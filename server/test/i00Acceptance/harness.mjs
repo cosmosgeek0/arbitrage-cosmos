@@ -822,13 +822,24 @@ export function validateScenarioResult(definition, result) {
 }
 
 export function routeContractScan(catalog) {
-  const source = readText('server/src/systemIntegration/routes/router.ts');
-  const observed = [...source.matchAll(/router\.(get|post|put|delete)\(\s*['"]([^'"]+)['"]/g)]
-    .map((match) => `${match[1].toUpperCase()} ${match[2]}`);
-  return catalog.canonicalRoutes.map((route) => ({
-    ...route,
-    observed: observed.includes(`${route.method} ${route.route.replace('/api/system-integration', '')}`),
+  const owners = Object.freeze([
+    Object.freeze({ prefix: '/api/system-integration', sourcePath: 'server/src/systemIntegration/routes/router.ts' }),
+    Object.freeze({ prefix: '/api/product-integration', sourcePath: 'server/src/productIntegration/runtime/router.ts' }),
+  ]);
+  const observedByOwner = new Map(owners.map((owner) => {
+    const source = readText(owner.sourcePath);
+    const observed = [...source.matchAll(/router\.(get|post|put|delete)\(\s*['"]([^'"]+)['"]/g)]
+      .map((match) => `${match[1].toUpperCase()} ${match[2]}`);
+    return [owner.prefix, observed];
   }));
+  return catalog.canonicalRoutes.map((route) => {
+    const owner = owners.find((candidate) => route.route.startsWith(candidate.prefix));
+    const relativeRoute = owner ? route.route.slice(owner.prefix.length) : null;
+    const observed = owner && relativeRoute !== null
+      ? observedByOwner.get(owner.prefix)?.includes(`${route.method} ${relativeRoute}`) === true
+      : false;
+    return { ...route, observed };
+  });
 }
 
 export function discoverOperationalPageIds() {
@@ -899,7 +910,9 @@ export function measureResourceHarness(closure, samples) {
     assert(series.every((value) => Number.isFinite(value) && value >= 0), `invalid sample ${metric.id}`);
     const sorted = [...series].sort((left, right) => left - right);
     const maximum = sorted.at(-1);
-    const unavailable = metric.status === 'OWNER_GATED' || metric.status.startsWith('AWAITING_');
+    const unavailable = metric.status === 'OWNER_GATED'
+      || metric.status.startsWith('AWAITING_')
+      || metric.status.endsWith('_NOT_CONFIGURED');
     const breachState = unavailable ? 'UNAVAILABLE'
       : maximum >= metricPlan.hardBound ? 'BLOCKED'
         : maximum >= metricPlan.softBound ? 'DEGRADED'

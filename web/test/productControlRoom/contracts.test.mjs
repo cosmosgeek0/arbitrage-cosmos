@@ -11,12 +11,59 @@ import {
   buildFixtureBinding,
   createFixtureSession,
   isFunctionalWiringState,
+  productTraceHasSyntheticEvidence,
   validateMaterialEventPage,
+  validateProductCorrelationTrace,
   validateProductSupervisorEnvelope,
 } from '../../src/lib/productIntegration/model.ts';
+import {
+  PRODUCT_MATERIAL_CURSOR_STORAGE_KEY,
+  persistDurableMaterialCursor,
+  proveMaterialContinuity,
+  readDurableMaterialCursor,
+} from '../../src/lib/productIntegration/useProductControlRoomBinding.ts';
 import { buildProductControlRoomFixture } from '../../src/features/productControlRoom/fixtureBinding.ts';
+import { controlResultTruthLabel } from '../../src/features/productControlRoom/components/ControlRegistryPanel.tsx';
 
 const NOW = 1_800_000_000_000;
+
+const materialEvent = (cursor) => ({
+  cursor,
+  eventId: `evt-${cursor}`,
+  occurredAtMs: NOW,
+  componentId: 'source',
+  kind: 'material',
+  correlationId: `corr-${cursor}`,
+  truthLabel: 'LIVE_PUBLIC',
+});
+
+function materialPage({
+  mode = 'CURSOR',
+  after,
+  next,
+  highWater = next,
+  retained = highWater === '0' ? null : '1',
+  items = [],
+  missingRange = null,
+  continuity = 'PROVEN',
+  truncated = false,
+  backfillRequired = false,
+}) {
+  return {
+    schemaVersion: MATERIAL_CURSOR_SCHEMA,
+    mode,
+    requestedAfterCursor: after,
+    retainedFromCursor: retained,
+    highWaterCursor: highWater,
+    nextCursor: next,
+    hasMore: BigInt(next) < BigInt(highWater),
+    continuity,
+    truncated,
+    backfillRequired,
+    missingRange,
+    items,
+  };
+}
 
 test('required fixture registry is exact and stable', () => {
   assert.deepEqual(REQUIRED_FIXTURE_SCENARIOS, [
@@ -52,10 +99,10 @@ for (const scenarioId of REQUIRED_FIXTURE_SCENARIOS) {
 
 test('fixture kill switch mirrors server asymmetry and does not auto-resume intake', () => {
   const initial = createFixtureSession('HEALTHY_OBSERVE', 'kill', NOW);
-  const engaged = applyFixtureControl(initial, 'global.kill-switch', 'fixture-rev-1');
+  const engaged = applyFixtureControl(initial, 'global.kill-switch.engage', 'fixture-rev-1');
   assert.equal(engaged.killSwitchEngaged, true);
   assert.equal(engaged.intakePaused, true);
-  const released = applyFixtureControl(engaged, 'global.kill-switch', 'fixture-rev-2');
+  const released = applyFixtureControl(engaged, 'global.kill-switch.engage', 'fixture-rev-2');
   assert.equal(released.killSwitchEngaged, false);
   assert.equal(released.intakePaused, true);
 });
@@ -80,11 +127,16 @@ test('owner-gated controls are nonfunctional and have no preview', () => {
 test('cursor validator rejects gaps, truncation, and unproven continuity', () => {
   const page = {
     schemaVersion: MATERIAL_CURSOR_SCHEMA,
+    mode: 'CURSOR',
     requestedAfterCursor: '5',
+    retainedFromCursor: '1',
+    highWaterCursor: '8',
     nextCursor: '8',
+    hasMore: false,
     continuity: 'UNPROVEN',
     truncated: true,
     backfillRequired: true,
+    missingRange: { fromCursor: '6', toCursor: '7', reason: 'INTERIOR_GAP' },
     items: [{ cursor: '8', eventId: 'evt-8', occurredAtMs: NOW, componentId: 'source', kind: 'material', correlationId: null, truthLabel: 'LIVE_PUBLIC' }],
   };
   const errors = validateMaterialEventPage('5', page);
@@ -98,6 +150,152 @@ test('cursor validator bounds hostile payloads without throwing', () => {
   const malformed = validateMaterialEventPage('9'.repeat(41), { schemaVersion: MATERIAL_CURSOR_SCHEMA, items: null });
   assert.ok(malformed.includes('MATERIAL_CURSOR_INVALID'));
   assert.ok(malformed.includes('MATERIAL_ITEMS_INVALID'));
+  assert.ok(validateMaterialEventPage('9223372036854775808', { schemaVersion: MATERIAL_CURSOR_SCHEMA, items: [] }).includes('MATERIAL_CURSOR_INVALID'));
+});
+
+test('tail bootstrap accepts only fully retained omission and rejects false-proven retention loss', () => {
+  const ordinaryTail = materialPage({
+    mode: 'TAIL_BOOTSTRAP',
+    after: '5',
+    next: '6',
+    retained: '1',
+    items: [materialEvent('6')],
+    missingRange: { fromCursor: '1', toCursor: '5', reason: 'BOOTSTRAP_HISTORY_OMITTED' },
+  });
+  assert.deepEqual(validateMaterialEventPage('5', ordinaryTail, 'TAIL_BOOTSTRAP'), []);
+
+  const retainedTail = materialPage({
+    mode: 'TAIL_BOOTSTRAP',
+    after: '9',
+    next: '10',
+    retained: '10',
+    items: [materialEvent('10')],
+    missingRange: { fromCursor: '1', toCursor: '9', reason: 'RETENTION_GAP' },
+  });
+  assert.ok(validateMaterialEventPage('9', retainedTail, 'TAIL_BOOTSTRAP').includes('MATERIAL_RETENTION_STATE_CONTRADICTION'));
+  const honestRetainedTail = {
+    ...retainedTail,
+    continuity: 'GAP',
+    truncated: true,
+    backfillRequired: true,
+  };
+  const honestErrors = validateMaterialEventPage('9', honestRetainedTail, 'TAIL_BOOTSTRAP');
+  assert.ok(honestErrors.includes('MATERIAL_CURSOR_GAP'));
+  assert.ok(honestErrors.includes('MATERIAL_BACKFILL_REQUIRED'));
+  assert.ok(!honestErrors.includes('MATERIAL_RETENTION_STATE_CONTRADICTION'));
+  assert.ok(validateMaterialEventPage('9', { ...retainedTail, retainedFromCursor: '8' }, 'TAIL_BOOTSTRAP').includes('MATERIAL_RETENTION_RANGE_INVALID'));
+  assert.ok(validateMaterialEventPage('9', retainedTail, 'CURSOR').includes('MATERIAL_PAGE_MODE_MISMATCH'));
+});
+
+test('cursor pages require progress, exact high-water geometry, and no missing range', () => {
+  const valid = materialPage({ after: '7', next: '8', highWater: '8', items: [materialEvent('8')] });
+  assert.deepEqual(validateMaterialEventPage('7', valid), []);
+  const stalled = materialPage({ after: '7', next: '7', highWater: '8', items: [] });
+  assert.ok(validateMaterialEventPage('7', stalled).includes('MATERIAL_CURSOR_NO_PROGRESS'));
+  const hiddenGap = { ...valid, missingRange: { fromCursor: '1', toCursor: '7', reason: 'BOOTSTRAP_HISTORY_OMITTED' } };
+  assert.ok(validateMaterialEventPage('7', hiddenGap).includes('MATERIAL_BACKFILL_REQUIRED'));
+});
+
+test('durable cursor storage is monotonic and verifies persistence', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  assert.deepEqual(readDurableMaterialCursor(storage), { state: 'ABSENT', cursor: null });
+  assert.equal(persistDurableMaterialCursor('12', storage), true);
+  assert.equal(values.get(PRODUCT_MATERIAL_CURSOR_STORAGE_KEY), '12');
+  assert.deepEqual(readDurableMaterialCursor(storage), { state: 'VALID', cursor: '12' });
+  assert.equal(persistDurableMaterialCursor('11', storage), false);
+  assert.deepEqual(readDurableMaterialCursor(storage), { state: 'VALID', cursor: '12' });
+  assert.equal(persistDurableMaterialCursor('9223372036854775807', storage), true);
+  assert.equal(persistDurableMaterialCursor('9223372036854775808', storage), false);
+  assert.deepEqual(readDurableMaterialCursor(storage), { state: 'VALID', cursor: '9223372036854775807' });
+  values.set(PRODUCT_MATERIAL_CURSOR_STORAGE_KEY, 'not-a-cursor');
+  assert.deepEqual(readDurableMaterialCursor(storage), { state: 'INVALID', cursor: null });
+  assert.equal(persistDurableMaterialCursor('13', storage), false);
+  assert.equal(values.get(PRODUCT_MATERIAL_CURSOR_STORAGE_KEY), 'not-a-cursor');
+  const unavailable = { getItem: () => { throw new Error('storage denied'); }, setItem: () => undefined };
+  assert.deepEqual(readDurableMaterialCursor(unavailable), { state: 'UNAVAILABLE', cursor: null });
+});
+
+test('malformed or unavailable durable evidence cannot enter tail bootstrap', async () => {
+  let reads = 0;
+  const client = { readMaterialEvents: async () => { reads += 1; throw new Error('must not read'); } };
+  const tail = materialPage({ mode: 'TAIL_BOOTSTRAP', after: '0', next: '0', highWater: '0', retained: null });
+  await assert.rejects(
+    proveMaterialContinuity({ client, supervisorPage: tail, durableCursor: { state: 'INVALID', cursor: null } }),
+    /malformed/,
+  );
+  await assert.rejects(
+    proveMaterialContinuity({ client, supervisorPage: tail, durableCursor: { state: 'UNAVAILABLE', cursor: null } }),
+    /unavailable/,
+  );
+  assert.equal(reads, 0);
+});
+
+test('saved nonzero cursor is honored before the supervisor tail', async () => {
+  const calls = [];
+  const persisted = [];
+  const client = {
+    readMaterialEvents: async (after) => {
+      calls.push(after);
+      return materialPage({ after, next: '8', highWater: '8', items: [materialEvent('8')] });
+    },
+  };
+  const supervisorPage = materialPage({
+    mode: 'TAIL_BOOTSTRAP', after: '99', next: '100', retained: '1', items: [materialEvent('100')],
+    missingRange: { fromCursor: '1', toCursor: '99', reason: 'BOOTSTRAP_HISTORY_OMITTED' },
+  });
+  const proof = await proveMaterialContinuity({
+    client,
+    supervisorPage,
+    durableCursor: { state: 'VALID', cursor: '7' },
+    persistCursor: (cursor) => { persisted.push(cursor); return true; },
+  });
+  assert.deepEqual(calls, ['7']);
+  assert.deepEqual(persisted, ['8']);
+  assert.equal(proof.continuity, 'PROVEN');
+});
+
+test('first run durably accepts the tail baseline, then proves a cursor page', async () => {
+  const calls = [];
+  const persisted = [];
+  const supervisorPage = materialPage({
+    mode: 'TAIL_BOOTSTRAP', after: '5', next: '6', retained: '1', items: [materialEvent('6')],
+    missingRange: { fromCursor: '1', toCursor: '5', reason: 'BOOTSTRAP_HISTORY_OMITTED' },
+  });
+  const proof = await proveMaterialContinuity({
+    client: {
+      readMaterialEvents: async (after) => {
+        calls.push(after);
+        return materialPage({ after, next: after, highWater: after, retained: '1' });
+      },
+    },
+    supervisorPage,
+    durableCursor: { state: 'ABSENT', cursor: null },
+    persistCursor: (cursor) => { persisted.push(cursor); return true; },
+  });
+  assert.deepEqual(calls, ['6']);
+  assert.deepEqual(persisted, ['6', '6']);
+  assert.equal(proof.continuity, 'PROVEN');
+});
+
+test('bounded catch-up stays blocked and persistence failure rejects', async () => {
+  const client = {
+    readMaterialEvents: async (after) => {
+      const next = String(BigInt(after) + 1n);
+      return materialPage({ after, next, highWater: '5', items: [materialEvent(next)] });
+    },
+  };
+  const tail = materialPage({ mode: 'TAIL_BOOTSTRAP', after: '0', next: '0', highWater: '0', retained: null });
+  const proof = await proveMaterialContinuity({ client, supervisorPage: tail, durableCursor: { state: 'VALID', cursor: '0' }, persistCursor: () => true, maxPages: 2 });
+  assert.equal(proof.continuity, 'BACKFILL');
+  assert.equal(proof.cursor, '2');
+  await assert.rejects(
+    proveMaterialContinuity({ client, supervisorPage: tail, durableCursor: { state: 'ABSENT', cursor: null }, persistCursor: () => false }),
+    /durably persisted/,
+  );
 });
 
 test('envelope validator rejects synthetic data without its persistent label', () => {
@@ -105,6 +303,131 @@ test('envelope validator rejects synthetic data without its persistent label', (
   const snapshot = buildProductControlRoomFixture(session);
   const errors = validateProductSupervisorEnvelope({ ...snapshot, persistentSyntheticLabel: false });
   assert.ok(errors.includes('SYNTHETIC_LABEL_NOT_PERSISTENT'));
+});
+
+test('nested synthetic truth requires the persistent banner even when top-level truth is not synthetic', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'nested-label', NOW));
+  const errors = validateProductSupervisorEnvelope({
+    ...snapshot,
+    truthLabel: 'BUILT_AND_TESTED',
+    persistentSyntheticLabel: false,
+  });
+  assert.ok(errors.includes('SYNTHETIC_LABEL_NOT_PERSISTENT'));
+});
+
+test('trace validator distinguishes complete absence from truncation uncertainty', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'trace', NOW));
+  const complete = snapshot.traces[0];
+  assert.deepEqual(validateProductCorrelationTrace(complete, complete.correlationId), []);
+  const truncated = {
+    ...complete,
+    truncated: true,
+    completeness: 'TRUNCATED',
+    stages: complete.stages.map((stage) => stage.evidenceState === 'PRESENT' ? stage : {
+      ...stage,
+      truthLabel: 'UNKNOWN',
+      outcome: 'UNKNOWN_DUE_TO_TRACE_TRUNCATION',
+      evidenceState: 'UNKNOWN_DUE_TO_TRUNCATION',
+    }),
+  };
+  assert.deepEqual(validateProductCorrelationTrace(truncated, complete.correlationId), []);
+  assert.ok(validateProductCorrelationTrace({
+    ...complete,
+    stages: [complete.stages[1], complete.stages[0], ...complete.stages.slice(2)],
+  }).includes('TRACE_STAGE_ORDER_INVALID'));
+  assert.ok(validateProductCorrelationTrace({
+    ...truncated,
+    stages: truncated.stages.map((stage, index) => index === 11 ? { ...stage, evidenceState: 'ABSENT' } : stage),
+  }).includes('TRACE_STAGE_ABSENT_ON_TRUNCATED_TRACE'));
+  assert.ok(validateProductCorrelationTrace({ ...complete, completeness: 'TRUNCATED' }).includes('TRACE_COMPLETENESS_INVALID'));
+  const absentIndex = complete.stages.findIndex((stage) => stage.evidenceState === 'ABSENT');
+  assert.ok(absentIndex >= 0);
+  const falseGreenAbsent = {
+    ...complete,
+    stages: complete.stages.map((stage, index) => index === absentIndex ? { ...stage, truthLabel: 'LIVE_PUBLIC' } : stage),
+  };
+  assert.ok(validateProductCorrelationTrace(falseGreenAbsent).includes('TRACE_STAGE_ABSENT_TRUTH_INVALID'));
+  const arbitraryAbsent = {
+    ...complete,
+    stages: complete.stages.map((stage, index) => index === absentIndex ? { ...stage, outcome: 'READY' } : stage),
+  };
+  assert.ok(validateProductCorrelationTrace(arbitraryAbsent).includes('TRACE_STAGE_ABSENT_OUTCOME_INVALID'));
+  const arbitraryTruncation = {
+    ...truncated,
+    stages: truncated.stages.map((stage) => stage.evidenceState === 'UNKNOWN_DUE_TO_TRUNCATION' ? { ...stage, outcome: 'MAYBE' } : stage),
+  };
+  assert.ok(validateProductCorrelationTrace(arbitraryTruncation).includes('TRACE_STAGE_TRUNCATION_OUTCOME_INVALID'));
+});
+
+test('UNAVAILABLE and UNKNOWN product truth values remain distinct and valid', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'unknown-truth', NOW));
+  const unavailableTrace = {
+    ...snapshot.traces[0],
+    stages: snapshot.traces[0].stages.map((stage, index) => index === 0 ? { ...stage, truthLabel: 'UNAVAILABLE' } : stage),
+  };
+  assert.deepEqual(validateProductCorrelationTrace(unavailableTrace), []);
+  const unknownTrace = {
+    ...snapshot.traces[0],
+    stages: snapshot.traces[0].stages.map((stage, index) => index === 0 ? { ...stage, truthLabel: 'UNKNOWN' } : stage),
+  };
+  assert.deepEqual(validateProductCorrelationTrace(unknownTrace), []);
+});
+
+test('standalone synthetic trace evidence requires the persistent page banner', async () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'live-trace-banner', NOW));
+  assert.equal(productTraceHasSyntheticEvidence(snapshot.traces[0]), true);
+  const source = await readFile(new URL('../../src/features/productControlRoom/ProductControlRoom.tsx', import.meta.url), 'utf8');
+  assert.match(source, /productTraceHasSyntheticEvidence\(liveTrace\)/);
+  assert.match(source, /SYNTHETIC EVIDENCE · NO LIVE AUTHORITY/);
+});
+
+test('incident availability prevents an empty array from becoming false all-clear', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('DEGRADED_STALE_SOURCES', 'incidents', NOW));
+  const unavailable = {
+    ...snapshot,
+    incidentAvailability: { state: 'NOT_CONFIGURED', truthLabel: 'NOT_CONFIGURED', blocker: 'INCIDENT_OWNER_NOT_CONFIGURED' },
+  };
+  assert.ok(validateProductSupervisorEnvelope(unavailable).includes('INCIDENTS_PUBLISHED_WHILE_UNAVAILABLE'));
+  assert.ok(validateProductSupervisorEnvelope({ ...snapshot, incidentAvailability: undefined }).includes('INCIDENT_AVAILABILITY_INVALID'));
+  const falseAvailable = {
+    ...snapshot,
+    incidents: [],
+    incidentAvailability: { state: 'AVAILABLE', truthLabel: 'UNAVAILABLE', blocker: null },
+  };
+  assert.ok(validateProductSupervisorEnvelope(falseAvailable).includes('INCIDENT_AVAILABILITY_TRUTH_MISMATCH'));
+});
+
+test('owner machine readiness is equivalent to dashboard READY posture in both directions', () => {
+  const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'ready-map', NOW));
+  assert.ok(validateProductSupervisorEnvelope({ ...ready, ownerView: { ...ready.ownerView, machineReady: 'NO' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
+  const degraded = buildProductControlRoomFixture(createFixtureSession('DEGRADED_STALE_SOURCES', 'degraded-map', NOW));
+  assert.ok(validateProductSupervisorEnvelope({ ...degraded, ownerView: { ...degraded.ownerView, machineReady: 'YES' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
+  assert.ok(validateProductSupervisorEnvelope({ ...ready, ownerView: { ...ready.ownerView, tradeReady: 'YES' } }).includes('OWNER_TRADE_READY_INVALID'));
+});
+
+test('owner latest material change is unavailable until the material page reaches high water', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'material-prefix', NOW));
+  const highWaterCursor = String(BigInt(snapshot.materialEvents.nextCursor) + 1n);
+  const prefix = {
+    ...snapshot,
+    materialEvents: {
+      ...snapshot.materialEvents,
+      highWaterCursor,
+      hasMore: true,
+    },
+  };
+  assert.notEqual(prefix.ownerView.latestMaterialChange, null);
+  assert.ok(validateProductSupervisorEnvelope(prefix).includes('OWNER_MATERIAL_LATEST_CHANGE_NOT_AT_HIGH_WATER'));
+  assert.ok(validateProductSupervisorEnvelope({
+    ...prefix,
+    materialEvents: { ...prefix.materialEvents, hasMore: false },
+  }).includes('OWNER_MATERIAL_LATEST_CHANGE_NOT_AT_HIGH_WATER'));
+});
+
+test('control result truth never labels absence as canonical evidence', () => {
+  assert.equal(controlResultTruthLabel(null), 'NO_RESULT_TRUTH');
+  assert.equal(controlResultTruthLabel({ synthetic: true }), 'SYNTHETIC');
+  assert.equal(controlResultTruthLabel({ synthetic: false }), 'CANONICAL');
 });
 
 test('envelope validator fails closed on empty owner and dashboard records', () => {
@@ -169,11 +492,13 @@ test('fixture command validates full preview authority, is idempotent, and resol
 });
 
 
-test('binding wrapper consumes the donor and suppresses its fixture-only control panel', async () => {
+test('binding wrapper consumes the donor through a structural read-only projection', async () => {
   const source = await readFile(new URL('../../src/features/productControlRoom/ProductControlRoom.tsx', import.meta.url), 'utf8');
   const css = await readFile(new URL('../../src/features/productControlRoom/styles/productControlRoom.css', import.meta.url), 'utf8');
   assert.match(source, /systemDashboard\/SystemDashboard/);
-  assert.match(css, /sdx-section\[aria-label="Controls"\]/);
+  assert.match(source, /readOnlyProjection/);
+  assert.doesNotMatch(source, /mutate=\{\(\) => undefined\}/);
+  assert.doesNotMatch(css, /sdx-section\[aria-label="Controls"\]/);
   assert.doesNotMatch(source, /fetch\s*\(/);
   assert.match(source, /pcr-binding-blocker/);
 });
@@ -190,7 +515,8 @@ test('route binding cadence and event page are bounded without hardcoded endpoin
   const hook = await readFile(new URL('../../src/lib/productIntegration/useProductControlRoomBinding.ts', import.meta.url), 'utf8');
   const transport = await readFile(new URL('../../src/lib/productIntegration/httpTransport.ts', import.meta.url), 'utf8');
   assert.match(hook, /cadenceMs = 5_000/);
-  assert.match(hook, /initialMaterialCursor = '0'/);
-  assert.match(hook, /readMaterialEvents\(afterCursor, 200\)/);
+  assert.match(hook, /initialMaterialCursor: Readonly<DurableMaterialCursorRead>/);
+  assert.match(hook, /PRODUCT_MATERIAL_PAGE_LIMIT = 200/);
+  assert.match(hook, /PRODUCT_MATERIAL_MAX_PAGES_PER_REFRESH = 8/);
   assert.doesNotMatch(transport, /\/api\//);
 });

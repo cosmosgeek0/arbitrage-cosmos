@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * v0 gate tests. Boots the built server on a test port with an isolated data
- * dir and NO Binance keys, then asserts the contract the spec demands.
+ * dir and hostile ambient credentials, then asserts they cannot become an
+ * exchange-private, money-moving, or external-infrastructure capability.
  * Run: node server/test/gates.mjs   (after npm run build)
  */
 import { execFileSync, spawn } from 'node:child_process';
@@ -193,13 +194,46 @@ check(
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
     && !/permissions\s*:\s*\{[^}]*universalTransfer\s*:\s*true/si.test(serverIndex)
 );
+check(
+  'production composition has no ambient credential or external-control constructor',
+  !/\bcredsFromEnv\b/.test(serverIndex) &&
+    !/new\s+BinanceClient\b/.test(serverIndex) &&
+    !/from\s+['"]\.\/binance\/userStream\.js['"]/.test(serverIndex) &&
+    !/new\s+UserStream\b/.test(serverIndex) &&
+    !/from\s+['"]\.\/services\/awsRunnerControl\.js['"]/.test(serverIndex) &&
+    !/new\s+AwsRunnerControl\b/.test(serverIndex) &&
+    !/from\s+['"]\.\/services\/loans\.js['"]/.test(serverIndex)
+);
+check(
+  'legacy signed services receive only a mechanically unavailable client',
+  /function\s+unavailablePrivateBinanceClient\(\):\s*BinanceClient\s*\|\s*null\s*\{\s*return\s+null;\s*\}/s.test(serverIndex) &&
+    /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
+);
+check(
+  'production route composition invokes no signed or money mutation method',
+  !/\b(?:orders|loans)\.(?:send|testOrder|cancel|cancelAll|borrow|repay|adjustLtv|resolveOrderRecovery)\s*\(/.test(serverIndex) &&
+    !/\baccount\.sync\s*\(/.test(serverIndex) &&
+    !/\borders\.(?:syncOpenOrders|reconcilePendingOrders)\s*\(/.test(serverIndex)
+);
+check(
+  'legacy WebSocket does not expose raw Ledger events and Product streaming is not claimed',
+  !/ledger\.on\(\s*['"]event['"][\s\S]{0,200}type:\s*['"]event['"]/.test(serverIndex)
+);
+check(
+  'startup admits only market-owned auxiliaries from canonical lifecycle truth',
+  /component\.componentId\s*===\s*['"]market-universe['"]/.test(serverIndex) &&
+    /market\.readiness\s*===\s*['"]READY['"]/.test(serverIndex) &&
+    /server\.listen\([\s\S]*?startServerTimers\(\);/.test(serverIndex) &&
+    !/startNewsRefreshLoop|primeIconStartTimer|initialRefreshTimer|warmProfileStartTimer/.test(serverIndex)
+);
 
 // ---------- boot server ----------
-console.log('\nBooting server (no keys, isolated data dir)…');
+console.log('\nBooting server (hostile ambient credentials, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
-const child = spawn(process.execPath, ['server/dist/index.js'], {
-  // SKIP_DOTENV keeps gates deterministic/keyless even when a real .env exists,
-  // so the disconnected-state contract is what gets tested.
+const privateEgressSentinel = path.join(dataDir, 'private-egress-attempts.log');
+const child = spawn(process.execPath, ['--import', './server/test/private-egress-tripwire.mjs', 'server/dist/index.js'], {
+  // Synthetic credentials are deliberate: the runtime must remain keyless and
+  // owner-gated even if every common ambient credential source is populated.
   env: {
     PATH: process.env.PATH,
     PORT: String(PORT),
@@ -209,6 +243,20 @@ const child = spawn(process.execPath, ['server/dist/index.js'], {
     ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
     LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
     SKIP_DOTENV: '1',
+    BINANCE_API_KEY: 'sentinel-binance-api-key-not-a-secret',
+    BINANCE_API_SECRET: 'sentinel-binance-api-secret-not-a-secret',
+    AWS_ACCESS_KEY_ID: 'SENTINELACCESSKEY',
+    AWS_SECRET_ACCESS_KEY: 'sentinel-aws-secret-not-a-secret',
+    AWS_SESSION_TOKEN: 'sentinel-aws-session-not-a-secret',
+    AWS_REGION: 'us-east-1',
+    AWS_CONTROL_REGION: 'us-east-1',
+    AWS_CONTROL_INSTANCE_ID: 'i-0123456789abcdef0',
+    AWS_CONTROL_RUNNER_PATH: '/tmp/sentinel-runner.mjs',
+    AWS_CONTROL_WORKDIR: '/tmp',
+    AWS_CONTROL_SERVICE: 'sentinel-service',
+    AWS_CONTROL_VALIDATE_COMMAND: 'true',
+    NOTIFICATION_AWS_INGEST_TOKEN: 'sentinel-aws-notification-token-not-a-secret',
+    PRIVATE_EGRESS_SENTINEL_FILE: privateEgressSentinel,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -260,7 +308,29 @@ check('fresh boot mode is HALTED', health.mode === 'HALTED');
 const state = (await get('/api/state')).body;
 check('disconnected state: account is null', state.account === null);
 check('disconnected state: binance.connected=false', state.binance.connected === false);
+check(
+  'ambient Binance credentials cannot create a private runtime posture',
+  state.binance.keysPresent === false && state.binance.userStream === 'off' && state.binance.keyFingerprint === null
+);
 check('state includes config/risk/events', !!state.config && !!state.risk && Array.isArray(state.events));
+const tradeReady = await get('/health/trade-ready');
+const processLive = await get('/health/live');
+check(
+  'canonical liveness remains process-only while readiness evidence is unavailable',
+  processLive.status === 200 && processLive.body?.ok === true
+);
+const dependencyReady = await get('/health/ready');
+check(
+  'canonical readiness fails closed without owner-supplied meaningful advance',
+  dependencyReady.status === 503 &&
+    dependencyReady.body?.ok === false &&
+    dependencyReady.body?.lastMeaningfulAdvanceAtMs === null &&
+    dependencyReady.body?.reasonCodes?.includes('MEANINGFUL_ADVANCE_NOT_SUPPLIED')
+);
+check(
+  'canonical trade readiness preserves the live-execution barrier',
+  tradeReady.status === 503 && tradeReady.body?.executionBarrier === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
 
 await browserGet('/api/state');
 const browserSessionsResponse = await browserGet('/api/sessions');
@@ -307,47 +377,57 @@ check('preview validates Binance filters', tiny?.filters?.minNotional !== undefi
 check('kill switch blocks in risk checks', tiny?.risk?.checks?.find((c) => c.name === 'kill_switch_off')?.pass === false);
 check('empty allowlist blocks symbol', tiny?.risk?.checks?.find((c) => c.name === 'symbol_allowed')?.pass === false);
 
-// live send without keys must fail cleanly, never place anything
-const send = (await post('/api/trade/send', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10, confirmSymbol: 'BTCUSDT' })).body;
-check('live send without keys fails cleanly', send?.sent === false && /keys/i.test(send?.error ?? ''));
-
-// typed-confirmation mismatch must be rejected before anything else
-const mismatch = (await post('/api/trade/send', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10, confirmSymbol: 'WRONG' })).body;
-check('send rejects on any failure without keys', mismatch?.sent === false);
+const send = await post('/api/trade/send', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10, confirmSymbol: 'BTCUSDT' });
+check(
+  'live send is retired independently of ambient credentials',
+  send.status === 410 && send.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
+const testOrder = await post('/api/trade/test', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10 });
+check(
+  'signed test-order route is retired',
+  testOrder.status === 410 && testOrder.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
 
 // config persistence
 await post('/api/config', { maxOrderNotionalUsd: 15 });
 const cfg = (await get('/api/config')).body;
-check('config saves and persists', cfg?.maxOrderNotionalUsd === 15);
-
-await post('/api/config', {
-  controlModes: { funds: 'paused', borrowing: 'paused', automation: 'blocked', liveOrders: 'blocked' },
-});
-const pausedModes = (await get('/api/config')).body;
 check(
-  'three-state execution modes persist and fail closed',
-  pausedModes?.controlModes?.funds === 'paused' &&
-    pausedModes?.controlModes?.borrowing === 'paused' &&
-    pausedModes?.controlModes?.automation === 'blocked' &&
-    pausedModes?.controlModes?.liveOrders === 'blocked' &&
-    pausedModes?.fundsLocked === true &&
-    pausedModes?.automationPaused === true &&
-    pausedModes?.liveTradingEnabled === false &&
-    pausedModes?.borrowGuard?.newBorrowPaused === true &&
-    pausedModes?.borrowGuard?.repayOnly === false
+  'config saves while financial posture remains sealed',
+  cfg?.maxOrderNotionalUsd === 15 &&
+    cfg?.liveTradingEnabled === false &&
+    cfg?.fundsLocked === true &&
+    cfg?.controlModes?.funds === 'blocked' &&
+    cfg?.controlModes?.borrowing === 'blocked' &&
+    cfg?.controlModes?.liveOrders === 'blocked' &&
+    cfg?.borrowGuard?.newBorrowPaused === true &&
+    cfg?.borrowGuard?.repayOnly === true
 );
-await post('/api/config', {
-  controlModes: { funds: 'blocked', borrowing: 'blocked', automation: 'paused', liveOrders: 'paused' },
-});
 
-// kill switch + live arm flow
+const hostileConfig = await post('/api/config', {
+  liveTradingEnabled: true,
+  fundsLocked: false,
+  borrowGuard: { enabled: false, newBorrowPaused: false, repayOnly: false },
+  controlModes: { funds: 'allowed', borrowing: 'allowed', liveOrders: 'allowed' },
+});
+check(
+  'config arming request fails closed',
+  hostileConfig.status === 409 &&
+    hostileConfig.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED' &&
+    hostileConfig.body?.fields?.includes?.('controlModes.liveOrders')
+);
+const safeConfig = await post('/api/config', {
+  controlModes: { funds: 'blocked', borrowing: 'blocked', automation: 'paused', liveOrders: 'blocked' },
+});
+check('safe non-financial config remains writable', safeConfig.status === 200 && safeConfig.body?.controlModes?.automation === 'paused');
+
+// Kill can disengage while the separate live-execution barrier remains sealed.
 await post('/api/kill', { on: false });
 let h = (await get('/api/health')).body;
 check('kill off → mode MANUAL', h.mode === 'MANUAL');
-await post('/api/live', { on: true });
+const liveArm = await post('/api/live', { on: true });
 h = (await get('/api/health')).body;
-check('live armed → mode LIVE_ARMED', h.mode === 'LIVE_ARMED');
-check('direct live arm synchronizes the explicit control mode', (await get('/api/config')).body?.controlModes?.liveOrders === 'allowed');
+check('direct live arm is retired', liveArm.status === 410 && liveArm.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED');
+check('failed live arm leaves mode MANUAL and live orders blocked', h.mode === 'MANUAL' && (await get('/api/config')).body?.controlModes?.liveOrders === 'blocked');
 await post('/api/kill', { on: true });
 h = (await get('/api/health')).body;
 check('kill switch overrides → HALTED', h.mode === 'HALTED');
@@ -359,7 +439,7 @@ const manual = (await get('/api/events?kind=manual_action&limit=10')).body;
 const cfgEv = (await get('/api/events?kind=config_change&limit=10')).body;
 check('ledger records order intents', Array.isArray(intents) && intents.length >= 2);
 check('ledger records risk decisions', Array.isArray(decisions) && decisions.length >= 2);
-check('ledger records manual actions (kill/live)', Array.isArray(manual) && manual.length >= 3);
+check('ledger records kill actions but no live-arm mutation', Array.isArray(manual) && manual.length >= 2 && !manual.some((event) => event?.data?.action === 'live_trading'));
 check('ledger records config changes', Array.isArray(cfgEv) && cfgEv.length >= 1);
 
 // remaining API surface renders data
@@ -374,26 +454,44 @@ check('markets rows carry spark arrays', Array.isArray(mkts?.rows?.[0]?.spark));
 const detail = (await get('/api/market/detail?symbol=BTCUSDT')).body;
 check('market detail responds', detail?.row?.symbol === 'BTCUSDT' && detail?.filters !== null);
 
-const loansSnap = (await get('/api/loans')).body;
-check('loans endpoint honest without keys', loansSnap?.available === false && /keys/i.test(loansSnap?.error ?? ''));
-
 const walletBalanceResponse = await get('/api/wallet-balances');
-const walletBalances = walletBalanceResponse.body;
-check(
-  'wallet balance aggregate honest without keys',
-  Array.isArray(walletBalances?.rows) && walletBalances.rows.length === 0 && /keys/i.test(walletBalances?.error ?? '')
-);
 check(
   'wallet balance aggregate is never browser/proxy cached',
   /private/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
     && /no-store/i.test(walletBalanceResponse.headers.get('cache-control') ?? '')
 );
 
-const borrow = (await post('/api/loans/borrow', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, confirmCoin: 'BTC' })).body;
-check('loan borrow blocked without keys/arm', borrow?.ok === false);
+const privateReadResponses = [
+  await post('/api/fills/import', { symbol: 'BTCUSDT' }),
+  await get('/api/equity-history'),
+  await get('/api/earn'),
+  walletBalanceResponse,
+  await get('/api/loans'),
+  await post('/api/loans/refresh', {}),
+  await get('/api/orders/history?symbol=BTCUSDT'),
+  await get('/api/loans/max-borrowable?asset=BTC'),
+  await post('/api/refresh', { target: 'account' }),
+  await get('/api/apikey'),
+];
+check(
+  'all private/account compatibility routes are statically NOT_CONFIGURED',
+  privateReadResponses.every((response) => response.status === 503 && response.body?.code === 'NOT_CONFIGURED' && response.body?.available === false)
+);
 
-const oh = (await get('/api/orders/history?symbol=BTCUSDT')).body;
-check('order history honest without keys', oh?.available === false && Array.isArray(oh?.orders));
+const retiredMoneyResponses = [
+  await post('/api/loans/reconcile', { confirm: 'RECONCILE' }),
+  await post('/api/loans/borrow', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, confirmCoin: 'BTC' }),
+  await post('/api/loans/adjust-ltv', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, direction: 'ADDITIONAL', confirmCoin: 'BTC' }),
+  await post('/api/loans/repay', { loanCoin: 'BTC', collateralCoin: 'USDT', amount: 1, confirmCoin: 'BTC' }),
+  await post('/api/orders/cancel', { symbol: 'BTCUSDT', orderId: 1 }),
+  await post('/api/orders/cancel-all', { symbol: 'BTCUSDT' }),
+  await post('/api/orders/recovery/resolve', { action: 'hold' }),
+];
+check(
+  'all loan/order money and recovery mutations are deterministically retired',
+  retiredMoneyResponses.every((response) => response.status === 410 && response.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED')
+);
+check('local order-recovery evidence remains read-only', (await get('/api/orders/recovery')).status === 200);
 
 const depthB = (await get('/api/market/depth?symbol=BTCUSDT')).body;
 check('depth endpoint returns book', Array.isArray(depthB?.bids) && depthB.bids.length > 5 && Array.isArray(depthB?.asks));
@@ -413,15 +511,6 @@ check('funding extremes responds', Array.isArray(fundX?.positive) && Array.isArr
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
 check('symbol context responds', Array.isArray(sctx?.openOrders) && Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
 
-const loansM = (await get('/api/loans')).body;
-check('loans includes honest margin state', loansM?.margin?.available === false && /keys/i.test(loansM?.margin?.error ?? ''));
-
-const cAll = (await post('/api/orders/cancel-all', { symbol: 'BTCUSDT' })).body;
-check('cancel-all honest without keys', cAll?.ok === false && /keys/i.test(cAll?.error ?? ''));
-
-const maxB = (await get('/api/loans/max-borrowable?asset=BTC')).body;
-check('max-borrowable honest without keys', maxB?.ok === false);
-
 const sys = (await get('/api/system')).body;
 check('system health responds', sys?.ok === true && typeof sys.uptimeSec === 'number' && sys.dbOk === true);
 const browserObservation = await post('/api/connections/browser-observation', { rttMs: 24, socketConnected: true });
@@ -436,57 +525,61 @@ check(
     typeof sys?.connections?.watchman?.summary?.required === 'number' &&
     Array.isArray(sys?.connections?.watchman?.components) &&
     sys.connections.watchman.components.some((component) => component.id === 'market-streams' && component.resetTarget === 'market') &&
+    sys.connections.watchman.components.some((component) => component.id === 'user-stream' && component.status === 'planned' && /NOT_CONFIGURED/.test(component.detail ?? '')) &&
     sys.connections.watchman.components.some((component) => component.id === 'aws-runner' && component.status === 'planned') &&
     sys?.connections?.planned?.awsRunner?.configured === false &&
+    sys?.connections?.planned?.awsRunner?.state === 'owner_gated' &&
     typeof sys?.connections?.planned?.cloudflareAccess?.reason === 'string'
-);
-const accountConnectionReset = await post('/api/refresh', { target: 'account' });
-check(
-  'targeted connection reset is real and reports its work',
-  accountConnectionReset.status === 200 &&
-    accountConnectionReset.body?.reset?.target === 'account' &&
-    accountConnectionReset.body?.reset?.steps?.some?.((step) => step.key === 'account-data' && step.ok === true)
 );
 
 const notificationRouting = (await get('/api/notification-routing')).body;
 check(
   'notification routing exposes real source and destination readiness',
   notificationRouting?.sources?.bot?.available === true &&
-    notificationRouting?.sources?.execution?.available === true &&
+    notificationRouting?.sources?.execution?.available === false &&
     notificationRouting?.sources?.aws?.available === false &&
     notificationRouting?.destinations?.inApp?.available === true &&
     notificationRouting?.destinations?.telegram?.available === false
 );
-const awsNotificationClosed = await post('/api/notifications/ingest/aws', {
-  source: 'aws.ec2',
-  'detail-type': 'EC2 Instance State-change Notification',
-  detail: { state: 'stopped' },
+const awsNotificationResponse = await request('/api/notifications/ingest/aws', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer sentinel-aws-notification-token-not-a-secret',
+  },
+  body: JSON.stringify({
+    source: 'aws.ec2',
+    'detail-type': 'EC2 Instance State-change Notification',
+    detail: { state: 'stopped' },
+  }),
 });
+const awsNotificationClosed = {
+  status: awsNotificationResponse.status,
+  body: await awsNotificationResponse.json().catch(() => null),
+};
 check(
-  'AWS notification intake fails closed until a server token is configured',
-  awsNotificationClosed.status === 503 && /not configured/i.test(awsNotificationClosed.body?.error ?? '')
+  'AWS notification intake remains OWNER_GATED despite a matching hostile ambient token',
+  awsNotificationClosed.status === 503 &&
+    awsNotificationClosed.body?.code === 'OWNER_GATED' &&
+    awsNotificationClosed.body?.available === false
 );
 
-const awsStatus = (await awsControl('/api/aws-control/status')).body;
+const awsStatus = await awsControl('/api/aws-control/status');
+const awsProbe = await awsControl('/api/aws-control/status?probe=1');
+const awsOwnerGated = [
+  awsStatus,
+  awsProbe,
+  await post('/api/aws-control/gates', { connectionEnabled: true }),
+  await awsControl('/api/aws-control/gates', { method: 'POST', body: { connectionEnabled: true, executionEnabled: true } }),
+  await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'restart' } }),
+  await awsControl('/api/aws-control/runner'),
+  await awsControl('/api/aws-control/runner', { method: 'PUT', body: { content: 'sentinel', expectedSha256: null } }),
+];
 check(
-  'AWS runner control defaults closed and honest',
-  awsStatus?.status?.configured === false &&
-    awsStatus?.status?.connectionEnabled === false &&
-    awsStatus?.status?.executionEnabled === false &&
-    awsStatus?.status?.channel === 'not_configured'
+  'all AWS status, probe, command, gate, and runner surfaces remain OWNER_GATED',
+  awsOwnerGated.every((response) => response.status === 503 && response.body?.code === 'OWNER_GATED' && response.body?.available === false)
 );
-const awsDenied = await post('/api/aws-control/gates', { connectionEnabled: false });
-check('AWS runner mutations require control header', awsDenied.status === 403 && awsDenied.body?.code === 'AWS_OPERATOR_DENIED');
-const awsClosed = await awsControl('/api/aws-control/gates', { method: 'POST', body: { connectionEnabled: false } });
-check('AWS runner gates can be explicitly locked', awsClosed.status === 200 && awsClosed.body?.gates?.connectionEnabled === false);
-const awsUnconfigured = await awsControl('/api/aws-control/gates', { method: 'POST', body: { connectionEnabled: true } });
-check('AWS runner channel cannot arm without target config', awsUnconfigured.status === 409 && awsUnconfigured.body?.code === 'AWS_NOT_CONFIGURED');
-const awsHelp = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'help' } });
-check('AWS runner exposes restricted command help', awsHelp.status === 200 && /status/.test(awsHelp.body?.result?.output ?? ''));
-const awsArbitrary = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'rm -rf /' } });
-check('AWS runner rejects arbitrary shell input', awsArbitrary.status === 400 && awsArbitrary.body?.code === 'AWS_COMMAND_NOT_ALLOWED');
-const awsBlocked = await awsControl('/api/aws-control/command', { method: 'POST', body: { command: 'status' } });
-check('AWS runner blocks remote command while channel is closed', awsBlocked.status === 423 && awsBlocked.body?.code === 'AWS_CHANNEL_BLOCKED');
+check('AWS probe cannot change behavior or contact AWS', JSON.stringify(awsProbe.body) === JSON.stringify(awsStatus.body));
 
 const evSearch = (await get('/api/events?kind=manual_action&q=kill')).body;
 check('ledger search works', Array.isArray(evSearch));
@@ -516,6 +609,12 @@ check(
     Array.isArray(basisRuntime?.rows) &&
     basisRuntime?.status?.verifiedBorrow === 0 &&
     typeof basisRuntime?.thresholds?.watchGapPct === 'number'
+);
+
+check(
+  'hostile ambient Binance and AWS credentials generated zero prohibited egress',
+  !existsSync(privateEgressSentinel),
+  existsSync(privateEgressSentinel) ? readFileSync(privateEgressSentinel, 'utf8').slice(0, 300) : ''
 );
 
 const iconsRes = await request('/api/icons?bases=BTC,ETH,TLM,BREV');

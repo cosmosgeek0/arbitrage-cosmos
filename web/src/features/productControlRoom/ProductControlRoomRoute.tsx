@@ -7,19 +7,22 @@ import { useProductControlRoomContext } from './ProductControlRoomProvider';
 
 export function ProductControlRoomRoute() {
   const { binding, client } = useProductControlRoomContext();
+  const continuityBlocked = binding.continuity !== 'PROVEN';
   const preview = (control: Readonly<ProductControlRegistryEntry>) => (
     client.previewCommand(control.controlId, control.currentStateRevision)
   );
   const submit = (request: Readonly<ProductCommandRequest>) => client.submitCommand(request);
   return (
     <ProductControlRoom
-      snapshot={binding.continuity === 'BLOCKED' ? null : binding.snapshot}
-      staleSnapshot={binding.continuity === 'BLOCKED' ? binding.snapshot : null}
+      snapshot={continuityBlocked ? null : binding.snapshot}
+      staleSnapshot={continuityBlocked ? binding.snapshot : null}
+      materialEvents={binding.materialEvents}
       busy={binding.loading}
-      unavailableReason={binding.error ?? (binding.continuity === 'BLOCKED' ? 'Material-event continuity is blocked.' : null)}
-      bindingBlocker={binding.continuity === 'BLOCKED' ? binding.error ?? 'Material-event continuity is blocked.' : null}
+      unavailableReason={binding.error ?? (continuityBlocked ? `Material-event continuity is ${binding.continuity}.` : null)}
+      bindingBlocker={continuityBlocked ? binding.error ?? `Material-event continuity is ${binding.continuity}.` : null}
       onPreview={preview}
       onSubmit={submit}
+      onReadTrace={(correlationId) => client.readTrace(correlationId, 200)}
       allowFixtureControls={false}
     />
   );

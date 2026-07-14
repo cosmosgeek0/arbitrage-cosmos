@@ -14,10 +14,8 @@ import { ApiRequestError, fetchJson, type ApiFailure } from './lib/http';
 import { createSettledPoll } from './lib/polling';
 import type {
   AppConfig,
-  CancelResult,
   MarketRow,
   PreviewResult,
-  SendResult,
   ServerState,
 } from './types';
 
@@ -25,21 +23,19 @@ export type RefreshResult = {
   ok: boolean;
   issues: string[];
   ts?: number;
-  binanceConnected?: boolean;
-  feedsOk?: boolean;
-  keysPresent?: boolean;
 };
 
-// 'orders' | 'positions' | 'fills' | 'pnl' are deep links that all
-// render the merged Execution page (each id = its active tab), so existing
-// setPage(...) call sites keep working. 'detail' opens from Markets rows only.
+// Account detail ids render controlled, read-only Account subviews. Product
+// truth remains in ProductControlRoomProvider; this store owns navigation only.
 export type Page =
   | 'dashboard'
+  | 'control-room'
   | 'account'
   | 'wallets'
   | 'markets'
   | 'detail'
   | 'loans'
+  | 'execution'
   | 'orders'
   | 'positions'
   | 'fills'
@@ -55,7 +51,7 @@ export type Page =
   | 'calendar';
 
 const PAGE_IDS: Page[] = [
-  'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'orders',
+  'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
   'notifications', 'news', 'calendar',
 ];
@@ -80,15 +76,7 @@ interface Store {
   setPaletteOpen: (v: boolean) => void;
   toggleWatch: (symbol: string) => Promise<ApiFailure | null>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
-  setKill: (on: boolean) => Promise<ApiFailure | null>;
-  setLive: (on: boolean) => Promise<ApiFailure | null>;
   preview: (intent: Record<string, unknown>) => Promise<PreviewResult | null>;
-  testOrder: (intent: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
-  sendLive: (intent: Record<string, unknown>, confirmSymbol: string) => Promise<SendResult>;
-  cancelOrder: (symbol: string, orderId: number) => Promise<CancelResult>;
-  cancelAll: (symbol: string) => Promise<CancelResult>;
-  approveProposal: (id: number) => Promise<ApiFailure | null>;
-  importFills: (symbol: string) => Promise<{ imported?: number; error?: string }>;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -157,15 +145,35 @@ function isConfigAcknowledgement(value: unknown): value is AppConfig {
   );
 }
 
-function isCancelAcknowledgement(value: unknown): value is CancelResult {
-  if (!value || typeof value !== 'object') return false;
-  const result = value as CancelResult;
-  return (
-    typeof result.ok === 'boolean' &&
-    (result.outcome === undefined || ['canceled', 'not_canceled', 'unknown'].includes(result.outcome)) &&
-    (result.reconciliationRequired === undefined || typeof result.reconciliationRequired === 'boolean') &&
-    (result.error === undefined || typeof result.error === 'string')
-  );
+function failClosedConfig(config: AppConfig): AppConfig {
+  return {
+    ...config,
+    liveTradingEnabled: false,
+    fundsLocked: true,
+    automationPaused: true,
+    controlModes: {
+      ...config.controlModes,
+      funds: 'blocked',
+      borrowing: 'blocked',
+      automation: 'paused',
+      liveOrders: 'blocked',
+    },
+    borrowGuard: {
+      ...config.borrowGuard,
+      enabled: true,
+      newBorrowPaused: true,
+      repayOnly: true,
+    },
+  };
+}
+
+function failClosedState(serverState: ServerState): ServerState {
+  const config = failClosedConfig(serverState.config);
+  return {
+    ...serverState,
+    mode: config.killSwitch ? 'HALTED' : 'MANUAL',
+    config,
+  };
 }
 
 async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
@@ -258,7 +266,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void fetchJson<ServerState>('/api/state')
-      .then((s) => setState(s))
+      .then((s) => setState(failClosedState(s)))
       .catch(() => undefined);
 
     let closed = false;
@@ -305,7 +313,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         try {
           const data = JSON.parse(msg.data as string) as { type: string; payload: unknown };
-          if (data.type === 'state') setState(data.payload as ServerState);
+          if (data.type === 'state') setState(failClosedState(data.payload as ServerState));
           else if (data.type === 'book' || data.type === 'btrades') {
             for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
           }
@@ -380,21 +388,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveConfig = useCallback(async (patch: Partial<AppConfig>) => {
     const result = await post<AppConfig>('/api/config', patch);
-    const config = result.data && isConfigAcknowledgement(result.data) ? result.data : null;
+    const config = result.data && isConfigAcknowledgement(result.data) ? failClosedConfig(result.data) : null;
     const error = result.error ?? (config ? null : acknowledgementFailure('Configuration acknowledgement was malformed.'));
     setMutationError(error);
-    if (config) setState((s) => (s ? { ...s, config, mode: config.killSwitch ? 'HALTED' : config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+    if (config) setState((s) => (s ? failClosedState({ ...s, config }) : s));
     return config;
   }, []);
 
-  // In-place reset for the bottom Connection Control: rebuild the browser
-  // socket, ask the server to reset every live source, then fan a refresh signal
-  // to page-owned fetchers without reloading the document.
+  // In-place public/local recovery for the bottom Connection Control: rebuild
+  // the managed market runtime and browser socket, then fan a refresh signal to
+  // page-owned public sources. Private account recovery is intentionally absent.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
     let health: RefreshResult | null = null;
     try {
-      const result = await post<RefreshResult>('/api/refresh', { target: 'all' });
+      const result = await post<RefreshResult>('/api/refresh', { target: 'market' });
       health = result.data;
       setMutationError(result.error);
       if (!health) issues.push(result.error?.message ?? 'Server refresh request failed');
@@ -403,7 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     try {
       const s = await fetchJson<ServerState>('/api/state');
-      setState(s);
+      setState(failClosedState(s));
     } catch {
       issues.push('State snapshot failed');
     }
@@ -427,9 +435,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ok: issues.length === 0,
       issues,
       ts: health?.ts ?? Date.now(),
-      binanceConnected: health?.binanceConnected,
-      feedsOk: health?.feedsOk,
-      keysPresent: health?.keysPresent,
     };
   }, []);
 
@@ -469,97 +474,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       [state, saveConfig]
     ),
     saveConfig,
-    setKill: useCallback(async (on) => {
-      const result = await post<{ killSwitch: boolean }>('/api/kill', { on });
-      const error = result.error ?? (result.data?.killSwitch === on ? null : acknowledgementFailure('Kill-switch acknowledgement did not match the requested state.'));
-      setMutationError(error);
-      if (!error && result.data) setState((s) => (s ? { ...s, config: { ...s.config, killSwitch: result.data.killSwitch }, mode: result.data.killSwitch ? 'HALTED' : s.config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
-      return error;
-    }, []),
-    setLive: useCallback(async (on) => {
-      const result = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
-      const error = result.error ?? (result.data?.liveTradingEnabled === on ? null : acknowledgementFailure('Live-control acknowledgement did not match the requested state.'));
-      setMutationError(error);
-      if (!error && result.data) setState((s) => (s ? {
-        ...s,
-        config: {
-          ...s.config,
-          liveTradingEnabled: result.data.liveTradingEnabled,
-          controlModes: { ...s.config.controlModes, liveOrders: result.data.liveTradingEnabled ? 'allowed' : 'paused' },
-        },
-        mode: s.config.killSwitch ? 'HALTED' : result.data.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL',
-      } : s));
-      return error;
-    }, []),
     preview: useCallback(async (intent) => {
       const result = await post<PreviewResult>('/api/trade/preview', intent);
       setMutationError(result.error);
       return result.data;
     }, []),
-    testOrder: useCallback(
-      async (intent) => {
-        const result = await post<{ ok: boolean; error?: string }>('/api/trade/test', intent);
-        setMutationError(result.error);
-        return result.data ?? { ok: false, error: result.error.message };
-      },
-      []
-    ),
-    sendLive: useCallback(
-      async (intent, confirmSymbol) => {
-        const result = await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol });
-        setMutationError(result.error);
-        return result.data ?? { sent: false, error: result.error.message };
-      },
-      []
-    ),
-    cancelOrder: useCallback(
-      async (symbol, orderId) => {
-        const result = await post<CancelResult>('/api/orders/cancel', { symbol, orderId });
-        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
-        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel acknowledgement was malformed.'));
-        setMutationError(error);
-        return data ?? {
-          ok: false,
-          outcome: 'unknown',
-          reconciliationRequired: true,
-          error: error?.message ?? 'Cancel acknowledgement was unavailable.',
-        };
-      },
-      []
-    ),
-    cancelAll: useCallback(
-      async (symbol) => {
-        const result = await post<CancelResult>('/api/orders/cancel-all', { symbol });
-        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
-        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel-all acknowledgement was malformed.'));
-        setMutationError(error);
-        return data ?? {
-          ok: false,
-          outcome: 'unknown',
-          reconciliationRequired: true,
-          error: error?.message ?? 'Cancel-all acknowledgement was unavailable.',
-        };
-      },
-      []
-    ),
-    approveProposal: useCallback(
-      async (id) => {
-        // approval is server-side; with execution removed the returned intent
-        // is informational only — orders go through Binance itself
-        const result = await post(`/api/proposals/${id}/approve`, {});
-        setMutationError(result.error);
-        return result.error;
-      },
-      []
-    ),
-    importFills: useCallback(
-      async (symbol) => {
-        const result = await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol });
-        setMutationError(result.error);
-        return result.data ?? { error: result.error.message };
-      },
-      []
-    ),
   };
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;

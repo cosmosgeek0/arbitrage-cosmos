@@ -7,6 +7,7 @@ import {
   type ProductControlRegistryEntry,
   type ProductControlResult,
 } from '../../../lib/productIntegration';
+import { PillSelect } from '../../../components/PillSelect';
 
 export interface ControlRegistryPanelProps {
   readonly controls: readonly Readonly<ProductControlRegistryEntry>[];
@@ -14,6 +15,11 @@ export interface ControlRegistryPanelProps {
   readonly allowFixtureControls?: boolean;
   readonly onPreview: (control: Readonly<ProductControlRegistryEntry>) => Promise<ProductControlPreview>;
   readonly onSubmit: (request: Readonly<ProductCommandRequest>) => Promise<ProductControlResult>;
+}
+
+export function controlResultTruthLabel(result: Readonly<ProductControlResult> | null): 'NO_RESULT_TRUTH' | 'SYNTHETIC' | 'CANONICAL' {
+  if (result === null) return 'NO_RESULT_TRUTH';
+  return result.synthetic ? 'SYNTHETIC' : 'CANONICAL';
 }
 
 export function ControlRegistryPanel({ controls, busy, allowFixtureControls = false, onPreview, onSubmit }: ControlRegistryPanelProps) {
@@ -100,15 +106,27 @@ export function ControlRegistryPanel({ controls, busy, allowFixtureControls = fa
   const filteredControls = controls.filter((control) => {
     const haystack = `${control.controlId} ${control.backendCommandId} ${control.label} ${control.owner}`.toLowerCase();
     return (group === 'ALL' || control.group === group) && haystack.includes(query.trim().toLowerCase());
-  }).sort((left, right) => (left.controlId === 'global.kill-switch' ? -1 : right.controlId === 'global.kill-switch' ? 1 : 0));
+  }).sort((left, right) => (left.controlId === 'global.kill-switch.engage' ? -1 : right.controlId === 'global.kill-switch.engage' ? 1 : 0));
 
   return (
     <section className="pcr-section" aria-label="Control Registry" aria-busy={busy || working}>
       <header className="pcr-band"><h2>Control Registry</h2><span>{controls.length} Entries · Live Route Requires WIRED_LIVE</span></header>
       <div className="pcr-control-filters">
-        <label>Search controls<input type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} /></label>
-        <label>Control family<select value={group} onChange={(event) => setGroup(event.currentTarget.value)}><option value="ALL">All families</option>{groups.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>
-        <span role="status">{filteredControls.length} shown</span>
+        <label>Search Controls<input type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} /></label>
+        <label>
+          Control Family
+          <PillSelect
+            value={group}
+            options={['ALL', ...groups].map((entry) => ({
+              id: entry,
+              label: entry === 'ALL' ? 'All Families' : entry,
+            }))}
+            onChange={setGroup}
+            ariaLabel="Control Family"
+            className="pcr-control-family"
+          />
+        </label>
+        <span role="status">{filteredControls.length} Shown</span>
       </div>
       <div className="pcr-working-status" role="status" aria-live="polite">{workingMessage ?? (result ? `${result.controlId} ${result.status}` : '')}</div>
       <div className="pcr-control-list">
@@ -121,7 +139,7 @@ export function ControlRegistryPanel({ controls, busy, allowFixtureControls = fa
           const disabledReason = workingMessage ?? control.disabledReason ?? (!functional
             ? (control.wiringState === 'WIRED_LIVE' && !safeLiveCommand ? 'COMMAND_OUTSIDE_IP_CONTROL_NON_MONEY_ALLOWLIST' : `${control.wiringState} is not functional in this route.`)
             : control.confirmationText);
-          const emergency = control.controlId === 'global.kill-switch';
+          const emergency = control.controlId === 'global.kill-switch.engage';
           const emergencyEngaged = emergency && control.currentEffectiveValue.includes('ENGAGED');
           const buttonLabel = emergency
             ? (control.currentEffectiveValue.includes('ENGAGED') ? 'Preview Resume' : 'Preview STOP BOT')
@@ -150,7 +168,7 @@ export function ControlRegistryPanel({ controls, busy, allowFixtureControls = fa
                 <div><dt>Current Revision</dt><dd><code>{control.currentStateRevision}</code></dd></div>
                 <div><dt>Effect</dt><dd>{control.effect}</dd></div>
                 <div><dt>Preview / Revision</dt><dd><code>{control.preview?.digest ?? 'UNAVAILABLE'} · {control.preview?.expectedRevision ?? 'UNKNOWN'}</code></dd></div>
-                <div><dt>Result / Receipt</dt><dd><code>{control.latestResult?.status ?? 'NO_RESULT'} · {control.latestResult?.receiptId ?? 'NO_RECEIPT'} · {control.latestResult?.synthetic ? 'SYNTHETIC' : 'NON_SYNTHETIC'}</code></dd></div>
+                <div><dt>Result / Receipt</dt><dd><code>{control.latestResult?.status ?? 'NO_RESULT'} · {control.latestResult?.receiptId ?? 'NO_RECEIPT'} · {controlResultTruthLabel(control.latestResult)}</code></dd></div>
               </dl>
               <div className="pcr-control-action">
                 <span id={`reason-${control.controlId}`}>{disabledReason}</span>
@@ -175,7 +193,7 @@ export function ControlRegistryPanel({ controls, busy, allowFixtureControls = fa
           );
         })}
       </div>
-      {result && <div className={`pcr-result result-${result.status.toLowerCase()}`}><strong>{result.status}</strong><span>{result.before} → {result.after}</span><code>{result.receiptId ?? 'NO_RECEIPT'}</code><em>{result.synthetic ? 'SYNTHETIC' : 'NON_SYNTHETIC'}</em></div>}
+      {result && <div className={`pcr-result result-${result.status.toLowerCase()}`}><strong>{result.status}</strong><span>{result.before} → {result.after}</span><code>{result.receiptId ?? 'NO_RECEIPT'}</code><em>{controlResultTruthLabel(result)}</em></div>}
       {error && <div className="pcr-error" role="alert">{error}</div>}
     </section>
   );

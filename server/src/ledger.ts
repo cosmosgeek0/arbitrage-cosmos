@@ -3,6 +3,27 @@ import { EventEmitter } from 'node:events';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
+import type { SystemTraceEvent } from './systemIntegration/contracts/types.js';
+import { validateSystemTraceEvent } from './systemIntegration/contracts/validation.js';
+import {
+  canonicalPersistenceJson,
+  validateSystemTraceEvent as validatePersistedSystemTraceEvent,
+} from './systemIntegration/persistence/codec.js';
+import {
+  PRODUCT_IDENTITY_REFERENCE_TYPES,
+  PRODUCT_IDENTITY_RESOLUTION_STATES,
+  type ProductBootReleasePersistenceInput,
+  type ProductCommandPersistenceInput,
+  type ProductConfigRevisionPersistenceInput,
+  type ProductDesiredStatePersistenceInput,
+  type ProductIdentityReferencePersistenceInput,
+  type ProductIdentityReferenceRecord,
+  type ProductIncidentPersistenceInput,
+  type ProductPersistenceAuditRecord,
+  type ProductPersistenceMutationResult,
+  type SystemJsonValue,
+} from './systemIntegration/persistence/types.js';
+
 const EVENT_RESULT_MAX = 2_000;
 const EVENT_SEARCH_MAX_CHARS = 64;
 const EVENT_SEARCH_SCAN_ROWS = 25_000;
@@ -10,6 +31,53 @@ const BROWSER_SESSION_MAX = 2_000;
 const BROWSER_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 const HEALTH_PROBE_CACHE_MS = 5_000;
 const EPHEMERAL_EVENT_BATCH_MAX = 10_000;
+const CONFIG_CAS_KEY = /^[A-Za-z0-9_.:-]{1,160}$/;
+const CONFIG_CAS_VALUE_MAX_BYTES = 512 * 1_024;
+const CONFIG_CAS_EVENT_DATA_MAX_BYTES = 128 * 1_024;
+const CONFIG_CAS_EVENT_BATCH_MAX = 2;
+const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
+const LEDGER_EVENT_KIND = /^[a-z0-9_.-]{1,64}$/;
+const SYSTEM_INTEGRATION_EVENT_KIND = 'system.integration.trace';
+const SYSTEM_INTEGRATION_AUDIT_SCHEMA = 'cosmos.system-integration.audit';
+const SYSTEM_INTEGRATION_AUDIT_KINDS = new Set([
+  'STARTUP',
+  'TRANSITION',
+  'TRACE',
+  'RESTART_TRUTH',
+  'SHUTDOWN',
+  'CHECKPOINT',
+]);
+const MATERIAL_SYSTEM_TRACE_KINDS = new Set<SystemTraceEvent['kind']>([
+  'CONTROL',
+  'STRATEGY',
+  'INTELLIGENCE',
+  'CAPITAL',
+  'RISK',
+  'EXECUTION',
+  'RECONCILIATION',
+]);
+const SYSTEM_CHECKPOINT_CHECKSUM = /^[a-f0-9]{64}$/;
+const PRODUCT_OPERATOR_EVENT_MAX_BYTES = 128 * 1_024;
+const PRODUCT_OPERATOR_EVENT_MAX_QUERY_LIMIT = 500;
+export const PRODUCT_OPERATOR_EVENT_RETENTION_MAX = 25_000;
+const PRODUCT_PERSISTENCE_JSON_MAX_BYTES = 256 * 1_024;
+const PRODUCT_PERSISTENCE_AUDIT_MAX_BYTES = 128 * 1_024;
+const PRODUCT_PERSISTENCE_QUERY_MAX = 2_000;
+const PRODUCT_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
+const PRODUCT_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+const PRODUCT_DOMAIN_STATE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
+const PRODUCT_DIGEST = /^(?:sha256:)?[a-f0-9]{16,128}$/i;
+const PRODUCT_COMMIT = /^[a-f0-9]{40,64}$/i;
+const PRODUCT_SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
+const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
+  'TICKET',
+  'AMBIGUOUS_MUTATION',
+  'POSITION',
+  'LIABILITY',
+  'RECOVERY_CAMPAIGN',
+] as const);
+const SQLITE_MAX_ROWID = 9_223_372_036_854_775_807n;
+const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -45,6 +113,36 @@ export interface LedgerEventInput {
   kind: string;
   symbol?: string | null;
   data?: unknown;
+}
+
+export type LedgerConfigCompareAndSetResult =
+  | {
+      readonly committed: true;
+      readonly events: readonly LedgerEvent[];
+    }
+  | {
+      readonly committed: false;
+      readonly reason: 'VERSION_CONFLICT';
+      readonly currentValue: string | null;
+    };
+
+export interface LedgerProductOperatorEventRecord {
+  readonly cursor: string;
+  readonly event: Readonly<SystemTraceEvent>;
+}
+
+/**
+ * Structural match for the System Integration persistence read port. Ledger
+ * owns the durable cursor and exposes evidence; productIntegration remains a
+ * consumer and is deliberately not imported here.
+ */
+export interface LedgerProductOperatorEventPage {
+  readonly requestedAfterCursor: string;
+  readonly retainedFromCursor: string | null;
+  readonly highWaterCursor: string;
+  readonly continuity: 'PROVEN' | 'GAP' | 'UNPROVEN';
+  readonly truncated: boolean;
+  readonly items: readonly Readonly<LedgerProductOperatorEventRecord>[];
 }
 
 export interface FillRow {
@@ -92,6 +190,113 @@ interface EventDbRow {
   kind: string;
   symbol: string | null;
   data: string | null;
+}
+
+interface ProductOperatorEventDbRow {
+  cursor: string;
+  ledger_event_id: number;
+  event_id: string;
+  component_id: string;
+  correlation_id: string;
+  occurred_at_ms: number;
+  persisted_at_ms: number;
+  material_projection_json: string;
+  ledger_ts: number | null;
+  ledger_kind: string | null;
+  ledger_data: string | null;
+}
+
+interface ProductCommandDbRow {
+  command_id: string;
+  idempotency_key: string;
+  request_digest: string;
+  command_type: string;
+  target_component_id: string;
+  authenticated_operator_id: string;
+  reason: string;
+  required_authority: string;
+  request_payload_json: string;
+  preview_digest: string;
+  preview_json: string;
+  expected_revision: number;
+  resulting_revision: number | null;
+  status: string;
+  created_at_ms: number;
+  expires_at_ms: number;
+  completed_at_ms: number | null;
+  correlation_id: string;
+  before_projection_json: string | null;
+  after_projection_json: string | null;
+  result_json: string | null;
+  ledger_event_id: number | null;
+}
+
+interface ProductIdentityReferenceDbRow {
+  reference_type: string;
+  reference_id: string;
+  owner_id: string;
+  owner_revision: string;
+  owner_state: string;
+  resolution_state: string;
+  correlation_id: string;
+  parent_reference_type: string | null;
+  parent_reference_id: string | null;
+  payload_hash: string | null;
+  owner_projection_json: string;
+  occurred_at_ms: number;
+  valid_until_ms: number | null;
+  ledger_event_id: number;
+}
+
+interface ProductIncidentDbRow {
+  incident_id: string;
+  fingerprint: string;
+  root_component_id: string;
+  severity: string;
+  capital_relevant: number;
+  state: string;
+  first_seen_at_ms: number;
+  last_seen_at_ms: number;
+  event_count: number;
+  acknowledged_at_ms: number | null;
+  acknowledged_by_operator_id: string | null;
+  resolved_at_ms: number | null;
+  correlation_id: string;
+  ledger_event_id: number;
+}
+
+interface ProductBootReleaseDbRow {
+  operation_id: string;
+  operation_type: string;
+  generation: number;
+  tested_commit: string | null;
+  deployed_commit: string | null;
+  config_revision: string | null;
+  schema_revision: string;
+  model_revision: string | null;
+  started_at_ms: number;
+  completed_at_ms: number | null;
+  clean: number | null;
+  blocker_code: string | null;
+  correlation_id: string;
+  ledger_event_id: number;
+}
+
+interface PreparedProductPersistenceAudit {
+  readonly kind: string;
+  readonly symbol: string | null;
+  readonly serialized: string;
+  readonly data: SystemJsonValue;
+}
+
+interface PreparedProductOperatorEvent {
+  readonly eventId: string;
+  readonly componentId: string;
+  readonly correlationId: string;
+  readonly occurredAtMs: number;
+  readonly persistedAtMs: number;
+  readonly serializedProjection: string;
+  readonly event: Readonly<SystemTraceEvent>;
 }
 
 interface UnresolvedOrderDbRow {
@@ -153,6 +358,7 @@ export class Ledger extends EventEmitter {
     mkdirSync(dataDir, { recursive: true });
     this.db = new Database(path.join(dataDir, 'cosmos.db'));
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('foreign_keys = ON');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,6 +396,139 @@ export class Ledger extends EventEmitter {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS product_component_desired_state (
+        component_id TEXT PRIMARY KEY,
+        desired_state TEXT NOT NULL,
+        state_revision INTEGER NOT NULL CHECK(state_revision >= 0),
+        restart_generation INTEGER NOT NULL CHECK(restart_generation >= 0),
+        updated_at_ms INTEGER NOT NULL,
+        correlation_id TEXT NOT NULL,
+        ledger_event_id INTEGER NOT NULL REFERENCES events(id)
+      );
+      CREATE TABLE IF NOT EXISTS product_commands (
+        command_id TEXT PRIMARY KEY,
+        idempotency_key TEXT NOT NULL UNIQUE,
+        request_digest TEXT NOT NULL,
+        command_type TEXT NOT NULL,
+        target_component_id TEXT NOT NULL,
+        authenticated_operator_id TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        required_authority TEXT NOT NULL,
+        request_payload_json TEXT NOT NULL,
+        preview_digest TEXT NOT NULL,
+        preview_json TEXT NOT NULL,
+        expected_revision INTEGER NOT NULL CHECK(expected_revision >= 0),
+        resulting_revision INTEGER CHECK(resulting_revision IS NULL OR resulting_revision >= 0),
+        status TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        expires_at_ms INTEGER NOT NULL,
+        completed_at_ms INTEGER,
+        correlation_id TEXT NOT NULL,
+        before_projection_json TEXT,
+        after_projection_json TEXT,
+        result_json TEXT,
+        ledger_event_id INTEGER REFERENCES events(id),
+        CHECK(expires_at_ms > created_at_ms),
+        CHECK(completed_at_ms IS NULL OR completed_at_ms >= created_at_ms),
+        CHECK(length(reason) BETWEEN 1 AND 500 AND reason = trim(reason)),
+        CHECK(json_valid(request_payload_json) AND length(CAST(request_payload_json AS BLOB)) <= 262144),
+        CHECK(json_valid(preview_json) AND length(CAST(preview_json AS BLOB)) <= 262144),
+        CHECK(before_projection_json IS NULL OR (json_valid(before_projection_json) AND length(CAST(before_projection_json AS BLOB)) <= 262144)),
+        CHECK(after_projection_json IS NULL OR (json_valid(after_projection_json) AND length(CAST(after_projection_json AS BLOB)) <= 262144)),
+        CHECK(result_json IS NULL OR (json_valid(result_json) AND length(CAST(result_json AS BLOB)) <= 262144)),
+        UNIQUE(idempotency_key, request_digest)
+      );
+      CREATE TABLE IF NOT EXISTS product_config_revisions (
+        config_revision TEXT PRIMARY KEY,
+        content_digest TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL,
+        effective_at_ms INTEGER,
+        created_at_ms INTEGER NOT NULL,
+        created_by_operator_id TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        config_json TEXT NOT NULL,
+        ledger_event_id INTEGER NOT NULL REFERENCES events(id),
+        CHECK(json_valid(config_json) AND length(CAST(config_json AS BLOB)) <= 262144)
+      );
+      CREATE TABLE IF NOT EXISTS product_identity_references (
+        reference_type TEXT NOT NULL CHECK(reference_type IN (
+          'OPPORTUNITY', 'CAPITAL_VERDICT', 'RISK_VERDICT', 'TICKET', 'LEG', 'ORDER',
+          'AMBIGUOUS_MUTATION', 'POSITION', 'LIABILITY', 'RECOVERY_CAMPAIGN',
+          'MODEL_ASSESSMENT', 'OUTCOME', 'BOOT_OPERATION', 'SHUTDOWN_OPERATION',
+          'DEPLOYMENT_REVISION'
+        )),
+        reference_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        owner_revision TEXT NOT NULL DEFAULT 'UNKNOWN' CHECK(length(owner_revision) > 0),
+        owner_state TEXT NOT NULL,
+        resolution_state TEXT NOT NULL CHECK(resolution_state IN (
+          'OPEN', 'TERMINAL_PROVEN', 'AMBIGUOUS', 'RECOVERY_REQUIRED', 'UNAVAILABLE', 'UNKNOWN'
+        )),
+        correlation_id TEXT NOT NULL,
+        parent_reference_type TEXT CHECK(parent_reference_type IS NULL OR parent_reference_type IN (
+          'OPPORTUNITY', 'CAPITAL_VERDICT', 'RISK_VERDICT', 'TICKET', 'LEG', 'ORDER',
+          'AMBIGUOUS_MUTATION', 'POSITION', 'LIABILITY', 'RECOVERY_CAMPAIGN',
+          'MODEL_ASSESSMENT', 'OUTCOME', 'BOOT_OPERATION', 'SHUTDOWN_OPERATION',
+          'DEPLOYMENT_REVISION'
+        )),
+        parent_reference_id TEXT,
+        payload_hash TEXT,
+        owner_projection_json TEXT NOT NULL,
+        occurred_at_ms INTEGER NOT NULL,
+        valid_until_ms INTEGER,
+        ledger_event_id INTEGER NOT NULL REFERENCES events(id),
+        PRIMARY KEY(reference_type, reference_id, owner_revision),
+        CHECK((parent_reference_type IS NULL) = (parent_reference_id IS NULL)),
+        CHECK(valid_until_ms IS NULL OR valid_until_ms >= occurred_at_ms),
+        CHECK(json_valid(owner_projection_json) AND length(CAST(owner_projection_json AS BLOB)) <= 262144)
+      );
+      CREATE TABLE IF NOT EXISTS product_operator_events (
+        cursor INTEGER PRIMARY KEY AUTOINCREMENT,
+        ledger_event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+        event_id TEXT NOT NULL UNIQUE,
+        component_id TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        occurred_at_ms INTEGER NOT NULL,
+        persisted_at_ms INTEGER NOT NULL,
+        material_projection_json TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS product_incidents (
+        incident_id TEXT PRIMARY KEY,
+        fingerprint TEXT NOT NULL UNIQUE,
+        root_component_id TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        capital_relevant INTEGER NOT NULL CHECK(capital_relevant IN (0,1)),
+        state TEXT NOT NULL,
+        first_seen_at_ms INTEGER NOT NULL,
+        last_seen_at_ms INTEGER NOT NULL,
+        event_count INTEGER NOT NULL CHECK(event_count >= 1),
+        acknowledged_at_ms INTEGER,
+        acknowledged_by_operator_id TEXT,
+        resolved_at_ms INTEGER,
+        correlation_id TEXT NOT NULL,
+        ledger_event_id INTEGER NOT NULL REFERENCES events(id),
+        CHECK(last_seen_at_ms >= first_seen_at_ms),
+        CHECK((acknowledged_at_ms IS NULL) = (acknowledged_by_operator_id IS NULL)),
+        CHECK(acknowledged_at_ms IS NULL OR acknowledged_at_ms >= first_seen_at_ms),
+        CHECK(resolved_at_ms IS NULL OR resolved_at_ms >= first_seen_at_ms)
+      );
+      CREATE TABLE IF NOT EXISTS product_boot_release_revisions (
+        operation_id TEXT PRIMARY KEY,
+        operation_type TEXT NOT NULL,
+        generation INTEGER NOT NULL CHECK(generation >= 0),
+        tested_commit TEXT,
+        deployed_commit TEXT,
+        config_revision TEXT,
+        schema_revision TEXT NOT NULL,
+        model_revision TEXT,
+        started_at_ms INTEGER NOT NULL,
+        completed_at_ms INTEGER,
+        clean INTEGER CHECK(clean IN (0,1)),
+        blocker_code TEXT,
+        correlation_id TEXT NOT NULL,
+        ledger_event_id INTEGER NOT NULL REFERENCES events(id),
+        CHECK(completed_at_ms IS NULL OR completed_at_ms >= started_at_ms)
+      );
       CREATE TABLE IF NOT EXISTS browser_sessions (
         id TEXT PRIMARY KEY,
         ip TEXT NOT NULL,
@@ -204,6 +543,24 @@ export class Ledger extends EventEmitter {
       );
       CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts DESC);
       CREATE INDEX IF NOT EXISTS idx_events_kind ON events (kind, ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_operator_events_correlation_cursor
+        ON product_operator_events (correlation_id, cursor);
+      CREATE INDEX IF NOT EXISTS idx_product_operator_events_component_cursor
+        ON product_operator_events (component_id, cursor DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_commands_target_created
+        ON product_commands (target_component_id, created_at_ms DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_commands_status_created
+        ON product_commands (status, created_at_ms DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_commands_correlation
+        ON product_commands (correlation_id);
+      CREATE INDEX IF NOT EXISTS idx_product_identity_references_correlation_occurred
+        ON product_identity_references (correlation_id, occurred_at_ms);
+      CREATE INDEX IF NOT EXISTS idx_product_identity_references_parent
+        ON product_identity_references (parent_reference_type, parent_reference_id);
+      CREATE INDEX IF NOT EXISTS idx_product_identity_references_resolution_occurred
+        ON product_identity_references (reference_type, resolution_state, occurred_at_ms DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_incidents_state_severity_last_seen
+        ON product_incidents (state, severity, last_seen_at_ms DESC);
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
@@ -769,6 +1126,79 @@ export class Ledger extends EventEmitter {
     ).run(BROWSER_SESSION_MAX);
   }
 
+  /**
+   * Keeps the newest fixed material-event window. Callers invoke this before
+   * their surrounding transaction commits, so cursor insertion and retention
+   * advance are one atomic state change. Deleting projection rows never
+   * deletes the underlying immutable audit events or lowers sqlite_sequence.
+   */
+  private trimProductOperatorEvents(): void {
+    this.db.prepare(`
+      DELETE FROM product_operator_events
+      WHERE cursor <= COALESCE((
+        SELECT cursor
+        FROM product_operator_events
+        ORDER BY cursor DESC
+        LIMIT 1 OFFSET ?
+      ), 0)
+    `).run(PRODUCT_OPERATOR_EVENT_RETENTION_MAX);
+  }
+
+  private appendProductPersistenceAudit(
+    prepared: Readonly<PreparedProductPersistenceAudit>,
+  ): LedgerEvent {
+    const ts = Date.now();
+    const info = this.db
+      .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
+      .run(ts, prepared.kind, prepared.symbol, prepared.serialized);
+    const id = Number(info.lastInsertRowid);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      throw new RangeError('product persistence ledger event identity is invalid');
+    }
+    return {
+      id,
+      ts,
+      kind: prepared.kind,
+      symbol: prepared.symbol,
+      data: JSON.parse(prepared.serialized) as SystemJsonValue,
+    };
+  }
+
+  private readProductPersistenceAudit(
+    ledgerEventId: number,
+    expected?: Readonly<PreparedProductPersistenceAudit>,
+  ): LedgerEvent {
+    if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
+      throw new TypeError('product persistence ledger event identity is invalid');
+    }
+    const row = this.db.prepare('SELECT * FROM events WHERE id = ?').get(ledgerEventId) as EventDbRow | undefined;
+    if (!row) throw new Error('product persistence ledger event is missing');
+    if (expected && (row.kind !== expected.kind
+      || row.symbol !== expected.symbol
+      || row.data !== expected.serialized)) {
+      throw new Error('product persistence ledger event does not match its durable owner projection');
+    }
+    return parseEvent(row);
+  }
+
+  private publishProductPersistenceResult(
+    result: ProductPersistenceMutationResult,
+  ): ProductPersistenceMutationResult {
+    if (result.disposition !== 'COMMITTED_NEW') return result;
+    try {
+      const event = result.ledgerEvent;
+      this.emit('event', {
+        ...event,
+        data: JSON.parse(JSON.stringify(event.data)) as unknown,
+      } satisfies LedgerEvent);
+    } catch {
+      // The SQLite transaction is already authoritative. Listener failure or
+      // application shutdown cannot turn a committed owner projection into an
+      // apparent retryable write failure.
+    }
+    return result;
+  }
+
   getConfigValue(key: string): string | null {
     const row = this.db.prepare('SELECT value FROM config WHERE key = ?').get(key) as
       | { value: string }
@@ -798,25 +1228,1071 @@ export class Ledger extends EventEmitter {
     data: unknown = null,
   ): LedgerEvent {
     const ts = Date.now();
-    const serialized = data === undefined ? null : JSON.stringify(data);
+    let serialized: string | null = null;
+    if (data !== undefined) {
+      const encoded = JSON.stringify(data);
+      if (typeof encoded !== 'string') throw new TypeError('ledger event data must be JSON serializable');
+      serialized = encoded;
+    }
+    const durableData = serialized === null ? null : JSON.parse(serialized) as unknown;
+    const productOperatorEvent = prepareProductOperatorEvent(kind, durableData, ts);
     const commit = this.db.transaction(() => {
       this.db
         .prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
         .run(key, value);
-      return this.db
+      const info = this.db
         .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
         .run(ts, kind, symbol, serialized);
+      const ledgerEventId = Number(info.lastInsertRowid);
+      if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
+        throw new RangeError('ledger event identity exceeds the supported integer range');
+      }
+      if (productOperatorEvent) {
+        this.db.prepare(`
+          INSERT INTO product_operator_events (
+            ledger_event_id,
+            event_id,
+            component_id,
+            correlation_id,
+            occurred_at_ms,
+            persisted_at_ms,
+            material_projection_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          ledgerEventId,
+          productOperatorEvent.eventId,
+          productOperatorEvent.componentId,
+          productOperatorEvent.correlationId,
+          productOperatorEvent.occurredAtMs,
+          productOperatorEvent.persistedAtMs,
+          productOperatorEvent.serializedProjection,
+        );
+        this.trimProductOperatorEvents();
+      }
+      return ledgerEventId;
     });
-    const info = commit();
+    const ledgerEventId = commit.immediate();
     const event: LedgerEvent = {
-      id: Number(info.lastInsertRowid),
+      id: ledgerEventId,
       ts,
       kind,
       symbol,
-      data: data ?? null,
+      data: durableData,
     };
-    this.emit('event', event);
-    return event;
+    try {
+      this.emit('event', event);
+      return event;
+    } catch {
+      // The SQLite transaction is already committed. Verify the coupled
+      // config/ledger/operator write when possible and never turn a listener
+      // exception into a false write failure that invites a duplicate append.
+      try {
+        const row = this.db.prepare('SELECT * FROM events WHERE id = ?').get(ledgerEventId) as EventDbRow | undefined;
+        const operatorRow = this.db.prepare(`
+          SELECT material_projection_json
+          FROM product_operator_events
+          WHERE ledger_event_id = ?
+        `).get(ledgerEventId) as { material_projection_json: string } | undefined;
+        const exactOperator = productOperatorEvent
+          ? operatorRow?.material_projection_json === productOperatorEvent.serializedProjection
+          : operatorRow === undefined;
+        if (this.getConfigValue(key) === value
+          && row?.id === ledgerEventId
+          && row.ts === ts
+          && row.kind === kind
+          && row.symbol === symbol
+          && row.data === serialized
+          && exactOperator) {
+          return parseEvent(row);
+        }
+      } catch {
+        // A listener may close its surrounding application. The pristine
+        // transaction result below remains authoritative in that case.
+      }
+      return {
+        id: ledgerEventId,
+        ts,
+        kind,
+        symbol,
+        data: serialized === null ? null : JSON.parse(serialized) as unknown,
+      };
+    }
+  }
+
+  /**
+   * Persists owner-supplied desired state with an exact per-component revision
+   * CAS. This primitive records state; it does not start, stop, or pause a
+   * component and therefore owns no lifecycle behavior.
+   */
+  compareAndSetProductComponentDesiredState(
+    input: Readonly<ProductDesiredStatePersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product desired-state input is invalid');
+    assertProductIdentifier(input.componentId, 'product desired-state componentId');
+    if (!['STOPPED', 'RUNNING', 'PAUSED'].includes(input.desiredState)) {
+      throw new TypeError('product desired-state desiredState is invalid');
+    }
+    if (input.expectedStateRevision !== null) {
+      assertProductNonNegativeInteger(input.expectedStateRevision, 'product desired-state expectedStateRevision');
+    }
+    assertProductNonNegativeInteger(input.stateRevision, 'product desired-state stateRevision');
+    const requiredRevision = input.expectedStateRevision === null ? 0 : input.expectedStateRevision + 1;
+    if (!Number.isSafeInteger(requiredRevision) || input.stateRevision !== requiredRevision) {
+      throw new TypeError('product desired-state revision must advance exactly once');
+    }
+    assertProductNonNegativeInteger(input.restartGeneration, 'product desired-state restartGeneration');
+    assertProductUtcMillis(input.updatedAtMs, 'product desired-state updatedAtMs');
+    assertProductIdentifier(input.correlationId, 'product desired-state correlationId');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const current = this.db.prepare(`
+        SELECT state_revision FROM product_component_desired_state WHERE component_id = ?
+      `).get(input.componentId) as { state_revision: number } | undefined;
+      const currentRevision = current?.state_revision ?? null;
+      if (currentRevision !== input.expectedStateRevision) {
+        return frozenProductPersistenceResult(
+          'VERSION_CONFLICT',
+          null,
+          currentRevision === null ? null : String(currentRevision),
+        );
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_component_desired_state (
+          component_id, desired_state, state_revision, restart_generation,
+          updated_at_ms, correlation_id, ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(component_id) DO UPDATE SET
+          desired_state = excluded.desired_state,
+          state_revision = excluded.state_revision,
+          restart_generation = excluded.restart_generation,
+          updated_at_ms = excluded.updated_at_ms,
+          correlation_id = excluded.correlation_id,
+          ledger_event_id = excluded.ledger_event_id
+      `).run(
+        input.componentId,
+        input.desiredState,
+        input.stateRevision,
+        input.restartGeneration,
+        input.updatedAtMs,
+        input.correlationId,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(input.stateRevision));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * Appends a generic command projection only after exact idempotency and
+   * target desired-state revision checks. It deliberately does not apply the
+   * command, choose a status, or advance desired state.
+   */
+  compareAndAppendProductCommand(
+    input: Readonly<ProductCommandPersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product command persistence input is invalid');
+    assertProductIdentifier(input.commandId, 'product commandId');
+    if (typeof input.idempotencyKey !== 'string' || !PRODUCT_IDEMPOTENCY_KEY.test(input.idempotencyKey)) {
+      throw new TypeError('product command idempotencyKey is invalid');
+    }
+    if (typeof input.requestDigest !== 'string' || !PRODUCT_DIGEST.test(input.requestDigest)
+      || typeof input.previewDigest !== 'string' || !PRODUCT_DIGEST.test(input.previewDigest)) {
+      throw new TypeError('product command digest is invalid');
+    }
+    assertProductDomainState(input.commandType, 'product commandType');
+    assertProductIdentifier(input.targetComponentId, 'product targetComponentId');
+    assertProductIdentifier(input.authenticatedOperatorId, 'product authenticatedOperatorId');
+    assertProductReason(input.reason);
+    assertProductDomainState(input.requiredAuthority, 'product requiredAuthority');
+    assertProductNonNegativeInteger(input.expectedRevision, 'product expectedRevision');
+    if (input.resultingRevision !== null) {
+      assertProductNonNegativeInteger(input.resultingRevision, 'product resultingRevision');
+    }
+    assertProductDomainState(input.status, 'product command status');
+    assertProductUtcMillis(input.createdAtMs, 'product command createdAtMs');
+    assertProductUtcMillis(input.expiresAtMs, 'product command expiresAtMs');
+    if (input.expiresAtMs <= input.createdAtMs) throw new TypeError('product command must expire after creation');
+    if (input.completedAtMs !== null) {
+      assertProductUtcMillis(input.completedAtMs, 'product command completedAtMs');
+      if (input.completedAtMs < input.createdAtMs) throw new TypeError('product command completion precedes creation');
+    }
+    assertProductIdentifier(input.correlationId, 'product command correlationId');
+    const requestPayloadJson = canonicalProductPersistenceJson(input.requestPayload, 'product command request payload');
+    const previewJson = canonicalProductPersistenceJson(input.preview, 'product command preview');
+    const beforeProjectionJson = canonicalNullableProductPersistenceJson(input.beforeProjection, 'product command before projection');
+    const afterProjectionJson = canonicalNullableProductPersistenceJson(input.afterProjection, 'product command after projection');
+    const resultJson = canonicalNullableProductPersistenceJson(input.result, 'product command result');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.db.prepare(`
+        SELECT * FROM product_commands
+        WHERE idempotency_key = ? OR command_id = ?
+        ORDER BY CASE WHEN idempotency_key = ? THEN 0 ELSE 1 END
+        LIMIT 1
+      `).get(input.idempotencyKey, input.commandId, input.idempotencyKey) as ProductCommandDbRow | undefined;
+      if (existing) {
+        if (exactProductCommandRow(
+          existing,
+          input,
+          requestPayloadJson,
+          previewJson,
+          beforeProjectionJson,
+          afterProjectionJson,
+          resultJson,
+        )) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.ledger_event_id as number, audit),
+            String(existing.expected_revision),
+          );
+        }
+        return frozenProductPersistenceResult(
+          'IDEMPOTENCY_CONFLICT',
+          null,
+          Number.isSafeInteger(existing.expected_revision) ? String(existing.expected_revision) : null,
+        );
+      }
+
+      const desired = this.db.prepare(`
+        SELECT state_revision FROM product_component_desired_state WHERE component_id = ?
+      `).get(input.targetComponentId) as { state_revision: number } | undefined;
+      const currentRevision = desired?.state_revision ?? null;
+      if (currentRevision !== input.expectedRevision) {
+        return frozenProductPersistenceResult(
+          'VERSION_CONFLICT',
+          null,
+          currentRevision === null ? null : String(currentRevision),
+        );
+      }
+
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_commands (
+          command_id, idempotency_key, request_digest, command_type,
+          target_component_id, authenticated_operator_id, reason,
+          required_authority, request_payload_json, preview_digest,
+          preview_json, expected_revision, resulting_revision, status,
+          created_at_ms, expires_at_ms, completed_at_ms, correlation_id,
+          before_projection_json, after_projection_json, result_json,
+          ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.commandId,
+        input.idempotencyKey,
+        input.requestDigest,
+        input.commandType,
+        input.targetComponentId,
+        input.authenticatedOperatorId,
+        input.reason,
+        input.requiredAuthority,
+        requestPayloadJson,
+        input.previewDigest,
+        previewJson,
+        input.expectedRevision,
+        input.resultingRevision,
+        input.status,
+        input.createdAtMs,
+        input.expiresAtMs,
+        input.completedAtMs,
+        input.correlationId,
+        beforeProjectionJson,
+        afterProjectionJson,
+        resultJson,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(input.expectedRevision));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Stores an immutable, owner-supplied configuration revision and audit. */
+  recordProductConfigRevision(
+    input: Readonly<ProductConfigRevisionPersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product config revision input is invalid');
+    assertProductIdentifier(input.configRevision, 'product configRevision');
+    if (typeof input.contentDigest !== 'string' || !PRODUCT_DIGEST.test(input.contentDigest)) {
+      throw new TypeError('product config contentDigest is invalid');
+    }
+    assertProductDomainState(input.status, 'product config status');
+    if (input.effectiveAtMs !== null) assertProductUtcMillis(input.effectiveAtMs, 'product config effectiveAtMs');
+    assertProductUtcMillis(input.createdAtMs, 'product config createdAtMs');
+    assertProductIdentifier(input.createdByOperatorId, 'product config createdByOperatorId');
+    assertProductIdentifier(input.correlationId, 'product config correlationId');
+    const configJson = canonicalProductPersistenceJson(input.config, 'product config projection');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.db.prepare(`
+        SELECT * FROM product_config_revisions
+        WHERE config_revision = ? OR content_digest = ?
+        LIMIT 1
+      `).get(input.configRevision, input.contentDigest) as {
+        config_revision: string;
+        content_digest: string;
+        status: string;
+        effective_at_ms: number | null;
+        created_at_ms: number;
+        created_by_operator_id: string;
+        correlation_id: string;
+        config_json: string;
+        ledger_event_id: number;
+      } | undefined;
+      if (existing) {
+        const exact = existing.config_revision === input.configRevision
+          && existing.content_digest === input.contentDigest
+          && existing.status === input.status
+          && existing.effective_at_ms === input.effectiveAtMs
+          && existing.created_at_ms === input.createdAtMs
+          && existing.created_by_operator_id === input.createdByOperatorId
+          && existing.correlation_id === input.correlationId
+          && existing.config_json === configJson
+          && Number.isSafeInteger(existing.ledger_event_id)
+          && existing.ledger_event_id > 0;
+        if (exact) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.ledger_event_id, audit),
+            existing.config_revision,
+          );
+        }
+        return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, existing.config_revision);
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_config_revisions (
+          config_revision, content_digest, status, effective_at_ms,
+          created_at_ms, created_by_operator_id, correlation_id,
+          config_json, ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.configRevision,
+        input.contentDigest,
+        input.status,
+        input.effectiveAtMs,
+        input.createdAtMs,
+        input.createdByOperatorId,
+        input.correlationId,
+        configJson,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, input.configRevision);
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * CAS-upserts one opaque owner revision in the durable identity graph. The
+   * caller supplies both current and next resolution states; Ledger preserves
+   * them without deciding whether an opportunity, position, or recovery is
+   * terminal.
+   */
+  compareAndUpsertProductIdentityReference(
+    input: Readonly<ProductIdentityReferencePersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product identity reference input is invalid');
+    if (!(PRODUCT_IDENTITY_REFERENCE_TYPES as readonly string[]).includes(input.referenceType)) {
+      throw new TypeError('product identity referenceType is invalid');
+    }
+    assertProductIdentifier(input.referenceId, 'product identity referenceId');
+    assertProductIdentifier(input.ownerId, 'product identity ownerId');
+    assertProductIdentifier(input.ownerRevision, 'product identity ownerRevision');
+    if (input.expectedResolutionState !== null
+      && !(PRODUCT_IDENTITY_RESOLUTION_STATES as readonly string[]).includes(input.expectedResolutionState)) {
+      throw new TypeError('product identity expectedResolutionState is invalid');
+    }
+    assertProductDomainState(input.ownerState, 'product identity ownerState');
+    if (!(PRODUCT_IDENTITY_RESOLUTION_STATES as readonly string[]).includes(input.resolutionState)) {
+      throw new TypeError('product identity resolutionState is invalid');
+    }
+    assertProductIdentifier(input.correlationId, 'product identity correlationId');
+    const hasParentType = input.parentReferenceType !== null;
+    const hasParentId = input.parentReferenceId !== null;
+    if (hasParentType !== hasParentId
+      || (input.parentReferenceType !== null
+        && !(PRODUCT_IDENTITY_REFERENCE_TYPES as readonly string[]).includes(input.parentReferenceType))) {
+      throw new TypeError('product identity parent reference is invalid');
+    }
+    assertProductOptionalIdentifier(input.parentReferenceId, 'product identity parentReferenceId');
+    assertProductOptionalDigest(input.payloadHash, 'product identity payloadHash');
+    assertProductUtcMillis(input.occurredAtMs, 'product identity occurredAtMs');
+    if (input.validUntilMs !== null) {
+      assertProductUtcMillis(input.validUntilMs, 'product identity validUntilMs');
+      if (input.validUntilMs < input.occurredAtMs) throw new TypeError('product identity validity precedes occurrence');
+    }
+    const ownerProjectionJson = canonicalProductPersistenceJson(input.ownerProjection, 'product owner projection');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.db.prepare(`
+        SELECT * FROM product_identity_references
+        WHERE reference_type = ? AND reference_id = ? AND owner_revision = ?
+      `).get(input.referenceType, input.referenceId, input.ownerRevision) as ProductIdentityReferenceDbRow | undefined;
+      if (existing && exactProductIdentityReferenceRow(existing, input, ownerProjectionJson)) {
+        return frozenProductPersistenceResult(
+          'IDEMPOTENT_REPLAY',
+          this.readProductPersistenceAudit(existing.ledger_event_id, audit),
+          existing.resolution_state,
+        );
+      }
+      const currentResolution = existing?.resolution_state ?? null;
+      if (currentResolution !== input.expectedResolutionState) {
+        return frozenProductPersistenceResult('VERSION_CONFLICT', null, currentResolution);
+      }
+      if (existing && input.occurredAtMs < existing.occurred_at_ms) {
+        throw new TypeError('product identity transition cannot move occurrence time backwards');
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_identity_references (
+          reference_type, reference_id, owner_id, owner_revision, owner_state,
+          resolution_state, correlation_id, parent_reference_type,
+          parent_reference_id, payload_hash, owner_projection_json,
+          occurred_at_ms, valid_until_ms, ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(reference_type, reference_id, owner_revision) DO UPDATE SET
+          owner_id = excluded.owner_id,
+          owner_state = excluded.owner_state,
+          resolution_state = excluded.resolution_state,
+          correlation_id = excluded.correlation_id,
+          parent_reference_type = excluded.parent_reference_type,
+          parent_reference_id = excluded.parent_reference_id,
+          payload_hash = excluded.payload_hash,
+          owner_projection_json = excluded.owner_projection_json,
+          occurred_at_ms = excluded.occurred_at_ms,
+          valid_until_ms = excluded.valid_until_ms,
+          ledger_event_id = excluded.ledger_event_id
+      `).run(
+        input.referenceType,
+        input.referenceId,
+        input.ownerId,
+        input.ownerRevision,
+        input.ownerState,
+        input.resolutionState,
+        input.correlationId,
+        input.parentReferenceType,
+        input.parentReferenceId,
+        input.payloadHash,
+        ownerProjectionJson,
+        input.occurredAtMs,
+        input.validUntilMs,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, input.resolutionState);
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * Reads only unresolved restart-blocking owner references. Any malformed
+   * durable row throws so the System Integration adapter can fail closed.
+   */
+  readProductBlockingIdentityReferences(
+    limit = 1_000,
+  ): readonly Readonly<ProductIdentityReferenceRecord>[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > PRODUCT_PERSISTENCE_QUERY_MAX) {
+      throw new RangeError(`product identity reference limit must be 1-${PRODUCT_PERSISTENCE_QUERY_MAX}`);
+    }
+    const placeholders = PRODUCT_BLOCKING_REFERENCE_TYPES.map(() => '?').join(', ');
+    const rows = this.db.prepare(`
+      SELECT * FROM product_identity_references
+      WHERE reference_type IN (${placeholders})
+        AND resolution_state != 'TERMINAL_PROVEN'
+      ORDER BY occurred_at_ms ASC, reference_type ASC, reference_id ASC, owner_revision ASC
+      LIMIT ?
+    `).all(...PRODUCT_BLOCKING_REFERENCE_TYPES, limit) as ProductIdentityReferenceDbRow[];
+    return Object.freeze(rows.map((row) => {
+      if (!(PRODUCT_IDENTITY_REFERENCE_TYPES as readonly string[]).includes(row.reference_type)
+        || !(PRODUCT_IDENTITY_RESOLUTION_STATES as readonly string[]).includes(row.resolution_state)
+        || !PRODUCT_BLOCKING_REFERENCE_TYPES.includes(row.reference_type as typeof PRODUCT_BLOCKING_REFERENCE_TYPES[number])) {
+        throw new Error('durable product identity reference has invalid vocabulary');
+      }
+      assertProductIdentifier(row.reference_id, 'durable product identity referenceId');
+      assertProductIdentifier(row.owner_id, 'durable product identity ownerId');
+      assertProductIdentifier(row.owner_revision, 'durable product identity ownerRevision');
+      assertProductDomainState(row.owner_state, 'durable product identity ownerState');
+      assertProductIdentifier(row.correlation_id, 'durable product identity correlationId');
+      const parentTypeValid = row.parent_reference_type === null
+        || (PRODUCT_IDENTITY_REFERENCE_TYPES as readonly string[]).includes(row.parent_reference_type);
+      if (!parentTypeValid || (row.parent_reference_type === null) !== (row.parent_reference_id === null)) {
+        throw new Error('durable product identity parent reference is invalid');
+      }
+      assertProductOptionalIdentifier(row.parent_reference_id, 'durable product identity parentReferenceId');
+      assertProductOptionalDigest(row.payload_hash, 'durable product identity payloadHash');
+      assertProductUtcMillis(row.occurred_at_ms, 'durable product identity occurredAtMs');
+      if (row.valid_until_ms !== null) {
+        assertProductUtcMillis(row.valid_until_ms, 'durable product identity validUntilMs');
+        if (row.valid_until_ms < row.occurred_at_ms) throw new Error('durable product identity validity is invalid');
+      }
+      assertProductPositiveInteger(row.ledger_event_id, 'durable product identity ledgerEventId');
+      this.readProductPersistenceAudit(row.ledger_event_id);
+      const parsed = JSON.parse(row.owner_projection_json) as SystemJsonValue;
+      if (canonicalProductPersistenceJson(parsed, 'durable product owner projection') !== row.owner_projection_json) {
+        throw new Error('durable product owner projection is not canonical');
+      }
+      return Object.freeze({
+        referenceType: row.reference_type as ProductIdentityReferenceRecord['referenceType'],
+        referenceId: row.reference_id,
+        ownerId: row.owner_id,
+        ownerRevision: row.owner_revision,
+        ownerState: row.owner_state,
+        resolutionState: row.resolution_state as ProductIdentityReferenceRecord['resolutionState'],
+        correlationId: row.correlation_id,
+        parentReferenceType: row.parent_reference_type as ProductIdentityReferenceRecord['parentReferenceType'],
+        parentReferenceId: row.parent_reference_id,
+        payloadHash: row.payload_hash,
+        ownerProjection: parsed,
+        occurredAtMs: row.occurred_at_ms,
+        validUntilMs: row.valid_until_ms,
+        ledgerEventId: row.ledger_event_id,
+      });
+    }));
+  }
+
+  /**
+   * Persists an incident projection with an exact event-count CAS. Grouping,
+   * severity, acknowledgement, and resolution remain supplied owner truth.
+   */
+  compareAndTransitionProductIncident(
+    input: Readonly<ProductIncidentPersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product incident input is invalid');
+    assertProductIdentifier(input.incidentId, 'product incidentId');
+    assertProductIdentifier(input.fingerprint, 'product incident fingerprint');
+    assertProductIdentifier(input.rootComponentId, 'product incident rootComponentId');
+    assertProductDomainState(input.severity, 'product incident severity');
+    if (typeof input.capitalRelevant !== 'boolean') throw new TypeError('product incident capitalRelevant is invalid');
+    if (input.expectedEventCount !== null) {
+      assertProductPositiveInteger(input.expectedEventCount, 'product incident expectedEventCount');
+    }
+    assertProductDomainState(input.state, 'product incident state');
+    assertProductUtcMillis(input.firstSeenAtMs, 'product incident firstSeenAtMs');
+    assertProductUtcMillis(input.lastSeenAtMs, 'product incident lastSeenAtMs');
+    if (input.lastSeenAtMs < input.firstSeenAtMs) throw new TypeError('product incident lastSeenAtMs precedes firstSeenAtMs');
+    assertProductPositiveInteger(input.eventCount, 'product incident eventCount');
+    const expectedNextCount = input.expectedEventCount === null ? 1 : input.expectedEventCount + 1;
+    if (!Number.isSafeInteger(expectedNextCount) || input.eventCount !== expectedNextCount) {
+      throw new TypeError('product incident eventCount must advance exactly once');
+    }
+    if ((input.acknowledgedAtMs === null) !== (input.acknowledgedByOperatorId === null)) {
+      throw new TypeError('product incident acknowledgement fields must be paired');
+    }
+    if (input.acknowledgedAtMs !== null) {
+      assertProductUtcMillis(input.acknowledgedAtMs, 'product incident acknowledgedAtMs');
+      if (input.acknowledgedAtMs < input.firstSeenAtMs) throw new TypeError('product incident acknowledgement precedes first sighting');
+    }
+    assertProductOptionalIdentifier(input.acknowledgedByOperatorId, 'product incident acknowledgedByOperatorId');
+    if (input.resolvedAtMs !== null) {
+      assertProductUtcMillis(input.resolvedAtMs, 'product incident resolvedAtMs');
+      if (input.resolvedAtMs < input.firstSeenAtMs) throw new TypeError('product incident resolution precedes first sighting');
+    }
+    assertProductIdentifier(input.correlationId, 'product incident correlationId');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.db.prepare(`
+        SELECT * FROM product_incidents
+        WHERE incident_id = ? OR fingerprint = ?
+        ORDER BY CASE WHEN incident_id = ? THEN 0 ELSE 1 END
+        LIMIT 1
+      `).get(input.incidentId, input.fingerprint, input.incidentId) as ProductIncidentDbRow | undefined;
+      if (existing && exactProductIncidentRow(existing, input)) {
+        return frozenProductPersistenceResult(
+          'IDEMPOTENT_REPLAY',
+          this.readProductPersistenceAudit(existing.ledger_event_id, audit),
+          String(existing.event_count),
+        );
+      }
+      if (existing && (existing.incident_id !== input.incidentId || existing.fingerprint !== input.fingerprint)) {
+        return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, String(existing.event_count));
+      }
+      const currentCount = existing?.event_count ?? null;
+      if (currentCount !== input.expectedEventCount) {
+        return frozenProductPersistenceResult(
+          'VERSION_CONFLICT',
+          null,
+          currentCount === null ? null : String(currentCount),
+        );
+      }
+      if (existing && (existing.first_seen_at_ms !== input.firstSeenAtMs
+        || input.lastSeenAtMs < existing.last_seen_at_ms)) {
+        throw new TypeError('product incident transition cannot rewrite first sighting or move last sighting backwards');
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_incidents (
+          incident_id, fingerprint, root_component_id, severity,
+          capital_relevant, state, first_seen_at_ms, last_seen_at_ms,
+          event_count, acknowledged_at_ms, acknowledged_by_operator_id,
+          resolved_at_ms, correlation_id, ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(incident_id) DO UPDATE SET
+          fingerprint = excluded.fingerprint,
+          root_component_id = excluded.root_component_id,
+          severity = excluded.severity,
+          capital_relevant = excluded.capital_relevant,
+          state = excluded.state,
+          first_seen_at_ms = excluded.first_seen_at_ms,
+          last_seen_at_ms = excluded.last_seen_at_ms,
+          event_count = excluded.event_count,
+          acknowledged_at_ms = excluded.acknowledged_at_ms,
+          acknowledged_by_operator_id = excluded.acknowledged_by_operator_id,
+          resolved_at_ms = excluded.resolved_at_ms,
+          correlation_id = excluded.correlation_id,
+          ledger_event_id = excluded.ledger_event_id
+      `).run(
+        input.incidentId,
+        input.fingerprint,
+        input.rootComponentId,
+        input.severity,
+        input.capitalRelevant ? 1 : 0,
+        input.state,
+        input.firstSeenAtMs,
+        input.lastSeenAtMs,
+        input.eventCount,
+        input.acknowledgedAtMs,
+        input.acknowledgedByOperatorId,
+        input.resolvedAtMs,
+        input.correlationId,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(input.eventCount));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * CAS-records one boot, shutdown, or release revision. The row is evidence
+   * only; this primitive never deploys, switches a release, or marks readiness.
+   */
+  compareAndSetProductBootReleaseRevision(
+    input: Readonly<ProductBootReleasePersistenceInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)) throw new TypeError('product boot/release input is invalid');
+    assertProductIdentifier(input.operationId, 'product boot/release operationId');
+    assertProductDomainState(input.operationType, 'product boot/release operationType');
+    if (input.expectedLedgerEventId !== null) {
+      assertProductPositiveInteger(input.expectedLedgerEventId, 'product boot/release expectedLedgerEventId');
+    }
+    assertProductNonNegativeInteger(input.generation, 'product boot/release generation');
+    for (const [label, value] of [
+      ['testedCommit', input.testedCommit],
+      ['deployedCommit', input.deployedCommit],
+    ] as const) {
+      if (value !== null && !PRODUCT_COMMIT.test(value)) {
+        throw new TypeError(`product boot/release ${label} is invalid`);
+      }
+    }
+    assertProductOptionalIdentifier(input.configRevision, 'product boot/release configRevision');
+    assertProductIdentifier(input.schemaRevision, 'product boot/release schemaRevision');
+    assertProductOptionalIdentifier(input.modelRevision, 'product boot/release modelRevision');
+    assertProductUtcMillis(input.startedAtMs, 'product boot/release startedAtMs');
+    if (input.completedAtMs !== null) {
+      assertProductUtcMillis(input.completedAtMs, 'product boot/release completedAtMs');
+      if (input.completedAtMs < input.startedAtMs) throw new TypeError('product boot/release completion precedes start');
+    }
+    if (input.clean !== null && typeof input.clean !== 'boolean') throw new TypeError('product boot/release clean is invalid');
+    if (input.clean !== null && input.completedAtMs === null) {
+      throw new TypeError('product boot/release clean evidence requires completion');
+    }
+    if (input.blockerCode !== null) assertProductDomainState(input.blockerCode, 'product boot/release blockerCode');
+    assertProductIdentifier(input.correlationId, 'product boot/release correlationId');
+    const audit = prepareProductPersistenceAudit(input.audit);
+
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.db.prepare(`
+        SELECT * FROM product_boot_release_revisions WHERE operation_id = ?
+      `).get(input.operationId) as ProductBootReleaseDbRow | undefined;
+      if (existing && exactProductBootReleaseRow(existing, input)) {
+        return frozenProductPersistenceResult(
+          'IDEMPOTENT_REPLAY',
+          this.readProductPersistenceAudit(existing.ledger_event_id, audit),
+          String(existing.ledger_event_id),
+        );
+      }
+      const currentLedgerEventId = existing?.ledger_event_id ?? null;
+      if (currentLedgerEventId !== input.expectedLedgerEventId) {
+        return frozenProductPersistenceResult(
+          'VERSION_CONFLICT',
+          null,
+          currentLedgerEventId === null ? null : String(currentLedgerEventId),
+        );
+      }
+      if (existing && (input.generation < existing.generation
+        || input.startedAtMs !== existing.started_at_ms
+        || input.completedAtMs === null && existing.completed_at_ms !== null)) {
+        throw new TypeError('product boot/release transition cannot regress durable evidence');
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.db.prepare(`
+        INSERT INTO product_boot_release_revisions (
+          operation_id, operation_type, generation, tested_commit,
+          deployed_commit, config_revision, schema_revision, model_revision,
+          started_at_ms, completed_at_ms, clean, blocker_code,
+          correlation_id, ledger_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(operation_id) DO UPDATE SET
+          operation_type = excluded.operation_type,
+          generation = excluded.generation,
+          tested_commit = excluded.tested_commit,
+          deployed_commit = excluded.deployed_commit,
+          config_revision = excluded.config_revision,
+          schema_revision = excluded.schema_revision,
+          model_revision = excluded.model_revision,
+          started_at_ms = excluded.started_at_ms,
+          completed_at_ms = excluded.completed_at_ms,
+          clean = excluded.clean,
+          blocker_code = excluded.blocker_code,
+          correlation_id = excluded.correlation_id,
+          ledger_event_id = excluded.ledger_event_id
+      `).run(
+        input.operationId,
+        input.operationType,
+        input.generation,
+        input.testedCommit,
+        input.deployedCommit,
+        input.configRevision,
+        input.schemaRevision,
+        input.modelRevision,
+        input.startedAtMs,
+        input.completedAtMs,
+        input.clean === null ? null : input.clean ? 1 : 0,
+        input.blockerCode,
+        input.correlationId,
+        event.id,
+      );
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /**
+   * Reads one bounded page from the dedicated material-event cursor. Cursor
+   * zero is the valid origin. Prefix retention, missing interior rows, an
+   * impossible future cursor, and malformed durable projections remain
+   * distinct evidence states rather than being repaired or silently reset.
+   */
+  readProductOperatorEventPage(
+    afterCursor: string,
+    limit = 200,
+  ): Readonly<LedgerProductOperatorEventPage> {
+    const after = parseSqliteCursor(afterCursor);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > PRODUCT_OPERATOR_EVENT_MAX_QUERY_LIMIT) {
+      throw new RangeError(`product operator event limit must be 1-${PRODUCT_OPERATOR_EVENT_MAX_QUERY_LIMIT}`);
+    }
+
+    const read = this.db.transaction(() => {
+      const geometry = this.db.prepare(`
+        SELECT
+          CAST(MIN(cursor) AS TEXT) AS retained_from_cursor,
+          COALESCE(
+            (SELECT CAST(seq AS TEXT) FROM sqlite_sequence WHERE name = 'product_operator_events'),
+            '0'
+          ) AS high_water_cursor
+        FROM product_operator_events
+      `).get() as { retained_from_cursor: string | null; high_water_cursor: string };
+      const rows = this.db.prepare(`
+        SELECT
+          CAST(operator.cursor AS TEXT) AS cursor,
+          operator.ledger_event_id,
+          operator.event_id,
+          operator.component_id,
+          operator.correlation_id,
+          operator.occurred_at_ms,
+          operator.persisted_at_ms,
+          operator.material_projection_json,
+          ledger.ts AS ledger_ts,
+          ledger.kind AS ledger_kind,
+          ledger.data AS ledger_data
+        FROM product_operator_events AS operator
+        LEFT JOIN events AS ledger ON ledger.id = operator.ledger_event_id
+        WHERE operator.cursor > ?
+        ORDER BY operator.cursor ASC
+        LIMIT ?
+      `).all(after, limit) as ProductOperatorEventDbRow[];
+      const requestedCursorPresent = after === 0n || this.db.prepare(`
+        SELECT 1 AS present FROM product_operator_events WHERE cursor = ?
+      `).get(after) !== undefined;
+      return { geometry, rows, requestedCursorPresent };
+    });
+    const { geometry, rows, requestedCursorPresent } = read();
+    const retainedFromCursor = geometry.retained_from_cursor;
+    const highWaterCursor = geometry.high_water_cursor;
+    let retained: bigint | null;
+    let highWater: bigint;
+    try {
+      retained = retainedFromCursor === null ? null : parseSqliteCursor(retainedFromCursor);
+      highWater = parseSqliteCursor(highWaterCursor);
+    } catch {
+      return unprovenProductOperatorEventPage(afterCursor, retainedFromCursor, highWaterCursor);
+    }
+
+    if (after > highWater) {
+      return unprovenProductOperatorEventPage(afterCursor, retainedFromCursor, highWaterCursor);
+    }
+    if (highWater === 0n) {
+      return frozenProductOperatorEventPage(afterCursor, null, '0', 'PROVEN', false, []);
+    }
+    if (retained === null) {
+      return frozenProductOperatorEventPage(
+        afterCursor,
+        null,
+        highWaterCursor,
+        after < highWater ? 'GAP' : 'UNPROVEN',
+        true,
+        [],
+      );
+    }
+    if (retained > highWater) {
+      return unprovenProductOperatorEventPage(afterCursor, retainedFromCursor, highWaterCursor);
+    }
+    if (after + 1n < retained) {
+      return frozenProductOperatorEventPage(
+        afterCursor,
+        retainedFromCursor,
+        highWaterCursor,
+        'GAP',
+        true,
+        [],
+      );
+    }
+    if (after >= retained && after <= highWater && !requestedCursorPresent) {
+      return frozenProductOperatorEventPage(
+        afterCursor,
+        retainedFromCursor,
+        highWaterCursor,
+        'GAP',
+        false,
+        [],
+      );
+    }
+
+    let continuity: LedgerProductOperatorEventPage['continuity'] = 'PROVEN';
+    const items: Readonly<LedgerProductOperatorEventRecord>[] = [];
+    let expected = after + 1n;
+    for (const row of rows) {
+      let cursor: bigint;
+      try {
+        cursor = parseSqliteCursor(row.cursor);
+      } catch {
+        continuity = 'UNPROVEN';
+        break;
+      }
+      if (cursor !== expected) {
+        continuity = 'GAP';
+        break;
+      }
+      const event = parseProductOperatorEventRow(row);
+      if (!event) {
+        continuity = 'UNPROVEN';
+        break;
+      }
+      items.push(Object.freeze({ cursor: row.cursor, event }));
+      expected += 1n;
+    }
+    if (items.length === 0 && after < highWater && continuity === 'PROVEN') continuity = 'GAP';
+    return frozenProductOperatorEventPage(
+      afterCursor,
+      retainedFromCursor,
+      highWaterCursor,
+      continuity,
+      false,
+      items,
+    );
+  }
+
+  /**
+   * Compares the exact durable config value and, only on a match, commits the
+   * replacement value plus its bounded journal/audit records in one SQLite
+   * writer transaction. `BEGIN IMMEDIATE` is intentional: independently
+   * opened Ledger connections must serialize before reading the expected
+   * value, so a stale writer returns a conflict without appending an event.
+   */
+  compareAndSetConfigValueAndLogEvents(
+    key: string,
+    expectedValue: string | null,
+    nextValue: string,
+    records: readonly LedgerEventInput[],
+  ): LedgerConfigCompareAndSetResult {
+    if (typeof key !== 'string' || !CONFIG_CAS_KEY.test(key)) {
+      throw new TypeError('invalid compare-and-set config key');
+    }
+    if (expectedValue !== null && typeof expectedValue !== 'string') {
+      throw new TypeError('compare-and-set expected value must be a string or null');
+    }
+    if (typeof nextValue !== 'string') {
+      throw new TypeError('compare-and-set next value must be a string');
+    }
+    if ((expectedValue !== null
+        && Buffer.byteLength(expectedValue, 'utf8') > CONFIG_CAS_VALUE_MAX_BYTES)
+      || Buffer.byteLength(nextValue, 'utf8') > CONFIG_CAS_VALUE_MAX_BYTES) {
+      throw new RangeError('compare-and-set config value exceeds its byte bound');
+    }
+    if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
+      throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+    }
+
+    const prepared = records.map((record) => {
+      if (record === null || typeof record !== 'object'
+        || typeof record.kind !== 'string' || !LEDGER_EVENT_KIND.test(record.kind)) {
+        throw new TypeError('invalid compare-and-set ledger event kind');
+      }
+      const symbol = record.symbol ?? null;
+      if (symbol !== null && (typeof symbol !== 'string'
+        || symbol.length > CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS
+        || /[\u0000-\u001f\u007f]/.test(symbol))) {
+        throw new TypeError('invalid compare-and-set ledger event symbol');
+      }
+      let serialized: string | null = null;
+      if (record.data !== undefined) {
+        const encoded = JSON.stringify(record.data);
+        if (typeof encoded !== 'string') {
+          throw new TypeError('compare-and-set ledger event data must be JSON serializable');
+        }
+        if (Buffer.byteLength(encoded, 'utf8') > CONFIG_CAS_EVENT_DATA_MAX_BYTES) {
+          throw new RangeError('compare-and-set ledger event data exceeds its byte bound');
+        }
+        serialized = encoded;
+      }
+      return Object.freeze({
+        kind: record.kind,
+        symbol,
+        serialized,
+        data: serialized === null ? null : JSON.parse(serialized) as unknown,
+      });
+    });
+
+    const insert = this.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
+    const insertProductOperatorEvent = this.db.prepare(`
+      INSERT INTO product_operator_events (
+        ledger_event_id,
+        event_id,
+        component_id,
+        correlation_id,
+        occurred_at_ms,
+        persisted_at_ms,
+        material_projection_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const commit = this.db.transaction((): LedgerConfigCompareAndSetResult => {
+      const row = this.db.prepare('SELECT value FROM config WHERE key = ?').get(key) as
+        | { value: string }
+        | undefined;
+      const currentValue = row?.value ?? null;
+      if (currentValue !== expectedValue) {
+        return Object.freeze({ committed: false as const, reason: 'VERSION_CONFLICT' as const, currentValue });
+      }
+
+      const ts = Date.now();
+      this.db
+        .prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+        .run(key, nextValue);
+      let appendedProductOperatorEvent = false;
+      const events = prepared.map((record) => {
+        const info = insert.run(ts, record.kind, record.symbol, record.serialized);
+        const ledgerEventId = Number(info.lastInsertRowid);
+        if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
+          throw new RangeError('ledger event identity exceeds the supported integer range');
+        }
+        const productOperatorEvent = prepareProductOperatorEvent(record.kind, record.data, ts);
+        if (productOperatorEvent) {
+          insertProductOperatorEvent.run(
+            ledgerEventId,
+            productOperatorEvent.eventId,
+            productOperatorEvent.componentId,
+            productOperatorEvent.correlationId,
+            productOperatorEvent.occurredAtMs,
+            productOperatorEvent.persistedAtMs,
+            productOperatorEvent.serializedProjection,
+          );
+          appendedProductOperatorEvent = true;
+        }
+        return Object.freeze({
+          id: ledgerEventId,
+          ts,
+          kind: record.kind,
+          symbol: record.symbol,
+          data: record.data,
+        } satisfies LedgerEvent);
+      });
+      if (appendedProductOperatorEvent) this.trimProductOperatorEvents();
+      return Object.freeze({ committed: true as const, events: Object.freeze(events) });
+    });
+
+    const result = commit.immediate();
+    if (!result.committed) return result;
+
+    let listenerFailed = false;
+    for (const event of result.events) {
+      try {
+        this.emit('event', event);
+      } catch {
+        listenerFailed = true;
+      }
+    }
+    if (!listenerFailed) return result;
+
+    // The transaction has already committed. Exact readback prevents a
+    // listener exception from being returned as a write failure that could
+    // cause a caller to append the same financial mutation a second time.
+    try {
+      const ids = result.events.map((event) => event.id);
+      const placeholders = ids.map(() => '?').join(', ');
+      const rows = this.db
+        .prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY id ASC`)
+        .all(...ids) as EventDbRow[];
+      const operatorRows = this.db.prepare(`
+        SELECT ledger_event_id, material_projection_json
+        FROM product_operator_events
+        WHERE ledger_event_id IN (${placeholders})
+        ORDER BY ledger_event_id ASC
+      `).all(...ids) as { ledger_event_id: number; material_projection_json: string }[];
+      const operatorByLedgerEventId = new Map(
+        operatorRows.map((row) => [row.ledger_event_id, row.material_projection_json] as const),
+      );
+      const exact = this.getConfigValue(key) === nextValue
+        && rows.length === prepared.length
+        && rows.every((row, index) => row.id === ids[index]
+          && row.ts === result.events[index].ts
+          && row.kind === prepared[index].kind
+          && row.symbol === prepared[index].symbol
+          && row.data === prepared[index].serialized
+          && (() => {
+            const productOperatorEvent = prepareProductOperatorEvent(
+              prepared[index].kind,
+              prepared[index].data,
+              row.ts,
+            );
+            const stored = operatorByLedgerEventId.get(row.id);
+            return productOperatorEvent
+              ? stored === productOperatorEvent.serializedProjection
+              : stored === undefined;
+          })());
+      if (exact) {
+        return Object.freeze({
+          committed: true as const,
+          events: Object.freeze(rows.map(parseEvent)),
+        });
+      }
+    } catch {
+      // The commit result remains authoritative even if diagnostic readback is
+      // unavailable after a listener mutates or closes its surrounding app.
+    }
+    return Object.freeze({
+      committed: true as const,
+      events: Object.freeze(result.events.map((event, index) => Object.freeze({
+        id: event.id,
+        ts: event.ts,
+        kind: prepared[index].kind,
+        symbol: prepared[index].symbol,
+        data: prepared[index].serialized === null
+          ? null
+          : JSON.parse(prepared[index].serialized) as unknown,
+      } satisfies LedgerEvent))),
+    });
   }
 
   /**
@@ -865,6 +2341,361 @@ export class Ledger extends EventEmitter {
     this.removeAllListeners();
     if (this.db.open) this.db.close();
   }
+}
+
+function plainLedgerRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function exactLedgerFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...fields].sort();
+  return actual.length === expected.length && actual.every((field, index) => field === expected[index]);
+}
+
+function validProductUtcMillis(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && value <= 4_102_444_800_000;
+}
+
+function assertProductIdentifier(value: unknown, label: string): asserts value is string {
+  if (typeof value !== 'string' || !PRODUCT_IDENTIFIER.test(value)) {
+    throw new TypeError(`${label} must be a bounded canonical identifier`);
+  }
+}
+
+function assertProductDomainState(value: unknown, label: string): asserts value is string {
+  if (typeof value !== 'string' || !PRODUCT_DOMAIN_STATE.test(value)) {
+    throw new TypeError(`${label} must be a bounded canonical state`);
+  }
+}
+
+function assertProductUtcMillis(value: unknown, label: string): asserts value is number {
+  if (!validProductUtcMillis(value)) throw new TypeError(`${label} must be valid UTC milliseconds`);
+}
+
+function assertProductNonNegativeInteger(value: unknown, label: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new TypeError(`${label} must be a non-negative safe integer`);
+  }
+}
+
+function assertProductPositiveInteger(value: unknown, label: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new TypeError(`${label} must be a positive safe integer`);
+  }
+}
+
+function assertProductOptionalIdentifier(value: unknown, label: string): asserts value is string | null {
+  if (value !== null) assertProductIdentifier(value, label);
+}
+
+function assertProductOptionalDigest(value: unknown, label: string): asserts value is string | null {
+  if (value !== null && (typeof value !== 'string' || !PRODUCT_DIGEST.test(value))) {
+    throw new TypeError(`${label} must be a canonical digest or null`);
+  }
+}
+
+function assertProductReason(value: unknown): asserts value is string {
+  if (typeof value !== 'string'
+    || value !== value.trim()
+    || [...value].length < 1
+    || [...value].length > 500
+    || /[\u0000-\u001f\u007f]/.test(value)
+    || PRODUCT_SENSITIVE_TEXT.test(value)) {
+    throw new TypeError('product command reason must be 1-500 secret-free UTF-8 characters');
+  }
+}
+
+function canonicalProductPersistenceJson(value: unknown, label: string): string {
+  let serialized: string;
+  try {
+    serialized = canonicalPersistenceJson(value);
+  } catch {
+    throw new TypeError(`${label} must be bounded canonical secret-free JSON`);
+  }
+  if (Buffer.byteLength(serialized, 'utf8') > PRODUCT_PERSISTENCE_JSON_MAX_BYTES) {
+    throw new RangeError(`${label} exceeds its 262144-byte bound`);
+  }
+  return serialized;
+}
+
+function canonicalNullableProductPersistenceJson(value: SystemJsonValue | null, label: string): string | null {
+  return value === null ? null : canonicalProductPersistenceJson(value, label);
+}
+
+function prepareProductPersistenceAudit(
+  audit: Readonly<ProductPersistenceAuditRecord>,
+): Readonly<PreparedProductPersistenceAudit> {
+  if (!plainLedgerRecord(audit)
+    || typeof audit.kind !== 'string'
+    || !LEDGER_EVENT_KIND.test(audit.kind)
+    || Object.keys(audit).some((key) => !['kind', 'symbol', 'data'].includes(key))) {
+    throw new TypeError('product persistence audit record is invalid');
+  }
+  const symbol = audit.symbol ?? null;
+  if (symbol !== null && (typeof symbol !== 'string'
+    || symbol.length > CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS
+    || /[\u0000-\u001f\u007f]/.test(symbol))) {
+    throw new TypeError('product persistence audit symbol is invalid');
+  }
+  const serialized = canonicalProductPersistenceJson(audit.data, 'product persistence audit data');
+  if (Buffer.byteLength(serialized, 'utf8') > PRODUCT_PERSISTENCE_AUDIT_MAX_BYTES) {
+    throw new RangeError('product persistence audit data exceeds its 131072-byte bound');
+  }
+  return Object.freeze({
+    kind: audit.kind,
+    symbol,
+    serialized,
+    data: JSON.parse(serialized) as SystemJsonValue,
+  });
+}
+
+function frozenProductPersistenceResult(
+  disposition: ProductPersistenceMutationResult['disposition'],
+  ledgerEvent: LedgerEvent | null,
+  currentRevision: string | null,
+): ProductPersistenceMutationResult {
+  if (disposition === 'COMMITTED_NEW' || disposition === 'IDEMPOTENT_REPLAY') {
+    if (!ledgerEvent) throw new Error('committed product persistence result is missing its ledger event');
+    return Object.freeze({ disposition, ledgerEvent: Object.freeze(ledgerEvent), currentRevision });
+  }
+  return Object.freeze({ disposition, ledgerEvent: null, currentRevision });
+}
+
+function exactProductCommandRow(
+  row: Readonly<ProductCommandDbRow>,
+  input: Readonly<ProductCommandPersistenceInput>,
+  requestPayloadJson: string,
+  previewJson: string,
+  beforeProjectionJson: string | null,
+  afterProjectionJson: string | null,
+  resultJson: string | null,
+): boolean {
+  return row.command_id === input.commandId
+    && row.idempotency_key === input.idempotencyKey
+    && row.request_digest === input.requestDigest
+    && row.command_type === input.commandType
+    && row.target_component_id === input.targetComponentId
+    && row.authenticated_operator_id === input.authenticatedOperatorId
+    && row.reason === input.reason
+    && row.required_authority === input.requiredAuthority
+    && row.request_payload_json === requestPayloadJson
+    && row.preview_digest === input.previewDigest
+    && row.preview_json === previewJson
+    && row.expected_revision === input.expectedRevision
+    && row.resulting_revision === input.resultingRevision
+    && row.status === input.status
+    && row.created_at_ms === input.createdAtMs
+    && row.expires_at_ms === input.expiresAtMs
+    && row.completed_at_ms === input.completedAtMs
+    && row.correlation_id === input.correlationId
+    && row.before_projection_json === beforeProjectionJson
+    && row.after_projection_json === afterProjectionJson
+    && row.result_json === resultJson
+    && Number.isSafeInteger(row.ledger_event_id)
+    && (row.ledger_event_id ?? 0) > 0;
+}
+
+function exactProductIdentityReferenceRow(
+  row: Readonly<ProductIdentityReferenceDbRow>,
+  input: Readonly<ProductIdentityReferencePersistenceInput>,
+  ownerProjectionJson: string,
+): boolean {
+  return row.reference_type === input.referenceType
+    && row.reference_id === input.referenceId
+    && row.owner_id === input.ownerId
+    && row.owner_revision === input.ownerRevision
+    && row.owner_state === input.ownerState
+    && row.resolution_state === input.resolutionState
+    && row.correlation_id === input.correlationId
+    && row.parent_reference_type === input.parentReferenceType
+    && row.parent_reference_id === input.parentReferenceId
+    && row.payload_hash === input.payloadHash
+    && row.owner_projection_json === ownerProjectionJson
+    && row.occurred_at_ms === input.occurredAtMs
+    && row.valid_until_ms === input.validUntilMs
+    && Number.isSafeInteger(row.ledger_event_id)
+    && row.ledger_event_id > 0;
+}
+
+function exactProductIncidentRow(
+  row: Readonly<ProductIncidentDbRow>,
+  input: Readonly<ProductIncidentPersistenceInput>,
+): boolean {
+  return row.incident_id === input.incidentId
+    && row.fingerprint === input.fingerprint
+    && row.root_component_id === input.rootComponentId
+    && row.severity === input.severity
+    && row.capital_relevant === (input.capitalRelevant ? 1 : 0)
+    && row.state === input.state
+    && row.first_seen_at_ms === input.firstSeenAtMs
+    && row.last_seen_at_ms === input.lastSeenAtMs
+    && row.event_count === input.eventCount
+    && row.acknowledged_at_ms === input.acknowledgedAtMs
+    && row.acknowledged_by_operator_id === input.acknowledgedByOperatorId
+    && row.resolved_at_ms === input.resolvedAtMs
+    && row.correlation_id === input.correlationId
+    && Number.isSafeInteger(row.ledger_event_id)
+    && row.ledger_event_id > 0;
+}
+
+function exactProductBootReleaseRow(
+  row: Readonly<ProductBootReleaseDbRow>,
+  input: Readonly<ProductBootReleasePersistenceInput>,
+): boolean {
+  return row.operation_id === input.operationId
+    && row.operation_type === input.operationType
+    && row.generation === input.generation
+    && row.tested_commit === input.testedCommit
+    && row.deployed_commit === input.deployedCommit
+    && row.config_revision === input.configRevision
+    && row.schema_revision === input.schemaRevision
+    && row.model_revision === input.modelRevision
+    && row.started_at_ms === input.startedAtMs
+    && row.completed_at_ms === input.completedAtMs
+    && row.clean === (input.clean === null ? null : input.clean ? 1 : 0)
+    && row.blocker_code === input.blockerCode
+    && row.correlation_id === input.correlationId
+    && Number.isSafeInteger(row.ledger_event_id)
+    && row.ledger_event_id > 0;
+}
+
+function frozenSystemTraceEvent(event: Readonly<SystemTraceEvent>): Readonly<SystemTraceEvent> {
+  return Object.freeze({
+    ...event,
+    releaseStatuses: Object.freeze([...event.releaseStatuses]),
+    failure: event.failure === null ? null : Object.freeze({ ...event.failure }),
+    referenceIds: Object.freeze([...event.referenceIds]),
+    lossCodes: Object.freeze([...event.lossCodes]),
+  });
+}
+
+/**
+ * Selects only a canonical System Integration audit carrying an already-owned
+ * material decision. The trace is copied with its actual persistence time;
+ * no readiness, severity, incident, or strategy truth is derived here.
+ */
+function prepareProductOperatorEvent(
+  kind: string,
+  data: unknown,
+  persistedAtMs: number,
+): Readonly<PreparedProductOperatorEvent> | null {
+  if (kind !== SYSTEM_INTEGRATION_EVENT_KIND || !plainLedgerRecord(data)) return null;
+  if (!exactLedgerFields(data, [
+    'schema',
+    'version',
+    'auditKind',
+    'correlationId',
+    'occurredAtMs',
+    'checkpointRevision',
+    'checkpointChecksum',
+    'trace',
+  ])) return null;
+  if (data.schema !== SYSTEM_INTEGRATION_AUDIT_SCHEMA
+    || data.version !== 1
+    || typeof data.auditKind !== 'string'
+    || !SYSTEM_INTEGRATION_AUDIT_KINDS.has(data.auditKind)
+    || !Number.isSafeInteger(data.checkpointRevision)
+    || (data.checkpointRevision as number) < 0
+    || typeof data.checkpointChecksum !== 'string'
+    || !SYSTEM_CHECKPOINT_CHECKSUM.test(data.checkpointChecksum)
+    || !plainLedgerRecord(data.trace)) return null;
+
+  if (validateSystemTraceEvent(data.trace).length > 0
+    || validatePersistedSystemTraceEvent(data.trace).length > 0) return null;
+  const source = data.trace as unknown as Readonly<SystemTraceEvent>;
+  if (!MATERIAL_SYSTEM_TRACE_KINDS.has(source.kind)
+    || source.id.length > 160
+    || source.persistedAtMs !== null
+    || data.correlationId !== source.correlationId
+    || data.occurredAtMs !== source.occurredAtMs) return null;
+
+  const event = frozenSystemTraceEvent({ ...source, persistedAtMs });
+  if (validateSystemTraceEvent(event).length > 0
+    || validatePersistedSystemTraceEvent(event).length > 0) return null;
+  const serializedProjection = JSON.stringify(event);
+  if (Buffer.byteLength(serializedProjection, 'utf8') > PRODUCT_OPERATOR_EVENT_MAX_BYTES) {
+    throw new RangeError('product operator event projection exceeds its byte bound');
+  }
+  return Object.freeze({
+    eventId: event.id,
+    componentId: event.componentId,
+    correlationId: event.correlationId,
+    occurredAtMs: event.occurredAtMs,
+    persistedAtMs,
+    serializedProjection,
+    event,
+  });
+}
+
+function parseSqliteCursor(value: string): bigint {
+  if (typeof value !== 'string' || !SQLITE_CURSOR.test(value)) {
+    throw new TypeError('product operator event cursor must be a canonical non-negative decimal');
+  }
+  const cursor = BigInt(value);
+  if (cursor > SQLITE_MAX_ROWID) throw new RangeError('product operator event cursor exceeds SQLite rowid');
+  return cursor;
+}
+
+function parseProductOperatorEventRow(row: ProductOperatorEventDbRow): Readonly<SystemTraceEvent> | null {
+  if (!Number.isSafeInteger(row.ledger_event_id) || row.ledger_event_id < 1
+    || !Number.isSafeInteger(row.occurred_at_ms) || row.occurred_at_ms < 0
+    || !Number.isSafeInteger(row.persisted_at_ms) || row.persisted_at_ms < 0
+    || !Number.isSafeInteger(row.ledger_ts) || (row.ledger_ts ?? -1) < 0
+    || row.ledger_kind !== SYSTEM_INTEGRATION_EVENT_KIND
+    || typeof row.ledger_data !== 'string') return null;
+  try {
+    const audit = JSON.parse(row.ledger_data) as unknown;
+    const prepared = prepareProductOperatorEvent(row.ledger_kind, audit, row.ledger_ts as number);
+    if (!prepared
+      || prepared.eventId !== row.event_id
+      || prepared.componentId !== row.component_id
+      || prepared.correlationId !== row.correlation_id
+      || prepared.occurredAtMs !== row.occurred_at_ms
+      || prepared.persistedAtMs !== row.persisted_at_ms
+      || prepared.serializedProjection !== row.material_projection_json) return null;
+    return prepared.event;
+  } catch {
+    return null;
+  }
+}
+
+function frozenProductOperatorEventPage(
+  requestedAfterCursor: string,
+  retainedFromCursor: string | null,
+  highWaterCursor: string,
+  continuity: LedgerProductOperatorEventPage['continuity'],
+  truncated: boolean,
+  items: readonly Readonly<LedgerProductOperatorEventRecord>[],
+): Readonly<LedgerProductOperatorEventPage> {
+  return Object.freeze({
+    requestedAfterCursor,
+    retainedFromCursor,
+    highWaterCursor,
+    continuity,
+    truncated,
+    items: Object.freeze([...items]),
+  });
+}
+
+function unprovenProductOperatorEventPage(
+  requestedAfterCursor: string,
+  retainedFromCursor: string | null,
+  highWaterCursor: string,
+): Readonly<LedgerProductOperatorEventPage> {
+  return frozenProductOperatorEventPage(
+    requestedAfterCursor,
+    retainedFromCursor,
+    highWaterCursor,
+    'UNPROVEN',
+    false,
+    [],
+  );
 }
 
 function parseEvent(r: EventDbRow): LedgerEvent {

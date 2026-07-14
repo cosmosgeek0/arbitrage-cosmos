@@ -1,0 +1,134 @@
+import express, { type NextFunction, type Request, type Response } from 'express';
+import type { ProductIntegrationRuntimeService } from './service.js';
+import { isProductRuntimeCursor } from './events.js';
+import { isProductRuntimeTraceId } from './trace.js';
+import { PRODUCT_RUNTIME_MAX_QUERY_LIMIT, ProductRuntimeError, type ProductRuntimeOperator } from './types.js';
+
+function operator(value: unknown): Readonly<ProductRuntimeOperator> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.id !== 'string' || candidate.id.length === 0 || candidate.id.length > 160
+      || !(candidate.email === null || candidate.email === undefined || (typeof candidate.email === 'string' && candidate.email.length <= 320))
+      || (candidate.source !== 'loopback' && candidate.source !== 'cloudflare-access')) return null;
+  return Object.freeze({ id: candidate.id, email: typeof candidate.email === 'string' ? candidate.email : null, source: candidate.source });
+}
+
+function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => { void handler(req, res).catch(next); };
+}
+
+function exactQuery(req: Request, allowed: readonly string[]): boolean {
+  return Object.keys(req.query).every((key) => allowed.includes(key));
+}
+
+function queryString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function limit(value: unknown, fallback?: number): number | null {
+  if (value === undefined && fallback !== undefined) return fallback;
+  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed <= PRODUCT_RUNTIME_MAX_QUERY_LIMIT ? parsed : null;
+}
+
+function exactBody(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value as Record<string, unknown>).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+/** Relative router. Mount exactly at `/api/product-integration`. */
+export function createProductIntegrationRuntimeRouter(service: ProductIntegrationRuntimeService): express.Router {
+  if (!service || typeof service.readSupervisor !== 'function' || typeof service.readMaterialEvents !== 'function'
+      || typeof service.readTrace !== 'function' || typeof service.previewCommand !== 'function'
+      || typeof service.submitCommand !== 'function') throw new TypeError('A ProductIntegrationRuntimeService is required.');
+  const router = express.Router();
+  router.use((_req, res, next) => {
+    const verified = operator(res.locals.operator);
+    if (!verified) {
+      res.status(401).json({ ok: false, code: 'OPERATOR_REQUIRED', error: 'Verified server-derived operator identity is required.' });
+      return;
+    }
+    res.locals.productRuntimeOperator = verified;
+    next();
+  });
+
+  router.get('/v1/supervisor', asyncRoute(async (req, res) => {
+    if (!exactQuery(req, [])) {
+      res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Supervisor read accepts no query fields.' });
+      return;
+    }
+    res.json(await service.readSupervisor());
+  }));
+
+  router.get('/v1/material-events', asyncRoute(async (req, res) => {
+    if (!exactQuery(req, ['afterCursor', 'limit'])) {
+      res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Material-event query contains unsupported fields.' });
+      return;
+    }
+    const afterCursor = queryString(req.query.afterCursor);
+    const boundedLimit = limit(req.query.limit);
+    if (!isProductRuntimeCursor(afterCursor) || boundedLimit === null) {
+      res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'afterCursor and integer limit 1..500 are required.' });
+      return;
+    }
+    res.json(await service.readMaterialEvents(afterCursor, boundedLimit));
+  }));
+
+  router.get('/v1/traces/:correlationId', asyncRoute(async (req, res) => {
+    if (!exactQuery(req, ['limit'])) {
+      res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Trace query contains unsupported fields.' });
+      return;
+    }
+    const correlationId = req.params.correlationId;
+    const boundedLimit = limit(req.query.limit, 200);
+    if (!isProductRuntimeTraceId(correlationId) || boundedLimit === null) {
+      res.status(400).json({ ok: false, code: 'INVALID_TRACE_QUERY', error: 'Trace identity or limit is invalid.' });
+      return;
+    }
+    const trace = await service.readTrace(correlationId, boundedLimit);
+    if (!trace) {
+      res.status(404).json({ ok: false, code: 'TRACE_NOT_FOUND', error: 'Correlation trace was not found.' });
+      return;
+    }
+    res.json(trace);
+  }));
+
+  router.post('/v1/commands/preview', asyncRoute(async (req, res) => {
+    if (!req.is('application/json')) {
+      res.status(415).json({ ok: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: 'Content-Type must be application/json.' });
+      return;
+    }
+    if (!exactBody(req.body, ['controlId', 'expectedRevision'])
+        || typeof req.body.controlId !== 'string' || req.body.controlId.length === 0 || req.body.controlId.length > 160
+        || typeof req.body.expectedRevision !== 'string' || req.body.expectedRevision.length === 0 || req.body.expectedRevision.length > 160) {
+      res.status(400).json({ ok: false, code: 'CONTROL_PREVIEW_INVALID', error: 'controlId and expectedRevision are required.' });
+      return;
+    }
+    res.json(await service.previewCommand({
+      controlId: req.body.controlId,
+      expectedRevision: req.body.expectedRevision,
+      operator: res.locals.productRuntimeOperator as Readonly<ProductRuntimeOperator>,
+    }));
+  }));
+
+  router.post('/v1/commands', asyncRoute(async (req, res) => {
+    if (!req.is('application/json')) {
+      res.status(415).json({ ok: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: 'Content-Type must be application/json.' });
+      return;
+    }
+    res.json(await service.submitCommand(req.body, res.locals.productRuntimeOperator as Readonly<ProductRuntimeOperator>));
+  }));
+
+  router.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
+    if (res.headersSent) { next(error); return; }
+    if (error instanceof ProductRuntimeError) {
+      res.status(error.status).json({ ok: false, code: error.code, error: error.message });
+      return;
+    }
+    res.status(503).json({ ok: false, code: 'PRODUCT_INTEGRATION_UNAVAILABLE', error: 'Product Integration runtime is unavailable.' });
+  });
+  return router;
+}

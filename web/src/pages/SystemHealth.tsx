@@ -20,7 +20,7 @@ import {
   Wifi,
   type LucideIcon,
 } from 'lucide-react';
-import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll, type SettledPoll } from '../lib/polling';
@@ -163,14 +163,6 @@ function weightState(weight: number | null): HealthState {
   return 'healthy';
 }
 
-function postureState(posture: KeyPosture | null, keysPresent: boolean): HealthState {
-  if (!keysPresent || !posture) return 'not_configured';
-  if (posture.tone === 'bad') return 'broken';
-  if (posture.tone === 'warn') return 'degraded';
-  if (posture.tone === 'ok') return 'healthy';
-  return 'not_configured';
-}
-
 function feedState(status: string): HealthState {
   if (status === 'live' || status === 'open') return 'healthy';
   if (status === 'connecting') return 'degraded';
@@ -193,7 +185,7 @@ function readinessLabel(state: HealthState): string {
   if (state === 'healthy') return 'Operational';
   if (state === 'degraded') return 'Review Required';
   if (state === 'broken') return 'Unavailable';
-  return 'Setup Required';
+  return 'NOT_CONFIGURED';
 }
 
 function filterMatches(check: HealthCheck, filter: HealthFilter): boolean {
@@ -279,7 +271,6 @@ export function SystemHealth() {
   const checks = useMemo<HealthCheck[]>(() => {
     if (!info) return [];
 
-    const binance = state?.binance ?? info.binance;
     const feedEntries = Object.entries(info.feeds);
     const feedStates = feedEntries.map(([, status]) => feedState(status));
     const liveFeeds = feedStates.filter((sourceState) => sourceState === 'healthy').length;
@@ -289,28 +280,9 @@ export function SystemHealth() {
       ? combineState(worstState(feedStates), marketAge)
       : 'not_configured';
 
-    const accountSyncState: HealthState = !binance.keysPresent
-      ? 'not_configured'
-      : !binance.connected
-        ? 'broken'
-        : ageState(binance.lastSyncTs, 90_000, 5 * 60_000, 'broken');
-
-    const userStreamOpen = binance.userStream === 'open' || binance.userStream === 'live';
-    const userStreamState: HealthState = !binance.keysPresent
-      ? 'not_configured'
-      : userStreamOpen
-        ? 'healthy'
-        : accountSyncState === 'healthy' || accountSyncState === 'degraded'
-          ? 'degraded'
-          : 'broken';
-
     const browserState = loadError
       ? 'broken'
       : combineState(latencyState(browserLatencyMs), connected ? 'healthy' : 'degraded');
-
-    const orderSyncState: HealthState = !binance.keysPresent
-      ? 'not_configured'
-      : ageState(info.lastOrdersSyncTs, 90_000, 5 * 60_000, 'degraded');
 
     const profileState: HealthState = profileError
       ? 'broken'
@@ -331,7 +303,7 @@ export function SystemHealth() {
         value: browserLatencyMs === null ? 'Not Measured' : String(browserLatencyMs) + 'ms',
         detail: connected ? 'The control-room WebSocket and HTTP path are responding.' : 'HTTP may answer, but the app WebSocket is reconnecting.',
         state: browserState,
-        fix: 'Check the local server process, browser network path, and Cloudflare Tunnel if this source remains unavailable.',
+        fix: 'Check the local server process and browser network path if this source remains unavailable.',
         icon: Monitor,
       },
       {
@@ -364,43 +336,33 @@ export function SystemHealth() {
         id: 'account-sync',
         group: 'Account',
         source: 'Account Sync',
-        measurement: 'Signed read-only account polling',
-        value: binance.lastSyncTs ? fmtAge(binance.lastSyncTs) : 'Not Configured',
-        detail: binance.keysPresent
-          ? binance.connected
-            ? 'Signed account truth is current.'
-            : binance.lastError ?? 'Keys exist, but account polling is disconnected.'
-          : 'Server-side Binance read keys are absent.',
-        state: accountSyncState,
-        fix: 'Verify the server-side read key, IP restriction, and signed account endpoint.',
+        measurement: 'Private account adapter boundary',
+        value: 'NOT_CONFIGURED',
+        detail: 'Private account polling is not mounted; legacy /api/system metadata is not treated as account truth.',
+        state: 'not_configured',
+        fix: 'Owner authorization and a separately verified private-read adapter are required before this state can change.',
         icon: Wallet,
       },
       {
         id: 'user-stream',
         group: 'Account',
         source: 'User Stream',
-        measurement: 'Account event stream with polling fallback',
-        value: userStreamOpen ? 'Open' : binance.keysPresent ? 'Polling Fallback' : 'Not Configured',
-        detail: userStreamOpen
-          ? 'Account events are arriving through the user stream.'
-          : binance.keysPresent
-            ? 'The user stream is ' + binance.userStream + '; current account truth depends on signed polling.'
-            : 'No account stream can start until server keys exist.',
-        state: userStreamState,
-        fix: 'Polling is current, but restore the Binance user stream before depending on event-driven account updates.',
+        measurement: 'Private account event boundary',
+        value: 'NOT_CONFIGURED',
+        detail: 'No private user stream is mounted. A legacy open or live field is ignored.',
+        state: 'not_configured',
+        fix: 'This is owner gated; do not configure keys or infer account health from legacy fields.',
         icon: Wifi,
       },
       {
         id: 'key-scope',
         group: 'Account',
         source: 'API Key Posture',
-        measurement: 'Live apiRestrictions posture',
-        value: binance.keysPresent ? binance.keyPosture.label : 'Not Configured',
-        detail: binance.keyFingerprint
-          ? 'Key ' + binance.keyFingerprint + (binance.keyPosture.ipRestricted ? ' is IP restricted.' : ' is not confirmed IP restricted.')
-          : 'No key fingerprint is returned to the browser.',
-        state: postureState(binance.keyPosture, binance.keysPresent),
-        fix: 'Use a server-only read key with withdrawals and transfers disabled and IP restriction enabled.',
+        measurement: 'Private credential authority boundary',
+        value: 'OWNER_GATED',
+        detail: 'Key presence, fingerprint, and permissions from legacy state are not projected as product capability.',
+        state: 'not_configured',
+        fix: 'No credential setup is requested by this surface; private access requires separate owner authorization.',
         icon: KeyRound,
       },
       {
@@ -418,15 +380,11 @@ export function SystemHealth() {
         id: 'rate-budget',
         group: 'Exchange',
         source: 'Request Weight',
-        measurement: 'X-MBX-USED-WEIGHT-1M header snapshot',
-        value: info.usedWeight1m === null ? 'Not Exposed' : String(info.usedWeight1m),
-        detail: info.binanceCooldownUntil && info.binanceCooldownUntil > Date.now()
-          ? `Exchange cooldown active for ${Math.max(1, Math.ceil((info.binanceCooldownUntil - Date.now()) / 1_000))}s.`
-          : info.usedWeightTs
-          ? 'Last observed ' + fmtAge(info.usedWeightTs) + '. The exchange limit is not exposed here.'
-          : 'No signed Binance call has returned a request-weight header.',
-        state: weightState(info.usedWeight1m),
-        fix: 'Reduce polling or cache heavier signed endpoints if usage approaches the local guard band.',
+        measurement: 'Private request-weight boundary',
+        value: 'NOT_CONFIGURED',
+        detail: 'Legacy signed-request metadata is not projected as current product health.',
+        state: 'not_configured',
+        fix: 'No private polling is mounted; no request-weight setup action is available here.',
         icon: Gauge,
       },
       {
@@ -436,7 +394,7 @@ export function SystemHealth() {
         measurement: 'Binance server time minus backend time',
         value: fmtSignedMs(info.serverTimeDiffMs),
         detail: info.timeSyncTs
-          ? 'Observed ' + fmtAge(info.timeSyncTs) + '; signed requests depend on a sane timestamp window.'
+          ? 'Observed ' + fmtAge(info.timeSyncTs) + ' through the public server-time probe.'
           : 'No successful server-time comparison is exposed.',
         state: driftState(info.serverTimeDiffMs),
         fix: 'Check host NTP/time sync and retry the Binance server-time probe.',
@@ -444,24 +402,24 @@ export function SystemHealth() {
       },
       {
         id: 'binance-error',
-        group: 'Exchange',
-        source: 'Latest Binance Error',
-        measurement: 'Signed account source error state',
-        value: binance.lastError ? 'Recorded' : binance.keysPresent ? 'None' : 'Not Configured',
-        detail: binance.lastError ?? (binance.keysPresent ? 'No current Binance account error is reported.' : 'No signed account source is configured.'),
-        state: binance.lastError ? 'broken' : binance.keysPresent ? 'healthy' : 'not_configured',
-        fix: 'Read the exact error in Logs, then verify key scope, IP restriction, rate limits, and endpoint recovery.',
+        group: 'Account',
+        source: 'Private Account Error',
+        measurement: 'Private adapter error boundary',
+        value: 'NOT_CONFIGURED',
+        detail: 'Legacy private error metadata is not evidence that a product account source is mounted or healthy.',
+        state: 'not_configured',
+        fix: 'Use the ledger for historical evidence; private adapter diagnosis remains owner gated.',
         icon: AlertTriangle,
       },
       {
         id: 'order-cache',
         group: 'Account',
         source: 'Open-Order Cache',
-        measurement: 'Latest signed open-orders sync',
-        value: info.lastOrdersSyncTs ? fmtAge(info.lastOrdersSyncTs) : binance.keysPresent ? 'Never Synced' : 'Not Configured',
-        detail: binance.keysPresent ? 'Open-order truth is refreshed by signed account polling.' : 'Order sync is unavailable without server-side keys.',
-        state: orderSyncState,
-        fix: 'Confirm open-order polling completes and the resulting account actions remain ledgered.',
+        measurement: 'Private open-order boundary',
+        value: 'NOT_CONFIGURED',
+        detail: 'No private open-order endpoint is polled; missing rows are not interpreted as zero orders.',
+        state: 'not_configured',
+        fix: 'Owner authorization and a verified private-read adapter are required before exposing order truth.',
         icon: List,
       },
       {
@@ -503,7 +461,7 @@ export function SystemHealth() {
       state: 'degraded' as HealthState,
       detail: `Latest system refresh failed; retained evidence may be stale. ${check.detail}`,
     } : check);
-  }, [browserLatencyMs, connected, info, loadError, profileError, profiles, state?.binance, state?.scanner.lastTickTs]);
+  }, [browserLatencyMs, connected, info, loadError, profileError, profiles, state?.scanner.lastTickTs]);
 
   const sortedChecks = useMemo(() => [...checks].sort((left, right) => {
     const rank = STATE_RANK[right.state] - STATE_RANK[left.state];
@@ -530,7 +488,7 @@ export function SystemHealth() {
   const topIssue = attentionChecks[0] ?? null;
   const feedEntries = info ? Object.entries(info.feeds) : [];
   const liveFeedCount = feedEntries.filter(([, status]) => status === 'open' || status === 'live').length;
-  const accessLabel = info?.cfUser ? 'Cloudflare Access' : 'Local Session';
+  const accessLabel = 'Local Runtime';
 
   const filterCount = (target: HealthFilter): number => checks.filter((check) => filterMatches(check, target)).length;
 
@@ -566,7 +524,7 @@ export function SystemHealth() {
           </div>
         </header>
 
-        <SystemIntegrationSurface surface="health" />
+        <ProductSurfaceAdapter surfaceId="health" />
 
         {info ? (
           <>

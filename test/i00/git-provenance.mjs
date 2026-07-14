@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -349,4 +349,538 @@ export function verifyReceiptProvenance(document) {
     results: Object.freeze(results),
     passed: baseExists && results.every((result) => result.passed),
   });
+}
+
+const PRODUCT_ASSURANCE_SCHEMA = 'I00_PRODUCT_ASSURANCE_HARNESS_V1';
+const PRODUCT_ASSURANCE_DONOR_IDS = Object.freeze([
+  'A_CORE',
+  'A_HAZARD',
+  'A_COCKPIT',
+  'A_AGENT',
+  'A_STABILITY',
+  'A_CASE_S4',
+]);
+const PRODUCT_ASSURANCE_SUITE_IDS = Object.freeze([
+  'A_CORE_BEHAVIOR',
+  'A_HAZARD_BEHAVIOR',
+  'A_COCKPIT_BEHAVIOR',
+  'A_OBSERVABILITY_BEHAVIOR',
+  'A_AGENT_BEHAVIOR',
+  'A_STABILITY_BEHAVIOR',
+  'A_CASE_S4_BEHAVIOR',
+]);
+const PRODUCT_ASSURANCE_MANIFEST_KEYS = Object.freeze([
+  'schemaVersion',
+  'expectedBehaviorPasses',
+  'expectedDonorBehaviorPasses',
+  'expectedIntegrationReplacementPasses',
+  'expectedProvenancePasses',
+  'expectedSkippedCallbacks',
+  'expectedGitObjectContextProofs',
+  'expectedLiveContextReplacements',
+  'expectedContextReplacementRows',
+  'contextProofPolicy',
+  'integrationReplacement',
+  'operationScan',
+  'donors',
+  'suites',
+]);
+const PRODUCT_ASSURANCE_DONOR_KEYS = Object.freeze([
+  'id',
+  'deltaBase',
+  'acceptedTip',
+  'donorTree',
+  'deltaPathCount',
+  'deltaPathSetSha256',
+  'mergeCommit',
+  'mergeTree',
+  'mergeParents',
+  'donorReceipt',
+  'integrationReceipt',
+  'requiredAncestry',
+  'requiredObjects',
+]);
+const PRODUCT_ASSURANCE_SUITE_KEYS = Object.freeze([
+  'id',
+  'donorId',
+  'testRoot',
+  'completeTestInventory',
+  'runs',
+  'excludedContextTests',
+  'expectedPasses',
+]);
+
+function compareAscii(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function uniqueStrings(values) {
+  return Array.isArray(values)
+    && values.every((value) => typeof value === 'string')
+    && new Set(values).size === values.length;
+}
+
+function sortedStrings(values) {
+  return [...values].sort(compareAscii);
+}
+
+function exactOrderedMembers(actual, expected) {
+  return Array.isArray(actual)
+    && actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+}
+
+function addError(errors, condition, code) {
+  if (!condition) errors.push(code);
+}
+
+function safeWorkspaceBytes(relativePath) {
+  if (!SAFE_PATH.test(relativePath ?? '')) return null;
+  try {
+    return readFileSync(path.join(ROOT, relativePath));
+  } catch {
+    return null;
+  }
+}
+
+function listTestFiles(relativeRoot) {
+  if (!SAFE_PATH.test(relativeRoot ?? '')) throw new TypeError('INVALID_TEST_ROOT');
+  const absoluteRoot = path.join(ROOT, relativeRoot);
+  const output = [];
+  const visit = (absoluteDirectory, relativeDirectory) => {
+    for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true }).sort((left, right) => compareAscii(left.name, right.name))) {
+      const absolute = path.join(absoluteDirectory, entry.name);
+      const relative = path.posix.join(relativeDirectory, entry.name);
+      if (entry.isSymbolicLink()) throw new TypeError(`SYMLINK_FORBIDDEN:${relative}`);
+      if (entry.isDirectory()) visit(absolute, relative);
+      else if (entry.isFile() && entry.name.endsWith('.test.mjs')) output.push(relative);
+    }
+  };
+  const info = statSync(absoluteRoot, { throwIfNoEntry: false });
+  if (!info?.isDirectory()) throw new TypeError(`TEST_ROOT_MISSING:${relativeRoot}`);
+  visit(absoluteRoot, relativeRoot);
+  return Object.freeze(output.sort(compareAscii));
+}
+
+export function validateProductAssuranceManifest(document) {
+  const errors = [];
+  addError(errors, exactKeys(document, PRODUCT_ASSURANCE_MANIFEST_KEYS), 'MANIFEST_KEYS');
+  addError(errors, document?.schemaVersion === PRODUCT_ASSURANCE_SCHEMA, 'SCHEMA_VERSION');
+  addError(errors, document?.expectedBehaviorPasses === 802, 'BEHAVIOR_TOTAL');
+  addError(errors, document?.expectedDonorBehaviorPasses === 801, 'DONOR_BEHAVIOR_TOTAL');
+  addError(errors, document?.expectedIntegrationReplacementPasses === 1, 'INTEGRATION_REPLACEMENT_TOTAL');
+  addError(errors, document?.expectedProvenancePasses === 4, 'PROVENANCE_TOTAL');
+  addError(errors, document?.expectedSkippedCallbacks === 6, 'SKIPPED_CALLBACK_TOTAL');
+  addError(errors, document?.expectedGitObjectContextProofs === 6, 'GIT_OBJECT_CONTEXT_PROOF_TOTAL');
+  addError(errors, document?.expectedLiveContextReplacements === 1, 'LIVE_CONTEXT_REPLACEMENT_TOTAL');
+  addError(errors, document?.expectedContextReplacementRows === 7, 'CONTEXT_REPLACEMENT_ROW_TOTAL');
+  addError(errors, document?.contextProofPolicy
+    === 'SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK',
+  'CONTEXT_PROOF_POLICY');
+  addError(errors, exactKeys(document?.integrationReplacement, ['id', 'testFile', 'exactName', 'expectedPasses'])
+    && document.integrationReplacement.id === 'LIVE_OPERATION_POLICY'
+    && document.integrationReplacement.testFile === 'test/i00/product-assurance-live-operation.test.mjs'
+    && document.integrationReplacement.exactName
+      === 'assembled production operation scan matches the final manifest denominator with zero uncovered sites'
+    && document.integrationReplacement.expectedPasses === 1, 'INTEGRATION_REPLACEMENT');
+
+  const operationScan = document?.operationScan;
+  addError(errors, exactKeys(operationScan, [
+    'schemaVersion', 'scriptPath', 'filesScanned', 'discovered', 'covered', 'uncovered',
+  ]), 'OPERATION_SCAN_KEYS');
+  addError(errors, operationScan?.schemaVersion === 'production-operation-scan.v1', 'OPERATION_SCAN_SCHEMA');
+  addError(errors, operationScan?.scriptPath === 'test/productAssurance/production-operation-scan.mjs', 'OPERATION_SCAN_PATH');
+  addError(errors, Number.isSafeInteger(operationScan?.filesScanned) && operationScan.filesScanned > 0, 'OPERATION_FILE_COUNT');
+  addError(errors, Number.isSafeInteger(operationScan?.discovered) && operationScan.discovered > 0
+    && operationScan.covered === operationScan.discovered
+    && operationScan.uncovered === 0, 'OPERATION_COUNTS');
+
+  const donors = Array.isArray(document?.donors) ? document.donors : [];
+  addError(errors, donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length, 'DONOR_COUNT');
+  addError(errors, uniqueStrings(donors.map((donor) => donor?.id))
+    && sameMembers(donors.map((donor) => donor.id), PRODUCT_ASSURANCE_DONOR_IDS), 'DONOR_IDS');
+  for (const donor of donors) {
+    const prefix = `DONOR_${donor?.id ?? 'UNKNOWN'}`;
+    addError(errors, exactKeys(donor, PRODUCT_ASSURANCE_DONOR_KEYS), `${prefix}_KEYS`);
+    for (const [field, value] of [
+      ['DELTA_BASE', donor?.deltaBase],
+      ['ACCEPTED_TIP', donor?.acceptedTip],
+      ['DONOR_TREE', donor?.donorTree],
+      ['MERGE_COMMIT', donor?.mergeCommit],
+      ['MERGE_TREE', donor?.mergeTree],
+    ]) addError(errors, FULL_SHA.test(value ?? ''), `${prefix}_${field}`);
+    addError(errors, Number.isSafeInteger(donor?.deltaPathCount) && donor.deltaPathCount > 0, `${prefix}_PATH_COUNT`);
+    addError(errors, SHA256.test(donor?.deltaPathSetSha256 ?? ''), `${prefix}_PATH_HASH`);
+    addError(errors, Array.isArray(donor?.mergeParents) && donor.mergeParents.length === 2
+      && donor.mergeParents.every((value) => FULL_SHA.test(value))
+      && donor.mergeParents[1] === donor.acceptedTip, `${prefix}_MERGE_PARENTS`);
+    addError(errors, exactKeys(donor?.donorReceipt, ['path', 'gitBlob', 'sha256', 'terminalNeedle'])
+      && SAFE_PATH.test(donor.donorReceipt.path ?? '')
+      && FULL_SHA.test(donor.donorReceipt.gitBlob ?? '')
+      && SHA256.test(donor.donorReceipt.sha256 ?? '')
+      && typeof donor.donorReceipt.terminalNeedle === 'string'
+      && donor.donorReceipt.terminalNeedle.length > 0, `${prefix}_DONOR_RECEIPT`);
+    addError(errors, exactKeys(donor?.integrationReceipt, ['commit', 'path', 'gitBlob', 'sha256', 'statusNeedle'])
+      && FULL_SHA.test(donor.integrationReceipt.commit ?? '')
+      && SAFE_PATH.test(donor.integrationReceipt.path ?? '')
+      && FULL_SHA.test(donor.integrationReceipt.gitBlob ?? '')
+      && SHA256.test(donor.integrationReceipt.sha256 ?? '')
+      && typeof donor.integrationReceipt.statusNeedle === 'string'
+      && donor.integrationReceipt.statusNeedle.length > 0, `${prefix}_INTEGRATION_RECEIPT`);
+    addError(errors, Array.isArray(donor?.requiredAncestry)
+      && donor.requiredAncestry.every((entry) => exactKeys(entry, ['ancestor', 'descendant'])
+        && FULL_SHA.test(entry.ancestor ?? '') && FULL_SHA.test(entry.descendant ?? '')), `${prefix}_REQUIRED_ANCESTRY`);
+    addError(errors, uniqueStrings(donor?.requiredObjects)
+      && donor.requiredObjects.every((value) => FULL_SHA.test(value)), `${prefix}_REQUIRED_OBJECTS`);
+  }
+
+  const suites = Array.isArray(document?.suites) ? document.suites : [];
+  addError(errors, suites.length === PRODUCT_ASSURANCE_SUITE_IDS.length, 'SUITE_COUNT');
+  addError(errors, uniqueStrings(suites.map((suite) => suite?.id))
+    && sameMembers(suites.map((suite) => suite.id), PRODUCT_ASSURANCE_SUITE_IDS), 'SUITE_IDS');
+  const ownedFiles = new Map();
+  let behaviorTotal = 0;
+  let contextReplacementRows = 0;
+  let gitObjectContextProofs = 0;
+  let liveContextReplacements = 0;
+  const skippedCallbacks = new Set();
+  for (const suite of suites) {
+    const prefix = `SUITE_${suite?.id ?? 'UNKNOWN'}`;
+    addError(errors, exactKeys(suite, PRODUCT_ASSURANCE_SUITE_KEYS), `${prefix}_KEYS`);
+    addError(errors, PRODUCT_ASSURANCE_DONOR_IDS.includes(suite?.donorId), `${prefix}_DONOR`);
+    addError(errors, SAFE_PATH.test(suite?.testRoot ?? ''), `${prefix}_ROOT`);
+    const inventory = Array.isArray(suite?.completeTestInventory) ? suite.completeTestInventory : [];
+    addError(errors, uniqueStrings(inventory)
+      && exactOrderedMembers(inventory, sortedStrings(inventory))
+      && inventory.every((file) => SAFE_PATH.test(file) && file.endsWith('.test.mjs')
+        && file.startsWith(`${suite.testRoot}/`)), `${prefix}_INVENTORY`);
+    for (const file of inventory) {
+      if (ownedFiles.has(file)) errors.push(`${prefix}_DUPLICATE_OWNER:${file}`);
+      else ownedFiles.set(file, suite.id);
+    }
+
+    const runs = Array.isArray(suite?.runs) ? suite.runs : [];
+    addError(errors, runs.length > 0 && uniqueStrings(runs.map((run) => run?.id)), `${prefix}_RUNS`);
+    const runFiles = new Set();
+    let suiteTotal = 0;
+    for (const run of runs) {
+      const runPrefix = `${prefix}_RUN_${run?.id ?? 'UNKNOWN'}`;
+      const files = Array.isArray(run?.files) ? run.files : [];
+      const exactNames = Array.isArray(run?.exactNames) ? run.exactNames : [];
+      addError(errors, exactKeys(run, ['id', 'files', 'selection', 'exactNames', 'expectedPasses']), `${runPrefix}_KEYS`);
+      addError(errors, uniqueStrings(files) && files.length > 0
+        && files.every((file) => inventory.includes(file)), `${runPrefix}_FILES`);
+      for (const file of files) {
+        if (runFiles.has(file)) errors.push(`${runPrefix}_DUPLICATE_FILE:${file}`);
+        runFiles.add(file);
+      }
+      addError(errors, run?.selection === 'ALL' || run?.selection === 'EXACT_NAMES', `${runPrefix}_SELECTION`);
+      addError(errors, uniqueStrings(exactNames), `${runPrefix}_NAMES`);
+      addError(errors, run?.selection === 'ALL'
+        ? exactNames.length === 0
+        : files.length === 1 && exactNames.length > 0
+          && exactNames.every((name) => typeof name === 'string' && name.length > 0 && name.length <= 512), `${runPrefix}_NAME_POLICY`);
+      addError(errors, Number.isSafeInteger(run?.expectedPasses) && run.expectedPasses > 0, `${runPrefix}_PASS_COUNT`);
+      if (Number.isSafeInteger(run?.expectedPasses)) suiteTotal += run.expectedPasses;
+    }
+
+    const exclusions = Array.isArray(suite?.excludedContextTests) ? suite.excludedContextTests : [];
+    contextReplacementRows += exclusions.length;
+    gitObjectContextProofs += exclusions.filter((entry) => entry.replacementKind === 'GIT_OBJECT_PROVENANCE').length;
+    liveContextReplacements += exclusions.filter((entry) => entry.replacementKind === 'LIVE_OPERATION_POLICY').length;
+    addError(errors, exclusions.every((entry) => exactKeys(entry, ['file', 'exactName', 'replacementKind', 'replacementProofId'])
+      && inventory.includes(entry.file)
+      && typeof entry.exactName === 'string' && entry.exactName.length > 0 && entry.exactName.length <= 512
+      && ((entry.replacementKind === 'GIT_OBJECT_PROVENANCE'
+        && /^[A-Z0-9_]+_GIT_OBJECT_PROVENANCE$/u.test(entry.replacementProofId ?? ''))
+        || (entry.replacementKind === 'LIVE_OPERATION_POLICY'
+          && entry.replacementProofId === 'A_CORE_LIVE_OPERATION_POLICY_ASSEMBLED_SCAN'))), `${prefix}_EXCLUSIONS`);
+    const exclusionKeys = exclusions.map((entry) => `${entry.file}\0${entry.exactName}\0${entry.replacementProofId}`);
+    addError(errors, new Set(exclusionKeys).size === exclusionKeys.length, `${prefix}_DUPLICATE_EXCLUSION`);
+    for (const exclusion of exclusions) {
+      skippedCallbacks.add(`${exclusion.file}\0${exclusion.exactName}`);
+      for (const run of runs) {
+        const files = Array.isArray(run?.files) ? run.files : [];
+        const exactNames = Array.isArray(run?.exactNames) ? run.exactNames : [];
+        if (files.includes(exclusion.file) && exactNames.includes(exclusion.exactName)) {
+          errors.push(`${prefix}_CONTEXT_SELECTED:${exclusion.file}`);
+        }
+      }
+    }
+    addError(errors, inventory.every((file) => runFiles.has(file)
+      || exclusions.some((entry) => entry.file === file)), `${prefix}_UNCLASSIFIED_FILE`);
+    addError(errors, suiteTotal === suite?.expectedPasses, `${prefix}_SUBTOTAL`);
+    if (Number.isSafeInteger(suite?.expectedPasses)) behaviorTotal += suite.expectedPasses;
+  }
+  addError(errors, behaviorTotal === 801 && behaviorTotal === document?.expectedDonorBehaviorPasses, 'DONOR_BEHAVIOR_AGGREGATE');
+  addError(errors, behaviorTotal + document?.expectedIntegrationReplacementPasses === 802
+    && behaviorTotal + document?.expectedIntegrationReplacementPasses === document?.expectedBehaviorPasses,
+  'EFFECTIVE_BEHAVIOR_AGGREGATE');
+  addError(errors, contextReplacementRows === 7
+    && contextReplacementRows === document?.expectedContextReplacementRows, 'CONTEXT_REPLACEMENT_ROW_AGGREGATE');
+  addError(errors, gitObjectContextProofs === 6
+    && gitObjectContextProofs === document?.expectedGitObjectContextProofs, 'GIT_OBJECT_CONTEXT_PROOF_AGGREGATE');
+  addError(errors, liveContextReplacements === 1
+    && liveContextReplacements === document?.expectedLiveContextReplacements, 'LIVE_CONTEXT_REPLACEMENT_AGGREGATE');
+  addError(errors, skippedCallbacks.size === 6
+    && skippedCallbacks.size === document?.expectedSkippedCallbacks, 'SKIPPED_CALLBACK_AGGREGATE');
+  addError(errors, PRODUCT_ASSURANCE_DONOR_IDS.every((donorId) => suites.some((suite) => suite.donorId === donorId)),
+    'UNUSED_DONOR');
+
+  return Object.freeze({
+    schemaVersion: document?.schemaVersion ?? null,
+    donorBehaviorTotal: behaviorTotal,
+    integrationReplacementBehavior: document?.expectedIntegrationReplacementPasses ?? null,
+    effectiveBehaviorTotal: Number.isSafeInteger(document?.expectedIntegrationReplacementPasses)
+      ? behaviorTotal + document.expectedIntegrationReplacementPasses
+      : null,
+    skippedCallbacks: skippedCallbacks.size,
+    gitObjectContextProofs,
+    liveContextReplacements,
+    contextReplacementRows,
+    errors: Object.freeze(errors),
+    passed: errors.length === 0,
+  });
+}
+
+export function verifyProductAssuranceSuiteInventory(document) {
+  const validation = validateProductAssuranceManifest(document);
+  if (!validation.passed) return Object.freeze({
+    validation,
+    suites: Object.freeze([]),
+    integrationReplacement: null,
+    passed: false,
+  });
+  const results = document.suites.map((suite) => {
+    let actualFiles = [];
+    let scanError = null;
+    try {
+      actualFiles = listTestFiles(suite.testRoot);
+    } catch (error) {
+      scanError = error instanceof Error ? error.message : String(error);
+    }
+    const inventoryMatches = scanError === null
+      && exactOrderedMembers(actualFiles, suite.completeTestInventory);
+    const nameResults = [];
+    for (const run of suite.runs.filter((entry) => entry.selection === 'EXACT_NAMES')) {
+      const bytes = safeWorkspaceBytes(run.files[0]);
+      for (const name of run.exactNames) nameResults.push(Object.freeze({
+        file: run.files[0],
+        name,
+        found: bytes !== null && bytes.includes(Buffer.from(name)),
+      }));
+    }
+    for (const exclusion of suite.excludedContextTests) {
+      const bytes = safeWorkspaceBytes(exclusion.file);
+      nameResults.push(Object.freeze({
+        file: exclusion.file,
+        name: exclusion.exactName,
+        found: bytes !== null && bytes.includes(Buffer.from(exclusion.exactName)),
+        excluded: true,
+      }));
+    }
+    return Object.freeze({
+      id: suite.id,
+      scanError,
+      actualFiles: Object.freeze(actualFiles),
+      inventoryMatches,
+      nameResults: Object.freeze(nameResults),
+      passed: inventoryMatches && nameResults.every((entry) => entry.found),
+    });
+  });
+  const integrationReplacementBytes = safeWorkspaceBytes(document.integrationReplacement.testFile);
+  const integrationReplacement = Object.freeze({
+    id: document.integrationReplacement.id,
+    file: document.integrationReplacement.testFile,
+    name: document.integrationReplacement.exactName,
+    fileExists: integrationReplacementBytes !== null,
+    nameFound: integrationReplacementBytes?.includes(Buffer.from(document.integrationReplacement.exactName)) === true,
+  });
+  return Object.freeze({
+    validation,
+    suites: Object.freeze(results),
+    integrationReplacement,
+    passed: results.every((result) => result.passed)
+      && integrationReplacement.fileExists && integrationReplacement.nameFound,
+  });
+}
+
+function gitTreeBlobs(ref) {
+  if (!FULL_SHA.test(ref ?? '') && ref !== 'HEAD') return null;
+  const output = safeGit(['ls-tree', '-r', '-z', '--full-tree', ref], null);
+  if (output === null) return null;
+  const entries = new Map();
+  for (const record of output.toString('utf8').split('\0').filter(Boolean)) {
+    const tab = record.indexOf('\t');
+    const header = tab < 0 ? '' : record.slice(0, tab);
+    const relativePath = tab < 0 ? '' : record.slice(tab + 1);
+    const fields = header.split(' ');
+    if (fields.length === 3 && fields[1] === 'blob' && FULL_SHA.test(fields[2]) && SAFE_PATH.test(relativePath)) {
+      entries.set(relativePath, fields[2]);
+    }
+  }
+  return entries;
+}
+
+function gitDeltaPaths(base, tip) {
+  if (!FULL_SHA.test(base ?? '') || !FULL_SHA.test(tip ?? '')) return null;
+  const output = safeGit(['diff', '--name-only', '--no-renames', '-z', `${base}..${tip}`, '--'], null);
+  if (output === null) return null;
+  const paths = output.toString('utf8').split('\0').filter(Boolean).sort(compareAscii);
+  return paths.every((entry) => SAFE_PATH.test(entry)) ? Object.freeze(paths) : null;
+}
+
+function pathSetDigest(paths) {
+  return digest(Buffer.from(`${paths.join('\n')}\n`, 'utf8'));
+}
+
+export function verifyProductAssuranceDonor(donor) {
+  const baseExists = FULL_SHA.test(donor?.deltaBase ?? '') && gitExitZero(['cat-file', '-e', `${donor.deltaBase}^{commit}`]);
+  const donorExists = FULL_SHA.test(donor?.acceptedTip ?? '') && gitExitZero(['cat-file', '-e', `${donor.acceptedTip}^{commit}`]);
+  const mergeExists = FULL_SHA.test(donor?.mergeCommit ?? '') && gitExitZero(['cat-file', '-e', `${donor.mergeCommit}^{commit}`]);
+  const donorTree = donorExists ? safeGit(['rev-parse', `${donor.acceptedTip}^{tree}`])?.trim() ?? null : null;
+  const mergeTree = mergeExists ? safeGit(['rev-parse', `${donor.mergeCommit}^{tree}`])?.trim() ?? null : null;
+  const mergeParents = mergeExists
+    ? safeGit(['show', '-s', '--format=%P', donor.mergeCommit])?.trim().split(/\s+/u).filter(Boolean) ?? []
+    : [];
+  const donorMerged = donorExists && mergeExists
+    && gitExitZero(['merge-base', '--is-ancestor', donor.acceptedTip, donor.mergeCommit]);
+  const mergeReachable = mergeExists && gitExitZero(['merge-base', '--is-ancestor', donor.mergeCommit, 'HEAD']);
+  const paths = baseExists && donorExists ? gitDeltaPaths(donor.deltaBase, donor.acceptedTip) : null;
+  const donorBlobs = donorExists ? gitTreeBlobs(donor.acceptedTip) : null;
+  const mergeBlobs = mergeExists ? gitTreeBlobs(donor.mergeCommit) : null;
+  const headBlobs = gitTreeBlobs('HEAD');
+  const blobResults = (paths ?? []).map((relativePath) => {
+    const donorBlob = donorBlobs?.get(relativePath) ?? null;
+    const mergeBlob = mergeBlobs?.get(relativePath) ?? null;
+    const headBlob = headBlobs?.get(relativePath) ?? null;
+    return Object.freeze({
+      path: relativePath,
+      donorBlob,
+      mergeBlob,
+      headBlob,
+      passed: donorBlob !== null && donorBlob === mergeBlob && donorBlob === headBlob,
+    });
+  });
+
+  const donorReceiptPath = donor?.donorReceipt?.path ?? '';
+  const donorReceiptBytes = donorExists && SAFE_PATH.test(donorReceiptPath)
+    ? safeGit(['show', `${donor.acceptedTip}:${donorReceiptPath}`], null)
+    : null;
+  const currentDonorReceiptBytes = safeWorkspaceBytes(donorReceiptPath);
+  const donorReceipt = Object.freeze({
+    gitBlob: donorBlobs?.get(donorReceiptPath) ?? null,
+    donorSha256: donorReceiptBytes === null ? null : digest(donorReceiptBytes),
+    currentSha256: currentDonorReceiptBytes === null ? null : digest(currentDonorReceiptBytes),
+    terminalAtDonor: donorReceiptBytes?.includes(Buffer.from(donor?.donorReceipt?.terminalNeedle ?? '')) === true,
+    terminalAtHead: currentDonorReceiptBytes?.includes(Buffer.from(donor?.donorReceipt?.terminalNeedle ?? '')) === true,
+  });
+  const donorReceiptPassed = donorReceipt.gitBlob === donor?.donorReceipt?.gitBlob
+    && donorReceipt.donorSha256 === donor?.donorReceipt?.sha256
+    && donorReceipt.currentSha256 === donor?.donorReceipt?.sha256
+    && donorReceipt.terminalAtDonor && donorReceipt.terminalAtHead;
+
+  const integrationReceiptCommit = donor?.integrationReceipt?.commit ?? '';
+  const integrationReceiptPath = donor?.integrationReceipt?.path ?? '';
+  const integrationReceiptCommitExists = FULL_SHA.test(integrationReceiptCommit)
+    && gitExitZero(['cat-file', '-e', `${integrationReceiptCommit}^{commit}`]);
+  const integrationReceiptReachable = integrationReceiptCommitExists
+    && gitExitZero(['merge-base', '--is-ancestor', integrationReceiptCommit, 'HEAD']);
+  const integrationReceiptBlobs = integrationReceiptCommitExists ? gitTreeBlobs(integrationReceiptCommit) : null;
+  const integrationReceiptBytes = integrationReceiptCommitExists && SAFE_PATH.test(integrationReceiptPath)
+    ? safeGit(['show', `${integrationReceiptCommit}:${integrationReceiptPath}`], null)
+    : null;
+  const currentIntegrationReceiptBytes = safeWorkspaceBytes(integrationReceiptPath);
+  const integrationReceipt = Object.freeze({
+    commitExists: integrationReceiptCommitExists,
+    reachable: integrationReceiptReachable,
+    gitBlob: integrationReceiptBlobs?.get(integrationReceiptPath) ?? null,
+    headBlob: headBlobs?.get(integrationReceiptPath) ?? null,
+    committedSha256: integrationReceiptBytes === null ? null : digest(integrationReceiptBytes),
+    currentSha256: currentIntegrationReceiptBytes === null ? null : digest(currentIntegrationReceiptBytes),
+    statusAtCommit: integrationReceiptBytes?.includes(Buffer.from(donor?.integrationReceipt?.statusNeedle ?? '')) === true,
+    statusAtHead: currentIntegrationReceiptBytes?.includes(Buffer.from(donor?.integrationReceipt?.statusNeedle ?? '')) === true,
+  });
+  const integrationReceiptPassed = integrationReceipt.commitExists && integrationReceipt.reachable
+    && integrationReceipt.gitBlob === donor?.integrationReceipt?.gitBlob
+    && integrationReceipt.headBlob === donor?.integrationReceipt?.gitBlob
+    && integrationReceipt.committedSha256 === donor?.integrationReceipt?.sha256
+    && integrationReceipt.currentSha256 === donor?.integrationReceipt?.sha256
+    && integrationReceipt.statusAtCommit && integrationReceipt.statusAtHead;
+
+  const requiredAncestry = (Array.isArray(donor?.requiredAncestry) ? donor.requiredAncestry : []).map((entry) => Object.freeze({
+    ...entry,
+    passed: FULL_SHA.test(entry?.ancestor ?? '') && FULL_SHA.test(entry?.descendant ?? '')
+      && gitExitZero(['merge-base', '--is-ancestor', entry.ancestor, entry.descendant]),
+  }));
+  const requiredObjects = (Array.isArray(donor?.requiredObjects) ? donor.requiredObjects : []).map((object) => Object.freeze({
+    object,
+    passed: FULL_SHA.test(object ?? '') && gitExitZero(['cat-file', '-e', `${object}^{commit}`]),
+  }));
+  const mergeShapePassed = mergeParents.length === 2
+    && exactOrderedMembers(mergeParents, donor?.mergeParents ?? [])
+    && mergeParents[1] === donor?.acceptedTip;
+  const pathSetPassed = paths !== null
+    && paths.length === donor?.deltaPathCount
+    && pathSetDigest(paths) === donor?.deltaPathSetSha256;
+  const diffCheckPassed = mergeExists && gitExitZero(['diff', '--check', `${donor.mergeCommit}^1`, donor.mergeCommit, '--']);
+  const passed = baseExists && donorExists && mergeExists
+    && donorTree === donor?.donorTree && mergeTree === donor?.mergeTree
+    && mergeShapePassed && donorMerged && mergeReachable && pathSetPassed
+    && blobResults.length === donor?.deltaPathCount && blobResults.every((entry) => entry.passed)
+    && donorReceiptPassed && integrationReceiptPassed && diffCheckPassed
+    && requiredAncestry.every((entry) => entry.passed)
+    && requiredObjects.every((entry) => entry.passed);
+  return Object.freeze({
+    id: donor?.id ?? null,
+    baseExists,
+    donorExists,
+    mergeExists,
+    donorTree,
+    mergeTree,
+    mergeParents: Object.freeze(mergeParents),
+    donorMerged,
+    mergeReachable,
+    pathCount: paths?.length ?? null,
+    pathSetSha256: paths === null ? null : pathSetDigest(paths),
+    pathSetPassed,
+    blobsChecked: blobResults.length,
+    blobMismatches: Object.freeze(blobResults.filter((entry) => !entry.passed)),
+    donorReceipt,
+    donorReceiptPassed,
+    integrationReceipt,
+    integrationReceiptPassed,
+    requiredAncestry: Object.freeze(requiredAncestry),
+    requiredObjects: Object.freeze(requiredObjects),
+    diffCheckPassed,
+    passed,
+  });
+}
+
+export function verifyProductAssuranceDonors(document) {
+  const validation = validateProductAssuranceManifest(document);
+  if (!validation.passed) return Object.freeze({ validation, donors: Object.freeze([]), passed: false });
+  const donors = document.donors.map((donor) => verifyProductAssuranceDonor(donor));
+  return Object.freeze({
+    validation,
+    donors: Object.freeze(donors),
+    passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length && donors.every((donor) => donor.passed),
+  });
+}
+
+export function verifyProductAssuranceOperationReport(document, report) {
+  const expected = document?.operationScan;
+  const checks = Object.freeze({
+    manifestValid: validateProductAssuranceManifest(document).passed,
+    schemaVersion: report?.schemaVersion === expected?.schemaVersion,
+    scannedRoot: report?.scannedRoot === 'server/src',
+    filesScanned: report?.filesScanned === expected?.filesScanned,
+    discovered: report?.discovered === expected?.discovered,
+    covered: report?.covered === expected?.covered,
+    uncovered: report?.uncovered === expected?.uncovered && report?.uncovered === 0,
+    conservation: report?.discovered === report?.covered + report?.uncovered,
+    sites: Array.isArray(report?.sites) && report.sites.length === report?.discovered,
+    uncoveredSites: Array.isArray(report?.uncoveredSites) && report.uncoveredSites.length === 0,
+  });
+  return Object.freeze({ checks, passed: Object.values(checks).every(Boolean) });
 }

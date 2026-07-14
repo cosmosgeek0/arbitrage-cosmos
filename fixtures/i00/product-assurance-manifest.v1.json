@@ -1,0 +1,578 @@
+{
+  "schemaVersion": "I00_PRODUCT_ASSURANCE_HARNESS_V1",
+  "expectedBehaviorPasses": 802,
+  "expectedDonorBehaviorPasses": 801,
+  "expectedIntegrationReplacementPasses": 1,
+  "expectedProvenancePasses": 4,
+  "expectedSkippedCallbacks": 6,
+  "expectedGitObjectContextProofs": 6,
+  "expectedLiveContextReplacements": 1,
+  "expectedContextReplacementRows": 7,
+  "contextProofPolicy": "SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK",
+  "integrationReplacement": {
+    "id": "LIVE_OPERATION_POLICY",
+    "testFile": "test/i00/product-assurance-live-operation.test.mjs",
+    "exactName": "assembled production operation scan matches the final manifest denominator with zero uncovered sites",
+    "expectedPasses": 1
+  },
+  "operationScan": {
+    "schemaVersion": "production-operation-scan.v1",
+    "scriptPath": "test/productAssurance/production-operation-scan.mjs",
+    "filesScanned": 386,
+    "discovered": 143,
+    "covered": 143,
+    "uncovered": 0
+  },
+  "donors": [
+    {
+      "id": "A_CORE",
+      "deltaBase": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "acceptedTip": "08a0a09780727e2b4ba59017b5701998abe29b77",
+      "donorTree": "b904ca0f5b6f7c8df294274351611635560f80f7",
+      "deltaPathCount": 36,
+      "deltaPathSetSha256": "9ee8554b60e5e580169b65671baf9899d53d46a79e500a1004230ece81c9af5e",
+      "mergeCommit": "3ee0eda6b0da01b6fae441c684fa53829cab15be",
+      "mergeTree": "cb1d785f69c2b1d36fc11d88446acc64cf53a33d",
+      "mergeParents": [
+        "d3ae63f7c755ac5bb56889207e698c23a895798a",
+        "08a0a09780727e2b4ba59017b5701998abe29b77"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/receipts/IP_ASSURANCE_RECEIPT.md",
+        "gitBlob": "ad22f9ab75deffcb62fa2a6986dbed6ac61595b2",
+        "sha256": "93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e",
+        "terminalNeedle": "CORE_SCAFFOLD_READY"
+      },
+      "integrationReceipt": {
+        "commit": "66aa2155d8587897fc59d25f40dfa6c1e3461213",
+        "path": "docs/archive/i00-phase2/A_CORE_INTEGRATION_RECEIPT.md",
+        "gitBlob": "c4f7a0e096a85d9fe8f2bc5ec768eb188800176a",
+        "sha256": "6741509d67eb622f913661e1ea0e277b01a29ebb3a0e9318e3025882122ba0fa",
+        "statusNeedle": "Status: `A_CORE_INTEGRATED / CORE_SCAFFOLD_READY_PRESERVED`"
+      },
+      "requiredAncestry": [],
+      "requiredObjects": []
+    },
+    {
+      "id": "A_HAZARD",
+      "deltaBase": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "acceptedTip": "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f",
+      "donorTree": "e33224d4b2e6b018fd39bfdcb403b3d88e74712f",
+      "deltaPathCount": 24,
+      "deltaPathSetSha256": "f715f96f1a77bd37acc5810acf6121af622cf404441345eeca4f28b0129946e2",
+      "mergeCommit": "bfb813ba1c15a23c7f4f0bff6a8da2f13d5c2729",
+      "mergeTree": "7eed3e5336354c03455282b9ee3421c7d90a0a92",
+      "mergeParents": [
+        "66aa2155d8587897fc59d25f40dfa6c1e3461213",
+        "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/systemic/hazard/receipts/HAZARD_D_LAUNCH_10_AUDIT_RECEIPT.md",
+        "gitBlob": "5dc3bd4bafe7eb9a42e9547989cd7f488eb72c74",
+        "sha256": "ecfca4e7d60d9dca3b07e4e21d4595ebb234dab421924f14226cf39f8a9c85ea",
+        "terminalNeedle": "HAZARD_PRESTAGE_READY"
+      },
+      "integrationReceipt": {
+        "commit": "9edc3230f1b2411efee4a5d9b112c979ec74024c",
+        "path": "docs/archive/i00-phase2/A_HAZARD_INTEGRATION_RECEIPT.md",
+        "gitBlob": "8c28c9a6ac562d854386cd27e13de4863775129b",
+        "sha256": "3190610ddf4ea7c47d3483769ed6983a4f821ba91ec38cb9c5260310edbf9c3e",
+        "statusNeedle": "Status: `A_HAZARD_INTEGRATED / HAZARD_PRESTAGE_READY_PRESERVED`"
+      },
+      "requiredAncestry": [],
+      "requiredObjects": []
+    },
+    {
+      "id": "A_COCKPIT",
+      "deltaBase": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "acceptedTip": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d",
+      "donorTree": "bda9b452c9e6564576fa3cd390a5981cd6907c09",
+      "deltaPathCount": 53,
+      "deltaPathSetSha256": "870d23aebb1d60b12eabb91364a134b97569dc21ba4345618282b1355d39e01d",
+      "mergeCommit": "0204687d8c65875c99d17ae7bee1c61707f0be0f",
+      "mergeTree": "317994f194899f0edfe170d2dcab4386280b9489",
+      "mergeParents": [
+        "9edc3230f1b2411efee4a5d9b112c979ec74024c",
+        "d4ff9c94c9fec9477481223c4b33d8f671a34f6d"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/systemic/cockpit/receipts/COCKPIT_PRESTAGE_RECEIPT.v1.json",
+        "gitBlob": "e02c7f40eec4aad271ee47461e1c8a313709b588",
+        "sha256": "b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd",
+        "terminalNeedle": "COCKPIT_PRESTAGE_READY"
+      },
+      "integrationReceipt": {
+        "commit": "c5d18db072153d335ab14c82634eafca2370230c",
+        "path": "docs/archive/i00-phase2/A_COCKPIT_INTEGRATION_RECEIPT.md",
+        "gitBlob": "a6aae22e16c54682fad77ff34acf5aee0b94de99",
+        "sha256": "f11e706995c1156b82f6c1f7aaa8bcb29b0c76c8dbc9364087a973ccd7514555",
+        "statusNeedle": "Status: `A_COCKPIT_INTEGRATED / COCKPIT_PRESTAGE_READY_PRESERVED`"
+      },
+      "requiredAncestry": [],
+      "requiredObjects": []
+    },
+    {
+      "id": "A_AGENT",
+      "deltaBase": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "acceptedTip": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "donorTree": "e68ef10d09c11bc5623099a2eb6eb6881054486b",
+      "deltaPathCount": 20,
+      "deltaPathSetSha256": "11a0a317f05371d5a9378776cc0d7343a5d4a622c5f19dce2c2f6dbe8a5d6b27",
+      "mergeCommit": "251d901e2a38c7b3b9634ab1728098655f0104bb",
+      "mergeTree": "7740fd6df57a5caf337320d439c027585df488de",
+      "mergeParents": [
+        "c5d18db072153d335ab14c82634eafca2370230c",
+        "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/systemic/agentBoundary/receipts/AGENT_BOUNDARY_PRESTAGE_RECEIPT.v1.json",
+        "gitBlob": "1c2fb625a3d90ece61a44c56adc9788063badb99",
+        "sha256": "c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c",
+        "terminalNeedle": "AGENT_PRESTAGE_READY"
+      },
+      "integrationReceipt": {
+        "commit": "57aff72c1d557572558aee795c5e0a669bf080af",
+        "path": "docs/archive/i00-phase2/A_AGENT_INTEGRATION_RECEIPT.md",
+        "gitBlob": "f3657fa8a31f91caeb36b5229ad0fd61806e9bf6",
+        "sha256": "e47be0f081b15859b2d8509e2fd0e2a611c48dcca50a8640f39dc86be717e7d0",
+        "statusNeedle": "Status: `A_AGENT_INTEGRATED / AGENT_PRESTAGE_READY_PRESERVED`"
+      },
+      "requiredAncestry": [],
+      "requiredObjects": []
+    },
+    {
+      "id": "A_STABILITY",
+      "deltaBase": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "acceptedTip": "d35674e7f9621320c35e0bc0270efd515cc64dbd",
+      "donorTree": "16c92923b837105471b232df0480d1270bda756e",
+      "deltaPathCount": 19,
+      "deltaPathSetSha256": "84b18ffcfd1893442eedacad74d4ef94823a4f5d846a1a5362e859ed6c5cc117",
+      "mergeCommit": "332208e64fb9b54ef2b6320c7609e53833da469f",
+      "mergeTree": "b776b00591e853d1ed6acd9fbdef99fc9f06b2b8",
+      "mergeParents": [
+        "57aff72c1d557572558aee795c5e0a669bf080af",
+        "d35674e7f9621320c35e0bc0270efd515cc64dbd"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/systemic/stability/receipts/STABILITY_ACCEPTANCE_RECEIPT.md",
+        "gitBlob": "d441a5d23bf87178af47b143e4a955d826aeb711",
+        "sha256": "b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168",
+        "terminalNeedle": "STABILITY_PRESTAGE_READY"
+      },
+      "integrationReceipt": {
+        "commit": "7b1a93215df726d98a39ec05588d06f0badf8afe",
+        "path": "docs/archive/i00-phase2/A_STABILITY_INTEGRATION_RECEIPT.md",
+        "gitBlob": "958f03f5d463bc2790499e06ce814a0f5a1d56ff",
+        "sha256": "bc527367b7b05f78e4be4dd4a916be59029316fa671f1d2ea1ed91f7a0f734d2",
+        "statusNeedle": "Status: `A_STABILITY_INTEGRATED / STABILITY_PRESTAGE_READY_PRESERVED`"
+      },
+      "requiredAncestry": [],
+      "requiredObjects": []
+    },
+    {
+      "id": "A_CASE_S4",
+      "deltaBase": "f72c531f766d3f8ffa52e0f0e3fc77ef8345913b",
+      "acceptedTip": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c",
+      "donorTree": "3c773878016f4a56c6b03fe6485a42b002c3f5d2",
+      "deltaPathCount": 41,
+      "deltaPathSetSha256": "cf1c711e8688e5d00382b244566d210f5eabbfad30d622ae49a33b6380d358cc",
+      "mergeCommit": "86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1",
+      "mergeTree": "db4708ef5bdd261f4493885a770aa3ff670bf674",
+      "mergeParents": [
+        "7b1a93215df726d98a39ec05588d06f0badf8afe",
+        "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c"
+      ],
+      "donorReceipt": {
+        "path": "fixtures/productAssurance/systemic/assuranceCase/receipts/CASE_ACCEPTANCE_RECEIPT.md",
+        "gitBlob": "0a10dd8b21b52b40a392a2fa8b11dc949aea649c",
+        "sha256": "05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550",
+        "terminalNeedle": "CASE_PRESTAGE_READY"
+      },
+      "integrationReceipt": {
+        "commit": "4d70005628f9af166296f5b2952aa05fa396aef4",
+        "path": "docs/archive/i00-phase2/A_CASE_INTEGRATION_RECEIPT.md",
+        "gitBlob": "dc7a70f25520b8bbf5423e217fc081226f29c676",
+        "sha256": "f721c0a72a36255727555a4ab13e4fab0f1fc829604e8ce8ae8897760dd0925b",
+        "statusNeedle": "Status: `A_CASE_INTEGRATED / CASE_PRESTAGE_READY_PRESERVED`"
+      },
+      "requiredAncestry": [
+        {
+          "ancestor": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+          "descendant": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c"
+        },
+        {
+          "ancestor": "2d840599c716b5da8f5c42a272fc2232792f868c",
+          "descendant": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c"
+        },
+        {
+          "ancestor": "c2201cf91a60387d2cd6901cb42f1c3532ca9b53",
+          "descendant": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c"
+        }
+      ],
+      "requiredObjects": [
+        "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f"
+      ]
+    }
+  ],
+  "suites": [
+    {
+      "id": "A_CORE_BEHAVIOR",
+      "donorId": "A_CORE",
+      "testRoot": "server/test/productAssurance",
+      "completeTestInventory": [
+        "server/test/productAssurance/core-policy-inventory.test.mjs",
+        "server/test/productAssurance/operational-remediation.test.mjs",
+        "server/test/productAssurance/owner-contract-gate-adversarial.test.mjs",
+        "server/test/productAssurance/production-operation-scan-adversarial.test.mjs",
+        "server/test/productAssurance/systemic-diagnostics.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_CORE_NON_DENOMINATOR_FILES",
+          "files": [
+            "server/test/productAssurance/operational-remediation.test.mjs",
+            "server/test/productAssurance/owner-contract-gate-adversarial.test.mjs",
+            "server/test/productAssurance/production-operation-scan-adversarial.test.mjs",
+            "server/test/productAssurance/systemic-diagnostics.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 25
+        },
+        {
+          "id": "A_CORE_SAFE_POLICY_BEHAVIOR",
+          "files": [
+            "server/test/productAssurance/core-policy-inventory.test.mjs"
+          ],
+          "selection": "EXACT_NAMES",
+          "exactNames": [
+            "unknown paths and forged mutation-to-read mappings remain uncovered",
+            "ambiguous submission retry and circuit recovery stay bounded",
+            "all adjudicated owner surfaces consume exact tuples and absence remains WAITING",
+            "owner contract rejects hostile owner, release, subject, digest, algorithm, splice, and extra-field substitutions",
+            "critical invariants require exact release, owner, subject, and digest bindings",
+            "evidence expiry, truth realm, and future observations fail closed"
+          ],
+          "expectedPasses": 6
+        }
+      ],
+      "excludedContextTests": [
+        {
+          "file": "server/test/productAssurance/core-policy-inventory.test.mjs",
+          "exactName": "operation policies and reviewed news read cover all 143 production sites",
+          "replacementKind": "LIVE_OPERATION_POLICY",
+          "replacementProofId": "A_CORE_LIVE_OPERATION_POLICY_ASSEMBLED_SCAN"
+        }
+      ],
+      "expectedPasses": 31
+    },
+    {
+      "id": "A_HAZARD_BEHAVIOR",
+      "donorId": "A_HAZARD",
+      "testRoot": "test/productAssurance/systemic/hazard",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/hazard/atlas-coverage.test.mjs",
+        "test/productAssurance/systemic/hazard/contracts.test.mjs",
+        "test/productAssurance/systemic/hazard/draft-rows.test.mjs",
+        "test/productAssurance/systemic/hazard/hazard-evaluator.test.mjs",
+        "test/productAssurance/systemic/hazard/purity-scope.test.mjs",
+        "test/productAssurance/systemic/hazard/view-model.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_HAZARD_ALL",
+          "files": [
+            "test/productAssurance/systemic/hazard/atlas-coverage.test.mjs",
+            "test/productAssurance/systemic/hazard/contracts.test.mjs",
+            "test/productAssurance/systemic/hazard/draft-rows.test.mjs",
+            "test/productAssurance/systemic/hazard/hazard-evaluator.test.mjs",
+            "test/productAssurance/systemic/hazard/purity-scope.test.mjs",
+            "test/productAssurance/systemic/hazard/view-model.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 69
+        }
+      ],
+      "excludedContextTests": [],
+      "expectedPasses": 69
+    },
+    {
+      "id": "A_COCKPIT_BEHAVIOR",
+      "donorId": "A_COCKPIT",
+      "testRoot": "test/productAssurance/systemic/cockpit",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs",
+        "test/productAssurance/systemic/cockpit/import-purity.test.mjs",
+        "test/productAssurance/systemic/cockpit/path-scope.test.mjs",
+        "test/productAssurance/systemic/cockpit/receipt-and-state.test.mjs",
+        "test/productAssurance/systemic/cockpit/release-bound-panel.test.mjs",
+        "test/productAssurance/systemic/cockpit/schema-and-drafts.test.mjs",
+        "test/productAssurance/systemic/cockpit/schema-conformance.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_COCKPIT_ALL",
+          "files": [
+            "test/productAssurance/systemic/cockpit/contract-and-projection.test.mjs",
+            "test/productAssurance/systemic/cockpit/import-purity.test.mjs",
+            "test/productAssurance/systemic/cockpit/path-scope.test.mjs",
+            "test/productAssurance/systemic/cockpit/receipt-and-state.test.mjs",
+            "test/productAssurance/systemic/cockpit/release-bound-panel.test.mjs",
+            "test/productAssurance/systemic/cockpit/schema-and-drafts.test.mjs",
+            "test/productAssurance/systemic/cockpit/schema-conformance.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 50
+        }
+      ],
+      "excludedContextTests": [],
+      "expectedPasses": 50
+    },
+    {
+      "id": "A_OBSERVABILITY_BEHAVIOR",
+      "donorId": "A_COCKPIT",
+      "testRoot": "test/productAssurance/systemic/observability",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/observability/conservation.test.mjs",
+        "test/productAssurance/systemic/observability/historical-series.test.mjs",
+        "test/productAssurance/systemic/observability/import-purity-and-scope.test.mjs",
+        "test/productAssurance/systemic/observability/reason-code-registry.test.mjs",
+        "test/productAssurance/systemic/observability/release-manifest.test.mjs",
+        "test/productAssurance/systemic/observability/schema-conformance.test.mjs",
+        "test/productAssurance/systemic/observability/slo-catalog.test.mjs",
+        "test/productAssurance/systemic/observability/slo-trend.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_OBSERVABILITY_ALL",
+          "files": [
+            "test/productAssurance/systemic/observability/conservation.test.mjs",
+            "test/productAssurance/systemic/observability/historical-series.test.mjs",
+            "test/productAssurance/systemic/observability/import-purity-and-scope.test.mjs",
+            "test/productAssurance/systemic/observability/reason-code-registry.test.mjs",
+            "test/productAssurance/systemic/observability/release-manifest.test.mjs",
+            "test/productAssurance/systemic/observability/schema-conformance.test.mjs",
+            "test/productAssurance/systemic/observability/slo-catalog.test.mjs",
+            "test/productAssurance/systemic/observability/slo-trend.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 100
+        }
+      ],
+      "excludedContextTests": [],
+      "expectedPasses": 100
+    },
+    {
+      "id": "A_AGENT_BEHAVIOR",
+      "donorId": "A_AGENT",
+      "testRoot": "test/productAssurance/systemic/agentBoundary",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/agentBoundary/promotion-repair-corpus.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/provider-stub-hardening.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/purity-scope.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/receipt-state.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/schema-boundary.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/trace-retention.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/workload-sandbox.test.mjs",
+        "test/productAssurance/systemic/agentBoundary/workload-view-insertion.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_AGENT_NON_CONTEXT_FILES",
+          "files": [
+            "test/productAssurance/systemic/agentBoundary/promotion-repair-corpus.test.mjs",
+            "test/productAssurance/systemic/agentBoundary/provider-stub-hardening.test.mjs",
+            "test/productAssurance/systemic/agentBoundary/schema-boundary.test.mjs",
+            "test/productAssurance/systemic/agentBoundary/trace-retention.test.mjs",
+            "test/productAssurance/systemic/agentBoundary/workload-sandbox.test.mjs",
+            "test/productAssurance/systemic/agentBoundary/workload-view-insertion.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 103
+        },
+        {
+          "id": "A_AGENT_SAFE_PURITY",
+          "files": [
+            "test/productAssurance/systemic/agentBoundary/purity-scope.test.mjs"
+          ],
+          "selection": "EXACT_NAMES",
+          "exactNames": [
+            "packet implementation has no wall clock, randomness, timers, environment, process, or mutable I/O",
+            "packet imports no Q, L, exchange, production evaluator, runtime owner, or shared authority",
+            "test imports remain local, standard-library-only, and outside Q/L/production owners",
+            "provider stub contains no network, SDK, shell, process-spawn, or credential-acquisition seam",
+            "every packet JSON artifact parses and stays bounded",
+            "fixture inventory remains entirely inside the assigned packet subtree"
+          ],
+          "expectedPasses": 6
+        }
+      ],
+      "excludedContextTests": [
+        {
+          "file": "test/productAssurance/systemic/agentBoundary/receipt-state.test.mjs",
+          "exactName": "D-LAUNCH-13 receipt and state seal the exact verified implementation",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_AGENT_RECEIPT_BRANCH_GIT_OBJECT_PROVENANCE"
+        },
+        {
+          "file": "test/productAssurance/systemic/agentBoundary/receipt-state.test.mjs",
+          "exactName": "D-LAUNCH-13 receipt and state seal the exact verified implementation",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_AGENT_RECEIPT_STATE_GIT_OBJECT_PROVENANCE"
+        },
+        {
+          "file": "test/productAssurance/systemic/agentBoundary/purity-scope.test.mjs",
+          "exactName": "actual Git path set is confined to the satellite subtrees plus the protected parent I00 input",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_AGENT_DELTA_PATH_GIT_OBJECT_PROVENANCE"
+        }
+      ],
+      "expectedPasses": 109
+    },
+    {
+      "id": "A_STABILITY_BEHAVIOR",
+      "donorId": "A_STABILITY",
+      "testRoot": "test/productAssurance/systemic/stability",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/stability/cancellation.test.mjs",
+        "test/productAssurance/systemic/stability/contracts.test.mjs",
+        "test/productAssurance/systemic/stability/drafts.test.mjs",
+        "test/productAssurance/systemic/stability/import-purity.test.mjs",
+        "test/productAssurance/systemic/stability/integrity.test.mjs",
+        "test/productAssurance/systemic/stability/repair-loop.test.mjs",
+        "test/productAssurance/systemic/stability/resource-evidence.test.mjs",
+        "test/productAssurance/systemic/stability/scope.test.mjs",
+        "test/productAssurance/systemic/stability/view-model.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_STABILITY_NON_CONTEXT_FILES",
+          "files": [
+            "test/productAssurance/systemic/stability/cancellation.test.mjs",
+            "test/productAssurance/systemic/stability/contracts.test.mjs",
+            "test/productAssurance/systemic/stability/drafts.test.mjs",
+            "test/productAssurance/systemic/stability/import-purity.test.mjs",
+            "test/productAssurance/systemic/stability/integrity.test.mjs",
+            "test/productAssurance/systemic/stability/repair-loop.test.mjs",
+            "test/productAssurance/systemic/stability/resource-evidence.test.mjs",
+            "test/productAssurance/systemic/stability/view-model.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 209
+        },
+        {
+          "id": "A_STABILITY_SAFE_SCOPE",
+          "files": [
+            "test/productAssurance/systemic/stability/scope.test.mjs"
+          ],
+          "selection": "EXACT_NAMES",
+          "exactNames": [
+            "packet source contains no secret-like fixture keys or external endpoints",
+            "draft and view artifacts carry honest non-runtime truth labels"
+          ],
+          "expectedPasses": 2
+        }
+      ],
+      "excludedContextTests": [
+        {
+          "file": "test/productAssurance/systemic/stability/scope.test.mjs",
+          "exactName": "all changes since the verified base stay inside the assigned roots",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_STABILITY_DELTA_BRANCH_GIT_OBJECT_PROVENANCE"
+        }
+      ],
+      "expectedPasses": 211
+    },
+    {
+      "id": "A_CASE_S4_BEHAVIOR",
+      "donorId": "A_CASE_S4",
+      "testRoot": "test/productAssurance/systemic/assuranceCase",
+      "completeTestInventory": [
+        "test/productAssurance/systemic/assuranceCase/artifacts.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/basis-certified-separation-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/bounds.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/closure-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/contract-boundary-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/contracts.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/diagnostic-posture.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/evaluator.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/expiry-transitive.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/expiry-unknown-origin-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/false-green.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/final-law-closure.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/hostile-input.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/independence.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/reason-diagnostic-bridge-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/s1-provenance.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/truncation-path-law-regression.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/view-boundary-redteam.test.mjs",
+        "test/productAssurance/systemic/assuranceCase/view-model.test.mjs"
+      ],
+      "runs": [
+        {
+          "id": "A_CASE_S4_NINETEEN_NON_CONTEXT_FILES",
+          "files": [
+            "test/productAssurance/systemic/assuranceCase/artifacts.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/basis-certified-separation-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/bounds.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/closure-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/contract-boundary-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/contracts.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/diagnostic-posture.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/evaluator.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/expiry-transitive.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/expiry-unknown-origin-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/false-green.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/final-law-closure.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/hostile-input.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/independence.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/reason-diagnostic-bridge-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/s1-provenance.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/truncation-path-law-regression.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/view-boundary-redteam.test.mjs",
+            "test/productAssurance/systemic/assuranceCase/view-model.test.mjs"
+          ],
+          "selection": "ALL",
+          "exactNames": [],
+          "expectedPasses": 226
+        },
+        {
+          "id": "A_CASE_S4_SAFE_PURITY",
+          "files": [
+            "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs"
+          ],
+          "selection": "EXACT_NAMES",
+          "exactNames": [
+            "protected untracked I00 input remains byte-identical",
+            "fixture modules have no ambient effects or authority dependencies",
+            "test imports stay within packet roots or node test tooling",
+            "no packet source exports a command or mutation authority",
+            "working diff has no whitespace errors"
+          ],
+          "expectedPasses": 5
+        }
+      ],
+      "excludedContextTests": [
+        {
+          "file": "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs",
+          "exactName": "branch and base ancestry match the assigned S4 lane",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_CASE_S4_BRANCH_BASE_GIT_OBJECT_PROVENANCE"
+        },
+        {
+          "file": "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs",
+          "exactName": "tracked and untracked paths remain inside the two exclusive roots",
+          "replacementKind": "GIT_OBJECT_PROVENANCE",
+          "replacementProofId": "A_CASE_S4_EXCLUSIVE_PATH_GIT_OBJECT_PROVENANCE"
+        }
+      ],
+      "expectedPasses": 231
+    }
+  ]
+}

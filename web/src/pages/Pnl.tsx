@@ -6,9 +6,8 @@ import { createSettledPoll } from '../lib/polling';
 import { Empty, Pill, Seg } from '../components/px';
 import { TokenIcon } from '../components/TokenIcon';
 import { SparkArea } from '../components/Spark';
-import { EquityChart } from '../components/PerfChart';
 import { Num } from '../components/Num';
-import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, signClass, timeAgo } from '../format';
+import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, signClass } from '../format';
 import type { FillRow } from '../types';
 
 interface PnlData {
@@ -24,10 +23,6 @@ interface PnlData {
 }
 
 type Lens = 'realized' | 'equity' | 'costs';
-
-function finite(v: number | null | undefined): v is number {
-  return typeof v === 'number' && Number.isFinite(v);
-}
 
 function sum(values: number[]): number {
   return values.reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0);
@@ -45,17 +40,6 @@ function cumulative(days: { day: string; usd: number }[]): number[] {
     running += d.usd;
     return running;
   });
-}
-
-function maxDrawdownPct(values: number[]): number | null {
-  if (values.length < 2) return null;
-  let peak = -Infinity;
-  let maxDd = 0;
-  for (const v of values) {
-    peak = Math.max(peak, v);
-    if (peak > 0) maxDd = Math.max(maxDd, ((peak - v) / peak) * 100);
-  }
-  return maxDd;
 }
 
 function DayBars({ days }: { days: { day: string; usd: number }[] }) {
@@ -87,9 +71,9 @@ function DayBars({ days }: { days: { day: string; usd: number }[] }) {
 }
 
 export function Pnl() {
-  const { state, setPage, openDetail, prefs } = useStore();
+  const { setPage, openDetail, prefs } = useStore();
   const [data, setData] = useState<PnlData | null>(null);
-  const [fills, setFills] = useState<FillRow[]>([]);
+  const [fills, setFills] = useState<FillRow[] | null>(null);
   const [lens, setLens] = useState<Lens>('realized');
   const [refreshTick, setRefreshTick] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -116,49 +100,44 @@ export function Pnl() {
     });
     poll.start();
     return poll.stop;
-  }, [state?.recentFills.length, refreshTick, prefs.dataCadence?.account]);
+  }, [refreshTick, prefs.dataCadence?.account]);
 
   const days = data?.realizedByDay ?? [];
   const symbols = data?.realizedBySymbol ?? [];
   const fees = data?.feesByAsset ?? [];
-  const equity = (data?.equitySnapshots ?? []).map((s) => s.totalUsdt).filter(finite);
+  const fillRows = fills ?? [];
   const todayKey = new Date().toISOString().slice(0, 10);
-  const realizedToday = state?.account?.realizedTodayUsd ?? days.find((d) => d.day === todayKey)?.usd ?? 0;
-  const totalRealized = sum(days.map((d) => d.usd));
+  const realizedToday = data?.realizedByDay.find((d) => d.day === todayKey)?.usd ?? null;
+  const totalRealized = data ? sum(days.map((d) => d.usd)) : null;
   const wins = days.filter((d) => d.usd > 0).length;
   const losses = days.filter((d) => d.usd < 0).length;
-  const maxDd = maxDrawdownPct(equity);
-  const equityChange = equity.length > 1 ? equity[equity.length - 1] - equity[0] : state?.account?.dayChangeUsd ?? null;
-  const lastSnapshotTs = data?.equitySnapshots.at(-1)?.ts ?? null;
-  const quoteTraded = sum(fills.map((f) => f.quoteQty));
+  const quoteTraded = fills ? sum(fillRows.map((f) => f.quoteQty)) : null;
   const curve = useMemo(() => cumulative(days), [days]);
-  const keysPresent = !!state?.binance.keysPresent;
-  const equityReady = equity.length >= 2;
 
   return (
     <>
       <div className="hp-stats exec-stats">
         <div className="hp-stat">
           <span className="k">Realized today</span>
-          <span className={`v ${signClass(realizedToday)}`}>
-            <Num value={realizedToday}>{fmtPrice(realizedToday)}</Num>
+          <span className={`v ${realizedToday === null ? '' : signClass(realizedToday)}`}>
+            <Num value={realizedToday}>{realizedToday === null ? '—' : fmtPrice(realizedToday)}</Num>
           </span>
-          <span className="s">{state?.account ? 'server account state' : 'ledger fallback — account disconnected'}</span>
+          <span className="s">{data ? 'Durable ledger evidence only' : 'Outcome truth unavailable'}</span>
         </div>
         <div className="hp-stat">
-          <span className="k">{data?.integrity.complete === false ? 'Partial realized' : 'Realized all-time'}</span>
-          <span className={`v ${signClass(totalRealized)}`}>{fmtPrice(totalRealized)}</span>
-          <span className="s" title={data?.integrity.reasons.join(' · ') || undefined}>{data?.integrity.complete === false ? 'Incomplete cost or fee basis' : `${days.length} PnL day${days.length === 1 ? '' : 's'} · ${wins}W / ${losses}L`}</span>
+          <span className="k">{data === null ? 'Realized Evidence' : data.integrity.complete === false ? 'Partial Realized' : 'Realized All-Time'}</span>
+          <span className={`v ${totalRealized === null ? '' : signClass(totalRealized)}`}>{totalRealized === null ? '—' : fmtPrice(totalRealized)}</span>
+          <span className="s" title={data?.integrity.reasons.join(' · ') || undefined}>{data === null ? 'Unknown until the durable outcome read responds' : data.integrity.complete === false ? 'Incomplete cost or fee basis' : `${days.length} PnL day${days.length === 1 ? '' : 's'} · ${wins}W / ${losses}L`}</span>
         </div>
         <div className="hp-stat">
           <span className="k">Equity change</span>
-          <span className={`v ${equityChange === null ? '' : signClass(equityChange)}`}>{equityChange === null ? '—' : fmtPrice(equityChange)}</span>
-          <span className="s">{equityReady ? `${equity.length} snapshots · last ${lastSnapshotTs ? timeAgo(lastSnapshotTs) : '—'}` : 'needs account snapshots'}</span>
+          <span className="v">—</span>
+          <span className="s">Private account snapshots NOT_CONFIGURED</span>
         </div>
         <div className="hp-stat">
           <span className="k">Max drawdown</span>
-          <span className="v">{maxDd === null ? '—' : `${maxDd.toFixed(2)}%`}</span>
-          <span className="s">{maxDd === null ? 'curve needs 2+ points' : 'peak to trough on equity'}</span>
+          <span className="v">—</span>
+          <span className="s">Unknown without the canonical equity owner</span>
         </div>
       </div>
 
@@ -174,12 +153,12 @@ export function Pnl() {
         />
         <span className="pnl-lens-note">
           {loadError
-            ? `Stale data · ${loadError}`
+            ? `Unavailable or stale · ${loadError}`
             : lens === 'realized'
             ? 'avg-cost from ledgered fills'
             : lens === 'equity'
-              ? 'account snapshots, not deposits-adjusted'
-              : 'commissions now; funding and borrow once account data exists'}
+              ? 'private account equity is owner gated'
+              : 'recorded commissions only; private funding and borrow are owner gated'}
         </span>
       </div>
 
@@ -188,33 +167,37 @@ export function Pnl() {
           <h3>{lens === 'realized' ? 'Realized PnL' : lens === 'equity' ? 'Equity curve' : 'Cost attribution'}</h3>
           <span className="hp-val">
             {lens === 'realized'
-              ? `${fmtMoney(quoteTraded)} traded · ${fills.length} fills`
+              ? fills && quoteTraded !== null ? `${fmtMoney(quoteTraded)} traded · ${fills.length} fills` : 'Local Fill Evidence Unavailable'
               : lens === 'equity'
-                ? equityReady ? `${equity.length} snapshots` : 'waiting for account data'
-                : feeText(fees)}
+                ? 'NOT_CONFIGURED'
+                : data ? feeText(fees) : 'UNKNOWN'}
           </span>
         </div>
 
         {lens === 'realized' && (
           <div className="pnl-chart-pad">
-            {curve.length > 1 ? (
-              <div className="pnl-curve">
-                <SparkArea values={curve} color={totalRealized >= 0 ? 'var(--up)' : 'var(--down)'} dots endDot />
-              </div>
-            ) : null}
-            <DayBars days={days} />
+            {data ? (
+              <>
+                {curve.length > 1 ? (
+                  <div className="pnl-curve">
+                    <SparkArea values={curve} color={(totalRealized ?? 0) >= 0 ? 'var(--up)' : 'var(--down)'} dots endDot />
+                  </div>
+                ) : null}
+                <DayBars days={days} />
+              </>
+            ) : (
+              <Empty title="Realized Outcome Evidence Is Unavailable">
+                The app does not convert an unavailable durable outcome read into a zero-PnL claim.
+              </Empty>
+            )}
           </div>
         )}
 
         {lens === 'equity' && (
           <div className="pnl-chart-pad">
-            {equityReady && data ? (
-              <EquityChart snaps={data.equitySnapshots} />
-            ) : (
-              <Empty title="Equity snapshots are waiting for account data">
-                The app snapshots equity every 15 minutes once Binance read-only keys are configured.
-              </Empty>
-            )}
+            <Empty title="Private Equity Truth Is Not Configured">
+              Legacy account payloads are not accepted as equity evidence. No curve or drawdown is inferred until the canonical private owner is mounted.
+            </Empty>
           </div>
         )}
 
@@ -222,18 +205,18 @@ export function Pnl() {
           <div className="pnl-costs">
             <div>
               <span className="k">Commissions</span>
-              <b>{feeText(fees)}</b>
-              <em>{fees.length ? 'from recorded fills' : 'no execution fees recorded yet'}</em>
+              <b>{data ? feeText(fees) : 'Unknown'}</b>
+              <em>{data ? fees.length ? 'from recorded fills' : 'no commissions in the available durable evidence' : 'durable commission evidence unavailable'}</em>
             </div>
             <div>
               <span className="k">Funding</span>
-              <b>{keysPresent ? 'pending futures history' : 'keys not set'}</b>
-              <em>Binance futures income history is source-gated.</em>
+              <b>Not Configured</b>
+              <em>Private USD-M funding attribution requires an accepted owner.</em>
             </div>
             <div>
               <span className="k">Borrow interest</span>
-              <b>{keysPresent ? 'waiting for margin usage' : 'keys not set'}</b>
-              <em>Shows after margin or loan activity is ledgered.</em>
+              <b>Owner Gated</b>
+              <em>Margin and loan attribution remains unavailable without canonical liability truth.</em>
             </div>
           </div>
         )}
@@ -247,7 +230,7 @@ export function Pnl() {
           </div>
           {symbols.length === 0 ? (
             <div className="lg-empty-pad">
-              <Empty title="No closed symbol PnL">Attribution starts after the first sell fill matches against average cost.</Empty>
+              <Empty title={data ? 'No Closed Symbol PnL' : 'Symbol Attribution Is Unavailable'}>{data ? 'No durable fill evidence currently closes inventory with a verified cost basis.' : 'The app will not infer empty attribution while the outcome read is unavailable.'}</Empty>
             </div>
           ) : (
             <div className="hp-table-wrap">
@@ -285,9 +268,9 @@ export function Pnl() {
             <h3>Recent fills</h3>
             <button className="hp-btn" type="button" onClick={() => setPage('fills')}>Open fills</button>
           </div>
-          {fills.length === 0 ? (
+          {fills === null || fillRows.length === 0 ? (
             <div className="lg-empty-pad">
-              <Empty title="No fills in the ledger">Live fills and imported Binance trades create the realized timeline here.</Empty>
+              <Empty title={fills ? 'No Durable Fills Recorded' : 'Fill Evidence Is Unavailable'}>{fills ? 'This view shows only fills already present in the durable ledger.' : 'No private fill source is inferred, and unavailable evidence is not reported as zero.'}</Empty>
             </div>
           ) : (
             <div className="hp-table-wrap">
@@ -305,7 +288,7 @@ export function Pnl() {
                   </tr>
                 </thead>
                 <tbody>
-                  {fills.slice(0, 8).map((f) => (
+                  {fillRows.slice(0, 8).map((f) => (
                     <tr key={`${f.symbol}-${f.tradeId}`} onClick={() => openDetail(f.symbol)}>
                       <td className="t-source">
                         <span className="exec-sym">

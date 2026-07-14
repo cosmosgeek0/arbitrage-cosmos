@@ -7,6 +7,7 @@ import {
   type ProductCorrelationTrace,
   type ProductSupervisorEnvelope,
   validateMaterialEventPage,
+  validateProductCorrelationTrace,
   validateProductSupervisorEnvelope,
 } from './model';
 
@@ -51,24 +52,18 @@ export function createProductIntegrationClient(
       const boundedLimit = boundedQueryLimit(limit);
       const value = await transport.readMaterialEvents(afterCursor, boundedLimit, signal);
       const page = value as MaterialEventPage;
-      const errors = validateMaterialEventPage(afterCursor, page);
+      const errors = validateMaterialEventPage(afterCursor, page, 'CURSOR');
       if (errors.length) throw new ProductBindingError('Material-event continuity is not proven.', errors);
       return page;
     },
 
     async readTrace(correlationId: string, limit = 200, signal?: AbortSignal) {
-      if (!correlationId || correlationId.length > 160) {
+      if (!/^[A-Za-z0-9_.:\-]{1,160}$/.test(correlationId)) {
         throw new ProductBindingError('Correlation id is invalid.', ['TRACE_CORRELATION_ID_INVALID']);
       }
       const value = await transport.readTrace(correlationId, boundedQueryLimit(limit), signal);
-      if (!isRecord(value) || value.correlationId !== correlationId || !Array.isArray(value.stages)
-        || value.stages.length !== 12
-        || value.stages.some((stage) => !isRecord(stage)
-          || typeof stage.stage !== 'string' || stage.stage.length === 0
-          || typeof stage.owner !== 'string' || stage.owner.length === 0
-          || typeof stage.outcome !== 'string' || stage.outcome.length === 0)) {
-        throw new ProductBindingError('Trace response is invalid.', ['TRACE_RESPONSE_INVALID']);
-      }
+      const errors = validateProductCorrelationTrace(value, correlationId);
+      if (errors.length) throw new ProductBindingError('Trace response is invalid.', errors);
       return value as unknown as ProductCorrelationTrace;
     },
 

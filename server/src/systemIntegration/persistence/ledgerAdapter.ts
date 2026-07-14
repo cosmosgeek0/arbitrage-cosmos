@@ -50,6 +50,15 @@ import {
   type SystemJsonValue,
   type TraceAppendReceipt,
   type TraceQuery,
+  type ProductBootReleasePersistenceInput,
+  type ProductCommandPersistenceInput,
+  type ProductConfigRevisionPersistenceInput,
+  type ProductDesiredStatePersistenceInput,
+  type ProductIdentityReferencePersistenceInput,
+  type ProductIdentityReferenceRecord,
+  type ProductIncidentPersistenceInput,
+  type ProductPersistenceMutationResult,
+  type RestartBarrierProjection,
 } from './types.js';
 
 const MAX_UTC_MS = 4_102_444_800_000;
@@ -642,6 +651,7 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
  */
 export class SystemLedgerPersistenceAdapter {
   private stateValue: Readonly<SystemIntegrationCheckpointState> | null = null;
+  private loadedSerializedValue: string | null = null;
   private loadFailure: Readonly<{ code: 'PERSISTENCE_CORRUPT' | 'PERSISTENCE_READ_FAILED'; message: string }> | null = null;
   private sealed = false;
   private finalShutdownReceipt: Readonly<PersistedCommitReceipt> | null = null;
@@ -653,6 +663,33 @@ export class SystemLedgerPersistenceAdapter {
       || typeof ledger.recentEvents !== 'function') {
       throw new TypeError('SystemLedgerPersistenceAdapter requires the existing Ledger structural port');
     }
+  }
+
+  private withProductIdentityRestartBarrier(
+    base: Readonly<RestartBarrierProjection>,
+  ): Readonly<RestartBarrierProjection> {
+    if (typeof this.ledger.readProductBlockingIdentityReferences !== 'function') return base;
+    const reasonCodes = new Set(base.reasonCodes);
+    try {
+      const references = this.ledger.readProductBlockingIdentityReferences(
+        SYSTEM_PERSISTENCE_LIMITS.maximumAuthorityReferences,
+      );
+      if (references.length === 0) return base;
+      reasonCodes.add('UNRESOLVED_PRODUCT_IDENTITY_REFERENCES');
+      for (const referenceType of [...new Set(references.map((reference) => reference.referenceType))].sort()) {
+        reasonCodes.add(`UNRESOLVED_PRODUCT_IDENTITY_REFERENCE_${referenceType}`);
+      }
+    } catch {
+      reasonCodes.add('PRODUCT_IDENTITY_REFERENCE_READ_FAILED');
+    }
+    return Object.freeze({
+      ...base,
+      canOpenOrIncrease: false,
+      reasonCodes: Object.freeze([...reasonCodes].sort()),
+      activeReservationIds: Object.freeze([...base.activeReservationIds]),
+      usableApprovalIds: Object.freeze([...base.usableApprovalIds]),
+      reconciliationRequiredPlanIds: Object.freeze([...base.reconciliationRequiredPlanIds]),
+    });
   }
 
   load(nowMs: number, emptyCorrelationId = 'system-integration-cold-start'): PersistenceLoadResult {
@@ -669,12 +706,19 @@ export class SystemLedgerPersistenceAdapter {
       if (serialized === null) {
         const state = createInitialCheckpointState(nowMs, emptyCorrelationId);
         this.stateValue = state;
+        this.loadedSerializedValue = null;
         this.loadFailure = null;
-        return { ok: true, source: 'EMPTY', state, barrier: evaluateRestartBarrier(state, nowMs) };
+        return {
+          ok: true,
+          source: 'EMPTY',
+          state,
+          barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(state, nowMs)),
+        };
       }
       const decoded = decodeSystemCheckpoint(serialized);
       if (!decoded.ok) {
         this.stateValue = null;
+        this.loadedSerializedValue = serialized;
         this.loadFailure = { code: 'PERSISTENCE_CORRUPT', message: decoded.message };
         return {
           ok: false,
@@ -684,16 +728,18 @@ export class SystemLedgerPersistenceAdapter {
         };
       }
       this.stateValue = decoded.value;
+      this.loadedSerializedValue = serialized;
       this.loadFailure = null;
       return {
         ok: true,
         source: 'CHECKPOINT',
         state: decoded.value,
-        barrier: evaluateRestartBarrier(decoded.value, nowMs),
+        barrier: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(decoded.value, nowMs)),
       };
     } catch (error) {
       const message = errorMessage(error, 'existing Ledger could not read the integration checkpoint');
       this.stateValue = null;
+      this.loadedSerializedValue = null;
       this.loadFailure = { code: 'PERSISTENCE_READ_FAILED', message };
       return {
         ok: false,
@@ -714,7 +760,116 @@ export class SystemLedgerPersistenceAdapter {
     const current = this.currentState();
     if (!current.ok) return current;
     if (!validUtcMillis(nowMs)) return failed('INVALID_PERSISTENCE_REQUEST', 'restart barrier time is invalid');
-    return { ok: true, value: evaluateRestartBarrier(current.value, nowMs) };
+    return { ok: true, value: this.withProductIdentityRestartBarrier(evaluateRestartBarrier(current.value, nowMs)) };
+  }
+
+  private productPersistenceWriteReady(): PersistenceResult<true> {
+    if (this.sealed) return failed('PERSISTENCE_SEALED', 'final shutdown checkpoint has sealed this adapter');
+    const current = this.currentState();
+    if (!current.ok) return failed(current.code, current.message);
+    try {
+      if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
+        return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger is not writable');
+      }
+    } catch {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger writability could not be proven');
+    }
+    return { ok: true, value: true };
+  }
+
+  private invokeProductPersistenceMutation(
+    operation: () => ProductPersistenceMutationResult,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    const ready = this.productPersistenceWriteReady();
+    if (!ready.ok) return ready;
+    try {
+      return { ok: true, value: operation() };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product persistence request is invalid');
+      }
+      return failed('PERSISTENCE_WRITE_FAILED', errorMessage(error, 'product persistence transaction failed'));
+    }
+  }
+
+  compareAndSetProductComponentDesiredState(
+    input: Readonly<ProductDesiredStatePersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.compareAndSetProductComponentDesiredState !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product desired-state CAS capability');
+    }
+    return this.invokeProductPersistenceMutation(
+      () => this.ledger.compareAndSetProductComponentDesiredState!(input),
+    );
+  }
+
+  compareAndAppendProductCommand(
+    input: Readonly<ProductCommandPersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.compareAndAppendProductCommand !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product command append capability');
+    }
+    return this.invokeProductPersistenceMutation(() => this.ledger.compareAndAppendProductCommand!(input));
+  }
+
+  recordProductConfigRevision(
+    input: Readonly<ProductConfigRevisionPersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.recordProductConfigRevision !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product config revision capability');
+    }
+    return this.invokeProductPersistenceMutation(() => this.ledger.recordProductConfigRevision!(input));
+  }
+
+  compareAndUpsertProductIdentityReference(
+    input: Readonly<ProductIdentityReferencePersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.compareAndUpsertProductIdentityReference !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product identity reference capability');
+    }
+    return this.invokeProductPersistenceMutation(
+      () => this.ledger.compareAndUpsertProductIdentityReference!(input),
+    );
+  }
+
+  readProductBlockingIdentityReferences(
+    limit = 1_000,
+  ): PersistenceResult<readonly Readonly<ProductIdentityReferenceRecord>[]> {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    if (typeof this.ledger.readProductBlockingIdentityReferences !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product identity reference read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductBlockingIdentityReferences(limit) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product identity reference query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product identity reference query failed'));
+    }
+  }
+
+  compareAndTransitionProductIncident(
+    input: Readonly<ProductIncidentPersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.compareAndTransitionProductIncident !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product incident transition capability');
+    }
+    return this.invokeProductPersistenceMutation(
+      () => this.ledger.compareAndTransitionProductIncident!(input),
+    );
+  }
+
+  compareAndSetProductBootReleaseRevision(
+    input: Readonly<ProductBootReleasePersistenceInput>,
+  ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
+    if (typeof this.ledger.compareAndSetProductBootReleaseRevision !== 'function') {
+      return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger lacks product boot/release CAS capability');
+    }
+    return this.invokeProductPersistenceMutation(
+      () => this.ledger.compareAndSetProductBootReleaseRevision!(input),
+    );
   }
 
   private findAuditEvent(checkpointRevision: number, checkpointDigest?: string): LedgerEventRecord | null {
@@ -733,6 +888,29 @@ export class SystemLedgerPersistenceAdapter {
     } catch {
       return null;
     }
+  }
+
+  private refreshAfterCompareAndSetConflict(serialized: string | null): void {
+    this.loadedSerializedValue = serialized;
+    if (serialized === null) {
+      this.stateValue = null;
+      this.loadFailure = {
+        code: 'PERSISTENCE_CORRUPT',
+        message: 'durable checkpoint disappeared during compare-and-set conflict',
+      };
+      return;
+    }
+    const decoded = decodeSystemCheckpoint(serialized);
+    if (!decoded.ok) {
+      this.stateValue = null;
+      this.loadFailure = {
+        code: 'PERSISTENCE_CORRUPT',
+        message: `compare-and-set conflict returned an invalid durable checkpoint: ${decoded.message}`,
+      };
+      return;
+    }
+    this.stateValue = decoded.value;
+    this.loadFailure = null;
   }
 
   private writePrepared(
@@ -766,14 +944,49 @@ export class SystemLedgerPersistenceAdapter {
       if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
         return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger is not writable');
       }
-      const event = this.ledger.setConfigValueAndLogEvent(
-        SYSTEM_PERSISTENCE_CONFIG_KEY,
-        serialized,
-        SYSTEM_PERSISTENCE_EVENT_KIND,
-        null,
-        data,
-      );
+      let event: LedgerEventRecord;
+      if (typeof this.ledger.compareAndSetConfigValueAndLogEvents === 'function') {
+        const result = this.ledger.compareAndSetConfigValueAndLogEvents(
+          SYSTEM_PERSISTENCE_CONFIG_KEY,
+          this.loadedSerializedValue,
+          serialized,
+          [{
+            kind: SYSTEM_PERSISTENCE_EVENT_KIND,
+            symbol: null,
+            data,
+          }],
+        );
+        if (!result.committed) {
+          this.refreshAfterCompareAndSetConflict(result.currentValue);
+          return failed(
+            'CHECKPOINT_REVISION_CONFLICT',
+            this.loadFailure
+              ? 'durable checkpoint changed and its current value failed closed validation'
+              : 'durable checkpoint changed after this adapter loaded it',
+          );
+        }
+        const committedEvent = result.events[0];
+        if (!committedEvent) {
+          const readback = this.findAuditEvent(nextState.revision, checksum);
+          if (!readback) {
+            return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger committed without a readable persistence audit event');
+          }
+          event = readback;
+        } else {
+          event = committedEvent;
+        }
+      } else {
+        event = this.ledger.setConfigValueAndLogEvent(
+          SYSTEM_PERSISTENCE_CONFIG_KEY,
+          serialized,
+          SYSTEM_PERSISTENCE_EVENT_KIND,
+          null,
+          data,
+        );
+      }
       this.stateValue = cloneCheckpointState(nextState);
+      this.loadedSerializedValue = serialized;
+      this.loadFailure = null;
       return {
         ok: true,
         value: Object.freeze({
@@ -791,6 +1004,8 @@ export class SystemLedgerPersistenceAdapter {
           const committed = this.findAuditEvent(nextState.revision, checksum);
           if (committed) {
             this.stateValue = cloneCheckpointState(nextState);
+            this.loadedSerializedValue = serialized;
+            this.loadFailure = null;
             return {
               ok: true,
               value: Object.freeze({

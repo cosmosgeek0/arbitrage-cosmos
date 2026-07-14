@@ -19,20 +19,23 @@ export function ProductSurfaceAdapter({
   }
   return (
     <section className="pcr-surface-adapter pcr-section" aria-label={`${surface.label} Canonical Binding`}>
-      {binding.continuity === 'BLOCKED' && <div className="pcr-binding-blocker" role="alert">STALE LAST-KNOWN TRUTH · BLOCKED_BACKEND · {binding.error ?? 'Continuity is not proven.'}</div>}
+      {binding.continuity !== 'PROVEN' && <div className="pcr-binding-blocker" role="alert">STALE LAST-KNOWN TRUTH · BLOCKED_BACKEND · {binding.error ?? `Continuity is ${binding.continuity}.`}</div>}
       <header className="pcr-band"><h2>{surface.label} Binding</h2><span>{surface.evidence.length} Required Evidence Fields</span></header>
-      <SurfaceRow surface={surface} blocked={binding.continuity === 'BLOCKED'} />
-      <SurfaceEvidenceGrid surface={surface} blocked={binding.continuity === 'BLOCKED'} />
+      <SurfaceRow surface={surface} blocked={binding.continuity !== 'PROVEN'} />
+      <SurfaceEvidenceGrid surface={surface} blocked={binding.continuity !== 'PROVEN'} />
     </section>
   );
 }
 
-export function SurfaceBindingPanel({ snapshot }: { snapshot: Readonly<ProductSupervisorEnvelope<unknown>> }) {
+export function SurfaceBindingPanel({ snapshot, onTrace }: {
+  snapshot: Readonly<ProductSupervisorEnvelope<unknown>>;
+  onTrace?: (correlationId: string) => void;
+}) {
   return (
     <section className="pcr-section" aria-label="Surface Adapter Package">
       <header className="pcr-band"><h2>Surface Adapter Package</h2><span>{REQUIRED_SURFACE_IDS.length} Exact Mount Rows</span></header>
       <div className="pcr-surface-list">
-        {REQUIRED_SURFACE_IDS.map((surfaceId) => <SurfaceRow key={surfaceId} surface={snapshot.surfaces[surfaceId]} />)}
+        {REQUIRED_SURFACE_IDS.map((surfaceId) => <SurfaceRow key={surfaceId} surface={snapshot.surfaces[surfaceId]} onTrace={onTrace} />)}
       </div>
       <header className="pcr-band"><h2>Control Room Required Evidence</h2><span>{snapshot.surfaces['control-room'].evidence.length} Contract Fields</span></header>
       <SurfaceEvidenceGrid surface={snapshot.surfaces['control-room']} />
@@ -54,12 +57,20 @@ function SurfaceEvidenceGrid({ surface, blocked = false }: { surface: Readonly<P
   );
 }
 
-function SurfaceRow({ surface, blocked = false }: { surface: Readonly<ProductSurfaceProjection>; blocked?: boolean }) {
+function SurfaceRow({ surface, blocked = false, onTrace }: {
+  surface: Readonly<ProductSurfaceProjection>;
+  blocked?: boolean;
+  onTrace?: (correlationId: string) => void;
+}) {
   const truthClass = `truth-${surface.truthLabel.toLowerCase().replaceAll('_', '-')}`;
   return (
     <article className="pcr-surface" aria-label={`${surface.label} Binding`}>
       <span><strong>{surface.label}</strong><small>{surface.summary}</small></span>
-      <span><code>{surface.canonicalSource}</code><small>{surface.evidence.length} required fields · {surface.blocker ?? 'No Adapter Blocker'}</small></span>
+      <span>
+        <code>{surface.canonicalSource}</code>
+        <small>{surface.evidence.length} required fields · {surface.blocker ?? 'No Adapter Blocker'}</small>
+        {surface.correlationId && onTrace && <button className="pcr-trace-link" type="button" onClick={() => onTrace(surface.correlationId!)}>Read Trace</button>}
+      </span>
       <span className="pcr-surface-end"><em className={blocked ? 'truth-blocked' : truthClass}>{blocked ? 'BLOCKED' : surface.truthLabel}</em><b className={`binding-${blocked ? 'blocked-backend' : surface.bindingState.toLowerCase().replaceAll('_', '-')}`}>{blocked ? 'BLOCKED_BACKEND' : surface.bindingState}</b></span>
     </article>
   );

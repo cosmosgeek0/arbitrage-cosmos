@@ -48,9 +48,199 @@ export interface LedgerEventRecord {
   readonly data: unknown;
 }
 
+export interface LedgerEventInputRecord {
+  readonly kind: string;
+  readonly symbol?: string | null;
+  readonly data?: unknown;
+}
+
+export type LedgerConfigCompareAndSetResult =
+  | {
+      readonly committed: true;
+      readonly events: readonly LedgerEventRecord[];
+    }
+  | {
+      readonly committed: false;
+      readonly reason: 'VERSION_CONFLICT';
+      readonly currentValue: string | null;
+    };
+
+export const PRODUCT_IDENTITY_REFERENCE_TYPES = Object.freeze([
+  'OPPORTUNITY',
+  'CAPITAL_VERDICT',
+  'RISK_VERDICT',
+  'TICKET',
+  'LEG',
+  'ORDER',
+  'AMBIGUOUS_MUTATION',
+  'POSITION',
+  'LIABILITY',
+  'RECOVERY_CAMPAIGN',
+  'MODEL_ASSESSMENT',
+  'OUTCOME',
+  'BOOT_OPERATION',
+  'SHUTDOWN_OPERATION',
+  'DEPLOYMENT_REVISION',
+] as const);
+
+export type ProductIdentityReferenceType = (typeof PRODUCT_IDENTITY_REFERENCE_TYPES)[number];
+
+export const PRODUCT_IDENTITY_RESOLUTION_STATES = Object.freeze([
+  'OPEN',
+  'TERMINAL_PROVEN',
+  'AMBIGUOUS',
+  'RECOVERY_REQUIRED',
+  'UNAVAILABLE',
+  'UNKNOWN',
+] as const);
+
+export type ProductIdentityResolutionState = (typeof PRODUCT_IDENTITY_RESOLUTION_STATES)[number];
+
+export interface ProductPersistenceAuditRecord extends LedgerEventInputRecord {
+  readonly data: SystemJsonValue;
+}
+
+export interface ProductDesiredStatePersistenceInput {
+  readonly componentId: SystemComponentId;
+  readonly expectedStateRevision: number | null;
+  readonly desiredState: 'STOPPED' | 'RUNNING' | 'PAUSED';
+  readonly stateRevision: number;
+  readonly restartGeneration: number;
+  readonly updatedAtMs: number;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductCommandPersistenceInput {
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly commandType: string;
+  readonly targetComponentId: string;
+  readonly authenticatedOperatorId: string;
+  readonly reason: string;
+  readonly requiredAuthority: string;
+  readonly requestPayload: SystemJsonValue;
+  readonly previewDigest: string;
+  readonly preview: SystemJsonValue;
+  readonly expectedRevision: number;
+  readonly resultingRevision: number | null;
+  readonly status: string;
+  readonly createdAtMs: number;
+  readonly expiresAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly correlationId: string;
+  readonly beforeProjection: SystemJsonValue | null;
+  readonly afterProjection: SystemJsonValue | null;
+  readonly result: SystemJsonValue | null;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductConfigRevisionPersistenceInput {
+  readonly configRevision: string;
+  readonly contentDigest: string;
+  readonly status: string;
+  readonly effectiveAtMs: number | null;
+  readonly createdAtMs: number;
+  readonly createdByOperatorId: string;
+  readonly correlationId: string;
+  readonly config: SystemJsonValue;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIdentityReferencePersistenceInput {
+  readonly referenceType: ProductIdentityReferenceType;
+  readonly referenceId: string;
+  readonly ownerId: string;
+  readonly ownerRevision: string;
+  readonly expectedResolutionState: ProductIdentityResolutionState | null;
+  readonly ownerState: string;
+  readonly resolutionState: ProductIdentityResolutionState;
+  readonly correlationId: string;
+  readonly parentReferenceType: ProductIdentityReferenceType | null;
+  readonly parentReferenceId: string | null;
+  readonly payloadHash: string | null;
+  readonly ownerProjection: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly validUntilMs: number | null;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIdentityReferenceRecord {
+  readonly referenceType: ProductIdentityReferenceType;
+  readonly referenceId: string;
+  readonly ownerId: string;
+  readonly ownerRevision: string;
+  readonly ownerState: string;
+  readonly resolutionState: ProductIdentityResolutionState;
+  readonly correlationId: string;
+  readonly parentReferenceType: ProductIdentityReferenceType | null;
+  readonly parentReferenceId: string | null;
+  readonly payloadHash: string | null;
+  readonly ownerProjection: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly validUntilMs: number | null;
+  readonly ledgerEventId: number;
+}
+
+export interface ProductIncidentPersistenceInput {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly rootComponentId: string;
+  readonly severity: string;
+  readonly capitalRelevant: boolean;
+  readonly expectedEventCount: number | null;
+  readonly state: string;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly eventCount: number;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductBootReleasePersistenceInput {
+  readonly operationId: string;
+  readonly operationType: string;
+  readonly expectedLedgerEventId: number | null;
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export type ProductPersistenceMutationResult =
+  | {
+      readonly disposition: 'COMMITTED_NEW' | 'IDEMPOTENT_REPLAY';
+      readonly ledgerEvent: Readonly<LedgerEventRecord>;
+      readonly currentRevision: string | null;
+    }
+  | {
+      readonly disposition: 'VERSION_CONFLICT' | 'IDEMPOTENCY_CONFLICT';
+      readonly ledgerEvent: null;
+      readonly currentRevision: string | null;
+    };
+
 /** Structural port implemented by the existing Ledger. No second store exists. */
 export interface LedgerPersistencePort {
   getConfigValue(key: string): string | null;
+  /** Canonical Ledger capability; optional so legacy read/checkpoint doubles remain structural ports. */
+  compareAndSetConfigValueAndLogEvents?(
+    key: string,
+    expectedValue: string | null,
+    nextValue: string,
+    records: readonly LedgerEventInputRecord[],
+  ): LedgerConfigCompareAndSetResult;
   setConfigValueAndLogEvent(
     key: string,
     value: string,
@@ -69,6 +259,27 @@ export interface LedgerPersistencePort {
     offset?: number,
     afterId?: number,
   ): LedgerEventRecord[];
+  compareAndSetProductComponentDesiredState?(
+    input: Readonly<ProductDesiredStatePersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndAppendProductCommand?(
+    input: Readonly<ProductCommandPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  recordProductConfigRevision?(
+    input: Readonly<ProductConfigRevisionPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndUpsertProductIdentityReference?(
+    input: Readonly<ProductIdentityReferencePersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  readProductBlockingIdentityReferences?(
+    limit?: number,
+  ): readonly Readonly<ProductIdentityReferenceRecord>[];
+  compareAndTransitionProductIncident?(
+    input: Readonly<ProductIncidentPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndSetProductBootReleaseRevision?(
+    input: Readonly<ProductBootReleasePersistenceInput>,
+  ): ProductPersistenceMutationResult;
   probeWritable?(force?: boolean): boolean;
 }
 

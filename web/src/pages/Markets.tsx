@@ -8,6 +8,7 @@ import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, signClass } from '../
 import { primeIcons } from '../lib/iconManifest';
 import { tokenName } from '../lib/tokenNames';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { MarketRow } from '../types';
 import './Markets.css';
 
@@ -365,6 +366,8 @@ export function Markets() {
           <article><span>24h Volume</span><strong>{fmtMoney(totalVolume)}</strong><small>Binance Spot Quote</small></article>
           <article><span>Market Breadth</span><strong>{gainers.toLocaleString('en-US')} / {losers.toLocaleString('en-US')}</strong><small className={top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="markets" />
 
         <nav className="mkx-viewbar" aria-label="Market Views">
           <div role="tablist">

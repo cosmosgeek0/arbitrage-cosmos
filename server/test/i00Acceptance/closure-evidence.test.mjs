@@ -120,8 +120,14 @@ test('resource measurement plan computes quantiles breaches and P0-first load sh
 });
 
 test('page capability and control matrices stay machine-checkable and synthetic', () => {
-  assert.equal(catalog.pages.length, 19);
+  assert.equal(catalog.pages.length, 21);
   assert.deepEqual(catalog.pages.map((row) => row.pageId).sort(), discoverOperationalPageIds());
+  assert.deepEqual(
+    catalog.pages.filter((row) => row.mountState === 'NOT_APPLICABLE').map((row) => row.pageId).sort(),
+    ['calendar', 'news'],
+  );
+  assert.equal(catalog.pages.filter((row) => row.mountState === 'WIRED').length, 19);
+  assert(catalog.pages.every((row) => row.mountState === 'WIRED' || row.mountState === 'NOT_APPLICABLE'));
   assert.equal(catalog.capabilities.length, 10);
   assert.equal(catalog.controls.length, 14);
   assert(catalog.capabilities.every((row) => row.fixtureState === 'SYNTHETIC_ONLY'));
@@ -137,14 +143,20 @@ test('page capability and control matrices stay machine-checkable and synthetic'
     assert(control.wiringState === 'WIRED_FIXTURE' || control.wiringState === 'OWNER_GATED'
       || control.wiringState.startsWith('PENDING_BACKEND:') || control.wiringState.startsWith('UNAVAILABLE:'));
   }
-  assert.equal(catalog.requiredAbsentSurfaces.length, 1);
-  assert.deepEqual(catalog.requiredAbsentSurfaces[0], {
-    surface: 'Control Room',
-    source: 'I00#15',
-    state: 'MISSING',
-    blocker: 'DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED',
-    requiredEvidence: 'real machine graph, registry search, preview-confirm-result, before/after receipt readback',
-  });
+  assert.deepEqual(catalog.requiredAbsentSurfaces, []);
+  assert.equal(catalog.canonicalRoutes.length, 11);
+  assert.deepEqual(
+    catalog.canonicalRoutes
+      .filter((route) => route.route.startsWith('/api/product-integration'))
+      .map(({ method, route }) => `${method} ${route}`),
+    [
+      'GET /api/product-integration/v1/supervisor',
+      'GET /api/product-integration/v1/material-events',
+      'GET /api/product-integration/v1/traces/:correlationId',
+      'POST /api/product-integration/v1/commands/preview',
+      'POST /api/product-integration/v1/commands',
+    ],
+  );
 });
 
 test('generated Markdown reports are byte-identical to machine evidence rendering', () => {

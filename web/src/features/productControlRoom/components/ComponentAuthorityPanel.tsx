@@ -4,9 +4,11 @@ import type { ProductComponentProjection, ProductDependencyEdgeProjection } from
 export function ComponentAuthorityPanel({
   components,
   edges,
+  onTrace,
 }: {
   readonly components: readonly Readonly<ProductComponentProjection>[];
   readonly edges: readonly Readonly<ProductDependencyEdgeProjection>[];
+  readonly onTrace?: (correlationId: string) => void;
 }) {
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => {
@@ -32,7 +34,7 @@ export function ComponentAuthorityPanel({
                 <div><dt>Blocker / Root</dt><dd>{component.blockerCode ?? 'NONE'} / {component.rootCauseComponentId ?? 'NONE'}</dd></div>
                 <div><dt>Capital</dt><dd>{component.capitalRelevance}</dd></div>
                 <div><dt>Controls</dt><dd>{component.supportedControlIds.join(' · ') || 'NONE'}</dd></div>
-                <div><dt>Correlation</dt><dd>{component.correlationId ?? 'UNKNOWN'}</dd></div>
+                <div><dt>Correlation</dt><dd>{component.correlationId ?? 'UNKNOWN'}{component.correlationId && onTrace && <button className="pcr-trace-link" type="button" onClick={() => onTrace(component.correlationId!)}>Read Trace</button>}</dd></div>
                 <div><dt>Dependencies</dt><dd>{incoming.length ? incoming.map((edge) => `${edge.fromComponentId}:${edge.state}`).join(' · ') : 'NONE PUBLISHED'}</dd></div>
               </dl>
             </article>

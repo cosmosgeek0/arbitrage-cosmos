@@ -4,6 +4,21 @@ export const MATERIAL_CURSOR_SCHEMA = 'material-cursor.v1' as const;
 export const SAFE_LIVE_BACKEND_COMMAND_IDS: readonly string[] = Object.freeze([
   'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
 ]);
+export const PRODUCT_TRACE_STAGES: readonly string[] = Object.freeze([
+  'Market Source',
+  'Normalized Evidence',
+  'Attention / Focus',
+  'Q Assessment',
+  'Basis / Volume Decision',
+  'Capital Verdict',
+  'Risk Verdict',
+  'Ticket / Plan',
+  'Reconciliation',
+  'Position / Recovery',
+  'PnL / Cost Attribution',
+  'Outcome Feedback',
+]);
+const PRODUCT_TRACE_ID = /^[A-Za-z0-9_.:\-]{1,160}$/;
 
 export type ProductTruthLabel =
   | 'LIVE_PUBLIC'
@@ -13,7 +28,9 @@ export type ProductTruthLabel =
   | 'SYNTHETIC_ONLY'
   | 'BLOCKED'
   | 'NOT_CONFIGURED'
-  | 'MISSING';
+  | 'UNAVAILABLE'
+  | 'MISSING'
+  | 'UNKNOWN';
 
 export type ProductLifecycle =
   | 'STOPPED'
@@ -121,7 +138,7 @@ export interface ProductRevisionSet {
 export interface FiveSecondOwnerView {
   readonly processAlive: 'YES' | 'NO' | 'UNKNOWN';
   readonly machineReady: 'YES' | 'NO' | 'UNKNOWN';
-  readonly tradeReady: 'YES' | 'NO' | 'UNKNOWN';
+  readonly tradeReady: 'NO';
   readonly desiredMode: ProductSafeMode;
   readonly effectiveMode: ProductSafeMode | 'BLOCKED' | 'UNKNOWN';
   readonly exposedCapital: string | null;
@@ -226,12 +243,25 @@ export interface ProductTraceStage {
   readonly occurredAtMs: number | null;
   readonly outcome: string;
   readonly truthLabel: ProductTruthLabel;
+  readonly evidenceState: 'PRESENT' | 'ABSENT' | 'UNKNOWN_DUE_TO_TRUNCATION';
 }
 
 export interface ProductCorrelationTrace {
   readonly correlationId: string;
   readonly symbol: string | null;
+  readonly truncated: boolean;
+  readonly completeness: 'COMPLETE' | 'TRUNCATED';
   readonly stages: readonly Readonly<ProductTraceStage>[];
+}
+
+export function productTraceHasSyntheticEvidence(trace: Readonly<ProductCorrelationTrace> | null): boolean {
+  return trace?.stages.some((stage) => stage.truthLabel === 'SYNTHETIC_ONLY') ?? false;
+}
+
+export interface ProductIncidentAvailability {
+  readonly state: 'AVAILABLE' | 'NOT_CONFIGURED' | 'UNAVAILABLE';
+  readonly truthLabel: ProductTruthLabel;
+  readonly blocker: string | null;
 }
 
 export interface ProductIncidentProjection {
@@ -260,11 +290,20 @@ export interface MaterialEventProjection {
 
 export interface MaterialEventPage {
   readonly schemaVersion: typeof MATERIAL_CURSOR_SCHEMA;
+  readonly mode: 'CURSOR' | 'TAIL_BOOTSTRAP';
   readonly requestedAfterCursor: string;
+  readonly retainedFromCursor: string | null;
+  readonly highWaterCursor: string;
   readonly nextCursor: string;
+  readonly hasMore: boolean;
   readonly continuity: 'PROVEN' | 'GAP' | 'UNPROVEN';
   readonly truncated: boolean;
   readonly backfillRequired: boolean;
+  readonly missingRange: Readonly<{
+    readonly fromCursor: string;
+    readonly toCursor: string;
+    readonly reason: 'RETENTION_GAP' | 'INTERIOR_GAP' | 'EVIDENCE_UNPROVEN' | 'BOOTSTRAP_HISTORY_OMITTED';
+  }> | null;
   readonly items: readonly Readonly<MaterialEventProjection>[];
 }
 
@@ -304,6 +343,7 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly dependencyEdges: readonly Readonly<ProductDependencyEdgeProjection>[];
   readonly controls: readonly Readonly<ProductControlRegistryEntry>[];
   readonly traces: readonly Readonly<ProductCorrelationTrace>[];
+  readonly incidentAvailability: Readonly<ProductIncidentAvailability>;
   readonly incidents: readonly Readonly<ProductIncidentProjection>[];
   readonly materialEvents: Readonly<MaterialEventPage>;
   readonly surfaces: Readonly<Record<SurfaceId, Readonly<ProductSurfaceProjection>>>;
@@ -550,7 +590,7 @@ function applyFixtureControlInternal(
       desiredMode = session.desiredMode === 'READ_ONLY' ? 'ADVISORY' : session.desiredMode === 'ADVISORY' ? 'VALIDATE_ONLY' : 'READ_ONLY';
       effectiveMode = session.scenarioId === 'TINY_LIVE_CANARY_OWNER_GATED' ? 'BLOCKED' : desiredMode;
       after = `${desiredMode} / ${effectiveMode}`;
-    } else if (controlId === 'global.kill-switch') {
+    } else if (controlId === 'global.kill-switch.engage') {
       killSwitchEngaged = !session.killSwitchEngaged;
       if (killSwitchEngaged) intakePaused = true;
       after = killSwitchEngaged ? 'ENGAGED / INTAKE_PAUSED' : 'CLEAR / INTAKE_REMAINS_PAUSED';
@@ -599,7 +639,7 @@ function stableScalarRecord(value: Readonly<Record<string, ProductCommandScalar>
 
 function fixtureControlValue(session: Readonly<ProductFixtureSession>, controlId: string): string {
   if (controlId === 'global.safe-mode') return `${session.desiredMode} / ${session.effectiveMode}`;
-  if (controlId === 'global.kill-switch') return session.killSwitchEngaged ? 'ENGAGED' : 'CLEAR';
+  if (controlId === 'global.kill-switch.engage') return session.killSwitchEngaged ? 'ENGAGED' : 'CLEAR';
   if (controlId === 'global.intake') return session.intakePaused ? 'PAUSED' : 'OPEN';
   if (controlId === 'component.restart') return 'READY';
   if (controlId === 'recovery.execute-plan') return session.scenarioId === 'RECOVERY_REQUIRED_ONE_LEG' ? 'RECOVERY_REQUIRED' : 'UNAVAILABLE';
@@ -657,11 +697,20 @@ export function buildFixtureBinding<TDashboard>(
 
   const materialEvents: MaterialEventPage = Object.freeze({
     schemaVersion: MATERIAL_CURSOR_SCHEMA,
+    mode: 'TAIL_BOOTSTRAP',
     requestedAfterCursor: previousCursor,
+    retainedFromCursor: '1',
+    highWaterCursor: eventCursor,
     nextCursor: eventCursor,
+    hasMore: false,
     continuity: 'PROVEN',
     truncated: false,
     backfillRequired: false,
+    missingRange: previousCursor === '0' ? null : Object.freeze({
+      fromCursor: '1',
+      toCursor: previousCursor,
+      reason: 'BOOTSTRAP_HISTORY_OMITTED',
+    }),
     items: Object.freeze([Object.freeze({
       cursor: eventCursor,
       eventId: `fixture-event-${session.sessionId}-${eventCursor}`,
@@ -686,6 +735,11 @@ export function buildFixtureBinding<TDashboard>(
     dependencyEdges: buildFixtureDependencyEdges(scenario.components),
     controls,
     traces: Object.freeze([buildFixtureTrace(session, scenario)]),
+    incidentAvailability: Object.freeze({
+      state: 'AVAILABLE',
+      truthLabel: 'SYNTHETIC_ONLY',
+      blocker: null,
+    }),
     incidents: scenario.incidents,
     materialEvents,
     surfaces: Object.freeze(surfaces),
@@ -765,7 +819,7 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
   if (session.scenarioId === 'TINY_LIVE_CANARY_OWNER_GATED') {
     return {
       summary: 'Tiny-live canary remains owner-gated and unavailable',
-      processAlive: 'YES', machineReady: 'YES', exposedCapital: '0.00 USDT', recovery: 'NONE',
+      processAlive: 'YES', machineReady: 'NO', exposedCapital: '0.00 USDT', recovery: 'NONE',
       freshness: `${2 + tickPhase}s`, blocker: 'OWNER_AUTHORIZATION_REQUIRED',
       opportunity: 'fixture-canary-candidate-01', ticket: null, position: null,
       materialChange: 'Canary preview remains blocked before command submission',
@@ -879,7 +933,7 @@ function buildFixtureControls(
       preview: preview('global.safe-mode', 'Cycles the synthetic safe mode within the frozen three-mode vocabulary.'), latestResult: resultFor(session, 'global.safe-mode'),
     },
     {
-      controlId: 'global.kill-switch', backendCommandId: 'SET_KILL_SWITCH', wiringState: 'WIRED_FIXTURE', owner: 'foundation/control',
+      controlId: 'global.kill-switch.engage', backendCommandId: 'SET_KILL_SWITCH', wiringState: 'WIRED_FIXTURE', owner: 'foundation/control',
       targetType: 'SYSTEM', targetId: 'machine', payload: { engaged: !session.killSwitchEngaged }, currentStateRevision: revision,
       payloadSchema: '{ engaged: boolean }', payloadEnumeration: [false, true], defaultValue: true,
       group: 'Global Posture', label: 'Kill Switch',
@@ -887,7 +941,7 @@ function buildFixtureControls(
       currentDesiredValue: session.killSwitchEngaged ? 'ENGAGED' : 'CLEAR', currentEffectiveValue: session.killSwitchEngaged ? 'ENGAGED' : 'CLEAR', authority: 'FIXTURE_OPERATOR', effect: 'IMMEDIATE',
       requiredPosture: 'PROCESS_ALIVE', expiryPolicy: 'Preview expires after 30 seconds.', reversibility: 'Reversible; release never resumes intake.', invariants: ['Engage also pauses intake.', 'Release does not resume intake.'], effectTelemetry: ['kill posture', 'intake posture', 'control revision'],
       confirmationText: 'Confirm the fail-closed synthetic kill posture.', disabledReason: null,
-      preview: preview('global.kill-switch', 'Engaging also pauses fixture intake; releasing does not resume intake automatically.'), latestResult: resultFor(session, 'global.kill-switch'),
+      preview: preview('global.kill-switch.engage', 'Engaging also pauses fixture intake; releasing does not resume intake automatically.'), latestResult: resultFor(session, 'global.kill-switch.engage'),
     },
     {
       controlId: 'global.intake', backendCommandId: 'SET_INTAKE_PAUSED', wiringState: 'WIRED_FIXTURE', owner: 'foundation/control',
@@ -949,17 +1003,20 @@ function resultFor(session: Readonly<ProductFixtureSession>, controlId: string):
 
 function buildFixtureTrace(session: Readonly<ProductFixtureSession>, scenario: FixtureScenarioFacts): ProductCorrelationTrace {
   const correlationId = `fixture-correlation-${session.sessionId}`;
-  const stages = ['Market Source', 'Normalized Evidence', 'Attention / Focus', 'Q Assessment', 'Basis / Volume Decision', 'Capital Verdict', 'Risk Verdict', 'Ticket / Plan', 'Reconciliation', 'Position / Recovery', 'PnL / Cost Attribution', 'Outcome Feedback'];
+  const stages = PRODUCT_TRACE_STAGES;
   return Object.freeze({
     correlationId,
     symbol: session.scenarioId === 'HEALTHY_OBSERVE' ? null : 'FIXTUREUSDT',
+    truncated: false,
+    completeness: 'COMPLETE',
     stages: Object.freeze(stages.map((stage, index) => Object.freeze({
       stage,
       owner: fixtureTraceOwner(index),
       referenceId: index <= Math.min(session.tick, stages.length - 1) ? `fixture-ref-${index + 1}` : null,
       occurredAtMs: index <= Math.min(session.tick, stages.length - 1) ? session.startedAtMs + index * 250 : null,
-      outcome: index <= Math.min(session.tick, stages.length - 1) ? scenario.eventKind : 'NOT_REACHED',
-      truthLabel: 'SYNTHETIC_ONLY',
+      outcome: index <= Math.min(session.tick, stages.length - 1) ? scenario.eventKind : 'NO_EVENT_PUBLISHED',
+      truthLabel: index <= Math.min(session.tick, stages.length - 1) ? 'SYNTHETIC_ONLY' : 'MISSING',
+      evidenceState: index <= Math.min(session.tick, stages.length - 1) ? 'PRESENT' : 'ABSENT',
     } satisfies ProductTraceStage))),
   });
 }
@@ -1041,21 +1098,53 @@ function buildFixtureSurfaceEvidence(
 export function validateMaterialEventPage(
   previousCursor: string,
   value: unknown,
+  expectedMode: MaterialEventPage['mode'] = 'CURSOR',
 ): readonly string[] {
   const errors: string[] = [];
   if (!isRecord(value)) return Object.freeze(['MATERIAL_PAGE_INVALID']);
   const page = value;
   if (page.schemaVersion !== MATERIAL_CURSOR_SCHEMA) errors.push('MATERIAL_CURSOR_SCHEMA_UNSUPPORTED');
+  if (page.mode !== expectedMode) errors.push('MATERIAL_PAGE_MODE_MISMATCH');
   const requestedAfterCursor = typeof page.requestedAfterCursor === 'string' ? page.requestedAfterCursor : '';
+  const retainedFromCursor = typeof page.retainedFromCursor === 'string' ? page.retainedFromCursor : null;
+  const highWaterCursor = typeof page.highWaterCursor === 'string' ? page.highWaterCursor : '';
   const nextCursor = typeof page.nextCursor === 'string' ? page.nextCursor : '';
-  if (!isDecimalCursor(previousCursor) || !isDecimalCursor(requestedAfterCursor) || !isDecimalCursor(nextCursor)) errors.push('MATERIAL_CURSOR_INVALID');
+  if (!isDecimalCursor(previousCursor) || !isDecimalCursor(requestedAfterCursor)
+    || !(page.retainedFromCursor === null || (typeof page.retainedFromCursor === 'string' && isPositiveDecimalCursor(page.retainedFromCursor)))
+    || !isDecimalCursor(highWaterCursor) || !isDecimalCursor(nextCursor)) errors.push('MATERIAL_CURSOR_INVALID');
   if (page.requestedAfterCursor !== previousCursor) errors.push('MATERIAL_CURSOR_REQUEST_MISMATCH');
   if (page.continuity !== 'PROVEN') errors.push(page.continuity === 'GAP' ? 'MATERIAL_CURSOR_GAP' : 'MATERIAL_CURSOR_UNPROVEN');
-  if (page.truncated || page.backfillRequired) errors.push('MATERIAL_BACKFILL_REQUIRED');
+  if (page.truncated !== false || page.backfillRequired !== false) errors.push('MATERIAL_BACKFILL_REQUIRED');
+  if (typeof page.hasMore !== 'boolean') errors.push('MATERIAL_HAS_MORE_INVALID');
+  if (page.missingRange !== null) {
+    if (!isRecord(page.missingRange)
+      || typeof page.missingRange.fromCursor !== 'string' || !isPositiveDecimalCursor(page.missingRange.fromCursor)
+      || typeof page.missingRange.toCursor !== 'string' || !isPositiveDecimalCursor(page.missingRange.toCursor)
+      || !['RETENTION_GAP', 'INTERIOR_GAP', 'EVIDENCE_UNPROVEN', 'BOOTSTRAP_HISTORY_OMITTED'].includes(String(page.missingRange.reason))) {
+      errors.push('MATERIAL_MISSING_RANGE_INVALID');
+    } else if (expectedMode === 'CURSOR'
+      || !['BOOTSTRAP_HISTORY_OMITTED', 'RETENTION_GAP'].includes(String(page.missingRange.reason))) {
+      errors.push('MATERIAL_BACKFILL_REQUIRED');
+    }
+  }
   const items = Array.isArray(page.items) ? page.items : [];
   if (!Array.isArray(page.items)) errors.push('MATERIAL_ITEMS_INVALID');
   if (items.length > 500) errors.push('MATERIAL_ITEMS_OUT_OF_BOUNDS');
   if (!errors.includes('MATERIAL_CURSOR_INVALID') && !errors.includes('MATERIAL_ITEMS_INVALID') && !errors.includes('MATERIAL_ITEMS_OUT_OF_BOUNDS')) {
+    const previous = BigInt(previousCursor);
+    const retained = retainedFromCursor === null ? null : BigInt(retainedFromCursor);
+    const highWater = BigInt(highWaterCursor);
+    const next = BigInt(nextCursor);
+    const tailRetentionLoss = expectedMode === 'TAIL_BOOTSTRAP' && retained !== null && retained > 1n;
+    if (tailRetentionLoss && (page.continuity === 'PROVEN'
+      || page.truncated !== true
+      || page.backfillRequired !== true)) {
+      errors.push('MATERIAL_RETENTION_STATE_CONTRADICTION');
+    }
+    if (previous > highWater || next < previous || next > highWater || (retained !== null && retained > highWater)) {
+      errors.push('MATERIAL_CURSOR_GEOMETRY_INVALID');
+    }
+    if (retained === null && highWater > 0n) errors.push('MATERIAL_RETENTION_UNPROVEN');
     let expected = BigInt(previousCursor) + 1n;
     for (const item of items) {
       if (!isRecord(item) || typeof item.cursor !== 'string' || !isDecimalCursor(item.cursor) || BigInt(item.cursor) !== expected) {
@@ -1073,12 +1162,90 @@ export function validateMaterialEventPage(
     const lastItem = items.length ? items[items.length - 1] : null;
     const expectedNext = isRecord(lastItem) && typeof lastItem.cursor === 'string' ? lastItem.cursor : previousCursor;
     if (nextCursor !== expectedNext) errors.push('MATERIAL_NEXT_CURSOR_MISMATCH');
+    const shouldHaveMore = next < highWater;
+    if (page.hasMore !== shouldHaveMore) errors.push('MATERIAL_HAS_MORE_MISMATCH');
+    if (shouldHaveMore && next === previous) errors.push('MATERIAL_CURSOR_NO_PROGRESS');
+    if (!shouldHaveMore && next !== highWater) errors.push('MATERIAL_HIGH_WATER_MISMATCH');
+    if (expectedMode === 'TAIL_BOOTSTRAP' && previous > 0n && page.missingRange === null) {
+      errors.push('MATERIAL_BOOTSTRAP_RANGE_MISSING');
+    }
+    if (page.missingRange !== null && isRecord(page.missingRange)
+      && typeof page.missingRange.fromCursor === 'string' && isPositiveDecimalCursor(page.missingRange.fromCursor)
+      && typeof page.missingRange.toCursor === 'string' && isPositiveDecimalCursor(page.missingRange.toCursor)
+      && ['BOOTSTRAP_HISTORY_OMITTED', 'RETENTION_GAP'].includes(String(page.missingRange.reason))) {
+      const exactTailRange = expectedMode === 'TAIL_BOOTSTRAP'
+        && page.missingRange.fromCursor === '1'
+        && BigInt(page.missingRange.toCursor) === previous;
+      if (!exactTailRange) errors.push('MATERIAL_BOOTSTRAP_RANGE_INVALID');
+      if (page.missingRange.reason === 'RETENTION_GAP'
+        && (retained === null || previous !== retained - 1n)) errors.push('MATERIAL_RETENTION_RANGE_INVALID');
+      if (page.missingRange.reason === 'BOOTSTRAP_HISTORY_OMITTED'
+        && retained !== null && retained > 1n) errors.push('MATERIAL_BOOTSTRAP_REASON_INVALID');
+    }
   }
   return Object.freeze(Array.from(new Set(errors)));
 }
 
 function isDecimalCursor(value: string): boolean {
-  return value.length <= 40 && /^(0|[1-9][0-9]*)$/.test(value);
+  return /^(0|[1-9][0-9]{0,18})$/.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
+}
+
+function isPositiveDecimalCursor(value: string): boolean {
+  return isDecimalCursor(value) && value !== '0';
+}
+
+export function validateProductCorrelationTrace(value: unknown, expectedCorrelationId?: string): readonly string[] {
+  const errors: string[] = [];
+  if (!isRecord(value) || !Array.isArray(value.stages)) return Object.freeze(['TRACE_ENTRY_INVALID']);
+  if (typeof value.correlationId !== 'string' || !PRODUCT_TRACE_ID.test(value.correlationId)) {
+    errors.push('TRACE_CORRELATION_ID_INVALID');
+  } else if (expectedCorrelationId !== undefined && value.correlationId !== expectedCorrelationId) {
+    errors.push('TRACE_CORRELATION_ID_MISMATCH');
+  }
+  if (!isStringOrNull(value.symbol)) errors.push('TRACE_SYMBOL_INVALID');
+  if (typeof value.truncated !== 'boolean'
+    || !['COMPLETE', 'TRUNCATED'].includes(String(value.completeness))
+    || (value.truncated === true) !== (value.completeness === 'TRUNCATED')) errors.push('TRACE_COMPLETENESS_INVALID');
+  if (value.stages.length !== PRODUCT_TRACE_STAGES.length) errors.push('TRACE_STAGE_COUNT_INVALID');
+  for (const [index, stage] of value.stages.entries()) {
+    if (!isRecord(stage)
+      || typeof stage.stage !== 'string' || stage.stage.length === 0
+      || typeof stage.owner !== 'string' || stage.owner.length === 0
+      || !isStringOrNull(stage.referenceId)
+      || !isFiniteNumberOrNull(stage.occurredAtMs)
+      || typeof stage.outcome !== 'string' || stage.outcome.length === 0
+      || !isProductTruthLabel(stage.truthLabel)
+      || !['PRESENT', 'ABSENT', 'UNKNOWN_DUE_TO_TRUNCATION'].includes(String(stage.evidenceState))) {
+      errors.push('TRACE_STAGE_INVALID');
+      continue;
+    }
+    if (stage.stage !== PRODUCT_TRACE_STAGES[index]) errors.push('TRACE_STAGE_ORDER_INVALID');
+    if (stage.evidenceState === 'PRESENT' && (stage.referenceId === null || stage.occurredAtMs === null)) {
+      errors.push('TRACE_STAGE_PRESENT_EVIDENCE_MISSING');
+    }
+    if (stage.evidenceState !== 'PRESENT' && (stage.referenceId !== null || stage.occurredAtMs !== null)) {
+      errors.push('TRACE_STAGE_ABSENT_EVIDENCE_CONTRADICTION');
+    }
+    if (stage.evidenceState === 'UNKNOWN_DUE_TO_TRUNCATION' && value.truncated !== true) {
+      errors.push('TRACE_STAGE_UNKNOWN_WITHOUT_TRUNCATION');
+    }
+    if (stage.evidenceState === 'UNKNOWN_DUE_TO_TRUNCATION' && stage.truthLabel !== 'UNKNOWN') {
+      errors.push('TRACE_STAGE_TRUNCATION_TRUTH_INVALID');
+    }
+    if (stage.evidenceState === 'UNKNOWN_DUE_TO_TRUNCATION' && stage.outcome !== 'UNKNOWN_DUE_TO_TRACE_TRUNCATION') {
+      errors.push('TRACE_STAGE_TRUNCATION_OUTCOME_INVALID');
+    }
+    if (stage.evidenceState === 'ABSENT' && value.truncated === true) {
+      errors.push('TRACE_STAGE_ABSENT_ON_TRUNCATED_TRACE');
+    }
+    if (stage.evidenceState === 'ABSENT' && stage.truthLabel !== 'MISSING') {
+      errors.push('TRACE_STAGE_ABSENT_TRUTH_INVALID');
+    }
+    if (stage.evidenceState === 'ABSENT' && stage.outcome !== 'NO_EVENT_PUBLISHED') {
+      errors.push('TRACE_STAGE_ABSENT_OUTCOME_INVALID');
+    }
+  }
+  return Object.freeze(Array.from(new Set(errors)));
 }
 
 export function validateProductSupervisorEnvelope(value: unknown): readonly string[] {
@@ -1089,7 +1256,10 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (typeof value.digest !== 'string' || value.digest.length === 0 || value.digest.length > 500) errors.push('PRODUCT_DIGEST_INVALID');
   if (typeof value.evaluatedAtMs !== 'number' || !Number.isFinite(value.evaluatedAtMs)) errors.push('PRODUCT_EVALUATED_AT_INVALID');
   if (!isProductTruthLabel(value.truthLabel)) errors.push('PRODUCT_TRUTH_LABEL_INVALID');
-  if (value.truthLabel === 'SYNTHETIC_ONLY' && value.persistentSyntheticLabel !== true) errors.push('SYNTHETIC_LABEL_NOT_PERSISTENT');
+  if (typeof value.persistentSyntheticLabel !== 'boolean') errors.push('SYNTHETIC_LABEL_INVALID');
+  const syntheticScan = scanSyntheticTruth(value);
+  if (!syntheticScan.complete) errors.push('SYNTHETIC_TRUTH_SCAN_OUT_OF_BOUNDS');
+  if (syntheticScan.found && value.persistentSyntheticLabel !== true) errors.push('SYNTHETIC_LABEL_NOT_PERSISTENT');
   errors.push(...validateOwnerView(value.ownerView));
   errors.push(...validateDashboardProjection(value.dashboard));
   if (!Array.isArray(value.components)) errors.push('COMPONENT_GRAPH_MISSING');
@@ -1147,22 +1317,21 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
     }
   }
   if (!Array.isArray(value.traces)) errors.push('TRACE_INDEX_MISSING');
-  else for (const trace of value.traces) {
-    if (!isRecord(trace) || !Array.isArray(trace.stages)) errors.push('TRACE_ENTRY_INVALID');
-    else {
-      if (typeof trace.correlationId !== 'string' || trace.correlationId.length === 0 || trace.correlationId.length > 160) errors.push('TRACE_CORRELATION_ID_INVALID');
-      if (!isStringOrNull(trace.symbol)) errors.push('TRACE_SYMBOL_INVALID');
-      if (trace.stages.length !== 12) errors.push('TRACE_STAGE_COUNT_INVALID');
-      for (const stage of trace.stages) {
-        if (!isRecord(stage)
-          || typeof stage.stage !== 'string' || stage.stage.length === 0
-          || typeof stage.owner !== 'string' || stage.owner.length === 0
-          || !isStringOrNull(stage.referenceId)
-          || !isFiniteNumberOrNull(stage.occurredAtMs)
-          || typeof stage.outcome !== 'string' || stage.outcome.length === 0
-          || !isProductTruthLabel(stage.truthLabel)) errors.push('TRACE_STAGE_INVALID');
-      }
-    }
+  else for (const trace of value.traces) errors.push(...validateProductCorrelationTrace(trace));
+  if (!isRecord(value.incidentAvailability)
+    || !['AVAILABLE', 'NOT_CONFIGURED', 'UNAVAILABLE'].includes(String(value.incidentAvailability.state))
+    || !isProductTruthLabel(value.incidentAvailability.truthLabel)
+    || !isStringOrNull(value.incidentAvailability.blocker)
+    || (value.incidentAvailability.state === 'AVAILABLE' && value.incidentAvailability.blocker !== null)
+    || (value.incidentAvailability.state !== 'AVAILABLE'
+      && (typeof value.incidentAvailability.blocker !== 'string' || value.incidentAvailability.blocker.length === 0))) {
+    errors.push('INCIDENT_AVAILABILITY_INVALID');
+  } else if ((value.incidentAvailability.state === 'AVAILABLE'
+      && !['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY'].includes(String(value.incidentAvailability.truthLabel)))
+    || (value.incidentAvailability.state === 'NOT_CONFIGURED' && value.incidentAvailability.truthLabel !== 'NOT_CONFIGURED')
+    || (value.incidentAvailability.state === 'UNAVAILABLE'
+      && !['UNAVAILABLE', 'UNKNOWN'].includes(String(value.incidentAvailability.truthLabel)))) {
+    errors.push('INCIDENT_AVAILABILITY_TRUTH_MISMATCH');
   }
   if (!Array.isArray(value.incidents)) errors.push('INCIDENT_PROJECTION_MISSING');
   else {
@@ -1180,6 +1349,9 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
         || !Number.isInteger(incident.count) || Number(incident.count) < 1
         || !isStringOrNull(incident.operatorAction)
         || !isStringOrNull(incident.correlationId)) errors.push('INCIDENT_ENTRY_INVALID');
+    }
+    if (isRecord(value.incidentAvailability) && value.incidentAvailability.state !== 'AVAILABLE' && value.incidents.length > 0) {
+      errors.push('INCIDENTS_PUBLISHED_WHILE_UNAVAILABLE');
     }
   }
   if (!Array.isArray(value.controls)) errors.push('CONTROL_REGISTRY_MISSING');
@@ -1259,13 +1431,21 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
     }
   }
   if (!isRecord(value.materialEvents)) errors.push('MATERIAL_EVENTS_MISSING');
-  else errors.push(...validateMaterialEventPage(String(value.materialEvents.requestedAfterCursor ?? ''), value.materialEvents));
+  else errors.push(...validateMaterialEventPage(String(value.materialEvents.requestedAfterCursor ?? ''), value.materialEvents, 'TAIL_BOOTSTRAP'));
+  if (isRecord(value.ownerView) && isRecord(value.materialEvents)
+    && value.ownerView.latestMaterialChange !== null
+    && (value.materialEvents.hasMore === true
+      || value.materialEvents.nextCursor !== value.materialEvents.highWaterCursor)) {
+    errors.push('OWNER_MATERIAL_LATEST_CHANGE_NOT_AT_HIGH_WATER');
+  }
   if (isRecord(value.ownerView) && isRecord(value.dashboard) && isRecord(value.dashboard.summaries)) {
     const capital = value.dashboard.summaries.capital;
     const reconciliation = value.dashboard.summaries.reconciliation;
     if (isRecord(capital) && value.ownerView.exposedCapital !== capital.activeExposureAmount) errors.push('OWNER_DASHBOARD_EXPOSURE_MISMATCH');
     if (value.ownerView.unresolvedRecovery !== null && value.ownerView.unresolvedRecovery !== 'NONE' && isRecord(reconciliation) && reconciliation.blocksNewExposure !== true) errors.push('OWNER_DASHBOARD_RECOVERY_MISMATCH');
-    if (value.ownerView.machineReady === 'NO' && value.dashboard.overallPosture === 'READY') errors.push('OWNER_DASHBOARD_READINESS_MISMATCH');
+    const dashboardReady = value.dashboard.overallPosture === 'READY';
+    const ownerReady = value.ownerView.machineReady === 'YES';
+    if (dashboardReady !== ownerReady) errors.push('OWNER_DASHBOARD_READINESS_MISMATCH');
   }
   return Object.freeze(Array.from(new Set(errors)));
 }
@@ -1275,7 +1455,7 @@ function validateOwnerView(value: unknown): readonly string[] {
   const errors: string[] = [];
   if (!['YES', 'NO', 'UNKNOWN'].includes(String(value.processAlive))) errors.push('OWNER_PROCESS_ALIVE_INVALID');
   if (!['YES', 'NO', 'UNKNOWN'].includes(String(value.machineReady))) errors.push('OWNER_MACHINE_READY_INVALID');
-  if (!['YES', 'NO', 'UNKNOWN'].includes(String(value.tradeReady))) errors.push('OWNER_TRADE_READY_INVALID');
+  if (value.tradeReady !== 'NO') errors.push('OWNER_TRADE_READY_INVALID');
   if (!['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY'].includes(String(value.desiredMode))) errors.push('OWNER_DESIRED_MODE_INVALID');
   if (!['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY', 'BLOCKED', 'UNKNOWN'].includes(String(value.effectiveMode))) errors.push('OWNER_EFFECTIVE_MODE_INVALID');
   for (const field of ['exposedCapital', 'unresolvedRecovery', 'dataFreshness', 'topRootBlocker', 'activeOpportunity', 'activeTicket', 'activePosition', 'latestMaterialChange']) {
@@ -1472,7 +1652,28 @@ function isValidControlResult(value: unknown): boolean {
 }
 
 function isProductTruthLabel(value: unknown): value is ProductTruthLabel {
-  return ['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY', 'BLOCKED', 'NOT_CONFIGURED', 'MISSING'].includes(String(value));
+  return ['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY', 'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN'].includes(String(value));
+}
+
+function scanSyntheticTruth(value: unknown): Readonly<{ found: boolean; complete: boolean }> {
+  const stack: unknown[] = [value];
+  const seen = new WeakSet<object>();
+  let visited = 0;
+  while (stack.length > 0 && visited < 10_000) {
+    const current = stack.pop();
+    if (!isRecord(current) && !Array.isArray(current)) continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    visited += 1;
+    if (isRecord(current) && current.truthLabel === 'SYNTHETIC_ONLY') {
+      return Object.freeze({ found: true, complete: true });
+    }
+    const children = Array.isArray(current) ? current : Object.values(current);
+    for (const child of children) {
+      if (typeof child === 'object' && child !== null) stack.push(child);
+    }
+  }
+  return Object.freeze({ found: false, complete: stack.length === 0 });
 }
 
 function isFiniteNumberOrNull(value: unknown): value is number | null {

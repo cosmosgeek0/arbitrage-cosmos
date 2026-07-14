@@ -245,25 +245,9 @@ export interface PreviewResult {
   risk: RiskDecision;
 }
 
-export interface SendResult {
-  sent: boolean;
-  outcome?: 'accepted' | 'not_sent' | 'unknown';
-  reconciliationRequired?: boolean;
-  risk?: RiskDecision;
-  error?: string;
-  order?: { orderId: number; status: string; executedQty: string; cummulativeQuoteQty: string };
-}
-
-export interface CancelResult {
-  ok: boolean;
-  outcome?: 'canceled' | 'not_canceled' | 'unknown';
-  reconciliationRequired?: boolean;
-  error?: string;
-}
-
 export interface ServerState {
   now: number;
-  mode: 'HALTED' | 'MANUAL' | 'LIVE_ARMED';
+  mode: 'HALTED' | 'MANUAL';
   binance: {
     keysPresent: boolean;
     connected: boolean;

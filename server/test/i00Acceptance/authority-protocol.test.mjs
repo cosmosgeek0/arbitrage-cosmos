@@ -192,7 +192,23 @@ test('truth labels distinguish live synthetic replay and unknown without upgradi
 
 test('canonical system-integration route contract is present without registering routes here', () => {
   const routes = routeContractScan(catalog);
-  assert.equal(routes.length, 6);
+  assert.equal(routes.length, 11);
+  assert.deepEqual(
+    routes.map(({ method, route }) => `${method} ${route}`),
+    [
+      'GET /api/system-integration/supervisor',
+      'GET /api/system-integration/graph',
+      'GET /api/system-integration/events',
+      'GET /api/system-integration/controls',
+      'GET /api/system-integration/traces/:correlationId',
+      'POST /api/system-integration/controls',
+      'GET /api/product-integration/v1/supervisor',
+      'GET /api/product-integration/v1/material-events',
+      'GET /api/product-integration/v1/traces/:correlationId',
+      'POST /api/product-integration/v1/commands/preview',
+      'POST /api/product-integration/v1/commands',
+    ],
+  );
   assert(routes.every((route) => route.observed), JSON.stringify(routes.filter((route) => !route.observed)));
 });
 

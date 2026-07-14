@@ -20,7 +20,7 @@
     "resourceMetrics": 19,
     "officialInterfaces": 15,
     "noSurprisesQuestions": 9,
-    "pages": 19,
+    "pages": 21,
     "controls": 14,
     "capabilities": 10,
     "scenarios": 22,
@@ -66,31 +66,31 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "6deab33ac445f92a4f7db29ad7be13e7307e185597b692db4886967e9a6f6e4a",
+      "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2",
       "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
-      "acceptedLatestCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
-      "acceptedGitBlob": "f0c4422c6acb25da03feb41c5389ad6004c55c77",
-      "acceptedSha256": "081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4"
+      "acceptedSourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
+      "acceptedLatestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
+      "acceptedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
+      "acceptedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
       "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+      "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110",
       "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
-      "acceptedLatestCommit": "1fec867fa3f62d17829543b3776dc768506ae8ac",
-      "acceptedGitBlob": "e068fe7634ac8d2b117935cff0e4a91d36d7d7b5",
-      "acceptedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b"
+      "acceptedSourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
+      "acceptedLatestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
+      "acceptedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
+      "acceptedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110"
     },
     {
       "path": "quant/DIRECTIVE_INPUTS.lock",
@@ -190,14 +190,14 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "6deab33ac445f92a4f7db29ad7be13e7307e185597b692db4886967e9a6f6e4a",
+      "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2",
       "passed": false
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
       "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+      "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110",
       "passed": false
     },
     {
@@ -262,7 +262,7 @@
     "ruling": "D-LAUNCH-7",
     "mode": "LATEST_CURRENT_MAIN_TOUCH",
     "sourceRef": "current-main",
-    "sourceTip": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+    "sourceTip": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
     "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
     "structuralChecks": {
       "schemaVersion": true,
@@ -282,9 +282,9 @@
       {
         "path": "QL_DIRECTOR_STATE.md",
         "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-        "latestCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
-        "observedGitBlob": "f0c4422c6acb25da03feb41c5389ad6004c55c77",
-        "observedSha256": "081f3bf6c99bd41b6e6e50a0e1c0b9bd12052b60f203f8ea5f0ea1ad422d85c4",
+        "latestCommit": "7ff1fd05584779672690f5058a01b1de573b4ccd",
+        "observedGitBlob": "0537a84b7608acffd1c4208b0aba2201e8c7fce4",
+        "observedSha256": "b4a81f58fb0c2f701f1c761a8cce0b7e032854d9b52f2ce4fc400ac849765ec2",
         "safePath": true,
         "historicalPinValid": true,
         "latestCommitReachable": true,
@@ -294,9 +294,9 @@
       {
         "path": "QL_PARALLEL_DAG.md",
         "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-        "latestCommit": "1fec867fa3f62d17829543b3776dc768506ae8ac",
-        "observedGitBlob": "e068fe7634ac8d2b117935cff0e4a91d36d7d7b5",
-        "observedSha256": "469370d904484e450f17da301991d07b9d87ef39ee5b693048e14e997000338b",
+        "latestCommit": "5aa6c34e20d00ce5963c2d0e848d5dd6183775a4",
+        "observedGitBlob": "3d0a28e55c90504773cd887de2d969422dd57936",
+        "observedSha256": "f6802f2e6236622c8f2d4b7bf2a5dda049f90aa553522034d929ca6a6e15a110",
         "safePath": true,
         "historicalPinValid": true,
         "latestCommitReachable": true,
@@ -406,11 +406,11 @@
         "observed": true
       },
       {
-        "id": "GENERATED_Q_CLIENT_ABSENT",
+        "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "path": null,
         "needle": null,
-        "classification": "BLOCKED_PENDING_ACCEPTED_Q_CLIENT",
-        "impact": "schema-hash handshake and generated-client parity must be inserted from accepted Q tip",
+        "classification": "NOT_CONFIGURED",
+        "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until the production transport and schema-hash handshake are mounted",
         "observed": false
       }
     ],
@@ -483,7 +483,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3463,
+        "line": 3521,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -593,17 +593,17 @@
       },
       {
         "file": "web/src/pages/TokenDetail.tsx",
-        "line": 1675,
+        "line": 1676,
         "classification": "UI_LOCAL_EXCEPTION_REVIEW"
       },
       {
         "file": "web/src/pages/TokenDetail.tsx",
-        "line": 1684,
+        "line": 1685,
         "classification": "UI_LOCAL_EXCEPTION_REVIEW"
       },
       {
         "file": "web/src/store.tsx",
-        "line": 296,
+        "line": 297,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -2347,13 +2347,13 @@
         "concept": "risk-authority",
         "declaration": "function hasKnownOpenExposure",
         "file": "server/src/foundation/execution/reducer.ts",
-        "line": 150
+        "line": 160
       },
       {
         "concept": "risk-authority",
         "declaration": "function hasNakedExposure",
         "file": "server/src/foundation/execution/reducer.ts",
-        "line": 178
+        "line": 188
       },
       {
         "concept": "risk-authority",
@@ -2599,49 +2599,49 @@
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 78
+        "line": 84
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 271
+        "line": 299
       },
       {
         "concept": "control-authority",
         "declaration": "function sendAwsControlError",
         "file": "server/src/index.ts",
-        "line": 711
+        "line": 769
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1638
+        "line": 1696
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1647
+        "line": 1705
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2110
+        "line": 2168
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2122
+        "line": 2180
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2132
+        "line": 2190
       },
       {
         "concept": "semantic-source",
@@ -3355,19 +3355,115 @@
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 17
+        "line": 52
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 44
+        "line": 79
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type LedgerConfigCompareAndSetResult",
+        "file": "server/src/ledger.ts",
+        "line": 85
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface LedgerProductOperatorEventRecord",
+        "file": "server/src/ledger.ts",
+        "line": 96
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface LedgerProductOperatorEventPage",
+        "file": "server/src/ledger.ts",
+        "line": 106
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 146
+        "line": 235
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function plainLedgerRecord",
+        "file": "server/src/ledger.ts",
+        "line": 1388
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function exactLedgerFields",
+        "file": "server/src/ledger.ts",
+        "line": 1394
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function assertSourcePath",
+        "file": "server/src/productAssurance/common.ts",
+        "line": 224
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ControllerPosture",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 24
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ControllerProposal",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 26
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AdvancedControllerEvidenceBinding",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 59
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AdvancedControllerGateInput",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 78
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AdvancedControllerGateDecision",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 89
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function evaluateAdvancedControllerGate",
+        "file": "server/src/productAssurance/controllers/gate.ts",
+        "line": 226
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface FailureAssuranceControl",
+        "file": "server/src/productAssurance/failureAtlas/atlas.ts",
+        "line": 43
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface FailureControlObservation",
+        "file": "server/src/productAssurance/failureAtlas/atlas.ts",
+        "line": 81
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface FailureControlEvidenceBinding",
+        "file": "server/src/productAssurance/failureAtlas/atlas.ts",
+        "line": 94
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function failureControlEvidenceSubjectId",
+        "file": "server/src/productAssurance/failureAtlas/atlas.ts",
+        "line": 187
       },
       {
         "concept": "capital-authority",
@@ -3695,6 +3791,132 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlPreview",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 10
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlRegistryEntry",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 11
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlResult",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 12
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function buildProductRuntimeControlRegistry",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 87
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function findWiredControl",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 127
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function previewProductRuntimeControl",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 157
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function submitProductRuntimeControl",
+        "file": "server/src/productIntegration/runtime/controls.ts",
+        "line": 234
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type ProductRuntimeMaterialSourcePage",
+        "file": "server/src/productIntegration/runtime/events.ts",
+        "line": 6
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeSupervisorEnvelope",
+        "file": "server/src/productIntegration/runtime/projection.ts",
+        "line": 19
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function buildProductRuntimeSupervisorEnvelope",
+        "file": "server/src/productIntegration/runtime/projection.ts",
+        "line": 300
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlPreview",
+        "file": "server/src/productIntegration/runtime/service.ts",
+        "line": 9
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlResult",
+        "file": "server/src/productIntegration/runtime/service.ts",
+        "line": 10
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeSupervisorEnvelope",
+        "file": "server/src/productIntegration/runtime/service.ts",
+        "line": 15
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface ProductRuntimeMaterialSourceRecord",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 23
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface ProductRuntimeMaterialSourcePage",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 32
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductRuntimeControlPreview",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 82
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlResultStatus",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 108
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductRuntimeControlResult",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 115
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type ProductRuntimeControlWiringState",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 189
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductRuntimeControlRegistryEntry",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 192
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface ProductRuntimeSupervisorEnvelope",
+        "file": "server/src/productIntegration/runtime/types.ts",
+        "line": 300
+      },
+      {
+        "concept": "control-authority",
         "declaration": "type ProductSupervisorProjection",
         "file": "server/src/productIntegration/supervisor/project.ts",
         "line": 14
@@ -3872,6 +4094,18 @@
         "declaration": "function preserveSourceRecord",
         "file": "server/src/systemIntegration/adapters/engineCapture.ts",
         "line": 169
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function proveJournalRoundTrip",
+        "file": "server/src/systemIntegration/adapters/foundationQuantityBridge.ts",
+        "line": 146
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function compareJournalToFoundationQuantity",
+        "file": "server/src/systemIntegration/adapters/foundationQuantityBridge.ts",
+        "line": 285
       },
       {
         "concept": "semantic-source",
@@ -4361,21 +4595,33 @@
       },
       {
         "concept": "ledger-authority",
+        "declaration": "interface LedgerEventInputRecord",
+        "file": "server/src/systemIntegration/persistence/types.ts",
+        "line": 51
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type LedgerConfigCompareAndSetResult",
+        "file": "server/src/systemIntegration/persistence/types.ts",
+        "line": 57
+      },
+      {
+        "concept": "ledger-authority",
         "declaration": "interface LedgerPersistencePort",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 52
+        "line": 69
       },
       {
         "concept": "capital-authority",
         "declaration": "interface PersistedReservationReference",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 98
+        "line": 122
       },
       {
         "concept": "control-authority",
         "declaration": "interface PersistedControlRejectionReceipt",
         "file": "server/src/systemIntegration/persistence/types.ts",
-        "line": 165
+        "line": 189
       },
       {
         "concept": "semantic-source",
@@ -4674,6 +4920,11 @@
         "target": "../../capitalFoundation/accountTruth/index.js"
       },
       {
+        "file": "server/src/systemIntegration/adapters/foundationQuantityBridge.ts",
+        "line": 16,
+        "target": "../../capitalFoundation/contracts/decimal.js"
+      },
+      {
         "file": "server/src/systemIntegration/adapters/probes.ts",
         "line": 23,
         "target": "../../intelligenceRuntime/contracts/index.js"
@@ -4833,6 +5084,36 @@
       "method": "POST",
       "route": "/api/system-integration/controls",
       "sourceNeedle": "router.post('/controls'",
+      "observed": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/product-integration/v1/supervisor",
+      "sourceNeedle": "router.get('/v1/supervisor'",
+      "observed": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/product-integration/v1/material-events",
+      "sourceNeedle": "router.get('/v1/material-events'",
+      "observed": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/product-integration/v1/traces/:correlationId",
+      "sourceNeedle": "router.get('/v1/traces/:correlationId'",
+      "observed": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/product-integration/v1/commands/preview",
+      "sourceNeedle": "router.post('/v1/commands/preview'",
+      "observed": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/product-integration/v1/commands",
+      "sourceNeedle": "router.post('/v1/commands'",
       "observed": true
     }
   ],
@@ -6678,26 +6959,26 @@
         "source": "docs/archive/What-i-want.txt; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb; IP_PROOF_RECEIPT.md@23e985c17b9b860fee26be397fa05b26f3daf8f2",
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
-        "code": "canonical domain owners plus fanned-in prestage artifacts; no shared composition",
-        "runtime": "final shared composition pending",
-        "persistence": "existing Ledger",
-        "api": "canonical supervisor and controls",
-        "cockpit": "Dashboard, Control Room",
-        "control": "real bounded registry",
-        "test": "server/test/i00Acceptance/closure-evidence.test.mjs",
+        "code": "canonical domain owners plus fanned-in artifacts and the source-proven Product Control application mount",
+        "runtime": "source-built Product Integration runtime composition and five authenticated routes are wired; real owner bindings and runtime/browser readback remain pending",
+        "persistence": "existing Ledger plus source-built and tested bounded product_operator_events cursor",
+        "api": "eleven canonical routes including five Product Integration routes are source-mounted",
+        "cockpit": "Dashboard and Control Room mounted",
+        "control": "real bounded registry remains unavailable without canonical persistence",
+        "test": "server/test/i00Acceptance/closure-evidence.test.mjs; web/test/productControlRoom/mount.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
         "scenario": "I00-01 through I00-22",
         "sha": "8069f9bde596524ba74bb3778c9cde6ad3efb385",
         "status": "DESIGNED",
-        "blocker": "AWAITING_REAL_ADAPTERS; AWAITING_DIRECTOR_SHARED_COMPOSITION; DIRECTOR_MOUNT_REQUIRED",
-        "replacement": "director shared composition, canonical persistence/routes, real runtime and browser readback"
+        "blocker": "AWAITING_REAL_ADAPTERS; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "real owner adapters, canonical command persistence, and real runtime/browser readback"
       },
       {
         "id": "Q-CLOSURE-01",
         "source": "QL_DIRECTOR_STATE.md; QL_PARALLEL_DAG.md; quant/DIRECTIVE_INPUTS.lock",
         "requirement": "Ingest the binding Q directive, accepted build state, immutable receipts, generated client, feature/model registry, and final lane-ready tip without granting money authority",
         "owner": "accepted Q lane plus I00 Q adapter",
-        "code": "frozen edge protocol only at D-LAUNCH-6 base",
-        "runtime": "Q final adapter absent",
+        "code": "accepted Q donor and frozen edge protocol imported",
+        "runtime": "production transport not configured",
         "persistence": "assessment/outcome references pending",
         "api": "Q health and assessment pending",
         "cockpit": "Dashboard Q brain",
@@ -6706,7 +6987,7 @@
         "scenario": "I00-02,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "director imports accepted Q directive/state/receipts and generated client"
       },
       {
@@ -6724,7 +7005,7 @@
         "scenario": "I00-05,I00-06,I00-12 through I00-17",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "director imports accepted L directive/state/receipts and real adapters"
       },
       {
@@ -6733,7 +7014,7 @@
         "requirement": "Advisory protocol stays versioned fail-closed bounded and money-authority free",
         "owner": "accepted Q protocol client",
         "code": "packages/edge-protocol frozen only",
-        "runtime": "generated Q client absent",
+        "runtime": "accepted generated client imported; production transport not configured",
         "persistence": "assessment references pending",
         "api": "Q assessment pending",
         "cockpit": "Dashboard Q",
@@ -6742,7 +7023,7 @@
         "scenario": "I00-02,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted generated Q client"
       },
       {
@@ -6750,7 +7031,7 @@
         "source": "Q blob eebe7b0c#8",
         "requirement": "Framework and paper adoption decisions remain explicit ADOPT ADAPT REFERENCE_ONLY or REJECT with no inherited authority",
         "owner": "accepted Q framework intake",
-        "code": "accepted Q receipt absent",
+        "code": "accepted Q framework artifact imported; production transport not configured",
         "runtime": "not integrated",
         "persistence": "framework decision registry pending",
         "api": "framework provenance pending",
@@ -6760,7 +7041,7 @@
         "scenario": "not applicable to fixture chain",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q framework decision receipt"
       },
       {
@@ -6768,7 +7049,7 @@
         "source": "Q blob eebe7b0c#9-10",
         "requirement": "Point-in-time lake manifests raw records partitions quality and book reconstruction remain deterministic",
         "owner": "accepted Q data factory",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "capture adapter absent",
         "persistence": "Q lake pending",
         "api": "dataset health pending",
@@ -6778,7 +7059,7 @@
         "scenario": "I00-09",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q data manifests"
       },
       {
@@ -6786,7 +7067,7 @@
         "source": "Q blob eebe7b0c#11",
         "requirement": "Point-in-time multi-horizon labels controls and event disposition avoid leakage",
         "owner": "accepted Q label factory",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "offline only",
         "persistence": "label registry pending",
         "api": "label provenance pending",
@@ -6796,7 +7077,7 @@
         "scenario": "I00-04,I00-08",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted label and matched-control factory"
       },
       {
@@ -6804,7 +7085,7 @@
         "source": "Q blob eebe7b0c#12-13",
         "requirement": "Versioned robust self-relative feature registry covers flow activity regimes cross-market Basis and data quality",
         "owner": "accepted Q feature registry",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "inference inputs absent",
         "persistence": "feature registry pending",
         "api": "feature lineage pending",
@@ -6814,7 +7095,7 @@
         "scenario": "I00-03,I00-07,I00-08",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q feature registry"
       },
       {
@@ -6822,7 +7103,7 @@
         "source": "Q blob eebe7b0c#14-15",
         "requirement": "Transparent baselines challengers calibration uncertainty ensemble and abstention remain advisory",
         "owner": "accepted Q model battery",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "bounded inference absent",
         "persistence": "model cards pending",
         "api": "votes uncertainty abstention pending",
@@ -6832,7 +7113,7 @@
         "scenario": "I00-02,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q ensemble and abstention"
       },
       {
@@ -6840,7 +7121,7 @@
         "source": "Q blob eebe7b0c#16",
         "requirement": "Chronological splits negative controls multiple-testing discipline and economic promotion gates prevent overfit",
         "owner": "accepted Q validation factory",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "promotion remains blocked",
         "persistence": "validation receipts pending",
         "api": "validation status pending",
@@ -6850,7 +7131,7 @@
         "scenario": "I00-08",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q validation receipt"
       },
       {
@@ -6858,7 +7139,7 @@
         "source": "Q blob eebe7b0c#17",
         "requirement": "Shadow-first drift delayed outcomes and retirement never self-edit live risk",
         "owner": "accepted Q learning feedback",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "feedback adapter absent",
         "persistence": "outcome cohorts pending",
         "api": "drift and retirement pending",
@@ -6868,7 +7149,7 @@
         "scenario": "I00-04",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
         "replacement": "accepted Q feedback adapter"
       },
       {
@@ -6876,7 +7157,7 @@
         "source": "Q blob eebe7b0c#18",
         "requirement": "Experiment dataset and model identities plus cards are immutable and reproducible",
         "owner": "accepted Q registry",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "registry read model absent",
         "persistence": "registry pending",
         "api": "registry health pending",
@@ -6886,7 +7167,7 @@
         "scenario": "I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q registry"
       },
       {
@@ -6894,7 +7175,7 @@
         "source": "Q blob eebe7b0c#19",
         "requirement": "Bounded inference and generated consumers expose measured latency queues parity and explicit failure",
         "owner": "accepted Q inference service",
-        "code": "accepted Q tip absent",
+        "code": "accepted Q donor imported under quant/**; production transport not configured",
         "runtime": "service absent",
         "persistence": "request references pending",
         "api": "Q health/assessment pending",
@@ -6904,7 +7185,7 @@
         "scenario": "I00-02,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "Q16 generated service/client"
       },
       {
@@ -6922,7 +7203,7 @@
         "scenario": "I00-12,I00-17",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
         "replacement": "accepted L kernel"
       },
       {
@@ -6940,7 +7221,7 @@
         "scenario": "I00-02,I00-04,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L01 compatibility adapter"
       },
       {
@@ -6958,7 +7239,7 @@
         "scenario": "I00-03",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L04 registry"
       },
       {
@@ -6976,7 +7257,7 @@
         "scenario": "I00-10",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED",
         "replacement": "accepted L05 adapters"
       },
       {
@@ -6994,7 +7275,7 @@
         "scenario": "I00-12,I00-15,I00-16,I00-17",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L06 journal adapter"
       },
       {
@@ -7012,7 +7293,7 @@
         "scenario": "I00-04,I00-12,I00-13",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L07 twin"
       },
       {
@@ -7030,7 +7311,7 @@
         "scenario": "I00-03,I00-12,I00-14",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L08 policy"
       },
       {
@@ -7048,7 +7329,7 @@
         "scenario": "I00-03,I00-04,I00-13",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L09 adapter"
       },
       {
@@ -7066,7 +7347,7 @@
         "scenario": "I00-05,I00-06",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED",
         "replacement": "accepted L10 adapter"
       },
       {
@@ -7084,7 +7365,7 @@
         "scenario": "I00-07,I00-08",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L11 adapter"
       },
       {
@@ -7102,7 +7383,7 @@
         "scenario": "I00-07,I00-14",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L adapters"
       },
       {
@@ -7120,7 +7401,7 @@
         "scenario": "I00-06,I00-10,I00-13,I00-14,I00-15",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L12 supervisor"
       },
       {
@@ -7129,17 +7410,17 @@
         "requirement": "Durable commands and machine graph expose exact state revision idempotency before/after and owner truth",
         "owner": "foundation-control and systemIntegration",
         "code": "product command projection and Control Room binding artifacts built without canonical owner mutation",
-        "runtime": "unmounted; current legacy endpoints do not satisfy final cursor and registry contracts",
-        "persistence": "canonical product and L14 command persistence pending",
-        "api": "final preview submit result and material-cursor routes pending",
-        "cockpit": "Dashboard Control Room package built but not mounted",
+        "runtime": "application mount and five authenticated Product routes are source-wired; bounded Ledger material-event cursor is source-built and tested; command registry lifecycle remains pending",
+        "persistence": "durable product_operator_events cursor built; canonical product and L14 command persistence pending",
+        "api": "preview, submit, material-events, and trace routes are source-mounted; command results remain unavailable until canonical persistence",
+        "cockpit": "Dashboard and Control Room package mounted",
         "control": "bounded fixture registry only",
-        "test": "server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
+        "test": "server/test/productIntegration/commands/commands-events.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_PERSISTENCE_REQUIRED",
-        "replacement": "accepted L13/L14 adapters plus director-owned persistence, routes, and mount"
+        "blocker": "L_LANE_READY_NOT_SEALED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "accepted L13/L14 adapters plus canonical command persistence"
       },
       {
         "id": "L-OBSERVABILITY",
@@ -7147,17 +7428,17 @@
         "requirement": "Metrics logs ledger and incidents preserve material events root cause redaction and bounded attention",
         "owner": "systemIntegration plus IP-OPS",
         "code": "bounded cursor and incident presentation plus ops readback validators built",
-        "runtime": "unmounted artifacts; real projections incomplete",
-        "persistence": "existing Ledger; dedicated material cursor and incident persistence pending",
-        "api": "final events incidents and readback routes pending",
-        "cockpit": "Health Logs Notifications adapters built but not mounted",
+        "runtime": "application renderers, authenticated Product routes, and the durable material-event cursor are source-built and tested; real projections and runtime readback remain incomplete",
+        "persistence": "Ledger product_operator_events is bounded at 25,000 rows with source-tested floor, high-water, gap, and truncation semantics; incident persistence remains pending",
+        "api": "material-events and trace routes are source-mounted; real readback was not run",
+        "cockpit": "Health, Logs, and Notifications adapters mounted",
         "control": "incident acknowledgement backend absent",
-        "test": "server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs; ops/tests/i00/test-probes-and-readback.sh",
+        "test": "server/test/productIntegration/commands/commands-events.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs; web/test/productControlRoom/contracts.test.mjs; ops/tests/i00/test-probes-and-readback.sh",
         "scenario": "I00-20",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
-        "replacement": "director-owned event persistence, routes, mount, and real readback"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "real owner projections, incident persistence/acknowledgement, and runtime readback"
       },
       {
         "id": "L-OPS",
@@ -7168,7 +7449,7 @@
         "runtime": "no deployment or vendor action",
         "persistence": "receipt schemas and validators built; no production receipt",
         "api": "readback validators built; real deployment health absent",
-        "cockpit": "Health mount pending",
+        "cockpit": "Health adapter mounted; target evidence remains unavailable",
         "control": "owner-gated external actions",
         "test": "bash ops/tests/i00/run-all.sh: 651 combined assertions in IP_OPS_RECEIPT.md",
         "scenario": "I00-21,I00-22",
@@ -7192,7 +7473,7 @@
         "scenario": "not run",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; TINY_LIVE_CANARY_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; TINY_LIVE_CANARY_AUTHORIZATION_REQUIRED",
         "replacement": "director-only authorized canary ladder"
       },
       {
@@ -7210,7 +7491,7 @@
         "scenario": "I00-10",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED",
         "replacement": "authorized private read adapter"
       },
       {
@@ -7228,7 +7509,7 @@
         "scenario": "not run",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
         "replacement": "authorized Spot test-order adapter"
       },
       {
@@ -7246,7 +7527,7 @@
         "scenario": "not run",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED",
         "replacement": "authorized USD-M test-order adapter"
       },
       {
@@ -7264,7 +7545,7 @@
         "scenario": "I00-05,I00-06",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED",
         "replacement": "authorized Margin read adapter"
       },
       {
@@ -7282,7 +7563,7 @@
         "scenario": "I00-12,I00-15,I00-17",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "real reconciliation adapter"
       },
       {
@@ -7291,35 +7572,35 @@
         "requirement": "Private and signed validation truth is visibly separated and browser-proven",
         "owner": "IP-CONTROL",
         "code": "BINDING_READY cockpit artifact with fail-closed private and signed truth labels",
-        "runtime": "fixture preview browser proof only; application mount and real readback absent",
+        "runtime": "application adapters and canonical supervisor route are source-wired; private/signed runtime truth remains NOT_CONFIGURED and real browser readback is absent",
         "persistence": "read-only artifact; canonical command persistence pending",
-        "api": "canonical supervisor pending private fields and final endpoints",
-        "cockpit": "Account Execution Health adapters built but not mounted",
+        "api": "canonical supervisor is source-mounted but private fields and runtime/browser readback remain pending",
+        "cockpit": "Account, Execution, and Health adapters mounted with fail-closed labels",
         "control": "owner-gated",
         "test": "web/test/productControlRoom/contracts.test.mjs 18/18 plus fixture-browser evidence in IP_CONTROL_RECEIPT.md",
         "scenario": "fixture preview only",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
-        "replacement": "director mount followed by authorized private/signed evidence and real browser acceptance"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "authorized private/signed evidence plus real browser acceptance"
       },
       {
         "id": "I00-PAGES",
         "source": "I00#15 and #27; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Every App-routed operational page has a machine-checkable canonical API honest state controls and blocker row and required absent surfaces stay named",
         "owner": "IP-CONTROL plus domain adapters",
-        "code": "source-derived page catalog plus BINDING_READY mount-row artifacts",
-        "runtime": "all real bindings pending or blocked",
-        "persistence": "owner-specific",
-        "api": "per-page catalog; final runtime endpoints pending",
-        "cockpit": "19 App-routed page states; Control Room code present but route still missing",
+        "code": "source-derived page catalog plus mounted Product Control adapters",
+        "runtime": "19 Product Control page routes and five authenticated Product Integration routes are source-wired; real owner bindings and browser readback remain pending or blocked",
+        "persistence": "owner-specific plus bounded Ledger material-event cursor",
+        "api": "five exact Product Integration routes are source-mounted alongside owner-specific page APIs",
+        "cockpit": "21 App-routed page states; Control Room and Execution routes mounted",
         "control": "per-page catalog",
-        "test": "discoverOperationalPageIds exact-set and absent-surface tests; web/test/productControlRoom/contracts.test.mjs",
+        "test": "discoverOperationalPageIds exact-set, mount-state, and absent-surface tests; server/test/systemIntegration/persistence/product-operator-events.test.mjs; web/test/productControlRoom/mount.test.mjs",
         "scenario": "all",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
-        "status": "DESIGNED",
-        "blocker": "AWAITING_REAL_ADAPTERS; DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED",
-        "replacement": "director real page bindings and required Control Room route"
+        "status": "BUILT",
+        "blocker": "AWAITING_REAL_ADAPTERS; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "real owner bindings and browser/runtime readback"
       },
       {
         "id": "I00-CONTROL-SEED",
@@ -7327,17 +7608,17 @@
         "requirement": "Required control families and superseded 172-item seed are classified without decorative controls",
         "owner": "IP-CONTROL director",
         "code": "14 proof-catalog rows plus six BINDING_READY fixture controls; 172-item source absent",
-        "runtime": "backend and cockpit gaps named; no mounted live registry",
+        "runtime": "registry renderer mounted; backend gaps remain named and unavailable controls stay disabled",
         "persistence": "canonical control receipts pending",
         "api": "control registry contract built",
-        "cockpit": "Control Room package unmounted",
+        "cockpit": "Control Room registry mounted",
         "control": "bounded fixture registry",
         "test": "control matrix contract test; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "DESIGNED",
-        "blocker": "CONTROL_SEED_SOURCE_NOT_PRESENT; DIRECTOR_MOUNT_REQUIRED; CANONICAL_BACKEND_REGISTRY_REQUIRED",
-        "replacement": "director imports the missing seed, binds canonical backend controls, and mounts the accepted registry"
+        "blocker": "CONTROL_SEED_SOURCE_NOT_PRESENT; CANONICAL_BACKEND_REGISTRY_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "director imports the missing seed and binds canonical backend controls"
       },
       {
         "id": "CORE-01",
@@ -7390,7 +7671,7 @@
         "scenario": "I00-03",
         "sha": "963538d3cc9da74b51b70347a70a017b6eab2910",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L exact cost and ticket adapter"
       },
       {
@@ -7435,7 +7716,7 @@
         "requirement": "Rank candidates without treating rank as strategy authority",
         "owner": "intelligenceFoundation attention",
         "code": "server/src/intelligenceFoundation/attention plus product adapter contracts",
-        "runtime": "prestage adapter artifact present; real owner binding pending",
+        "runtime": "source-mounted Product runtime contract present; real owner binding pending",
         "persistence": "bounded evidence references",
         "api": "candidate counts",
         "cockpit": "Markets",
@@ -7444,8 +7725,8 @@
         "scenario": "I00-07",
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED",
-        "replacement": "director binds accepted owner evidence through the prestaged runtime contract"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED",
+        "replacement": "bind accepted owner evidence through the source-mounted runtime contract"
       },
       {
         "id": "ATTN-03",
@@ -7453,7 +7734,7 @@
         "requirement": "Bound focused enrichment with explicit capacity and comparability",
         "owner": "intelligenceRuntime focus",
         "code": "server/src/intelligenceRuntime/focus plus product adapter contracts",
-        "runtime": "prestage adapter artifact present; real focus binding pending",
+        "runtime": "source-mounted Product runtime contract present; real focus binding pending",
         "persistence": "capture adapter pending",
         "api": "focus budget/queue",
         "cockpit": "Markets, Token",
@@ -7462,8 +7743,8 @@
         "scenario": "I00-07",
         "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_FOCUS_ADAPTER_BINDING_REQUIRED",
-        "replacement": "director binds accepted focus owner through the prestaged runtime contract"
+        "blocker": "REAL_FOCUS_ADAPTER_BINDING_REQUIRED",
+        "replacement": "bind accepted focus owner through the source-mounted runtime contract"
       },
       {
         "id": "OPP-01",
@@ -7480,7 +7761,7 @@
         "scenario": "I00-03,I00-07",
         "sha": "c4ae7a9aee51050da2076bf4a454988b1d372bc4",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q assessment and engine projection"
       },
       {
@@ -7534,7 +7815,7 @@
         "scenario": "I00-05,I00-06",
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L reverse-Basis and recovery adapter"
       },
       {
@@ -7570,7 +7851,7 @@
         "scenario": "I00-08",
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q outcome feedback"
       },
       {
@@ -7588,7 +7869,7 @@
         "scenario": "I00-13,I00-14",
         "sha": "963538d3cc9da74b51b70347a70a017b6eab2910",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED",
         "replacement": "accepted L private truth adapter"
       },
       {
@@ -7686,18 +7967,18 @@
         "source": "MISSION.md#reliability-is-part-of-the-edge; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Lifecycle heartbeat freshness backoff checkpoints and degraded truth stay visible",
         "owner": "foundation-control plus supervisor",
-        "code": "server/src/systemIntegration/supervisor plus unmounted product supervisor projector",
-        "runtime": "current convergence subset plus prestaged pure projection; no final composition",
+        "code": "server/src/systemIntegration/supervisor plus source-built Product Integration supervisor projector",
+        "runtime": "Product Control application and authenticated Product runtime composition are source-wired; accepted Q/L owner nodes and real runtime readback remain pending",
         "persistence": "ledger checkpoints; product lifecycle persistence pending",
-        "api": "/api/system-integration/graph; final product endpoints pending",
-        "cockpit": "Health",
+        "api": "/api/system-integration/graph and /api/product-integration/v1/supervisor are source-mounted",
+        "cockpit": "Health adapter mounted",
         "control": "CTRL-COMPONENT",
         "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs; server/test/productIntegration/supervisor/supervisor.test.mjs",
         "scenario": "I00-09,I00-11",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_RUNTIME_READBACK_REQUIRED",
-        "replacement": "director composes accepted Q/L/ops owner evidence into the canonical supervisor"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "compose accepted Q/L/ops owner evidence into the canonical supervisor and perform real readback"
       },
       {
         "id": "REL-02",
@@ -7714,7 +7995,7 @@
         "scenario": "I00-12,I00-13,I00-15,I00-17",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L journal/twin/recovery"
       },
       {
@@ -7723,16 +8004,16 @@
         "requirement": "Durable immutable correlation and alias chain spans observation through outcome",
         "owner": "existing Ledger",
         "code": "server/src/ledger.ts",
-        "runtime": "convergence adapter exists; final Q/L aliases pending",
-        "persistence": "data/cosmos.db",
-        "api": "trace index",
+        "runtime": "convergence adapter and durable product_operator_events cursor exist; final Q/L aliases remain pending",
+        "persistence": "data/cosmos.db; product_operator_events is source-built and tested with 25,000-row retention",
+        "api": "/api/product-integration/v1/material-events and /api/product-integration/v1/traces/:correlationId are source-mounted",
         "cockpit": "Logs, Token",
         "control": "none",
-        "test": "server/test/systemIntegration/persistence/ledger-adapter.test.mjs",
+        "test": "server/test/systemIntegration/persistence/ledger-adapter.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
         "scenario": "I00-04",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_SHARED_COMPOSITION",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED",
         "replacement": "real Q/L identity graph"
       },
       {
@@ -7768,7 +8049,7 @@
         "scenario": "I00-04,I00-08",
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
         "replacement": "accepted Q feedback and real outcomes"
       },
       {
@@ -7804,7 +8085,7 @@
         "scenario": "I00-02,I00-11",
         "sha": "73e1a1ff7daa48df8dac45713fc5f106842edafc",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "generated Q client parity and schema hash handshake"
       },
       {
@@ -7812,36 +8093,36 @@
         "source": "docs/DASHBOARD_TRUTH.md#hard-laws; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Cockpit formats one supervisor source and never recomputes domain truth",
         "owner": "systemIntegration supervisor",
-        "code": "web/src/lib/systemIntegration.ts plus BINDING_READY product Control Room adapters",
-        "runtime": "current subset; final endpoints and application mount pending",
-        "persistence": "read-only",
-        "api": "/api/system-integration/supervisor is insufficient for final product contract",
-        "cockpit": "all operational page adapters built but unmounted",
+        "code": "one mounted ProductControlRoomProvider plus Product Control page adapters",
+        "runtime": "application mount and authenticated Product Integration endpoints are source-wired; real runtime/browser readback remains pending",
+        "persistence": "read-only plus durable material-event cursor",
+        "api": "/api/product-integration/v1/supervisor is source-mounted",
+        "cockpit": "19 Product Control page routes mounted",
         "control": "catalog artifact only",
-        "test": "server/test/systemIntegration/application/production-facade.test.mjs; web/test/productControlRoom/contracts.test.mjs",
+        "test": "server/test/systemIntegration/application/production-facade.test.mjs; web/test/productControlRoom/contracts.test.mjs; web/test/productControlRoom/mount.test.mjs",
         "scenario": "all",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
-        "replacement": "director mounts the accepted Control Room adapters against final canonical endpoints"
+        "blocker": "REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "perform real authenticated runtime and browser readback"
       },
       {
         "id": "CTRL-01",
         "source": "MISSION.md#control-must-be-designed-into-engine; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Controls are authenticated bounded revisioned idempotent durable and never decorative",
         "owner": "foundation-control",
-        "code": "existing systemIntegration controls plus prestaged projection and cockpit artifacts",
-        "runtime": "current safe subset; final preview submit result lifecycle unmounted",
+        "code": "existing systemIntegration controls plus mounted product command renderer",
+        "runtime": "renderer and authenticated preview/submit routes are source-wired; result lifecycle remains unavailable until canonical persistence is proven",
         "persistence": "existing ledger receipts; final canonical product command persistence pending",
-        "api": "/api/system-integration/controls is insufficient for the final registry lifecycle",
-        "cockpit": "Control Room package unmounted",
+        "api": "/api/product-integration/v1/commands/preview and /api/product-integration/v1/commands are source-mounted",
+        "cockpit": "Control Room package mounted with unavailable reasons",
         "control": "bounded fixture registry only",
         "test": "server/test/systemIntegration/routes/control-routes.test.mjs; server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
-        "replacement": "director binds the accepted projection/catalog to canonical owner commands and durable receipts"
+        "blocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "bind the accepted projection/catalog to canonical owner commands and durable receipts"
       },
       {
         "id": "OPS-01",
@@ -7870,7 +8151,7 @@
         "runtime": "artifact-only; no external mutation authorized or performed",
         "persistence": "isolated restore artifact proven; production restore blocked",
         "api": "readback validators built; deployment supervisor fields and target evidence pending",
-        "cockpit": "Health mount pending",
+        "cockpit": "Health adapter mounted; target evidence remains unavailable",
         "control": "owner-gated external operations",
         "test": "bash ops/tests/i00/run-all.sh: 651 combined assertions in IP_OPS_RECEIPT.md",
         "scenario": "I00-21,I00-22",
@@ -7902,36 +8183,36 @@
         "source": "docs/DASHBOARD_TRUTH.md#1; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Whole-machine posture mode kill startup restart and first root blocker",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor plus unmounted ProductSurfaceAdapter dashboard artifact",
-        "runtime": "final component graph and application mount pending",
+        "code": "server/src/systemIntegration/supervisor plus mounted ProductSurfaceAdapter dashboard",
+        "runtime": "application mount and authenticated Product supervisor endpoint are source-wired; real runtime/browser readback remains pending",
         "persistence": "control/startup checkpoints; final command receipt binding pending",
-        "api": "supervisor plus final product endpoint pending",
-        "cockpit": "Dashboard adapter built but unmounted",
+        "api": "/api/product-integration/v1/supervisor is source-mounted",
+        "cockpit": "Dashboard adapter mounted",
         "control": "CTRL-KILL, CTRL-MODE fixture registry",
-        "test": "server/test/systemIntegration/supervisor/projection.test.mjs; web/test/productControlRoom/contracts.test.mjs",
+        "test": "server/test/systemIntegration/supervisor/projection.test.mjs; web/test/productControlRoom/contracts.test.mjs; web/test/productControlRoom/mount.test.mjs",
         "scenario": "I00-15",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
-        "replacement": "director mounts accepted Dashboard adapter against final canonical supervisor"
+        "blocker": "REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "perform real authenticated runtime and browser readback"
       },
       {
         "id": "DASH-02",
         "source": "docs/DASHBOARD_TRUTH.md#2; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Machine graph shows desired observed readiness liveness ages restarts errors and truth label",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor plus prestaged product graph and cockpit artifacts",
-        "runtime": "final Q/L/ops nodes and director composition pending",
+        "code": "server/src/systemIntegration/supervisor plus product graph and mounted cockpit adapters",
+        "runtime": "Product runtime composition is source-wired; final Q/L/ops nodes and real runtime readback remain pending",
         "persistence": "component checkpoints; product lifecycle persistence pending",
-        "api": "graph plus final product endpoint pending",
-        "cockpit": "Dashboard, Health adapters built but unmounted",
+        "api": "graph plus /api/product-integration/v1/supervisor are source-mounted",
+        "cockpit": "Dashboard and Health adapters mounted",
         "control": "CTRL-COMPONENT fixture registry",
         "test": "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs; server/test/productIntegration/supervisor/supervisor.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-09,I00-11",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
-        "replacement": "director composes final owner graph and mounts accepted cockpit adapters"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "compose the final owner graph and perform real readback"
       },
       {
         "id": "DASH-03",
@@ -7956,26 +8237,26 @@
         "source": "docs/DASHBOARD_TRUTH.md#4; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea",
         "requirement": "Basis and Volume ages counts decisions and exact rejects",
         "owner": "existing engines",
-        "code": "server/src/engine plus prestaged owner-preserving product adapters",
-        "runtime": "adapter artifact present; real engine binding pending",
+        "code": "server/src/engine plus mounted owner-preserving Product Surface adapter",
+        "runtime": "application renderer and Product runtime route are source-wired; real engine binding remains pending",
         "persistence": "ledger",
-        "api": "engine projections pending final endpoint",
-        "cockpit": "Dashboard adapter unmounted",
+        "api": "engine projections are exposed through the source-mounted supervisor route; real engine adapter binding is pending",
+        "cockpit": "Dashboard adapter mounted",
         "control": "engine intake control binding pending",
         "test": "server/test/engine-basis.mjs; server/test/engine-volume.mjs; server/test/productIntegration/adapters/adapters.test.mjs",
         "scenario": "I00-03,I00-07,I00-08",
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED",
-        "replacement": "director binds existing engines through accepted product adapters"
+        "blocker": "REAL_ENGINE_ADAPTER_BINDING_REQUIRED",
+        "replacement": "bind existing engines through accepted product adapters"
       },
       {
         "id": "DASH-05",
         "source": "docs/DASHBOARD_TRUTH.md#5",
         "requirement": "Q health versions drift assessments actions and abstention reasons",
         "owner": "accepted Q",
-        "code": "accepted Q tip pending",
-        "runtime": "not integrated",
+        "code": "accepted Q donor imported under quant/**",
+        "runtime": "production transport not configured",
         "persistence": "assessment refs",
         "api": "Q health pending",
         "cockpit": "Dashboard",
@@ -7984,7 +8265,7 @@
         "scenario": "I00-02,I00-11",
         "sha": null,
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP",
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "replacement": "accepted Q client"
       },
       {
@@ -8020,7 +8301,7 @@
         "scenario": "I00-12,I00-13",
         "sha": "c4ae7a9aee51050da2076bf4a454988b1d372bc4",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP",
+        "blocker": "L_LANE_READY_NOT_SEALED",
         "replacement": "accepted L chain"
       },
       {
@@ -8028,18 +8309,18 @@
         "source": "docs/DASHBOARD_TRUTH.md#8; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Attention queue ranks exposed capital first and names resolving control",
         "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor plus unmounted canonical attention renderer",
-        "runtime": "final graph pending",
+        "code": "server/src/systemIntegration/supervisor plus mounted canonical attention renderer",
+        "runtime": "application renderer and supervisor route are source-wired; real graph readback remains pending",
         "persistence": "incident/control refs; final incident persistence pending",
-        "api": "attention queue endpoint pending",
-        "cockpit": "Dashboard adapter built but unmounted",
+        "api": "attention queue projection is source-mounted through the supervisor route",
+        "cockpit": "Dashboard adapter mounted",
         "control": "fixture catalog",
         "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-13,I00-20",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_READBACK_REQUIRED",
-        "replacement": "director mounts accepted attention renderer against final supervisor"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; REAL_RUNTIME_READBACK_REQUIRED",
+        "replacement": "bind canonical incident persistence/acknowledgement and perform real readback"
       },
       {
         "id": "DASH-09",
@@ -8047,53 +8328,53 @@
         "requirement": "Trace drill-down spans evidence through ledger by correlation ID",
         "owner": "systemIntegration trace index",
         "code": "server/src/systemIntegration/supervisor",
-        "runtime": "Q/L identity aliases pending",
+        "runtime": "Product trace route is source-mounted; Q/L identity aliases remain pending",
         "persistence": "ledger",
-        "api": "/api/system-integration/traces/:correlationId",
+        "api": "/api/system-integration/traces/:correlationId; /api/product-integration/v1/traces/:correlationId",
         "cockpit": "Dashboard, Token",
         "control": "none",
         "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs",
         "scenario": "I00-04",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_SHARED_COMPOSITION",
-        "replacement": "real identity graph"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED",
+        "replacement": "real Q/L identity graph"
       },
       {
         "id": "DASH-10",
         "source": "docs/DASHBOARD_TRUTH.md#10; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Each control maps to one tested backend mutation with before/after ledger evidence",
         "owner": "foundation-control",
-        "code": "server/src/systemIntegration/controls plus prestaged product command and cockpit artifacts",
-        "runtime": "safe legacy subset only; final product command lifecycle unmounted",
+        "code": "server/src/systemIntegration/controls plus mounted product command and cockpit renderers",
+        "runtime": "safe legacy subset only; product command renderer and authenticated routes are source-wired but the final lifecycle remains unavailable",
         "persistence": "legacy ledger control receipt; canonical product command persistence pending",
-        "api": "/api/system-integration/controls is insufficient for final preview/result contracts",
-        "cockpit": "Dashboard, Control Room adapters built but unmounted",
+        "api": "Product Integration preview and submit routes are source-mounted; canonical persistence remains pending",
+        "cockpit": "Dashboard and Control Room adapters mounted with unavailable reasons",
         "control": "fixture catalog",
         "test": "server/test/systemIntegration/controls/mutations.test.mjs; server/test/productIntegration/commands/commands-events.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
-        "replacement": "director binds canonical commands, receipts, endpoints, and accepted renderer"
+        "blocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
+        "replacement": "bind canonical commands and durable receipts"
       },
       {
         "id": "DASH-LAW-01",
         "source": "docs/DASHBOARD_TRUTH.md#hard-laws; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "One supervisor snapshot is the cockpit truth source and the browser does not infer",
         "owner": "systemIntegration supervisor",
-        "code": "web/src/lib/systemIntegration.ts plus accepted ProductControlRoomProvider artifact",
-        "runtime": "final binding and application mount pending",
-        "persistence": "read-only plus durable cursor pending",
-        "api": "/api/system-integration/supervisor is insufficient for final product envelope",
-        "cockpit": "all operational adapters built but unmounted",
+        "code": "one module-scope product client and one mounted ProductControlRoomProvider",
+        "runtime": "application binding, authenticated Product endpoints, and durable Ledger cursor are source-built and tested; browser/runtime readback remains pending",
+        "persistence": "Ledger product_operator_events bounded at 25,000 rows with floor, high-water, gap, and truncation semantics",
+        "api": "/api/product-integration/v1/supervisor and /api/product-integration/v1/material-events are source-mounted",
+        "cockpit": "19 Product Control page routes mounted",
         "control": "none",
-        "test": "server/test/systemIntegration/application/production-facade.test.mjs; web/test/productControlRoom/contracts.test.mjs",
+        "test": "server/test/systemIntegration/application/production-facade.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs; web/test/productControlRoom/contracts.test.mjs; web/test/productControlRoom/mount.test.mjs",
         "scenario": "all",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; DURABLE_CURSOR_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
-        "replacement": "director mounts one accepted provider against final canonical product endpoints"
+        "blocker": "REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "perform authenticated runtime and browser readback"
       },
       {
         "id": "DASH-LAW-02",
@@ -8154,18 +8435,18 @@
         "source": "docs/DASHBOARD_TRUTH.md#acceptance; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Cold-open ten-second owner test answers state blocker exposure kill and degraded sources without terminal archaeology",
         "owner": "IP-CONTROL plus director browser acceptance",
-        "code": "accepted dashboard donor and BINDING_READY fixture shell present",
-        "runtime": "fixture browser proof only; application mount and real readback absent",
+        "code": "accepted dashboard donor mounted in the application shell",
+        "runtime": "application mount and authenticated supervisor route are source-wired; real runtime and browser readback are absent",
         "persistence": "fixture receipt only",
-        "api": "final canonical supervisor endpoint pending",
-        "cockpit": "Dashboard adapter built but unmounted",
-        "control": "bounded fixture controls",
-        "test": "fixture browser evidence in IP_CONTROL_RECEIPT.md; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "api": "canonical Product supervisor endpoint is source-mounted",
+        "cockpit": "Dashboard adapter mounted",
+        "control": "bounded fixture controls remain unavailable without canonical persistence",
+        "test": "fixture browser evidence in IP_CONTROL_RECEIPT.md; web/test/productControlRoom/mount.test.mjs; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
         "scenario": "fixture descriptions only",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "status": "BUILT",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
-        "replacement": "director-mounted accepted shell followed by real browser ship gate"
+        "blocker": "REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+        "replacement": "real authenticated runtime and browser ship gate"
       }
     ],
     "autonomy": [
@@ -8181,20 +8462,20 @@
       {
         "layer": "evidence",
         "authority": "intelligenceFoundation",
-        "limit": "no strategy decision; prestaged adapter artifact only",
+        "limit": "no strategy decision; source-mounted adapter contract only",
         "failurePosture": "UNKNOWN",
         "ownerOverride": "none",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "attention",
         "authority": "intelligenceFoundation",
-        "limit": "bounded focus; prestaged adapter artifact only",
+        "limit": "bounded focus; source-mounted adapter contract only",
         "failurePosture": "NO_PROMOTION",
         "ownerOverride": "pin focus",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "q-assessment",
@@ -8203,7 +8484,7 @@
         "failurePosture": "ABSTAIN_UNKNOWN",
         "ownerOverride": "disable Q consumption",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
       },
       {
         "layer": "strategy-decision",
@@ -8217,11 +8498,11 @@
       {
         "layer": "opportunity-formation",
         "authority": "CanonicalOpportunity",
-        "limit": "read projection; prestaged adapter artifact only",
+        "limit": "read projection; source-mounted adapter contract only",
         "failurePosture": "reject malformed",
         "ownerOverride": "none",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED"
       },
       {
         "layer": "capital",
@@ -8230,7 +8511,7 @@
         "failurePosture": "UNAVAILABLE",
         "ownerOverride": "revoke reservation",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       {
         "layer": "risk",
@@ -8257,7 +8538,7 @@
         "failurePosture": "NOT_CONFIGURED",
         "ownerOverride": "request reconciliation",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       {
         "layer": "reconciliation",
@@ -8266,7 +8547,7 @@
         "failurePosture": "RECOVERY_REQUIRED",
         "ownerOverride": "retry reconciliation",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "layer": "position-supervision",
@@ -8275,7 +8556,7 @@
         "failurePosture": "UNKNOWN_EXPOSURE_VISIBLE",
         "ownerOverride": "risk-reducing only",
         "status": "BUILT",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "layer": "recovery",
@@ -8284,7 +8565,7 @@
         "failurePosture": "RECOVERY_REQUIRED",
         "ownerOverride": "execute precomputed plan",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "layer": "outcome-attribution",
@@ -8302,16 +8583,16 @@
         "failurePosture": "PENDING",
         "ownerOverride": "freeze promotion",
         "status": "DESIGNED",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
       },
       {
         "layer": "operator-control",
         "authority": "foundation-control",
-        "limit": "safe legacy subset plus unmounted IP-CONTROL artifact",
+        "limit": "mounted IP-CONTROL renderer and authenticated Product routes; safe legacy subset only; unsupported commands disabled",
         "failurePosture": "REJECTED",
         "ownerOverride": "authenticated command",
         "status": "BUILT",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED"
+        "blocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED"
       },
       {
         "layer": "deployment",
@@ -8391,7 +8672,7 @@
         "classification": "DEFECT",
         "mechanism": "backend command pending",
         "command": null,
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "operation": "SAFE_RESTART",
@@ -8419,7 +8700,7 @@
         "classification": "DEFECT",
         "mechanism": "accepted L command pending",
         "command": null,
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "operation": "BACKUP",
@@ -8452,9 +8733,9 @@
       {
         "operation": "INCIDENT_ACK",
         "classification": "DEFECT",
-        "mechanism": "incident command and application mount absent",
+        "mechanism": "renderer mounted; canonical incident command absent",
         "command": null,
-        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT"
       },
       {
         "operation": "MODE_CHANGE",
@@ -8466,23 +8747,23 @@
       {
         "operation": "COMPONENT_DESIRED_STATE",
         "classification": "DEFECT",
-        "mechanism": "legacy backend command exists; final product lifecycle and cockpit mount absent",
+        "mechanism": "renderer mounted; legacy backend command exists but final product lifecycle binding is absent",
         "command": "SET_COMPONENT_STATE",
-        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED"
       },
       {
         "operation": "CONFIG_REVISION",
         "classification": "DEFECT",
-        "mechanism": "legacy backend command exists; final registry and cockpit mount absent",
+        "mechanism": "renderer mounted; legacy backend command exists but final registry binding is absent",
         "command": "APPLY_CONFIGURATION",
-        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED"
       },
       {
         "operation": "APPROVAL_REVOKE",
         "classification": "DEFECT",
-        "mechanism": "legacy backend command exists; final registry and cockpit mount absent",
+        "mechanism": "renderer mounted; legacy backend command exists but final registry binding is absent",
         "command": "REVOKE_APPROVAL",
-        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "CANONICAL_PRODUCT_COMMAND_BINDING_REQUIRED"
       },
       {
         "operation": "SOURCE_ISOLATE",
@@ -8601,7 +8882,7 @@
         "method": "rate plus p50/p95/p99",
         "softBound": null,
         "hardBound": null,
-        "status": "AWAITING_ACCEPTED_Q_TIP"
+        "status": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
       },
       {
         "id": "QUEUE_DEPTH",
@@ -8934,7 +9215,7 @@
         "contractTest": "PENDING_PRIVATE_READ_AUTHORIZATION",
         "disposition": "OWNER_GATED",
         "interfaceStatus": "ENDPOINT_SELECTION_BLOCKED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       {
         "id": "IF-USDM-TEST",
@@ -9086,7 +9367,7 @@
       },
       "IF-SPOT-USER": {
         "status": "FACTS_PINNED_OWNER_GATED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       "IF-SPOT-TEST": {
         "status": "FACTS_PINNED_OWNER_GATED",
@@ -9102,7 +9383,7 @@
       },
       "IF-USDM-PRIVATE": {
         "status": "ENDPOINT_SELECTION_BLOCKED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       "IF-USDM-TEST": {
         "status": "FACTS_PINNED_OWNER_GATED",
@@ -9110,11 +9391,11 @@
       },
       "IF-MARGIN-MAX": {
         "status": "FACTS_PINNED_OWNER_GATED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       "IF-MARGIN-INTEREST": {
         "status": "FACTS_PINNED_OWNER_GATED",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       "IF-MARGIN-MUTATE": {
         "status": "PROHIBITED_IN_IP_PROOF",
@@ -9143,177 +9424,220 @@
       {
         "pageId": "dashboard",
         "page": "Dashboard",
-        "canonicalApi": "/api/system-integration/supervisor plus FINAL_PRODUCT_ENDPOINT_PENDING",
+        "canonicalApi": "/api/product-integration/v1/supervisor; /api/product-integration/v1/material-events",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-KILL",
           "CTRL-MODE"
         ],
         "errorBehavior": "UNKNOWN_NOT_GREEN",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
+        "blocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
+      },
+      {
+        "pageId": "control-room",
+        "page": "Control Room",
+        "canonicalApi": "/api/product-integration/v1/supervisor; /api/product-integration/v1/material-events; /api/product-integration/v1/traces/:correlationId; /api/product-integration/v1/commands/preview; /api/product-integration/v1/commands",
+        "mountState": "WIRED",
+        "fixtureState": "BASE_REALITY_UNVERIFIED",
+        "controls": [
+          "CTRL-KILL",
+          "CTRL-MODE",
+          "CTRL-INTAKE",
+          "CTRL-RESTART"
+        ],
+        "errorBehavior": "UNAVAILABLE_DISABLED_NOT_GREEN",
+        "blocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "account",
         "page": "Account",
-        "canonicalApi": "PENDING_PRIVATE_TRUTH_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_PRIVATE_TRUTH_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "PRODUCT_REALMS_SEPARATE",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       {
         "pageId": "wallets",
         "page": "Wallets",
-        "canonicalApi": "PENDING_PRIVATE_TRUTH_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_PRIVATE_TRUTH_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "UNKNOWN_BALANCES_NOT_ZERO",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
       },
       {
         "pageId": "markets",
         "page": "Markets",
-        "canonicalApi": "PENDING_UNIVERSE_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_UNIVERSE_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-FOCUS"
         ],
         "errorBehavior": "QUIET_SYMBOLS_RETAINED",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "detail",
         "page": "Token Detail",
-        "canonicalApi": "/api/system-integration/traces/:correlationId plus PENDING_SYMBOL_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor; /api/product-integration/v1/traces/:correlationId plus PENDING_SYMBOL_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [],
         "errorBehavior": "MISSING_EVIDENCE_NAMED",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_OWNER_ADAPTER_BINDING_REQUIRED; AWAITING_DIRECTOR_SHARED_COMPOSITION; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "REAL_OWNER_ADAPTER_BINDING_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "loans",
         "page": "Borrow",
-        "canonicalApi": "PENDING_MARGIN_READ_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_MARGIN_READ_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "UNKNOWN_NOT_ZERO",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED"
+      },
+      {
+        "pageId": "execution",
+        "page": "Execution",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_EXECUTION_READ_MODEL",
+        "mountState": "WIRED",
+        "fixtureState": "NOT_CONFIGURED",
+        "controls": [],
+        "errorBehavior": "LIVE_EXECUTION_NOT_IMPLEMENTED_AND_UNKNOWN_PRIVATE_TRUTH_VISIBLE",
+        "blocker": "L_LANE_READY_NOT_SEALED; PRIVATE_READ_AUTHORIZATION_REQUIRED; LIVE_EXECUTION_NOT_IMPLEMENTED"
       },
       {
         "pageId": "orders",
         "page": "Orders",
-        "canonicalApi": "PENDING_L_ORDER_READ_MODEL",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_ORDER_READ_MODEL",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "AMBIGUITY_VISIBLE",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "pageId": "positions",
         "page": "Positions",
-        "canonicalApi": "PENDING_L_POSITION_READ_MODEL",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_POSITION_READ_MODEL",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [
           "CTRL-RECOVERY"
         ],
         "errorBehavior": "ONE_LEG_EXPOSURE_VISIBLE",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "pageId": "fills",
         "page": "Fills",
-        "canonicalApi": "PENDING_L_FILL_READ_MODEL",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_FILL_READ_MODEL",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "INCOMPLETE_FILL_TRUTH_VISIBLE",
-        "blocker": "AWAITING_ACCEPTED_L_TIP"
+        "blocker": "L_LANE_READY_NOT_SEALED"
       },
       {
         "pageId": "pnl",
         "page": "PnL",
-        "canonicalApi": "PENDING_L_OUTCOME_READ_MODEL",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_OUTCOME_READ_MODEL",
+        "mountState": "WIRED",
         "fixtureState": "NOT_CONFIGURED",
         "controls": [],
         "errorBehavior": "INCOMPLETE_ATTRIBUTION_UNAVAILABLE",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED"
       },
       {
         "pageId": "strategies",
         "page": "Basis",
-        "canonicalApi": "PENDING_BASIS_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_BASIS_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-BASIS-INTAKE"
         ],
         "errorBehavior": "BORROW_UNKNOWN_BLOCKS_REVERSE",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "REAL_ENGINE_ADAPTER_BINDING_REQUIRED; L_LANE_READY_NOT_SEALED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "volume",
         "page": "Volume",
-        "canonicalApi": "PENDING_VOLUME_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_VOLUME_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-VOLUME-INTAKE"
         ],
         "errorBehavior": "FALSE_BURST_REJECT_VISIBLE",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; REAL_ENGINE_ADAPTER_BINDING_REQUIRED; AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "REAL_ENGINE_ADAPTER_BINDING_REQUIRED; L_LANE_READY_NOT_SEALED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "opportunities",
         "page": "Opportunities",
-        "canonicalApi": "PENDING_OPPORTUNITY_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_OPPORTUNITY_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [],
         "errorBehavior": "REJECTION_EXACT",
-        "blocker": "AWAITING_ACCEPTED_Q_TIP; AWAITING_ACCEPTED_L_TIP"
+        "blocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED"
       },
       {
         "pageId": "risk",
         "page": "Risk",
-        "canonicalApi": "PENDING_L_RISK_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor plus PENDING_L_RISK_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-KILL"
         ],
         "errorBehavior": "STALE_TRUTH_BLOCKS",
-        "blocker": "AWAITING_ACCEPTED_L_TIP; DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED"
+        "blocker": "L_LANE_READY_NOT_SEALED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "ledger",
         "page": "Ledger / Logs",
-        "canonicalApi": "/api/system-integration/events",
+        "canonicalApi": "/api/system-integration/events; /api/product-integration/v1/supervisor; /api/product-integration/v1/material-events",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [],
         "errorBehavior": "BOUNDED_CURSOR_AND_GAP_STATE",
-        "blocker": "AWAITING_DIRECTOR_SHARED_COMPOSITION"
+        "blocker": "REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "system",
         "page": "System Health",
-        "canonicalApi": "/api/system-integration/graph plus FINAL_PRODUCT_ENDPOINT_PENDING",
+        "canonicalApi": "/api/system-integration/graph; /api/product-integration/v1/supervisor",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-COMPONENT"
         ],
         "errorBehavior": "SILENT_OR_STALE_NOT_GREEN",
-        "blocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED; REAL_RUNTIME_AND_TARGET_READBACK_REQUIRED"
+        "blocker": "REAL_RUNTIME_AND_TARGET_READBACK_REQUIRED"
       },
       {
         "pageId": "notifications",
         "page": "Notifications",
-        "canonicalApi": "PENDING_INCIDENT_ADAPTER",
+        "canonicalApi": "/api/product-integration/v1/supervisor; /api/product-integration/v1/material-events plus PENDING_INCIDENT_ADAPTER",
+        "mountState": "WIRED",
         "fixtureState": "SYNTHETIC_ONLY",
         "controls": [
           "CTRL-ACK"
         ],
         "errorBehavior": "FINGERPRINT_GROUPED",
-        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; DIRECTOR_MOUNT_REQUIRED"
+        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; REAL_RUNTIME_BROWSER_READBACK_REQUIRED"
       },
       {
         "pageId": "news",
         "page": "News",
         "canonicalApi": "/api/news",
+        "mountState": "NOT_APPLICABLE",
         "fixtureState": "BASE_REALITY_UNVERIFIED",
         "controls": [],
         "errorBehavior": "SOURCE_AGE_AND_EMPTY_STATE_VISIBLE",
@@ -9323,21 +9647,14 @@
         "pageId": "calendar",
         "page": "Calendar",
         "canonicalApi": "/api/calendar",
+        "mountState": "NOT_APPLICABLE",
         "fixtureState": "BASE_REALITY_UNVERIFIED",
         "controls": [],
         "errorBehavior": "SOURCE_AGE_AND_EMPTY_STATE_VISIBLE",
         "blocker": "REAL_RUNTIME_READBACK_REQUIRED"
       }
     ],
-    "requiredAbsentSurfaces": [
-      {
-        "surface": "Control Room",
-        "source": "I00#15",
-        "state": "MISSING",
-        "blocker": "DIRECTOR_MOUNT_REQUIRED; FINAL_RUNTIME_ENDPOINTS_REQUIRED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED",
-        "requiredEvidence": "real machine graph, registry search, preview-confirm-result, before/after receipt readback"
-      }
-    ],
+    "requiredAbsentSurfaces": [],
     "controls": [
       {
         "id": "CTRL-KILL",
@@ -10481,11 +10798,11 @@
         "impact": "viewed-symbol delivery may remain UI-local but cannot become broad authority"
       },
       {
-        "id": "GENERATED_Q_CLIENT_ABSENT",
+        "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
         "path": null,
         "needle": null,
-        "classification": "BLOCKED_PENDING_ACCEPTED_Q_CLIENT",
-        "impact": "schema-hash handshake and generated-client parity must be inserted from accepted Q tip"
+        "classification": "NOT_CONFIGURED",
+        "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until the production transport and schema-hash handshake are mounted"
       }
     ],
     "messageValidityCases": [
@@ -10731,9 +11048,9 @@
       "question": "Can it think honestly?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Unknown/expiry/revision/abstention laws pass; accepted Q client is absent.",
-      "primaryBlocker": "AWAITING_ACCEPTED_Q_TIP",
-      "safeNextAction": "insert generated Q client and parity gate"
+      "answer": "Unknown/expiry/revision/abstention laws pass; accepted Q client is imported but production transport is not configured.",
+      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
+      "safeNextAction": "mount the accepted generated Q client with its parity and schema-hash gate"
     },
     {
       "id": "NS-04",
@@ -10750,7 +11067,7 @@
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
       "answer": "Twenty-two deterministic fixture campaigns pass; real L recovery is not lane-ready.",
-      "primaryBlocker": "AWAITING_ACCEPTED_L_TIP",
+      "primaryBlocker": "L_LANE_READY_NOT_SEALED",
       "safeNextAction": "replace failure fixtures with accepted L adapters"
     },
     {
@@ -10758,9 +11075,9 @@
       "question": "Can the owner operate it without routine terminal work?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Safe legacy controls and an IP-CONTROL artifact exist, but the final registry, canonical persistence, application mount, and several routine controls remain absent or owner-runbook-only.",
-      "primaryBlocker": "AWAITING_DIRECTOR_RUNTIME_COMPOSITION; DIRECTOR_MOUNT_REQUIRED",
-      "safeNextAction": "bind canonical command persistence and mount the accepted control package before the real browser owner test"
+      "answer": "The accepted IP-CONTROL provider, Control Room, 18 Product Surface contracts, and five authenticated Product Integration routes are source-wired; canonical command persistence and real runtime/browser readback remain unproved, so unsupported controls stay disabled.",
+      "primaryBlocker": "CANONICAL_COMMAND_PERSISTENCE_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+      "safeNextAction": "prove command persistence and run the real authenticated runtime/browser owner test"
     },
     {
       "id": "NS-07",
@@ -10776,18 +11093,18 @@
       "question": "Can it learn?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Outcome structures exist but accepted Q feedback and real forward outcomes are absent.",
-      "primaryBlocker": "AWAITING_ACCEPTED_Q_TIP; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
-      "safeNextAction": "integrate accepted Q feedback then collect immutable real outcomes"
+      "answer": "Outcome structures exist but accepted Q feedback is not production-mounted and real forward outcomes are absent.",
+      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; EMPIRICAL_OUTCOME_EVIDENCE_REQUIRED",
+      "safeNextAction": "mount accepted Q feedback without granting authority, then collect immutable real outcomes"
     },
     {
       "id": "NS-09",
       "question": "Is any heavyweight requirement absent?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "No binding source is silently omitted: IP packet artifacts are present, while Q/L final tips, real adapters, shared composition, persistence, mounts, target activation, runtime measurements, and browser readback remain named blockers.",
-      "primaryBlocker": "AWAITING_ACCEPTED_Q_TIP; AWAITING_ACCEPTED_L_TIP; AWAITING_DIRECTOR_SHARED_COMPOSITION",
-      "safeNextAction": "execute IP_PROOF_SHARED_INSERTION_REQUEST.md from the accepted packet tips without upgrading artifact evidence to runtime truth"
+      "answer": "No binding source is silently omitted: the accepted IP-CONTROL mount, five authenticated Product Integration routes, and bounded durable Ledger material-event cursor are source-built and tested, while Q production transport, final L, private truth, command persistence, target activation, runtime measurements, and browser readback remain named blockers.",
+      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; L_LANE_READY_NOT_SEALED; CANONICAL_COMMAND_PERSISTENCE_REQUIRED; REAL_RUNTIME_BROWSER_READBACK_REQUIRED",
+      "safeNextAction": "complete real owner integration and acceptance without upgrading source/test evidence to runtime, private, target, or live truth"
     }
   ],
   "adapterInsertionPoints": [
@@ -10832,5 +11149,5 @@
       "gate": "IP-OPS accepted; no external mutation"
     }
   ],
-  "evidenceSha256": "e84ad91ef6afff0e0f501efc349ee131e86ffcea13619959a27ab2a15fafe140"
+  "evidenceSha256": "9c77044ddccaeb83d2a47e6a6b0d52dd4c8b265b32b61c8d28702ec24ac4b448"
 }

@@ -14,6 +14,7 @@ import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import './VolumeScanner.css';
 
 type Filter = 'all' | 'watching' | 'focus' | 'rejected' | 'warming';
@@ -228,6 +229,8 @@ export function VolumeScanner() {
             ) : null}
           </label>
         </header>
+
+        <ProductSurfaceAdapter surfaceId="volume" />
 
         <div className="volx-summary" aria-label="Volume Summary">
           <div className="volx-summary-cell">

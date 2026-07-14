@@ -50,7 +50,7 @@ export function eventSummary(kind: string, data: Data, symbol: string | null): s
     }
     case 'order_request': {
       const p = d.params as Record<string, unknown> | undefined;
-      return `Order sent to Binance · ${s(p?.side) ?? ''} ${sym} ${s(p?.type) ?? ''}`.trim();
+      return `Historical legacy order request · ${s(p?.side) ?? ''} ${sym} ${s(p?.type) ?? ''}`.trim();
     }
     case 'order_response': {
       const status = s(d.status) ?? '';
@@ -68,16 +68,16 @@ export function eventSummary(kind: string, data: Data, symbol: string | null): s
     case 'manual_action': {
       const action = s(d.action) ?? '';
       const map: Record<string, string> = {
-        kill_switch: `Kill switch ${d.on ? 'ON — halted' : 'off'}`,
-        live_trading: `Live trading ${d.on ? 'armed' : 'disarmed'}`,
-        approve_proposal: `You approved a proposal → ticket · ${sym}`,
-        reject_proposal: `You rejected a proposal`,
-        cancel_order: `You canceled an order · ${sym}`,
-        cancel_all_orders: `You canceled all orders · ${sym}`,
-        import_fills: `Imported ${n(d.imported) ?? 0} fills · ${sym}`,
-        test_order: `Signed test order · ${s(d.result) ?? ''} · ${sym}`,
-        live_send: `Live send attempt · ${s(d.result) ?? ''} · ${sym}`,
-        loan_borrow: `Borrow attempt · ${s(d.result) ?? ''}`,
+        kill_switch: `Historical legacy stop setting · ${d.on ? 'recorded on' : 'recorded off'} · non-authoritative`,
+        live_trading: `Historical legacy execution setting · ${d.on ? 'recorded on' : 'recorded off'} · ignored by this candidate`,
+        approve_proposal: `Historical legacy proposal approval · ${sym}`,
+        reject_proposal: 'Historical legacy proposal rejection',
+        cancel_order: `Historical legacy cancel event · ${sym}`,
+        cancel_all_orders: `Historical legacy cancel-all event · ${sym}`,
+        import_fills: `Historical legacy fill import · ${n(d.imported) ?? 0} records · ${sym}`,
+        test_order: `Historical legacy test-order event · ${s(d.result) ?? ''} · ${sym}`,
+        live_send: `Historical legacy send event · ${s(d.result) ?? ''} · ${sym}`,
+        loan_borrow: `Historical legacy borrow event · ${s(d.result) ?? ''}`,
       };
       return map[action] ?? `Manual action · ${action}`;
     }
@@ -96,15 +96,15 @@ export function eventSummary(kind: string, data: Data, symbol: string | null): s
     case 'ws.closed':
       return `Market feed dropped · ${s(d.feed) ?? ''} — reconnecting`;
     case 'binance.connected':
-      return `Binance account connected · ${n(d.assets) ?? 0} assets`;
+      return 'Historical legacy private-account event · not current connection evidence';
     case 'engine.start':
       return `Engine started · ${n(d.pairs) ?? 0} pairs`;
     case 'user_stream':
-      return `User data stream · ${s(d.status) ?? ''}`;
+      return `Historical legacy private-stream event · ${s(d.status) ?? ''} · not current evidence`;
     case 'loan_request':
-      return `Loan ${s(d.action) ?? ''} · ${s(d.loanCoin) ?? ''}`;
+      return `Historical legacy loan request · ${s(d.action) ?? ''} · ${s(d.loanCoin) ?? ''}`;
     case 'loan_response':
-      return `Loan ${s(d.action) ?? ''} ok`;
+      return `Historical legacy loan response · ${s(d.action) ?? ''}`;
     default:
       return kind.replace(/[._]/g, ' ');
   }

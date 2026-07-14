@@ -21,7 +21,6 @@ export interface CuratedNotification {
 }
 
 const text = (value: unknown): string => typeof value === 'string' ? value : '';
-const numberValue = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const titleCase = (value: string) => value
   .replace(/[._-]+/g, ' ')
   .replace(/\b\w/g, (character) => character.toUpperCase());
@@ -72,13 +71,12 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       : [];
     return notice(
       event,
-      'critical',
-      'critical',
-      'Execution Blocked By Risk',
-      reasons.slice(0, 2).join(' · ') || `${titleCase(text(data.stage) || 'Order')} did not pass configured limits`,
+      'execution',
+      'warning',
+      'Validate-Only Rejection',
+      `OWNER_GATED · ${reasons.slice(0, 2).join(' · ') || `${titleCase(text(data.stage) || 'Intent')} did not pass local policy`}`,
       subject,
       'execution',
-      true,
     );
   }
 
@@ -89,27 +87,41 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
     if (noise.includes('source-logo') || noise.includes('favicon') || noise.includes('logo cache')) return null;
     if (!/(engine|runtime|order|executor|risk|binance|account|user.stream|market.stream|aws)/i.test(source)) return null;
     const executionFailure = /(order|executor|risk|loan)/i.test(source);
+    if (executionFailure) {
+      return notice(
+        event,
+        'execution',
+        'warning',
+        'Legacy Execution Error Evidence',
+        `OWNER_GATED · ${message || `${titleCase(source || 'Legacy runtime')} reported an error`}`,
+        titleCase(source || 'Legacy Runtime'),
+        'execution',
+      );
+    }
     return notice(
       event,
       'critical',
       'critical',
-      executionFailure ? 'Execution Path Failed' : 'Bot Dependency Failed',
+      'Bot Dependency Failed',
       message || `${titleCase(source || 'Runtime')} reported an error`,
       titleCase(source || 'Bot Runtime'),
-      executionFailure ? 'execution' : 'bot',
+      'bot',
       true,
     );
   }
 
   if (kind === 'user_stream') {
     const status = text(data.status).toLowerCase();
-    if (['failed', 'closed', 'error'].includes(status)) {
-      return notice(event, 'critical', 'critical', 'Binance User Stream Failed', text(data.detail) || 'Private account events are not arriving', 'Binance', 'bot', true);
-    }
-    if (['open', 'opened', 'connected', 'live'].includes(status)) {
-      return notice(event, 'health', 'resolved', 'Binance User Stream Recovered', 'Private account events are arriving again', 'Binance', 'bot');
-    }
-    return null;
+    if (!['failed', 'closed', 'error', 'open', 'opened', 'connected', 'live'].includes(status)) return null;
+    return notice(
+      event,
+      'health',
+      'warning',
+      'Private Account Stream Event Ignored',
+      `NOT_CONFIGURED · legacy user-stream state “${status || 'unknown'}” is not projected as product health`,
+      'Private Account',
+      'bot',
+    );
   }
 
   if (kind === 'ws.closed') {
@@ -128,14 +140,26 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
     const component = text(data.component) || titleCase(text(data.componentId)) || 'Connection';
     const infrastructure = text(data.group) === 'infrastructure';
     const outage = status === 'outage';
+    if (infrastructure) {
+      return notice(
+        event,
+        'infrastructure',
+        outage ? 'critical' : 'warning',
+        outage ? `${component} External Event` : `${component} Event Owner Gated`,
+        `OWNER_GATED · ${[text(data.value), text(data.detail)].filter(Boolean).join(' · ') || 'external infrastructure state is unverified'}`,
+        component,
+        'aws',
+        outage,
+      );
+    }
     return notice(
       event,
-      recovered ? (infrastructure ? 'infrastructure' : 'health') : outage ? 'critical' : infrastructure ? 'infrastructure' : 'health',
+      recovered ? 'health' : outage ? 'critical' : 'health',
       recovered ? 'resolved' : outage ? 'critical' : 'warning',
       recovered ? `${component} Recovered` : outage ? `${component} Offline` : `${component} Is Lagging`,
       [text(data.value), text(data.detail)].filter(Boolean).join(' · ') || 'Connection state changed',
       component,
-      infrastructure ? 'aws' : 'bot',
+      'bot',
       !recovered,
     );
   }
@@ -147,9 +171,9 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       return notice(
         event,
         engaged ? 'critical' : 'health',
-        engaged ? 'critical' : 'resolved',
-        engaged ? 'Kill Switch Engaged' : 'Kill Switch Released',
-        engaged ? 'Orders, loans, and automation are blocked' : 'Configured risk gates are back in control',
+        engaged ? 'warning' : 'info',
+        engaged ? 'Legacy Stop Recorded' : 'Legacy Stop Released',
+        engaged ? 'A local stop is recorded; execution remains OWNER_GATED independently' : 'Releasing the local stop does not arm execution',
         'Execution Control',
         'bot',
         engaged,
@@ -159,10 +183,10 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       const armed = data.on === true;
       return notice(
         event,
-        'health',
-        armed ? 'warning' : 'info',
-        armed ? 'Live Execution Armed' : 'Live Execution Disarmed',
-        armed ? 'Orders may route after every risk gate passes' : 'Live order routing is disabled',
+        'critical',
+        'warning',
+        'Legacy Live Setting Ignored',
+        `OWNER_GATED · legacy live setting was recorded as ${armed ? 'on' : 'off'}; no route can be armed`,
         'Execution Control',
         'bot',
         armed,
@@ -175,7 +199,7 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
     if (text(data.stage) === 'preview') return null;
     const intent = data.intent && typeof data.intent === 'object' ? data.intent as Record<string, unknown> : {};
     const detail = [titleCase(text(intent.side)), symbol, titleCase(text(intent.type))].filter(Boolean).join(' · ');
-    return notice(event, 'execution', 'info', 'Order Entered Execution', detail || 'A signed order preview entered the execution path', subject, 'execution');
+    return notice(event, 'execution', 'warning', 'Legacy Order Intent Evidence', `OWNER_GATED · ${detail || 'historical intent was ledgered'}`, subject, 'execution');
   }
 
   if (kind === 'order_outcome_unknown' || kind === 'cancel_outcome_unknown') {
@@ -184,8 +208,8 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       event,
       'critical',
       'critical',
-      cancel ? 'Cancel Outcome Needs Reconciliation' : 'Order Outcome Needs Reconciliation',
-      text(data.detail) || 'Binance may have accepted the request; reconcile authoritative order state before retrying.',
+      cancel ? 'Legacy Cancel Outcome Unresolved' : 'Legacy Order Outcome Unresolved',
+      `OWNER_GATED · ${text(data.detail) || 'historical outcome remains ambiguous; no private reconciliation is mounted'}`,
       subject,
       'execution',
       true,
@@ -201,20 +225,20 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       || ['REJECTED', 'FAILED', 'ERROR', 'EXPIRED', 'EXPIRED_IN_MATCH', 'CANCELED'].includes(responseStatus)
       || data.ok === false;
     const label = kind === 'fill_event'
-      ? 'Trade Filled'
+      ? 'Fill'
       : kind.startsWith('loan_')
         ? `Loan ${kind.endsWith('response') ? 'Response' : 'Request'}`
         : kind.endsWith('response')
           ? 'Order Response'
-          : 'Order Sent';
+          : 'Order Request';
     return notice(
       event,
       failed || unknown ? 'critical' : 'execution',
-      failed || unknown ? 'critical' : 'info',
-      unknown ? `${label} Needs Reconciliation` : failed ? `${label} Failed` : label,
+      failed || unknown ? 'critical' : 'warning',
+      unknown ? `Legacy ${label} Unresolved` : failed ? `Legacy ${label} Failed` : `Legacy ${label} Evidence`,
       unknown
-        ? text(data.error) || 'Signed state is ambiguous; reconcile before retrying.'
-        : responseStatus || titleCase(outcome) || `${titleCase(text(data.side))}${symbol ? ` · ${symbol}` : ''}` || 'Binance execution event',
+        ? `OWNER_GATED · ${text(data.error) || 'historical state is ambiguous; no private reconciliation is mounted'}`
+        : `LIVE_EXECUTION_NOT_IMPLEMENTED · ${responseStatus || titleCase(outcome) || `${titleCase(text(data.side))}${symbol ? ` · ${symbol}` : ''}` || 'historical ledger event'}`,
       subject,
       'execution',
       failed || unknown,
@@ -222,9 +246,7 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
   }
 
   if (kind === 'binance.connected') {
-    const assets = numberValue(data.assets);
-    const permissions = data.canTrade === true ? 'Trading permission confirmed' : 'Read-only connection';
-    return notice(event, 'health', 'resolved', 'Binance Connection Recovered', `${assets ?? 0} assets synchronized · ${permissions}`, 'Binance', 'bot');
+    return notice(event, 'health', 'warning', 'Private Connection Event Ignored', 'NOT_CONFIGURED · legacy Binance connection metadata is not product account truth', 'Private Account', 'bot');
   }
 
   if (kind === 'engine.start' || kind === 'engine_started' || kind === 'basis.engine_started') {
@@ -240,8 +262,8 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
       event,
       paused ? 'critical' : 'health',
       paused ? 'warning' : 'info',
-      paused ? 'Bot Automation Paused' : 'Execution Control Changed',
-      controlKeys.map(titleCase).join(' · '),
+      paused ? 'Bot Automation Paused' : 'Legacy Control Record',
+      `OWNER_GATED · ${controlKeys.map(titleCase).join(' · ')}`,
       'Execution Control',
       'bot',
       paused,
@@ -252,14 +274,13 @@ export function curateNotification(event: LedgerEvent): CuratedNotification | nu
     const awsState = text(data.state).toLowerCase();
     const alarm = text(data.alarmName);
     const failed = ['alarm', 'stopped', 'stopping', 'shutting-down', 'terminated', 'impaired', 'failed'].includes(awsState);
-    const recovered = ['ok', 'running', 'healthy', 'resolved'].includes(awsState);
     const resource = text(data.resource) || text(data.detailType) || 'AWS Resource';
     return notice(
       event,
       'infrastructure',
-      failed ? 'critical' : recovered ? 'resolved' : 'warning',
-      alarm || (failed ? 'AWS Infrastructure Needs Attention' : recovered ? 'AWS Infrastructure Recovered' : 'AWS State Changed'),
-      [resource, awsState ? titleCase(awsState) : '', text(data.reason)].filter(Boolean).join(' · '),
+      failed ? 'critical' : 'warning',
+      alarm || (failed ? 'AWS External Event Needs Review' : 'AWS Event Owner Gated'),
+      `OWNER_GATED · ${[resource, awsState ? titleCase(awsState) : '', text(data.reason)].filter(Boolean).join(' · ') || 'external state is unverified'}`,
       text(data.service) || 'AWS',
       'aws',
       failed,

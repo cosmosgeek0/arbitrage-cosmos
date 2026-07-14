@@ -10,7 +10,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { TokenIcon } from '../components/TokenIcon';
 import { baseOf, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { useStore } from '../store';
@@ -235,7 +235,7 @@ export function Opportunities() {
           </label>
         </header>
 
-        <SystemIntegrationSurface surface="opportunities" />
+        <ProductSurfaceAdapter surfaceId="opportunities" />
 
         <div className="opportunityx-summary" aria-label="Opportunity Summary">
           <div className="opportunityx-summary-cell">

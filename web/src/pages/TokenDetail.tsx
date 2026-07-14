@@ -16,6 +16,7 @@ import { createSettledPoll } from '../lib/polling';
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { MarketRow } from '../types';
 import './Markets.css';
 import './TokenDetail.css';
@@ -1931,6 +1932,8 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <small>{hasPerp ? <><Chg pct={openInterestSnapshot?.changePct}>{openInterestSnapshot?.changePct === null || openInterestSnapshot?.changePct === undefined ? '—' : fmtPct(Math.abs(openInterestSnapshot.changePct), 2, false)}</Chg> · {fmtMoney(live?.liquidations15mUsd)} Liq · 15m</> : 'No derivatives telemetry'}</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="token" />
 
         <div className="tkx-workspace">
           <section className="tdx-cell tdx-chartcell tkx-chartview">

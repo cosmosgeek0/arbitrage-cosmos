@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { SystemSupervisorSnapshot } from '../../lib/systemIntegration';
 import {
+  type DurableMaterialCursorRead,
   type ProductControlRoomBindingState,
   type ProductIntegrationClient,
   useProductControlRoomBinding,
@@ -19,7 +20,7 @@ export function ProductControlRoomProvider({
   children,
 }: {
   readonly client: Readonly<ProductIntegrationClient>;
-  readonly initialMaterialCursor: string;
+  readonly initialMaterialCursor: Readonly<DurableMaterialCursorRead>;
   readonly children: ReactNode;
 }) {
   const binding = useProductControlRoomBinding<SystemSupervisorSnapshot>(client, 5_000, initialMaterialCursor);

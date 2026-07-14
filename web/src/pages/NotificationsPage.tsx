@@ -19,6 +19,7 @@ import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { LedgerEvent } from '../types';
 import './LiveIntelligence.css';
 import './NotificationsPage.css';
@@ -42,10 +43,10 @@ interface RuntimeSnapshot {
 }
 
 const RULES: { key: NotificationRuleKey; label: string; short: string }[] = [
-  { key: 'critical', label: 'Needs Attention', short: 'Blocked execution, failed dependencies, and emergency controls' },
-  { key: 'execution', label: 'Execution Outcomes', short: 'Orders, fills, loans, and risk decisions' },
+  { key: 'critical', label: 'Needs Attention', short: 'Failed dependencies, owner-gated boundaries, and emergency controls' },
+  { key: 'execution', label: 'Legacy Execution Evidence', short: 'Historical order, fill, loan, and risk evidence; never route authority' },
   { key: 'health', label: 'Bot Health', short: 'Engine, stream, connection, and control transitions' },
-  { key: 'infrastructure', label: 'Infrastructure', short: 'Connected AWS instance, health, and alarm transitions' },
+  { key: 'infrastructure', label: 'Infrastructure Evidence', short: 'Unverified external events; AWS remains OWNER_GATED' },
 ];
 
 const FILTERS: { id: NotificationFilter; label: string }[] = [
@@ -59,18 +60,33 @@ const FILTERS: { id: NotificationFilter; label: string }[] = [
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
     bot: { available: true, label: 'Bot Runtime', detail: 'Engine and control transitions' },
-    execution: { available: true, label: 'Execution Pipeline', detail: 'Order and risk outcomes' },
-    aws: { available: false, label: 'AWS Infrastructure', detail: 'Secure connector required' },
+    execution: { available: false, label: 'Execution Pipeline', detail: 'OWNER_GATED · LIVE_EXECUTION_NOT_IMPLEMENTED' },
+    aws: { available: false, label: 'AWS Infrastructure', detail: 'OWNER_GATED · external AWS state is not verified' },
   },
   destinations: {
     inApp: { available: true, label: 'In-App', detail: 'Active in this control room' },
     email: { available: false, label: 'Email', detail: 'Delivery provider is not connected' },
     telegram: { available: false, label: 'Telegram', detail: 'Bot and chat routing are not connected' },
     whatsapp: { available: false, label: 'WhatsApp', detail: 'Cloud API is not connected' },
-    awsSns: { available: false, label: 'AWS SNS', detail: 'SNS topic and publish role are not connected' },
+    awsSns: { available: false, label: 'AWS SNS', detail: 'OWNER_GATED · AWS delivery is not mounted' },
   },
   policy: { transitionsOnly: true, repeatWindowMinutes: 15, rawLogsExcluded: true },
 };
+
+function failClosedRouting(snapshot: RoutingSnapshot): RoutingSnapshot {
+  return {
+    ...snapshot,
+    sources: {
+      ...snapshot.sources,
+      execution: EMPTY_ROUTING.sources.execution,
+      aws: EMPTY_ROUTING.sources.aws,
+    },
+    destinations: {
+      ...snapshot.destinations,
+      awsSns: EMPTY_ROUTING.destinations.awsSns,
+    },
+  };
+}
 
 function categoryIcon(category: NotificationRuleKey, size = 15): ReactNode {
   if (category === 'critical') return <IconAlert size={size} />;
@@ -106,7 +122,7 @@ function statusLabel(item: CuratedNotification): string {
 }
 
 export function NotificationsPage() {
-  const { state, prefs, updatePref } = useStore();
+  const { prefs, updatePref } = useStore();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
   const [events, setEvents] = useState<LedgerEvent[]>([]);
@@ -199,7 +215,7 @@ export function NotificationsPage() {
       ]>,
       onSuccess: ([routingResult, basisResult, volumeResult]) => {
         if (routingResult.status === 'fulfilled') {
-          setRouting(routingResult.value);
+          setRouting(failClosedRouting(routingResult.value));
           setRoutingFailed(false);
         } else setRoutingFailed(true);
         if (basisResult.status === 'fulfilled') setBasisRuntime(basisResult.value);
@@ -253,12 +269,11 @@ export function NotificationsPage() {
   const groupedCount = Math.max(0, curatedRaw.length - notifications.length);
   const excludedCount = Math.max(0, events.length - curatedRaw.length);
 
-  const config = state?.config;
-  const botState = config?.killSwitch ? 'Stopped' : config?.automationPaused ? 'Paused' : 'Running';
-  const botTone = config?.killSwitch ? 'bad' : config?.automationPaused ? 'warn' : 'good';
-  const executionState = state?.mode === 'LIVE_ARMED' ? 'Live Armed' : state?.mode === 'MANUAL' ? 'Manual' : 'Halted';
   const enginesOnline = [basisRuntime?.status?.running, volumeRuntime?.status?.running].filter(Boolean).length;
   const enginesKnown = !runtimeFailed && basisRuntime !== null && volumeRuntime !== null;
+  const botState = runtimeFailed ? 'Unavailable' : enginesKnown ? 'Public Runtime' : 'UNKNOWN';
+  const botTone = runtimeFailed ? 'bad' : enginesKnown ? 'good' : 'warn';
+  const executionState = 'OWNER_GATED';
   const latestAction = enabled.find((item) => item.needsAction);
 
   const markRead = () => {
@@ -285,11 +300,13 @@ export function NotificationsPage() {
       </header>
 
       <section className="notifx-command" aria-label="Notification Control Summary">
-        <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{config?.killSwitch ? 'Emergency stop is active' : config?.automationPaused ? 'Automation is not sending' : 'Automation is processing'}</em></div>
-        <div><span>Execution</span><strong>{executionState}</strong><em>{config?.liveTradingEnabled ? 'Risk-gated live routing' : 'No automatic live sends'}</em></div>
+        <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{runtimeFailed ? 'Latest public runtime checks failed' : enginesKnown ? 'Public engine status observed' : 'Runtime status is not yet known'}</em></div>
+        <div><span>Execution</span><strong>{executionState}</strong><em>LIVE_EXECUTION_NOT_IMPLEMENTED</em></div>
         <div><span>Engines</span><strong>{runtimeFailed ? 'Unavailable' : enginesKnown ? `${enginesOnline} / 2 Online` : 'Checking'}</strong><em>{!runtimeFailed && enginesOnline === 2 ? 'Basis and volume are online' : runtimeFailed ? 'Latest runtime checks failed' : 'Runtime status is being verified'}</em></div>
-        <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'No Active Blocker'}</strong><em>{latestAction ? latestAction.subject : 'No curated intervention is open'}</em></div>
+        <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'Incident State UNKNOWN'}</strong><em>{latestAction ? latestAction.subject : 'No current intervention was observed; this is not an all-clear'}</em></div>
       </section>
+
+      <ProductSurfaceAdapter surfaceId="notifications" />
 
       <>
         <section className="calx-navigation notifx-navigation" aria-label="Notifications Navigation">
@@ -337,7 +354,7 @@ export function NotificationsPage() {
             {filtered.map((item) => <article key={`${item.id}-${item.category}`} className={`notifx-alert ${item.severity} ${item.needsAction ? 'action' : ''}`}>
               <span className={`notifx-alert-icon ${item.category}`}>{categoryIcon(item.category, 16)}</span>
               <span className="notifx-alert-copy"><b>{item.title}{item.count > 1 ? ` · ${item.count} Events` : ''}</b><em>{item.detail}</em></span>
-              <span className="notifx-alert-source"><b>{item.subject}</b><em>{item.origin === 'aws' ? 'AWS Infrastructure' : item.origin === 'execution' ? 'Execution Pipeline' : 'Bot Runtime'}</em></span>
+              <span className="notifx-alert-source"><b>{item.subject}</b><em>{item.origin === 'aws' ? 'AWS Evidence · OWNER_GATED' : item.origin === 'execution' ? 'Legacy Execution Evidence' : 'Bot Runtime'}</em></span>
               <time><b>{notificationTime(item.ts, zone)}</b><em>{formatKey(dayKey(new Date(item.ts), zone), { month: 'short', day: 'numeric' })}</em></time>
               <span className={`notifx-status ${item.severity}`}>{statusLabel(item)}</span>
             </article>)}
@@ -355,11 +372,11 @@ export function NotificationsPage() {
 
         <div className="notifx-routing-grid">
           <section className="notifx-connector-group">
-            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${Object.values(routing.sources).filter((item) => item.available).length} Connected · 1 Optional`}</em></header>
+            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${Object.values(routing.sources).filter((item) => item.available).length} Available · gated sources excluded`}</em></header>
             {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => <article key={key}>
               <span className="notifx-connector-icon">{connectorIcon(key)}</span>
               <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
-              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Connected' : 'Connector Required'}</strong>
+              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Available' : key === 'execution' || key === 'aws' ? 'OWNER_GATED' : 'Not Configured'}</strong>
             </article>)}
           </section>
 
@@ -368,7 +385,7 @@ export function NotificationsPage() {
             {(Object.entries(routing.destinations) as [keyof RoutingSnapshot['destinations'], ConnectorState][]).map(([key, connector]) => <article key={key}>
               <span className="notifx-connector-icon">{connectorIcon(key)}</span>
               <span><b>{connector.label}</b><em>{connector.detail}</em></span>
-              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Active' : 'Not Connected'}</strong>
+              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Active' : key === 'awsSns' ? 'OWNER_GATED' : 'Not Configured'}</strong>
             </article>)}
           </section>
         </div>
@@ -384,7 +401,7 @@ export function NotificationsPage() {
 
         <section className="notifx-noise-policy">
           <div><IconShield size={16} /><span><b>Transitions Only</b><em>Repeated telemetry never enters this inbox.</em></span></div>
-          <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>State repeats and execution bursts collapse with a real count.</em></span></div>
+          <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>State repeats and legacy evidence bursts collapse with a real count.</em></span></div>
           <div><IconActivity size={16} /><span><b>Logs Stay Complete</b><em>No raw evidence is deleted or hidden.</em></span></div>
         </section>
       </section>

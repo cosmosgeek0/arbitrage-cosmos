@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
-import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { TokenIcon } from '../components/TokenIcon';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
@@ -109,9 +109,9 @@ interface RuntimeRow {
   state: string;
   intake: string;
   coverage: string;
-  watching: number;
-  focused: number;
-  proposals: number;
+  watching: number | string;
+  focused: number | string;
+  proposals: number | string;
   constraint: string;
   updatedAt: number | null;
   page: Page;
@@ -166,8 +166,11 @@ function useDashboardSources(refreshTick: number) {
   const [basis, setBasis] = useState<Source<BasisSnapshot>>(source);
   const [volume, setVolume] = useState<Source<VolumeSnapshot>>(source);
   const [pnl, setPnl] = useState<Source<PnlData>>(source);
-  const [history, setHistory] = useState<Source<EquityHistory>>(source);
   const [system, setSystem] = useState<Source<SystemSnapshot>>(source);
+  const history: Source<EquityHistory> = {
+    data: null,
+    error: 'NOT_CONFIGURED · private balance history is not mounted',
+  };
 
   useEffect(() => {
     const commit = <T,>(
@@ -195,38 +198,23 @@ function useDashboardSources(refreshTick: number) {
     });
     const slow = createSettledPoll<[
       PromiseSettledResult<PnlData>,
-      PromiseSettledResult<EquityHistory>,
       PromiseSettledResult<SystemSnapshot>,
     ]>({
       intervalMs: 30_000,
       request: (signal) => Promise.allSettled([
         fetchJson<PnlData>('/api/pnl', { cache: 'no-store', signal }),
-        fetchJson<EquityHistory>('/api/equity-history', { cache: 'no-store', signal }),
         fetchJson<SystemSnapshot>('/api/system', { cache: 'no-store', signal }),
       ]) as Promise<[
         PromiseSettledResult<PnlData>,
-        PromiseSettledResult<EquityHistory>,
         PromiseSettledResult<SystemSnapshot>,
       ]>,
-      onSuccess: ([pnlResult, historyResult, systemResult]) => {
+      onSuccess: ([pnlResult, systemResult]) => {
         commit(pnlResult, setPnl);
-        if (historyResult.status === 'fulfilled') {
-          const integrity = historyResult.value.reconstruction;
-          setHistory({
-            data: historyResult.value,
-            error: integrity && !integrity.complete
-              ? integrity.reasons[0] ?? 'Older account reconstruction is unavailable'
-              : null,
-          });
-        } else {
-          setHistory((current) => ({ data: current.data, error: apiErrorMessage(historyResult.reason, 'Source unavailable') }));
-        }
         commit(systemResult, setSystem);
       },
       onError: (error) => {
         const message = apiErrorMessage(error, 'Source unavailable');
         setPnl((current) => ({ data: current.data, error: message }));
-        setHistory((current) => ({ data: current.data, error: message }));
         setSystem((current) => ({ data: current.data, error: message }));
       },
     });
@@ -262,23 +250,10 @@ export function Dashboard() {
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
   const sources = useDashboardSources(refreshTick);
 
-  const account = state?.account ?? null;
-  const positions = state?.positions ?? [];
-  const openOrders = state?.openOrders ?? [];
-  const exposure = positions.reduce((sum, position) => sum + position.valueUsdt, 0);
-  const heldNotional = openOrders.reduce((sum, order) => sum + order.price * order.origQty, 0);
-  const dayChange = account?.dayChangeUsd ?? null;
-  const dayChangePct = finite(dayChange) && finite(account?.dayOpenEquity) && account!.dayOpenEquity! > 0
-    ? (dayChange / account!.dayOpenEquity!) * 100
-    : null;
-
   const historyPoints = useMemo(() => {
     const rows = [...(sources.history.data?.rows ?? [])]
       .filter((row) => finite(row.totalUsdt) && finite(row.ts))
       .map((row) => ({ ts: row.ts, totalUsdt: row.totalUsdt }));
-    if (account?.complete && finite(account.totalUsdt)) {
-      rows.push({ ts: state?.binance.lastSyncTs ?? sources.history.data?.fetchedAt ?? Date.now(), totalUsdt: account.totalUsdt });
-    }
     rows.sort((left, right) => left.ts - right.ts);
     const deduped: { ts: number; totalUsdt: number }[] = [];
     for (const point of rows) {
@@ -292,7 +267,7 @@ export function Dashboard() {
     const previous = [...deduped].reverse().find((point) => point.ts < cutoff);
     if (previous) selected.unshift(previous);
     return selected;
-  }, [account?.complete, account?.totalUsdt, range, sources.history.data, state?.binance.lastSyncTs]);
+  }, [range, sources.history.data]);
 
   const historyStats = useMemo(() => {
     if (historyPoints.length < 2) return null;
@@ -308,25 +283,21 @@ export function Dashboard() {
       low: Math.min(...values),
     };
   }, [historyPoints]);
-  const historyCoverage = sources.history.data?.reconstruction?.complete
-    ? 'Spot Balance History · Transfers And Borrowing Included · Not Strategy PnL'
-    : 'Spot Balance History · Signed Snapshots Only · Older Reconstruction Unavailable';
+  const historyCoverage = 'NOT_CONFIGURED · private balance history is not mounted';
 
   const basis = sources.basis.data;
   const volume = sources.volume.data;
   const system = sources.system.data;
   const basisLive = Boolean(!sources.basis.error && basis?.status.running && basis.status.bookState === 'fresh' && basis.status.markState === 'fresh' && !basis.status.lastError);
   const volumeLive = Boolean(!sources.volume.error && volume?.status.running && volume.status.streamState === 'open' && volume.status.bookState === 'fresh');
-  const accountFresh = Boolean(state?.binance.connected && state.binance.lastSyncTs && Date.now() - state.binance.lastSyncTs < 90_000);
   const feedsOpen = state ? Object.values(state.feeds).length > 0 && Object.values(state.feeds).every((feed) => feed === 'open') : false;
-  const keySafe = state?.binance.keyPosture.level === 'read_only';
   const ledgerReady = !sources.system.error && system?.dbOk === true;
 
   const integrityChecks: IntegrityCheck[] = [
     {
       label: 'Account Sync',
-      detail: accountFresh ? `Fresh · ${timeAgo(state?.binance.lastSyncTs ?? null)}` : state?.binance.connected ? 'Stale Signed Snapshot' : 'Not Connected',
-      tone: accountFresh ? 'ok' : 'bad',
+      detail: 'NOT_CONFIGURED · private account reads are not mounted',
+      tone: 'warn',
     },
     {
       label: 'Public Market Feeds',
@@ -350,12 +321,12 @@ export function Dashboard() {
     },
     {
       label: 'API Key Posture',
-      detail: state?.binance.keyPosture.label ?? 'Checking',
-      tone: keySafe ? 'ok' : state?.binance.keyPosture.tone ?? 'warn',
+      detail: 'OWNER_GATED · no private key posture is projected',
+      tone: 'warn',
     },
   ];
   const passingChecks = integrityChecks.filter((check) => check.tone === 'ok').length;
-  const systemLive = connected && accountFresh && feedsOpen && basisLive && volumeLive && ledgerReady;
+  const publicRuntimeLive = connected && feedsOpen && basisLive && volumeLive && ledgerReady;
 
   const topBasis = useMemo(() => {
     if (!basis) return null;
@@ -383,10 +354,10 @@ export function Dashboard() {
       state: basisLive ? 'Live' : sources.basis.error ? 'Unavailable' : 'Starting',
       intake: basis ? `${basis.status.universeSize} Pairs` : '—',
       coverage: basis ? `${basis.status.dataQualityPassing}/${basis.status.universeSize}` : '—',
-      watching: basis?.status.watching ?? 0,
-      focused: basis?.status.focused ?? 0,
-      proposals: basis?.status.openProposals ?? 0,
-      constraint: basis?.status.borrowBlocked ? `${basis.status.borrowBlocked} Borrow Blocked` : topBasis?.reason ?? 'No Active Constraint',
+      watching: basis ? basis.status.watching : '—',
+      focused: basis ? basis.status.focused : '—',
+      proposals: basis ? basis.status.openProposals : '—',
+      constraint: basis ? (basis.status.borrowBlocked ? `${basis.status.borrowBlocked} Borrow Blocked` : topBasis?.reason ?? 'No Active Constraint') : 'UNKNOWN',
       updatedAt: basis?.updatedAt ?? null,
       page: 'strategies',
     },
@@ -398,10 +369,10 @@ export function Dashboard() {
       state: volumeLive ? 'Live' : sources.volume.error ? 'Unavailable' : 'Starting',
       intake: volume ? `${volume.status.observedSymbols}/${volume.status.eligibleSize}` : '—',
       coverage: volume ? `${volume.status.baselineReady}/${volume.status.baselineTotal}` : '—',
-      watching: volume?.status.watching ?? 0,
-      focused: volume?.status.focused ?? 0,
-      proposals: volume?.status.openProposals ?? 0,
-      constraint: topVolume?.rejectCode ? titleCase(topVolume.rejectCode) : topVolume?.reason ?? 'No Verified Wakeup',
+      watching: volume ? volume.status.watching : '—',
+      focused: volume ? volume.status.focused : '—',
+      proposals: volume ? volume.status.openProposals : '—',
+      constraint: volume ? (topVolume?.rejectCode ? titleCase(topVolume.rejectCode) : topVolume?.reason ?? 'No Verified Wakeup') : 'UNKNOWN',
       updatedAt: volume?.updatedAt ?? null,
       page: 'volume',
     },
@@ -430,21 +401,24 @@ export function Dashboard() {
   const dailyProfitFactor = grossLoss > 0 ? grossProfit / grossLoss : winningDays.length ? Infinity : null;
   const usdtFees = sources.pnl.data?.feesByAsset.find((fee) => fee.asset === 'USDT')?.amount ?? 0;
 
-  const controlState = state?.config.killSwitch
-    ? { label: 'Legacy Halted', detail: 'Existing App Kill Switch On', tone: 'ok' as Tone }
-    : state?.config.liveTradingEnabled
-      ? { label: 'Legacy Live Configured', detail: 'Outside The Convergence Slice', tone: 'warn' as Tone }
-      : { label: 'Legacy Live Off', detail: 'Convergence Authority Is Shown Above', tone: 'ok' as Tone };
+  const controlState = {
+    label: 'OWNER_GATED',
+    detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+    tone: 'warn' as Tone,
+  };
 
-  const queueCount = (basis?.status.watching ?? 0) + (basis?.status.focused ?? 0) + (volume?.status.watching ?? 0) + (volume?.status.focused ?? 0);
-  const latestUpdate = Math.max(basis?.updatedAt ?? 0, volume?.updatedAt ?? 0, state?.binance.lastSyncTs ?? 0);
+  const queueCount = basis && volume
+    ? basis.status.watching + basis.status.focused + volume.status.watching + volume.status.focused
+    : null;
+  const proposalCount = basis && volume ? basis.status.openProposals + volume.status.openProposals : null;
+  const latestUpdate = Math.max(basis?.updatedAt ?? 0, volume?.updatedAt ?? 0);
 
   if (!state) {
     return (
       <div className="container page dash-page dcx-page">
         <section className="dcx-frame dcx-loading" aria-label="dashboard workspace">
           <Radio size={18} />
-          <span><b>Connecting Dashboard</b><small>Waiting for account, engine, and ledger state.</small></span>
+          <span><b>Connecting Dashboard</b><small>Waiting for public engine and ledger state.</small></span>
         </section>
       </div>
     );
@@ -460,7 +434,7 @@ export function Dashboard() {
             <span className="dcx-source-mark"><img className="dcx-page-mark" src="/dashboard-blocks.png" alt="" aria-hidden="true" /></span>
             <span className="dcx-title-content">
               <h1>Dashboard</h1>
-              <span className={`dcx-live ${systemLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{systemLive ? 'System Live' : 'Review Required'}</span>
+              <span className={`dcx-live ${publicRuntimeLive ? 'active' : 'degraded'}`}><i aria-hidden="true" />{publicRuntimeLive ? 'Public Runtime Live' : 'Review Required'}</span>
               <span className="dcx-updated">{latestUpdate ? `Updated ${timeAgo(latestUpdate)}` : 'Connecting Sources'}</span>
             </span>
           </div>
@@ -470,25 +444,25 @@ export function Dashboard() {
           </div>
         </header>
 
-        <SystemIntegrationSurface surface="dashboard" />
+        <ProductSurfaceAdapter surfaceId="dashboard" />
 
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric
-            label={account?.complete === false ? 'Partial Account Value' : 'Estimated Total Value'}
-            value={account ? fmtPrice(account.totalUsdt) : '—'}
-            detail={account?.complete === false ? (account.unpricedAssets.length ? `${account.unpricedAssets.join(', ')} Unpriced` : 'Signed Account Source Is Stale') : 'Signed Binance Account'}
-            tone={account?.complete === false ? 'warn' : 'idle'}
+            label="Account Value"
+            value="UNKNOWN"
+            detail="NOT_CONFIGURED · private account reads are not mounted"
+            tone="warn"
           />
           <Metric
             label="Today’s Account Change"
-            value={finite(dayChange) ? `${dayChange > 0 ? '+' : ''}${fmtPrice(dayChange)}` : '—'}
-            detail={account?.complete === false ? 'Current Equity Is Partially Priced' : dayChangePct === null ? 'Day Open Unavailable' : `${dayChangePct > 0 ? '+' : ''}${dayChangePct.toFixed(2)}% From Day Open`}
-            tone={finite(dayChange) ? (dayChange >= 0 ? 'ok' : 'bad') : 'idle'}
+            value="UNKNOWN"
+            detail="NOT_CONFIGURED · day-open account truth is unavailable"
+            tone="warn"
           />
-          <Metric label="Available USDT" value={account ? fmtPrice(account.availableUsdt) : '—'} detail="Free Spot Balance" />
-          <Metric label="Active Exposure" value={fmtPrice(exposure)} detail={`${positions.length} Position${positions.length === 1 ? '' : 's'} · ${fmtMoney(heldNotional)} Held`} />
-          <Metric label="Engine Queue" value={String(queueCount)} detail={`${(basis?.status.openProposals ?? 0) + (volume?.status.openProposals ?? 0)} Open Proposals`} tone={queueCount ? 'warn' : 'idle'} />
-          <Metric label="Legacy Order Route" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
+          <Metric label="Available USDT" value="UNKNOWN" detail="NOT_CONFIGURED · private balance unavailable" tone="warn" />
+          <Metric label="Active Exposure" value="UNKNOWN" detail="NOT_CONFIGURED · positions and open orders are not read" tone="warn" />
+          <Metric label="Engine Queue" value={queueCount === null ? 'UNKNOWN' : String(queueCount)} detail={proposalCount === null ? 'Proposal count unavailable' : `${proposalCount} Open Proposals`} tone={queueCount === null ? 'warn' : queueCount ? 'warn' : 'idle'} />
+          <Metric label="Execution Authority" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
         </div>
 
         <section className="dcx-section dcx-capital-section">
@@ -505,7 +479,7 @@ export function Dashboard() {
               {historyPoints.length >= 2 ? (
                 <EquityChart snaps={historyPoints} height={230} />
               ) : (
-                <div className="dcx-empty"><BarChart3 size={18} /><span><b>Balance History Is Loading</b><small>The chart waits for the signed Binance history route.</small></span></div>
+                <div className="dcx-empty"><BarChart3 size={18} /><span><b>Balance History Not Configured</b><small>Private balance history is not mounted; absence is not interpreted as zero.</small></span></div>
               )}
               <div className="dcx-chart-facts">
                 <span><small>Range Open</small><b>{historyStats ? fmtPrice(historyStats.first) : '—'}</b></span>
@@ -553,7 +527,7 @@ export function Dashboard() {
                   <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Near Gate</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Deep Checks</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>All Gates Passed</small></span>
-                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? `${basis?.status.verifiedBorrow ?? 0} Borrow Verified` : `${volume?.status.tradeMessages.toLocaleString() ?? '—'} Trade Messages`}</small></span>
+                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? (basis ? `${basis.status.verifiedBorrow} Borrow Verified` : 'Borrow state UNKNOWN') : (volume ? `${volume.status.tradeMessages.toLocaleString()} Trade Messages` : 'Trade count UNKNOWN')}</small></span>
                   <span className="dcx-runtime-open" role="cell"><b>{sourceAge(row.updatedAt)}</b><ChevronRight size={14} /></span>
                 </button>
               ))}
@@ -568,9 +542,9 @@ export function Dashboard() {
             </header>
             <div className="dcx-attention-list">
               <button type="button" onClick={() => open('loans')}>
-                <StatusMark tone={basis?.status.borrowBlocked ? 'warn' : 'ok'} />
-                <span><b>Borrow Verification</b><small>{basis?.status.borrowBlocked ? `${basis.status.borrowBlocked} Reverse-Basis Decisions Blocked` : 'No Borrow Blocker In The Current Runtime'}</small></span>
-                <em>{basis?.status.verifiedBorrow ?? 0} Verified</em><ChevronRight size={14} />
+                <StatusMark tone={!basis ? 'idle' : basis.status.borrowBlocked ? 'warn' : 'ok'} />
+                <span><b>Borrow Verification</b><small>{!basis ? 'Borrow state UNKNOWN' : basis.status.borrowBlocked ? `${basis.status.borrowBlocked} Reverse-Basis Decisions Blocked` : 'No Borrow Blocker In The Current Runtime'}</small></span>
+                <em>{basis ? `${basis.status.verifiedBorrow} Verified` : 'UNKNOWN'}</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('strategies')}>
                 <StatusMark tone={topBasis ? (topBasis.decisionKind === 'proposal' ? 'ok' : 'warn') : 'idle'} />
@@ -583,8 +557,8 @@ export function Dashboard() {
                 <em>{topVolume?.state ? titleCase(topVolume.state.toLowerCase()) : '—'}</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('risk')}>
-                <StatusMark tone={state.config.killSwitch ? 'ok' : state.config.liveTradingEnabled ? 'warn' : 'ok'} />
-                <span><b>Execution Guard</b><small>{state.config.killSwitch ? 'Bot Stopped Before Order Routing' : state.config.liveTradingEnabled ? 'Live Orders Require The Full Risk Gate' : 'Manual Guarded Mode · Live Orders Off'}</small></span>
+                <StatusMark tone="warn" />
+                <span><b>Execution Guard</b><small>OWNER_GATED · live execution is mechanically unavailable</small></span>
                 <em>{state.risk.rejectionsToday} Rejected Today</em><ChevronRight size={14} />
               </button>
             </div>
@@ -641,7 +615,7 @@ export function Dashboard() {
         </section>
 
         <footer className="dcx-source-footer">
-          <span><Database size={13} />Sources: Binance Signed Account, Spot And USD-M Streams, Engine Snapshots, SQLite Ledger</span>
+          <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account NOT_CONFIGURED</span>
           <span>{system ? `${system.restLatencyMs ?? '—'} ms REST · ${system.usedWeight1m ?? '—'} Weight / Min · ${Math.round(system.uptimeSec / 60)} Min Uptime` : 'System Source Checking'}</span>
         </footer>
       </section>

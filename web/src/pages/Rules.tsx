@@ -5,12 +5,8 @@ import { IconBook, IconShield } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
 import type { CustomRule } from '../types';
 
-// Governance: what this cockpit is allowed to do. Rendered inside the Risk
-// page (Risk owns every operational control — the old standalone Rules page
-// is gone from the sidebar).
-// Top: platform rules — hard-coded / config-driven and ENFORCED today.
-// Bottom: owner-authored rules — persisted server-side + ledgered now; the
-// risk gate starts consuming `strict` ones when live mode lands (labeled, not fake).
+// Local governance inputs for validate-only evaluation. These records never
+// grant money authority or imply that a private execution adapter exists.
 export function GovernanceSection() {
   const { state, saveConfig } = useStore();
   const cfg = state?.config;
@@ -27,13 +23,13 @@ export function GovernanceSection() {
 
   const platform = [
     { name: 'Withdrawals & transfers-out', detail: 'No code path exists. Not configurable.', state: 'blocked', tone: 'ok' },
-    { name: 'Kill switch', detail: cfg.killSwitch ? 'ON — every send is blocked right now.' : 'OFF — sends pass to the risk gate.', state: cfg.killSwitch ? 'halting' : 'armed', tone: cfg.killSwitch ? 'bad' : 'ok' },
-    { name: 'Live trading', detail: cfg.liveTradingEnabled ? 'Enabled — typed confirmation still required per order.' : 'Disabled — orders cannot reach Binance.', state: cfg.liveTradingEnabled ? 'on' : 'off', tone: cfg.liveTradingEnabled ? 'warn' : 'ok' },
-    { name: 'Per-order cap', detail: `Any single order above ${fmtPrice(cfg.maxOrderNotionalUsd)} is rejected by the risk gate.`, state: fmtPrice(cfg.maxOrderNotionalUsd), tone: '' },
-    { name: 'Daily notional cap', detail: `Total sends above ${fmtPrice(cfg.maxDailyNotionalUsd)}/day are rejected.`, state: fmtPrice(cfg.maxDailyNotionalUsd), tone: '' },
-    { name: 'Daily loss stop', detail: `Realized loss beyond ${fmtPrice(cfg.maxDailyLossUsd)} halts new orders for the day.`, state: fmtPrice(cfg.maxDailyLossUsd), tone: '' },
-    { name: 'Symbol allowlist', detail: cfg.allowedSymbols.length ? `Only ${cfg.allowedSymbols.join(', ')} may trade.` : 'Empty — the risk gate rejects every symbol.', state: `${cfg.allowedSymbols.length} symbols`, tone: cfg.allowedSymbols.length ? '' : 'ok' },
-    { name: 'Order cooldown', detail: `Minimum ${cfg.cooldownSec}s between sends.`, state: `${cfg.cooldownSec}s`, tone: '' },
+    { name: 'Execution authority', detail: 'OWNER_GATED · LIVE_EXECUTION_NOT_IMPLEMENTED.', state: 'owner gated', tone: 'warn' },
+    { name: 'Legacy kill switch', detail: cfg.killSwitch ? 'A local stop is recorded.' : 'Inactive; this does not arm any route.', state: cfg.killSwitch ? 'stop recorded' : 'inactive', tone: cfg.killSwitch ? 'bad' : 'warn' },
+    { name: 'Per-order cap', detail: `Validate-only intent above ${fmtPrice(cfg.maxOrderNotionalUsd)} fails the local advisory check.`, state: fmtPrice(cfg.maxOrderNotionalUsd), tone: '' },
+    { name: 'Daily notional cap', detail: `Local validation compares supplied evidence with ${fmtPrice(cfg.maxDailyNotionalUsd)}/day.`, state: fmtPrice(cfg.maxDailyNotionalUsd), tone: '' },
+    { name: 'Daily loss stop', detail: `Advisory threshold ${fmtPrice(cfg.maxDailyLossUsd)}; private PnL remains NOT_CONFIGURED.`, state: fmtPrice(cfg.maxDailyLossUsd), tone: '' },
+    { name: 'Symbol allowlist', detail: cfg.allowedSymbols.length ? `Only ${cfg.allowedSymbols.join(', ')} may pass local validation.` : 'Empty — every hypothetical symbol fails validation.', state: `${cfg.allowedSymbols.length} symbols`, tone: cfg.allowedSymbols.length ? '' : 'ok' },
+    { name: 'Order cooldown', detail: `Validate-only interval of ${cfg.cooldownSec}s between hypothetical decisions.`, state: `${cfg.cooldownSec}s`, tone: '' },
   ];
 
   const submit = async (e: React.FormEvent) => {
@@ -57,8 +53,8 @@ export function GovernanceSection() {
   return (
     <div className="rules-page">
       <section className="rules-section">
-        <h2 className="rules-h"><IconShield size={16} /> Platform rules <span className="rule-badge enforced">enforced</span></h2>
-        <p className="rules-sub">Hard limits from the risk gate and server config. Edit the numbers in the sections above.</p>
+        <h2 className="rules-h"><IconShield size={16} /> Platform rules <span className="rule-badge enforced">validate only</span></h2>
+        <p className="rules-sub">Local advisory policy from server config. These values do not create execution authority.</p>
         <div className="rules-list">
           {platform.map((r) => (
             <div key={r.name} className="rule-row">
@@ -73,10 +69,10 @@ export function GovernanceSection() {
       </section>
 
       <section className="rules-section">
-        <h2 className="rules-h"><IconBook size={16} /> Your rules <span className="rule-badge recorded">recorded · enforcement lands with live mode</span></h2>
+        <h2 className="rules-h"><IconBook size={16} /> Your rules <span className="rule-badge recorded">recorded · advisory only</span></h2>
         <p className="rules-sub">
-          Author your own allow/block/limit rules. They persist on the server and are ledgered; <b>strict</b> rules are
-          the ones the risk gate will consume first when live-mode wiring lands. Nothing here pretends to run yet.
+          Author local allow/block/limit rules. They persist on the server and are ledgered; <b>strict</b> remains a
+          validation preference, not permission to place orders or move money.
         </p>
         <form className="rule-form" onSubmit={(e) => void submit(e)}>
           <input className="rf-name" value={name} maxLength={80} placeholder="Rule name — e.g. Never trade meme pairs" onChange={(e) => setName(e.target.value)} />

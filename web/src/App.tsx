@@ -19,7 +19,27 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
+import { ProductControlRoomProvider, ProductControlRoomRoute } from './features/productControlRoom';
+import {
+  createHttpProductIntegrationTransport,
+  createProductIntegrationClient,
+  readDurableMaterialCursor,
+  type ProductIntegrationEndpoints,
+} from './lib/productIntegration';
 import './pages/MetricTiles.css';
+
+const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
+  supervisor: '/api/product-integration/v1/supervisor',
+  materialEvents: '/api/product-integration/v1/material-events',
+  trace: (correlationId: string) => `/api/product-integration/v1/traces/${encodeURIComponent(correlationId)}`,
+  commandPreview: '/api/product-integration/v1/commands/preview',
+  commandSubmit: '/api/product-integration/v1/commands',
+});
+
+const productIntegrationClient = createProductIntegrationClient(
+  createHttpProductIntegrationTransport(PRODUCT_INTEGRATION_ENDPOINTS),
+);
+const durableResumeCursor = readDurableMaterialCursor();
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
@@ -41,12 +61,17 @@ function Shell() {
             <section className={`app-page-frame frame-${framePage}`} aria-label={`${framePage} workspace`}>
               <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
                 {page === 'dashboard' && <Dashboard />}
-                {page === 'account' && <Account />}
-                {page === 'wallets' && <Account />}
+                {page === 'control-room' && <ProductControlRoomRoute />}
+                {page === 'account' && <Account view="overview" />}
+                {page === 'wallets' && <Account view="overview" />}
                 {page === 'markets' && <Markets />}
                 {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
                 {page === 'loans' && <Loans />}
-                {['orders', 'positions', 'fills', 'pnl'].includes(page) && <Account />}
+                {page === 'execution' && <Account view="execution" />}
+                {page === 'orders' && <Account view="orders" />}
+                {page === 'positions' && <Account view="positions" />}
+                {page === 'fills' && <Account view="fills" />}
+                {page === 'pnl' && <Account view="pnl" />}
                 {page === 'strategies' && <Strategies />}
                 {page === 'volume' && <VolumeScanner />}
                 {page === 'opportunities' && <Opportunities />}
@@ -63,9 +88,9 @@ function Shell() {
                 <span className="ftr-left">
                   <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
                   <i>•</i>
-                  <span>Private</span>
+                  <span>Local Candidate</span>
                   <i>•</i>
-                  <span>No withdrawals</span>
+                  <span>No Money Paths</span>
                   <i>•</i>
                   <span>Every action ledgered</span>
                 </span>
@@ -91,7 +116,9 @@ function Shell() {
 export default function App() {
   return (
     <StoreProvider>
-      <Shell />
+      <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
+        <Shell />
+      </ProductControlRoomProvider>
     </StoreProvider>
   );
 }

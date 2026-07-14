@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 import { MarketEngine } from './engine/marketData.js';
 import { Scanner } from './engine/scanner.js';
@@ -25,24 +25,27 @@ import {
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
-import { BinanceClient, credsFromEnv, maskApiKey, keyPosture, rateLimit } from './binance/client.js';
+import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
 import { startLiquidationCollector, stopLiquidationCollector, liquidationSeries, liquidationStats } from './binance/liquidations.js';
-import { UserStream, type ExecutionReport } from './binance/userStream.js';
 import { AccountService } from './services/account.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
-import { LoanService } from './services/loans.js';
 import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import { createSystemIntegrationApplication } from './systemIntegration/application/index.js';
+import { projectI00Health } from './systemIntegration/application/health.js';
 import { createNodeRepeatingScheduler, createSystemUtcClock } from './systemIntegration/composition/index.js';
 import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
-import { AwsRunnerControl, AwsRunnerControlError } from './services/awsRunnerControl.js';
+import {
+  createProductIntegrationRuntime,
+  createProductIntegrationRuntimeRouter,
+  type ProductRuntimeReadPorts,
+} from './productIntegration/runtime/index.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig, ControlMode, ExecutionControlModes, OrderIntent } from './types.js';
@@ -69,7 +72,6 @@ loadDotEnv();
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const TICK_MS = 2_000;
-const POLL_MS = 30_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
 const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
 const DIRECT_SOURCE_LOGOS: Record<string, string> = {
@@ -85,8 +87,23 @@ const sourceLogoFailures = new Map<string, number>();
 const ledger = new Ledger(
   process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
 );
-const awsRunnerControl = new AwsRunnerControl(ledger);
 const config = loadConfig(ledger);
+Object.assign(config, {
+  liveTradingEnabled: false,
+  fundsLocked: true,
+  borrowGuard: {
+    ...config.borrowGuard,
+    enabled: true,
+    newBorrowPaused: true,
+    repayOnly: true,
+  },
+  controlModes: {
+    ...config.controlModes,
+    funds: 'blocked',
+    borrowing: 'blocked',
+    liveOrders: 'blocked',
+  },
+});
 const engine = new MarketEngine(ledger);
 const scanner = new Scanner(config, ledger);
 const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows().map((row) => ({
@@ -128,9 +145,35 @@ if (!systemIntegrationStart.ok) {
         : 'APPLICATION_START_FAILED'),
   );
 }
+const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
+  supervisor: () => systemIntegration.supervisor(),
+  events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
+    ledger.readProductOperatorEventPage(afterCursor, limit)
+  ),
+  trace: async (correlationId: string, limit: number) => {
+    const snapshot = await systemIntegration.read.trace(correlationId);
+    if (snapshot === null) return null;
+    const events = snapshot.events.slice(-limit);
+    return Object.freeze({
+      ...snapshot,
+      events: Object.freeze(events),
+      truncated: snapshot.truncated || events.length < snapshot.events.length,
+    });
+  },
+});
+const productIntegrationRuntime = createProductIntegrationRuntime({
+  read: productIntegrationRead,
+  clock: systemIntegrationClock,
+  // No command owner is injected until an accepted donor proves durable
+  // idempotency, revision CAS, receipts, and managed restart authority.
+});
 
-const creds = credsFromEnv();
-const client = creds ? new BinanceClient(creds) : null;
+// Phase 2 has no accepted signed/private exchange adapter. Keep the legacy
+// read projections mechanically keyless even when ambient credentials exist.
+function unavailablePrivateBinanceClient(): BinanceClient | null {
+  return null;
+}
+const client = unavailablePrivateBinanceClient();
 const account = new AccountService(client, ledger, (s) => engine.priceOf(s));
 const risk = new RiskService(config, ledger);
 const orders = new OrderService(
@@ -141,7 +184,6 @@ const orders = new OrderService(
   ledger,
   account,
 );
-const loans = new LoanService(client, config, ledger, account, (symbol) => engine.priceOf(symbol));
 
 function normalizeLogoDomain(value: string): string | null {
   let host = value.trim().toLowerCase();
@@ -157,116 +199,21 @@ function normalizeLogoDomain(value: string): string | null {
   return host;
 }
 
-let userStream: UserStream | null = null;
-let accountSyncTimer: NodeJS.Timeout | null = null;
-let orderSyncTimer: NodeJS.Timeout | null = null;
-let fillReconcileTimer: NodeJS.Timeout | null = null;
-
-function fillReconciliationSymbols(): string[] {
-  const symbols = new Set<string>([...config.allowedSymbols, ...config.watchlist]);
-  for (const order of orders.openOrdersCache) symbols.add(order.symbol);
-  for (const request of ledger.unresolvedOrderRequests(500)) symbols.add(request.symbol);
-  for (const fill of ledger.listFills(200)) symbols.add(fill.symbol);
-  for (const entry of account.equity().entries) {
-    if (entry.asset !== 'USDT') {
-      const symbol = `${entry.asset}USDT`;
-      if (engine.filters.has(symbol)) symbols.add(symbol);
-    }
-  }
-  return [...symbols];
-}
-
-async function reconcileAccountFills(): Promise<void> {
-  if (!client || shuttingDown) return;
-  account.setRequiredFillSymbols(fillReconciliationSymbols());
-  await account.reconcileFills();
-}
-
-if (client) {
-  await account.sync();
-  await orders.syncOpenOrders().catch((error) => {
-    safeLogEvent('error_event', null, { source: 'orders.initial_sync', message: error instanceof Error ? error.message : String(error) });
-  });
-  void orders.reconcilePendingOrders().catch((error) => {
-    safeLogEvent('error_event', null, { source: 'orders.initial_reconciliation', message: error instanceof Error ? error.message : String(error) });
-  });
-  void reconcileAccountFills();
-  userStream = new UserStream(
-    client,
-    (ev) => {
-      const e = ev.e as string | undefined;
-      if (e === 'executionReport') {
-        const r = ev as unknown as ExecutionReport;
-        if (r.x === 'TRADE' && r.t >= 0) {
-          account.recordFill({
-            symbol: r.s,
-            tradeId: r.t,
-            orderId: r.i,
-            side: r.S,
-            price: Number(r.L),
-            qty: Number(r.l),
-            quoteQty: Number(r.L) * Number(r.l),
-            commission: Number(r.n),
-            commissionAsset: r.N,
-            ts: r.T,
-            source: 'user_stream',
-          });
-        }
-        void orders.syncOpenOrders().catch((error) => {
-          safeLogEvent('error_event', r.s, { source: 'orders.stream_sync', message: error instanceof Error ? error.message : String(error) });
-        });
-      } else if (e === 'outboundAccountPosition') {
-        account.applyStreamBalances(ev.B as { a: string; f: string; l: string }[], Number(ev.u));
-      }
-    },
-    (status, detail) => {
-      ledger.logEvent('user_stream', null, { status, detail });
-      if (status === 'open') void reconcileAccountFills();
-    }
-  );
-  void userStream.start();
-  accountSyncTimer = setInterval(() => {
-    void account.sync().catch((error) => {
-      try {
-        ledger.logEvent('error_event', null, { source: 'account.sync', message: error instanceof Error ? error.message : String(error) });
-      } catch {
-        // Health state in AccountService remains the primary signal.
-      }
-    });
-  }, POLL_MS);
-  orderSyncTimer = setInterval(() => {
-    void (async () => {
-      await orders.syncOpenOrders();
-      await orders.reconcilePendingOrders();
-    })().catch((error) => {
-      safeLogEvent('error_event', null, { source: 'orders.periodic_sync', message: error instanceof Error ? error.message : String(error) });
-    });
-  }, POLL_MS);
-  fillReconcileTimer = setInterval(() => {
-    void reconcileAccountFills().catch((error) => {
-      try {
-        ledger.logEvent('error_event', null, {
-          source: 'account.fill_reconciliation',
-          message: error instanceof Error ? error.message : String(error),
-        });
-      } catch {
-        // AccountService retains the reconciliation error for risk admission.
-      }
-    });
-  }, POLL_MS);
-}
-
 console.log(
-  `cosmos control room: managed market graph booting, Binance keys ${account.keysPresent ? 'PRESENT' : 'absent'}, listening ${HOST}:${PORT}`
+  `cosmos control room: managed market graph booting, signed/private exchange adapter NOT_CONFIGURED, listening ${HOST}:${PORT}`
 );
 
-const scannerTimer = setInterval(() => {
+let scannerTimer: NodeJS.Timeout | null = null;
+let liquidationCollectorStarted = false;
+let eventRetentionTimer: NodeJS.Timeout | null = null;
+
+function runScannerTick(): void {
   try {
     scanner.tick(engine.rows());
   } catch (err) {
     console.error('scanner tick failed:', err);
   }
-}, TICK_MS);
+}
 
 function pruneEphemeralLedgerEvents(maxBatches = 1): void {
   try {
@@ -282,10 +229,6 @@ function pruneEphemeralLedgerEvents(maxBatches = 1): void {
     });
   }
 }
-// Drain a bounded historical backlog at boot, then maintain it incrementally.
-pruneEphemeralLedgerEvents(5);
-const eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
-
 function mode(): string {
   if (config.killSwitch) return 'HALTED';
   return config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL';
@@ -306,8 +249,8 @@ function buildState() {
       lastError: account.lastError,
       canWithdraw: account.canWithdraw,
       canTrade: account.canTrade,
-      userStream: userStream?.status ?? 'off',
-      keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
+      userStream: 'off',
+      keyFingerprint: null,
       keyPermissions: account.keyRestrictions,
       keyPermissionsTs: account.lastRestrictionsTs,
       keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
@@ -391,6 +334,41 @@ app.use((_req, res, next) => {
 });
 app.use(express.json({ limit: '192kb', strict: true }));
 
+function sendI00Health(
+  res: express.Response,
+  kind: 'LIVE' | 'READY' | 'TRADE_READY',
+): void {
+  try {
+    // No canonical owner currently supplies last-meaningful-advance evidence.
+    // READY therefore stays fail-closed until that owner contract is mounted.
+    const projection = projectI00Health(kind, systemIntegration.supervisor(), systemIntegrationStart.ok, null);
+    res.status(projection.ok ? 200 : 503).json(projection);
+  } catch {
+    const processResponsive = kind === 'LIVE';
+    res.status(processResponsive ? 200 : 503).json({
+      schemaVersion: 'i00.health.v1',
+      kind,
+      ok: processResponsive,
+      evaluatedAtMs: Date.now(),
+      overallPosture: 'FAILED',
+      rootBlockerComponentId: null,
+      reasonCodes: [processResponsive ? 'SUPERVISOR_READ_UNAVAILABLE_LIVENESS_ONLY' : 'SUPERVISOR_READ_UNAVAILABLE'],
+      componentCount: 0,
+      dependencyEdgeCount: 0,
+      meaningfulAdvanceOwnerComponentId: null,
+      lastMeaningfulAdvanceAtMs: null,
+      meaningfulAdvanceAgeMs: null,
+      executionBarrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+    });
+  }
+}
+
+// Deployment/watchdog probes are intentionally outside the authenticated API
+// namespace and expose only bounded canonical supervisor posture.
+app.get('/health/live', (_req, res) => sendI00Health(res, 'LIVE'));
+app.get('/health/ready', (_req, res) => sendI00Health(res, 'READY'));
+app.get('/health/trade-ready', (_req, res) => sendI00Health(res, 'TRADE_READY'));
+
 function runAsync(res: express.Response, task: () => Promise<void>): void {
   void task().catch((error) => {
     try {
@@ -406,6 +384,35 @@ function runAsync(res: express.Response, task: () => Promise<void>): void {
   });
 }
 
+function sendLiveExecutionNotImplemented(res: express.Response, operation: string): void {
+  res.status(410).json({
+    ok: false,
+    code: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+    error: 'Signed, private, test-order, and money-moving execution is not implemented in this runtime.',
+    operation,
+  });
+}
+
+function sendNotConfigured(res: express.Response, capability: string): void {
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'NOT_CONFIGURED',
+    error: 'Private exchange access is not configured in this runtime.',
+    capability,
+  });
+}
+
+function sendOwnerGated(res: express.Response, capability: string): void {
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'OWNER_GATED',
+    error: 'External infrastructure control requires separate owner authorization and is not mounted.',
+    capability,
+  });
+}
+
 function safeLogEvent(kind: string, symbol: string | null, data: unknown): void {
   try {
     ledger.logEvent(kind, symbol, data);
@@ -415,22 +422,19 @@ function safeLogEvent(kind: string, symbol: string | null, data: unknown): void 
   }
 }
 
-function secretMatches(received: string, expected: string): boolean {
-  const left = Buffer.from(received);
-  const right = Buffer.from(expected);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
 function notificationRoutingSnapshot() {
-  const awsIngressReady = Boolean(process.env.NOTIFICATION_AWS_INGEST_TOKEN?.trim());
   return {
     sources: {
       bot: { available: true, label: 'Bot Runtime', detail: 'Engine, controls, and dependency state changes' },
-      execution: { available: true, label: 'Execution Pipeline', detail: 'Risk blocks, order outcomes, fills, and loan outcomes' },
+      execution: {
+        available: false,
+        label: 'Execution Pipeline',
+        detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED; no execution notification producer is mounted',
+      },
       aws: {
-        available: awsIngressReady,
+        available: false,
         label: 'AWS Infrastructure',
-        detail: awsIngressReady ? 'Secure EventBridge intake is ready' : 'Set NOTIFICATION_AWS_INGEST_TOKEN on the server',
+        detail: 'OWNER_GATED; inbound AWS notification intake is not mounted',
         endpoint: '/api/notifications/ingest/aws',
       },
     },
@@ -449,65 +453,20 @@ function notificationRoutingSnapshot() {
   };
 }
 
-/**
- * Optional AWS EventBridge/API-Destination intake. It is unavailable until a
- * server-side bearer token is configured; credentials are never accepted from
- * or returned to the browser.
- */
-app.post('/api/notifications/ingest/aws', (req, res) => {
-  const expected = process.env.NOTIFICATION_AWS_INGEST_TOKEN?.trim() ?? '';
-  if (!expected) {
-    res.status(503).json({ error: 'AWS notification intake is not configured' });
-    return;
-  }
-  const authorization = req.header('authorization') ?? '';
-  const received = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  if (!received || !secretMatches(received, expected)) {
-    res.status(401).json({ error: 'invalid notification intake token' });
-    return;
-  }
-
-  const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-  const source = String(body.source ?? '');
-  if (!['aws.ec2', 'aws.cloudwatch', 'aws.health'].includes(source)) {
-    res.status(400).json({ error: 'unsupported AWS event source' });
-    return;
-  }
-  const detail = body.detail && typeof body.detail === 'object' ? body.detail as Record<string, unknown> : {};
-  const stateValue = detail.state && typeof detail.state === 'object'
-    ? String((detail.state as Record<string, unknown>).value ?? '')
-    : String(detail.state ?? detail.statusCode ?? '');
-  const resources = Array.isArray(body.resources) ? body.resources.filter((item): item is string => typeof item === 'string') : [];
-  const eventId = String(body.id ?? '').slice(0, 120);
-  if (eventId && ledger.recentEvents(1_000, 'aws_notification', undefined, eventId).length > 0) {
-    res.status(202).json({ accepted: true, duplicate: true });
-    return;
-  }
-  const ev = ledger.logEvent('aws_notification', null, {
-    eventId: eventId || null,
-    service: source.replace(/^aws\./, '').toUpperCase(),
-    detailType: String(body['detail-type'] ?? 'AWS State Change').slice(0, 160),
-    region: String(body.region ?? '').slice(0, 80),
-    resource: String(resources[0] ?? detail['instance-id'] ?? detail.resource ?? '').slice(0, 300),
-    state: stateValue.slice(0, 80),
-    alarmName: String(detail.alarmName ?? detail['alarm-name'] ?? '').slice(0, 160),
-    reason: String(
-      detail.state && typeof detail.state === 'object'
-        ? (detail.state as Record<string, unknown>).reason ?? ''
-        : detail.description ?? '',
-    ).slice(0, 500),
-  });
-  res.status(202).json({ accepted: true, id: ev.id });
+// Ambient bearer material cannot widen Phase 2 authority. This route remains
+// present only as an explicit owner-gated boundary and performs no persistence.
+app.post('/api/notifications/ingest/aws', (_req, res) => {
+  sendOwnerGated(res, 'AWS_NOTIFICATION_INGEST');
 });
 
-// The notification intake has its own exact bearer-token contract. Every
-// other API route shares one operator admission boundary.
+// Every mounted API route shares one operator admission boundary.
 app.use('/api', operatorAccess.middleware());
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,
   clock: systemIntegrationClock,
 }));
+app.use('/api/product-integration', createProductIntegrationRuntimeRouter(productIntegrationRuntime));
 
 app.get('/api/notification-routing', (_req, res) => {
   res.json(notificationRoutingSnapshot());
@@ -684,42 +643,6 @@ app.use((req, _res, next) => {
   }
   next();
 });
-
-interface AwsOperatorResult {
-  authorized: boolean;
-  operator: string | null;
-  reason: string | null;
-}
-
-async function awsOperator(req: express.Request): Promise<AwsOperatorResult> {
-  const controlHeader = req.headers['x-cosmos-control'];
-  if (controlHeader !== 'aws-runner') return { authorized: false, operator: null, reason: 'Missing control-channel header.' };
-  const verified = operatorAccess.operator(req) ?? (await operatorAccess.verify(req)).operator;
-  if (!verified) return { authorized: false, operator: null, reason: 'Verified operator identity is required.' };
-  return { authorized: true, operator: verified.email ?? verified.id, reason: null };
-}
-
-async function requireAwsOperator(req: express.Request, res: express.Response): Promise<AwsOperatorResult | null> {
-  const operator = await awsOperator(req);
-  if (!operator.authorized) {
-    res.status(403).json({ ok: false, code: 'AWS_OPERATOR_DENIED', error: operator.reason });
-    return null;
-  }
-  return operator;
-}
-
-function sendAwsControlError(res: express.Response, error: unknown): void {
-  if (error instanceof AwsRunnerControlError) {
-    res.status(error.statusCode).json({ ok: false, code: error.code, error: error.message });
-    return;
-  }
-  try {
-    ledger.logEvent('error_event', null, { source: 'aws.control', message: error instanceof Error ? error.message : String(error) });
-  } catch {
-    // Preserve a stable control-plane response if persistence is degraded.
-  }
-  res.status(500).json({ ok: false, code: 'AWS_CONTROL_ERROR', error: 'AWS control request failed.' });
-}
 
 app.get('/api/sessions', (req, res) => {
   const now = Date.now();
@@ -1027,16 +950,6 @@ app.post('/api/news-context/refresh', (req, res) => {
   });
 });
 
-// One server-owned refresh loop runs whether or not a browser is open. This is
-// what keeps the rolling seven-day archive complete on an unattended EC2 host;
-// browsers only subscribe to committed snapshots and never own collection.
-let newsRefreshTimer: NodeJS.Timeout | null = null;
-
-function startNewsRefreshLoop(): void {
-  if (newsRefreshTimer) return;
-  newsRefreshTimer = setInterval(() => { void getNewsContext(true).catch(() => undefined); }, 5_000);
-}
-
 let newsStreamClients = 0;
 const NEWS_STREAM_MAX_CLIENTS = 16;
 
@@ -1206,44 +1119,8 @@ app.get('/api/fills', (_req, res) => {
   res.json(ledger.listFills(200));
 });
 
-app.post('/api/fills/import', (req, res) => {
-  runAsync(res, async () => {
-    const symbol = String((req.body as Record<string, unknown>).symbol ?? '');
-    if (!client) {
-      res.status(400).json({ error: 'Binance keys not configured' });
-      return;
-    }
-    if (!/^[A-Z0-9]{1,16}USDT$/.test(symbol)) {
-      res.status(400).json({ error: 'fill imports currently support USDT symbols only' });
-      return;
-    }
-    account.registerFillSymbols([symbol]);
-    try {
-      const trades = await client.myTrades(symbol, 200);
-      let imported = 0;
-      for (const t of trades) {
-        if (t.symbol !== symbol) throw new Error('Binance trade payload symbol mismatch');
-        const isNew = account.recordFill({
-          symbol: t.symbol,
-          tradeId: t.id,
-          orderId: t.orderId,
-          side: t.isBuyer ? 'BUY' : 'SELL',
-          price: Number(t.price),
-          qty: Number(t.qty),
-          quoteQty: Number(t.quoteQty),
-          commission: Number(t.commission),
-          commissionAsset: t.commissionAsset,
-          ts: t.time,
-          source: 'import',
-        });
-        if (isNew) imported++;
-      }
-      ledger.logEvent('manual_action', symbol, { action: 'import_fills', imported, fetched: trades.length });
-      res.json({ imported, fetched: trades.length });
-    } catch (err) {
-      res.status(502).json({ error: String((err as Error).message) });
-    }
-  });
+app.post('/api/fills/import', (_req, res) => {
+  sendNotConfigured(res, 'SIGNED_FILL_IMPORT');
 });
 
 function usableBook(b: BookTicker | undefined): BookTicker | null {
@@ -1492,29 +1369,7 @@ function startEquityHistoryRefresh(): Promise<EquityHistorySnapshot> {
 }
 
 app.get('/api/equity-history', (_req, res) => {
-  runAsync(res, async () => {
-    const now = Date.now();
-    if (eqHistCache && now - eqHistCache.ts < 3_600_000) {
-      res.json({ rows: withRecentEquityRows(eqHistCache.rows), reconstructedBefore: eqHistCache.reconstructedBefore, reconstruction: eqHistCache.reconstruction, fetchedAt: eqHistCache.ts });
-      return;
-    }
-    if (!client) {
-      res.json({ rows: [], reconstructedBefore: null, reconstruction: { complete: false, reasons: ['Binance key is not configured'] }, fetchedAt: null });
-      return;
-    }
-    try {
-      const snapshot = await startEquityHistoryRefresh();
-      res.json({ rows: withRecentEquityRows(snapshot.rows), reconstructedBefore: snapshot.reconstructedBefore, reconstruction: snapshot.reconstruction, fetchedAt: snapshot.ts });
-    } catch (error) {
-      res.json({
-        rows: withRecentEquityRows(eqHistCache?.rows ?? []),
-        reconstructedBefore: eqHistCache?.reconstructedBefore ?? null,
-        reconstruction: eqHistCache?.reconstruction ?? { complete: false, reasons: ['Signed history refresh failed'] },
-        fetchedAt: eqHistCache?.ts ?? null,
-        error: error instanceof Error ? error.message : 'history failed',
-      });
-    }
-  });
+  sendNotConfigured(res, 'PRIVATE_EQUITY_HISTORY');
 });
 
 type EarnSnapshot = { ts: number; rows: { asset: string; amount: number; apr: number }[] };
@@ -1551,23 +1406,7 @@ function startEarnRefresh(): Promise<EarnSnapshot> {
 }
 
 app.get('/api/earn', (_req, res) => {
-  runAsync(res, async () => {
-    const now = Date.now();
-    if (earnCache && now - earnCache.ts < 60_000) {
-      res.json({ rows: earnCache.rows, fetchedAt: earnCache.ts });
-      return;
-    }
-    if (!client) {
-      res.json({ rows: [], fetchedAt: null });
-      return;
-    }
-    try {
-      const snapshot = await startEarnRefresh();
-      res.json({ rows: snapshot.rows, fetchedAt: snapshot.ts });
-    } catch (error) {
-      res.json({ rows: earnCache?.rows ?? [], fetchedAt: earnCache?.ts ?? null, error: error instanceof Error ? error.message : 'earn fetch failed' });
-    }
-  });
+  sendNotConfigured(res, 'PRIVATE_EARN_POSITIONS');
 });
 
 // Account-wide wallet totals from Binance's signed wallet-balance endpoint.
@@ -1621,18 +1460,7 @@ async function refreshWalletBalances(force = false): Promise<WalletBalanceSnapsh
 
 app.get('/api/wallet-balances', (_req, res) => {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-  runAsync(res, async () => {
-    try {
-      const snapshot = await refreshWalletBalances();
-      res.json({ rows: snapshot.rows, fetchedAt: snapshot.ts });
-    } catch (error) {
-      res.json({
-        rows: walletBalanceCache?.rows ?? [],
-        fetchedAt: walletBalanceCache?.ts ?? null,
-        error: error instanceof Error ? error.message : 'wallet balance fetch failed',
-      });
-    }
-  });
+  sendNotConfigured(res, 'PRIVATE_WALLET_BALANCES');
 });
 
 type MarketSourceSnapshot = {
@@ -1765,97 +1593,31 @@ app.get('/api/market/detail', (req, res) => {
 });
 
 app.get('/api/loans', (_req, res) => {
-  runAsync(res, async () => {
-    res.json(await loans.snapshot(false));
-  });
+  sendNotConfigured(res, 'PRIVATE_LOAN_STATE');
 });
 
 app.post('/api/loans/refresh', (_req, res) => {
-  runAsync(res, async () => {
-    res.json(await loans.snapshot(true));
-  });
+  sendNotConfigured(res, 'PRIVATE_LOAN_REFRESH');
 });
 
-app.post('/api/loans/reconcile', (req, res) => {
-  const confirm = typeof (req.body as Record<string, unknown>).confirm === 'string'
-    ? String((req.body as Record<string, unknown>).confirm)
-    : '';
-  res.json(loans.acknowledgeReconciliation(confirm));
+app.post('/api/loans/reconcile', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LOAN_RECONCILIATION_MUTATION');
 });
 
-function loanCoin(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  return /^[A-Z0-9]{2,10}$/.test(value) ? value : null;
-}
-
-function positiveFinite(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-app.post('/api/loans/borrow', (req, res) => {
-  runAsync(res, async () => {
-    const b = req.body as Record<string, unknown>;
-    const requestedLoanCoin = loanCoin(b.loanCoin);
-    const collateralCoin = loanCoin(b.collateralCoin);
-    const amount = positiveFinite(b.amount);
-    const confirmCoin = loanCoin(b.confirmCoin);
-    if (!requestedLoanCoin || !collateralCoin || amount === null || !confirmCoin) {
-      res.status(400).json({ error: 'bad borrow request' });
-      return;
-    }
-    res.json(await loans.borrow(requestedLoanCoin, collateralCoin, amount, confirmCoin));
-  });
+app.post('/api/loans/borrow', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LOAN_BORROW');
 });
 
-app.post('/api/loans/adjust-ltv', (req, res) => {
-  runAsync(res, async () => {
-    const b = req.body as Record<string, unknown>;
-    const requestedLoanCoin = loanCoin(b.loanCoin);
-    const collateralCoin = loanCoin(b.collateralCoin);
-    const amount = positiveFinite(b.amount);
-    const direction = b.direction === 'REDUCED' || b.direction === 'ADDITIONAL' ? b.direction : null;
-    const confirmCoin = loanCoin(b.confirmCoin);
-    if (!requestedLoanCoin || !collateralCoin || amount === null || !direction || !confirmCoin) {
-      res.status(400).json({ error: 'bad adjust request' });
-      return;
-    }
-    res.json(await loans.adjustLtv(requestedLoanCoin, collateralCoin, amount, direction, confirmCoin));
-  });
+app.post('/api/loans/adjust-ltv', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LOAN_ADJUST_LTV');
 });
 
-app.post('/api/loans/repay', (req, res) => {
-  runAsync(res, async () => {
-    const b = req.body as Record<string, unknown>;
-    const requestedLoanCoin = loanCoin(b.loanCoin);
-    const collateralCoin = loanCoin(b.collateralCoin);
-    const amount = positiveFinite(b.amount);
-    const confirmCoin = loanCoin(b.confirmCoin);
-    if (!requestedLoanCoin || !collateralCoin || amount === null || !confirmCoin) {
-      res.status(400).json({ error: 'bad repay request' });
-      return;
-    }
-    res.json(await loans.repay(requestedLoanCoin, collateralCoin, amount, confirmCoin));
-  });
+app.post('/api/loans/repay', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LOAN_REPAY');
 });
 
-app.get('/api/orders/history', (req, res) => {
-  runAsync(res, async () => {
-    const symbol = String(req.query.symbol ?? '');
-    if (!client) {
-      res.json({ available: false, error: 'Binance keys not configured', orders: [] });
-      return;
-    }
-    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
-      res.status(400).json({ error: 'bad symbol' });
-      return;
-    }
-    try {
-      const all = await client.allOrders(symbol, 100);
-      res.json({ available: true, orders: all.reverse() });
-    } catch (err) {
-      res.json({ available: false, error: String((err as Error).message), orders: [] });
-    }
-  });
+app.get('/api/orders/history', (_req, res) => {
+  sendNotConfigured(res, 'PRIVATE_ORDER_HISTORY');
 });
 
 app.get('/api/pnl', (_req, res) => {
@@ -2362,26 +2124,12 @@ app.get('/api/symbol/context', (req, res) => {
   });
 });
 
-app.post('/api/orders/cancel-all', (req, res) => {
-  runAsync(res, async () => {
-    const symbol = String((req.body as Record<string, unknown>).symbol ?? '');
-    if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
-      res.status(400).json({ error: 'bad symbol' });
-      return;
-    }
-    res.json(await orders.cancelAll(symbol));
-  });
+app.post('/api/orders/cancel-all', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL_ALL');
 });
 
-app.get('/api/loans/max-borrowable', (req, res) => {
-  runAsync(res, async () => {
-    const asset = String(req.query.asset ?? '').toUpperCase();
-    if (!/^[A-Z0-9]{2,10}$/.test(asset)) {
-      res.status(400).json({ error: 'bad asset' });
-      return;
-    }
-    res.json(await loans.maxBorrowable(asset));
-  });
+app.get('/api/loans/max-borrowable', (_req, res) => {
+  sendNotConfigured(res, 'PRIVATE_MAX_BORROWABLE');
 });
 
 // System health for the dedicated page.
@@ -2434,8 +2182,6 @@ function connectionWatchmanSnapshot(
   const newsAgeMs = news.fetchedAt ? now - news.fetchedAt : null;
   const calendarAgeMs = calCache?.at ? now - calCache.at : null;
   const fxAgeMs = fxCache?.at ? now - fxCache.at : null;
-  const privateStream = String(userStream?.status ?? 'off').toLowerCase();
-
   const accountStatus: WatchmanStatus = !account.keysPresent
     ? 'planned'
     : !account.connected || accountAgeMs === null || accountAgeMs > 6 * 60_000
@@ -2448,8 +2194,10 @@ function connectionWatchmanSnapshot(
     : basis.bookState !== 'fresh' || basis.markState !== 'fresh' || volume.bookState !== 'fresh' || volume.streamState !== 'open'
       ? 'degraded'
       : 'operational';
-  const newsStatus: WatchmanStatus = !news.fetchedAt || news.live === 0 || (newsAgeMs !== null && newsAgeMs > 5 * 60_000)
-    ? 'outage'
+  const newsStatus: WatchmanStatus = !news.fetchedAt
+    ? 'planned'
+    : news.live === 0 || (newsAgeMs !== null && newsAgeMs > 5 * 60_000)
+      ? 'outage'
     : news.errors > Math.max(3, Math.floor(news.sources * 0.2)) || (newsAgeMs !== null && newsAgeMs > 90_000)
       ? 'degraded'
       : 'operational';
@@ -2499,27 +2247,27 @@ function connectionWatchmanSnapshot(
     },
     {
       id: 'user-stream', label: 'Binance User Stream', group: 'binance',
-      status: ['open', 'live', 'connected'].includes(privateStream) ? 'operational' : 'degraded',
-      detail: ['open', 'live', 'connected'].includes(privateStream) ? 'Private account-event socket' : 'Optional socket unavailable · 30s signed REST fallback active',
-      value: ['open', 'live', 'connected'].includes(privateStream) ? 'Live' : 'Fallback', required: false,
-      updatedAt: account.lastSyncTs, resetTarget: 'account',
+      status: 'planned',
+      detail: 'NOT_CONFIGURED: private account-event socket and signed REST fallback are not mounted',
+      value: 'Not configured', required: false,
+      updatedAt: null, resetTarget: 'account',
     },
     {
       id: 'news-sources', label: 'News Source Network', group: 'sources', status: newsStatus,
-      detail: `${news.live} live · ${news.delayed} delayed · ${news.errors} errors · ${news.items} retained`,
-      value: `${news.live}/${news.sources} live`, required: true, updatedAt: news.fetchedAt, resetTarget: 'news',
+      detail: `On-demand/unaccepted · ${news.live} live · ${news.delayed} delayed · ${news.errors} errors · ${news.items} retained`,
+      value: news.fetchedAt ? `${news.live}/${news.sources} live` : 'On demand', required: false, updatedAt: news.fetchedAt, resetTarget: 'news',
     },
     {
       id: 'calendar-source', label: 'Economic Calendar', group: 'sources',
-      status: !calCache?.at || !calCache.items.length ? 'outage' : calendarAgeMs !== null && calendarAgeMs > 10 * 60_000 ? 'degraded' : 'operational',
-      detail: 'TradingView macro-event cache with actual, forecast, and prior values',
-      value: `${calCache?.items.length ?? 0} events`, required: true, updatedAt: calCache?.at ?? null, resetTarget: 'calendar',
+      status: !calCache?.at ? 'planned' : !calCache.items.length ? 'outage' : calendarAgeMs !== null && calendarAgeMs > 10 * 60_000 ? 'degraded' : 'operational',
+      detail: 'On-demand/unaccepted TradingView macro-event cache',
+      value: calCache?.at ? `${calCache.items.length} events` : 'On demand', required: false, updatedAt: calCache?.at ?? null, resetTarget: 'calendar',
     },
     {
       id: 'fx-source', label: 'FX Reference Rates', group: 'sources',
-      status: !fxCache?.at || !Object.keys(fxCache.rates).length ? 'outage' : fxAgeMs !== null && fxAgeMs > 45 * 60_000 ? 'degraded' : 'operational',
-      detail: 'Display-currency conversion cache; trading decisions remain USD based',
-      value: `${fxCache ? Object.keys(fxCache.rates).length : 0} currencies`, required: true, updatedAt: fxCache?.at ?? null, resetTarget: 'fx',
+      status: !fxCache?.at ? 'planned' : !Object.keys(fxCache.rates).length ? 'outage' : fxAgeMs !== null && fxAgeMs > 45 * 60_000 ? 'degraded' : 'operational',
+      detail: 'On-demand/unaccepted display-currency cache; trading decisions remain USD based',
+      value: fxCache?.at ? `${Object.keys(fxCache.rates).length} currencies` : 'On demand', required: false, updatedAt: fxCache?.at ?? null, resetTarget: 'fx',
     },
     {
       id: 'aws-runner', label: 'AWS EC2 Runner', group: 'infrastructure', status: awsConnectionStatus,
@@ -2605,7 +2353,15 @@ app.get('/api/system', (req, res) => {
       }
     }
     const dbOk = ledger.probeWritable();
-    const awsStatus = await awsRunnerControl.status(false, null, false);
+    const awsStatus = {
+      configured: false,
+      connectionEnabled: false,
+      executionEnabled: false,
+      channel: 'owner_gated',
+      region: null,
+      instanceId: null,
+      missing: ['OWNER_AUTHORIZATION'],
+    };
     const notificationRouting = notificationRoutingSnapshot();
     const watchman = connectionWatchmanSnapshot(dbOk, awsStatus, notificationRouting, Boolean(req.headers['cf-ray']));
     res.json({
@@ -2620,8 +2376,8 @@ app.get('/api/system', (req, res) => {
         connected: account.connected,
         lastSyncTs: account.lastSyncTs,
         lastError: account.lastError,
-        userStream: userStream?.status ?? 'off',
-        keyFingerprint: creds ? maskApiKey(creds.apiKey) : null,
+        userStream: 'off',
+        keyFingerprint: null,
         keyPermissions: account.keyRestrictions,
         keyPermissionsTs: account.lastRestrictionsTs,
         keyPosture: keyPosture(account.keyRestrictions, account.keysPresent),
@@ -2744,7 +2500,7 @@ function apiKeyManifest() {
   // Only Binance's live per-key restriction response is authoritative. Never
   // turn an unavailable permission read into reassuring false values.
   const r = account.keyRestrictions;
-  const posture = keyPosture(r, Boolean(creds));
+  const posture = keyPosture(r, false);
   const permissions = r
     ? {
         reading: r.enableReading,
@@ -2771,22 +2527,16 @@ function apiKeyManifest() {
             : posture.level === 'read_only'
               ? 'Read-only'
               : 'Unknown',
-      status: r ? 'live' : creds ? 'unknown' : 'missing',
+      status: 'missing',
       live: !!r, // permissions are the real, cross-checkable ones from Binance
-      keysPresent: !!creds,
-      prefix: creds ? creds.apiKey.slice(0, 8) : declaredPrefix, // first 8 only — never the full key
-      fingerprint: creds ? maskApiKey(creds.apiKey) : null,
+      keysPresent: false,
+      prefix: declaredPrefix,
+      fingerprint: null,
       ipRestrict: r ? r.ipRestrict : null,
       ips,
-      ipNote: creds ? 'Restriction declared by server environment' : 'No key is loaded',
+      ipNote: 'No private exchange adapter is mounted',
       permissions,
-      note: creds
-        ? r
-          ? posture.level === 'unsafe'
-            ? 'Unsafe transfer or withdrawal authority is enabled. Recreate this key before operating the control room.'
-            : null
-          : 'Live permissions are unavailable; every permission remains unknown until Binance verifies it.'
-        : 'Declared config — no key wired into this server yet.',
+      note: 'Private exchange access is NOT_CONFIGURED in this runtime.',
       updatedAt: account.lastRestrictionsTs,
     },
     {
@@ -2816,11 +2566,8 @@ type ConnectionRefreshTarget = 'all' | 'market' | 'runtime' | 'account' | 'news'
 const CONNECTION_REFRESH_TARGETS = new Set<ConnectionRefreshTarget>(['all', 'market', 'runtime', 'account', 'news', 'calendar', 'fx']);
 let connectionRefreshBusy = false;
 
-// On-demand connection control. "all" is a real reconnect cycle: rebuild the
-// Binance market/runtime streams, re-open the optional user stream, resync the
-// signed account/order/wallet state, and force every server-owned cache source.
-// Targeted retries use the same implementation without pretending that a local
-// polling preference can restart an upstream connection by itself.
+// On-demand connection control is limited to public and local runtimes. Private
+// account refresh remains an explicit unavailable capability.
 app.post('/api/refresh', (req, res) => {
   runAsync(res, async () => {
     const rawTarget = (req.body as { target?: unknown } | null)?.target;
@@ -2830,6 +2577,10 @@ app.post('/api/refresh', (req, res) => {
       return;
     }
     const target = requested as ConnectionRefreshTarget;
+    if (target === 'account') {
+      sendNotConfigured(res, 'PRIVATE_ACCOUNT_REFRESH');
+      return;
+    }
     if (connectionRefreshBusy) {
       res.status(409).json({ ok: false, issues: ['A connection reset is already running'], target, ts: Date.now() });
       return;
@@ -2869,18 +2620,10 @@ app.post('/api/refresh', (req, res) => {
         });
       }
 
-      if (target === 'all' || target === 'account') {
-        await runStep('account-data', async () => {
-          await account.sync();
-          await orders.syncOpenOrders();
-          await orders.reconcilePendingOrders();
-          if (account.keysPresent) await refreshWalletBalances(true);
-          if (userStream) {
-            userStream.stop();
-            await userStream.start();
-          }
-          return account.keysPresent ? 'Account, orders, wallets, and user stream reset' : 'No signed account key configured';
-        });
+      if (target === 'all') {
+        const detail = 'NOT_CONFIGURED: private account refresh is not mounted';
+        issues.push(`account-data: ${detail}`);
+        steps.push({ key: 'account-data', ok: false, durationMs: 0, detail });
       }
 
       if (target === 'all' || target === 'news') {
@@ -2938,79 +2681,27 @@ app.post('/api/refresh', (req, res) => {
 });
 
 app.get('/api/apikey', (_req, res) => {
-  res.json({ keys: apiKeyManifest(), activeId: 'read-only', ts: Date.now() });
+  sendNotConfigured(res, 'PRIVATE_API_KEY_POSTURE');
 });
 
-app.get('/api/aws-control/status', (req, res) => {
-  void (async () => {
-    const operator = await awsOperator(req);
-    const probe = req.query.probe === '1';
-    const status = await awsRunnerControl.status(operator.authorized, operator.operator, probe);
-    res.json({ ok: true, status, authorizationReason: operator.authorized ? null : operator.reason });
-  })().catch((error) => sendAwsControlError(res, error));
+app.get('/api/aws-control/status', (_req, res) => {
+  sendOwnerGated(res, 'AWS_CONTROL_STATUS');
 });
 
-app.post('/api/aws-control/gates', (req, res) => {
-  void (async () => {
-    const operator = await requireAwsOperator(req, res);
-    if (!operator) return;
-    const body = req.body as Record<string, unknown>;
-    const provided = ['connectionEnabled', 'executionEnabled'].filter((key) => body[key] !== undefined);
-    if (provided.length === 0 || provided.some((key) => typeof body[key] !== 'boolean')) {
-      res.status(400).json({ ok: false, code: 'INVALID_AWS_GATES', error: 'At least one explicit boolean gate is required.' });
-      return;
-    }
-    const gates = awsRunnerControl.setGates({
-      connectionEnabled: typeof body.connectionEnabled === 'boolean' ? body.connectionEnabled : undefined,
-      executionEnabled: typeof body.executionEnabled === 'boolean' ? body.executionEnabled : undefined,
-    }, operator.operator);
-    res.json({ ok: true, gates });
-  })().catch((error) => sendAwsControlError(res, error));
+app.post('/api/aws-control/gates', (_req, res) => {
+  sendOwnerGated(res, 'AWS_CONTROL_GATES');
 });
 
-app.post('/api/aws-control/command', (req, res) => {
-  void (async () => {
-    const operator = await requireAwsOperator(req, res);
-    if (!operator) return;
-    const rawCommand = (req.body as Record<string, unknown>).command;
-    const command = typeof rawCommand === 'string' && rawCommand.length <= 80 ? rawCommand : '';
-    if (!command) {
-      res.status(400).json({ ok: false, code: 'INVALID_AWS_COMMAND', error: 'A valid command is required.' });
-      return;
-    }
-    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: command.toLowerCase() });
-    const result = await awsRunnerControl.runCommand(command);
-    res.json({ ok: true, result });
-  })().catch((error) => sendAwsControlError(res, error));
+app.post('/api/aws-control/command', (_req, res) => {
+  sendOwnerGated(res, 'AWS_CONTROL_COMMAND');
 });
 
-app.get('/api/aws-control/runner', (req, res) => {
-  void (async () => {
-    const operator = await requireAwsOperator(req, res);
-    if (!operator) return;
-    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: 'read_runner' });
-    const file = await awsRunnerControl.readRunner();
-    res.json({ ok: true, file });
-  })().catch((error) => sendAwsControlError(res, error));
+app.get('/api/aws-control/runner', (_req, res) => {
+  sendOwnerGated(res, 'AWS_RUNNER_SOURCE');
 });
 
-app.put('/api/aws-control/runner', (req, res) => {
-  void (async () => {
-    const operator = await requireAwsOperator(req, res);
-    if (!operator) return;
-    const body = req.body as Record<string, unknown>;
-    const content = typeof body.content === 'string' ? body.content : null;
-    const expectedSha256 = typeof body.expectedSha256 === 'string' && /^[a-f0-9]{64}$/.test(body.expectedSha256)
-      ? body.expectedSha256
-      : body.expectedSha256 === null || body.expectedSha256 === undefined ? null : undefined;
-    if (content === null || expectedSha256 === undefined) {
-      res.status(400).json({ ok: false, code: 'INVALID_RUNNER_SOURCE', error: 'Runner content or expected hash is invalid.' });
-      return;
-    }
-    ledger.logEvent('aws_runner_request', null, { operator: operator.operator, command: 'save_runner', bytes: Buffer.byteLength(content) });
-    const file = await awsRunnerControl.saveRunner(content, expectedSha256);
-    res.json({ ok: true, file: { ...file, content: undefined } });
-  })().catch((error) => sendAwsControlError(res, error));
+app.put('/api/aws-control/runner', (_req, res) => {
+  sendOwnerGated(res, 'AWS_RUNNER_SOURCE_MUTATION');
 });
 
 app.get('/api/config', (_req, res) => {
@@ -3053,8 +2744,37 @@ function parseCoinList(v: unknown, max = 40): string[] | null {
   return [...new Set(rows)];
 }
 
+function financialArmingFields(body: Record<string, unknown>): string[] {
+  const fields: string[] = [];
+  if (body.liveTradingEnabled === true) fields.push('liveTradingEnabled');
+  if (body.fundsLocked === false) fields.push('fundsLocked');
+  if (body.borrowGuard && typeof body.borrowGuard === 'object' && !Array.isArray(body.borrowGuard)) {
+    const guard = body.borrowGuard as Record<string, unknown>;
+    if (guard.enabled === false) fields.push('borrowGuard.enabled');
+    if (guard.newBorrowPaused === false) fields.push('borrowGuard.newBorrowPaused');
+    if (guard.repayOnly === false) fields.push('borrowGuard.repayOnly');
+  }
+  if (body.controlModes && typeof body.controlModes === 'object' && !Array.isArray(body.controlModes)) {
+    const modes = body.controlModes as Record<string, unknown>;
+    for (const key of ['funds', 'borrowing', 'liveOrders'] as const) {
+      if (modes[key] !== undefined && modes[key] !== 'blocked') fields.push(`controlModes.${key}`);
+    }
+  }
+  return fields;
+}
+
 app.post('/api/config', (req, res) => {
   const body = req.body as Record<string, unknown>;
+  const armingFields = financialArmingFields(body);
+  if (armingFields.length > 0) {
+    res.status(409).json({
+      ok: false,
+      code: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+      error: 'Financial controls cannot be armed in this runtime.',
+      fields: armingFields,
+    });
+    return;
+  }
   const patch: Record<string, unknown> = {}; // applied to config
   const logPatch: Record<string, unknown> = {}; // written to the ledger (no image bytes)
   const invalidFields: string[] = [];
@@ -3100,7 +2820,7 @@ app.post('/api/config', (req, res) => {
     touchedControlModes.add('automation');
   }
   if (typeof body.liveTradingEnabled === 'boolean') {
-    nextControlModes.liveOrders = body.liveTradingEnabled ? 'allowed' : 'paused';
+    nextControlModes.liveOrders = 'blocked';
     touchedControlModes.add('liveOrders');
   }
   if (body.borrowGuard !== undefined && (!body.borrowGuard || typeof body.borrowGuard !== 'object' || Array.isArray(body.borrowGuard))) {
@@ -3240,6 +2960,32 @@ app.post('/api/config', (req, res) => {
     res.status(400).json({ code: 'INVALID_CONFIG', error: 'Configuration contains invalid fields.', fields: [...new Set(invalidFields)] });
     return;
   }
+  const requestedGuard = patch.borrowGuard && typeof patch.borrowGuard === 'object'
+    ? patch.borrowGuard as AppConfig['borrowGuard']
+    : config.borrowGuard;
+  const requestedModes = patch.controlModes && typeof patch.controlModes === 'object'
+    ? patch.controlModes as ExecutionControlModes
+    : config.controlModes;
+  patch.liveTradingEnabled = false;
+  patch.fundsLocked = true;
+  patch.borrowGuard = {
+    ...requestedGuard,
+    enabled: true,
+    newBorrowPaused: true,
+    repayOnly: true,
+  };
+  patch.controlModes = {
+    ...requestedModes,
+    funds: 'blocked',
+    borrowing: 'blocked',
+    liveOrders: 'blocked',
+  };
+  Object.assign(logPatch, {
+    liveTradingEnabled: false,
+    fundsLocked: true,
+    borrowGuard: patch.borrowGuard,
+    controlModes: patch.controlModes,
+  });
   const nextConfig = { ...config, ...patch } as AppConfig;
   saveConfig(ledger, nextConfig);
   Object.assign(config, nextConfig);
@@ -3260,21 +3006,8 @@ app.post('/api/kill', (req, res) => {
   res.json({ killSwitch: config.killSwitch });
 });
 
-app.post('/api/live', (req, res) => {
-  const on = (req.body as Record<string, unknown>).on;
-  if (typeof on !== 'boolean') {
-    res.status(400).json({ error: 'live trading requires a boolean on value' });
-    return;
-  }
-  const nextConfig = {
-    ...config,
-    liveTradingEnabled: on,
-    controlModes: { ...config.controlModes, liveOrders: on ? 'allowed' as const : 'paused' as const },
-  };
-  saveConfig(ledger, nextConfig);
-  Object.assign(config, nextConfig);
-  ledger.logEvent('manual_action', null, { action: 'live_trading', on: config.liveTradingEnabled });
-  res.json({ liveTradingEnabled: config.liveTradingEnabled });
+app.post('/api/live', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LIVE_TRADING_ARM');
 });
 
 function parseIntent(body: Record<string, unknown>): OrderIntent | null {
@@ -3312,28 +3045,12 @@ app.post('/api/trade/preview', (req, res) => {
   res.json(orders.preview(intent));
 });
 
-app.post('/api/trade/test', (req, res) => {
-  runAsync(res, async () => {
-    const intent = parseIntent(req.body as Record<string, unknown>);
-    if (!intent) {
-      res.status(400).json({ error: 'invalid order intent' });
-      return;
-    }
-    res.json(await orders.testOrder(intent));
-  });
+app.post('/api/trade/test', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'TEST_ORDER');
 });
 
-app.post('/api/trade/send', (req, res) => {
-  runAsync(res, async () => {
-    const body = req.body as Record<string, unknown>;
-    const intent = parseIntent(body);
-    if (!intent) {
-      res.status(400).json({ error: 'invalid order intent' });
-      return;
-    }
-    const confirmSymbol = typeof body.confirmSymbol === 'string' ? body.confirmSymbol : '';
-    res.json(await orders.send(intent, confirmSymbol));
-  });
+app.post('/api/trade/send', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'LIVE_ORDER_SEND');
 });
 
 app.get('/api/orders/recovery', (req, res) => {
@@ -3353,50 +3070,12 @@ app.get('/api/orders/recovery', (req, res) => {
   });
 });
 
-app.post('/api/orders/recovery/resolve', (req, res) => {
-  runAsync(res, async () => {
-    const body = req.body as Record<string, unknown>;
-    const action = body.action === 'hold'
-      || body.action === 'confirm_not_sent'
-      || body.action === 'confirm_accepted'
-      ? body.action
-      : null;
-    if (!action) {
-      res.status(400).json({ ok: false, error: 'invalid order-recovery action' });
-      return;
-    }
-    const verified = operatorAccess.operator(req);
-    if (!verified) {
-      res.status(403).json({ ok: false, error: 'verified operator identity is required' });
-      return;
-    }
-    const result = await orders.resolveOrderRecovery({
-      reservationId: typeof body.reservationId === 'string' ? body.reservationId : '',
-      clientOrderId: typeof body.clientOrderId === 'string' ? body.clientOrderId : '',
-      action,
-      confirm: typeof body.confirm === 'string' ? body.confirm : '',
-      reason: typeof body.reason === 'string' ? body.reason : '',
-      operator: verified.email ?? verified.id,
-      orderId: typeof body.orderId === 'number' ? body.orderId : undefined,
-      status: typeof body.status === 'string' ? body.status : undefined,
-      executedQty: typeof body.executedQty === 'number' ? body.executedQty : undefined,
-      executedQuoteUsd: typeof body.executedQuoteUsd === 'number' ? body.executedQuoteUsd : undefined,
-    });
-    res.status(result.ok ? 200 : 409).json(result);
-  });
+app.post('/api/orders/recovery/resolve', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'ORDER_RECOVERY_MUTATION');
 });
 
-app.post('/api/orders/cancel', (req, res) => {
-  runAsync(res, async () => {
-    const body = req.body as Record<string, unknown>;
-    const symbol = typeof body.symbol === 'string' ? body.symbol : '';
-    const orderId = body.orderId;
-    if (!/^[A-Z0-9]{4,20}$/.test(symbol) || typeof orderId !== 'number' || !Number.isSafeInteger(orderId) || orderId <= 0) {
-      res.status(400).json({ error: 'bad cancel request' });
-      return;
-    }
-    res.json(await orders.cancel(symbol, orderId));
-  });
+app.post('/api/orders/cancel', (_req, res) => {
+  sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL');
 });
 
 // Serve the built dashboard (web/dist) with SPA fallback.
@@ -3600,52 +3279,80 @@ function broadcast(msg: unknown): void {
   }
 }
 
-const websocketHeartbeatTimer = setInterval(() => {
-  for (const client of wss.clients) {
-    if (wsAlive.get(client) === false) {
-      client.terminate();
-      continue;
-    }
-    wsAlive.set(client, false);
-    try { client.ping(); } catch { client.terminate(); }
-  }
-}, 30_000);
-const stateBroadcastTimer = setInterval(() => broadcast({ type: 'state', payload: buildState() }), TICK_MS);
-ledger.on('event', (ev) => broadcast({ type: 'event', payload: ev }));
+let websocketHeartbeatTimer: NodeJS.Timeout | null = null;
+let stateBroadcastTimer: NodeJS.Timeout | null = null;
 
-// Prime the icon resolver with the full market universe so logo coverage
-// converges in the background without waiting for a browser to ask, and new
-// listings resolve within the hour.
-function primeIconUniverse(): void {
+function marketOwnerReadyForAuxiliaries(): boolean {
+  if (!systemIntegrationStart.ok || shuttingDown) return false;
   try {
-    resolveIcons(engine.allRows().map((r) => r.base));
+    const market = systemIntegration.supervisor().components.find(
+      (component) => component.componentId === 'market-universe',
+    );
+    return market?.desiredState === 'RUNNING'
+      && market.phase === 'RUNNING'
+      && market.readiness === 'READY';
   } catch {
-    // non-fatal — the client-driven path still works
+    return false;
   }
 }
-const primeIconStartTimer = setTimeout(primeIconUniverse, 20_000);
-const initialRefreshTimer = setTimeout(() => {
-  void startCalendarRefresh();
-  void getNewsContext(false).catch(() => undefined);
-  void refreshFx().catch((error) => safeLogEvent('error_event', null, { source: 'fx.fetch', message: String(error) }));
-  startNewsRefreshLoop();
-}, 250);
-function warmProfileUniverse(): void {
-  try {
-    const rows = engine.allRows();
-    if (!rows.length) return;
-    const prices = new Map(rows.map((r) => [r.base, r.spot]));
-    void warmAllProfiles(rows.map((r) => r.base), (b) => prices.get(b) ?? null, STOCK_TOKENS);
-  } catch {
-    // non-fatal
+
+function admitMarketOwnedAuxiliaries(): void {
+  if (!marketOwnerReadyForAuxiliaries()) return;
+  if (scannerTimer === null) {
+    runScannerTick();
+    scannerTimer = setInterval(runScannerTick, TICK_MS);
+  }
+  if (!liquidationCollectorStarted) {
+    startLiquidationCollector();
+    liquidationCollectorStarted = true;
   }
 }
-const warmProfileStartTimer = setTimeout(warmProfileUniverse, 45_000);
-startLiquidationCollector();
-const warmProfileTimer = setInterval(warmProfileUniverse, 24 * 3_600_000);
-const primeIconTimer = setInterval(primeIconUniverse, 3_600_000);
+
+function stopMarketOwnedAuxiliaries(): void {
+  if (scannerTimer !== null) {
+    clearInterval(scannerTimer);
+    scannerTimer = null;
+  }
+  if (liquidationCollectorStarted) {
+    stopLiquidationCollector();
+    liquidationCollectorStarted = false;
+  }
+}
+
+function startServerTimers(): void {
+  if (websocketHeartbeatTimer !== null || stateBroadcastTimer !== null || eventRetentionTimer !== null) return;
+
+  // Listener ownership exists before background work is admitted. Product
+  // operator events remain bounded pull-only truth; raw Ledger events are not
+  // exposed on the legacy WebSocket.
+  pruneEphemeralLedgerEvents(5);
+  eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
+  websocketHeartbeatTimer = setInterval(() => {
+    for (const client of wss.clients) {
+      if (wsAlive.get(client) === false) {
+        client.terminate();
+        continue;
+      }
+      wsAlive.set(client, false);
+      try { client.ping(); } catch { client.terminate(); }
+    }
+  }, 30_000);
+  stateBroadcastTimer = setInterval(() => {
+    admitMarketOwnedAuxiliaries();
+    try {
+      broadcast({ type: 'state', payload: buildState() });
+    } catch (error) {
+      safeLogEvent('error_event', null, {
+        source: 'server.state_broadcast',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, TICK_MS);
+  admitMarketOwnedAuxiliaries();
+}
 
 server.listen(PORT, HOST, () => {
+  startServerTimers();
   console.log(`cosmos control room listening on http://${HOST}:${PORT}`);
 });
 server.on('error', (error) => {
@@ -3661,28 +3368,16 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
     shuttingDown = true;
     console.log(`received ${signal}; draining control-room services`);
 
-    for (const timer of [
-      accountSyncTimer,
-      orderSyncTimer,
-      fillReconcileTimer,
-      newsRefreshTimer,
-      scannerTimer,
-      eventRetentionTimer,
-      websocketHeartbeatTimer,
-      stateBroadcastTimer,
-      primeIconStartTimer,
-      initialRefreshTimer,
-      warmProfileStartTimer,
-      warmProfileTimer,
-      primeIconTimer,
-    ]) {
-      if (timer) clearTimeout(timer);
+    for (const timer of [eventRetentionTimer, websocketHeartbeatTimer, stateBroadcastTimer]) {
+      if (timer) clearInterval(timer);
     }
+    eventRetentionTimer = null;
+    websocketHeartbeatTimer = null;
+    stateBroadcastTimer = null;
+    stopMarketOwnedAuxiliaries();
 
-    userStream?.stop();
     bookHub.stop();
     const systemIntegrationDrain = systemIntegration.drain();
-    stopLiquidationCollector();
     for (const socket of pendingWsUpgradeSockets) {
       rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');
       socket.destroy();

@@ -4,6 +4,11 @@ import { cloneFrozenNullable } from './values.mjs';
 
 const EVENT_KIND_PATTERN = /^[a-z0-9_.-]{1,64}$/;
 const CONFIG_KEY_PATTERN = /^[A-Za-z0-9_.:-]{1,160}$/;
+const CONFIG_CAS_VALUE_MAX_BYTES = 512 * 1024;
+const CONFIG_CAS_EVENT_DATA_MAX_BYTES = 128 * 1024;
+const CONFIG_CAS_EVENT_BATCH_MAX = 2;
+const EVENT_SYMBOL_MAX_CHARS = 64;
+const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
 
 function positiveSafeInteger(value, label) {
   if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${label} must be a positive safe integer`);
@@ -72,20 +77,24 @@ export class BoundedInMemoryLedger extends EventEmitter {
   }
 
   #setConfigValue(key, value) {
+    this.#validateConfigValue(key, value);
+    this.#config.set(key, value);
+  }
+
+  #validateConfigValue(key, value, enforceCapacity = true) {
     if (typeof key !== 'string' || !CONFIG_KEY_PATTERN.test(key)) throw new TypeError('invalid memory-ledger config key');
     if (typeof value !== 'string') throw new TypeError('memory-ledger config value must be a string');
     if (Buffer.byteLength(value, 'utf8') > this.#maximumConfigValueBytes) {
       throw new RangeError('memory-ledger config value exceeds maximumConfigValueBytes');
     }
-    if (!this.#config.has(key) && this.#config.size >= this.#maximumConfigEntries) {
+    if (enforceCapacity && !this.#config.has(key) && this.#config.size >= this.#maximumConfigEntries) {
       throw new RangeError('memory-ledger config capacity exceeded');
     }
-    this.#config.set(key, value);
   }
 
   #prepareEvent(kind, symbol, data) {
     if (typeof kind !== 'string' || !EVENT_KIND_PATTERN.test(kind)) throw new TypeError('invalid memory-ledger event kind');
-    if (symbol !== null && symbol !== undefined && (typeof symbol !== 'string' || symbol.length > 64)) {
+    if (symbol !== null && symbol !== undefined && (typeof symbol !== 'string' || symbol.length > EVENT_SYMBOL_MAX_CHARS)) {
       throw new TypeError('invalid memory-ledger event symbol');
     }
     if (this.#events.length >= this.#maximumEvents) throw new RangeError('memory-ledger event capacity exceeded');
@@ -143,6 +152,57 @@ export class BoundedInMemoryLedger extends EventEmitter {
     }
     this.#config.set(key, value);
     return this.#commitEvent(event);
+  }
+
+  compareAndSetConfigValueAndLogEvents(key, expectedValue, nextValue, records) {
+    this.#assertWritable();
+    if (expectedValue !== null && typeof expectedValue !== 'string') {
+      throw new TypeError('compare-and-set expected value must be a string or null');
+    }
+    if (typeof nextValue !== 'string'
+      || (expectedValue !== null && Buffer.byteLength(expectedValue, 'utf8') > CONFIG_CAS_VALUE_MAX_BYTES)
+      || Buffer.byteLength(nextValue, 'utf8') > CONFIG_CAS_VALUE_MAX_BYTES) {
+      throw new RangeError('compare-and-set config value exceeds its byte bound');
+    }
+    if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
+      throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+    }
+    this.#validateConfigValue(key, nextValue, false);
+    const ts = this.#clock.nowMs();
+    if (!Number.isSafeInteger(ts) || ts < 0) throw new TypeError('memory-ledger clock returned invalid UTC milliseconds');
+    const events = records.map((record, index) => {
+      if (record === null || typeof record !== 'object'
+        || typeof record.kind !== 'string' || !EVENT_KIND_PATTERN.test(record.kind)) {
+        throw new TypeError('invalid memory-ledger event kind');
+      }
+      const symbol = record.symbol ?? null;
+      if (symbol !== null && (typeof symbol !== 'string'
+        || symbol.length > CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS
+        || /[\u0000-\u001f\u007f]/.test(symbol))) {
+        throw new TypeError('invalid memory-ledger event symbol');
+      }
+      return freezeEvent({
+        id: this.#nextEventId + index,
+        ts,
+        kind: record.kind,
+        symbol,
+        data: cloneFrozenNullable(record.data, {
+          maximumBytes: Math.min(this.#maximumEventBytes, CONFIG_CAS_EVENT_DATA_MAX_BYTES),
+        }),
+      });
+    });
+
+    const currentValue = this.#config.get(key) ?? null;
+    if (currentValue !== expectedValue) {
+      return Object.freeze({ committed: false, reason: 'VERSION_CONFLICT', currentValue });
+    }
+    this.#validateConfigValue(key, nextValue);
+    if (this.#events.length + records.length > this.#maximumEvents) {
+      throw new RangeError('memory-ledger event capacity exceeded');
+    }
+    this.#config.set(key, nextValue);
+    for (const event of events) this.#commitEvent(event);
+    return Object.freeze({ committed: true, events: Object.freeze(events) });
   }
 
   recentEvents(

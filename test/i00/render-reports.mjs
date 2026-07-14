@@ -53,7 +53,7 @@ function evidenceCell(row) {
 function preamble(title, evidence) {
   return `# ${title}\n\nGenerated from \`fixtures/i00/closure-evidence.json\` at ${evidence.generatedAtUtc}. `
     + `Scope is \`${evidence.proofScope}\`; all fixture-chain evidence is permanently \`${evidence.truthLabel}\`. `
-    + 'Accepted IP packet artifacts are cited as build evidence only. This draft does not claim real-adapter integration, production wiring, application mounting, deployment, private truth, signed validation, canary readiness, or live execution.\n';
+    + 'This draft records the source-proven IP-CONTROL application mount, five authenticated Product Integration routes, and the source-built/tested bounded durable Ledger material-event cursor. It does not claim canonical command persistence, Q production transport, L/private adapters, runtime/browser validation or readback, deployment, signed validation, canary readiness, or live execution.\n';
 }
 
 function missionReport(evidence) {

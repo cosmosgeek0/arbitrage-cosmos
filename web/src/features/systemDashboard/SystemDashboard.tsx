@@ -23,29 +23,36 @@ import { TraceDrilldown } from './components/TraceDrilldown';
 import { ageText } from './lib/presentation';
 import './styles/systemDashboard.css';
 
-export interface SystemDashboardProps {
+interface SystemDashboardCommonProps {
   /** Canonical supervisor snapshot. Null renders the honest unavailable frame. */
   snapshot: SystemSupervisorSnapshot | null;
   /** Reference instant for every age on the surface. */
   nowMs: number;
-  /** Fires a control mutation. In fixture mode this applies in memory. */
-  mutate: (mutation: SystemControlMutation, reason: string) => void;
-  /** Receipt of the last fired mutation, shown before/after in Controls. */
-  lastReceipt: SystemControlReceipt | null;
   /** True while a mutation is in flight; controls disable. */
   busy: boolean;
   /** Why the snapshot is unavailable (poll error text), when it is. */
   unavailableReason?: string | null;
 }
 
-export function SystemDashboard({
-  snapshot,
-  nowMs,
-  mutate,
-  lastReceipt,
-  busy,
-  unavailableReason = null,
-}: SystemDashboardProps) {
+interface SystemDashboardInteractiveProps {
+  readonly readOnlyProjection?: false;
+  /** Fires a real control mutation. Fixture previews apply this in memory. */
+  readonly mutate: (mutation: SystemControlMutation, reason: string) => void;
+  /** Receipt of the last fired mutation, shown before/after in Controls. */
+  readonly lastReceipt: SystemControlReceipt | null;
+}
+
+interface SystemDashboardReadOnlyProps {
+  readonly readOnlyProjection: true;
+  readonly mutate?: never;
+  readonly lastReceipt?: never;
+}
+
+export type SystemDashboardProps = SystemDashboardCommonProps
+  & (SystemDashboardInteractiveProps | SystemDashboardReadOnlyProps);
+
+export function SystemDashboard(props: SystemDashboardProps) {
+  const { snapshot, nowMs, busy, unavailableReason = null } = props;
   const [selectedCorrelationId, setSelectedCorrelationId] = useState<string | null>(null);
 
   if (!snapshot) {
@@ -84,7 +91,9 @@ export function SystemDashboard({
 
         <PostureStrip snapshot={snapshot} nowMs={nowMs} />
         <ExposureBanner snapshot={snapshot} />
-        <AttentionQueuePanel snapshot={snapshot} onControl={mutate} busy={busy} />
+        {props.readOnlyProjection !== true && (
+          <AttentionQueuePanel snapshot={snapshot} onControl={props.mutate} busy={busy} />
+        )}
         <MachineGraph snapshot={snapshot} />
         <SourceHealthPanel snapshot={snapshot} nowMs={nowMs} />
         <EnginesPanel snapshot={snapshot} nowMs={nowMs} onTrace={setSelectedCorrelationId} />
@@ -97,7 +106,9 @@ export function SystemDashboard({
           selectedCorrelationId={selectedCorrelationId}
           onSelect={setSelectedCorrelationId}
         />
-        <ControlsPanel snapshot={snapshot} mutate={mutate} lastReceipt={lastReceipt} busy={busy} />
+        {props.readOnlyProjection !== true && (
+          <ControlsPanel snapshot={snapshot} mutate={props.mutate} lastReceipt={props.lastReceipt} busy={busy} />
+        )}
       </div>
     </div>
   );

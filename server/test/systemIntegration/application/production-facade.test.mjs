@@ -33,10 +33,10 @@ function fixture(options = {}) {
           return target.getConfigValue(...args);
         };
       }
-      if (property === 'setConfigValueAndLogEvent') {
+      if (property === 'setConfigValueAndLogEvent' || property === 'compareAndSetConfigValueAndLogEvents') {
         return (...args) => {
           order.push('ledger:persist');
-          return target.setConfigValueAndLogEvent(...args);
+          return target[property](...args);
         };
       }
       const value = Reflect.get(target, property, receiver);

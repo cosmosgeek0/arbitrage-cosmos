@@ -1,33 +1,24 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
-import type { AppConfig, ControlMode, ExecutionControlModes, LedgerEvent } from '../types';
+import type { LedgerEvent } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
-import { mutateSystemControl, useSystemIntegration, type SystemControlMutation } from '../lib/systemIntegration';
-import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, MARKET_PING_KEYS, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
+import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
 import { PillSelect } from './PillSelect';
-import {
-  AWS_CONSOLE_URL,
-  AWS_RUNNER_MARK,
-  AwsRunnerModal,
-  fetchAwsRunnerStatus,
-  updateAwsRunnerGates,
-  type AwsRunnerStatus,
-} from './AwsRunnerControl';
+import { AWS_CONTROL_POSTURE } from './AwsRunnerControl';
 import {
   BadgeCheck as LucideAdvisorClear,
   BellRing as LucideBell,
   CircleAlert as LucideAdvisorReview,
-  Laptop as LucideLaptop,
   Radar as LucideNotifOpportunity,
   ScrollText as LucideNotifLog,
   ShieldAlert as LucideNotifCritical,
-  Smartphone as LucideSmartphone,
   TriangleAlert as LucideAdvisorAction,
   WalletCards as LucideNotifAccount,
 } from 'lucide-react';
@@ -36,7 +27,6 @@ import {
   IconBell,
   IconBrain,
   IconCalendar,
-  IconCamera,
   IconChart,
   IconClock,
   IconClose,
@@ -57,11 +47,9 @@ import {
   IconPulse,
   IconRadar,
   IconRefresh,
-  IconReceipt,
   IconSearch,
   IconShield,
   IconSun,
-  IconTerminal,
   IconTicket,
   IconWallet,
   IconWifi,
@@ -83,7 +71,6 @@ const DEFAULT_PROFILE_LOGO = '/account-night-sky.png';
 const TRUST_ADVISOR_MARK = '/trust-advisor-shield.png';
 const NOTIFICATION_MARK = '/notification-bell.png';
 const BASIS_MARK = '/basis-percent.png';
-const DEPLOYED_APP_HOST = 'arbitrage.cosmosgeek.org';
 const TOPBAR_POPOVER_CONTENT_HEIGHT = 486;
 
 // Binance announcement categories → real catalog IDs (shared with the News page).
@@ -355,11 +342,13 @@ const BRAND_MARK = (
 
 const TITLES: Record<Page, string> = {
   dashboard: 'Dashboard',
+  'control-room': 'Control Room',
   account: 'Account',
   wallets: 'Account',
   markets: 'Markets',
   detail: 'Token Detail',
   loans: 'Borrow / Margin',
+  execution: 'Account · Execution',
   orders: 'Account · Orders',
   positions: 'Account · Positions',
   fills: 'Account · Fills',
@@ -387,7 +376,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     group: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <img className="snav-dashboard-mark" src="/dashboard-blocks.png" alt="" aria-hidden="true" /> },
-      { id: 'account', label: 'Account', icon: <img className="snav-account-mark" src="/account-wallet.png" alt="" aria-hidden="true" /> },
+      { id: 'account', label: 'Account', icon: <img className="snav-account-mark" src="/account-wallet.png" alt="" aria-hidden="true" />, match: ['wallets', 'execution', 'orders', 'positions', 'fills', 'pnl'] },
       { id: 'loans', label: 'Borrow', icon: <img className="snav-borrow-mark" src="/borrow-money-bag.png" alt="" aria-hidden="true" /> },
       { id: 'markets', label: 'Markets', icon: <img className="snav-markets-mark" src="/markets-chart.png" alt="" aria-hidden="true" /> },
       { id: 'detail', label: 'Token', icon: <img className="snav-token-mark" src="/token-diamonds.png" alt="" aria-hidden="true" /> },
@@ -404,6 +393,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   {
     group: 'Control',
     items: [
+      { id: 'control-room', label: 'Control Room', icon: <IconPulse size={19} /> },
       { id: 'risk', label: 'Risk', icon: <img className="snav-risk-mark" src="/risk-gauge.png" alt="" aria-hidden="true" /> },
       { id: 'system', label: 'Health', icon: <img className="snav-health-mark" src="/health-shield.png" alt="" aria-hidden="true" /> },
     ],
@@ -419,217 +409,30 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
-interface AccountSessionRow {
-  id: string;
-  ip: string | null;
-  country: string | null;
-  system: string;
-  browser: string;
-  device: string;
-  model: string | null;
-  firstSeen: number;
-  lastSeen: number;
-  current: boolean;
-  active: boolean;
-  requests?: number;
-}
-// ---- account sheet ----------------------------------------------------------
-// Account belongs to the same persistent topbar shell as every other operator
-// surface. Keeping its real session/profile logic in a dedicated sheet lets the
-// shared rail own hover, focus, motion, and dismissal without a second popover.
-function AccountSheet({ open }: { open: boolean }) {
-  const { state, saveConfig } = useStore();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const profile = state?.config.profile ?? { name: '', avatar: null };
-  const [preview, setPreview] = useState<string | null>(null); // instant feedback before the 2s state tick
-  const [editName, setEditName] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<AccountSessionRow[]>([]);
-  const [profileBusy, setProfileBusy] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const avatar = preview ?? profile.avatar ?? DEFAULT_PROFILE_LOGO;
-  const usesDefaultLogo = !preview && !profile.avatar;
-  const name = profile.name || 'Operator';
-  const displayName = name.toLocaleUpperCase();
-  const initial = name.trim().slice(0, 1).toUpperCase() || 'O';
-  const connected = !!state?.binance.keysPresent;
-  const accountTone = connected ? (state?.binance.connected ? 'live' : 'warn') : 'off';
-  const activeSessionCount = sessions.filter((s) => s.current || s.active).length;
-  const sessionRows = sessions;
-  const keyFingerprint = state?.binance.keyFingerprint ?? null;
-  const withdrawalLabel = state?.binance.canWithdraw === true
-    ? 'Withdrawals On'
-    : state?.binance.canWithdraw === false
-      ? 'Withdrawals Off'
-      : 'Permission Unknown';
-  const logoutHref = typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
-    ? '/cdn-cgi/access/logout'
-    : `https://${DEPLOYED_APP_HOST}/cdn-cgi/access/logout`;
-
-  // Recent browser request telemetry is the only live data this popover owns.
-  useEffect(() => {
-    if (!open) return;
-    let alive = true;
-    const load = () => {
-      void fetch('/api/sessions', { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (!alive || !d) return;
-          const next = [...(d.sessions ?? [])] as AccountSessionRow[];
-          next.sort((a, b) => Number(b.current) - Number(a.current) || Number(b.active) - Number(a.active) || b.lastSeen - a.lastSeen);
-          setSessions(next);
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const t = setInterval(load, 2000);
-    return () => { alive = false; clearInterval(t); };
-  }, [open]);
-
-  const persistProfile = async (next: { name: string; avatar: string | null }): Promise<boolean> => {
-    if (profileBusy) return false;
-    setProfileBusy(true);
-    setProfileError(null);
-    try {
-      const saved = await saveConfig({ profile: next } as never);
-      if (!saved) {
-        setProfileError('Profile change was not acknowledged.');
-        return false;
-      }
-      return true;
-    } catch (error) {
-      setProfileError(error instanceof Error ? error.message : 'Profile change failed.');
-      return false;
-    } finally {
-      setProfileBusy(false);
-    }
-  };
-
-  const onFile = (f: File | undefined) => {
-    if (!f) return;
-    if (!f.type.startsWith('image/')) {
-      setProfileError('Choose a PNG, JPEG, or WebP image.');
-      return;
-    }
-    const img = new Image();
-    const url = URL.createObjectURL(f);
-    img.onload = () => {
-      // Downscale to a small square so the data URL stays tiny (server caps 160KB).
-      const S = 112;
-      const c = document.createElement('canvas');
-      c.width = S;
-      c.height = S;
-      const ctx = c.getContext('2d');
-      if (!ctx) {
-        URL.revokeObjectURL(url);
-        setProfileError('This browser could not prepare the profile image.');
-        return;
-      }
-      const side = Math.min(img.width, img.height);
-      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, S, S);
-      const dataUrl = c.toDataURL('image/jpeg', 0.85);
-      URL.revokeObjectURL(url);
-      setPreview(dataUrl);
-      void persistProfile({ name: profile.name, avatar: dataUrl }).then(() => setPreview(null));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setProfileError('The selected image could not be read.');
-    };
-    img.src = url;
-  };
-
+// The integration candidate deliberately does not mount private account truth.
+// This sheet is provenance only: it has no credential, session, mutation, or
+// signed-read path and therefore cannot become green from legacy Binance state.
+function AccountSheet() {
   return (
     <div className="ops-sheet ops-account-sheet account-sheet-v3">
-          <header className="account-v3-head">
-            <button className={`cb-profile-avatar ${usesDefaultLogo ? 'profile-logo' : ''}`} disabled={profileBusy} onClick={() => fileRef.current?.click()} title={profileError ?? 'Change profile image'}>
-              {avatar ? <img src={avatar} alt="" /> : initial}
-              <span className="acct-cam"><IconCamera size={11} /></span>
-            </button>
-            <div className="account-v3-identity">
-              {editName === null ? (
-                <button className="cb-profile-name" onClick={() => setEditName(profile.name || '')} title="Edit display name">{displayName}</button>
-              ) : (
-                <form
-                  className="cb-profile-name-form"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (profileBusy) return;
-                    void persistProfile({ name: editName.slice(0, 40), avatar: profile.avatar }).then((saved) => {
-                      if (saved) setEditName(null);
-                    });
-                  }}
-                >
-                  <input autoFocus disabled={profileBusy} value={editName} maxLength={40} placeholder="Display name" onChange={(e) => setEditName(e.target.value)} />
-                  <button type="submit" disabled={profileBusy}>{profileBusy ? 'Saving…' : 'Save'}</button>
-                </form>
-              )}
-              <span>Control Room Operator</span>
-            </div>
-            <span className={`account-v3-state ${accountTone}`}><i />{state?.binance.connected ? 'Live' : connected ? 'Review' : 'Offline'}</span>
-          </header>
-
-          <div className="account-v3-body">
-            {profileError ? <div className="account-v3-empty" role="alert">{profileError}</div> : null}
-            <section className="account-v3-section" aria-label="Exchange posture">
-              <div className="account-v3-section-title">
-                <span>Exchange Connection</span>
-                <em>{state?.binance.connected ? 'Verified Now' : 'Needs Attention'}</em>
-              </div>
-              <div className="account-v3-exchange">
-                <span className="account-v3-exchange-mark"><BinanceLogo size={28} /></span>
-                <span className="account-v3-exchange-copy">
-                  <b>Binance Account</b>
-                  <em>{keyFingerprint ? `Key ${keyFingerprint}` : connected ? 'Key loaded · fingerprint pending' : 'No server key loaded'}</em>
-                </span>
-                <span className={`account-v3-exchange-value ${state?.binance.connected ? 'ok' : connected ? 'warn' : 'idle'}`}>
-                  <b>{state?.binance.connected ? 'Connected' : connected ? 'Sync Error' : 'Not Linked'}</b>
-                  <em>{withdrawalLabel}</em>
-                </span>
-              </div>
-            </section>
-
-            <section className="account-v3-section" aria-label="Recent browser sessions">
-              <div className="account-v3-section-title">
-                <span>Recent Devices</span>
-                <em>{sessionRows.length ? `${activeSessionCount} Active · ${sessionRows.length} Seen / 24h` : 'None Reported'}</em>
-              </div>
-              <div className="account-v3-session-list">
-                {sessionRows.length > 0 ? sessionRows.map((s) => {
-                  const ipLine = s.ip || 'IP Unavailable';
-                  const isPast = !s.current && !s.active;
-                  const isMobile = s.device === 'Mobile' || s.device === 'Tablet';
-                  const deviceLabel = s.model || s.device || (isMobile ? 'Mobile' : 'Desktop');
-                  const activityLabel = s.current ? 'This Device' : s.active ? 'Active Now' : timeAgo(s.lastSeen);
-                  const requestLabel = typeof s.requests === 'number' ? `${s.requests.toLocaleString('en-US')} Requests` : 'Requests Unavailable';
-                  return (
-                    <div className={`account-v3-session ${isPast ? 'past' : 'active'}`} key={s.id}>
-                      <span className={`account-v3-device-mark ${s.active ? 'on' : 'off'}`}>
-                        {isMobile ? <LucideSmartphone size={23} strokeWidth={1.7} /> : <LucideLaptop size={24} strokeWidth={1.7} />}
-                        <i aria-hidden="true" />
-                      </span>
-                      <span className="account-v3-session-copy">
-                        <b>{deviceLabel} · {s.browser}</b>
-                        <em>{s.system} · First Seen {timeAgo(s.firstSeen)}</em>
-                      </span>
-                      <span className="account-v3-session-time">
-                        <b title={s.ip ? `Visitor IP ${s.ip}` : 'Visitor IP unavailable'}>{ipLine}</b>
-                        <em>{[activityLabel, s.country].filter(Boolean).join(' · ')}</em>
-                        <small>{requestLabel}</small>
-                      </span>
-                    </div>
-                  );
-                }) : (
-                  <div className="account-v3-empty">No recent browser telemetry.</div>
-                )}
-              </div>
-              <div className="account-v3-session-note"><IconShield size={13} /><span>Browser Request Telemetry · 2-Minute Active Window</span></div>
-            </section>
-
-            <a className="account-v3-logout" href={logoutHref} title="Sign out of the deployed Cloudflare Access session">
-              <IconPower size={16} /><span>Log Out of Access Session</span>
-            </a>
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      <OpsSheetHeader
+        icon={<PopupSourceMark tone="#778292"><ApiKeyIdentityMark size={26} /></PopupSourceMark>}
+        title="Account Details"
+        subtitle="Private account truth is outside this candidate"
+        status="Not Configured"
+        tone="warn"
+      />
+      <div className="ops-section-label"><span>Authority Boundary</span><em>Static provenance</em></div>
+      <div className="ops-list ops-control-list">
+        <OpsRow title="Private Account Truth" detail="No signed account adapter is mounted" value="NOT CONFIGURED" tone="warn" />
+        <OpsRow title="Credentials" detail="Owner authorization and server-side configuration required" value="OWNER GATED" tone="idle" />
+        <OpsRow title="Signed Reads" detail="Balances, orders, positions, loans, and sessions are unavailable" value="NOT MOUNTED" tone="idle" />
+        <OpsRow title="Money Actions" detail="Orders, borrow, repay, transfer, withdrawal, and leverage mutation stay blocked" value="BLOCKED" tone="ok" />
+      </div>
+      <div className="ops-account-note">
+        <IconShield size={15} />
+        <span>This surface does not inspect credentials or imply private exchange connectivity.</span>
+      </div>
     </div>
   );
 }
@@ -688,6 +491,7 @@ function buildIndex(): SearchEntry[] {
     { label: 'Kill switch', hint: 'Risk · halt everything', page: 'risk', keywords: 'kill switch halt stop emergency risk' },
     { label: 'Risk limits', hint: 'Risk · caps & allowlist', page: 'risk', keywords: 'risk limits caps notional allowlist symbols' },
     { label: 'Rules & governance', hint: 'Risk · owner rules', page: 'risk', keywords: 'rules allowed blocked strict governance create' },
+    { label: 'Execution', hint: 'Account · canonical posture', page: 'execution', keywords: 'execution posture tickets legs reconciliation controls' },
     { label: 'Orders', hint: 'Execution · open & history', page: 'orders', keywords: 'orders open history cancel execution' },
     { label: 'Positions', hint: 'Execution · holdings', page: 'positions', keywords: 'positions holdings unrealized execution' },
     { label: 'Fills', hint: 'Execution · executions', page: 'fills', keywords: 'fills executions trades execution' },
@@ -1015,7 +819,7 @@ function AlertsMenu() {
     { key: 'critical', label: 'Needs attention', sub: 'Failures, blocks, and emergency controls' },
     { key: 'execution', label: 'Execution outcomes', sub: 'Orders, fills, loans, and risk decisions' },
     { key: 'health', label: 'Bot health', sub: 'Engine, stream, and control transitions' },
-    { key: 'infrastructure', label: 'Infrastructure', sub: 'Connected AWS state and alarm changes' },
+    { key: 'infrastructure', label: 'Infrastructure', sub: 'Owner-gated external-infrastructure notices' },
   ];
   const on = Object.values(a).filter(Boolean).length;
   return (
@@ -1105,7 +909,7 @@ interface SystemLite {
         required: boolean;
         updatedAt: number | null;
         latencyMs?: number | null;
-        resetTarget?: 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
+        resetTarget?: 'market' | 'runtime' | 'news' | 'calendar' | 'fx';
       }>;
       recentTransitions: Array<{ ts: number; componentId: string; label: string; from: string; to: string; detail: string }>;
       lastReset: { ts: number; target: string; ok: boolean; durationMs: number } | null;
@@ -1143,7 +947,6 @@ function DataHealthMenu() {
   const grade = !connected ? 'bad' : !feedsOk ? 'warn' : 'ok';
   const sources: { name: string; ok: boolean; detail: string }[] = [
     { name: 'Binance market feed', ok: connected && feedsOk, detail: `${Object.keys(feeds).length} streams · ${msLabel(lat)}` },
-    { name: 'Binance account', ok: !!state?.binance.connected, detail: state?.binance.keysPresent ? (state.binance.connected ? 'synced' : 'error') : 'no keys' },
     { name: 'Binance announcements', ok: srv.news, detail: srv.news ? 'reachable' : 'checking / down' },
     { name: 'Economic calendar', ok: srv.cal, detail: srv.cal ? 'reachable' : 'checking / down' },
     { name: 'FX rates', ok: srv.fx, detail: srv.fx ? 'reachable' : 'checking / down' },
@@ -1359,97 +1162,7 @@ function ThemeMenu() {
   );
 }
 
-// ---- Trusted Advisor: whole-cockpit safety scan (real checks, popup only) ----
 type Sev = 'action' | 'invest' | 'pass';
-function TrustedAdvisor() {
-  const { state, connected, setPage } = useStore();
-  const { open, setOpen, ref } = useMenu<HTMLDivElement>();
-  const [sys, setSys] = useState<SystemLite | null>(null);
-  const [scanTs, setScanTs] = useState<number | null>(null);
-  const [scanning, setScanning] = useState(false);
-
-  const scan = () => {
-    setScanning(true);
-    fetch('/api/system')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => { setSys(s as SystemLite); setScanTs(Date.now()); })
-      .catch(() => undefined)
-      .finally(() => setScanning(false));
-  };
-  useEffect(() => { if (open && !scanTs) scan(); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const b = state?.binance;
-  const cfg = state?.config;
-  const feeds = state?.feeds ?? {};
-  const feedsOk = Object.values(feeds).length > 0 && Object.values(feeds).every((s) => s === 'open');
-  const lat = sys?.restLatencyMs ?? null;
-
-  const withdrawalCheck = !b?.keysPresent
-    ? null
-    : b.canWithdraw === true
-      ? { sev: 'action' as const, name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key with withdrawals OFF.', page: 'account' as Page }
-      : b.canWithdraw === false
-        ? { sev: 'pass' as const, name: 'Withdrawals disabled', detail: 'Verified key posture cannot withdraw.' }
-        : { sev: 'invest' as const, name: 'Withdrawal permission unknown', detail: 'Per-key restrictions have not been verified.', page: 'account' as Page };
-  const raw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
-    withdrawalCheck,
-    cfg && !cfg.killSwitch && cfg.liveTradingEnabled && (cfg.allowedSymbols?.length ?? 0) === 0 ? { sev: 'action', name: 'Live armed, allowlist empty', detail: 'Nothing can trade — set an allowlist or halt.', page: 'risk' } : null,
-    b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Keys present but not syncing.', page: 'system' } : null,
-    !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting to the server.', page: 'system' } : null,
-    !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'One or more Binance streams are not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} streams open.` },
-    lat !== null && lat > 900 ? { sev: 'invest', name: 'High Binance latency', detail: `${Math.round(lat)}ms REST round-trip.`, page: 'system' } : null,
-    !b?.keysPresent ? { sev: 'invest', name: 'No read key set', detail: 'Balances, orders and fills stay hidden.', page: 'account' } : { sev: 'pass', name: 'Read key configured', detail: 'Account data is available.' },
-    (cfg?.allowedSymbols?.length ?? 0) === 0 ? { sev: 'invest', name: 'Allowlist empty', detail: 'Risk gate rejects every symbol (safe default).', page: 'risk' } : { sev: 'pass', name: `Allowlist: ${cfg?.allowedSymbols.length}`, detail: 'Only listed symbols may trade.' },
-    { sev: 'pass', name: cfg?.killSwitch ? 'Kill switch ON' : 'Kill switch armed', detail: cfg?.killSwitch ? 'Every send is blocked.' : 'Sends pass to the risk gate.' },
-    { sev: 'pass', name: 'No browser key form', detail: 'Keys never touch the frontend.' },
-    { sev: 'pass', name: 'Cloudflare-gated', detail: 'Hardware-key auth before load.' },
-  ];
-  const checks = raw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
-  const actions = checks.filter((c) => c.sev === 'action');
-  const invest = checks.filter((c) => c.sev === 'invest');
-  const passed = checks.filter((c) => c.sev === 'pass');
-  const attention = [...actions, ...invest];
-  const topFix = attention[0];
-  const badge = actions.length;
-
-  return (
-    <div className="menu-wrap" ref={ref}>
-      <button className={`hdr-ic tint-advisor ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Trusted Advisor — safety scan" aria-label="Trusted Advisor">
-        <IconShield size={16} />
-        {badge > 0 && <span className="ic-badge">{badge}</span>}
-      </button>
-      {open && (
-        <div className="menu-pop right adv-pop">
-          <div className="np-head">
-            <span className="np-title"><IconShield size={14} /> Trusted Advisor</span>
-            <span className="np-sub">{scanTs ? `scanned ${timeAgo(scanTs)}` : 'scanning…'}</span>
-          </div>
-          <div className="adv-stats">
-            <div className="adv-stat action"><span className="adv-ic">✕</span><b>{actions.length}</b><em>Action recommended</em></div>
-            <div className="adv-stat invest"><span className="adv-ic">!</span><b>{invest.length}</b><em>Investigation recommended</em></div>
-            <div className="adv-stat pass"><span className="adv-ic">✓</span><b>{passed.length}</b><em>Passed items</em></div>
-          </div>
-          <div className="adv-list">
-            {attention.length === 0 ? (
-              <div className="adv-clean">✓ All clear — nothing needs attention.</div>
-            ) : (
-              attention.slice(0, 5).map((c) => (
-                <button key={c.name} className={`adv-row ${c.sev}`} onClick={() => { if (c.page) { setOpen(false); setPage(c.page); } }}>
-                  <span className="adv-row-dot" />
-                  <span className="adv-row-meta"><b>{c.name}</b><small>{c.detail}</small></span>
-                </button>
-              ))
-            )}
-          </div>
-          <div className="adv-actions">
-            <button className="adv-scan" onClick={scan} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan again'}</button>
-            <button className="adv-fix" disabled={!topFix?.page} onClick={() => { if (topFix?.page) { setOpen(false); setPage(topFix.page); } }}>Fix top issue →</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ---- ONE shared morphing popover for the whole top bar (Aave-style) ---------
 // A single box: centered under the hovered trigger with a pointer aimed at it.
@@ -1746,95 +1459,52 @@ const clockDate = (zoneId: string, d: Date) => {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
   }
 };
-export interface ApiKeyInfo {
-  id: string; name: string; type: string; scope: string;
-  status: 'live' | 'declared' | 'planned' | 'missing' | 'unknown'; live: boolean; keysPresent?: boolean;
-  prefix: string; fingerprint: string | null;
-  ipRestrict: boolean | null; ips: string[]; ipNote: string;
-  permissions: { reading: boolean | null; spotMargin: boolean | null; marginLoan: boolean | null; withdrawals: boolean | null; universalTransfer: boolean | null; futures: boolean | null };
-  note: string | null;
-}
-// The six permissions the owner wants visible, in display order.
-export const API_PERMS: { key: keyof ApiKeyInfo['permissions']; label: string }[] = [
-  { key: 'reading', label: 'Reading' },
-  { key: 'spotMargin', label: 'Spot / Margin' },
-  { key: 'marginLoan', label: 'Loan / Repay' },
-  { key: 'futures', label: 'Futures' },
-  { key: 'universalTransfer', label: 'Universal Transfer' },
-  { key: 'withdrawals', label: 'Withdrawals' },
-];
-
-const apiKeyRole = (ak: ApiKeyInfo) => {
-  const scope = ak.scope.toLowerCase();
-  if (scope.includes('unknown')) return 'Permission Unknown';
-  if (scope.includes('unsafe')) return 'Unsafe Permissions';
-  if (scope.includes('elevated')) return 'Elevated Permissions';
-  if (scope.includes('trading')) return 'Trading Key';
-  if (ak.id === 'read-only' || scope.includes('read')) return 'Read-Only';
-  if (ak.id === 'secrets-full' || scope.includes('automation') || scope.includes('full')) return 'AWS Automation';
-  return ak.scope;
-};
-
-const apiKeyIp = (ak: ApiKeyInfo) => ak.ips[0] ?? 'IP not set';
-const apiKeyStatus = (ak: ApiKeyInfo) => ak.live
-  ? 'Live'
-  : ak.status === 'planned'
-    ? 'Planned'
-    : ak.status === 'declared'
-      ? 'Syncing'
-      : ak.status === 'unknown'
-        ? 'Unknown'
-      : 'Missing';
-
-function BinanceApiKeySheet({ keys }: { keys: ApiKeyInfo[] }) {
-  const visibleKeys = keys.slice(0, 2);
-  const liveCount = visibleKeys.filter((ak) => ak.live).length;
-  const plannedCount = visibleKeys.filter((ak) => ak.status === 'planned').length;
-  const liveIpRestricted = visibleKeys.filter((ak) => ak.live && ak.ipRestrict === true).length;
-  const keySummary = liveCount > 0
-    ? `${liveCount} Live${liveIpRestricted === liveCount ? ' · IP Restricted' : ''}${plannedCount ? ` · ${plannedCount} Planned` : ''}`
-    : plannedCount > 0 ? `No Live Key · ${plannedCount} Planned` : 'No Verified Key';
+function PrivateAdapterSheet() {
   return (
     <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
       <OpsSheetHeader
         icon={<PopupSourceMark tone="#ffb000" brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
-        title="Binance API Keys"
-        subtitle={keySummary}
-        status={liveCount ? `${liveCount} Live` : 'No Live Key'}
-        tone={liveCount ? 'ok' : 'warn'}
+        title="Private Exchange Adapter"
+        subtitle="Credential-bearing access is outside this candidate"
+        status="Owner Gated"
+        tone="warn"
       />
-      {visibleKeys.length ? (
-        <div className="api-key-pair" aria-label="Binance API key posture">
-          {visibleKeys.map((ak) => (
-            <section className={`api-key-object ${ak.status}`} key={ak.id}>
-              <header>
-                <span className="api-key-object-mark" aria-hidden="true"><ApiKeyIdentityMark size={26} /></span>
-                <span className="api-key-object-copy">
-                  <b>{apiKeyRole(ak)}</b>
-                  <em>{apiKeyIp(ak)}</em>
-                </span>
-                <span className={`api-key-object-state ${ak.live ? 'live' : ak.status}`}><i />{apiKeyStatus(ak)}</span>
-              </header>
-              <div className="api-key-scope" aria-label={`${apiKeyRole(ak)} permissions`}>
-                {API_PERMS.map((permission) => (
-                  <span className={ak.permissions[permission.key] === true ? 'on' : 'off'} key={permission.key}>
-                    <i />{permission.label}{ak.permissions[permission.key] === null ? ' ?' : ''}
-                  </span>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : (
-        <div className="ops-empty-state"><IconKey size={18} /><b>No Key Inventory</b></div>
-      )}
+      <div className="ops-section-label"><span>Authority Boundary</span><em>No Credential Discovery</em></div>
+      <div className="ops-list ops-control-list" aria-label="Private exchange adapter posture">
+        <OpsRow title="Private Adapter" detail="A separately accepted owner must supply the audited adapter." value="NOT CONFIGURED" tone="warn" />
+        <OpsRow title="Credentials" detail="The browser and assembled runtime do not discover or load exchange secrets." value="NOT LOADED" tone="idle" />
+        <OpsRow title="Signed Reads" detail="Account, wallet, order, loan, and fill reads are not mounted." value="BLOCKED" tone="bad" />
+        <OpsRow title="Money Actions" detail="Test orders, live orders, borrow, repay, transfer, and withdrawal remain absent." value="BLOCKED" tone="bad" />
+      </div>
+      <div className="aws-pop-notice neutral"><IconShield size={14} /><span>OWNER_GATED · Private access requires separate owner authorization and independent verification.</span></div>
+    </div>
+  );
+}
+
+function AwsOwnerGatedSheet() {
+  return (
+    <div className="ops-sheet ops-aws-sheet aws-control-sheet">
+      <OpsSheetHeader
+        icon={<span className="aws-popup-mark" aria-hidden="true"><AwsCubeIdentityMark size={42} /></span>}
+        title="AWS Runner Control"
+        subtitle="External infrastructure activation is outside this candidate"
+        status={AWS_CONTROL_POSTURE.authority.replace('_', ' ')}
+        tone="warn"
+      />
+      <div className="ops-section-label"><span>Infrastructure Boundary</span><em>Static Provenance</em></div>
+      <div className="ops-list ops-control-list" aria-label="AWS infrastructure posture">
+        <OpsRow title="Authority" detail={AWS_CONTROL_POSTURE.detail} value={AWS_CONTROL_POSTURE.authority} tone="warn" />
+        <OpsRow title="Configuration" detail="No AWS target, identity, credential, or session is loaded." value={AWS_CONTROL_POSTURE.configuration} tone="idle" />
+        <OpsRow title="Runtime Port" detail="No infrastructure control service is composed into the product runtime." value={AWS_CONTROL_POSTURE.runtime} tone="bad" />
+      </div>
+      <div className="aws-pop-notice neutral"><IconShield size={14} /><span>{AWS_CONTROL_POSTURE.boundary}</span></div>
     </div>
   );
 }
 
 function SharedTopBar() {
-  const { state, connected, page, prefs, updatePref, setPage, setKill, setLive, saveConfig } = useStore();
-  const integration = useSystemIntegration();
+  const { state, connected, page, prefs, updatePref, setPage } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
@@ -1868,9 +1538,7 @@ function SharedTopBar() {
     setOutgoingContent(null);
   }, []);
   const [now, setNow] = useState(() => new Date());
-  const [sys, setSys] = useState<SystemLite | null>(null);
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
-  const [apiKeys, setApiKeys] = useState<ApiKeyInfo[]>([]);
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
   const [notifLiveEvents, setNotifLiveEvents] = useState<LedgerEvent[]>([]);
   const notifLiveCursor = useRef(0);
@@ -1878,11 +1546,6 @@ function SharedTopBar() {
   const [currencyBusy, setCurrencyBusy] = useState(false);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
-  const [awsStatus, setAwsStatus] = useState<AwsRunnerStatus | null>(null);
-  const [awsStatusError, setAwsStatusError] = useState<string | null>(null);
-  const [awsGateBusy, setAwsGateBusy] = useState(false);
-  const [controlBusy, setControlBusy] = useState(false);
-  const [controlMutationError, setControlMutationError] = useState<string | null>(null);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -1900,16 +1563,6 @@ function SharedTopBar() {
       .finally(() => { if (alive) setCurrencyBusy(false); });
     return () => { alive = false; };
   }, [active]);
-  useEffect(() => {
-    if (active !== 'shell') return;
-    let alive = true;
-    setAwsStatusError(null);
-    fetchAwsRunnerStatus(true)
-      .then((next) => { if (alive) setAwsStatus(next); })
-      .catch((error) => { if (alive) setAwsStatusError(error instanceof Error ? error.message : String(error)); });
-    return () => { alive = false; };
-  }, [active]);
-  useEffect(() => { let al = true; const load = () => fetch('/api/system').then((r) => (r.ok ? r.json() : null)).then((s) => al && s && setSys(s as SystemLite)).catch(() => undefined); void load(); const t = setInterval(load, 5000); return () => { al = false; clearInterval(t); }; }, []);
   useEffect(() => {
     let alive = true;
     let running = false;
@@ -1968,13 +1621,6 @@ function SharedTopBar() {
     void load();
     const timer = window.setInterval(() => { void load(); }, 5000);
     return () => { alive = false; controller?.abort(); window.clearInterval(timer); };
-  }, []);
-  useEffect(() => {
-    let al = true;
-    fetch('/api/apikey').then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (al && d?.keys?.length) setApiKeys(d.keys as ApiKeyInfo[]);
-    }).catch(() => undefined);
-    return () => { al = false; };
   }, []);
 
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
@@ -2048,20 +1694,6 @@ function SharedTopBar() {
     if (currentCloser === closeShared) currentCloser = null;
     closeShared();
   }, [closeShared]);
-  const toggleAwsGate = useCallback(async (key: 'connectionEnabled' | 'executionEnabled') => {
-    if (!awsStatus || awsGateBusy) return;
-    setAwsGateBusy(true);
-    setAwsStatusError(null);
-    try {
-      await updateAwsRunnerGates({ [key]: !awsStatus[key] });
-      const next = await fetchAwsRunnerStatus(key === 'connectionEnabled' && !awsStatus.connectionEnabled);
-      setAwsStatus(next);
-    } catch (error) {
-      setAwsStatusError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setAwsGateBusy(false);
-    }
-  }, [awsGateBusy, awsStatus]);
   const scheduleClose = useCallback(() => {
     window.clearTimeout(closeT.current);
     closeT.current = window.setTimeout(() => {
@@ -2091,14 +1723,11 @@ function SharedTopBar() {
     };
   }, [active, closeMenu]);
 
-  const b = state?.binance; const cfg = state?.config;
+  const cfg = state?.config;
   const accountProfile = cfg?.profile ?? { name: '', avatar: null };
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
-  const accountConnected = !!b?.keysPresent;
-  const accountTone = accountConnected ? (b?.connected ? 'live' : 'warn') : 'off';
-  const accountSub = accountConnected ? (b?.connected ? 'Binance connected' : 'Binance needs review') : 'Binance not linked';
-  const roKey = apiKeys.find((k) => k.id === 'read-only') ?? apiKeys[0] ?? null;
-  const fullKey = apiKeys.find((k) => k.id === 'secrets-full') ?? apiKeys[1] ?? null;
+  const accountTone = 'off';
+  const accountSub = 'OWNER GATED · NOT CONFIGURED';
   const feeds = state?.feeds ?? {}; const feedList = Object.entries(feeds);
   const feedsOk = feedList.length > 0 && feedList.every(([, s]) => s === 'open');
   const events = state?.events ?? [];
@@ -2185,177 +1814,30 @@ function SharedTopBar() {
     prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined,
   ).filter((item) => notificationEnabled(item, al));
   const unread = compactNotifications.filter((item) => item.id > seen).length;
-  const mode = state?.mode ?? 'HALTED';
-  const modeClass = mode === 'HALTED' ? 'm-halted' : mode === 'LIVE_ARMED' ? 'm-live' : 'm-manual';
-  const killOn = !!cfg?.killSwitch;
-  const borrowGuard = cfg?.borrowGuard;
-  const controlModes: ExecutionControlModes = cfg?.controlModes ?? {
-    funds: cfg?.fundsLocked ? 'blocked' : 'allowed',
-    borrowing: !borrowGuard?.newBorrowPaused && !borrowGuard?.repayOnly ? 'allowed' : borrowGuard?.repayOnly ? 'blocked' : 'paused',
-    automation: cfg?.automationPaused ? 'paused' : 'allowed',
-    liveOrders: cfg?.liveTradingEnabled ? 'allowed' : 'paused',
-  };
-  const fundsAllowed = controlModes.funds === 'allowed';
-  const botRunning = controlModes.automation === 'allowed';
-  const liveOrdersAllowed = controlModes.liveOrders === 'allowed';
-  const newLoansAllowed = controlModes.borrowing === 'allowed';
-  const allowCount = cfg?.allowedSymbols?.length ?? 0;
-  const accountSyncAge = b?.lastSyncTs === null || b?.lastSyncTs === undefined
-    ? Number.POSITIVE_INFINITY
-    : now.getTime() - b.lastSyncTs;
-  const liveBlocker = (() => {
-    if (killOn) return 'Emergency stop is active';
-    if (!b?.keysPresent) return 'Binance key is missing';
-    if (!b.connected) return 'Binance account is not synchronized';
-    if (!Number.isFinite(accountSyncAge) || accountSyncAge < -1_000 || accountSyncAge > 60_000) {
-      return 'Binance account snapshot is stale';
-    }
-    if (!b.keyPermissions) return 'Binance key permissions are not verified';
-    if (!b.keyPermissions.enableReading) return 'Reading permission is not verified on the key';
-    if (b.keyPermissions.enableWithdrawals || b.keyPermissions.enableInternalTransfer || b.keyPermissions.permitsUniversalTransfer) {
-      return 'Transfer-out permissions must be disabled on the key';
-    }
-    if (!b.keyPermissions.enableSpotAndMarginTrading) return 'Spot trading permission is not verified on the key';
-    if (allowCount === 0) return 'Symbol allowlist is empty';
-    if (!fundsAllowed) return 'Funds access is locked';
-    if (!botRunning) return 'Automation is paused';
-    return null;
-  })();
-  const modeTone = killOn ? 'ok' : liveBlocker ? 'warn' : liveOrdersAllowed ? 'ok' : 'warn';
-  const modeLabel = killOn ? 'Bot Stopped' : liveBlocker ? 'Limited' : liveOrdersAllowed ? 'Armed' : 'Ready';
-  const modeSub = controlMutationError ?? (killOn ? 'Emergency stop is holding every bot action.' : liveBlocker ?? (liveOrdersAllowed ? 'Live sends remain behind the risk gate.' : 'Prerequisites pass; live sends remain off.'));
-  const modeNet = b?.connected ? 'Synced' : 'Offline';
-  const convergenceControl = integration.snapshot?.control ?? null;
-  const convergenceKillOn = convergenceControl?.killSwitchEngaged ?? true;
-  const convergenceModeLabel = convergenceControl?.safeMode ? convergenceControl.safeMode.replaceAll('_', ' ') : 'Unavailable';
-  const convergenceTone = !convergenceControl
+  const productSnapshot = productBinding.snapshot;
+  const killSwitchControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_KILL_SWITCH') ?? null;
+  const intakeControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_INTAKE_PAUSED') ?? null;
+  const safeModeControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_SAFE_MODE') ?? null;
+  const killSwitchState = killSwitchControl?.currentEffectiveValue ?? 'UNKNOWN';
+  const killSwitchClearProven = Boolean(
+    productSnapshot
+      && productBinding.continuity === 'PROVEN'
+      && killSwitchControl?.wiringState === 'WIRED_LIVE'
+      && killSwitchState.trim().toUpperCase() === 'CLEAR',
+  );
+  const convergenceKillOn = !killSwitchClearProven;
+  const intakeOpen = intakeControl?.currentEffectiveValue.trim().toUpperCase() === 'OPEN';
+  const intakeTone = productSnapshot && productBinding.continuity === 'PROVEN'
+    && intakeControl?.wiringState === 'WIRED_LIVE' && intakeOpen ? 'ok' : 'warn';
+  const convergenceModeLabel = productSnapshot?.ownerView.effectiveMode.replaceAll('_', ' ') ?? 'Unavailable';
+  const convergenceTone = !productSnapshot || productBinding.continuity !== 'PROVEN' || !killSwitchClearProven
     ? 'warn'
-    : convergenceControl.killSwitchEngaged || convergenceControl.intakePaused
-      ? 'warn'
-      : integration.snapshot?.overallPosture === 'READY'
-        ? 'ok'
-        : 'warn';
-  const convergenceSub = controlMutationError
-    ?? integration.error
-    ?? (convergenceControl
-      ? `${convergenceControl.intakePaused ? 'New strategy intake is paused.' : 'New strategy intake is open.'} Live execution remains mechanically unavailable.`
-      : 'Canonical supervisor state is unavailable. Controls fail closed.');
-  const liveTitle = liveBlocker ?? 'Allow live order sends after the risk gate';
-  const runConfigMutation = async (patch: Partial<AppConfig>) => {
-    if (controlBusy) return;
-    setControlBusy(true);
-    setControlMutationError(null);
-    try {
-      const next = await saveConfig(patch);
-      if (!next) setControlMutationError('Control change was not acknowledged. State was not changed.');
-    } catch (error) {
-      setControlMutationError(error instanceof Error ? error.message : 'Control change failed.');
-    } finally {
-      setControlBusy(false);
-    }
-  };
-  const runKillMutation = async (on: boolean) => {
-    if (controlBusy) return;
-    setControlBusy(true);
-    setControlMutationError(null);
-    try {
-      const error = await setKill(on);
-      if (error) setControlMutationError(error.message);
-    } catch (error) {
-      setControlMutationError(error instanceof Error ? error.message : 'Emergency-stop change failed.');
-    } finally {
-      setControlBusy(false);
-    }
-  };
-  const runLiveMutation = async (on: boolean) => {
-    if (controlBusy) return;
-    setControlBusy(true);
-    setControlMutationError(null);
-    try {
-      const error = await setLive(on);
-      if (error) setControlMutationError(error.message);
-    } catch (error) {
-      setControlMutationError(error instanceof Error ? error.message : 'Live-control change failed.');
-    } finally {
-      setControlBusy(false);
-    }
-  };
-  const runConvergenceMutation = async (mutation: SystemControlMutation, reason: string) => {
-    if (controlBusy || !convergenceControl) return;
-    setControlBusy(true);
-    setControlMutationError(null);
-    try {
-      await mutateSystemControl(convergenceControl.revision, reason, mutation);
-    } catch (error) {
-      setControlMutationError(error instanceof Error ? error.message : 'Convergence control change failed.');
-    } finally {
-      setControlBusy(false);
-    }
-  };
-  const setFundsAccess = (on: boolean) => { void runConfigMutation({ fundsLocked: !on }); };
-  const setBotRunning = (on: boolean) => { void runConfigMutation({ automationPaused: !on }); };
-  const setNewLoans = (on: boolean) => {
-    const cur = cfg?.borrowGuard;
-    if (!cur) return;
-    void runConfigMutation({ borrowGuard: { ...cur, enabled: true, newBorrowPaused: !on, repayOnly: !on } });
-  };
-  const setExecutionControlMode = (key: keyof ExecutionControlModes, value: ControlMode) => {
-    if (!cfg || controlModes[key] === value) return;
-    void runConfigMutation({ controlModes: { ...controlModes, [key]: value } });
-  };
-  const executionControlCopy: Record<keyof ExecutionControlModes, Record<ControlMode, string>> = {
-    funds: {
-      blocked: 'Money actions hard-blocked',
-      paused: 'No new money actions',
-      allowed: 'Risk-gated balance access',
-    },
-    borrowing: {
-      blocked: 'Borrowing hard-blocked',
-      paused: 'Borrow requests are paused',
-      allowed: 'Margin and flexible borrowing',
-    },
-    automation: {
-      blocked: 'Strategy actions hard-blocked',
-      paused: 'Observe only — no actions',
-      allowed: 'Configured strategies may act',
-    },
-    liveOrders: {
-      blocked: 'Live routing hard-blocked',
-      paused: 'Live routing is unarmed',
-      allowed: 'Every send passes the risk gate',
-    },
-  };
-  const executionControlRow = (key: keyof ExecutionControlModes, label: string) => {
-    const current = controlModes[key];
-    const options: { value: ControlMode; label: string }[] = [
-      { value: 'blocked', label: 'Blocked' },
-      { value: 'paused', label: 'Paused' },
-      { value: 'allowed', label: 'Allowed' },
-    ];
-    return (
-      <div className={`ops-control-row ops-tri-row state-${current}`} data-control={key}>
-        <span><b>{label}</b><em>{executionControlCopy[key][current]}</em></span>
-        <span className="ops-tri-control" role="radiogroup" aria-label={`${label} mode`}>
-          {options.map((option) => {
-            const blockedByPrerequisite = key === 'liveOrders' && option.value === 'allowed' && current !== 'allowed' && !!liveBlocker;
-            return (
-              <label key={option.value} className={option.value} title={blockedByPrerequisite ? liveTitle : `${label}: ${option.label}`}>
-                <input
-                  type="radio"
-                  name={`execution-${key}`}
-                  value={option.value}
-                  checked={current === option.value}
-                  disabled={blockedByPrerequisite || controlBusy}
-                  onChange={() => setExecutionControlMode(key, option.value)}
-                />
-                <span>{option.label}</span>
-              </label>
-            );
-          })}
-        </span>
-      </div>
-    );
-  };
+    : productSnapshot.ownerView.machineReady === 'YES' ? 'ok' : 'warn';
+  const convergenceSub = productBinding.error
+    ?? productSnapshot?.ownerView.topRootBlocker
+    ?? (productSnapshot
+      ? 'Canonical product supervisor truth. Live execution remains mechanically unavailable.'
+      : 'Canonical product supervisor state is unavailable. Controls fail closed.');
   const markNotificationsRead = () => {
     if (!compactNotifications.length) return;
     const latest = Math.max(...compactNotifications.map((item) => item.id));
@@ -2370,7 +1852,7 @@ function SharedTopBar() {
     { key: 'critical', label: 'Needs Attention', sub: 'Failures, blocked actions, and emergency controls' },
     { key: 'execution', label: 'Execution Outcomes', sub: 'Orders, fills, loans, and risk decisions' },
     { key: 'health', label: 'Bot Health', sub: 'Engine, stream, connection, and control transitions' },
-    { key: 'infrastructure', label: 'Infrastructure', sub: 'Connected AWS state and alarm changes' },
+    { key: 'infrastructure', label: 'Infrastructure', sub: 'Owner-gated external-infrastructure notices' },
   ];
   const notifTimeZone = prefs.clockZone || 'UTC';
   const notifStamp = (ts: number) => new Intl.DateTimeFormat('en-US', {
@@ -2383,7 +1865,7 @@ function SharedTopBar() {
     { id: 'critical', label: 'Attention', code: 'Attention' },
     { id: 'execution', label: 'Execution', code: 'Execution' },
     { id: 'health', label: 'Bot Health', code: 'Health' },
-    { id: 'infrastructure', label: 'AWS', code: 'AWS' },
+    { id: 'infrastructure', label: 'Infrastructure', code: 'Infra' },
     { id: 'prefs', label: 'Preferences', code: 'Prefs' },
   ];
   const notifToneFor = (category: NotificationRuleKey) => category === 'critical'
@@ -2409,28 +1891,25 @@ function SharedTopBar() {
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
-  const advWithdrawalCheck = !b?.keysPresent
-    ? null
-    : b.canWithdraw === true
-      ? { sev: 'action' as const, name: 'Withdrawals enabled on key', detail: 'Rotate to a read-only key.', page: 'account' as Page }
-      : b.canWithdraw === false
-        ? { sev: 'pass' as const, name: 'Withdrawals disabled', detail: 'Verified key posture cannot withdraw.' }
-        : { sev: 'invest' as const, name: 'Withdrawal permission unknown', detail: 'Per-key restrictions are not verified.', page: 'account' as Page };
   const advRaw: ({ sev: Sev; name: string; detail: string; page?: Page } | null)[] = [
-    advWithdrawalCheck,
-    b?.keysPresent && !b?.connected ? { sev: 'action', name: 'Account sync failing', detail: b?.lastError ?? 'Not syncing.', page: 'system' } : null,
+    !productSnapshot
+      ? { sev: 'action', name: 'Product supervisor unavailable', detail: 'Canonical control truth is unavailable; the cockpit remains fail-closed.', page: 'control-room' }
+      : null,
+    productSnapshot && productBinding.continuity !== 'PROVEN'
+      ? { sev: 'action', name: 'Supervisor continuity unproven', detail: `Material continuity is ${productBinding.continuity}; last-known state cannot authorize a green posture.`, page: 'control-room' }
+      : null,
+    productSnapshot && productBinding.continuity === 'PROVEN' && productSnapshot.ownerView.machineReady === 'YES'
+      ? { sev: 'pass', name: 'Canonical machine readiness', detail: `${productSnapshot.truthLabel} · revision ${productSnapshot.revision}.` }
+      : productSnapshot
+        ? { sev: 'invest', name: 'Machine not ready', detail: productSnapshot.ownerView.topRootBlocker ?? 'Canonical supervisor reports machine readiness NO.', page: 'control-room' }
+        : null,
+    killSwitchClearProven
+      ? { sev: 'pass', name: 'Kill switch truth proven', detail: 'Canonical owner is wired live and effective posture is CLEAR.' }
+      : { sev: 'invest', name: 'Kill switch fail-closed', detail: killSwitchControl?.disabledReason ?? killSwitchControl?.wiringState ?? 'Canonical kill-switch truth is unavailable.', page: 'control-room' },
     !connected ? { sev: 'invest', name: 'Cockpit socket offline', detail: 'Reconnecting.', page: 'system' } : null,
     !feedsOk ? { sev: 'invest', name: 'Market feed degraded', detail: 'A stream is not open.', page: 'system' } : { sev: 'pass', name: 'Market feeds live', detail: `${Object.keys(feeds).length} open.` },
-    !b?.keysPresent ? { sev: 'invest', name: 'No read key set', detail: 'Account data hidden.', page: 'account' } : { sev: 'pass', name: 'Read key set', detail: 'Account data available.' },
-    (cfg?.allowedSymbols?.length ?? 0) === 0 ? { sev: 'invest', name: 'Allowlist empty', detail: 'Safe default.', page: 'risk' } : { sev: 'pass', name: `Allowlist: ${cfg?.allowedSymbols.length}`, detail: 'Listed symbols only.' },
-    cfg?.killSwitch
-      ? { sev: 'pass', name: 'Kill switch ON', detail: 'Order, loan, and bot actions are blocked.' }
-      : { sev: 'invest', name: 'Kill switch off', detail: 'Execution continues through configured risk gates.', page: 'risk' },
-    typeof window !== 'undefined' && window.location.hostname === DEPLOYED_APP_HOST
-      ? sys?.cfUser
-        ? { sev: 'pass', name: 'Cloudflare Access verified', detail: sys.cfUser }
-        : { sev: 'action', name: 'Edge identity missing', detail: 'No Cloudflare Access identity header was received.', page: 'risk' }
-      : null,
+    { sev: 'pass', name: 'Live execution blocked', detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED; no signed, test-order, or money-moving port is mounted.' },
+    { sev: 'pass', name: 'Private adapter owner-gated', detail: 'Private exchange reads and credentials are NOT_CONFIGURED in this candidate.' },
   ];
   const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
   const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
@@ -2519,10 +1998,7 @@ function SharedTopBar() {
     </button>
   );
 
-  const keysBody = () => {
-    const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
-    return <BinanceApiKeySheet keys={visibleKeys} />;
-  };
+  const keysBody = () => <PrivateAdapterSheet />;
 
   const content = (k: MK) => {
     switch (k) {
@@ -2577,31 +2053,7 @@ function SharedTopBar() {
           </div>
         );
       case 'shell':
-        return (
-          <div className="shell-pop shell-premium">
-            <TopPanelHeader
-              className="shell-head"
-              logo={<img className="shell-cloud-mark" src={AWS_RUNNER_MARK} alt="" />}
-              title="AWS Runner Control"
-              sub="Restricted Systems Manager channel"
-              status={awsStatus?.connectionEnabled ? 'Open' : 'Blocked'}
-            />
-            <div className="shell-status-list" aria-label="AWS CloudShell session details">
-              <div><span>Target</span><b>{awsStatus?.instanceId ?? 'Not configured'}</b></div>
-              <div><span>Transport</span><b>SSM</b></div>
-              <div><span>Region</span><b>{awsStatus?.region ?? 'Not configured'}</b></div>
-            </div>
-            <div className="shell-actions">
-              <button className="shell-open primary" type="button" onClick={() => { setActive(null); openOverlay('cloudshell'); }} title="Open runner workspace" aria-label="Open runner workspace">
-                <IconTerminal size={15} />
-                <span>Open Workspace</span>
-              </button>
-              <a className="shell-open icon-only" href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={() => setActive(null)} title="Open AWS Console" aria-label="Open AWS Console">
-                <IconExternal size={14} />
-              </a>
-            </div>
-          </div>
-        );
+        return <AwsOwnerGatedSheet />;
       case 'apikey': return keysBody();
       case 'advisor':
         return (
@@ -2681,7 +2133,7 @@ function SharedTopBar() {
                 </div>
               ) : compactNotifEvents.slice(0, 3).map((e) => {
                   const tone = notifToneFor(e.category);
-                  const rightLabel = e.needsAction ? 'Action' : e.category === 'execution' ? 'Execution' : e.category === 'infrastructure' ? 'AWS' : 'Bot';
+                  const rightLabel = e.needsAction ? 'Action' : e.category === 'execution' ? 'Execution' : e.category === 'infrastructure' ? 'Infra' : 'Bot';
                   return (
                   <button key={e.id} className={`ntfx-event ${tone}`} type="button" title={e.detail} aria-label={e.title} onClick={openNotificationCenter}>
                     <span className={`ntfx-row-icon ${tone}`}>{notifIcon(tone, 16)}</span>
@@ -2710,36 +2162,15 @@ function SharedTopBar() {
         );
       case 'power':
         return (
-          <div className={`modex-pop ${modeTone}`}>
+          <div className="modex-pop warn">
             <TopPanelHeader
               className="modex-head"
-              logo={<CloudflareMark />}
-              title="Bot Controls"
-              sub={modeSub}
-              status={modeLabel}
+              logo={<ExecutionPowerIdentityMark stopped size={31} />}
+              title="Legacy Bot Controls"
+              sub="Retired; canonical Product supervisor truth owns this surface."
+              status="Blocked"
             />
-            <div className="modex-rows" role="group" aria-label="Bot guardrail controls">
-              <button className={`modex-row emergency ${killOn ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => { void runKillMutation(!killOn); }} aria-pressed={killOn}>
-                <span><b>Emergency Stop</b><em>Stops orders, loans, and bot actions.</em></span>
-                <i className="cb-switch" aria-hidden><span /></i>
-              </button>
-              <button className={`modex-row ${fundsAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setFundsAccess(!fundsAllowed)} aria-pressed={fundsAllowed}>
-                <span><b>Funds Access</b><em>Allow the bot to use account funds.</em></span>
-                <i className="cb-switch" aria-hidden><span /></i>
-              </button>
-              <button className={`modex-row ${newLoansAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setNewLoans(!newLoansAllowed)} aria-pressed={newLoansAllowed}>
-                <span><b>New Loans</b><em>Allow margin or flexible borrow requests.</em></span>
-                <i className="cb-switch" aria-hidden><span /></i>
-              </button>
-              <button className={`modex-row ${botRunning ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => setBotRunning(!botRunning)} aria-pressed={botRunning}>
-                <span><b>Bot Running</b><em>Allow strategy automation to act.</em></span>
-                <i className="cb-switch" aria-hidden><span /></i>
-              </button>
-              <button className={`modex-row ${liveOrdersAllowed ? 'on' : ''}`} type="button" disabled={controlBusy} onClick={() => { void runLiveMutation(!liveOrdersAllowed); }} aria-pressed={liveOrdersAllowed} title={liveTitle}>
-                <span><b>Live Orders</b><em>Allow live sends after the risk gate.</em></span>
-                <i className="cb-switch" aria-hidden><span /></i>
-              </button>
-            </div>
+            <div className="ops-empty-state"><IconShield size={18} /><b>No legacy money controls are mounted.</b></div>
           </div>
         );
       case 'currency':
@@ -3107,10 +2538,6 @@ function SharedTopBar() {
   };
 
   const premiumContent = (k: MK) => {
-    const closeAndOpen = (overlay: 'cloudshell') => {
-      closeMenu();
-      openOverlay(overlay);
-    };
     const statusTone = (tone: string): OpsTone => tone === 'ok' || tone === 'good'
       ? 'ok'
       : tone === 'bad'
@@ -3155,61 +2582,10 @@ function SharedTopBar() {
         );
 
       case 'shell':
-        return (
-          <div className="ops-sheet ops-aws-sheet aws-control-sheet">
-            <OpsSheetHeader
-              icon={<span className="aws-popup-mark" aria-hidden="true"><AwsCubeIdentityMark size={42} /></span>}
-              title="AWS Runner Control"
-              subtitle="Restricted Systems Manager channel"
-              status={!awsStatus ? 'Checking' : !awsStatus.configured ? 'Not Configured' : !awsStatus.connectionEnabled ? 'Blocked' : awsStatus.channel === 'online' ? 'Online' : awsStatus.channel === 'offline' ? 'Offline' : 'Ready'}
-              tone={!awsStatus || !awsStatus.configured || !awsStatus.connectionEnabled ? 'idle' : awsStatus.channel === 'online' ? 'ok' : awsStatus.channel === 'offline' ? 'bad' : 'warn'}
-            />
-            <section className="aws-pop-target" aria-label="Configured AWS runner target">
-              <div><span>Region</span><b>{awsStatus?.region ?? 'Not configured'}</b></div>
-              <div><span>Instance</span><b>{awsStatus?.instanceId ?? 'Not configured'}</b></div>
-              <div><span>Service</span><b>{awsStatus?.serviceName ?? 'Not configured'}</b></div>
-            </section>
-            <div className="ops-inline-actions aws-pop-actions" aria-label="AWS runner destinations">
-              <button type="button" onClick={() => closeAndOpen('cloudshell')}><IconTerminal size={14} /> Runner Workspace</button>
-              <a href={AWS_CONSOLE_URL} target="_blank" rel="noreferrer noopener" onClick={closeMenu}><IconExternal size={14} /> AWS Console</a>
-            </div>
-            <div className="aws-pop-gates" aria-label="AWS connection gates">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={awsStatus?.connectionEnabled === true}
-                className={awsStatus?.connectionEnabled ? 'on' : ''}
-                disabled={!awsStatus?.configured || !awsStatus?.operatorAuthorized || awsGateBusy}
-                onClick={() => { void toggleAwsGate('connectionEnabled'); }}
-              >
-                <span><b>AWS Channel</b><em>Block or allow website-to-AWS control traffic.</em></span>
-                <i><span /></i>
-              </button>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={awsStatus?.executionEnabled === true}
-                className={awsStatus?.executionEnabled ? 'on' : ''}
-                disabled={!awsStatus?.connectionEnabled || !awsStatus?.operatorAuthorized || awsGateBusy}
-                onClick={() => { void toggleAwsGate('executionEnabled'); }}
-              >
-                <span><b>Runner Changes</b><em>Write, validate, and restart the configured runner.</em></span>
-                <i><span /></i>
-              </button>
-            </div>
-            {(awsStatusError || (awsStatus && (!awsStatus.configured || !awsStatus.operatorAuthorized))) && (
-              <div className="aws-pop-notice"><IconShield size={14} /><span>{awsStatusError ?? (!awsStatus?.configured ? `Set ${awsStatus?.missing.join(', ')}` : awsStatus?.authorizationReason ?? 'Verified operator access is required.')}</span></div>
-            )}
-            {!awsStatusError && (!awsStatus || (awsStatus.configured && awsStatus.operatorAuthorized)) && (
-              <div className="aws-pop-notice neutral"><IconShield size={14} /><span>{awsStatus ? 'Restricted Systems Manager · No browser credentials exposed.' : 'Checking runner configuration and operator authorization.'}</span></div>
-            )}
-          </div>
-        );
+        return <AwsOwnerGatedSheet />;
 
-      case 'apikey': {
-        const visibleKeys = [roKey, fullKey].filter(Boolean) as ApiKeyInfo[];
-        return <BinanceApiKeySheet keys={visibleKeys} />;
-      }
+      case 'apikey':
+        return <PrivateAdapterSheet />;
 
       case 'advisor': {
         return (
@@ -3217,7 +2593,7 @@ function SharedTopBar() {
             <OpsSheetHeader
               icon={<PopupSourceMark tone="#24c85a" brand><img className="trust-advisor-source-image" src={TRUST_ADVISOR_MARK} alt="" /></PopupSourceMark>}
               title="Trust Advisor"
-              subtitle={`${advChecks.length} live cockpit checks`}
+              subtitle={`${advChecks.length} canonical safety checks`}
               status={advTone === 'bad' ? 'Action' : advTone === 'warn' ? 'Review' : 'Clear'}
               tone={statusTone(advTone)}
             />
@@ -3299,60 +2675,31 @@ function SharedTopBar() {
               tone={statusTone(convergenceTone)}
               action={(
                 <button
-                  className={`ops-execution-action ${convergenceKillOn ? 'resume' : 'stop'}`}
+                  className="ops-execution-action"
                   type="button"
                   onClick={() => {
-                    if (!convergenceKillOn || window.confirm('Release the convergence kill switch? Strategy intake will remain paused.')) {
-                      void runConvergenceMutation(
-                        { command: 'SET_KILL_SWITCH', engaged: !convergenceKillOn },
-                        convergenceKillOn ? 'Operator released convergence kill switch; intake remains paused.' : 'Operator engaged convergence kill switch from the control rail.',
-                      );
-                    }
+                    closeMenu();
+                    setPage('control-room');
                   }}
-                  aria-label={convergenceKillOn ? 'Release convergence kill switch' : 'Engage convergence kill switch'}
-                  disabled={controlBusy || !convergenceControl}
+                  aria-label="Open Control Room"
                 >
                   <ExecutionPowerIdentityMark stopped={convergenceKillOn} size={15} />
-                  <span>{convergenceKillOn ? 'Release' : 'Halt Intake'}</span>
+                  <span>Open Room</span>
                 </button>
               )}
             />
-            <div className="ops-section-label"><span>Safe Convergence Mode</span><em>{convergenceControl ? `Revision ${convergenceControl.revision}` : 'Unavailable'}</em></div>
-            <div className={`ops-control-row ops-tri-row state-${convergenceControl?.safeMode ?? 'READ_ONLY'}`} data-control="convergence-mode">
-              <span><b>Operator Authority</b><em>Read, advise, or validate through sealed dry-run ports.</em></span>
-              <span className="ops-tri-control" role="radiogroup" aria-label="Safe convergence mode">
-                {(['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY'] as const).map((safeMode) => (
-                  <label key={safeMode} className={safeMode === 'READ_ONLY' ? 'blocked' : safeMode === 'ADVISORY' ? 'paused' : 'allowed'} title={safeMode.replaceAll('_', ' ')}>
-                    <input
-                      type="radio"
-                      name="convergence-safe-mode"
-                      value={safeMode}
-                      checked={convergenceControl?.safeMode === safeMode}
-                      disabled={controlBusy || !convergenceControl}
-                      onChange={() => void runConvergenceMutation(
-                        { command: 'SET_SAFE_MODE', safeMode },
-                        `Operator selected ${safeMode} convergence authority from the control rail.`,
-                      )}
-                    />
-                    <span>{safeMode === 'READ_ONLY' ? 'Read' : safeMode === 'ADVISORY' ? 'Advise' : 'Validate'}</span>
-                  </label>
-                ))}
-              </span>
-            </div>
-            <div className="ops-list ops-control-list" aria-label="Convergence controls">
+            <div className="ops-section-label"><span>Canonical Product Registry</span><em>{productSnapshot ? `Revision ${productSnapshot.revision}` : 'Unavailable'}</em></div>
+            <div className="ops-list ops-control-list" aria-label="Canonical product controls">
               <OpsRow
-                title="Strategy Intake"
-                detail={convergenceControl?.intakePaused ? 'New and increasing activity remains paused.' : 'Canonical engines may publish new proposals.'}
-                value={convergenceControl?.intakePaused ? 'Paused' : 'Open'}
-                tone={convergenceControl?.intakePaused ? 'warn' : 'ok'}
-                disabled={controlBusy || !convergenceControl || (convergenceKillOn && convergenceControl?.intakePaused === true)}
-                onClick={() => void runConvergenceMutation(
-                  { command: 'SET_INTAKE_PAUSED', paused: !(convergenceControl?.intakePaused ?? false) },
-                  convergenceControl?.intakePaused ? 'Operator requested convergence intake resume.' : 'Operator paused convergence strategy intake.',
-                )}
+                title="Operator Authority"
+                detail={safeModeControl?.disabledReason ?? 'Desired and effective mode come from the product supervisor.'}
+                value={productSnapshot?.ownerView.effectiveMode.replaceAll('_', ' ') ?? 'UNKNOWN'}
+                tone={productSnapshot?.ownerView.effectiveMode === 'BLOCKED' || !productSnapshot ? 'warn' : 'idle'}
               />
+              <OpsRow title="Strategy Intake" detail={intakeControl?.disabledReason ?? intakeControl?.wiringState ?? 'Canonical state unavailable.'} value={intakeControl?.currentEffectiveValue ?? 'UNKNOWN'} tone={intakeTone} />
+              <OpsRow title="Kill Switch" detail={killSwitchControl?.disabledReason ?? killSwitchControl?.wiringState ?? 'Canonical state unavailable.'} value={killSwitchState} tone={convergenceKillOn ? 'warn' : 'ok'} />
               <OpsRow title="Live Execution" detail="No signed, test-order, private, or money-moving port exists in this slice." value="Blocked" tone="bad" />
-              <OpsRow title="Runtime Generation" detail={integration.snapshot ? `${integration.snapshot.overallPosture} · ${integration.snapshot.truthLabel}` : 'Supervisor unavailable'} value={integration.snapshot ? String(integration.snapshot.runtimeGeneration) : '—'} tone={integration.snapshot?.overallPosture === 'READY' ? 'ok' : 'warn'} />
+              <OpsRow title="Supervisor Continuity" detail={productSnapshot ? `${productSnapshot.truthLabel} · ${productSnapshot.ownerView.machineReady} Machine Ready` : 'Supervisor unavailable'} value={productBinding.continuity} tone={productSnapshot && productBinding.continuity === 'PROVEN' ? 'ok' : 'warn'} />
             </div>
           </div>
         );
@@ -3418,7 +2765,7 @@ function SharedTopBar() {
         );
 
       case 'account':
-        return <AccountSheet open={active === 'account'} />;
+        return <AccountSheet />;
 
       case 'appearance': {
         const themeModes = [
@@ -3494,13 +2841,13 @@ function SharedTopBar() {
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
         <span className="rail-icon-core aws-runner-trigger-core" aria-hidden="true"><AwsCubeIdentityMark size={24} /></span>
-      </>, { title: `AWS Runner Control — ${!awsStatus ? 'checking' : !awsStatus.configured ? 'not configured' : awsStatus.connectionEnabled ? 'channel open' : 'blocked'}` })}
-      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${roKey?.status ?? 'missing'}`, <>
-        <span className={`rail-icon-core api-key-trigger-core s-${roKey?.status ?? 'missing'}`}><ApiKeyIdentityMark size={24} /></span>
-      </>, { title: `API keys — ${roKey?.live ? 'live posture' : roKey?.keysPresent ? 'permission sync pending' : 'no live key'}` })}
+      </>, { title: 'AWS Runner Control — OWNER GATED · NOT CONFIGURED' })}
+      {trig('apikey', 'hdr-ic apikey-ghost apikey-premium-trigger s-missing', <>
+        <span className="rail-icon-core api-key-trigger-core s-missing"><ApiKeyIdentityMark size={24} /></span>
+      </>, { title: 'Private exchange adapter — OWNER GATED · NOT CONFIGURED' })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
         <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}><img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" /></span>
-      </>, { title: 'Trust Advisor — live cockpit checks' })}
+      </>, { title: 'Trust Advisor — canonical safety checks' })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
         <span className={`rail-icon-core notification-trigger-core ${notifTone}`}>
@@ -3580,7 +2927,7 @@ const IconCross = ({ size = 18 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
 );
 
-type ConnectionResetTarget = 'all' | 'market' | 'runtime' | 'account' | 'news' | 'calendar' | 'fx';
+type ConnectionResetTarget = 'all' | 'market' | 'runtime' | 'news' | 'calendar' | 'fx';
 type WatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
 type WatchmanGroup = 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
 type WatchmanView = 'overview' | 'connections' | 'sources';
@@ -3716,7 +3063,7 @@ export function RefreshDock() {
   const cadenceOptions = MARKET_PING_CHOICES.map((seconds) => ({ id: String(seconds), label: fmtCadence(seconds) }));
   const resetCadenceDefaults = () => {
     const next = { ...(prefs.dataCadence ?? {}) } as Record<DataCadenceKey, number>;
-    for (const key of MARKET_PING_KEYS) next[key] = DATA_CADENCE_DEFAULTS[key];
+    for (const key of ['market', 'news', 'calendar'] as const) next[key] = DATA_CADENCE_DEFAULTS[key];
     updatePref('dataCadence', next);
     updatePref('refreshSec', DATA_CADENCE_DEFAULTS.market);
     setCadenceReset(true);
@@ -3743,7 +3090,34 @@ export function RefreshDock() {
     updatedAt: Date.now(),
     latencyMs: appRtt,
   };
-  const components: WatchmanComponent[] = [browserComponent, ...(backendWatchman?.components ?? [])];
+  // Private account and external infrastructure are explicit owner boundaries,
+  // not runtime health. Discard any operational-looking server row for these
+  // IDs and replace it with static planned provenance before all counts/paths.
+  const ownerGatedComponents: WatchmanComponent[] = [
+    {
+      id: 'binance-account',
+      label: 'Private Account Adapter',
+      group: 'binance',
+      status: 'planned',
+      detail: 'OWNER_GATED · NOT_CONFIGURED · no signed account reads are mounted',
+      value: 'OWNER GATED',
+      required: false,
+      updatedAt: null,
+    },
+    {
+      id: 'aws-runner',
+      label: 'AWS Runner',
+      group: 'infrastructure',
+      status: 'planned',
+      detail: 'OWNER_GATED · NOT_CONFIGURED · no probe, command, deployment, or console path is mounted',
+      value: 'OWNER GATED',
+      required: false,
+      updatedAt: null,
+    },
+  ];
+  const backendComponents = (backendWatchman?.components ?? [])
+    .filter((component) => component.id !== 'binance-account' && component.id !== 'aws-runner');
+  const components: WatchmanComponent[] = [browserComponent, ...backendComponents, ...ownerGatedComponents];
   const requiredComponents = components.filter((component) => component.required && component.status !== 'planned');
   const operationalCount = requiredComponents.filter((component) => component.status === 'operational').length;
   const degradedCount = requiredComponents.filter((component) => component.status === 'degraded').length;
@@ -3827,17 +3201,15 @@ export function RefreshDock() {
     rows: components.filter((component) => component.group === group),
   })).filter((section) => section.rows.length > 0);
   const resetControls: Array<{ target: ConnectionResetTarget; label: string; detail: string }> = [
-    { target: 'all', label: 'All Connections', detail: 'Rebuild the browser socket and every server-owned connection' },
+    { target: 'all', label: 'Mounted Connections', detail: 'Rebuild public and local connections; owner-gated adapters remain excluded' },
     { target: 'market', label: 'Market Network', detail: 'Rebuild Binance public sockets' },
     { target: 'runtime', label: 'Bot Runtimes', detail: 'Restart Basis and Volume engines' },
-    { target: 'account', label: 'Signed Account', detail: 'Resync wallets, orders, loans, and user stream' },
     { target: 'news', label: 'News Sources', detail: 'Refresh every configured source adapter' },
     { target: 'calendar', label: 'Calendar', detail: 'Rebuild the economic-event cache' },
     { target: 'fx', label: 'FX Rates', detail: 'Refresh display-currency references' },
   ];
   const cadenceControls: Array<{ key: DataCadenceKey; target: Exclude<ConnectionResetTarget, 'all'>; label: string; detail: string }> = [
     { key: 'market', target: 'market', label: 'Market Prices', detail: 'Prices, breadth, and market rows' },
-    { key: 'account', target: 'account', label: 'Account Data', detail: 'Balances, orders, fills, and loans' },
     { key: 'news', target: 'news', label: 'News Context', detail: 'Feed fallback and new-item context' },
     { key: 'calendar', target: 'calendar', label: 'Calendar', detail: 'Macro releases and value changes' },
   ];
@@ -3868,7 +3240,7 @@ export function RefreshDock() {
         <section className={`rdock-pop rdock-control-pop watchman-panel status-${overallStatus}`} aria-label="Connection Watchman">
           <header className="rdock-control-head watchman-head">
             <span className={`rdock-control-logo status-${overallStatus}`}><ConnectionWatchmanMark size={54} /></span>
-            <span className="rdock-control-title"><b>Connection Watchman</b><em>Website · bot · AWS · Binance · source network</em></span>
+            <span className="rdock-control-title"><b>Connection Watchman</b><em>Website · bot · public sources · owner-gated boundaries</em></span>
             <span className={`watchman-live-pulse status-${overallStatus}`}><i />Live Monitor</span>
             <span className={`rdock-pop-tag status-${overallStatus}`}>{overallLabel}</span>
             <button className="watchman-close" type="button" onClick={() => setOpen(false)} aria-label="Close Connection Watchman"><IconCross size={14} /></button>
@@ -4174,16 +3546,11 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function CloudShellModal({ onClose }: { onClose: () => void }) {
-  return <AwsRunnerModal onClose={onClose} />;
-}
-
 // Rendered once at the app root so fixed overlays escape the sidebar box.
 export function Overlays() {
   const [kind, set] = useOverlay();
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
-  if (kind === 'cloudshell') return <CloudShellModal onClose={() => set(null)} />;
   return null;
 }
 

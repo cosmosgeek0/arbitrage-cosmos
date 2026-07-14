@@ -108,6 +108,74 @@ test('corrupt durable checkpoints fail closed and post-commit listener failure i
   }
 });
 
+test('two independent adapters admit one checkpoint writer and refresh the stale loser without a loser event', () => {
+  const dataDir = tempDataDir();
+  const winnerLedger = new Ledger(dataDir);
+  const loserLedger = new Ledger(dataDir);
+  try {
+    const winnerAdapter = new SystemLedgerPersistenceAdapter(winnerLedger);
+    const loserAdapter = new SystemLedgerPersistenceAdapter(loserLedger);
+    assert.equal(winnerAdapter.load(T0, 'race.winner.load').ok, true);
+    assert.equal(loserAdapter.load(T0, 'race.loser.load').ok, true);
+
+    const winner = winnerAdapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'race.winner.start',
+    });
+    assert.equal(winner.ok, true);
+    const durableAfterWinner = winnerLedger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY);
+    const eventsAfterWinner = winnerLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND);
+    assert.notEqual(durableAfterWinner, null);
+    assert.equal(eventsAfterWinner.length, 1);
+
+    const loser = loserAdapter.persistStartup({
+      startedAtMs: T0 + 2,
+      correlationId: 'race.loser.start',
+    });
+    assert.equal(loser.ok, false);
+    assert.equal(loser.code, 'CHECKPOINT_REVISION_CONFLICT');
+    assert.equal(loserLedger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY), durableAfterWinner);
+    assert.equal(loserLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, eventsAfterWinner.length);
+
+    const winnerState = winnerAdapter.currentState();
+    const recoveredLoserState = loserAdapter.currentState();
+    assert.equal(winnerState.ok, true);
+    assert.equal(recoveredLoserState.ok, true);
+    assert.deepEqual(recoveredLoserState.value, winnerState.value);
+    assert.equal(recoveredLoserState.value.lastStartup.correlationId, 'race.winner.start');
+  } finally {
+    winnerLedger.close();
+    loserLedger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a stale compare-and-set conflict with invalid durable truth fails the adapter closed without an audit event', () => {
+  const dataDir = tempDataDir();
+  const writerLedger = new Ledger(dataDir);
+  const staleLedger = new Ledger(dataDir);
+  try {
+    const staleAdapter = new SystemLedgerPersistenceAdapter(staleLedger);
+    assert.equal(staleAdapter.load(T0, 'race.corrupt.load').ok, true);
+    writerLedger.setConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY, '{"schema":"corrupt"}');
+
+    const stale = staleAdapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'race.corrupt.start',
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.code, 'CHECKPOINT_REVISION_CONFLICT');
+    assert.equal(staleLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    const failedClosed = staleAdapter.currentState();
+    assert.equal(failedClosed.ok, false);
+    assert.equal(failedClosed.code, 'PERSISTENCE_CORRUPT');
+  } finally {
+    writerLedger.close();
+    staleLedger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('idempotency survives process restart and prevents duplicate allocation and duplicate ledger events', () => {
   const dataDir = tempDataDir();
   let ledger = new Ledger(dataDir);

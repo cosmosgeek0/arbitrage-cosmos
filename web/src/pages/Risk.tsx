@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { IconBook } from '../components/Icons';
-import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { TokenIcon } from '../components/TokenIcon';
 import { Seg } from '../components/px';
 import { fmtDateTime, fmtMoney, fmtPrice, timeAgo } from '../format';
@@ -34,12 +34,12 @@ const LIMIT_FIELDS: {
   step: string;
   reason: string;
 }[] = [
-  { key: 'maxOrderNotionalUsd', label: 'Per-Order Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Rejects a single order above this value.' },
-  { key: 'maxDailyNotionalUsd', label: 'Daily Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Caps executed quote value during the UTC day.' },
-  { key: 'maxDailyLossUsd', label: 'Daily Loss Stop', unit: 'USD', min: 0, step: '0.01', reason: 'Blocks new orders after the realized-loss threshold.' },
-  { key: 'maxOpenOrders', label: 'Open Orders', unit: 'Count', min: 0, step: '1', reason: 'Limits concurrent open orders.' },
-  { key: 'cooldownSec', label: 'Order Cooldown', unit: 'Sec', min: 0, step: '1', reason: 'Minimum wait after an order response.' },
-  { key: 'staleOrderMaxMin', label: 'Stale Order Age', unit: 'Min', min: 1, step: '1', reason: 'Flags open orders older than this threshold.' },
+  { key: 'maxOrderNotionalUsd', label: 'Per-Order Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Validate-only advisory cap for a hypothetical order.' },
+  { key: 'maxDailyNotionalUsd', label: 'Daily Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Validate-only UTC-day policy input.' },
+  { key: 'maxDailyLossUsd', label: 'Daily Loss Stop', unit: 'USD', min: 0, step: '0.01', reason: 'Advisory loss threshold; private PnL remains unavailable.' },
+  { key: 'maxOpenOrders', label: 'Open Orders', unit: 'Count', min: 0, step: '1', reason: 'Advisory concurrency input; private order truth is unavailable.' },
+  { key: 'cooldownSec', label: 'Order Cooldown', unit: 'Sec', min: 0, step: '1', reason: 'Validate-only interval between hypothetical decisions.' },
+  { key: 'staleOrderMaxMin', label: 'Stale Order Age', unit: 'Min', min: 1, step: '1', reason: 'Advisory age threshold for supplied order evidence.' },
 ];
 
 const RISK_CHECK_LABELS: Record<string, string> = {
@@ -48,7 +48,7 @@ const RISK_CHECK_LABELS: Record<string, string> = {
   kill_switch_off: 'Kill Switch',
   funds_access_unlocked: 'Funds Access',
   automation_running: 'Automation',
-  live_trading_enabled: 'Live Arm',
+  live_trading_enabled: 'Legacy Live Setting',
   symbol_allowed: 'Allowlist',
   symbol_not_blocked: 'Blocklist',
   symbol_blocked: 'Blocklist',
@@ -67,7 +67,7 @@ const RISK_CHECK_LABELS: Record<string, string> = {
 
 const STAGE_LABELS: Record<string, string> = {
   risk_decision: 'Risk Decision',
-  preview: 'Dry Run',
+  preview: 'Validate Only',
   order_intent: 'Order Intent',
   order_request: 'Order Request',
   order_response: 'Order Response',
@@ -146,12 +146,12 @@ function riskDecisionData(event: LedgerEvent): { allowed: boolean | null; stage:
 }
 
 function statusLabel(condition: GateCondition): string {
-  if (condition.id === 'live-arm') return condition.pass ? 'Armed' : 'Disarmed';
-  if (condition.id === 'kill-switch') return condition.pass ? 'Clear' : 'Halted';
-  return condition.pass ? 'Clear' : 'Blocked';
+  if (condition.id === 'execution-authority') return 'Owner Gated';
+  return condition.pass ? 'Advisory Pass' : 'Unavailable';
 }
 
-function utilization(value: number, limit: number): number {
+function utilization(value: number | null, limit: number): number {
+  if (value === null) return 0;
   if (limit <= 0) return 100;
   return Math.max(0, Math.min(100, (value / limit) * 100));
 }
@@ -162,7 +162,7 @@ function RiskCheckTable({ checks }: { checks: RiskCheck[] }) {
   }
 
   return (
-    <div className="riskx-check-table" role="table" aria-label="Dry Run Checks">
+    <div className="riskx-check-table" role="table" aria-label="Validate-Only Checks">
       <div className="riskx-check-head" role="row">
         <span role="columnheader">Check</span>
         <span role="columnheader">Result</span>
@@ -173,7 +173,7 @@ function RiskCheckTable({ checks }: { checks: RiskCheck[] }) {
           <strong role="cell">{riskCheckLabel(check.name)}</strong>
           <span role="cell" className={'riskx-result ' + (check.pass ? 'clear' : 'blocked')}>
             <i aria-hidden="true" />
-            {check.pass ? 'Pass' : 'Fail'}
+            {check.pass ? 'Advisory Pass' : 'Advisory Fail'}
           </span>
           <span role="cell" className="riskx-detail" title={cleanRiskText(check.detail)}>
             {cleanRiskText(check.detail)}
@@ -222,15 +222,12 @@ export function Risk() {
   const perOrderLimit = configNumber(config, 'maxOrderNotionalUsd');
   const dailyLimit = configNumber(config, 'maxDailyNotionalUsd');
   const dailyUsedKnown = Number.isFinite(state.risk.dailyNotionalUsedUsd) && state.risk.dailyNotionalUsedUsd >= 0;
-  const dailyUsed = dailyUsedKnown ? state.risk.dailyNotionalUsedUsd : 0;
-  const dailyRemaining = dailyLimit > 0 ? Math.max(0, dailyLimit - dailyUsed) : 0;
+  const dailyUsed = dailyUsedKnown ? state.risk.dailyNotionalUsedUsd : null;
+  const dailyRemaining = dailyUsed !== null && dailyLimit > 0 ? Math.max(0, dailyLimit - dailyUsed) : null;
   const dailyLossLimit = configNumber(config, 'maxDailyLossUsd');
-  const realizedToday = state.account?.realizedTodayUsd ?? null;
-  const lossPolicy = state.account?.dailyLossPolicy ?? null;
-  const accountAge = state.binance.lastSyncTs === null ? Number.POSITIVE_INFINITY : Date.now() - state.binance.lastSyncTs;
-  const keyPermissions = state.binance.keyPermissions;
+  const realizedToday: number | null = null;
   const openOrderLimit = configNumber(config, 'maxOpenOrders');
-  const openOrdersCount = state.openOrders.length;
+  const openOrdersCount: number | null = null;
   const cooldownLeft =
     state.risk.lastOrderTs && config.cooldownSec > 0
       ? Math.max(0, Math.ceil((state.risk.lastOrderTs + config.cooldownSec * 1000 - Date.now()) / 1000))
@@ -238,53 +235,46 @@ export function Risk() {
 
   const gateConditions: GateCondition[] = [
     {
+      id: 'execution-authority',
+      label: 'Execution Authority',
+      pass: false,
+      value: 'OWNER_GATED',
+      detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED. Validation cannot dispatch, sign, borrow, transfer, or place an order.',
+    },
+    {
       id: 'kill-switch',
-      label: 'Kill Switch',
-      pass: !config.killSwitch,
-      value: config.killSwitch ? 'Global Stop' : 'All Routes',
-      detail: config.killSwitch ? 'Every live order path is stopped before routing.' : 'The global emergency stop is clear.',
+      label: 'Legacy Kill Switch',
+      pass: false,
+      value: config.killSwitch ? 'Stop Recorded' : 'Inactive',
+      detail: config.killSwitch ? 'A local stop is recorded.' : 'An inactive legacy stop does not grant execution authority.',
     },
     {
       id: 'funds-access',
       label: 'Funds Access',
-      pass: !config.fundsLocked,
-      value: config.fundsLocked ? 'Locked' : 'Available',
-      detail: config.fundsLocked ? 'Money actions are locked at the server.' : 'Server-side funds access is available.',
+      pass: false,
+      value: 'OWNER_GATED',
+      detail: 'Money actions remain mechanically unavailable regardless of the legacy fundsLocked setting.',
     },
     {
       id: 'live-arm',
-      label: 'Live Arm',
-      pass: config.liveTradingEnabled,
-      value: config.liveTradingEnabled ? 'Live Routing' : 'Paper / Manual',
-      detail: config.liveTradingEnabled ? 'Live routing is armed and still requires every order check.' : 'The system remains paper/manual-only.',
+      label: 'Legacy Live Setting',
+      pass: false,
+      value: 'OWNER_GATED',
+      detail: 'The legacy setting is ignored by this product and cannot arm a route.',
     },
     {
       id: 'account-source',
-      label: 'Signed Account',
-      pass: state.binance.connected && Number.isFinite(accountAge) && accountAge >= -1_000 && accountAge <= 60_000,
-      value: state.binance.connected ? (accountAge <= 60_000 ? 'Fresh' : 'Stale') : 'Offline',
-      detail: 'Live admission requires a signed account sync no older than 60 seconds.',
+      label: 'Private Account',
+      pass: false,
+      value: 'NOT_CONFIGURED',
+      detail: 'No private account endpoint or user stream is mounted.',
     },
     {
       id: 'key-posture',
       label: 'API Key Posture',
-      pass: Boolean(
-        keyPermissions?.enableReading
-        && keyPermissions.enableSpotAndMarginTrading
-        && !keyPermissions.enableWithdrawals
-        && !keyPermissions.enableInternalTransfer
-        && !keyPermissions.permitsUniversalTransfer
-      ),
-      value: keyPermissions ? state.binance.keyPosture.label : 'Unknown',
-      detail: !keyPermissions
-        ? 'Binance has not verified this key’s permissions.'
-        : !keyPermissions.enableReading
-          ? 'The key must have Binance reading permission before account truth can be verified.'
-          : !keyPermissions.enableSpotAndMarginTrading
-            ? 'This key is read-only. Live orders require Spot / Margin Trading permission.'
-            : keyPermissions.enableWithdrawals || keyPermissions.enableInternalTransfer || keyPermissions.permitsUniversalTransfer
-              ? 'Withdrawals and transfer-out authority must remain disabled.'
-              : 'Trading permission is verified and transfer-out powers are disabled.',
+      pass: false,
+      value: 'OWNER_GATED',
+      detail: 'No private key capability is accepted or projected by this surface.',
     },
     {
       id: 'symbol-policy',
@@ -292,60 +282,52 @@ export function Risk() {
       pass: config.allowedSymbols.length > 0,
       value: config.allowedSymbols.length ? String(config.allowedSymbols.length) + ' Allowed' : 'Empty',
       detail: config.allowedSymbols.length
-        ? String(config.allowedSymbols.length) + ' allowed · ' + String(config.blockedSymbols.length) + ' explicitly blocked.'
-        : 'A live order cannot pass until at least one symbol is allowed.',
+        ? String(config.allowedSymbols.length) + ' locally allowed · ' + String(config.blockedSymbols.length) + ' explicitly blocked for validation.'
+        : 'No symbol can pass the local validate-only policy.',
     },
     {
       id: 'order-limit',
       label: 'Per-Order Limit',
       pass: perOrderLimit > 0,
       value: fmtMoney(perOrderLimit),
-      detail: perOrderLimit > 0 ? 'Every estimated order notional is checked against this cap.' : 'Set a positive per-order cap.',
+      detail: perOrderLimit > 0 ? 'Hypothetical notional is checked against this advisory cap.' : 'Set a positive validate-only cap.',
     },
     {
       id: 'daily-notional',
       label: 'Daily Notional',
-      pass: dailyUsedKnown && dailyLimit > 0 && dailyUsed < dailyLimit,
-      value: dailyUsedKnown ? fmtMoney(dailyRemaining) + ' Left' : 'Unavailable',
-      detail: dailyUsedKnown
-        ? fmtMoney(dailyUsed) + ' used of the ' + fmtMoney(dailyLimit) + ' UTC-day cap.'
+      pass: dailyUsed !== null && dailyLimit > 0 && dailyUsed < dailyLimit,
+      value: dailyRemaining !== null ? fmtMoney(dailyRemaining) + ' Left' : 'UNKNOWN',
+      detail: dailyUsed !== null
+        ? fmtMoney(dailyUsed) + ' observed against the ' + fmtMoney(dailyLimit) + ' validate-only UTC-day cap.'
         : 'The server did not return a valid daily-notional total.',
     },
     {
       id: 'daily-loss',
       label: 'Daily Loss',
-      pass: lossPolicy?.complete === true && lossPolicy.valueUsd > -dailyLossLimit,
-      value: lossPolicy?.complete ? fmtMoney(lossPolicy.valueUsd) : 'Incomplete',
-      detail: lossPolicy?.complete
-        ? 'Fee-adjusted policy PnL; new orders stop at -' + fmtMoney(dailyLossLimit) + ' for the UTC day.'
-        : lossPolicy?.reasons.join(' · ') || 'Daily loss cost basis is unavailable.',
+      pass: false,
+      value: 'NOT_CONFIGURED',
+      detail: 'Private account PnL and cost basis are not projected; no zero is assumed.',
     },
     {
       id: 'open-orders',
       label: 'Open Orders',
-      pass: openOrdersCount < openOrderLimit,
-      value: String(openOrdersCount) + ' / ' + String(openOrderLimit),
-      detail: openOrderLimit > openOrdersCount
-        ? String(openOrderLimit - openOrdersCount) + ' order slot' + (openOrderLimit - openOrdersCount === 1 ? '' : 's') + ' available.'
-        : 'The configured concurrent-order limit is reached.',
+      pass: false,
+      value: 'UNKNOWN',
+      detail: 'Private open-order truth is not mounted; absence is not interpreted as zero.',
     },
     {
       id: 'cooldown',
       label: 'Cooldown',
       pass: cooldownLeft === 0,
       value: cooldownLeft > 0 ? String(cooldownLeft) + 's' : 'Ready',
-      detail: cooldownLeft > 0 ? 'Wait before another order can pass.' : 'The minimum interval between orders has elapsed.',
+      detail: cooldownLeft > 0 ? 'The validate-only interval has not elapsed.' : 'The local advisory interval has elapsed.',
     },
   ];
 
   const sortedConditions = [...gateConditions].sort((left, right) => Number(left.pass) - Number(right.pass));
   const failedConditions = gateConditions.filter((condition) => !condition.pass);
-  const posture = config.killSwitch ? 'halted' : config.liveTradingEnabled ? 'live' : 'paper';
-  const postureLabel = posture === 'halted'
-    ? 'Legacy Halted'
-    : posture === 'live'
-      ? 'Legacy Live Armed'
-      : 'Legacy Live Off';
+  const posture = 'halted';
+  const postureLabel = 'Execution OWNER_GATED';
 
   const dirtyLimitKeys = LIMIT_FIELDS.filter((field) => draft[field.key] !== undefined);
   const invalidLimitKeys = LIMIT_FIELDS.filter((field) => {
@@ -423,7 +405,7 @@ export function Risk() {
       const result = await preview({ symbol, side: probeSide, type: 'MARKET', quoteQty: amount });
       if (generation !== probeGeneration.current) return;
       if (!result) {
-        setProbeError('The server did not return a dry-run result.');
+        setProbeError('The server did not return a validate-only result.');
         return;
       }
 
@@ -431,7 +413,7 @@ export function Risk() {
       if (result.errors.length > 0) setProbeError(result.errors.map(cleanRiskText).join(' / '));
     } catch (error) {
       if (generation === probeGeneration.current) {
-        setProbeError(error instanceof Error ? error.message : 'The dry run failed.');
+        setProbeError(error instanceof Error ? error.message : 'The validate-only check failed.');
       }
     } finally {
       if (generation === probeGeneration.current) setProbeBusy(false);
@@ -447,33 +429,33 @@ export function Risk() {
             <h1>Risk</h1>
             <span className={'riskx-posture ' + posture}><i aria-hidden="true" />{postureLabel}</span>
             <span className="riskx-blocker-count">
-              {failedConditions.length ? String(failedConditions.length) + ' Blocker' + (failedConditions.length === 1 ? '' : 's') : 'Gate Clear'}
+              {String(failedConditions.length) + ' Blocker' + (failedConditions.length === 1 ? '' : 's')}
             </span>
           </div>
 
         </header>
 
-        <SystemIntegrationSurface surface="risk" />
+        <ProductSurfaceAdapter surfaceId="risk" />
 
         {saveError ? <div className="riskx-probe-error" role="alert">{saveError}</div> : null}
 
         <div className="riskx-summary" aria-label="Risk Summary">
           <div className="riskx-summary-cell">
             <span>Daily Notional</span>
-            <strong>{fmtMoney(dailyUsed)} <em>/ {fmtMoney(dailyLimit)}</em></strong>
-            <div className="riskx-meter"><i style={{ width: String(utilization(dailyUsed, dailyLimit)) + '%' }} /></div>
+            <strong>{dailyUsed === null ? 'UNKNOWN' : fmtMoney(dailyUsed)} <em>/ {fmtMoney(dailyLimit)}</em></strong>
+            {dailyUsed !== null ? <div className="riskx-meter"><i style={{ width: String(utilization(dailyUsed, dailyLimit)) + '%' }} /></div> : null}
           </div>
           <div className="riskx-summary-cell">
             <span>Realized Today</span>
             <strong className={realizedToday !== null && realizedToday < 0 ? 'negative' : ''}>
-              {realizedToday === null ? 'Unavailable' : fmtMoney(realizedToday)}
+              {realizedToday === null ? 'UNKNOWN' : fmtMoney(realizedToday)}
             </strong>
-            <small>Loss stop at -{fmtMoney(dailyLossLimit)}</small>
+            <small>NOT_CONFIGURED · advisory threshold -{fmtMoney(dailyLossLimit)}</small>
           </div>
           <div className="riskx-summary-cell">
             <span>Open Orders</span>
-            <strong>{openOrdersCount} <em>/ {openOrderLimit}</em></strong>
-            <small>{Math.max(0, openOrderLimit - openOrdersCount)} slots available</small>
+            <strong>UNKNOWN <em>/ {openOrderLimit}</em></strong>
+            <small>Private order truth is NOT_CONFIGURED</small>
           </div>
           <div className="riskx-summary-cell">
             <span>Rejections Today</span>
@@ -485,11 +467,11 @@ export function Risk() {
         <section className="riskx-section">
           <header className="riskx-section-head">
             <div>
-              <h2>Execution Gate</h2>
-              <p>Server-enforced conditions that decide whether a live order may route.</p>
+              <h2>Validate-Only Policy Gate</h2>
+              <p>Advisory checks for hypothetical intent. LIVE_EXECUTION_NOT_IMPLEMENTED; no result can route money.</p>
             </div>
           </header>
-          <div className="riskx-gate-table" role="table" aria-label="Execution Gate">
+          <div className="riskx-gate-table" role="table" aria-label="Validate-Only Policy Gate">
             <div className="riskx-gate-head" role="row">
               <span role="columnheader">Control</span>
               <span role="columnheader">State</span>
@@ -551,7 +533,7 @@ export function Risk() {
           <header className="riskx-section-head">
             <div>
               <h2>Limits</h2>
-              <p>Values saved directly to the deterministic server risk gate.</p>
+              <p>Local validate-only policy inputs. Saving them grants no execution authority.</p>
             </div>
             <div className="riskx-section-actions">
               {saved && dirtyLimitKeys.length === 0 ? <span className="riskx-saved"><i aria-hidden="true" />Saved</span> : null}
@@ -621,14 +603,14 @@ export function Risk() {
           <header className="riskx-section-head">
             <div>
               <h2>Symbol Policy</h2>
-              <p>Only allowed symbols can pass; an explicit block always wins.</p>
+              <p>Local advisory policy for validate-only intent; an explicit block always wins.</p>
             </div>
           </header>
 
           <div className="riskx-policy-row">
             <div className="riskx-policy-copy">
               <strong>Allowed Symbols</strong>
-              <span>{config.allowedSymbols.length ? String(config.allowedSymbols.length) + ' symbols can enter the live gate.' : 'No symbol can enter the live gate.'}</span>
+              <span>{config.allowedSymbols.length ? String(config.allowedSymbols.length) + ' symbols can enter validation.' : 'No symbol can enter validation.'}</span>
             </div>
             <div className="riskx-symbol-entry">
               <input
@@ -713,13 +695,13 @@ export function Risk() {
         <section className="riskx-section riskx-probe-section">
           <header className="riskx-section-head">
             <div>
-              <h2>Dry Run</h2>
-              <p>Evaluates a hypothetical market order through the server gate. No order is sent.</p>
+              <h2>Validate Only</h2>
+              <p>Evaluates hypothetical intent. No signed call, private read, borrow, transfer, or order is possible.</p>
             </div>
             {probeResult ? (
               <span className={'riskx-probe-state ' + (probeResult.risk.allowed ? 'clear' : 'blocked')}>
                 <i aria-hidden="true" />
-                {probeResult.risk.allowed ? 'Passed' : 'Rejected'}
+                {probeResult.risk.allowed ? 'Advisory Pass' : 'Advisory Reject'}
               </span>
             ) : null}
           </header>
@@ -748,7 +730,7 @@ export function Risk() {
               </span>
             </label>
             <button type="button" className="riskx-button primary riskx-probe-button" disabled={probeBusy} onClick={runProbe}>
-              {probeBusy ? 'Checking…' : 'Run Dry Run'}
+              {probeBusy ? 'Checking…' : 'Run Validate-Only Check'}
             </button>
           </div>
 

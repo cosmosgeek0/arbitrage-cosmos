@@ -26,19 +26,19 @@ A private Binance arbitrage/intelligence operating machine ("Cosmos Arbitrage Co
 | Market Intelligence (`server/src/intelligenceFoundation/**`) | WIRED as evidence substrate |
 | Intelligence Runtime (`server/src/intelligenceRuntime/**`) | WIRED for composed public sources; continuous effectful feed = next work |
 | Capital Supervision (`server/src/capitalFoundation/**`) | WIRED read/advisory; reservation authority UNAVAILABLE (needs real account truth) |
-| System Integration (`server/src/systemIntegration/**`) | WIRED — composition root, supervisor, authenticated APIs, controls, vertical slice |
+| System Integration (`server/src/systemIntegration/**`) | WIRED — composition root, supervisor, authenticated APIs, controls, vertical slice; accepted SI-RECON `f03ed786a8c5cab50ef27ad33026a74f79f7df87` preserves `DIVERGED` for contradictory working-order truth |
 | Operator modes | READ_ONLY / ADVISORY / VALIDATE_ONLY only; kill switch fail-closed for new risk |
 | Live execution / signed calls / borrow / transfer | MISSING by design — mechanically blocked |
 
-## Verification (Phase 2 F-BRIDGE intermediate gate, 2026-07-14)
+## Verification (Phase 2 F-BRIDGE + SI-RECON gate, 2026-07-14)
 
 ```bash
-npm run test:foundation  # exit 0; all 24 sorted files passed
-npm test                 # exit 0; deterministic 377/377
-npm run test:all         # exit 1; exact System Integration result 179/180
+npm run test:foundation  # exit 0; all 24 sorted files passed at the F-BRIDGE cut
+npm test                 # exit 0; deterministic 377/377 after SI-RECON
+npm run test:all         # exit 0; complete repository gate after SI-RECON
 ```
 
-F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. The only full-suite failure is `server/test/systemIntegration/verticalSlice/authority.scenarios.test.mjs`: actual canonical truth `DIVERGED`, stale fixture expectation `PARTIAL`. Accepted SI-RECON donor `f03ed786a8c5cab50ef27ad33026a74f79f7df87` is the bounded correction and must be integrated/tested separately next. No product source is weakened to hide this failure.
+F-BRIDGE focused proof is green: execution `173/173`, execution import purity `30/30`, compatibility `131/131`, reconciliation `75/75`. SI-RECON focused proof is `29/29`. The complete gate passes deterministic `377`, app `72`, intelligence `152`, intelligence runtime `394`, capital `433`, all 24 Foundation files, and System Integration `180/180`. The corrected expectation is `DIVERGED`, not a weakened `PARTIAL` claim.
 
 ## What is genuinely live vs not
 

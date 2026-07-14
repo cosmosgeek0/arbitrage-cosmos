@@ -434,3 +434,17 @@ The following amendment requirements are ACCEPTED and binding for the IP-ASSURAN
 - handoff §4 residuals 1–4 as narrow rows; §4.5 already covered by I00 law.
 
 The amendment source is archived as superseded provenance; no worker reads it. This section widens no path beyond §2 + amendment §11 and creates no new authority.
+
+### 7.1 Class A–D self-correction taxonomy (director-folded owner law, D-LAUNCH-13)
+
+Folded verbatim-in-substance from the superseded amendment §7.5–7.6 as the binding owner definition:
+
+**Class A — automatically eligible only when already registered.** Only an already-registered deterministic, local, non-capital Control Plane command class may be automatically executed (examples: reconnect, resubscribe, bounded resnapshot, bounded cache rebuild, bounded child-worker restart, diagnostic collection). Each class requires: deterministic trigger; preconditions; attempt/rate/resource budget; fencing; idempotence/replay safety where applicable; reconstructibility or a declared compensation/rollback path; explicit residual effects; independent postcondition; cooldown; anti-oscillation law; immutable receipt; automatic demotion on changed assumptions. No Class A command may mutate capital or an external environment.
+
+**Class B — canonical recovery, never agent repair.** Unknown exchange outcome, accounting mismatch, position ambiguity, partial fill, borrow/funding liability, and other capital-affecting states enter canonical reconciliation/recovery. They never enter an automatic or agent repair allowlist.
+
+**Class C — owner-approved normal release.** Any agent- or human-generated code change follows the owner-approved, hash-bound release pipeline; configuration/deployment/service/host/AWS/Cloudflare/Secrets/provider-activation additionally requires separate I00 §20 authorization. None can be promoted into the automatic allowlist.
+
+**Class D — abstain/demote.** Model/label drift, unsupported cohorts, calibration loss, strategy underperformance, and unknown research evidence cause the accepted Q/runtime boundary to abstain or recommend demotion through existing owners.
+
+**Promotion evidence law (all nine required for a Class A eligibility claim):** (1) deterministic failure reproduction; (2) exact registered command identity; (3) focused/regression/fault tests; (4) shadow or no-authority exercise; (5) independent verifier confirms the declared postcondition; (6) no recurrence during a declared quiet period (bounded past evidence, never future proof); (7) owner-preauthorized narrow class; (8) bounded rate/resource/attempt/exposure effects; (9) recurrence/drift/changed assumptions automatically demote. Clock repair never steps in-process wall clock; queue/export recovery preserves material events or records a visible gap; backup-path switch requires current proof, coherence, identity, and same truth semantics.

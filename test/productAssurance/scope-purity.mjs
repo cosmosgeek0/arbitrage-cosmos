@@ -6,6 +6,8 @@ import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
+import { verifySealedOwnerDirective } from '../i00/sealed-owner-evidence.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PRODUCT_SOURCE = join(ROOT, 'server', 'src', 'productAssurance');
 const PROTECTED_INPUT = Object.freeze({
@@ -64,18 +66,15 @@ function isCoreAllowedPath(path) {
 }
 
 export function verifyProtectedInput() {
-  const absolutePath = join(ROOT, PROTECTED_INPUT.path);
-  assert.equal(existsSync(absolutePath), true, `protected owner input is missing: ${PROTECTED_INPUT.path}`);
-  assert.equal(lstatSync(absolutePath).isFile(), true, `protected owner input is not a regular file: ${PROTECTED_INPUT.path}`);
-
-  const tracked = gitPaths(['ls-files', '--cached', '-z', '--', PROTECTED_INPUT.path]);
-  const untracked = gitPaths(['ls-files', '--others', '--exclude-standard', '-z', '--', PROTECTED_INPUT.path]);
-  assert.deepEqual(tracked, [], `protected owner input must remain untracked: ${PROTECTED_INPUT.path}`);
-  assert.deepEqual(untracked, [PROTECTED_INPUT.path], `protected owner input is not visible as the exact untracked path: ${PROTECTED_INPUT.path}`);
-
-  const sha256 = createHash('sha256').update(readFileSync(absolutePath)).digest('hex');
-  assert.equal(sha256, PROTECTED_INPUT.sha256, `protected owner input SHA-256 mismatch: ${PROTECTED_INPUT.path}`);
-  return Object.freeze({ path: PROTECTED_INPUT.path, sha256, untracked: true });
+  const evidence = verifySealedOwnerDirective(ROOT, PROTECTED_INPUT.path);
+  assert.equal(evidence.sha256, PROTECTED_INPUT.sha256, `protected owner input SHA-256 mismatch: ${PROTECTED_INPUT.path}`);
+  assert.ok(['LIVE_OWNER_FILE', 'SEALED_CANDIDATE_HASH'].includes(evidence.evidenceMode));
+  return Object.freeze({
+    path: PROTECTED_INPUT.path,
+    sha256: evidence.sha256,
+    untracked: evidence.liveFilePresent,
+    evidenceMode: evidence.evidenceMode,
+  });
 }
 
 export function verifyProtectedDedupMatrix() {

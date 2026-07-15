@@ -25,7 +25,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 | IP-OPS packet | ~/Desktop/ip-ops | ip-ops-20260713 | 420cc83 | OPS_READY — fan-in at I00 spine |
 | IP-PROOF packet | ~/Desktop/ip-proof | ip-proof-20260713 | 420cc83 | PROOF_PRESTAGE_READY (23e985c) — fan-in at I00 spine |
 
-| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | INTEGRATION_CANDIDATE_READY (C=098f7b9, seal 517bd63 sole child, pushed; D-LAUNCH-33) — PARKED read-only; Role 3 = RUN-8 |
+| I00-VERIFY | ~/Desktop/i00-assembly | i00-product-assembly-20260713 | 1fec867 | C 098f7b9 REJECTED by Role 3 (15 findings, receipt in role3-verify; D-LAUNCH-34) — Role-4 fix owner ACTIVE in ~/Desktop/role4-fix (RUN-9) → new C2 → fresh re-verify |
 
 | F-BRIDGE canonical execution | ~/Desktop/f-bridge | f-bridge-execution-20260713 | 24ac894 | ACCEPTED (1e9d28a) + MERGED to current-main c900907 (24/24 foundation, npm test green) |
 | A-CORE IP-ASSURANCE | ~/Desktop/ip-assurance | ip-assurance-20260713 | 9785c93 | CORE_SCAFFOLD_READY (08a0a09) — full READY after director fan-in |

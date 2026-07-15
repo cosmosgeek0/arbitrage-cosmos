@@ -565,6 +565,8 @@ test('managed Market init timeout invalidates late atomic commit and a fresh gen
         ? firstUniverse
         : Promise.resolve(universe('FRESHUSDT', 'FRESH'));
     },
+    undefined,
+    { publicSourceStartupEgressAdmitted: true },
   );
   const clock = new ManualClock();
   const scheduler = new ManualScheduler();

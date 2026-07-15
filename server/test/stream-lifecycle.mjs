@@ -459,6 +459,21 @@ test('passive liquidation projection is restart-safe, bounded, and rejects malfo
 });
 
 test('MarketEngine normalizes force-order snapshots once and both liquidation views stay equal', async () => {
+  let deniedUniverseFetchCalls = 0;
+  const deniedEngine = new MarketEngine(
+    { logEvent() {} },
+    async () => {
+      deniedUniverseFetchCalls += 1;
+      return { pairs: [], filters: new Map() };
+    },
+    undefined,
+    { publicSourceStartupEgressAdmitted: false },
+  );
+  await assert.rejects(deniedEngine.init(), /PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED/);
+  assert.equal(deniedUniverseFetchCalls, 0, 'denied startup stops before the REST universe owner');
+  assert.throws(() => deniedEngine.start(), /PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED/);
+  assert.deepEqual(deniedEngine.feeds, {}, 'denied startup cannot activate a WebSocket owner');
+
   const projected = [];
   const engine = new MarketEngine(
     { logEvent() {} },
@@ -473,6 +488,7 @@ test('MarketEngine normalizes force-order snapshots once and both liquidation vi
       start() {}, stop() {}, observeSourceStatus() {},
       ingestPrint(print) { projected.push(print); },
     },
+    { publicSourceStartupEgressAdmitted: true },
   );
   await engine.init();
   const timestamp = Date.now();

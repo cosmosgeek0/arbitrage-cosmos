@@ -28,7 +28,10 @@ import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
-import { deterministicOfflinePublicSourcesEnabled } from './binance/publicSourceMode.js';
+import {
+  deterministicOfflinePublicSourcesEnabled,
+  publicSourceStartupEgressAdmitted,
+} from './binance/publicSourceMode.js';
 import {
   ingestLiquidationPrint,
   liquidationSeries,
@@ -108,6 +111,11 @@ function loadDotEnv(): void {
 }
 loadDotEnv();
 
+// Source-catalog ownership is not operational egress authority. A normal
+// verifier-style boot stays local unless an effectful public-source campaign
+// supplies the one exact positive admission.
+const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
+
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
 const CANONICAL_DELIVERY_MS = 2_000;
@@ -148,7 +156,9 @@ const engine = new MarketEngine(ledger, undefined, Object.freeze({
   stop: () => stopLiquidationProjection(),
   observeSourceStatus: (status) => observeLiquidationSourceStatus(status),
   ingestPrint: (print) => ingestLiquidationPrint(print),
-} satisfies MarketLiquidationProjectionPort));
+} satisfies MarketLiquidationProjectionPort), Object.freeze({
+  publicSourceStartupEgressAdmitted: startupPublicSourceEgressAdmitted,
+}));
 const LEGACY_SCANNER_STATE = 'RETIRED' as const;
 const NO_ACTIVE_LEGACY_PROPOSALS: readonly [] = Object.freeze([]);
 

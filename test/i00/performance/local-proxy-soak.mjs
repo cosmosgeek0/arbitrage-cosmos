@@ -274,6 +274,7 @@ async function startBuiltApp(dataDir, port, sampleIntervalMs, testedSha) {
       ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
       LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
       SKIP_DOTENV: '1',
+      I00_PUBLIC_SOURCE_STARTUP_EGRESS: '1',
       I00_PERF_PROBE: '1',
       I00_PERF_TELEMETRY_FD: '3',
       I00_PERF_CONTROL_FD: '4',

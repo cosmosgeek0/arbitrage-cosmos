@@ -313,6 +313,8 @@ test('a tested commit never fabricates an absent deployed commit', async () => {
     deployedCommit: null,
     identityState: 'PARTIAL',
     identityIssues: Object.freeze(['DEPLOYED_COMMIT_UNKNOWN']),
+  }, {
+    reasonCodes: Object.freeze(['DEPLOYED_COMMIT_UNKNOWN']),
   });
   const service = createProductIntegrationRuntime({
     read: makeRead({ bootReleaseReadback: readback }),

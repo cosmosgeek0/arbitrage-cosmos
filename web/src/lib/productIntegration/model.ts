@@ -153,6 +153,46 @@ export interface FiveSecondOwnerView {
   readonly revisions: Readonly<ProductRevisionSet>;
 }
 
+export type ProductBootReleaseLifecycleState =
+  | 'ACTIVE' | 'CRASH_PENDING' | 'CLEAN_COMPLETED' | 'UNCLEAN_COMPLETED';
+
+export type ProductBootReleaseIdentityIssue =
+  | 'TESTED_COMMIT_UNKNOWN'
+  | 'DEPLOYED_COMMIT_UNKNOWN'
+  | 'CONFIG_REVISION_UNKNOWN'
+  | 'SCHEMA_REVISION_UNKNOWN'
+  | 'MODEL_REVISION_UNKNOWN';
+
+export interface ProductBootReleaseRecord {
+  readonly operationId: string;
+  readonly operationType: 'APPLICATION_BOOT';
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+  readonly lifecycleState: ProductBootReleaseLifecycleState;
+  readonly identityState: 'AVAILABLE' | 'PARTIAL' | 'UNKNOWN';
+  readonly identityIssues: readonly ProductBootReleaseIdentityIssue[];
+  readonly deploymentMutationAuthority: 'NONE';
+}
+
+export interface ProductBootReleaseReadback {
+  readonly source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE';
+  readonly state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE';
+  readonly latest: Readonly<ProductBootReleaseRecord> | null;
+  readonly history: readonly Readonly<ProductBootReleaseRecord>[];
+  readonly crashPendingOperationIds: readonly string[];
+  readonly reasonCodes: readonly string[];
+}
+
 /** Render the canonical owner verdict; the browser never derives readiness. */
 export function productMachineReadinessTone(
   machineReady: FiveSecondOwnerView['machineReady'],
@@ -523,6 +563,7 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly persistentSyntheticLabel: boolean;
   readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
+  readonly bootReleaseReadback: Readonly<ProductBootReleaseReadback>;
   readonly ownerView: Readonly<FiveSecondOwnerView>;
   readonly dashboard: TDashboard;
   readonly components: readonly Readonly<ProductComponentProjection>[];
@@ -955,10 +996,10 @@ export function buildFixtureBinding<TDashboard>(
     activePosition: scenario.position,
     latestMaterialChange: scenario.materialChange,
     revisions: Object.freeze({
-      testedCommit: '692501587617d4880303fbd747d93e63c376f088',
+      testedCommit: null,
       deployedCommit: null,
-      modelRevision: scenario.modelRevision,
-      configRevision: revision,
+      modelRevision: null,
+      configRevision: null,
       schemaRevision: PRODUCT_SUPERVISOR_SCHEMA,
     }),
   });
@@ -1015,6 +1056,14 @@ export function buildFixtureBinding<TDashboard>(
       externalActionAuthorization: 'NONE',
       evaluatedAtUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000).toISOString().replace('.000Z', 'Z'),
       readbackValidUntilUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+      reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
+    }),
+    bootReleaseReadback: Object.freeze({
+      source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE',
+      state: 'UNAVAILABLE',
+      latest: null,
+      history: Object.freeze([]),
+      crashPendingOperationIds: Object.freeze([]),
       reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
     }),
     ownerView,
@@ -1554,6 +1603,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (!isProductTruthLabel(value.truthLabel)) errors.push('PRODUCT_TRUTH_LABEL_INVALID');
   if (typeof value.persistentSyntheticLabel !== 'boolean') errors.push('SYNTHETIC_LABEL_INVALID');
   errors.push(...validateCanonicalOpsEnvelope(value.opsReadback, value.opsIntakeInterlock, value.evaluatedAtMs));
+  errors.push(...validateProductBootReleaseReadback(value.bootReleaseReadback, value.ownerView));
   const syntheticScan = scanSyntheticTruth(value);
   if (!syntheticScan.complete) errors.push('SYNTHETIC_TRUTH_SCAN_OUT_OF_BOUNDS');
   if (syntheticScan.found && value.persistentSyntheticLabel !== true) errors.push('SYNTHETIC_LABEL_NOT_PERSISTENT');
@@ -1966,6 +2016,216 @@ function validateOwnerView(value: unknown): readonly string[] {
   }
   if (isRecord(value.revisions) && value.revisions.schemaRevision !== PRODUCT_SUPERVISOR_SCHEMA) errors.push('OWNER_SCHEMA_REVISION_INVALID');
   return errors;
+}
+
+const PRODUCT_BOOT_RELEASE_MAX_HISTORY = 20;
+const PRODUCT_BOOT_RELEASE_MAX_UTC_MS = 4_102_444_800_000;
+const PRODUCT_BOOT_RELEASE_SHA = /^[0-9a-f]{40}$/;
+const PRODUCT_BOOT_RELEASE_REVISION = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const PRODUCT_BOOT_RELEASE_UNRESOLVED = /REPLACE_ME|CHANGEME|example\.com|000000000000|^(?:UNKNOWN|UNAVAILABLE|NOT_CONFIGURED)(?:_|$)/i;
+const PRODUCT_BOOT_RELEASE_SCHEMA_REVISION = /^(?:[1-9][0-9]{0,15}|UNKNOWN)$/;
+const PRODUCT_BOOT_RELEASE_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
+const PRODUCT_BOOT_RELEASE_RECORD_KEYS = Object.freeze([
+  'operationId', 'operationType', 'generation', 'testedCommit', 'deployedCommit',
+  'configRevision', 'schemaRevision', 'modelRevision', 'startedAtMs',
+  'completedAtMs', 'clean', 'blockerCode', 'correlationId', 'ledgerEventId',
+  'lifecycleState', 'identityState', 'identityIssues',
+  'deploymentMutationAuthority',
+] as const);
+const PRODUCT_BOOT_RELEASE_READBACK_KEYS = Object.freeze([
+  'source', 'state', 'latest', 'history', 'crashPendingOperationIds', 'reasonCodes',
+] as const);
+const PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES = Object.freeze([
+  'TESTED_COMMIT_UNKNOWN',
+  'DEPLOYED_COMMIT_UNKNOWN',
+  'CONFIG_REVISION_UNKNOWN',
+  'SCHEMA_REVISION_UNKNOWN',
+  'MODEL_REVISION_UNKNOWN',
+] as const);
+
+function exactObjectKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const orderedExpected = [...expected].sort();
+  return actual.length === orderedExpected.length
+    && actual.every((key, index) => key === orderedExpected[index]);
+}
+
+function sameStringArray(actual: readonly unknown[], expected: readonly string[]): boolean {
+  return actual.length === expected.length
+    && actual.every((entry, index) => entry === expected[index]);
+}
+
+function validBootReleaseRevision(value: unknown): value is string {
+  return typeof value === 'string'
+    && PRODUCT_BOOT_RELEASE_REVISION.test(value)
+    && !PRODUCT_BOOT_RELEASE_UNRESOLVED.test(value);
+}
+
+function validBootReleaseUtcMs(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && value <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS;
+}
+
+function validProductBootReleaseSchemaRevision(value: unknown): value is string {
+  if (value === 'UNKNOWN') return true;
+  return typeof value === 'string'
+    && PRODUCT_BOOT_RELEASE_SCHEMA_REVISION.test(value)
+    && Number.isSafeInteger(Number(value))
+    && Number(value) > 0;
+}
+
+function expectedBootReleaseIdentityIssues(
+  value: Record<string, unknown>,
+): readonly ProductBootReleaseIdentityIssue[] {
+  const issues: ProductBootReleaseIdentityIssue[] = [];
+  if (value.testedCommit === null) issues.push('TESTED_COMMIT_UNKNOWN');
+  if (value.deployedCommit === null) issues.push('DEPLOYED_COMMIT_UNKNOWN');
+  if (value.configRevision === null) issues.push('CONFIG_REVISION_UNKNOWN');
+  if (value.schemaRevision === 'UNKNOWN') issues.push('SCHEMA_REVISION_UNKNOWN');
+  if (value.modelRevision === null) issues.push('MODEL_REVISION_UNKNOWN');
+  return issues;
+}
+
+function validProductBootReleaseRecord(value: unknown): value is Readonly<ProductBootReleaseRecord> {
+  if (!isRecord(value) || !exactObjectKeys(value, PRODUCT_BOOT_RELEASE_RECORD_KEYS)) return false;
+  if (!Number.isSafeInteger(value.generation) || Number(value.generation) < 1
+    || value.operationId !== `system.application.boot.g${value.generation}`
+    || value.operationType !== 'APPLICATION_BOOT'
+    || value.correlationId !== `system-boot-g${value.generation}`
+    || !Number.isSafeInteger(value.ledgerEventId) || Number(value.ledgerEventId) < 1
+    || !(value.testedCommit === null
+      || (typeof value.testedCommit === 'string' && PRODUCT_BOOT_RELEASE_SHA.test(value.testedCommit)))
+    || !(value.deployedCommit === null
+      || (typeof value.deployedCommit === 'string' && PRODUCT_BOOT_RELEASE_SHA.test(value.deployedCommit)))
+    || !(value.configRevision === null || validBootReleaseRevision(value.configRevision))
+    || !(value.modelRevision === null || validBootReleaseRevision(value.modelRevision))
+    || !validProductBootReleaseSchemaRevision(value.schemaRevision)
+    || !validBootReleaseUtcMs(value.startedAtMs)
+    || !(value.completedAtMs === null || validBootReleaseUtcMs(value.completedAtMs))
+    || !(value.clean === null || typeof value.clean === 'boolean')
+    || !(value.blockerCode === null
+      || (typeof value.blockerCode === 'string' && PRODUCT_BOOT_RELEASE_CODE.test(value.blockerCode)))
+    || !['ACTIVE', 'CRASH_PENDING', 'CLEAN_COMPLETED', 'UNCLEAN_COMPLETED'].includes(String(value.lifecycleState))
+    || !['AVAILABLE', 'PARTIAL', 'UNKNOWN'].includes(String(value.identityState))
+    || !Array.isArray(value.identityIssues)
+    || value.identityIssues.length > PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES.length
+    || value.deploymentMutationAuthority !== 'NONE') return false;
+  const terminal = value.lifecycleState === 'CLEAN_COMPLETED'
+    || value.lifecycleState === 'UNCLEAN_COMPLETED';
+  if (terminal !== (value.completedAtMs !== null)
+    || terminal !== (value.clean !== null)
+    || (value.lifecycleState === 'CLEAN_COMPLETED' && value.clean !== true)
+    || (value.lifecycleState === 'UNCLEAN_COMPLETED' && value.clean !== false)
+    || (value.completedAtMs !== null && value.completedAtMs < value.startedAtMs)) return false;
+  const expectedIssues = expectedBootReleaseIdentityIssues(value);
+  if (value.identityIssues.some((issue) => (
+    typeof issue !== 'string'
+    || !PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES.includes(issue as ProductBootReleaseIdentityIssue)
+  )) || !sameStringArray(value.identityIssues, expectedIssues)) return false;
+  const expectedState = expectedIssues.includes('TESTED_COMMIT_UNKNOWN')
+    || expectedIssues.includes('SCHEMA_REVISION_UNKNOWN')
+    ? 'UNKNOWN'
+    : expectedIssues.length === 0 ? 'AVAILABLE' : 'PARTIAL';
+  return value.identityState === expectedState;
+}
+
+function sameProductBootReleaseRecord(
+  actual: Readonly<ProductBootReleaseRecord>,
+  expected: Readonly<ProductBootReleaseRecord>,
+): boolean {
+  return PRODUCT_BOOT_RELEASE_RECORD_KEYS.every((key) => (
+    key === 'identityIssues'
+      ? sameStringArray(actual.identityIssues, expected.identityIssues)
+      : actual[key] === expected[key]
+  ));
+}
+
+function validateProductBootReleaseReadback(
+  value: unknown,
+  ownerView: unknown,
+): readonly string[] {
+  const errors: string[] = [];
+  if (!isRecord(value) || !exactObjectKeys(value, PRODUCT_BOOT_RELEASE_READBACK_KEYS)
+    || value.source !== 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE'
+    || !['AVAILABLE', 'EMPTY', 'UNAVAILABLE'].includes(String(value.state))
+    || !Array.isArray(value.history)
+    || !Array.isArray(value.crashPendingOperationIds)
+    || !Array.isArray(value.reasonCodes)
+    || value.crashPendingOperationIds.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+    || value.reasonCodes.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+    || value.reasonCodes.some((code) => typeof code !== 'string' || !PRODUCT_BOOT_RELEASE_CODE.test(code))) {
+    return Object.freeze(['BOOT_RELEASE_READBACK_INVALID']);
+  }
+  if (value.state === 'EMPTY') {
+    if (value.latest !== null || value.history.length !== 0
+      || value.crashPendingOperationIds.length !== 0
+      || !sameStringArray(value.reasonCodes, ['BOOT_RELEASE_HISTORY_EMPTY'])) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    }
+  } else if (value.state === 'UNAVAILABLE') {
+    if (value.latest !== null || value.history.length !== 0
+      || value.crashPendingOperationIds.length !== 0 || value.reasonCodes.length < 1) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    }
+  } else {
+    if (value.history.length < 1 || value.history.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+      || !validProductBootReleaseRecord(value.latest)
+      || value.history.some((record) => !validProductBootReleaseRecord(record))) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    } else {
+      const history = value.history as readonly Readonly<ProductBootReleaseRecord>[];
+      const latest = value.latest as Readonly<ProductBootReleaseRecord>;
+      if (!sameProductBootReleaseRecord(latest, history[0]!)) {
+        errors.push('BOOT_RELEASE_READBACK_INVALID');
+      }
+      for (let index = 1; index < history.length; index += 1) {
+        if (history[index]!.generation >= history[index - 1]!.generation
+          || history[index]!.ledgerEventId >= history[index - 1]!.ledgerEventId
+          || history[index]!.startedAtMs > history[index - 1]!.startedAtMs
+          || (history[index]!.completedAtMs !== null
+            && history[index]!.completedAtMs! > history[index - 1]!.startedAtMs)
+          || history[index]!.lifecycleState === 'ACTIVE') {
+          errors.push('BOOT_RELEASE_READBACK_INVALID');
+        }
+      }
+      const expectedCrashIds = history
+        .filter((record) => record.lifecycleState === 'CRASH_PENDING')
+        .map((record) => record.operationId);
+      const expectedReasons = [
+        ...history[0]!.identityIssues,
+        ...(expectedCrashIds.length > 0 ? ['CRASH_PENDING_BOOT_PRESENT'] : []),
+      ];
+      if (value.crashPendingOperationIds.some((id) => typeof id !== 'string')
+        || !sameStringArray(value.crashPendingOperationIds, expectedCrashIds)
+        || !sameStringArray(value.reasonCodes, expectedReasons)) {
+        errors.push('BOOT_RELEASE_READBACK_INVALID');
+      }
+    }
+  }
+
+  if (errors.length === 0 && isRecord(ownerView) && isRecord(ownerView.revisions)) {
+    const revisions = ownerView.revisions as Record<string, unknown>;
+    const latest = value.state === 'AVAILABLE'
+      && validProductBootReleaseRecord(value.latest)
+      && value.latest.lifecycleState === 'ACTIVE'
+      && value.latest.identityState !== 'UNKNOWN'
+      && PRODUCT_BOOT_RELEASE_SHA.test(value.latest.testedCommit ?? '')
+      && value.latest.schemaRevision !== 'UNKNOWN'
+      ? value.latest
+      : null;
+    const expected = {
+      testedCommit: latest?.testedCommit ?? null,
+      deployedCommit: latest?.deployedCommit ?? null,
+      configRevision: latest?.configRevision ?? null,
+      modelRevision: latest?.modelRevision ?? null,
+    };
+    if (Object.entries(expected).some(([field, expectedValue]) => (
+      revisions[field] !== expectedValue
+    ))) errors.push('BOOT_RELEASE_REVISION_MISMATCH');
+  }
+  return Object.freeze([...new Set(errors)]);
 }
 
 function validateDashboardProjection(value: unknown): readonly string[] {

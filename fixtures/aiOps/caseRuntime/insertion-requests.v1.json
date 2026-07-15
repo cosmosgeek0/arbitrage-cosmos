@@ -1,0 +1,88 @@
+{
+  "schema": "AI_OPS_A2_SHADOW_INSERTION_REQUESTS_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityCreated": false,
+  "baseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "rows": [
+    {
+      "requestId": "A2-I00-CONTRACT-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "I00 canonical contract owner",
+      "seam": "AgentCase, evidence bundle, semantic claim receipt, provider usage, context manifest, and handoff public interfaces",
+      "need": "Bind A2 lane-local projections to the accepted A1 and I00 interfaces after those interfaces exist; do not promote these shadow shapes as canonical.",
+      "missingBehavior": "No production case-runtime public contract or canonical identity authority is claimed."
+    },
+    {
+      "requestId": "A2-I00-PERSIST-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "Ledger and SystemIntegration persistence",
+      "seam": "canonical case checkpoint and exact revision CAS",
+      "need": "Reserve canonical keys and event kinds, inject the singleton Ledger, add bounded read and resume with canonical artifact-owner proof verification, and preserve case revision, chain digest, compaction watermark, idempotency receipts, attempts, effects, and budget lineage atomically. Provide an owner-backed exact command-receipt archive before the lane-local 2,048-receipt bound; A2 must otherwise stop under backpressure rather than forget replay identity.",
+      "missingBehavior": "The A2 adapter accepts SYNTHETIC_ONLY ports and makes no production durability claim."
+    },
+    {
+      "requestId": "A2-I00-QUEUE-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "Ledger canonical transaction owner",
+      "seam": "inbox, outbox, DLQ, attempt, and global-effect records",
+      "need": "Bind logical records to the existing Ledger transaction with hard capacity refusal, critical reserve, exact idempotency, redrive lineage, owner-confirmed completion, owner-proven backpressure recovery, and compaction watermarks, with no second database, bus, or ledger. Completed lane-local records remain append-only until that canonical compaction contract exists.",
+      "missingBehavior": "No production delivery, exactly-once, or external-effect claim is made."
+    },
+    {
+      "requestId": "A2-I00-INCIDENT-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "Product incident and ProductRuntime owners",
+      "seam": "incident CAS readback, bounded resume scan, runtime projection, and acknowledgement",
+      "need": "Add validated incident read-by-ID and fingerprint, resumable scan, canonical acknowledgement command, and injected ProductRuntime projection before replacing NOT_CONFIGURED or readonly-never incident truth.",
+      "missingBehavior": "A2 emits incident admission proposals only."
+    },
+    {
+      "requestId": "A2-I00-EVIDENCE-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "intelligenceFoundation evidence owner",
+      "seam": "evidence pointer resolution and semantic claim adjudication receipts",
+      "need": "Provide bounded owner readback for artifact identity, digest, byte length, observation time, retention, and availability, plus claim-adjudication issuance and side-effect-free durable receipt verification. A2 must retain opaque pointers, cannot own another evidence or claim store, and cannot turn a requested disposition into semantic truth.",
+      "missingBehavior": "Unavailable or mismatched pointer or claim-owner readback remains INCONCLUSIVE or INVALIDATED and quarantines effects."
+    },
+    {
+      "requestId": "A2-I00-MATERIAL-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "SystemIntegration trace and Product operator-event owners",
+      "seam": "CASE and INCIDENT material-event vocabulary",
+      "need": "Accept component mappings, event kinds, cursor gap semantics, publication, and readback without masquerading as an existing owner.",
+      "missingBehavior": "A2 does not publish shared material events."
+    },
+    {
+      "requestId": "A2-I00-EFFECT-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "canonical control and effect dispatcher",
+      "seam": "global-effect dispatch and exact readback",
+      "need": "Provide APPLIED, NOT_APPLIED, or UNKNOWN readback with generation fencing and idempotency evidence. Only proven NOT_APPLIED may permit owner-controlled reissue.",
+      "missingBehavior": "A2 records effect intents only and has no execution authority."
+    },
+    {
+      "requestId": "A2-I00-PROVIDER-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "A3 provider route and intelligenceRuntime rate-budget owners",
+      "seam": "provider health, workload identity, aggregate rate, concurrency, cooldown, and measured usage",
+      "need": "Supply accepted provider facts and an atomic canonical CAS reservation spanning aggregate rate, concurrency, cooldown, state and cap lineage, then durably bind the selected admission and usage-request digests to the diagnostic result, fresh-session handoff, and measured-usage receipt. This must not duplicate diagnostic permission, provider, or rate-budget authority.",
+      "missingBehavior": "A2 computes read-only per-candidate projections from one snapshot but cannot prevent concurrent double admission; only deterministic synthetic providers are exercised and absence remains DIAGNOSTIC_PLANE_UNAVAILABLE."
+    },
+    {
+      "requestId": "A2-I00-SIGNING-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "I00 trust and fresh-session launch owner",
+      "seam": "manifest signing, trust registration, rotation, handoff consumption, and replay receipts",
+      "need": "Bind an owner-managed signer and durable one-time consumption after accepted context schemas exist.",
+      "missingBehavior": "A2 signatures are explicitly SYNTHETIC_ONLY."
+    },
+    {
+      "requestId": "A2-I00-GATES-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "I00 assembly and Product Assurance registry owners",
+      "seam": "test discovery, production-operation denominator, component registry, STATE, and shared receipt composition",
+      "need": "Add the A2 focused suite to shared scripts, re-accept Product Assurance scan totals, classify any accepted adapter operations, update STATE, and rerun the entire lane loop only in the future accepted worktree.",
+      "missingBehavior": "This shadow worker does not edit package files, shared registries, canonical docs, or composition."
+    }
+  ]
+}

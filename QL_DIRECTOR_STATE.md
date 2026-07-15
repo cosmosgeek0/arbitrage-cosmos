@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-42 (2026-07-15): FIX_AUDIT + PORT_PLAN sealed; 4 fix defects delivered to role4 pre-freeze
+
+RUN-F FIX_AUDIT_READY: 9 fixes COVERED; R3-VAL-001 PARTIAL (exact-S parity still passed:false; regression lacks own pass-bit assert), R3-D-CLEAN-009 PARTIAL (full commands deferred to final battery by law), R3-D-WATCHDOG-007 REGRESSION_RISK (permanent silent-lockout path, missing orphan-guard case), R3-D-BACKUP-008 REGRESSION_RISK (staged-inode mutation of verified bytes). Evidence-delivery paste issued to role4 chat BEFORE C2 freeze — this is the C3-prevention working. RUN-G PORT_PLAN_READY: 9 per-lane port scripts + feasibility + namespace mapping under ~/Desktop/port-plan/portPlan/ (untracked) — post-landing burst is now zero-analysis. Both worktrees parked read-only; outputs untracked by design.
+
 ## D-LAUNCH-41 (2026-07-15): compute-window burn — FIX-AUDIT + PORT-PLAN (both read-only, detached at afed4d5)
 
 Owner quota expires before C2. Two honest read-only tasks issued that attack the real schedule risks: RUN-F fix-coverage audit (re-verifies each committed R3 fix against its original repro + boundary — prevents a C3 rejection cycle, the 1-3-day risk) and RUN-G port planner (per-lane diff feasibility + ready port scripts for all 9 sealed shadow artifacts + namespace mapping per D-LAUNCH-30 — makes the post-landing burst zero-analysis). Both untracked-output-only, no writer conflicts, focused commands only.

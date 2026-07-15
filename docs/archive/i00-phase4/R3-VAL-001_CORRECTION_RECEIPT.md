@@ -72,3 +72,37 @@ npm test
 It exited `1` after the build, Basis `107/107`, Volume `124/124`, financial safety `59/59`, storage/AWS `29/29`, Node focused `51/51`, stream lifecycle `8/8`, perimeter `2/2`, and the first 11 Product Assurance groups passed. The sole reported failure was `A_CASE_S4_SAFE_PURITY: protected untracked I00 input remains byte-identical`, which is the independently accepted pending finding `R3-D-CLEAN-009`. No protected owner input was copied, created, or fabricated to make this unrelated gate green.
 
 This receipt is committed atomically with the correction. The final Phase 4 closure receipt will bind its exact commit SHA.
+
+## Independent fix-coverage audit closure
+
+The later D-LAUNCH-41 audit correctly found that the first regression asserted
+detached checkout shape and successful regeneration, but never asserted the
+returned parity bit. Exact rejected seal
+`517bd636d799c983ecddc9bda1985d0619b652d7` therefore still returned
+`passed:false`: its generated machine evidence could see only
+`refs/remotes/origin/current-main`, while the sealed generator resolved the
+literal local `current-main` branch.
+
+The validator now resolves the exact current-main commit from the outer
+verification repository, accepting only `refs/heads/current-main` or the clean
+clone transport `refs/remotes/origin/current-main`. It verifies that exact
+commit object inside each private parity clone, installs only the corresponding
+temporary local ref, and still requires the requested revision as detached
+`HEAD` with zero status bytes. No ref in the owner worktree is written.
+
+The named regression now binds the exact rejected seal, requires
+`result.passed === true`, requires all six artifacts, and requires every
+`matchesGenerator` bit. Evidence at the audit-closure correction tip:
+
+- pre-fix exact-S result: regeneration passed, five Markdown artifacts matched,
+  machine evidence differed, and overall parity was false;
+- hostile assertion added before the implementation correction: exit `1`,
+  `0/1`;
+- corrected named regression: exit `0`, `1/1`;
+- exact-S direct result: `passed:true`, regeneration passed, six artifacts,
+  and all six byte-identical.
+
+The moving-ref acceptance law is unchanged: an unavailable, invalid, or
+non-descendant current-main tip still fails closed. The correction only makes
+the already-observed exact ref available to the historical generator inside
+the two isolated clones.

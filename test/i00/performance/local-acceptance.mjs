@@ -1640,10 +1640,31 @@ async function verifyReportParity() {
 export async function verifyReportParityAtRevision(environment, revision, tempRoot) {
   const sealedRoot = path.join(tempRoot, 'sealed-report-parity-untouched');
   const generatedRoot = path.join(tempRoot, 'sealed-report-parity-generated');
+  let currentMainTip = null;
+  for (const ref of ['refs/heads/current-main', 'refs/remotes/origin/current-main']) {
+    try {
+      const observed = (await commandOutput(
+        'git',
+        ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
+        ROOT,
+        environment,
+        1_024,
+      )).stdout.toString('utf8').trim();
+      if (/^[0-9a-f]{40}$/u.test(observed)) {
+        currentMainTip = observed;
+        break;
+      }
+    } catch {
+      // A clean clone normally has only origin/current-main; try both exact refs.
+    }
+  }
+  if (currentMainTip === null) throw new Error('SEALED_REPORT_PARITY_CURRENT_MAIN_UNAVAILABLE');
   const checkouts = [];
   for (const checkoutRoot of [sealedRoot, generatedRoot]) {
     await commandOutput('git', ['clone', '--no-hardlinks', '--no-checkout', '--quiet', ROOT, checkoutRoot], ROOT, environment, 8 * 1024 * 1024);
     await commandOutput('git', ['checkout', '--detach', '--quiet', revision], checkoutRoot, environment, 8 * 1024 * 1024);
+    await commandOutput('git', ['cat-file', '-e', `${currentMainTip}^{commit}`], checkoutRoot, environment, 1_024);
+    await commandOutput('git', ['update-ref', 'refs/heads/current-main', currentMainTip], checkoutRoot, environment, 1_024);
     const observedHead = (await commandOutput(
       'git',
       ['rev-parse', '--verify', 'HEAD^{commit}'],
@@ -1705,13 +1726,9 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
   });
 }
 
-export async function verifyCurrentHeadReportParityRegression(tempRoot) {
+export async function verifyRejectedSealReportParityRegression(tempRoot) {
   const environment = safeEnvironment(tempRoot);
-  const revision = (await gitOutput(
-    ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'],
-    environment,
-  )).toString('utf8').trim();
-  if (!/^[0-9a-f]{40}$/u.test(revision)) throw new Error('REPORT_PARITY_HEAD_INVALID');
+  const revision = '517bd636d799c983ecddc9bda1985d0619b652d7';
   return verifyReportParityAtRevision(environment, revision, tempRoot);
 }
 

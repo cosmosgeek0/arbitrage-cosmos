@@ -33,7 +33,7 @@ import {
   validateQArchiveInventory,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
-  verifyCurrentHeadReportParityRegression,
+  verifyRejectedSealReportParityRegression,
 } from './local-acceptance.mjs';
 import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
 
@@ -515,11 +515,13 @@ test('independent validation requires a clean detached worktree pinned to exact 
 test('sealed report parity reads the exact revision from clean detached checkouts', async (context) => {
   const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-sealed-report-parity-'));
   context.after(() => rmSync(tempRoot, { recursive: true, force: true }));
-  const result = await verifyCurrentHeadReportParityRegression(tempRoot);
+  const result = await verifyRejectedSealReportParityRegression(tempRoot);
 
-  assert.match(result.revision, /^[0-9a-f]{40}$/u);
+  assert.equal(result.revision, '517bd636d799c983ecddc9bda1985d0619b652d7');
+  assert.equal(result.passed, true, JSON.stringify(result.artifacts.filter((artifact) => !artifact.matchesGenerator)));
   assert.equal(result.regeneration.passed, true);
-  assert.ok(result.artifacts.length > 0);
+  assert.equal(result.artifacts.length, 6);
+  assert.ok(result.artifacts.every((artifact) => artifact.matchesGenerator));
   assert.deepEqual(result.checkouts, [
     { checkout: 'sealed-report-parity-untouched', headSha: result.revision, branch: '', statusByteLength: 0 },
     { checkout: 'sealed-report-parity-generated', headSha: result.revision, branch: '', statusByteLength: 0 },

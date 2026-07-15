@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "OBS_SHADOW_RECEIPT_V1",
+  "packetId": "RUN-18",
+  "packetName": "OBS-SHADOW",
+  "packetPosture": "SHADOW_SPECULATIVE",
+  "acceptanceStatus": null,
+  "authorityEffect": "NONE",
+  "branch": "obs-shadow-20260715",
+  "baseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "implementationCommitSha": "61d877f3c7bb8e2d9067fd49add12f49c5c28fae",
+  "implementationCommitParentSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "sealCommitIdentity": "ENCLOSING_GIT_COMMIT_IS_AUTHORITY_AND_IS_NOT_SELF_RECORDED",
+  "receiptSelfHashPolicy": "RECEIPT_EXCLUDED_FROM_ARTIFACT_HASHES",
+  "changedPaths": [
+    "fixtures/obsShadow/cases.v1.json",
+    "fixtures/obsShadow/entry-inventory.v1.json",
+    "fixtures/obsShadow/insertion-requests.v1.json",
+    "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+    "fixtures/obsShadow/view-adapter.mjs",
+    "fixtures/obsShadow/view-contracts.v1.json",
+    "test/obsShadow/receipt.test.mjs",
+    "test/obsShadow/scope-security.test.mjs",
+    "test/obsShadow/view-contracts.test.mjs"
+  ],
+  "implementationPaths": [
+    "fixtures/obsShadow/cases.v1.json",
+    "fixtures/obsShadow/entry-inventory.v1.json",
+    "fixtures/obsShadow/insertion-requests.v1.json",
+    "fixtures/obsShadow/view-adapter.mjs",
+    "fixtures/obsShadow/view-contracts.v1.json",
+    "test/obsShadow/scope-security.test.mjs",
+    "test/obsShadow/view-contracts.test.mjs"
+  ],
+  "sealPaths": [
+    "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+    "test/obsShadow/receipt.test.mjs"
+  ],
+  "artifactSha256": {
+    "fixtures/obsShadow/cases.v1.json": "a83f81910d8db86fc04f6f1602904f6eb2534ef7b0efc1a16f456465a9921d1f",
+    "fixtures/obsShadow/entry-inventory.v1.json": "4ee4bf93f3e062e5df75ca617102064c0c8c959c7a51c30289a3ab9d94c78442",
+    "fixtures/obsShadow/insertion-requests.v1.json": "5f900fd66cda3c86260dbd78ef8cb99979e35fa3398a11b4415049ea7a7c53c4",
+    "fixtures/obsShadow/view-adapter.mjs": "7e02a734c188fcaa53fa6eec00446512d1466d36a4ba6e77d444c03066314f08",
+    "fixtures/obsShadow/view-contracts.v1.json": "1c958b7e2d0315c9392d12a95345db7256b0df6a156d98faeaf44d118461aa5c",
+    "test/obsShadow/receipt.test.mjs": "b69cda44aa377aa86b2463ce7a1a6055c545ba0da4f657e8e9db4a6417dfc1a2",
+    "test/obsShadow/scope-security.test.mjs": "4f5d4d37ef79002e9241a3948440c0e29e73fa2337ebd3829e1db15b0fb5042a",
+    "test/obsShadow/view-contracts.test.mjs": "a212b3dd05c306613445180b68883d1ad591ac61ce2d178ed9c671c5f2ff6b26"
+  },
+  "classifications": [
+    {
+      "itemId": "HISTORICAL_TRENDS",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION"
+    },
+    {
+      "itemId": "PAGING_RECEIPTS",
+      "classification": "ADAPT_EXISTING",
+      "buildDecision": "BUILD_RENDER_NEUTRAL_DETAIL_ADAPTER"
+    },
+    {
+      "itemId": "INCIDENT_DRILL_FIXTURES",
+      "classification": "ADAPT_EXISTING",
+      "buildDecision": "BUILD_RECORDED_RUN_COMPARISON_ADAPTER"
+    },
+    {
+      "itemId": "EXPECTED_VS_OBSERVED_INVENTORY",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION"
+    },
+    {
+      "itemId": "TELEMETRY_LOSS_DETECTION",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION"
+    },
+    {
+      "itemId": "COST_BUDGET_PROJECTIONS",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION"
+    }
+  ],
+  "testRuns": [
+    {
+      "command": "node --test --test-concurrency=1 --test-reporter=spec test/obsShadow/view-contracts.test.mjs test/obsShadow/scope-security.test.mjs",
+      "scope": "FOCUSED_PACKET_CONTRACT_AND_SECURITY",
+      "exitCode": 0,
+      "tests": 16,
+      "pass": 16,
+      "fail": 0
+    },
+    {
+      "command": "node --test --test-concurrency=1 --test-reporter=spec test/obsShadow/*.test.mjs",
+      "scope": "FOCUSED_PACKET_FINAL_GLOB",
+      "exitCode": 0,
+      "tests": 21,
+      "pass": 21,
+      "fail": 0
+    },
+    {
+      "command": "git diff --check",
+      "scope": "PATCH_WHITESPACE",
+      "exitCode": 0,
+      "tests": 0,
+      "pass": 0,
+      "fail": 0
+    }
+  ],
+  "limitations": [
+    "SHADOW_SPECULATIVE_ONLY_NO_ACCEPTANCE",
+    "PORTING_REQUIRES_C2_AND_DIRECTOR_ADJUDICATION",
+    "NO_MOUNT_PACKAGE_SCHEMA_ROUTER_STARTUP_OR_MONEY_PATH_CHANGES",
+    "HISTORICAL_INVENTORY_TELEMETRY_COST_OWNER_OUTPUTS_ADOPTED_NOT_REBUILT",
+    "PAGING_OWNER_DIGESTS_REFERENCE_BOUND_BUT_NOT_VERIFIED_BY_PACKET",
+    "LIVE_EXTERNAL_PAGING_WATCHDOG_INCIDENT_ROUTING_NOT_CONFIGURED",
+    "DRILL_SHADOW_IDENTITIES_ARE_NOT_OWNER_INCIDENT_IDENTITIES",
+    "NO_CANONICAL_NO_FAULT_CONTROL_RUN_SO_SPECIFICITY_NOT_CLAIMED",
+    "COST_OWNER_DOES_NOT_PUBLISH_UNIT_OR_CURRENCY_IN_SELECTED_REFERENCE_ROW_SO_NONE_INFERRED",
+    "CANONICAL_TELEMETRY_RUNTIME_EXPORT_NOT_CONFIGURED",
+    "NO_FULL_BROWSER_PERF_SOAK_OR_NPM_SUITE_PER_SAME_MACHINE_RULE",
+    "STATE_MD_NOT_UPDATED_BECAUSE_EXCLUSIVE_PATH_RULE"
+  ],
+  "insertionRequests": [
+    {
+      "requestId": "OBS-IR-001-PAGING-RECEIPT-DETAIL",
+      "status": "DRAFT",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION"
+    },
+    {
+      "requestId": "OBS-IR-002-INCIDENT-DRILL-RESULT",
+      "status": "DRAFT",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION"
+    },
+    {
+      "requestId": "OBS-IR-003-ADOPT-EXISTING-OBSERVABILITY-VIEWS",
+      "status": "DRAFT",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION"
+    }
+  ]
+}

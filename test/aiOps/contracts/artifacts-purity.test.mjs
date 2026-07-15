@@ -92,7 +92,7 @@ const fixtureNames = [
   'decision-log-design.synthetic.v1.json', 'control-insertion-requests.v1.json',
   'insertion-requests.v1.json', 'unfinished-interfaces.v1.json',
 ];
-const receiptNames = ['AI_OPS_REUSE_AND_GAP_RECEIPT.md', 'SHADOW_ARTIFACT_READY_RECEIPT.md'];
+const receiptNames = ['A1X_SHADOW_READY_RECEIPT.md', 'AI_OPS_REUSE_AND_GAP_RECEIPT.md', 'SHADOW_ARTIFACT_READY_RECEIPT.md'];
 
 const staticArtifactsByFixture = {
   'entry-inventory.v1.json': contracts.AI_OPS_ARTIFACTS.entryInventory,

@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-38 (2026-07-15): commander Queue.md adjudicated — consistent, no new authority, schedule adopted
+
+Queue.md (owner Desktop) accepted as scheduling note only: RUN-9 sole C2 writer (focused tests per finding, full battery once at freeze); shadows finish+park; V1-V5 only at frozen C2 SHA; one fresh Role-3 on the strongest model = sole verdict; one director lands; AI-Ops port only after INTEGRATED_ACCEPTED with reuse-not-regenerate. Matches D-LAUNCH-33..37 exactly — no changes needed. Owner-only items available NOW (no repo contact): sign AI_OPS_RELIABILITY_TARGETS_DRAFT + runbook manifests, set capital-ladder values, pick paging destination, weekly review commitment.
+
 ## D-LAUNCH-37 (2026-07-15): second acceleration order (90dcac299155) — six shadow packets RUN-14..19; C2 V-shard plan armed
 
 RUN-9 untouched (at cdc3d75, fixing Highs). Order's packets 1-2 map onto SEALED A2/A3 shadows → ruled ADOPT_EXISTING + gap-fill extension rounds in the same worktrees (A2X/A3X, entry-gate classification mandatory). Four NEW packets cut at 098f7b9: ops-shadow, replay-shadow, obs-shadow, runbook-shadow (branches *-20260715; disjoint namespaces fixtures/{ops,replay,obs,runbook}Shadow/** + tests; l15-infra/preverify consumed read-only). Same-machine rule: static/focused work only while RUN-9 owns heavy suites. COLLISION MATRIX: 6 packets pairwise disjoint; zero overlap with role4-fix (canonical server/web), aiOps port namespaces, or any sealed lane. Receipts: immutable per-packet in-worktree. C2 PLAN RE-ARMED per order: V1-V5 read-only shards at exact C2 + ONE fresh Role-3 sole verdict owner; corrections → C3 → repeat.

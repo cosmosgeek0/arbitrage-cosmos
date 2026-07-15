@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Bot, CircleUserRound, CornerDownLeft, Fingerprint, LockKeyhole, MessageSquareText, Route, ShieldAlert } from 'lucide-react';
-import { PostureTag, ProjectionNotice, SectionHeading } from '../components';
+import { GRow, Group } from '../../components/ui';
+import { EvidenceCanvas, PostureTag, ProjectionNotice, SectionHeading, SourceLine, iconForPosture, toneForPosture } from '../components';
 import type { AiOpsSnapshot } from '../types';
 
 const SUGGESTED_QUESTIONS = [
@@ -18,6 +19,7 @@ export function OwnerChat({ snapshot }: { snapshot: AiOpsSnapshot }) {
   const [draft, setDraft] = useState('');
   const [draftNotice, setDraftNotice] = useState('');
   const draftRef = useRef<HTMLTextAreaElement>(null);
+  const contextPosture = snapshot.contextManifest.generationStatus === 'FIXTURE_COMPLETE' ? 'SYNTHETIC_ONLY' : 'BLOCKED';
 
   const prepareDraft = (question: string) => {
     setDraft(question);
@@ -125,14 +127,81 @@ export function OwnerChat({ snapshot }: { snapshot: AiOpsSnapshot }) {
               <div><dt>Incident</dt><dd><code>{snapshot.lineage.incidentId}</code></dd></div>
               <div><dt>Workflow / run</dt><dd><code>{snapshot.lineage.workflowId}</code><code>{snapshot.lineage.runId}</code></dd></div>
               <div><dt>Session</dt><dd><code>{snapshot.lineage.sessionId}</code></dd></div>
+              <div><dt>Parent run / session</dt><dd>{snapshot.lineage.parentRunId ?? 'NONE'} / {snapshot.lineage.parentSessionId ?? 'NONE'}</dd></div>
+              <div><dt>Replacement</dt><dd>{snapshot.lineage.replacementReason}</dd></div>
+              <div><dt>Role / phase</dt><dd>{snapshot.lineage.role} / {snapshot.lineage.phase}</dd></div>
+              <div><dt>Generation</dt><dd className="num">{snapshot.lineage.generation}</dd></div>
+              <div><dt>Started / deadline</dt><dd>{snapshot.lineage.startedAt}<span>{snapshot.lineage.deadline}</span></dd></div>
               <div><dt>Provider trace</dt><dd>{snapshot.lineage.providerTraceId ?? 'UNKNOWN'}</dd></div>
+              <div><dt>Context manifest</dt><dd><code>{snapshot.lineage.contextManifestId}</code></dd></div>
+              <div><dt>Checkpoints</dt><dd>{snapshot.lineage.checkpointIds.join(', ') || 'NONE'}</dd></div>
+              <div><dt>Retrieval / children</dt><dd>{snapshot.lineage.retrievalIds.join(', ') || 'NONE'} / {snapshot.lineage.childLineageIds.join(', ') || 'NONE'}</dd></div>
+              <div><dt>Hidden memory</dt><dd>{snapshot.lineage.hiddenCrossSessionMemoryAllowed ? 'ALLOWED' : 'FORBIDDEN'}</dd></div>
+              <div><dt>Session caps</dt><dd>{snapshot.lineage.promptByteLimit} prompt bytes · {snapshot.lineage.retrievedFileLimit} files · {snapshot.lineage.childAgentLimit} children · {snapshot.lineage.toolDepthLimit} tool depth · {snapshot.lineage.iterationLimit} iterations · {snapshot.lineage.outputByteLimit} output bytes</dd></div>
               <div><dt>Evidence hash</dt><dd><code>{snapshot.lineage.evidenceHash}</code></dd></div>
               <div><dt>Policy / prompt / tools</dt><dd>{snapshot.lineage.policyRevision} / {snapshot.lineage.promptRevision} / {snapshot.lineage.toolRevision}</dd></div>
+              <div><dt>Stop condition</dt><dd>{snapshot.lineage.stopCondition}</dd></div>
             </dl>
             <ProjectionNotice>Fresh cases must resume from signed context plus canonical ledger/workflow state—not from a long conversation.</ProjectionNotice>
           </section>
         </aside>
       </div>
+
+      <section className="aiox-section" aria-labelledby="aiox-context-manifest-title">
+        <SectionHeading
+          id="aiox-context-manifest-title"
+          eyebrow="Generated context contract"
+          title="Static and dynamic context manifest"
+          detail="Equal inputs must produce the same bounded pointers. Any unresolved authority or hash fails closed before a provider session starts."
+          action={<PostureTag posture={contextPosture} />}
+        />
+        <EvidenceCanvas labelledBy="aiox-context-manifest-title">
+          <dl className="aiox-context-manifest">
+            <div><dt>Manifest / Generation</dt><dd><code>{snapshot.contextManifest.manifestId}</code><span className="num">{snapshot.contextManifest.generation}</span></dd></div>
+            <div><dt>Signature / Status</dt><dd>{snapshot.contextManifest.signatureStatus}<span>{snapshot.contextManifest.generationStatus}</span></dd></div>
+            <div><dt>Static Context Hash</dt><dd><code>{snapshot.contextManifest.staticContextHash}</code></dd></div>
+            <div><dt>Dynamic Context Hash</dt><dd><code>{snapshot.contextManifest.dynamicContextHash}</code></dd></div>
+            <div><dt>Base / Accepted / Deployed</dt><dd><code>{snapshot.contextManifest.baseSha}</code><code>{snapshot.contextManifest.acceptedSha ?? 'UNKNOWN'}</code><code>{snapshot.contextManifest.deployedSha ?? 'UNKNOWN'}</code></dd></div>
+            <div><dt>Inventory / Dependency</dt><dd>{snapshot.contextManifest.inventoryRevision} / {snapshot.contextManifest.dependencyRevision}</dd></div>
+            <div><dt>Classification / Runbook</dt><dd>{snapshot.contextManifest.classificationRevision} / {snapshot.contextManifest.runbookRevision}</dd></div>
+            <div><dt>Policy / Tool / Control</dt><dd>{snapshot.contextManifest.policyRevision} / {snapshot.contextManifest.toolRevision} / {snapshot.contextManifest.controlRegistryRevision}</dd></div>
+            <div><dt>Prompt / Evaluation / Provider Qualification</dt><dd>{snapshot.contextManifest.promptRevision} / {snapshot.contextManifest.evaluationRevision} / {snapshot.contextManifest.providerQualificationRevision}</dd></div>
+            <div><dt>Evidence / Age Ceiling</dt><dd><code>{snapshot.contextManifest.evidenceBundleHash}</code><span>{snapshot.contextManifest.evidenceAgeLimitMs} ms</span></dd></div>
+            <div><dt>Safety / Ambiguity</dt><dd>{snapshot.contextManifest.safetyPosture}<span>{snapshot.contextManifest.outstandingAmbiguity ?? 'NONE'}</span></dd></div>
+            <div><dt>Lease / Fence</dt><dd>{snapshot.contextManifest.leaseId ?? 'NONE'} / {snapshot.contextManifest.fencingEpoch ?? 'NONE'}</dd></div>
+            <div><dt>Provider / Model</dt><dd>{snapshot.contextManifest.provider} / {snapshot.contextManifest.model}</dd></div>
+            <div><dt>Budgets / Deadline</dt><dd>{snapshot.contextManifest.budgets.join(' · ')}<span>{snapshot.contextManifest.deadline}</span></dd></div>
+            <div><dt>Tools / Write Scope</dt><dd>{snapshot.contextManifest.allowedTools.join(', ') || 'NONE'} / {snapshot.contextManifest.writeScope.join(', ') || 'NONE'}</dd></div>
+            <div><dt>Prior Attempts / Effects</dt><dd>{snapshot.contextManifest.priorAttemptIds.join(', ') || 'NONE'} / {snapshot.contextManifest.effectReceiptIds.join(', ') || 'NONE'}</dd></div>
+          </dl>
+          <div className="aiox-group-scope aiox-context-pointers">
+            <Group title="Controlling authority pointers · generated, never assumed">
+              {snapshot.contextManifest.authorityPointers.map((pointer) => {
+                const pointerPosture = pointer.status === 'RESOLVED' ? 'SYNTHETIC_ONLY' : 'MISSING';
+                return (
+                  <GRow
+                    key={pointer.path}
+                    icon={iconForPosture(pointerPosture, 14)}
+                    color={`var(--aiox-${toneForPosture(pointerPosture)})`}
+                    label={<span className="aiox-row-label"><code>{pointer.path}</code>{pointer.status}</span>}
+                    sub={pointer.blobHash ?? 'BLOB HASH UNRESOLVED'}
+                    control={<PostureTag posture={pointerPosture} />}
+                  />
+                );
+              })}
+            </Group>
+          </div>
+          <div className="aiox-context-contract">
+            <div><span>Validated Evidence</span><p>{snapshot.contextManifest.validatedEvidenceIds.join(' · ') || 'NONE'}</p></div>
+            <div><span>Hard Denials</span><p>{snapshot.contextManifest.hardDenials.join(' · ')}</p></div>
+            <div><span>Unresolved Questions</span><p>{snapshot.contextManifest.unresolvedQuestions.join(' · ') || 'NONE'}</p></div>
+            <div><span>Exact Task</span><p>{snapshot.contextManifest.exactTask}</p></div>
+            <div><span>Acceptance Tests</span><p>{snapshot.contextManifest.acceptanceTests.join(' · ')}</p></div>
+            <div><span>Stop / Next Owner</span><p>{snapshot.contextManifest.stopCondition} · {snapshot.contextManifest.nextOwner}</p></div>
+          </div>
+          <SourceLine source={snapshot.contextManifest.source} />
+        </EvidenceCanvas>
+      </section>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useMemo, useState, type KeyboardEvent } from 'react';
 import { Ban, Clock3, Filter, KeyRound, LockKeyhole, Search, ShieldOff, SlidersHorizontal, TimerReset } from 'lucide-react';
 import { GRow, Group } from '../../components/ui';
 import { ABSOLUTE_HARD_DENIALS, AI_OPS_CONTROL_CATEGORIES, projectNarrowingControlIntent } from '../controlProjection';
-import { PostureTag, ProjectionNotice, SectionHeading, SourceLine, displayValue } from '../components';
+import { PostureTag, ProjectionNotice, SectionHeading, SourceLine, displayValue, iconForPosture, toneForPosture } from '../components';
 import type { AiOpsControlIntentDraft, AiOpsControlProjection, AiOpsSnapshot, ControlValue } from '../types';
 
 type ControlFilter = 'ALL' | (typeof AI_OPS_CONTROL_CATEGORIES)[number]['code'];
@@ -97,13 +97,50 @@ export function PermissionsConsole({ snapshot }: { snapshot: AiOpsSnapshot }) {
         <dl>
           <div><dt>Control</dt><dd><code>{snapshot.emergencyKill.controlId}</code></dd></div>
           <div><dt>Command</dt><dd><code>{snapshot.emergencyKill.commandId}</code></dd></div>
+          <div><dt>Desired / Requested</dt><dd>{snapshot.emergencyKill.desired} / {snapshot.emergencyKill.requested ?? 'NONE'}</dd></div>
+          <div><dt>Request Status</dt><dd>{snapshot.emergencyKill.requestStatus}</dd></div>
+          <div><dt>Effective / Readback</dt><dd>{snapshot.emergencyKill.effective} / {snapshot.emergencyKill.readback}</dd></div>
+          <div><dt>Readback Agreement</dt><dd>{snapshot.emergencyKill.readbackAgreement === null ? 'UNKNOWN' : snapshot.emergencyKill.readbackAgreement ? 'AGREES' : 'DISAGREES'}</dd></div>
+          <div><dt>Effect / Readback Handler</dt><dd>{snapshot.emergencyKill.effectHandler ?? 'MISSING'} / {snapshot.emergencyKill.readbackHandler ?? 'MISSING'}</dd></div>
+          <div><dt>Registry / Policy</dt><dd>{snapshot.emergencyKill.registryRevision} / {snapshot.emergencyKill.policyRevision}</dd></div>
+          <div><dt>Last Known Good</dt><dd>{snapshot.emergencyKill.lastKnownGoodRevision ?? 'MISSING'}</dd></div>
+          <div><dt>Requested By / At</dt><dd>{snapshot.emergencyKill.requestedBy} / {snapshot.emergencyKill.requestedAt}</dd></div>
+          <div><dt>Receipt / Observed</dt><dd>{snapshot.emergencyKill.receiptId ?? 'MISSING'} / {snapshot.emergencyKill.independentlyObservedAt ?? 'MISSING'}</dd></div>
+          <div><dt>Quiet Period Ends</dt><dd>{snapshot.emergencyKill.quietPeriodEndsAt ?? 'UNKNOWN'}</dd></div>
           <div><dt>Self re-enable</dt><dd>FORBIDDEN</dd></div>
           <div><dt>Evidence retention</dt><dd>CONTINUES</dd></div>
+          <div><dt>Financial Kill Alias</dt><dd>{snapshot.emergencyKill.financialKillAlias ? 'INVALID ALIAS' : 'FALSE'}</dd></div>
+          <div><dt>Blocking Reason</dt><dd>{snapshot.emergencyKill.blockingReason}</dd></div>
+          <div><dt>Owner Source</dt><dd><SourceLine source={snapshot.emergencyKill.source} /></dd></div>
         </dl>
         <button type="button" disabled aria-describedby="aiox-kill-reason">
           <ShieldOff size={15} aria-hidden="true" /> ENGAGE · NOT_WIRED
         </button>
         <small id="aiox-kill-reason">One-action projection only. It never overloads the financial kill switch and sends no command.</small>
+      </section>
+
+      <section className="aiox-section" aria-labelledby="aiox-kill-readback-title">
+        <SectionHeading
+          id="aiox-kill-readback-title"
+          eyebrow="Independent postconditions"
+          title="Emergency kill effective-state proof"
+          detail="The request remains local fixture state. Recovery cannot clear until every deterministic owner reports authoritative readback and the quiet period completes."
+          action={<PostureTag posture="NOT_WIRED" />}
+        />
+        <div className="aiox-group-scope">
+          <Group title="Required postconditions · no provider dependency">
+            {snapshot.emergencyKill.postconditions.map((postcondition) => (
+              <GRow
+                key={postcondition.id}
+                icon={iconForPosture(postcondition.posture, 14)}
+                color={`var(--aiox-${toneForPosture(postcondition.posture)})`}
+                label={postcondition.label}
+                sub={<span className="aiox-row-sub"><span>{postcondition.detail}</span><SourceLine source={postcondition.source} /></span>}
+                control={<span className="aiox-readback-pair"><strong>{postcondition.value ?? 'UNKNOWN'}</strong><PostureTag posture={postcondition.posture} /></span>}
+              />
+            ))}
+          </Group>
+        </div>
       </section>
 
       <section className="aiox-section" aria-labelledby="aiox-registry-title">

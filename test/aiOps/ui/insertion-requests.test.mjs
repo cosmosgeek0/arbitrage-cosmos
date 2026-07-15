@@ -11,6 +11,7 @@ test('fixture manifest is bound to the exact shadow base and obvious fake identi
   assert.equal(fixtureManifest.schema, 'AiOpsShadowFixtureManifestV1');
   assert.equal(fixtureManifest.version, 1);
   assert.equal(fixtureManifest.baseSha, '03857dcdaff8d8b12627d27ddcc97505da1f2f86');
+  assert.equal(fixtureManifest.extensionBaseSha, 'b5f4c478223796cf7f9d73ba8c424a179aaa8551');
   assert.match(fixtureManifest.obviousFakeProvider, /\.invalid$/);
   assert.match(fixtureManifest.obviousFakeModel, /^fixture-/);
 });

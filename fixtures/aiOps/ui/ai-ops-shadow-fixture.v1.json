@@ -3,6 +3,7 @@
   "version": 1,
   "fixtureId": "aiops-a4-shadow-provider-degraded-v1",
   "baseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "extensionBaseSha": "b5f4c478223796cf7f9d73ba8c424a179aaa8551",
   "generatedAt": "2026-07-14T12:00:00.000Z",
   "selectedCaseId": "FIXTURE-CASE-A4-0001",
   "scenario": "PROVIDER_DEGRADED_WITH_UNFINISHED_OWNERS",

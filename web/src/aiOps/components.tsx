@@ -92,9 +92,13 @@ function pointSegmentsFor(samples: AiOpsTrendSeries['samples']): readonly string
 }
 
 export function TrendCard({ series }: { series: AiOpsTrendSeries }) {
-  const knownSamples = series.samples.filter((sample): sample is typeof sample & { value: number } => sample.value !== null);
+  const boundedSampleLimit = Number.isInteger(series.sampleLimit) && series.sampleLimit >= 0 ? series.sampleLimit : 0;
+  const boundedDrilldownLimit = Number.isInteger(series.drilldownLimit) && series.drilldownLimit >= 0 ? series.drilldownLimit : 0;
+  const boundedSamples = series.samples.slice(0, boundedSampleLimit);
+  const boundedDrilldownRefs = series.drilldownRefs.slice(0, boundedDrilldownLimit);
+  const knownSamples = boundedSamples.filter((sample): sample is typeof sample & { value: number } => sample.value !== null);
   const latest = knownSamples.at(-1)?.value ?? null;
-  const pointSegments = pointSegmentsFor(series.samples);
+  const pointSegments = pointSegmentsFor(boundedSamples);
   const minimum = knownSamples.length ? Math.min(...knownSamples.map((sample) => sample.value)) : null;
   const maximum = knownSamples.length ? Math.max(...knownSamples.map((sample) => sample.value)) : null;
   const first = knownSamples[0];
@@ -108,7 +112,7 @@ export function TrendCard({ series }: { series: AiOpsTrendSeries }) {
         : 'flat trajectory';
   const range = minimum === null || maximum === null ? 'range unknown' : `range ${minimum} to ${maximum} ${series.unit}`;
   const span = first && last ? `from ${first.at} to ${last.at}` : 'time span unknown';
-  const trendDescription = `${series.label} fixture trend; ${knownSamples.length} of ${series.samples.length} samples known; ${trajectory}; ${range}; ${span}; latest ${latest === null ? 'unknown' : `${latest} ${series.unit}`}; missing samples render as gaps.`;
+  const trendDescription = `${series.label} fixture trend; ${knownSamples.length} of ${boundedSamples.length} bounded samples known; ${series.samples.length} supplied with limit ${boundedSampleLimit}; ${trajectory}; ${range}; ${span}; latest ${latest === null ? 'unknown' : `${latest} ${series.unit}`}; sample window ${series.window}; resolution ${series.resolution}; burn windows ${series.shortWindow} and ${series.longWindow}; alert ${series.alertClass}; source revision ${series.source.revision ?? 'unknown'} observed ${series.source.observedAt ?? 'unknown'}; missing samples render as gaps.`;
   return (
     <article className={`aiox-trend tone-${toneForPosture(series.posture)}`}>
       <div className="aiox-trend-copy">
@@ -119,7 +123,32 @@ export function TrendCard({ series }: { series: AiOpsTrendSeries }) {
         <line x1="0" x2="100" y1="30" y2="30" />
         {pointSegments.map((points, index) => <polyline key={`${series.seriesId}-${index}`} points={points} />)}
       </svg>
+      <div className="aiox-trend-meta">
+        <span>{series.metricFamily} · {series.percentile}</span>
+        <span>{series.window} / {series.resolution}</span>
+        <span>Burn {series.shortWindow} {series.shortWindowBurn ?? 'UNKNOWN'} / {series.longWindow} {series.longWindowBurn ?? 'UNKNOWN'}</span>
+        <span>Alert {series.alertClass}</span>
+        <SourceLine source={series.source} />
+      </div>
       <PostureTag posture={series.posture} />
+      <details className="aiox-trend-drilldown">
+        <summary>
+          <span>Forensic Drill-Down</span>
+          <small>{boundedSamples.length} Samples · Limit {boundedSampleLimit}</small>
+        </summary>
+        <div className="aiox-trend-samples" role="list" aria-label={`${series.label} bounded historical samples`}>
+          {boundedSamples.map((sample) => (
+            <span role="listitem" key={`${series.seriesId}-${sample.at}`}>
+              <time dateTime={sample.at}>{sample.at}</time>
+              <strong className="num">{sample.value === null ? 'UNKNOWN' : `${sample.value} ${series.unit}`}</strong>
+            </span>
+          ))}
+        </div>
+        <div className="aiox-trend-refs">
+          <span>Read-Only Correlation References · Limit {boundedDrilldownLimit}</span>
+          {boundedDrilldownRefs.map((reference) => <code key={reference}>{reference}</code>)}
+        </div>
+      </details>
     </article>
   );
 }

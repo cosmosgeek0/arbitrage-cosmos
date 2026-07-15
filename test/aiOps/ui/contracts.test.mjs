@@ -22,10 +22,19 @@ test('fixture builds deterministically from the checked-in manifest and is deepl
   assert.ok(Object.isFrozen(first));
   assert.ok(Object.isFrozen(first.controls));
   assert.ok(Object.isFrozen(first.controls[0].envelope));
+  assert.ok(Object.isFrozen(first.incidents[0].suppression));
+  assert.ok(Object.isFrozen(first.incidents[0].diagnosticValidation.checks));
+  assert.ok(Object.isFrozen(first.incidents[0].forensicBundle.artifacts));
+  assert.ok(Object.isFrozen(first.providerQualifications));
+  assert.ok(Object.isFrozen(first.capabilityGraduations[0].metrics));
+  assert.ok(Object.isFrozen(first.contextManifest.authorityPointers));
+  assert.ok(Object.isFrozen(first.lineage.checkpointIds));
+  assert.ok(Object.isFrozen(first.emergencyKill.postconditions));
   assert.equal(first.posture, 'SHADOW_SPECULATIVE');
   assert.equal(first.environment, 'SYNTHETIC_FIXTURE');
   assert.equal(first.mountState, 'DIRECTOR_MOUNT_REQUIRED');
   assert.equal(first.baseSha, '03857dcdaff8d8b12627d27ddcc97505da1f2f86');
+  assert.equal(first.extensionBaseSha, 'b5f4c478223796cf7f9d73ba8c424a179aaa8551');
 });
 
 test('fixture identities are obviously fake and real-looking identities are rejected', () => {
@@ -38,6 +47,10 @@ test('fixture identities are obviously fake and real-looking identities are reje
   assert.throws(
     () => buildAiOpsShadowFixture({ ...manifest, obviousFakeModel: 'production-model' }),
     /AI_OPS_FIXTURE_IDENTITY_MUST_BE_OBVIOUSLY_FAKE/,
+  );
+  assert.throws(
+    () => buildAiOpsShadowFixture({ ...manifest, extensionBaseSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
+    /AI_OPS_FIXTURE_EXTENSION_BASE_SHA_MISMATCH/,
   );
   assert.throws(
     () => buildAiOpsShadowFixture({ ...manifest, requestedControlIntents: { 'LIVE_CONTROL.A01': true } }),
@@ -208,6 +221,156 @@ test('unknown canonical values remain null rather than fabricated zeroes', () =>
   assert.ok(providerCost?.samples.every((sample) => sample.value === null));
   assert.equal(snapshot.refreshDock.effective, null);
   assert.equal(snapshot.refreshDock.readback, null);
+});
+
+test('incident funnel preserves raw evidence while every suppression and actionability decision stays fail-closed', () => {
+  const incident = buildAiOpsShadowFixture(manifest).incidents[0];
+  assert.equal(incident.suppression.rawEventCount, 8);
+  assert.equal(incident.suppression.deduplicatedCount, 7);
+  assert.equal(incident.suppression.dependencyRootIncidentId, 'FIXTURE-INCIDENT-A4-0001');
+  assert.equal(incident.suppression.inhibitedBy, 'provider-gateway');
+  assert.equal(incident.suppression.inhibitedSymptomIds.length, 2);
+  assert.equal(incident.suppression.childEvidencePreserved, true);
+  assert.equal(incident.suppression.silenceWindow.status, 'UNKNOWN');
+  assert.equal(incident.suppression.disposition, 'UNKNOWN');
+  assert.equal(incident.suppression.criticalReserve, 'UNKNOWN');
+  assert.equal(incident.suppression.actionable, null);
+  assert.equal(incident.suppression.resourceCooldownUntil, null);
+  assert.equal(incident.suppression.globalCooldownUntil, null);
+  assert.equal(incident.suppression.backoffAttempt, null);
+  assert.equal(incident.suppression.jitterMs, null);
+  assert.deepEqual(incident.suppression.actionReceipts.map((receipt) => receipt.action), [
+    'PAGE', 'TICKET', 'DIGEST', 'SUPPRESSION', 'INHIBITION', 'DISCARD',
+  ]);
+  assert.ok(incident.suppression.actionReceipts.every((receipt) => receipt.receiptId === null));
+  assert.deepEqual(incident.suppression.actionabilityMetrics, {
+    duplicateRate: null,
+    pagesPerIncident: null,
+    inhibitedSymptoms: 2,
+    falsePageRate: null,
+    acknowledgementLatencyMs: null,
+    unresolvedAgeMs: null,
+    ownerFeedback: null,
+  });
+  assert.match(incident.suppression.rawEventEscapeRef, /^fixture:/);
+});
+
+test('diagnostic validation and forensic drill-down expose mixed proof without authorizing an effect', () => {
+  const incident = buildAiOpsShadowFixture(manifest).incidents[0];
+  assert.equal(incident.diagnosticValidation.disposition, 'INCONCLUSIVE');
+  assert.equal(incident.diagnosticValidation.effectAuthorized, false);
+  assert.match(incident.diagnosticValidation.sourceHash, /^sha256:fixture-/);
+  assert.match(incident.diagnosticValidation.parserRevision, /^fixture-/);
+  assert.match(incident.diagnosticValidation.sanitizerRevision, /^fixture-/);
+  assert.equal(incident.diagnosticValidation.extractionMethod, 'DETERMINISTIC_FIXTURE_FIELDS');
+  assert.equal(incident.diagnosticValidation.confidence, null);
+  assert.equal(incident.diagnosticValidation.freshness, 'STALE_94S');
+  assert.match(incident.diagnosticValidation.temporalRelation, /FIXTURE_ONLY$/);
+  assert.deepEqual(
+    new Set(incident.diagnosticValidation.checks.map((check) => check.disposition)),
+    new Set(['VALIDATED', 'INVALIDATED', 'INCONCLUSIVE']),
+  );
+  assert.equal(incident.diagnosticValidation.missingEvidence.length, 4);
+  assert.ok(incident.diagnosticValidation.conflictingEvidence.length > 0);
+  assert.ok(incident.diagnosticValidation.falsificationTests.length > 0);
+  assert.match(incident.diagnosticValidation.stopCondition, /No operational effect/);
+  assert.equal(incident.forensicBundle.rawStreamSentToModel, false);
+  assert.equal(incident.forensicBundle.artifacts.length, 7);
+  assert.ok(incident.forensicBundle.artifacts.every((artifact) => artifact.bounded === true));
+  assert.ok(incident.forensicBundle.artifacts.some((artifact) => artifact.posture === 'MISSING'));
+  assert.equal(incident.forensicBundle.postmortem.required, true);
+  assert.equal(incident.forensicBundle.postmortem.status, 'NOT_CONFIGURED');
+});
+
+test('context manifest and session lineage are explicit, bounded, and forbid hidden cross-session memory', () => {
+  const snapshot = buildAiOpsShadowFixture(manifest);
+  assert.equal(snapshot.lineage.contextManifestId, snapshot.contextManifest.manifestId);
+  assert.equal(snapshot.lineage.hiddenCrossSessionMemoryAllowed, false);
+  assert.equal(snapshot.lineage.replacementReason, 'INITIAL_SESSION');
+  assert.equal(snapshot.lineage.generation, 1);
+  assert.equal(snapshot.lineage.childAgentLimit, 0);
+  assert.equal(snapshot.lineage.toolDepthLimit, 0);
+  assert.ok(snapshot.lineage.checkpointIds.length > 0);
+  assert.equal(snapshot.contextManifest.signatureStatus, 'UNSIGNED_FIXTURE');
+  assert.equal(snapshot.contextManifest.generationStatus, 'FAIL_CLOSED_UNRESOLVED_POINTERS');
+  assert.equal(snapshot.contextManifest.baseSha, manifest.extensionBaseSha);
+  assert.equal(snapshot.contextManifest.promptRevision, 'fixture-prompt-r1');
+  assert.equal(snapshot.contextManifest.providerQualificationRevision, 'UNMOUNTED');
+  assert.equal(snapshot.contextManifest.evidenceAgeLimitMs, 30000);
+  assert.ok(snapshot.contextManifest.authorityPointers.every((pointer) => pointer.status === 'UNRESOLVED' && pointer.blobHash === null));
+  assert.deepEqual(snapshot.contextManifest.allowedTools, []);
+  assert.deepEqual(snapshot.contextManifest.writeScope, []);
+  assert.deepEqual(snapshot.contextManifest.effectReceiptIds, []);
+  assert.match(snapshot.contextManifest.stopCondition, /Stop when/);
+});
+
+test('provider qualification reflects supported activation states without credentials, API fallback, or implied graduation', () => {
+  const snapshot = buildAiOpsShadowFixture(manifest);
+  assert.deepEqual(snapshot.providerQualifications.map((route) => route.activationState), [
+    'DIAGNOSTIC_PLANE_UNAVAILABLE',
+    'SUBSCRIPTION_CODEX_WORKER',
+    'SUBSCRIPTION_CLAUDE_CODE_WORKER',
+    'NOT_CONFIGURED',
+  ]);
+  assert.ok(snapshot.providerQualifications.every((route) => route.provider.endsWith('.invalid')));
+  assert.ok(snapshot.providerQualifications.every((route) => route.qualification !== 'QUALIFIED'));
+  assert.ok(snapshot.providerQualifications.every((route) => route.fallbackRouteId === null));
+  assert.ok(snapshot.providerQualifications.every((route) => route.credentialPosture === 'NOT_CONFIGURED'));
+  assert.match(snapshot.providerQualifications[1].blockedReasons.join(' '), /must not fall back to API billing or another account/);
+  assert.match(snapshot.providerQualifications[2].blockedReasons.join(' '), /must not fall back to API billing or another account/);
+
+  const graduation = snapshot.capabilityGraduations[0];
+  assert.equal(graduation.currentMode, 'OFF');
+  assert.equal(graduation.proposedMode, 'SHADOW');
+  assert.equal(graduation.disposition, 'NO_PROMOTION');
+  assert.equal(graduation.independentReviewer, null);
+  assert.equal(graduation.metrics.length, 11);
+  assert.ok(graduation.metrics.some((metric) => metric.metricId === 'FALSE_POSITIVE_RATE'));
+  assert.ok(graduation.metrics.every((metric) => metric.result !== 'PASS'));
+  assert.equal(graduation.posture, 'BLOCKED');
+  assert.ok(graduation.demotionTriggers.length >= 5);
+});
+
+test('historical trend contracts are bounded, windowed, gap-preserving, and correlation-only', () => {
+  const trends = buildAiOpsShadowFixture(manifest).trends;
+  assert.ok(trends.length > 0);
+  for (const series of trends) {
+    assert.equal(series.window, 'PT30M');
+    assert.equal(series.resolution, 'PT5M');
+    assert.equal(series.sampleLimit, 6);
+    assert.equal(series.samples.length, 6);
+    assert.equal(series.shortWindow, 'PT5M');
+    assert.equal(series.longWindow, 'PT1H');
+    assert.equal(series.alertClass, 'UNKNOWN');
+    assert.equal(series.shortWindowBurn, null);
+    assert.equal(series.longWindowBurn, null);
+    assert.equal(series.drilldownLimit, 1);
+    assert.ok(series.drilldownRefs.length > 0);
+    assert.ok(series.drilldownRefs.every((reference) => reference.startsWith('fixture:')));
+  }
+  assert.ok(trends.some((series) => series.samples.some((sample) => sample.value === null)));
+});
+
+test('emergency kill keeps desired, requested, effective, and independent readback authority distinct', () => {
+  const kill = buildAiOpsShadowFixture(manifest).emergencyKill;
+  assert.equal(kill.desired, 'ENGAGED');
+  assert.equal(kill.requested, 'ENGAGED');
+  assert.equal(kill.requestStatus, 'LOCAL_FIXTURE_ONLY');
+  assert.equal(kill.effective, 'UNKNOWN');
+  assert.equal(kill.readback, 'UNKNOWN');
+  assert.equal(kill.readbackAgreement, null);
+  assert.equal(kill.effectHandler, null);
+  assert.equal(kill.readbackHandler, null);
+  assert.equal(kill.receiptId, null);
+  assert.equal(kill.independentlyObservedAt, null);
+  assert.equal(kill.quietPeriodEndsAt, null);
+  assert.equal(kill.selfReenableAllowed, false);
+  assert.equal(kill.evidenceRetentionContinues, true);
+  assert.equal(kill.financialKillAlias, false);
+  assert.equal(kill.authorityCreated, false);
+  assert.equal(kill.postconditions.length, 6);
+  assert.ok(kill.postconditions.some((condition) => condition.value === 'REQUIRED'));
+  assert.ok(kill.postconditions.filter((condition) => condition.value === null).every((condition) => condition.posture === 'UNKNOWN'));
 });
 
 test('the fixture has no operational effect, money, secret, or self-approval capability', () => {

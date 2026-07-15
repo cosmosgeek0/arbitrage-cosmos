@@ -183,7 +183,7 @@ export function OverviewView({ snapshot }: { snapshot: AiOpsSnapshot }) {
           id="aiox-trends-title"
           eyebrow="Historical posture"
           title="Bounded trends"
-          detail="Age, latency, queues, drops, ambiguity, recovery, cost, incidents, host pressure, and rate budgets."
+          detail="Multi-window age, latency, queues, drops, ambiguity, recovery, cost, incidents, host pressure, rate budgets, alert class, and read-only correlation drill-down."
         />
         <EvidenceCanvas labelledBy="aiox-trends-title">
           <div className="aiox-trend-strip">

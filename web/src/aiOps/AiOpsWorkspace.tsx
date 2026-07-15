@@ -67,7 +67,7 @@ export function AiOpsWorkspace({ snapshot, initialView = 'overview' }: AiOpsWork
           <div className="aiox-toolbar-truth">
             <span><i />SYNTHETIC_ONLY</span>
             <span>{snapshot.generatedAt}</span>
-            <span><code>{snapshot.baseSha.slice(0, 12)}</code></span>
+            <span><code>A4 {snapshot.baseSha.slice(0, 12)} · A4X {snapshot.extensionBaseSha.slice(0, 12)}</code></span>
           </div>
         </header>
 

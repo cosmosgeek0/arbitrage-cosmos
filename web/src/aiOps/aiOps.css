@@ -503,7 +503,7 @@
 
 .aiox-trend {
   display: grid;
-  min-height: 82px;
+  min-height: 128px;
   grid-template-columns: 1fr 100px auto;
   align-items: center;
   gap: 10px;
@@ -512,15 +512,28 @@
   border-bottom: 1px solid var(--line-2);
 }
 
-.aiox-trend-copy { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.aiox-trend-copy { display: flex; min-width: 0; grid-row: 1; grid-column: 1; flex-direction: column; gap: 5px; }
 .aiox-trend-copy span { color: var(--muted); font-size: 9.5px; font-weight: 560; }
 .aiox-trend-copy strong { color: var(--text); font-size: 14px; font-weight: 530; }
-.aiox-trend svg { width: 100px; height: 32px; overflow: visible; }
+.aiox-trend svg { width: 100px; height: 32px; grid-row: 1; grid-column: 2; overflow: visible; }
+.aiox-trend > .state-pill { grid-row: 1; grid-column: 3; }
 .aiox-trend svg line { stroke: var(--line-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .aiox-trend svg polyline { fill: none; stroke: var(--muted); stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .aiox-trend.tone-ok svg polyline { stroke: var(--up, #16845b); }
 .aiox-trend.tone-warn svg polyline { stroke: var(--hp-amber, #c57921); }
 .aiox-trend.tone-bad svg polyline { stroke: var(--down, #c94747); }
+.aiox-trend-meta { display: grid; min-width: 0; grid-row: 2; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px 8px; padding-top: 7px; border-top: 1px solid var(--line-2); }
+.aiox-trend-meta > span:not(.aiox-source) { overflow: hidden; color: var(--muted-2); font-size: 7.5px; line-height: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.aiox-trend-meta .aiox-source { grid-column: 1 / -1; }
+.aiox-trend-drilldown { grid-row: 3; grid-column: 1 / -1; border-top: 1px solid var(--line-2); }
+.aiox-trend-drilldown summary { display: flex; min-height: 29px; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-2); cursor: pointer; font-size: 8.5px; font-weight: 570; list-style-position: inside; }
+.aiox-trend-drilldown summary small { color: var(--muted-2); font-size: 7.5px; font-weight: 430; }
+.aiox-trend-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--line-2); }
+.aiox-trend-samples > span { display: flex; min-width: 0; min-height: 28px; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 6px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-trend-samples time { overflow: hidden; color: var(--muted-2); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.aiox-trend-samples strong { color: var(--text-2); font-size: 7.5px; font-weight: 520; }
+.aiox-trend-refs { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 6px; }
+.aiox-trend-refs > span { width: 100%; color: var(--muted-2); font-size: 7.5px; font-weight: 620; }
 
 .aiox-two-column { display: grid; min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
@@ -573,6 +586,10 @@
 .aiox-actionability dl div { padding: 9px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
 .aiox-actionability dt { color: var(--muted-2); font-size: 8px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .aiox-actionability dd { margin: 3px 0 0; color: var(--text-2); font-size: 9.5px; }
+.aiox-actionability-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 9px; border: 1px solid var(--line-2); }
+.aiox-actionability-metrics > span { display: flex; min-height: 38px; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 8px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); color: var(--muted-2); font-size: 7.5px; font-weight: 560; }
+.aiox-actionability-metrics strong { color: var(--text-2); font-size: 8.5px; font-weight: 520; }
+.aiox-action-receipts { margin-bottom: 9px; }
 .aiox-atlas-matches { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 10px; }
 .aiox-atlas-matches > span { width: 100%; color: var(--muted); font-size: 9px; font-weight: 580; }
 
@@ -609,6 +626,30 @@
 .aiox-trace-detail dl div { min-width: 0; padding: 7px; border-right: 1px solid var(--line-2); }
 .aiox-trace-detail dt { color: var(--muted-2); font-size: 8px; font-weight: 650; text-transform: uppercase; }
 .aiox-trace-detail dd { margin: 3px 0 0; color: var(--text-2); font-size: 9px; }
+.aiox-forensic-summary { min-width: 860px; border-top: 1px solid var(--line-2); }
+.aiox-forensic-summary dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.aiox-forensic-summary dl > div { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-forensic-summary dt,
+.aiox-validation-summary dt,
+.aiox-context-manifest dt { color: var(--muted-2); font-size: 7.5px; font-weight: 650; text-transform: uppercase; }
+.aiox-forensic-summary dd,
+.aiox-validation-summary dd,
+.aiox-context-manifest dd { margin: 3px 0 0; color: var(--text-2); font-size: 8.5px; line-height: 12px; }
+.aiox-forensic-artifacts { min-width: 860px; }
+.aiox-forensic-postmortem { display: grid; min-width: 860px; grid-template-columns: 110px 1fr; border-top: 1px solid var(--line-2); }
+.aiox-forensic-postmortem span { padding: 8px 10px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); color: var(--muted-2); font-size: 7.5px; font-weight: 650; text-transform: uppercase; }
+.aiox-forensic-postmortem p { margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--line-2); color: var(--text-2); font-size: 8.5px; line-height: 13px; }
+
+.aiox-validation-summary { padding: 10px; border-bottom: 1px solid var(--line-2); }
+.aiox-validation-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--line-2); }
+.aiox-validation-summary dl > div { min-width: 0; padding: 7px 8px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-validation-summary > p { margin: 8px 0; color: var(--text); font-size: 9.5px; line-height: 14px; }
+.aiox-validation-handoff { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-2); }
+.aiox-validation-handoff > div { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-validation-handoff span,
+.aiox-context-contract span { color: var(--muted-2); font-size: 7.5px; font-weight: 650; text-transform: uppercase; }
+.aiox-validation-handoff p,
+.aiox-context-contract p { margin: 3px 0 0; color: var(--text-2); font-size: 8.5px; line-height: 13px; }
 
 .aiox-readback-pair { display: flex; align-items: center; gap: 7px; }
 .aiox-readback-pair strong { font-size: 9px; font-weight: 580; }
@@ -664,6 +705,13 @@
 .aiox-lineage dt { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 8.5px; font-weight: 570; }
 .aiox-lineage dd { display: flex; min-width: 0; flex-direction: column; margin: 0; color: var(--text-2); font-size: 9px; line-height: 13px; }
 .aiox-chat-aside .aiox-projection-notice { margin: 10px; }
+.aiox-context-manifest { display: grid; min-width: 1080px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; }
+.aiox-context-manifest > div { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-context-manifest dd { display: flex; min-width: 0; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.aiox-context-pointers { min-width: 860px; border-top: 1px solid var(--line-2); }
+.aiox-context-contract { display: grid; min-width: 960px; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-2); }
+.aiox-context-contract > div { padding: 8px 10px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+.aiox-context-manifest + .aiox-context-pointers ~ .aiox-source { display: flex; padding: 8px 10px; border-top: 1px solid var(--line-2); }
 
 /* Permission registry */
 .aiox-permission-summary { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(6, minmax(160px, 1fr)); overflow-x: auto; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); }
@@ -673,16 +721,17 @@
 .aiox-permission-summary strong { color: var(--text); font-size: 20px; font-weight: 520; line-height: 26px; }
 .aiox-permission-summary small { color: var(--muted-2); font-size: 8px; }
 
-.aiox-kill-strip { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(360px, 1.6fr) minmax(420px, 1fr) 170px; align-items: center; gap: 12px; padding: 12px; overflow-x: auto; border: 1px solid color-mix(in srgb, var(--down, #c94747) 26%, var(--line-2)); border-radius: 10px; background: color-mix(in srgb, var(--aiox-bad) 58%, var(--panel)); box-shadow: inset 3px 0 0 var(--down, #c94747); }
+.aiox-kill-strip { display: grid; width: 100%; min-width: 0; grid-template-columns: minmax(320px, .8fr) minmax(760px, 1.8fr) 170px; align-items: center; gap: 12px; padding: 12px; overflow-x: auto; border: 1px solid color-mix(in srgb, var(--down, #c94747) 26%, var(--line-2)); border-radius: 10px; background: color-mix(in srgb, var(--aiox-bad) 58%, var(--panel)); box-shadow: inset 3px 0 0 var(--down, #c94747); }
 .aiox-kill-copy { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .aiox-kill-copy > svg { flex: none; color: var(--down, #c94747); }
 .aiox-kill-copy span { color: var(--down, #c94747); font-size: 8.5px; font-weight: 690; letter-spacing: .05em; text-transform: uppercase; }
 .aiox-kill-copy h2 { margin: 1px 0 2px; font-size: 12px; font-weight: 590; }
 .aiox-kill-copy p { margin: 0; color: var(--muted); font-size: 9px; line-height: 13px; }
-.aiox-kill-strip dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.aiox-kill-strip dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border: 1px solid var(--line-2); }
 .aiox-kill-strip dl div { min-width: 0; padding: 5px 7px; border-right: 1px solid var(--line-2); }
 .aiox-kill-strip dt { color: var(--muted-2); font-size: 7.5px; font-weight: 650; text-transform: uppercase; }
 .aiox-kill-strip dd { margin: 2px 0 0; color: var(--text-2); font-size: 8.5px; }
+.aiox-kill-strip dd .aiox-source { align-items: flex-start; flex-direction: column; gap: 1px; }
 .aiox-kill-strip > button { min-height: 34px; border: 1px solid color-mix(in srgb, var(--down, #c94747) 28%, var(--line-2)); border-radius: 8px; background: var(--aiox-bad); color: var(--down, #c94747); font-size: 9.5px; font-weight: 680; }
 .aiox-kill-strip > small { grid-column: 3; color: var(--muted-2); font-size: 8px; line-height: 11px; text-align: center; }
 
@@ -787,9 +836,23 @@
 .aiox-reasoning-grid p { margin: 2px 0 0; color: var(--muted); font-size: 8.5px; }
 .aiox-reasoning-grid svg { color: var(--down, #c94747); }
 
+.aiox-provider-evidence { max-width: 960px; }
+.aiox-provider-evidence > span { white-space: normal; }
+.aiox-provider-state { display: flex; min-width: 128px; flex-direction: column; align-items: flex-end; gap: 4px; }
+.aiox-provider-state > strong { color: var(--text-2); font-size: 8px; font-weight: 560; }
+
 .aiox-graduation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .aiox-graduation-grid article { display: grid; min-height: 48px; grid-template-columns: 22px 1fr auto; align-items: center; gap: 6px; padding: 7px 9px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); color: var(--muted); }
 .aiox-graduation-grid article > span:not(.state-pill) { color: var(--text-2); font-size: 9px; }
+.aiox-graduation-contracts > article > header { display: grid; min-width: 860px; grid-template-columns: 1fr auto; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+.aiox-graduation-contracts header > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.aiox-graduation-contracts header > div:last-child { align-items: flex-end; text-align: right; }
+.aiox-graduation-contracts header strong { color: var(--text); font-size: 9.5px; font-weight: 560; line-height: 14px; }
+.aiox-graduation-contracts header span { color: var(--muted-2); font-size: 8px; line-height: 12px; }
+.aiox-graduation-contracts footer { display: grid; min-width: 860px; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line-2); }
+.aiox-graduation-contracts footer > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; padding: 7px 9px; border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); color: var(--muted-2); font-size: 7.5px; font-weight: 620; text-transform: uppercase; }
+.aiox-graduation-contracts footer strong { color: var(--text-2); font-size: 8px; font-weight: 500; line-height: 12px; text-transform: none; }
+.aiox-graduation-contracts footer .aiox-source { grid-column: 1 / -1; padding: 7px 9px; border-top: 1px solid var(--line-2); }
 .aiox-assumptions { margin: 0; padding: 0; list-style: none; }
 .aiox-assumptions li { display: grid; min-height: 54px; grid-template-columns: 28px 1fr; align-items: center; gap: 7px; padding: 8px 10px; border-bottom: 1px solid var(--line-2); }
 .aiox-assumptions span { color: var(--muted-2); font-size: 9px; font-weight: 620; }

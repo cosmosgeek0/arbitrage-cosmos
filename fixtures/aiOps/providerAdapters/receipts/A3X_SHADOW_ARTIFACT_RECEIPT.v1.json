@@ -1,0 +1,339 @@
+{
+  "schema": "AI_OPS_A3X_SHADOW_ARTIFACT_RECEIPT_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "terminalState": "A3X_SHADOW_READY",
+  "authorityGranted": false,
+  "prestageReadyClaimed": false,
+  "acceptanceClaimed": false,
+  "integratedAcceptedClaimed": false,
+  "c2VerifiedClaimed": false,
+  "directorAdjudicationClaimed": false,
+  "providerActivation": "ZERO_REAL_PROVIDER_ACTIVATION",
+  "deploymentPerformed": false,
+  "mergePerformed": false,
+  "pushPerformed": false,
+  "orderedBaseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "orderedBaseRole": "D_LAUNCH_37_REFERENCE_BASE_NOT_GIT_ANCESTOR",
+  "sealedArtifactInputSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+  "actualLineageBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "orderedBaseIsAncestorOfSealedArtifact": false,
+  "orderedBaseIsAncestorOfImplementation": false,
+  "sealedArtifactIsAncestorOfImplementation": true,
+  "implementationCommitSha": "46b0dd6c34010372232b918128fbbb899a0f2dab",
+  "implementationTreeSha": "075f49cd130ba950d46a6d148c0c02efa7717ab3",
+  "implementationParentSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+  "implementationBranch": "aiops-shadow-a3-20260715",
+  "receiptSealCommit": "ENCLOSING_COMMIT_NOT_SELF_REFERENTIAL",
+  "authorityBindings": {
+    "launchDecision": "D-LAUNCH-37",
+    "launchDecisionCommit": "d090d006019e21b150fa7b74831240695d8791e3",
+    "orderPrefix": "90dcac299155",
+    "packet": "RUN-15",
+    "packetTask": "A3X",
+    "sameWorktreeExtensionRuling": true,
+    "sameWorktreeExtensionBasis": "D-LAUNCH-37 records SEALED A2/A3 as gap-fill extensions in the same worktrees; only the four new packets were cut at 098f7b9."
+  },
+  "sealedArtifactVerification": {
+    "verified": true,
+    "sealedReceiptPath": "fixtures/aiOps/providerAdapters/receipts/A3_SHADOW_ARTIFACT_RECEIPT.v1.json",
+    "sealedReceiptGitBlob": "672153413d85f22cc79b6c03cd8dc63c4ba1ded4",
+    "sealedImplementationCommitSha": "a1eedf81afb7e8fa61b60fd58870bb1cc0f9664f",
+    "sealedImplementationTreeSha": "43fc857ed4a9cc0a9153c4901845ca4b48ee61e8",
+    "sealedTreeSha": "41c9f0476e8517afe19682189644103288b2b338",
+    "recordedBlobAndSha256Verification": "PASS"
+  },
+  "entryGate": {
+    "completedBeforeBuild": true,
+    "fixturePath": "fixtures/aiOps/providerAdapters/a3x-entry-gate.v1.json",
+    "fixtureGitBlob": "d988048e2561c7b382af152cec21c2ad285c2cea",
+    "fixtureSha256": "5631ba1bb0f9ef934646e5a00c854a453a2190081664cd64b9711fb5aaf62606",
+    "classifications": [
+      {
+        "item": "fake-openai-api-adapter",
+        "classification": "MISSING_BUILD"
+      },
+      {
+        "item": "fake-anthropic-api-adapter",
+        "classification": "MISSING_BUILD"
+      },
+      {
+        "item": "owner-operated-subscription-cli-workers",
+        "classification": "ADAPT_EXISTING"
+      },
+      {
+        "item": "approved-web-search-tool",
+        "classification": "ADAPT_EXISTING"
+      },
+      {
+        "item": "repository-inspection-tools",
+        "classification": "MISSING_BUILD"
+      },
+      {
+        "item": "sandboxed-patch-proposals",
+        "classification": "ADAPT_EXISTING"
+      },
+      {
+        "item": "api-vs-subscription-capability-separation",
+        "classification": "ADAPT_EXISTING"
+      },
+      {
+        "item": "real-provider-protocols-credentials-and-endpoints",
+        "classification": "REFERENCE_ONLY"
+      },
+      {
+        "item": "duplicate-provider-tool-patch-or-persistence-authority",
+        "classification": "REJECT_DUPLICATE"
+      }
+    ],
+    "builtOnly": [
+      "MISSING_BUILD",
+      "ADAPT_EXISTING"
+    ]
+  },
+  "capabilityBoundaryProof": {
+    "accessClasses": [
+      "PAID_API",
+      "OWNER_SUBSCRIPTION_CLI"
+    ],
+    "interchangeable": false,
+    "silentFallbackAllowed": false,
+    "providerRoutes": [
+      "OPENAI_API_FAKE",
+      "ANTHROPIC_API_FAKE",
+      "CODEX_SUBSCRIPTION_CLI_FAKE",
+      "CLAUDE_CODE_SUBSCRIPTION_CLI_FAKE"
+    ],
+    "executableProofFile": "test/aiOps/providerAdapters/providerCliMatrix.test.mjs",
+    "verifiedInvariants": [
+      "API_REQUEST_TO_SUBSCRIPTION_ROUTE_REJECTS_BEFORE_PORT",
+      "SUBSCRIPTION_REQUEST_TO_API_ROUTE_REJECTS_BEFORE_PORT",
+      "API_CREDENTIAL_CLASS_ON_CLAUDE_SUBSCRIPTION_ROUTE_REJECTS_BEFORE_PORT",
+      "MISMATCHED_ROUTE_PORT_INVOCATION_COUNT_ZERO",
+      "STALE_CROSS_ROUTE_PROVIDER_OUTPUT_REJECTED",
+      "POSITIVE_COST_BUDGET_REJECTED_BEFORE_PORT",
+      "UNROUTED_ADVISOR_IDENTITY_REJECTED_BEFORE_PORT",
+      "FALLBACK_USED_ALWAYS_FALSE"
+    ]
+  },
+  "scope": {
+    "exclusivePathRoots": [
+      "server/src/aiOps/providerAdapters",
+      "fixtures/aiOps/providerAdapters",
+      "test/aiOps/providerAdapters"
+    ],
+    "extensionDiffBaseSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+    "extensionChangedPathCount": 12,
+    "orderedBaseComparisonChangedPathCount": 84,
+    "orderedBaseComparisonIsExtensionScope": false,
+    "orderedBaseComparisonLimitation": "098f7b9 and the sealed A3 are sibling histories. The 84-path comparison contains divergent shared history and is not represented as RUN-15 output. The exact 12-path sealed-input-to-implementation diff is the authoritative A3X extension scope.",
+    "extensionChangedPaths": [
+      {
+        "path": "fixtures/aiOps/providerAdapters/a3x-entry-gate.v1.json",
+        "gitBlob": "d988048e2561c7b382af152cec21c2ad285c2cea",
+        "sha256": "5631ba1bb0f9ef934646e5a00c854a453a2190081664cd64b9711fb5aaf62606"
+      },
+      {
+        "path": "fixtures/aiOps/providerAdapters/syntheticPorts.mjs",
+        "gitBlob": "2d4ee2a2b1c8efc9545024d17164b024fe7eaa69",
+        "sha256": "7ceeb471d1ce87ee02490b97f647ca5307f3c33ab9fde1e3fd0b518f4dabce1f"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/contracts.ts",
+        "gitBlob": "974b05dd4499f30487880ded18a480db7236a7e2",
+        "sha256": "3d58d4d7afdd3270a35d8bbc0975d466a7169a9edc99946cf998c2f71d5f200f"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/index.ts",
+        "gitBlob": "52b364eb39307bd4e7f7bbe53ff6aa350744eac3",
+        "sha256": "245cc089048afa27f493e2d385a5f2510d86d79d2b0fe588ad8ed867980f853b"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/providerGateway.ts",
+        "gitBlob": "14cc8201c1043d084171129c10b34b427b082633",
+        "sha256": "594e992410abb8ccabab68d814d95e95811947f57559c7887d5f956ddff2f6e1"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/syntheticProviderAdapters.ts",
+        "gitBlob": "6408cc70500ad981e34c8e5f4ad0851a408e8f67",
+        "sha256": "44fc4721189e0d92dab7f939370b0bf57f60d84c4e38141e32a68ccd8d5de89a"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/syntheticToolAdapters.ts",
+        "gitBlob": "47a0a50a9256c6c458983afe5ca534a708937213",
+        "sha256": "6cc2ff0ed158f42a92ec0350fbe6d79752bbe9ffb7c045abd0e49fd0f0db09f4"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/toolGateway.ts",
+        "gitBlob": "afd9c74db423c38b78b975138d1a0f33e261619d",
+        "sha256": "7b9b79b2b35bd81eda63f77accc43e05e6a0c4afc6ed506b1b1cca370c1281cb"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/fixturesPurity.test.mjs",
+        "gitBlob": "c6385ef9d454205bf101522ea92843a6a2f7ddca",
+        "sha256": "fef08ada5ae18876405bdb52b2d533c76d085107c831b35bf8ab9e4478c92a2e"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/patchWorker.test.mjs",
+        "gitBlob": "e9acc17ac9e39d81538bac32e39ecd918c94891c",
+        "sha256": "367ce7c460c57bd642fab2d3f987d5d01d0272bc9c51f9445eab64864299a503"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/providerCliMatrix.test.mjs",
+        "gitBlob": "3e01c462e65d7db471e87285f3d89b3a65df77a3",
+        "sha256": "af11b18729daf9d1340ddeba589fb4bad8045bea6cce048cb2e4606832600263"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/toolEgress.test.mjs",
+        "gitBlob": "2b7b08699a2ba99e41696a5c6391eedc32523c88",
+        "sha256": "949dc7eab963f5240c34082a2ef0d2536c8287fff8725adaa4871a6f174b05a2"
+      }
+    ]
+  },
+  "environmentPreparation": {
+    "command": "npm ci --offline --ignore-scripts --loglevel verbose",
+    "outcome": "PASS_LOCAL_CACHE_ONLY",
+    "networkUsed": false,
+    "packageFilesChanged": false
+  },
+  "tests": [
+    {
+      "command": "npm run typecheck -w server",
+      "outcome": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build -w server",
+      "outcome": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/aiOps/providerAdapters/providerCliMatrix.test.mjs",
+      "outcome": "PASS_TOTAL_NETWORK_DENY",
+      "exitCode": 0,
+      "tests": 15,
+      "suites": 3,
+      "passed": 15,
+      "failed": 0
+    },
+    {
+      "command": "node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/aiOps/providerAdapters/toolEgress.test.mjs test/aiOps/providerAdapters/patchWorker.test.mjs",
+      "outcome": "PASS_TOTAL_NETWORK_DENY",
+      "exitCode": 0,
+      "tests": 30,
+      "suites": 5,
+      "passed": 30,
+      "failed": 0
+    },
+    {
+      "command": "node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/aiOps/providerAdapters/*.test.mjs",
+      "outcome": "PASS_TOTAL_NETWORK_DENY",
+      "exitCode": 0,
+      "tests": 65,
+      "suites": 12,
+      "passed": 65,
+      "failed": 0
+    },
+    {
+      "command": "node --check for every fixtures/aiOps/providerAdapters/*.mjs and test/aiOps/providerAdapters/*.mjs",
+      "outcome": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "jq -e . for every fixtures/aiOps/providerAdapters/*.json and git diff --check",
+      "outcome": "PASS",
+      "exitCode": 0
+    }
+  ],
+  "notRunBySameMachineLaw": [
+    "npm test",
+    "npm run test:all",
+    "browser suites",
+    "performance suites",
+    "soak suites"
+  ],
+  "limitations": [
+    "All OpenAI, Anthropic, Codex and Claude Code adapters are deterministic synthetic fixture ports only. No SDK, real endpoint, credential, login, provider request or provider activation exists.",
+    "Subscription routes resolve the canonical frozen CLI templates, which remain NOT_CONFIGURED with activationAllowed=false; no process is spawned and no ambient API or subscription credential is read.",
+    "Paid API and owner subscription CLI are separate capability and credential classes. Mismatch, stale output, unavailable route and credential-source drift fail closed with fallbackUsed=false.",
+    "The shipped tool registry remains disabled. Synthetic execution requires an externally admitted test-mode registry projection and grants no authority.",
+    "Search and repository inspection return closed frozen canned evidence only. No browser, fetch, filesystem read, filesystem mutation or patch application occurs.",
+    "Sandboxed patch proposal support is a thin non-executing projection of the existing planIsolatedPatchWorker owner. It creates no worktree, runs no tests, applies no patch, creates no commit and never falls back unsandboxed.",
+    "The ordered base 098f7b9 is not an ancestor of the sealed A3 or this implementation. D-LAUNCH-37 explicitly required the sealed A3 extension in the same worktree; the receipt does not claim otherwise.",
+    "No package root, shared schema, router, startup file, money path, STATE.md, Main, role4-fix, candidate or other worktree was touched.",
+    "Full, browser, performance and soak suites were not run because the active fix owner owns heavy same-machine suites. No broader green claim is made.",
+    "C2 verification and director adjudication remain mandatory before any possible porting or acceptance."
+  ],
+  "insertionRequestIds": [
+    "AIOPS-IR-COMPOSITION-001",
+    "AIOPS-IR-ROUTES-002",
+    "AIOPS-IR-PERSISTENCE-003",
+    "AIOPS-IR-AUTH-004",
+    "AIOPS-IR-PACKAGE-006",
+    "AIOPS-IR-DEPLOYMENT-007",
+    "AIOPS-IR-REMEDIATION-010",
+    "AIOPS-IR-TELEMETRY-012",
+    "AIOPS-IR-EGRESS-016",
+    "AIOPS-IR-SENTINEL-020",
+    "AIOPS-IR-AUDIT-021",
+    "AIOPS-IR-MANAGED-INVENTORY-022",
+    "AIOPS-IR-APPROVAL-023",
+    "AIOPS-IR-CONFIG-025",
+    "AIOPS-IR-TEST-MOUNT-026"
+  ],
+  "a3xRelevantInsertionRequestIds": [
+    "AIOPS-IR-COMPOSITION-001",
+    "AIOPS-IR-AUTH-004",
+    "AIOPS-IR-PACKAGE-006",
+    "AIOPS-IR-EGRESS-016",
+    "AIOPS-IR-MANAGED-INVENTORY-022",
+    "AIOPS-IR-CONFIG-025",
+    "AIOPS-IR-TEST-MOUNT-026"
+  ],
+  "unfinishedInterfaceDependences": [
+    "WORKLOAD-IDENTITY-SANDBOX",
+    "CREDENTIAL-BROKER-EGRESS-PROXY",
+    "CANONICAL-POLICY-VERIFIER",
+    "PROVIDER-ROUTE-QUALIFICATION",
+    "SIGNED-CONTEXT-PROMPT-MANIFEST",
+    "ISOLATED-WORKTREE-RUNNER"
+  ],
+  "researchBasis": [
+    {
+      "source": "https://platform.openai.com/docs/quickstart/make-your-first-api-request",
+      "owner": "OpenAI",
+      "finding": "Direct OpenAI API access uses an API key created in the API platform."
+    },
+    {
+      "source": "https://help.openai.com/en/articles/8156019-is-api-usage-included-in-chatgpt-subscriptions-even-if-i-have-a-paid-chatgpt-account",
+      "owner": "OpenAI",
+      "finding": "API service is billed and managed separately from ChatGPT subscriptions."
+    },
+    {
+      "source": "https://code.claude.com/docs/en/authentication",
+      "owner": "Anthropic",
+      "finding": "Claude subscription OAuth and Anthropic API credentials are distinct sources; an API key can take precedence and therefore must never be an ambient silent fallback."
+    },
+    {
+      "source": "https://code.claude.com/docs/en/legal-and-compliance",
+      "owner": "Anthropic",
+      "finding": "Subscription OAuth is for native Claude applications; products and services use API-key authentication and may not route through consumer credentials."
+    },
+    {
+      "source": "https://platform.claude.com/docs/en/manage-claude/authentication",
+      "owner": "Anthropic",
+      "finding": "Direct Claude API access uses API keys or workload identity rather than a Claude subscription session."
+    }
+  ],
+  "prohibitionsVerified": [
+    "NO_MONEY_PATHS",
+    "NO_REAL_CREDENTIALS",
+    "NO_REAL_PROVIDER_AUTHENTICATION",
+    "NO_REAL_PROVIDER_ACTIVATION",
+    "NO_NETWORK_MUTATION_OR_REAL_EGRESS",
+    "NO_ORDERS_DEPLOYMENT_OR_CAPITAL",
+    "NO_PACKAGE_SHARED_SCHEMA_ROUTER_STARTUP_OR_STATE_EDIT",
+    "NO_MAIN_ROLE4_FIX_CANDIDATE_OR_OTHER_WORKTREE_WRITE",
+    "NO_MERGE_PUSH_OR_DEPLOYMENT"
+  ],
+  "portingLaw": "SHADOW LAW D-LAUNCH-37: A3X remains SHADOW_SPECULATIVE and gains no PRESTAGE_READY, C2, director-adjudicated or acceptance status. Possible porting may occur only after C2 verification and director adjudication, followed by reconciliation and the required acceptance loop."
+}

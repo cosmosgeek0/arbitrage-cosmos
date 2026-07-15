@@ -1,11 +1,15 @@
 # I00 operations adaptation
 
 This package adapts the accepted L15 deployment owner at commit
-`2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`. It does not copy or replace
-`ops/live/**`. Every switch, rollback, backup, restore, and watchdog action
-continues to be owned by the accepted donor; I00 adds final packaging,
-preflight, canonical readback validation, safe restore staging, current
-provider/monitoring templates, receipt schemas, and owner-gated runbooks.
+`2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`. The immutable donor contract,
+Git trees, receipt, and donor tests remain exact. Post-integration Role 3
+corrections to `ops/live/**` are allowed only through the separate, closed
+`l15-amendment-contract.json`, which binds every changed path and before/after
+blob, the focused evidence, and the complete effective runtime inventory.
+Every switch, rollback, backup, restore, and watchdog action remains owned by
+that effective L15 root; I00 adds final packaging, preflight, canonical
+readback validation, safe restore staging, current provider/monitoring
+templates, receipt schemas, and owner-gated runbooks.
 
 Nothing in this package proves a deployment. All checked-in files are
 `BUILT_AND_TESTED`; real AWS, Cloudflare, DNS, Secrets Manager, systemd, host,
@@ -14,7 +18,8 @@ readback exists.
 
 ## Safety posture
 
-- Tests materialize the donor from Git into a temporary directory.
+- Historical donor tests materialize the accepted Git object; runtime and
+  release tests materialize the separately verified effective root.
 - Switch/rollback/restore simulation refuses the real `systemctl` command.
 - Non-simulation mutation requires an unexpired durable authorization whose
   action class matches the requested operation.
@@ -48,8 +53,9 @@ readback exists.
 bash ops/tests/i00/run-all.sh
 ```
 
-The suite is network-free except for donor loopback fake services. It runs the
-accepted donor's 11 suites (347 assertions) and the additive I00 tests.
+The suite is network-free except for donor loopback fake services. It replays
+the accepted donor's immutable 11 suites (347 assertions), verifies the closed
+effective-root amendment, and runs the additive I00 tests.
 
 ## Activation prerequisites
 

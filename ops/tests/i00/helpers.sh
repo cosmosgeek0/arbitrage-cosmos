@@ -40,6 +40,12 @@ materialize_donor() {
   git -C "$REPO_ROOT" archive "$DONOR_SHA" ops/live ops/tests | tar -x -C "$target"
 }
 
+materialize_effective_l15() {
+  local target="$1"
+  mkdir -p "$target/ops"
+  cp -R "$REPO_ROOT/ops/live" "$target/ops/live"
+}
+
 make_release_inputs() {
   local source="$1" deps="$2" sha="$3" receipt="$4"
   local tree=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -56,7 +62,8 @@ make_release_inputs() {
   printf 'module.exports = function FixtureDatabase() { throw new Error("FIXTURE_DATABASE_NOT_EXECUTABLE"); };\n' > "$deps/better-sqlite3/index.cjs"
   printf '{"name":"ws","version":"0.0.0-fixture","main":"index.cjs"}\n' > "$deps/ws/package.json"
   printf 'module.exports = class FixtureWebSocket {};\n' > "$deps/ws/index.cjs"
-  git -C "$REPO_ROOT" archive "$DONOR_SHA" ops/live | tar -x -C "$source"
+  mkdir -p "$source/ops"
+  cp -R "$REPO_ROOT/ops/live" "$source/ops/live"
   mkdir -p "$source/ops/templates" "$source/ops/docs"
   cp -R "$REPO_ROOT/ops/i00" "$source/ops/i00"
   cp -R "$REPO_ROOT/ops/templates/i00" "$source/ops/templates/i00"

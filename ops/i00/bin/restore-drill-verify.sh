@@ -32,9 +32,12 @@ else
   [ -n "$AUTHORIZATION" ] && [ -n "$TARGET_HOST" ] && [ -n "$TARGET_ENVIRONMENT" ] && [ -n "$TARGET_ACCOUNT" ] && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] \
     || { printf 'I00_OPS_BLOCKED: real isolated restore requires exact authorization, target identity, and receipt targets\n' >&2; exit 1; }
 fi
-[ -x "$DONOR_ROOT/bin/restore.sh" ] || { printf 'I00_OPS_BLOCKED: accepted donor restore.sh is unavailable\n' >&2; exit 1; }
-node "$SCRIPT_DIR/verify-donor.mjs" --contract "$I00_ROOT/donor-contract.json" --contract-only >/dev/null
-node "$SCRIPT_DIR/verify-donor-root.mjs" --contract "$I00_ROOT/donor-contract.json" --root "$DONOR_ROOT" --require-immutable >/dev/null
+[ -x "$DONOR_ROOT/bin/restore.sh" ] || { printf 'I00_OPS_BLOCKED: effective L15 restore.sh is unavailable\n' >&2; exit 1; }
+node "$SCRIPT_DIR/verify-donor.mjs" --contract "$I00_ROOT/donor-contract.json" \
+  --amendment-contract "$I00_ROOT/l15-amendment-contract.json" --contract-only >/dev/null
+node "$SCRIPT_DIR/verify-donor-root.mjs" --contract "$I00_ROOT/donor-contract.json" \
+  --amendment-contract "$I00_ROOT/l15-amendment-contract.json" \
+  --root "$DONOR_ROOT" --require-immutable >/dev/null
 
 SANITIZED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i00-restore-verify.XXXXXX")"
 chmod 700 "$SANITIZED_DIR"

@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 import { cpSync, existsSync, lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { relative, resolve, sep } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson,
-  sha256File, treeDigest,
+  sha256File, treeDigest, typedTreeDigest,
 } from '../lib.mjs';
 import {
   COMPLETE_ACCEPTANCE_STEP_COUNT, validateCompleteAcceptanceReceipt, validateGitSourceFreeze,
 } from '../complete-acceptance-receipt.mjs';
 import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-validation.mjs';
 import { readCompiledLedgerCompatibility } from '../ledger-compatibility.mjs';
+import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 import { expectedBuildAttestation, verifyBuildAttestation } from './verify-build-attestation.mjs';
 
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '187ef4af88744c252b95f2350b086f6321de590dea57732c1fede03a2ab6f7b9';
 const args = parseArgs(process.argv.slice(2), new Set(['rollback-barrier', 'simulation-source']));
 if (args['schema-version'] !== undefined || args['rollback-floor'] !== undefined || args['rollback-barrier'] === true) {
   fail('release compatibility is derived from the tested compiled Ledger; caller overrides are forbidden');
@@ -40,7 +43,12 @@ const required = [
   'ops/live/bin/deploy.sh',
   'ops/live/bin/rollback.sh',
   'ops/i00/donor-contract.json',
+  'ops/i00/l15-amendment-contract.json',
+  'ops/i00/l15-amendment.mjs',
+  'ops/i00/lib.mjs',
   'ops/i00/bin/install-ops-bundle.sh',
+  'ops/i00/bin/verify-donor.mjs',
+  'ops/i00/bin/verify-donor-root.mjs',
   'test/i00/donor-equality.mjs',
   'test/i00/verify-scope.mjs',
   'test/i00/scope-security.mjs',
@@ -57,6 +65,37 @@ const required = [
 for (const relative of required) {
   if (!existsSync(resolve(source, relative))) fail(`release input missing ${relative}`);
 }
+for (const forbidden of ['accepted-ops-live', 'install-receipt.json']) {
+  if (existsSync(resolve(source, 'ops/i00', forbidden))) {
+    fail(`source ops/i00 contains reserved installed-bundle path ${forbidden}`);
+  }
+}
+const trustedI00Root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const trustedI00EnforcementTreeDigestSha256 = typedTreeDigest(trustedI00Root, {
+  excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
+});
+const sourceI00EnforcementTreeDigestSha256 = typedTreeDigest(resolve(source, 'ops/i00'));
+if (sourceI00EnforcementTreeDigestSha256 !== trustedI00EnforcementTreeDigestSha256) {
+  fail('source ops/i00 enforcement cohort differs from the trusted assembler cohort');
+}
+const sourceL15Contract = loadL15AmendmentContract(
+  resolve(source, 'ops/i00/l15-amendment-contract.json'),
+  EXPECTED_AMENDMENT_CONTRACT_SHA256,
+);
+const sourceL15Verification = verifyEffectiveL15Root({
+  root: resolve(source, 'ops/live'),
+  loadedContract: sourceL15Contract,
+});
+const l15OpsProvenance = Object.freeze({
+  immutableDonorCommit: sourceL15Verification.immutableDonorCommit,
+  immutableDonorLiveTree: sourceL15Verification.immutableDonorLiveTree,
+  immutableDonorContractSha256: sourceL15Verification.immutableDonorContractSha256,
+  amendmentContractSha256: sourceL15Verification.amendmentContractSha256,
+  effectiveLiveTree: sourceL15Verification.effectiveLiveTree,
+  effectiveRootDigestSha256: sourceL15Verification.effectiveRootDigestSha256,
+  i00EnforcementTreeDigestSha256: sourceI00EnforcementTreeDigestSha256,
+  findingIds: sourceL15Verification.findingIds,
+});
 let releaseCompatibility;
 try {
   releaseCompatibility = readCompiledLedgerCompatibility(source);
@@ -199,6 +238,21 @@ try {
   cpSync(resolve(source, 'ops/i00'), resolve(staging, 'ops/i00'), { recursive: true, errorOnExist: true });
   cpSync(resolve(source, 'ops/templates/i00'), resolve(staging, 'ops/templates/i00'), { recursive: true, errorOnExist: true });
   cpSync(resolve(source, 'ops/docs/i00'), resolve(staging, 'ops/docs/i00'), { recursive: true, errorOnExist: true });
+  const stagedL15Contract = loadL15AmendmentContract(
+    resolve(staging, 'ops/i00/l15-amendment-contract.json'),
+    EXPECTED_AMENDMENT_CONTRACT_SHA256,
+  );
+  const stagedL15Verification = verifyEffectiveL15Root({
+    root: resolve(staging, 'ops/live'),
+    loadedContract: stagedL15Contract,
+  });
+  const stagedI00EnforcementTreeDigestSha256 = typedTreeDigest(resolve(staging, 'ops/i00'));
+  if (JSON.stringify(stagedL15Verification.findingIds) !== JSON.stringify(l15OpsProvenance.findingIds)
+      || stagedL15Verification.effectiveLiveTree !== l15OpsProvenance.effectiveLiveTree
+      || stagedL15Verification.effectiveRootDigestSha256 !== l15OpsProvenance.effectiveRootDigestSha256
+      || stagedI00EnforcementTreeDigestSha256 !== l15OpsProvenance.i00EnforcementTreeDigestSha256) {
+    throw new Error('copied effective L15 or I00 enforcement root does not match source provenance');
+  }
   mkdirSync(resolve(staging, 'test/i00/performance'), { recursive: true });
   for (const relative of ['donor-equality.mjs', 'verify-scope.mjs', 'scope-security.mjs']) {
     cpSync(resolve(source, 'test/i00', relative), resolve(staging, 'test/i00', relative));
@@ -259,6 +313,7 @@ try {
     webDistDigestSha256,
     sourceTree,
     sourceVerification,
+    l15OpsProvenance,
     buildAttestation,
     activationState: 'NOT_DEPLOYED',
   };
@@ -274,6 +329,7 @@ try {
       webDistDigestSha256,
     },
     acceptanceEvidence: release.acceptanceEvidence,
+    l15OpsProvenance,
     ledgerCompatibility: releaseCompatibility,
     buildAttestation,
     files: files.map((file) => ({

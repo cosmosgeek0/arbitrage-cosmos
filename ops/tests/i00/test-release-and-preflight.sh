@@ -42,8 +42,105 @@ assert_file "$INSTALLED_I00/bin/app-entrypoint.mjs"
 assert_file "$INSTALLED_I00/accepted-ops-live/bin/deploy.sh"
 assert_file "$INSTALLED_I00/install-receipt.json"
 assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.serviceMutationPerformed))' "$INSTALLED_I00/install-receipt.json")" false
-assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.acceptedDonorCommit)' "$INSTALLED_I00/install-receipt.json")" 2cec412927fa2f64f05a0b2774b18e45f8ce4fa5
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.schemaVersion))' "$INSTALLED_I00/install-receipt.json")" 2
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.effectiveOpsRoot)' "$INSTALLED_I00/install-receipt.json")" accepted-ops-live
+assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(v.immutableDonorCommit)' "$INSTALLED_I00/install-receipt.json")" 2cec412927fa2f64f05a0b2774b18e45f8ce4fa5
+assert_eq "$(node -e '
+  const installed=require(process.argv[1]), release=require(process.argv[2]);
+  const actual={
+    immutableDonorCommit:installed.immutableDonorCommit,
+    immutableDonorLiveTree:installed.immutableDonorLiveTree,
+    immutableDonorContractSha256:installed.immutableDonorContractSha256,
+    amendmentContractSha256:installed.amendmentContractSha256,
+    effectiveLiveTree:installed.effectiveLiveTree,
+    effectiveRootDigestSha256:installed.effectiveRootDigestSha256,
+    i00EnforcementTreeDigestSha256:installed.i00EnforcementTreeDigestSha256,
+    findingIds:installed.authorizedCorrectionFindingIds,
+  };
+  process.stdout.write(String(JSON.stringify(actual)===JSON.stringify(release.l15OpsProvenance)));
+' "$INSTALLED_I00/install-receipt.json" "$RELEASE/release.json")" true
+
+note "post-validation release rewrites cannot self-approve staged enforcement bytes"
+MUTABLE_RELEASE="$TEST_TMP/post-validation-mutable-release"
+cp -R "$RELEASE" "$MUTABLE_RELEASE"
+MUTATING_NODE_BIN="$TEST_TMP/mutating-node-bin"
+mkdir "$MUTATING_NODE_BIN"
+cp "$TEST_DIR/fixtures/mutate-release-after-validation.sh" "$MUTATING_NODE_BIN/node"
+chmod 700 "$MUTATING_NODE_BIN/node"
+MUTATION_FLAG="$TEST_TMP/post-validation-mutation-complete"
+MUTABLE_DESTINATION="$SIMULATION_ROOT/post-validation-mutable-install"
+assert_failure_contains 'staged I00 enforcement cohort differs from validated release' env \
+  PATH="$MUTATING_NODE_BIN:$PATH" \
+  REAL_NODE="$(command -v node)" \
+  VALIDATE_RELEASE_PATH="$I00_ROOT/bin/validate-release.mjs" \
+  MUTABLE_RELEASE="$MUTABLE_RELEASE" \
+  TRUSTED_I00_LIB="$I00_ROOT/lib.mjs" \
+  MUTATION_KIND=self-declared-cohort \
+  MUTATION_FLAG="$MUTATION_FLAG" \
+  "$I00_ROOT/bin/install-ops-bundle.sh" --release "$MUTABLE_RELEASE" \
+  --destination "$MUTABLE_DESTINATION" --simulation --simulation-root "$SIMULATION_ROOT"
+assert_file "$MUTATION_FLAG"
+assert_not_file "$MUTABLE_DESTINATION"
+
+note "post-validation reserved receipt injection is rejected before receipt generation"
+RESERVED_RELEASE="$TEST_TMP/post-validation-reserved-release"
+cp -R "$RELEASE" "$RESERVED_RELEASE"
+RESERVED_MUTATION_FLAG="$TEST_TMP/post-validation-reserved-mutation-complete"
+RESERVED_DESTINATION="$SIMULATION_ROOT/post-validation-reserved-install"
+assert_failure_contains 'staged I00 contains reserved installed-bundle path install-receipt.json' env \
+  PATH="$MUTATING_NODE_BIN:$PATH" \
+  REAL_NODE="$(command -v node)" \
+  VALIDATE_RELEASE_PATH="$I00_ROOT/bin/validate-release.mjs" \
+  MUTABLE_RELEASE="$RESERVED_RELEASE" \
+  TRUSTED_I00_LIB="$I00_ROOT/lib.mjs" \
+  MUTATION_KIND=reserved-receipt \
+  MUTATION_FLAG="$RESERVED_MUTATION_FLAG" \
+  "$I00_ROOT/bin/install-ops-bundle.sh" --release "$RESERVED_RELEASE" \
+  --destination "$RESERVED_DESTINATION" --simulation --simulation-root "$SIMULATION_ROOT"
+assert_file "$RESERVED_MUTATION_FLAG"
+assert_not_file "$RESERVED_DESTINATION"
+
+note "precreated staging symlink is refused without mutating its target"
+STAGING_RACE_RELEASE="$TEST_TMP/post-validation-staging-race-release"
+cp -R "$RELEASE" "$STAGING_RACE_RELEASE"
+STAGING_RACE_FLAG="$TEST_TMP/post-validation-staging-race-complete"
+STAGING_RACE_DESTINATION="$SIMULATION_ROOT/post-validation-staging-race-install"
+STAGING_RACE_TARGET="$TEST_TMP/post-validation-staging-race-target"
+mkdir "$STAGING_RACE_TARGET"
+printf 'sentinel\n' > "$STAGING_RACE_TARGET/sentinel"
+assert_failure_contains 'could not claim private staging directory' env \
+  PATH="$MUTATING_NODE_BIN:$PATH" \
+  REAL_NODE="$(command -v node)" \
+  VALIDATE_RELEASE_PATH="$I00_ROOT/bin/validate-release.mjs" \
+  MUTABLE_RELEASE="$STAGING_RACE_RELEASE" \
+  TRUSTED_I00_LIB="$I00_ROOT/lib.mjs" \
+  MUTATION_KIND=precreated-staging-symlink \
+  MUTATION_FLAG="$STAGING_RACE_FLAG" \
+  STAGING_DESTINATION="$STAGING_RACE_DESTINATION" \
+  STAGING_TARGET="$STAGING_RACE_TARGET" \
+  "$I00_ROOT/bin/install-ops-bundle.sh" --release "$STAGING_RACE_RELEASE" \
+  --destination "$STAGING_RACE_DESTINATION" --simulation --simulation-root "$SIMULATION_ROOT"
+assert_file "$STAGING_RACE_FLAG"
+assert_file "$STAGING_RACE_TARGET/sentinel"
+assert_eq "$(find "$STAGING_RACE_TARGET" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" 1
+assert_not_file "$STAGING_RACE_DESTINATION"
+
 assert_failure "$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" --destination /usr/local/lib/cosmos-ops/i00 --simulation --simulation-root "$SIMULATION_ROOT"
+
+note "release assembly refuses an incomplete effective-root verifier dependency closure"
+assert_missing_release_dependency_refused() {
+  local relative="$1" label="$2" source="$TEST_TMP/release/source" saved="$TEST_TMP/$label.saved"
+  mv "$source/$relative" "$saved"
+  assert_failure node "$I00_ROOT/bin/assemble-release.mjs" \
+    --source-root "$source" --runtime-deps "$TEST_TMP/release/deps" \
+    --output-root "$TEST_TMP/$label-output" --tested-sha "$SHA" \
+    --tested-receipt "$TEST_TMP/release/tested.json" \
+    --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m \
+    --simulation-source
+  mv "$saved" "$source/$relative"
+}
+assert_missing_release_dependency_refused ops/i00/bin/verify-donor.mjs missing-donor-verifier
+assert_missing_release_dependency_refused ops/i00/lib.mjs missing-i00-library
 
 note "production assembly requires and reverifies exact owner/CI Ed25519 provenance"
 PROD_ROOT="$TEST_TMP/production-release"
@@ -179,6 +276,39 @@ node -e '
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 ' "$TEST_TMP/manifest-rewritten"
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/manifest-rewritten" --allow-simulation
+cp -R "$RELEASE" "$TEST_TMP/effective-l15-manifest-rewritten"
+printf '\n# forged effective L15 bytes\n' >> "$TEST_TMP/effective-l15-manifest-rewritten/ops/live/README.md"
+node -e '
+  const crypto = require("crypto"), fs = require("fs"), path = require("path");
+  const root = process.argv[1], relative = "ops/live/README.md";
+  const manifestPath = path.join(root, "artifact-manifest.json");
+  const fileSha = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, relative))).digest("hex");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.files.find((entry) => entry.path === relative).sha256 = fileSha;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+' "$TEST_TMP/effective-l15-manifest-rewritten"
+assert_failure node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$TEST_TMP/effective-l15-manifest-rewritten" --allow-simulation
+cp -R "$RELEASE" "$TEST_TMP/i00-enforcement-manifest-rewritten"
+printf '\n// forged installed verifier bypass\n' \
+  >> "$TEST_TMP/i00-enforcement-manifest-rewritten/ops/i00/bin/verify-donor-root.mjs"
+node -e '
+  const crypto = require("crypto"), fs = require("fs"), path = require("path");
+  const root = process.argv[1], relative = "ops/i00/bin/verify-donor-root.mjs";
+  const manifestPath = path.join(root, "artifact-manifest.json");
+  const fileSha = crypto.createHash("sha256").update(fs.readFileSync(path.join(root, relative))).digest("hex");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  manifest.files.find((entry) => entry.path === relative).sha256 = fileSha;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+' "$TEST_TMP/i00-enforcement-manifest-rewritten"
+assert_failure_contains 'release ops/i00 enforcement cohort differs' \
+  node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$TEST_TMP/i00-enforcement-manifest-rewritten" --allow-simulation
+cp -R "$RELEASE" "$TEST_TMP/i00-enforcement-empty-directory"
+mkdir "$TEST_TMP/i00-enforcement-empty-directory/ops/i00/undeclared-empty"
+assert_failure_contains 'release ops/i00 enforcement cohort differs' \
+  node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$TEST_TMP/i00-enforcement-empty-directory" --allow-simulation
 cp -R "$RELEASE" "$TEST_TMP/mode-tampered"
 chmod -x "$TEST_TMP/mode-tampered/ops/i00/bin/install-ops-bundle.sh"
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$TEST_TMP/mode-tampered" --allow-simulation

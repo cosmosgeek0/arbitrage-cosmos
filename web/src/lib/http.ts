@@ -19,6 +19,11 @@ export class ApiRequestError extends Error implements ApiFailure {
   }
 }
 
+export interface JsonHttpResponse<T> {
+  readonly status: number;
+  readonly body: T;
+}
+
 function requestLabel(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.toString();
@@ -61,15 +66,17 @@ async function responseFailure(response: Response): Promise<ApiRequestError> {
 }
 
 /**
- * Fetch a JSON response with one bounded request lifetime. Non-2xx responses
- * reject with the server's stable code/message instead of being mistaken for
- * successful domain payloads.
+ * Fetch a JSON response with one bounded request lifetime and retain its HTTP
+ * status for callers whose domain state is status-bound. Non-2xx responses
+ * reject unless the caller explicitly lists the status for strict body/status
+ * validation at its own contract boundary.
  */
-export async function fetchJson<T>(
+export async function fetchJsonResponse<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
   timeoutMs = 10_000,
-): Promise<T> {
+  acceptedErrorStatuses: readonly number[] = [],
+): Promise<Readonly<JsonHttpResponse<T>>> {
   const controller = new AbortController();
   const upstreamSignal = init.signal;
   let timedOut = false;
@@ -83,10 +90,14 @@ export async function fetchJson<T>(
 
   try {
     const response = await fetch(input, { ...init, signal: controller.signal });
-    if (!response.ok) throw await responseFailure(response);
-    if (response.status === 204) return undefined as T;
+    if (!response.ok && !acceptedErrorStatuses.includes(response.status)) {
+      throw await responseFailure(response);
+    }
+    if (response.status === 204) {
+      return Object.freeze({ status: response.status, body: undefined as T });
+    }
     try {
-      return await response.json() as T;
+      return Object.freeze({ status: response.status, body: await response.json() as T });
     } catch {
       throw new ApiRequestError({
         status: 502,
@@ -107,6 +118,14 @@ export async function fetchJson<T>(
     window.clearTimeout(timeout);
     upstreamSignal?.removeEventListener('abort', forwardAbort);
   }
+}
+
+export async function fetchJson<T>(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 10_000,
+): Promise<T> {
+  return (await fetchJsonResponse<T>(input, init, timeoutMs)).body;
 }
 
 export function apiErrorMessage(error: unknown, fallback = 'Request failed'): string {

@@ -1,11 +1,12 @@
-import { fetchJson } from '../http';
+import { fetchJson, fetchJsonResponse } from '../http';
 import type { ProductIntegrationTransport } from './client';
-import type { ProductCommandRequest } from './model';
+import type { ProductCommandRequest, ProductCommandResultIdentity } from './model';
 
 export interface ProductIntegrationEndpoints {
   readonly supervisor: string;
   readonly materialEvents: string;
   readonly trace: (correlationId: string) => string;
+  readonly commandResult: (commandId: string) => string;
   readonly commandPreview: string;
   readonly commandSubmit: string;
 }
@@ -36,6 +37,17 @@ export function createHttpProductIntegrationTransport(
       const url = new URL(sameOriginPath(endpoints.trace(correlationId)), window.location.origin);
       url.searchParams.set('limit', String(limit));
       return fetchJson<unknown>(`${url.pathname}${url.search}`, { cache: 'no-store', signal });
+    },
+    readCommandResult(identity: Readonly<ProductCommandResultIdentity>, signal) {
+      const url = new URL(sameOriginPath(endpoints.commandResult(identity.commandId)), window.location.origin);
+      url.searchParams.set('idempotencyKey', identity.idempotencyKey);
+      url.searchParams.set('controlId', identity.controlId);
+      return fetchJsonResponse<unknown>(
+        `${url.pathname}${url.search}`,
+        { cache: 'no-store', signal },
+        10_000,
+        [503],
+      ).then(({ status, body }) => Object.freeze({ httpStatus: status, body }));
     },
     previewCommand(controlId, expectedRevision, signal) {
       return fetchJson<unknown>(commandPreview, {

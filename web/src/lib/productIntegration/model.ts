@@ -338,6 +338,35 @@ export interface ProductControlResult {
   readonly synthetic: boolean;
 }
 
+export interface ProductCommandResultIdentity {
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly controlId: string;
+}
+
+export type ProductCommandResultReadback =
+  | Readonly<{
+      readonly state: 'PENDING' | 'TERMINAL';
+      readonly result: Readonly<ProductControlResult>;
+      readonly reasonCode: null;
+    }>
+  | Readonly<{
+      readonly state: 'AMBIGUOUS';
+      readonly result: Readonly<ProductControlResult>;
+      readonly reasonCode: 'COMMAND_RESULT_FAILED_ATTENTION_REQUIRED';
+    }>;
+
+export function isProductCommandResultIdentity(value: unknown): value is ProductCommandResultIdentity {
+  return isRecord(value)
+    && Object.keys(value).length === 3
+    && typeof value.commandId === 'string'
+    && /^sysctrl_[a-f0-9]{64}$/.test(value.commandId)
+    && typeof value.idempotencyKey === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(value.idempotencyKey)
+    && typeof value.controlId === 'string'
+    && /^[a-z0-9][a-z0-9.-]{0,159}$/.test(value.controlId);
+}
+
 export interface ProductControlRegistryEntry {
   readonly controlId: string;
   readonly backendCommandId: string;

@@ -1,0 +1,29 @@
+{
+  "requestId": "dock.future-mount.v1",
+  "extensionId": "frontier.dock",
+  "requestVersion": "1.0.0",
+  "intendedSharedSeams": [
+    "foundation/control:canonical-capability-egress-policy-decision",
+    "product-assurance:post-mount-isolation-and-removal-proof",
+    "systemIntegration/supervisor:read-only-module-inventory-projection"
+  ],
+  "canonicalOwnerDecisions": [
+    "Capability, egress, retention and resource claims require canonical policy-owner approval.",
+    "Mount, disable, rollback and uninstall require canonical deployment/control-owner approval.",
+    "Production isolation and crash/removal safety require independent post-mount assurance."
+  ],
+  "requestedCapabilities": ["DESCRIBE", "VALIDATE_FIXTURE", "EVALUATE_FIXTURE", "PROJECT_FIXTURE"],
+  "egressDeclaration": "NONE",
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "resourceBudgetClaimRef": "frontier/dock/fixtures/resource-budget-claim.v1.json",
+  "blockedFacetRequests": ["ANNOTATION_ADAPTER:CANONICAL_Q_ANNOTATION_REVISION_RETRACTION_CONTRACT_UNRESOLVED"],
+  "futureTests": [
+    "canonical-owner policy approval readback",
+    "mounted import and process isolation",
+    "combined restart and removal proof",
+    "existing cockpit integration without recomputed truth"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "mutationImplemented": false
+}

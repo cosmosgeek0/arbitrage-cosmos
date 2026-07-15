@@ -1,0 +1,30 @@
+{
+  "schema": "DockCompatibilityMatrixV1",
+  "version": 1,
+  "dockContractVersion": "1.0.0",
+  "versionPolicy": {
+    "sameMajor": "REQUIRED",
+    "minimumVersion": "REQUIRED_OR_NEWER",
+    "stableProviderForStableConsumer": "REQUIRED",
+    "unsupportedMajor": "FAIL_CLOSED",
+    "unknownFields": "PRESERVE_WITHOUT_CHANGING_KNOWN_SEMANTICS"
+  },
+  "recordFamilies": [
+    "ExtensionDescriptorV1",
+    "CanonicalAdapterMapV1",
+    "ExtensionAttestationV1",
+    "ProviderFacetBindingV1",
+    "CanonicalSharedOwnerReferenceMapV1",
+    "ScenarioReferenceV1",
+    "ResourceBudgetClaimV1",
+    "InsertionRequestV1",
+    "ModuleInventoryProjectionV1"
+  ],
+  "claims": {
+    "fixtureCompatibility": true,
+    "productionIsolation": false,
+    "runtimeSafety": false,
+    "mounted": false,
+    "authorityGranted": false
+  }
+}

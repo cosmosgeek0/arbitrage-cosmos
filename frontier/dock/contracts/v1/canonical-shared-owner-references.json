@@ -1,0 +1,89 @@
+{
+  "schema": "CanonicalSharedOwnerReferenceMapV1",
+  "version": 1,
+  "references": [
+    {
+      "referenceId": "Q_EVIDENCE_AND_DATA_SOURCE",
+      "compatibilityStatus": "USABLE",
+      "acceptedOwnerCommitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/**; git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py",
+      "canonicalContractRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/types.ts#NormalizedEvidence,TruthMetadata; git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/types.ts#EvidenceNormalizationResult; git:73e1a1ff7daa48df8dac45713fc5f106842edafc:packages/edge-protocol/schema/edge-protocol-v1.schema.json#/$defs/MarketEvidenceEnvelopeV1; git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py#DataSourceCardV1",
+      "canonicalContractVersion": "1/evidence-normalizer-1/evidence-default-1/null; MarketEvidenceEnvelopeV1@1; DataSourceCardV1@1",
+      "ownerEvidenceRefs": [
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/types.ts blob=e601d79f436b023303baba1223f394695dd0ae13 sha256=7eb6b169cdf3a2d59e2ceccc000c8c9668d79a3b2aac6fbbe21c32e836f5d60d",
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/types.ts#EvidenceNormalizationResult blob=eb268ccfa608f4ce17a4a3dd88779df21fbb2429 sha256=0b08c20fff4ebffac8cf289b0ecc88d560b534b5fa6b05e8182da9f7ae3ae38e",
+        "git:73e1a1ff7daa48df8dac45713fc5f106842edafc:packages/edge-protocol/schema/edge-protocol-v1.schema.json blob=a23c5796e73e142c83bbea98276bd237be300ef7 sha256=229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c",
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py blob=2a35dd1bfa15f062f027b04ebc9e24975a11a7f0 sha256=0330b306dc21a25137578bb7dee4ad723303b5386c6f4de50f4e8cbe2b432d24"
+      ],
+      "limitations": ["Reference and fixture compatibility only", "No live subscription or canonical source-state write"],
+      "blockedReason": null,
+      "insertionRequestRef": null
+    },
+    {
+      "referenceId": "IP_EXPECTED_INVENTORY_AND_TELEMETRY",
+      "compatibilityStatus": "USABLE",
+      "acceptedOwnerCommitSha": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d",
+      "canonicalOwnerRef": "git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md#32-expected-inventory-and-telemetry-coverage-manifest; git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/**",
+      "canonicalContractRef": "git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/release-bound-expected-manifest.schema.json; git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/release-manifest-evaluator.mjs#evaluateReleaseBoundExpectedManifest; git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#/stateRuleSets/0",
+      "canonicalContractVersion": "release-bound-expected-manifest.v1; release-bound-expected-manifest-evaluation.v1; S5_COCKPIT_CONTRACT_SET_V1/ASSURANCE_ANTI_FALSE_GREEN_V1",
+      "ownerEvidenceRefs": [
+        "git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md blob=308a7b90a3a75a707bb22a8880ee02b6acef9675 sha256=49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84",
+        "git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/release-bound-expected-manifest.schema.json blob=580171d4fdf2dc85b31de6256eecba2e465e75ca sha256=a39240eb42924f0c5b101e9a93561f28b90fa90fe4d22b5e29bcfc1d001773cf",
+        "git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/release-manifest-evaluator.mjs blob=60261250314f97d1d68d6b4187e38c2097aa6adb sha256=180bb5e33d5625fb8f3d56426c1db3549eafaf8612dd6021d99ca0aa414b1a10",
+        "git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/cockpit/receipts/COCKPIT_PRESTAGE_RECEIPT.v1.json blob=e02c7f40eec4aad271ee47461e1c8a313709b588 sha256=b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd",
+        "git:c5d18db072153d335ab14c82634eafca2370230c:docs/archive/i00-phase2/A_COCKPIT_INTEGRATION_RECEIPT.md blob=a6aae22e16c54682fad77ff34acf5aee0b94de99 sha256=f11e706995c1156b82f6c1f7aaa8bcb29b0c76c8dbc9364087a973ccd7514555"
+      ],
+      "limitations": ["Packet-local fixture-backed reference", "Production wiring remains DIRECTOR_MOUNT_REQUIRED", "No rejected aggregate I00 candidate is treated as authority"],
+      "blockedReason": null,
+      "insertionRequestRef": null
+    },
+    {
+      "referenceId": "AI_OPS_AGENT_POLICY_BOUNDARY",
+      "compatibilityStatus": "USABLE",
+      "acceptedOwnerCommitSha": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+      "canonicalOwnerRef": "git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md#39-subordinate-llm-diagnostic-plane-boundary; git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md#71-class-ad-self-correction-taxonomy-director-folded-owner-law-d-launch-13; git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/diagnostics/boundary.ts",
+      "canonicalContractRef": "git:97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437:fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json; git:97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437:fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs#PERMISSION_LEVELS,SAFE_DIAGNOSTIC_CAPABILITIES,PERMANENTLY_FORBIDDEN_CAPABILITIES,IP_ASSURANCE_CLASS_LAW; git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/diagnostics/boundary.ts#DIAGNOSTIC_PERMISSION_LEVELS,DIAGNOSTIC_FORBIDDEN_CAPABILITIES,TypedDiagnosticProposal,DiagnosticBoundaryDecision,evaluateDiagnosticProposal,diagnosticProviderOutageProjection",
+      "canonicalContractVersion": "ip-assurance-agent-boundary-v1; PRODUCT_ASSURANCE_DIAGNOSTIC_PROPOSAL_V1; PRODUCT_ASSURANCE_DIAGNOSTIC_SANDBOX_V1; PRODUCT_ASSURANCE_DIAGNOSTIC_TRACE_PRIVACY_V1; PRODUCT_ASSURANCE_DIAGNOSTIC_RETENTION_V1",
+      "ownerEvidenceRefs": [
+        "git:97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437:fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json blob=042456c58b1cd5b6eb179c0c9c289f6e69d06034 sha256=abc7f76af710c08abf43b2b3f67a083861e131eadbeb5bcce8b7b4c72db372bc",
+        "git:97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437:fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs blob=9d8399e6c0d2a74a892bf759342a75e40eabd867 sha256=8ee0711d3980052022c3c3cd237486b075da4244f9a7a8b8229b52ee4ac74eb3",
+        "git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/diagnostics/boundary.ts blob=7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab sha256=66f66082a364545da1cc2de6a484cd73a39c2dbe86b66efc11de22a7424f50cc",
+        "git:57aff72c1d557572558aee795c5e0a669bf080af:docs/archive/i00-phase2/A_AGENT_INTEGRATION_RECEIPT.md blob=f3657fa8a31f91caeb36b5229ad0fd61806e9bf6 sha256=e47be0f081b15859b2d8509e2fd0e2a611c48dcca50a8640f39dc86be717e7d0"
+      ],
+      "limitations": ["PACKET_LOCAL_REFERENCE_ONLY", "DIRECTOR_MOUNT_REQUIRED", "Speculative A1 shadow policy is not canonical authority"],
+      "blockedReason": null,
+      "insertionRequestRef": null
+    },
+    {
+      "referenceId": "PRODUCT_HEALTH",
+      "compatibilityStatus": "USABLE",
+      "acceptedOwnerCommitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/**; git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/**",
+      "canonicalContractRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/contracts/diagnostics.ts#HEALTH_STATES,HealthState,ENVELOPE_VERSION,DiagnosticEnvelope; git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/types.ts#DiagnosticsPolicy,OverallHealthDiagnostic,DiagnosticsSnapshot,DiagnosticsResult; git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/types.ts#SystemQueueSnapshot,SystemComponentSnapshot,SystemSupervisorSnapshot",
+      "canonicalContractVersion": "DiagnosticEnvelope@1; system-integration supervisor schema=1",
+      "ownerEvidenceRefs": [
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/contracts/diagnostics.ts blob=348c15ccb2fd9574ecfbeda50dd9b5a221a7b426 sha256=b34842af819a61ba2514aa5c8ebef924870250a25bba112ba4f19037f317e6e6",
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/types.ts blob=179aa7c20db13fdef81a9c52b78ce09d36da6aae sha256=9ad75c9921001e0a701cf8db62ad87d922c07811f8b0a69dea4aa30b131583a4",
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/derive.ts#deriveDiagnostics blob=55074229a00dd9e509f3475a2d24f47a96caa7c3 sha256=763eb893dab11f2662a22c9c8d2b5fe4a11ad3fb56cf608f0d057e08a0992a9e",
+        "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/types.ts blob=ee9c35f1780a39eef390650842169a09cddc2648 sha256=5b9fa7e294a75bd22e61934c1a85d75d7400504612546e35ae8c935f8e4b4e33"
+      ],
+      "limitations": ["Read-only reference", "Dock does not recompute health"],
+      "blockedReason": null,
+      "insertionRequestRef": null
+    },
+    {
+      "referenceId": "PRODUCT_INCIDENT",
+      "compatibilityStatus": "BLOCKED",
+      "acceptedOwnerCommitSha": null,
+      "canonicalOwnerRef": "UNRESOLVED:DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "canonicalContractRef": "UNRESOLVED:incident-identity-grouping-fingerprint-severity-lifecycle-acknowledgement-resolution",
+      "canonicalContractVersion": "UNRESOLVED",
+      "ownerEvidenceRefs": [
+        "git:08e0beaa54c4c3ca9c24276785d6a302f751a226:AI_OPS_REUSE_INVENTORY.md#R06 blob=b2f2684370cff18ac29037b707693a36d5d9d03d sha256=fad79953390417a6d4b77ad41f9f48a83086677a9e8c816b41600fee2d965531"
+      ],
+      "limitations": ["IP-CONTROL incident projection is presentation only", "Ledger and speculative A2X are not incident lifecycle authority", "No unrelated provider facet is blocked"],
+      "blockedReason": "INCIDENT_OWNER_NOT_CONFIGURED",
+      "insertionRequestRef": "frontier/dock/INSERTION.md#product-incident-owner"
+    }
+  ]
+}

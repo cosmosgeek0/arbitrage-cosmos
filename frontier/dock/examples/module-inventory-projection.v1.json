@@ -1,0 +1,16 @@
+{
+  "schema": "ModuleInventoryProjectionV1",
+  "version": 1,
+  "readOnly": true,
+  "generatedAt": 1784131200000,
+  "modules": [
+    {
+      "extensionId": "frontier.example-fixture",
+      "extensionVersion": "0.1.0",
+      "descriptorHash": "3ce6aacadf14c172d768c03546f59ffbb0af41229595c0f66a5c801c5a0e4b67",
+      "status": "INSTALLED_DISABLED",
+      "authorityClass": "NO_AUTHORITY",
+      "controls": []
+    }
+  ]
+}

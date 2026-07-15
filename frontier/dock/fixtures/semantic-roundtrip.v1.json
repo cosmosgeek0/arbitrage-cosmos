@@ -1,0 +1,19 @@
+{
+  "schema": "DockSemanticRoundTripFixtureV1",
+  "identity": { "sourceId": "fixture.source", "instrumentId": "fixture:ABCUSDT" },
+  "truth": {
+    "identityStates": ["DISCOVERED", "MISSING", "UNKNOWN"],
+    "telemetryStates": ["INSTRUMENTED", "UNINSTRUMENTED", "UNKNOWN"],
+    "freshnessStates": ["CURRENT", "STALE", "SILENT", "UNAVAILABLE", "UNKNOWN"],
+    "coherenceStates": ["COHERENT", "INCOHERENT", "UNKNOWN"],
+    "completeness": "MISSING",
+    "expectedInventory": { "expected": 4, "observed": 2, "missingIds": ["source.c", "source.d"] },
+    "provenance": { "sourceRefs": ["fixture://source/a"], "transforms": ["identity-v1"] },
+    "sequence": { "state": "KNOWN", "value": 42 },
+    "uncertainty": { "epistemic": "UNKNOWN", "data": "HIGH" },
+    "eventTimeMs": 1784131200000,
+    "receiveTimeMs": 1784131200010,
+    "unit": "quote-asset"
+  },
+  "forwardCompatibleUnknown": { "opaqueFutureField": "preserve-byte-semantics" }
+}

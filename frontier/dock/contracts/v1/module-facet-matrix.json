@@ -1,0 +1,19 @@
+{
+  "schema": "ModuleFacetMatrixV1",
+  "version": 1,
+  "modules": [
+    { "moduleId": "F1", "moduleName": "VenueMesh", "requiredUsableFacets": ["EVIDENCE", "DERIVED_FEATURE"] },
+    { "moduleId": "F2", "moduleName": "PortfolioLab", "requiredUsableFacets": ["ADVISORY_ASSESSOR", "SCENARIO_REFERENCE", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F3", "moduleName": "StrategyArena", "requiredUsableFacets": ["EXPERIMENT_PROVIDER", "SCENARIO_REFERENCE", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F4", "moduleName": "OperatorGym", "requiredUsableFacets": ["SCENARIO_REFERENCE", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F5", "moduleName": "ChangeRadar", "requiredUsableFacets": ["EVIDENCE", "ADVISORY_ASSESSOR", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F6", "moduleName": "Nerve", "requiredUsableFacets": ["EVIDENCE", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F7", "moduleName": "Chronos", "requiredUsableFacets": ["REPLAY_ADAPTER", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F8", "moduleName": "EdgeMeter", "requiredUsableFacets": ["ADVISORY_ASSESSOR", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F9", "moduleName": "Narrator", "requiredUsableFacets": ["COCKPIT_PROJECTION"] },
+    { "moduleId": "F10", "moduleName": "Lineage", "requiredUsableFacets": ["COCKPIT_PROJECTION"] },
+    { "moduleId": "F11", "moduleName": "LabelForge", "requiredUsableFacets": ["ANNOTATION_ADAPTER", "COCKPIT_PROJECTION"] },
+    { "moduleId": "F12", "moduleName": "ScenarioBank", "requiredUsableFacets": ["SCENARIO_REFERENCE"] },
+    { "moduleId": "F13", "moduleName": "DecisionLab", "requiredUsableFacets": ["EXPERIMENT_PROVIDER", "COCKPIT_PROJECTION"] }
+  ]
+}

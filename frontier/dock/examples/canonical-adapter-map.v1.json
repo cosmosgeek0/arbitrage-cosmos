@@ -1,0 +1,39 @@
+{
+  "adapterId": "frontier.example-fixture.semantic-roundtrip.v1",
+  "canonicalContractId": "NormalizedEvidence+TruthMetadata+S5ReleaseBoundExpectedManifest",
+  "canonicalContractVersion": "1/evidence-normalizer-1/evidence-default-1/null; release-bound-expected-manifest.v1; release-bound-expected-manifest-evaluation.v1",
+  "canonicalOwner": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/**; git:d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/observability/**",
+  "extensionId": "frontier.example-fixture",
+  "fieldMap": [
+    { "canonicalPath": "schema", "localPath": "schema", "transform": "IDENTITY" },
+    { "canonicalPath": "identity.sourceId", "localPath": "identity.sourceId", "transform": "IDENTITY" },
+    { "canonicalPath": "identity.instrumentId", "localPath": "identity.instrumentId", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.identityStates", "localPath": "truth.identityStates", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.telemetryStates", "localPath": "truth.telemetryStates", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.freshnessStates", "localPath": "truth.freshnessStates", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.coherenceStates", "localPath": "truth.coherenceStates", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.completeness", "localPath": "truth.completeness", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.expectedInventory", "localPath": "truth.expectedInventory", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.provenance", "localPath": "truth.provenance", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.sequence", "localPath": "truth.sequence", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.uncertainty", "localPath": "truth.uncertainty", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.eventTimeMs", "localPath": "truth.eventTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.receiveTimeMs", "localPath": "truth.receiveTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "truth.unit", "localPath": "truth.unit", "transform": "IDENTITY" },
+    { "canonicalPath": "forwardCompatibleUnknown", "localPath": "forwardCompatibleUnknown", "transform": "IDENTITY" }
+  ],
+  "localFixtureSchema": "DockSemanticRoundTripFixtureV1",
+  "lossy": false,
+  "testVectors": [
+    "frontier/dock/fixtures/semantic-roundtrip.v1.json"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "29383e6984c0a7748058ac3050e05ecb2b17f22fa692abb82975300711ee9aa2"
+}

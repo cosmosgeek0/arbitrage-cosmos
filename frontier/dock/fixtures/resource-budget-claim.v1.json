@@ -1,0 +1,13 @@
+{
+  "claimId": "dock.fixture-budget.v1",
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "cpu": { "state": "UNAVAILABLE", "unit": "host-cpu-percent", "reason": "No host-performance or production-runtime claim is made in prestage." },
+  "memory": { "state": "UNAVAILABLE", "unit": "host-bytes", "reason": "No mounted process exists to measure production memory." },
+  "disk": { "state": "UNAVAILABLE", "unit": "host-bytes-per-second", "reason": "Fixture modules have no disk transport or mounted storage." },
+  "network": { "state": "MEASURED", "unit": "bytes", "limit": 0, "observed": 0 },
+  "eventRate": { "state": "MEASURED", "unit": "events-per-1000ms-fixture-window", "limit": 100, "observed": 100 },
+  "latency": { "state": "MEASURED", "unit": "deterministic-fixture-steps", "limit": { "p50": 4, "p95": 8, "p99": 12 }, "observed": { "p50": 3, "p95": 7, "p99": 11 } },
+  "queue": { "state": "MEASURED", "unit": "events", "limit": 16, "observed": 16, "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST" },
+  "storageGrowth": { "state": "MEASURED", "unit": "fixture-bytes-per-window", "limit": 4096, "observed": 3200 },
+  "modelUse": { "state": "MEASURED", "unit": "calls", "limit": 0, "observed": 0 }
+}

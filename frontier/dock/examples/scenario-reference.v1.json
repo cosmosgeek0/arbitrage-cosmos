@@ -1,0 +1,16 @@
+{
+  "clockRef": "fixture://clock/fixed-2026-07-15",
+  "expectedCanonicalPostureRefs": [
+    "git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md",
+    "git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/faults/harness.ts#evaluateCanonicalFaultHarness"
+  ],
+  "extensionProviderRef": "F12",
+  "fixtureSchemaRef": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ScenarioReferenceV1",
+  "lineageRefs": [
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts"
+  ],
+  "scenarioId": "frontier.scenario-bank.example",
+  "scenarioVersion": "1.0.0",
+  "seed": 715,
+  "scenarioHash": "c6fda794de08e979b4e47cd3d8372e9d28c724ea31ef15fb0cf6982c962dcbb7"
+}

@@ -1,0 +1,159 @@
+{
+  "adapterMapRefs": [
+    "frontier/dock/examples/canonical-adapter-map.v1.json"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "buildState": "PLANNED",
+  "canonicalInputContractRefs": [
+    "frontier/dock/contracts/v1/canonical-owner-map.json",
+    "frontier/dock/contracts/v1/canonical-shared-owner-references.json"
+  ],
+  "canonicalOutputContractRefs": [
+    "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ProviderFacetBindingV1"
+  ],
+  "canonicalPolicyRefs": [
+    "frontier/dock/contracts/v1/hard-denials.json",
+    "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/2"
+  ],
+  "capabilityClass": "FIXTURE_COMPATIBILITY_ONLY",
+  "cockpitProjectionRef": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4",
+  "completenessRequirement": "PRESERVE_MISSING_AND_EXPECTED_INVENTORY",
+  "dataClassifications": [
+    "SYNTHETIC_FIXTURE_NO_SECRETS"
+  ],
+  "dataSourceRefs": [
+    "fixture://dock/semantic-roundtrip"
+  ],
+  "degradationBehavior": "NO_CANONICAL_STATE;CANONICAL_OWNER_REVIEW_REQUIRED",
+  "determinismClass": "INJECTED_CLOCK_NO_RANDOMNESS",
+  "disablePlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "idempotent": true
+  },
+  "displayName": "Frontier Example Fixture",
+  "disposition": "NOT_LAUNCHED",
+  "dockContractVersion": "1.0.0",
+  "egressDeclaration": "NONE",
+  "extensionId": "frontier.example-fixture",
+  "extensionVersion": "0.1.0",
+  "failureModes": [
+    "FAIL_CLOSED_ON_VERSION_OR_HASH_MISMATCH",
+    "REQUEST_DEGRADATION_ON_RESOURCE_LIMIT"
+  ],
+  "freshnessRequirement": "EXACT_CANONICAL_REFERENCE_OR_UNKNOWN",
+  "hardDenialRefs": [
+    "frontier/dock/contracts/v1/hard-denials.json"
+  ],
+  "healthContractRef": "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/3",
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "insertionRequestRef": "frontier/dock/fixtures/insertion-request.v1.json",
+  "knownLimitations": [
+    "FIXTURE_COMPATIBILITY_ONLY",
+    "NO_PRODUCTION_ISOLATION_OR_RUNTIME_SAFETY_PROOF"
+  ],
+  "latencyClass": "DETERMINISTIC_FIXTURE_STEPS",
+  "licenseAndTermsRefs": [
+    "frontier/dock/research/RESEARCH_RECEIPT.md"
+  ],
+  "maxSafeRateClaim": {
+    "backpressurePolicy": "FAIL_CLOSED",
+    "eventsPerWindow": 100,
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "queueCapacity": 16,
+    "windowSizeMs": 1000
+  },
+  "networkMode": "FIXTURE_ONLY",
+  "optionalCapabilityRefs": [
+    "DockV1:DESCRIBE"
+  ],
+  "owner": "future-module-worker",
+  "purpose": "Demonstrate a non-authoritative Dock V1 fixture descriptor.",
+  "replayClass": "FIXTURE_REPLAY_ONLY",
+  "requestedCapabilities": [
+    "DESCRIBE",
+    "VALIDATE_FIXTURE"
+  ],
+  "requiredCapabilityRefs": [
+    "DockV1:VALIDATE_FIXTURE"
+  ],
+  "resourceBudgetClaim": {
+    "claimId": "dock.fixture-budget.v1",
+    "cpu": {
+      "reason": "No host-performance or production-runtime claim is made in prestage.",
+      "state": "UNAVAILABLE",
+      "unit": "host-cpu-percent"
+    },
+    "disk": {
+      "reason": "Fixture modules have no disk transport or mounted storage.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes-per-second"
+    },
+    "eventRate": {
+      "limit": 100,
+      "observed": 100,
+      "state": "MEASURED",
+      "unit": "events-per-1000ms-fixture-window"
+    },
+    "latency": {
+      "limit": {
+        "p50": 4,
+        "p95": 8,
+        "p99": 12
+      },
+      "observed": {
+        "p50": 3,
+        "p95": 7,
+        "p99": 11
+      },
+      "state": "MEASURED",
+      "unit": "deterministic-fixture-steps"
+    },
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "memory": {
+      "reason": "No mounted process exists to measure production memory.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes"
+    },
+    "modelUse": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "calls"
+    },
+    "network": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "bytes"
+    },
+    "queue": {
+      "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST",
+      "limit": 16,
+      "observed": 16,
+      "state": "MEASURED",
+      "unit": "events"
+    },
+    "storageGrowth": {
+      "limit": 4096,
+      "observed": 3200,
+      "state": "MEASURED",
+      "unit": "fixture-bytes-per-window"
+    }
+  },
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "rollbackPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "pinnedVersion": "0.1.0"
+  },
+  "secretMode": "NONE",
+  "sourceSha": "df9c52cd2a428e3d3675cf0260c0d30052a4bbff",
+  "testEntryPointRefs": [
+    "frontier/dock/tests/conformance.test.mjs"
+  ],
+  "testReceiptRef": "frontier/dock/RECEIPT.md",
+  "uninstallPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "deleteCanonicalEvidence": false
+  },
+  "descriptorHash": "3ce6aacadf14c172d768c03546f59ffbb0af41229595c0f66a5c801c5a0e4b67"
+}

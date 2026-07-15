@@ -1,0 +1,45 @@
+{
+  "schema": "DockAdapterRulesV1",
+  "version": 1,
+  "lossy": false,
+  "networkMode": "FIXTURE_ONLY",
+  "authorityClass": "NO_AUTHORITY",
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "requiredPreservation": [
+    "identity",
+    "units",
+    "eventTime",
+    "receiveTime",
+    "sequence",
+    "freshness",
+    "completeness",
+    "missingness",
+    "expectedInventory",
+    "provenance",
+    "uncertainty"
+  ],
+  "canonicalStateAxes": {
+    "ownerRef": "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/1",
+    "identityState": ["DISCOVERED", "MISSING", "UNKNOWN"],
+    "telemetryState": ["INSTRUMENTED", "UNINSTRUMENTED", "UNKNOWN"],
+    "freshnessState": ["CURRENT", "STALE", "SILENT", "UNAVAILABLE", "UNKNOWN"],
+    "coherenceState": ["COHERENT", "INCOHERENT", "UNKNOWN"]
+  },
+  "fixturePreview": {
+    "schema": "CanonicalFixturePreviewV1",
+    "canonical": false,
+    "canonicalStateWrite": false,
+    "sourceRetention": "LOSSLESS_SOURCE_PLUS_HASH",
+    "permittedTransforms": ["IDENTITY"]
+  },
+  "facetRules": {
+    "EVIDENCE": { "operation": "VALIDATE_FIXTURE", "forbidden": ["LIVE_SUBSCRIBE", "CANONICAL_SOURCE_STATE_WRITE"] },
+    "DERIVED_FEATURE": { "operation": "EVALUATE_FIXTURE", "forbidden": ["FEATURE_REGISTRY_WRITE", "TRAIN", "PROMOTE"] },
+    "ADVISORY_ASSESSOR": { "operation": "EVALUATE_FIXTURE", "forbidden": ["SIZE", "ORDER", "POLICY_EFFECT", "RECALIBRATE"] },
+    "REPLAY_ADAPTER": { "operation": "PROJECT_FIXTURE", "forbidden": ["SCENARIO_EXECUTION", "CANONICAL_REPLAY_STATE_WRITE", "RETENTION_MUTATION"] },
+    "COCKPIT_PROJECTION": { "operation": "PROJECT_FIXTURE", "forbidden": ["MOUNT", "CONTROL", "HEALTH_RECOMPUTE", "COCKPIT_MUTATION"] },
+    "EXPERIMENT_PROVIDER": { "operation": "VALIDATE_FIXTURE", "forbidden": ["TREATMENT_ASSIGNMENT", "EXPOSURE_WRITE", "OUTCOME_WRITE", "CANARY", "PROMOTE", "ROLLBACK"] },
+    "SCENARIO_REFERENCE": { "operation": "VALIDATE_FIXTURE", "forbidden": ["EXECUTE", "TWIN_MUTATION", "EXPECTED_TRUTH_REDEFINITION"] },
+    "ANNOTATION_ADAPTER": { "operation": "VALIDATE_FIXTURE", "forbidden": ["DATASET_AUTHORITY", "TRAIN", "WEIGHT", "PROMOTE"] }
+  }
+}

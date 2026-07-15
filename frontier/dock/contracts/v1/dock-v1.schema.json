@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cosmos:frontier:dock:v1",
+  "title": "Frontier Dock fixture compatibility contract V1",
+  "dockContractVersion": "1.0.0",
+  "$defs": {
+    "StringArray": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 2048 },
+      "maxItems": 512,
+      "uniqueItems": true
+    },
+    "ShaIdentity": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "UnavailableResourceMetric": {
+      "type": "object",
+      "required": ["state", "unit", "reason"],
+      "properties": {
+        "state": { "const": "UNAVAILABLE" },
+        "unit": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "limit": false,
+        "observed": false,
+        "backpressure": false
+      },
+      "additionalProperties": true
+    },
+    "MeasuredScalarResourceMetric": {
+      "type": "object",
+      "required": ["state", "unit", "limit", "observed"],
+      "properties": {
+        "state": { "const": "MEASURED" },
+        "unit": { "type": "string", "minLength": 1 },
+        "limit": { "type": "number", "minimum": 0 },
+        "observed": { "type": "number", "minimum": 0 },
+        "reason": false
+      },
+      "additionalProperties": true
+    },
+    "MeasuredIntegerResourceMetric": {
+      "type": "object",
+      "required": ["state", "unit", "limit", "observed"],
+      "properties": {
+        "state": { "const": "MEASURED" },
+        "unit": { "type": "string", "minLength": 1 },
+        "limit": { "type": "integer", "minimum": 0 },
+        "observed": { "type": "integer", "minimum": 0 },
+        "reason": false
+      },
+      "additionalProperties": true
+    },
+    "LatencyPercentiles": {
+      "type": "object",
+      "required": ["p50", "p95", "p99"],
+      "properties": {
+        "p50": { "type": "number", "minimum": 0 },
+        "p95": { "type": "number", "minimum": 0 },
+        "p99": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "MeasuredLatencyResourceMetric": {
+      "type": "object",
+      "required": ["state", "unit", "limit", "observed"],
+      "properties": {
+        "state": { "const": "MEASURED" },
+        "unit": { "const": "deterministic-fixture-steps" },
+        "limit": { "$ref": "#/$defs/LatencyPercentiles" },
+        "observed": { "$ref": "#/$defs/LatencyPercentiles" },
+        "reason": false
+      },
+      "additionalProperties": true
+    },
+    "MeasuredQueueResourceMetric": {
+      "allOf": [
+        { "$ref": "#/$defs/MeasuredIntegerResourceMetric" },
+        {
+          "required": ["backpressure"],
+          "properties": { "backpressure": { "const": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST" } }
+        }
+      ]
+    },
+    "ResourceBudgetClaimV1": {
+      "type": "object",
+      "required": ["claimId", "measurementMode", "cpu", "memory", "disk", "network", "eventRate", "latency", "queue", "storageGrowth", "modelUse"],
+      "properties": {
+        "claimId": { "type": "string", "minLength": 1 },
+        "measurementMode": { "enum": ["DETERMINISTIC_FIXTURE", "UNAVAILABLE_PRESTAGE"] },
+        "cpu": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredScalarResourceMetric" }] },
+        "memory": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] },
+        "disk": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] },
+        "network": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] },
+        "eventRate": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] },
+        "latency": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredLatencyResourceMetric" }] },
+        "queue": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredQueueResourceMetric" }] },
+        "storageGrowth": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] },
+        "modelUse": { "oneOf": [{ "$ref": "#/$defs/UnavailableResourceMetric" }, { "$ref": "#/$defs/MeasuredIntegerResourceMetric" }] }
+      },
+      "additionalProperties": true
+    },
+    "MaxSafeRateClaimV1": {
+      "type": "object",
+      "required": ["measurementMode", "eventsPerWindow", "windowSizeMs", "queueCapacity", "backpressurePolicy"],
+      "properties": {
+        "measurementMode": { "const": "DETERMINISTIC_FIXTURE" },
+        "eventsPerWindow": { "type": "integer", "minimum": 1 },
+        "windowSizeMs": { "type": "integer", "minimum": 1 },
+        "queueCapacity": { "type": "integer", "minimum": 0 },
+        "backpressurePolicy": { "enum": ["FAIL_CLOSED", "DEGRADE_REQUEST"] }
+      },
+      "additionalProperties": true
+    },
+    "ExtensionDescriptorV1": {
+      "type": "object",
+      "required": [
+        "extensionId", "displayName", "extensionVersion", "dockContractVersion", "owner", "purpose", "capabilityClass",
+        "immutableBaseSha", "sourceSha", "buildState", "disposition", "authorityClass", "canonicalInputContractRefs",
+        "canonicalOutputContractRefs", "canonicalPolicyRefs", "adapterMapRefs", "requestedCapabilities", "requiredCapabilityRefs",
+        "optionalCapabilityRefs", "hardDenialRefs", "latencyClass", "freshnessRequirement", "completenessRequirement",
+        "determinismClass", "replayClass", "egressDeclaration", "networkMode", "secretMode", "resourceBudgetClaim",
+        "maxSafeRateClaim", "dataSourceRefs", "dataClassifications", "licenseAndTermsRefs", "retentionRequest", "failureModes",
+        "degradationBehavior", "healthContractRef", "cockpitProjectionRef", "testEntryPointRefs", "testReceiptRef",
+        "knownLimitations", "insertionRequestRef", "disablePlan", "rollbackPlan", "uninstallPlan", "descriptorHash"
+      ],
+      "properties": {
+        "extensionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "extensionVersion": { "type": "string" },
+        "dockContractVersion": { "type": "string", "pattern": "^1\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:[-+].*)?$" },
+        "owner": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "capabilityClass": { "type": "string", "minLength": 1 },
+        "immutableBaseSha": { "$ref": "#/$defs/ShaIdentity" },
+        "sourceSha": { "$ref": "#/$defs/ShaIdentity" },
+        "buildState": { "enum": ["PLANNED", "CONTRACT_PINNED", "BUILDING", "LOCAL_PROOF_GREEN", "PRESTAGE_READY", "PARKED", "PORT_CANDIDATE", "INTEGRATION_TESTING", "ACCEPTED", "QUARANTINED", "RETIRED"] },
+        "disposition": { "enum": ["ACTIVE", "ALREADY_OWNED", "BLOCKED", "REJECTED", "NOT_LAUNCHED"] },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "canonicalInputContractRefs": { "$ref": "#/$defs/StringArray" },
+        "canonicalOutputContractRefs": { "$ref": "#/$defs/StringArray" },
+        "canonicalPolicyRefs": { "$ref": "#/$defs/StringArray" },
+        "adapterMapRefs": { "$ref": "#/$defs/StringArray" },
+        "requestedCapabilities": { "$ref": "#/$defs/StringArray" },
+        "requiredCapabilityRefs": { "$ref": "#/$defs/StringArray" },
+        "optionalCapabilityRefs": { "$ref": "#/$defs/StringArray" },
+        "hardDenialRefs": { "$ref": "#/$defs/StringArray" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "secretMode": { "const": "NONE" },
+        "resourceBudgetClaim": { "$ref": "#/$defs/ResourceBudgetClaimV1" },
+        "maxSafeRateClaim": { "$ref": "#/$defs/MaxSafeRateClaimV1" },
+        "dataSourceRefs": { "$ref": "#/$defs/StringArray" },
+        "dataClassifications": { "$ref": "#/$defs/StringArray" },
+        "licenseAndTermsRefs": { "$ref": "#/$defs/StringArray" },
+        "failureModes": { "$ref": "#/$defs/StringArray" },
+        "testEntryPointRefs": { "$ref": "#/$defs/StringArray" },
+        "knownLimitations": { "$ref": "#/$defs/StringArray" },
+        "descriptorHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "descriptorCanonicalizationId": false,
+        "descriptorHashAlgorithm": false,
+        "signatureAlgorithm": false,
+        "signerKeyId": false,
+        "trustPolicyRef": false,
+        "issuedAt": false,
+        "expiresAt": false,
+        "revocationRef": false,
+        "signature": false,
+        "attestationHash": false,
+        "attestation": false
+      },
+      "additionalProperties": true
+    },
+    "CanonicalAdapterMapV1": {
+      "type": "object",
+      "required": ["adapterId", "extensionId", "localFixtureSchema", "canonicalOwner", "canonicalContractId", "canonicalContractVersion", "fieldMap", "unitMap", "timeSemantics", "unknownPropagation", "lossy", "unsupportedFields", "testVectors", "adapterHash"],
+      "properties": {
+        "adapterId": { "type": "string", "minLength": 1 },
+        "extensionId": { "type": "string", "minLength": 1 },
+        "localFixtureSchema": { "type": "string", "minLength": 1 },
+        "canonicalOwner": { "type": "string", "minLength": 1 },
+        "canonicalContractId": { "type": "string", "minLength": 1 },
+        "canonicalContractVersion": { "type": "string", "minLength": 1 },
+        "fieldMap": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["localPath", "canonicalPath", "transform"],
+            "properties": {
+              "localPath": { "type": "string", "minLength": 1 },
+              "canonicalPath": { "type": "string", "minLength": 1 },
+              "transform": { "const": "IDENTITY" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "unitMap": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["localUnit", "canonicalUnit", "transform"],
+            "properties": {
+              "localUnit": { "type": "string", "minLength": 1 },
+              "canonicalUnit": { "type": "string", "minLength": 1 },
+              "transform": { "const": "IDENTITY" }
+            }
+          }
+        },
+        "timeSemantics": {
+          "type": "object",
+          "required": ["eventTime", "receiveTime", "clock"],
+          "properties": {
+            "eventTime": { "const": "PRESERVE_EXACT" },
+            "receiveTime": { "const": "PRESERVE_EXACT" },
+            "clock": { "const": "INJECTED_FIXTURE" }
+          }
+        },
+        "unknownPropagation": { "const": "PRESERVE_EXACT_OR_FAIL_CLOSED" },
+        "lossy": { "const": false },
+        "unsupportedFields": { "type": "array", "maxItems": 0 },
+        "testVectors": { "$ref": "#/$defs/StringArray" },
+        "adapterHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": true
+    },
+    "ExtensionAttestationV1": {
+      "type": "object",
+      "required": ["descriptorCanonicalizationId", "descriptorHashAlgorithm", "descriptorHash", "signatureAlgorithm", "signerKeyId", "trustPolicyRef", "issuedAt", "expiresAt", "revocationRef", "signature", "attestationHash"],
+      "properties": {
+        "descriptorCanonicalizationId": { "const": "RFC8785-JCS-WITH-RESERVED-ATTESTATION-EXCLUSION-V1" },
+        "descriptorHashAlgorithm": { "const": "SHA-256" },
+        "descriptorHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "signatureAlgorithm": { "const": "ED25519" },
+        "signerKeyId": { "type": "string", "minLength": 1 },
+        "trustPolicyRef": { "type": "string", "minLength": 1 },
+        "issuedAt": { "type": "integer", "minimum": 0 },
+        "expiresAt": { "type": "integer", "minimum": 1 },
+        "revocationRef": { "type": "string", "minLength": 1 },
+        "signature": { "type": "string", "minLength": 1 },
+        "attestationHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": true
+    },
+    "ProviderFacetBindingV1": {
+      "type": "object",
+      "required": ["providerId", "extensionId", "facetClass", "canonicalOwnerRef", "canonicalContractRef", "canonicalContractVersion", "extensionProviderRef", "fixtureRequestSchemaRef", "fixtureResponseSchemaRef", "canonicalAdapterMapRef", "operation", "readOnly", "networkMode", "authorityClass", "unknownPropagation", "resourceBudgetClaimRef", "provenanceRef", "bindingStatus", "blockedReason", "bindingHash"],
+      "properties": {
+        "providerId": { "type": "string", "minLength": 1 },
+        "extensionId": { "type": "string", "minLength": 1 },
+        "facetClass": { "enum": ["EVIDENCE", "DERIVED_FEATURE", "ADVISORY_ASSESSOR", "REPLAY_ADAPTER", "COCKPIT_PROJECTION", "EXPERIMENT_PROVIDER", "SCENARIO_REFERENCE", "ANNOTATION_ADAPTER"] },
+        "canonicalOwnerRef": { "type": "string", "minLength": 1 },
+        "canonicalContractRef": { "type": "string", "minLength": 1 },
+        "canonicalContractVersion": { "type": "string", "minLength": 1 },
+        "extensionProviderRef": { "type": "string", "minLength": 1 },
+        "fixtureRequestSchemaRef": { "type": "string", "minLength": 1 },
+        "fixtureResponseSchemaRef": { "type": "string", "minLength": 1 },
+        "canonicalAdapterMapRef": { "type": "string", "minLength": 1 },
+        "operation": { "enum": ["DESCRIBE", "VALIDATE_FIXTURE", "EVALUATE_FIXTURE", "PROJECT_FIXTURE"] },
+        "readOnly": { "const": true },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "unknownPropagation": { "type": "string", "minLength": 1 },
+        "resourceBudgetClaimRef": { "type": "string", "minLength": 1 },
+        "provenanceRef": { "type": "string", "minLength": 1 },
+        "bindingStatus": { "enum": ["USABLE", "BLOCKED"] },
+        "blockedReason": { "type": ["string", "null"] },
+        "insertionRequestRef": { "type": "string", "minLength": 1 },
+        "bindingHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "bindingStatus": { "const": "USABLE" } }, "required": ["bindingStatus"] },
+          "then": {
+            "properties": { "blockedReason": { "const": null } },
+            "not": { "required": ["insertionRequestRef"] }
+          }
+        },
+        {
+          "if": { "properties": { "bindingStatus": { "const": "BLOCKED" } }, "required": ["bindingStatus"] },
+          "then": {
+            "required": ["insertionRequestRef"],
+            "properties": { "blockedReason": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "CanonicalSharedOwnerReferenceMapV1": {
+      "type": "object",
+      "required": ["schema", "version", "references"],
+      "properties": {
+        "schema": { "const": "CanonicalSharedOwnerReferenceMapV1" },
+        "version": { "const": 1 },
+        "references": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["referenceId", "compatibilityStatus", "acceptedOwnerCommitSha", "canonicalOwnerRef", "canonicalContractRef", "canonicalContractVersion", "ownerEvidenceRefs", "limitations", "blockedReason", "insertionRequestRef"],
+            "properties": {
+              "referenceId": { "enum": ["Q_EVIDENCE_AND_DATA_SOURCE", "IP_EXPECTED_INVENTORY_AND_TELEMETRY", "AI_OPS_AGENT_POLICY_BOUNDARY", "PRODUCT_HEALTH", "PRODUCT_INCIDENT"] },
+              "compatibilityStatus": { "enum": ["USABLE", "BLOCKED"] },
+              "acceptedOwnerCommitSha": { "type": ["string", "null"] },
+              "canonicalOwnerRef": { "type": "string", "minLength": 1 },
+              "canonicalContractRef": { "type": "string", "minLength": 1 },
+              "canonicalContractVersion": { "type": "string", "minLength": 1 },
+              "ownerEvidenceRefs": { "$ref": "#/$defs/StringArray" },
+              "limitations": { "$ref": "#/$defs/StringArray" },
+              "blockedReason": { "type": ["string", "null"] },
+              "insertionRequestRef": { "type": ["string", "null"] }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "ScenarioReferenceV1": {
+      "type": "object",
+      "required": ["scenarioId", "scenarioVersion", "scenarioHash", "extensionProviderRef", "fixtureSchemaRef", "seed", "clockRef", "lineageRefs", "expectedCanonicalPostureRefs"],
+      "properties": {
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "scenarioVersion": { "type": "string", "minLength": 1 },
+        "scenarioHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "extensionProviderRef": { "const": "F12" },
+        "fixtureSchemaRef": { "type": "string", "minLength": 1 },
+        "seed": { "type": "integer" },
+        "clockRef": { "type": "string", "minLength": 1 },
+        "lineageRefs": { "$ref": "#/$defs/StringArray" },
+        "expectedCanonicalPostureRefs": { "$ref": "#/$defs/StringArray" }
+      },
+      "additionalProperties": true
+    },
+    "FacetFixtureRequestV1": {
+      "type": "object",
+      "required": ["facetClass", "operation", "networkMode", "authorityClass", "fixture"],
+      "properties": {
+        "facetClass": { "type": "string" },
+        "operation": { "type": "string" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "fixture": {}
+      },
+      "additionalProperties": true
+    },
+    "FacetFixtureResponseV1": {
+      "type": "object",
+      "required": ["truthClass", "networkMode", "authorityClass", "canonical"],
+      "properties": {
+        "truthClass": { "enum": ["EXTENSION_OBSERVATION", "ADVISORY", "FIXTURE_PROJECTION", "FIXTURE_VALIDATION", "FIXTURE_DESCRIPTION"] },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "canonical": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "InsertionRequestV1": {
+      "type": "object",
+      "required": ["requestId", "extensionId", "requestVersion", "intendedSharedSeams", "canonicalOwnerDecisions", "requestedCapabilities", "egressDeclaration", "retentionRequest", "resourceBudgetClaimRef", "blockedFacetRequests", "futureTests", "authorityClass", "networkMode", "mutationImplemented"],
+      "properties": {
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "mutationImplemented": { "const": false }
+      },
+      "additionalProperties": true
+    },
+    "ModuleInventoryProjectionV1": {
+      "type": "object",
+      "required": ["schema", "version", "readOnly", "generatedAt", "modules"],
+      "properties": {
+        "schema": { "const": "ModuleInventoryProjectionV1" },
+        "version": { "const": 1 },
+        "readOnly": { "const": true },
+        "generatedAt": { "type": "integer", "minimum": 0 },
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["extensionId", "extensionVersion", "descriptorHash", "status", "authorityClass", "controls"],
+            "properties": {
+              "extensionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "extensionVersion": { "type": "string", "minLength": 1 },
+              "descriptorHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "status": { "const": "INSTALLED_DISABLED" },
+              "authorityClass": { "const": "NO_AUTHORITY" },
+              "controls": { "type": "array", "maxItems": 0 }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

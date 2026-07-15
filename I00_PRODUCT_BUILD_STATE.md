@@ -4,9 +4,9 @@ Schema version: `I00_PRODUCT_BUILD_STATE_V2`
 
 Updated: `2026-07-15`
 
-Phase: `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
+Phase: `FINAL_INTEGRATION / PHASE_4_CORRECTIONS_COMPLETE`
 
-Status: `REPLACEMENT_CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
+Status: `CORRECTION_SOURCE_VERIFIED / C2_LIVE_ACCEPTANCE_BLOCKED / NOT_SELF_VERIFIED`
 
 Candidate state: `NOT_CANDIDATE_READY`
 
@@ -14,13 +14,14 @@ Candidate state: `NOT_CANDIDATE_READY`
 
 | Field | Current truth |
 | --- | --- |
-| Repository | `/Users/cosmosgeek/Desktop/i00-assembly` |
-| Integration branch | `i00-product-assembly-20260713` |
+| Correction repository | `/Users/cosmosgeek/Desktop/role4-fix` |
+| Correction branch | `role4-fix-20260715` |
+| Required live-acceptance branch | `i00-product-assembly-20260713`; the separate integration worktree was not touched |
 | Initial clean restart baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
 | Rejected pre-evidence source-freeze checkpoint | Commit `9bde37bc716194c241fb20bda4fdca4e451b1915`; tree `b7747152c926b688545e6e123ce34b49c1b1198e`; parent `6b50cca34a5615e828e9606cd7201daf81272ec7`. Incomplete PF-001 coverage was found before evidence capture, so this attempted freeze was never sealed and produced no browser, performance, or complete-acceptance receipt. It remains immutable history and is not a Phase 3 `REJECTED_CANDIDATE` verdict. |
-| Replacement source-freeze identity | This file and `docs/archive/i00-phase2/REPLACEMENT_CANDIDATE_SOURCE_FREEZE_RECEIPT.md` are committed atomically in replacement source-freeze commit **C**. C cannot self-name; only sole-child seal **S** records C and C's tree after complete local acceptance. |
-| Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in S and the immutable candidate receipt after all C-bound measurements pass. |
-| Active writer | Fresh Role 2 integrator, limited to shared write/merge authority on this integration branch only |
+| Correction checkpoint | All `15/15` Role 3 findings and `12/12` FIX_AUDIT rows are closed. `docs/archive/i00-phase4/ROLE4_CORRECTION_CLOSURE_CHECKPOINT_RECEIPT.md` binds the final correction-source gates and live-provenance blocker. This checkpoint is not C2. |
+| Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in a future S2 and immutable candidate receipt after every exact-C2 measurement passes. |
+| Active writer | Role-4 fix owner, limited to the correction branch; no write authority was exercised in another worktree |
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
 | Final integration order | The requested `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` path was absent at restart. Role 2 consumed the byte-identical sealed copy at `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`. |
 | Frozen local Main authority cutoff | `d78be24f4da14632c857ee250b62e3fec33c2743`; tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`; parent/prior pin `ac01b5e43830bc681ee7e251749c4d1fab210029` |
@@ -43,7 +44,7 @@ The immutable donor is its committed Git object, never a dirty donor worktree. D
 | `IP_OPS.md` | `2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779` |
 | `IP_PROOF.md` | `e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6` |
 
-All five are read-only and excluded from C. They must be the only remaining untracked paths after S.
+All five are absent in this correction checkout. They remain protected live owner inputs and must not be reconstructed from the tracked verifier-only package. A future integration/pre-seal run requires them as the exact physical regular `??` inputs on the required integration branch.
 
 ## Exact Phase 2 donor table
 
@@ -131,9 +132,9 @@ The current living-input authority protocol passes `14/14` against immutable cut
 | L14 | Structural integration and persistence contracts exist; production persistence is null, command dispatch is false, and activation remains owner-gated. |
 | Dashboard mount | Accepted donor mounted into the existing app through the canonical Product provider and IP-CONTROL insertion requests; no duplicate shell or browser strategy truth. |
 | Startup | Dependency-driven production composition replaces arbitrary startup delays; owner evidence is projected through canonical components. |
-| Public-source browser boundary | TokenDetail candle reads use the same-origin server route and own no exchange WebSocket; TokenIcon has no jsDelivr/CoinCap fallback transport. Deterministic offline mode fails browser-reachable GET and forced-refresh owners closed before transport creation and isolates profile, icon, and liquidation caches under `DATA_DIR`. Validated server-resolved CoinGecko image URLs may exist outside deterministic offline mode, so the exact-C browser network campaign remains mandatory. |
+| Public-source browser boundary | TokenDetail candle reads use the same-origin server route and own no exchange WebSocket; TokenIcon has no jsDelivr/CoinCap fallback transport. Deterministic offline mode fails browser-reachable GET and forced-refresh owners closed before transport creation and isolates profile, icon, and liquidation caches under `DATA_DIR`. Validated server-resolved CoinGecko image URLs may exist outside deterministic offline mode, so the future exact-C2 browser network campaign remains mandatory. |
 | Command result | `GET /api/product-integration/v1/commands/:commandId/result` requires exact command/idempotency/control identity and server-derived authentication; durable result is 200 terminal, 202 pending, 404 absent/substituted, or 503 unavailable/fail-closed. |
-| WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. Browser close truth is generation-bound: unopened retry failures retain the last established-socket close, and a later established close replaces or fail-closed clears it. Focused in-app-browser proof observed clean `1012 / service restart` surviving a failed retry, followed by a real established crash surfacing unclean `1006`; complete C-bound browser evidence remains pending. |
+| WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. Browser close truth is generation-bound: unopened retry failures retain the last established-socket close, and a later established close replaces or fail-closed clears it. Focused in-app-browser proof observed clean `1012 / service restart` surviving a failed retry, followed by a real established crash surfacing unclean `1006`; complete C2-bound browser evidence remains pending. |
 | Restart terminalization | Production durably refreshes one conservative restart projection from an exact canonical supervisor cut plus exact canonical ops readback; passive reads do not refresh, malformed/stale/ambiguous/recovery truth remains blocking, and success still requires exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED`. |
 | Assurance insertion requests | Applied only through canonical source/runtime/control/ledger owners. Fixture evidence remains non-authoritative and cannot mint live green. |
 
@@ -157,7 +158,7 @@ ledger-persistence, engine-supervisor
 - Source-wired runtime controls: exactly four — `global.safe-mode.read-only`, `global.kill-switch.engage`, `global.intake.pause`, `component.engine-supervisor.restart`.
 - All broader or reverse mutations stay disabled with exact `NOT_CONFIGURED`, `OWNER_GATED`, or unavailable reasons.
 
-## Verification measured before complete local acceptance
+## Correction-source verification measured before lawful complete local acceptance
 
 | Command or suite | Measured result |
 | --- | --- |
@@ -169,7 +170,7 @@ ledger-persistence, engine-supervisor
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
-| I00 proof / command contracts | Initial correction-tip proof reached `46/47` and stopped only at stale generated machine-evidence anchors; the command suite was not reached in that run; regenerated-report rerun pending |
+| I00 proof / command contracts | Exit 0; `47/47` proof and `28/28` command contracts |
 | Hostile repository/application gate | `82/82`; browser-reachable GET and forced-refresh owners attempted zero external public calls, and profile/icon/liquidation default caches were behaviorally read only beneath `DATA_DIR` |
 | Production runtime temporal/restart focus | `16/16`; each Product supervisor envelope reuses one validated canonical System snapshot for ops and exact last-200 embedded traces, while freeze-marker and identity truth remain freshly read; one exact market row/timestamp cut is reused by both source freshness and due projection, with one exact-step sibling refresh handoff; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
@@ -180,24 +181,26 @@ ledger-persistence, engine-supervisor
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 12/12 files; 725 additive assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
 | `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; exact footer sum 384 assertions, including 35 durable lane-scope cases |
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
-| `npm run test:all` | Initial correction-tip run exited 1 only at stale generated machine-evidence source anchors (`29→32`, `521→764`, `438→482`); regenerated report raw SHA-256 is `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5`; exact clean committed-shape closure-evidence passes `10/10`; full rerun pending, no pass claimed |
+| `npm run test:all` | Exit 0; Product Assurance `518` files and `205/205` operation sites with `802 + 4` proofs; app `82/82`; System Integration `401/401`; Product Integration `111/111`; Product Control `102/102`; I00 proof `47/47`; I00 commands `28/28`; live-edge `1618/1618` |
+| Generated report parity | Exit 0; all five Markdown reports and `integration/reports/i00-proof-evidence.json` were regenerated twice with byte-identical SHA-256 values; machine report raw SHA-256 `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5` |
+| `npm run test:i00:complete` | Exit 0 only as `PLAN_ONLY`. Effectful `--run` exits 1 before any measured step with `INTEGRATION_BRANCH_REQUIRED:role4-fix-20260715` |
 | `git diff --check` | Exit 0 at latest source audit |
 
-These focused results do not replace the complete C-bound gate. Final `npm test`, `npm run test:all`, generated-report parity, Q donor runs, deterministic scenarios, runtime startup, restart/reconciliation, performance, browser acceptance, evidence manifests, and complete-receipt validation must all be measured from exact C. S records the exact command, exit/signal, duration, stdout/stderr bytes and hashes, inventory/control observations, and evidence paths.
+Root `npm test`, `npm run test:all`, both ops aggregates, and generated-report parity pass on correction source `35bcfe96314f5047957bdff251831ab309c9be19`, tree `82c359b0baaeb1ec5c605340addaa1bb487384fd`. They do not replace exact-C2 Q, browser, performance, source-freeze, complete-receipt, and sole-child validation. The effectful complete runner rejected this branch before those steps, so no C2/S2 evidence is claimed.
 
 The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
 
-Product Assurance donor equality remains exact at the recorded merge cuts: 193/193 blobs. At the candidate HEAD, 190 remain donor-identical and exactly three authorized serial-spine replacements are bound to one-parent restoration commit `9a6ec938ef45716379d4f4f4972102ef85cb7271`: A-CORE is 34 unchanged plus two replacements, and A-CASE-S4 is 40 unchanged plus one replacement. Those replacements preserve the explicit News GET disposition and fail-closed sealed-owner evidence needed by a clean detached verifier; every other donor path and all donor/integration receipts remain exact.
+Product Assurance donor equality remains exact at the recorded merge cuts: 193/193 blobs. At the current correction-source HEAD, 190 remain donor-identical and exactly three authorized serial-spine replacements are bound to one-parent restoration commit `9a6ec938ef45716379d4f4f4972102ef85cb7271`: A-CORE is 34 unchanged plus two replacements, and A-CASE-S4 is 40 unchanged plus one replacement. Those replacements preserve the explicit News GET disposition and fail-closed sealed-owner evidence needed by a clean detached verifier; every other donor path and all donor/integration receipts remain exact.
 
 ## Runtime and external measurements
 
 | Evidence class | Current value |
 | --- | --- |
-| Complete local acceptance | `PENDING_MEASUREMENT` |
-| Runtime startup and deterministic scenario receipt | `PENDING_MEASUREMENT` |
-| Restart/reconciliation receipt | `PENDING_MEASUREMENT` |
-| Six-run browser/no-false-green receipt | `PENDING_MEASUREMENT` |
-| Local-proxy performance receipt | `PENDING_MEASUREMENT` |
+| Complete local acceptance | `BLOCKED_BY_INTEGRATION_BRANCH_AND_LIVE_OWNER_INPUT_PROVENANCE` |
+| Runtime startup and deterministic scenario receipt | `PENDING_EXACT_C2_MEASUREMENT` |
+| Restart/reconciliation receipt | `PENDING_EXACT_C2_MEASUREMENT` |
+| Six-run browser/no-false-green receipt | `PENDING_EXACT_C2_MEASUREMENT` |
+| Local-proxy performance receipt | `FIX_AUDIT_ONLY_ARTIFACT_PRESENT / PENDING_EXACT_C2_MEASUREMENT` |
 | Deployed runtime | `UNKNOWN / NOT_CONFIGURED`; no target or readback |
 | External actions performed | `NONE` |
 | External authorizations present | `NONE` |
@@ -221,13 +224,13 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 | PRODUCTION_CAPACITY | `UNKNOWN` | Local bounded acceptance only; production load/capacity not measured |
 | Q_PRODUCTION_TRANSPORT | `NOT_CONFIGURED` | No accepted production Q transport is mounted |
 
-## C to S transition and resume
+## C2 to S2 transition and resume
 
 Next exact task:
 
-1. Treat the commit containing this state and its source-freeze receipt as replacement C; do not rewrite rejected checkpoint `9bde37bc716194c241fb20bda4fdca4e451b1915` and permit no later source mutation.
-2. Run `npm run test:i00:complete -- --run ...` from exact C with immutable performance and browser receipts.
-3. If every measurement passes, update only allowed evidence/seal paths, create sole-child S, run validate-only against exact C, and park read-only.
+1. Preserve this correction branch as a closed fix checkpoint; do not relabel it C2 and do not rewrite rejected checkpoint `9bde37bc716194c241fb20bda4fdca4e451b1915` or the historical replacement source-freeze receipt.
+2. An authorized integrator must carry the correction source onto `i00-product-assembly-20260713` while preserving the five genuine hash-exact physical untracked owner directives, then commit the new source-freeze C2.
+3. Run `npm run test:i00:complete -- --run ...` from exact C2 with immutable browser/performance evidence. Only if every step passes may the integrator create sole-child S2, run validate-only against exact C2, render `INTEGRATION_CANDIDATE_READY`, and park read-only.
 
 Files a replacement integrator must read, in order:
 
@@ -241,4 +244,4 @@ Files a replacement integrator must read, in order:
 
 Work that must not be repeated: no donor rebuild or re-merge; no post-L donor; no duplicate scanner/ledger/control/socket; no hand edit of generated closure reports; no weakening of scope, receipt, inventory, browser, or no-false-green gates; no claim of current dashboard donor byte equality; no private/signed/deployed/live/canary claim from fixtures or local artifacts.
 
-Role 2 may create C and S but may not verify its own candidate. A different Role 3 session must independently return `VERIFIED_CANDIDATE` or `REJECTED_CANDIDATE`.
+The authorized integrator may create C2 and S2 but may not verify its own candidate. A different Role 3 session must independently return `VERIFIED_CANDIDATE` or `REJECTED_CANDIDATE`.

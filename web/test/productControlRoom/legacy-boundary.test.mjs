@@ -52,6 +52,17 @@ test('the web source tree contains no legacy private, money-moving, cancel, or A
   }
 });
 
+test('automatic token rendering uses only same-origin owners and deterministic local fallbacks', async () => {
+  const [detail, icon] = await Promise.all([
+    read('pages/TokenDetail.tsx'),
+    read('components/TokenIcon.tsx'),
+  ]);
+  assert.doesNotMatch(detail, /new\s+WebSocket|wss:\/\//);
+  assert.doesNotMatch(icon, /cdn\.jsdelivr\.net|assets\.coincap\.io/);
+  assert.match(icon, /const\s+chain\s*=\s*\[resolved\]\.filter\(Boolean\)/);
+  assert.match(detail, /same-origin public-source owner/);
+});
+
 test('the shared store structurally omits legacy preview and execution capabilities', async () => {
   const store = await read('store.tsx');
   assert.doesNotMatch(store, /preview:\s*\(intent:/);

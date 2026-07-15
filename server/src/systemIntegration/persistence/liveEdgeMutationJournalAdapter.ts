@@ -779,17 +779,21 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
       });
     }
 
-    let entryCount = 0;
-    let highestJournalVersion = 0;
-    for (const journal of loaded.registry.journals) {
-      const persisted = this.#reconstructSnapshotLineage(
-        journal.snapshot,
-        journal.snapshot.journalVersion,
-      );
-      entryCount += persisted.snapshot.entries.length;
-      highestJournalVersion = Math.max(highestJournalVersion, persisted.snapshot.journalVersion);
-    }
-    this.#assertGlobalReservedEventEquality(loaded.registry, loaded.serialized);
+    const firstJournal = loaded.registry.journals[0];
+    this.#validateRegistryLineages(
+      loaded.registry,
+      loaded.serialized,
+      firstJournal.mutationId,
+      firstJournal.snapshot.journalVersion,
+    );
+    const entryCount = loaded.registry.journals.reduce(
+      (count, journal) => count + journal.snapshot.entries.length,
+      0,
+    );
+    const highestJournalVersion = loaded.registry.journals.reduce(
+      (highest, journal) => Math.max(highest, journal.snapshot.journalVersion),
+      0,
+    );
     return Object.freeze({
       state: 'AVAILABLE',
       journalCount: loaded.registry.journals.length,

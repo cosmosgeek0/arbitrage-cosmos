@@ -140,12 +140,21 @@ test('one owner and producer registry passes scoped rules with conflicts classif
   assert.equal(scan.authorityConverged, true);
   assert.equal(scan.unresolvedConflictCount, 0);
   assert.equal(scan.conflictClassificationPassed, true);
-  assert.equal(scan.conflicts.filter((conflict) => conflict.observed).length, 4);
-  assert.equal(scan.conflicts.filter((conflict) => conflict.resolutionState === 'RESOLVED').length, 4);
+  assert.equal(scan.conflicts.filter((conflict) => conflict.observed).length, 3);
+  assert.equal(scan.conflicts.filter((conflict) => conflict.resolutionState === 'RESOLVED').length, 3);
   assert.deepEqual(scan.conflicts.filter((conflict) => conflict.resolutionState === 'LIMITATION').map((conflict) => conflict.id), [
     'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
   ]);
   assert.deepEqual(scan.boundaryFindings, []);
+  assert.deepEqual(
+    scan.rules
+      .filter((rule) => ['NO_BROWSER_TOKEN_EXCHANGE_SOCKET', 'NO_BROWSER_TOKEN_FALLBACK_CDN'].includes(rule.id))
+      .map((rule) => ({ id: rule.id, hits: rule.hits, passed: rule.passed })),
+    [
+      { id: 'NO_BROWSER_TOKEN_EXCHANGE_SOCKET', hits: [], passed: true },
+      { id: 'NO_BROWSER_TOKEN_FALLBACK_CDN', hits: [], passed: true },
+    ],
+  );
   assert(scan.transportCandidates.length > 0);
   assert.deepEqual(scan.unclassifiedTransportCandidates, []);
   assert(scan.transportCandidates.some((candidate) => candidate.classification === 'LEGACY_APP_DELIVERY'));

@@ -2,7 +2,7 @@
 
 **Phase:** `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
 
-**Status:** `CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
+**Status:** `REPLACEMENT_CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
 
 **Candidate state:** `NOT_CANDIDATE_READY`
 
@@ -19,12 +19,14 @@ No money path exists in the composed product. Live/test orders, borrow/repay, le
 ## Git, authority, and frozen inputs
 
 - Integration worktree: `/Users/cosmosgeek/Desktop/i00-assembly`; branch: `i00-product-assembly-20260713`.
-- Pre-freeze committed baseline: `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d`.
+- Initial clean restart baseline: `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d`.
+- Rejected pre-evidence source-freeze checkpoint: `9bde37bc716194c241fb20bda4fdca4e451b1915`; tree `b7747152c926b688545e6e123ce34b49c1b1198e`; parent `6b50cca34a5615e828e9606cd7201daf81272ec7`. Role 2 rejected that attempted freeze after the browser-capture preflight exposed incomplete PF-001 coverage. It remains immutable history, was never sealed, and produced no browser, performance, or complete-acceptance receipt. This source disposition is not a Phase 3 `REJECTED_CANDIDATE` verdict.
 - Role 2 accepted exclusive shared write/merge authority on this branch only in commit `c1266f24c464a49ef1657e2549b06d7a90d6cac7`. It has no authority over `current-main`, push, Phase 3 certification, private/signed/cloud activity, deployment, or money.
 - The frozen local Main authority cutoff is `d78be24f4da14632c857ee250b62e3fec33c2743`, tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`, parent `ac01b5e43830bc681ee7e251749c4d1fab210029`. At the latest source-freeze audit, local `current-main` and its local remote-tracking ref were observed at descendant `2b32317dbf89907bcf529231247f1f9a63235d49`, tree `4b3b079c9133eeb8649a5ecfd13e83ce5061e7a0`; no fetch was performed and no remote-freshness claim is made. The frozen cutoff remains its ancestor and later board state does not alter the Phase 2 donor table.
 - The living authority pins are: `QL_DIRECTOR_STATE.md` blob `8116ec491fc7fc863dbcb4015be4cdb105a5a1bc`, SHA-256 `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc`; `QL_PARALLEL_DAG.md` blob `701b3f263e73bf659ba4319c5839e798c1ce7abb`, SHA-256 `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec`. D-LAUNCH-27 pre-stages the future Role 3 block but remains trigger-locked; it changes no donor or D-LAUNCH-1..17 acceptance fact.
 - Five owner directives remain protected untracked inputs and are excluded from C: `I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md`, `IP_RUNTIME.md`, `IP_CONTROL.md`, `IP_OPS.md`, and `IP_PROOF.md`. Their exact hashes are recorded in `I00_PRODUCT_BUILD_STATE.md`.
 - The final integration order is SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`.
+- The latest source-freeze receipt is `docs/archive/i00-phase2/REPLACEMENT_CANDIDATE_SOURCE_FREEZE_RECEIPT.md`; it records the replacement batch but cannot substitute for S or independent verification.
 
 ## Donor closure
 
@@ -41,8 +43,8 @@ Expected = discovered = receipt-accepted = integrated is exactly **16/16/16/16**
 | --- | --- | --- |
 | Managed product inventory | Exact 33 I00 identities: 14 `EVIDENCE_PRESENT`, 13 `OWNER_GATED`, 3 `NOT_CONFIGURED`, 3 `MISSING`; all 14 canonical System component IDs are referenced without widening the graph | A mapped identity is owner evidence, not automatic liveness; Q production transport, private truth, and external ops remain separately unavailable |
 | Controls | Four exact fail-closed Product controls are source-wired: enter `READ_ONLY`, engage kill, pause intake, and request restart of `engine-supervisor`; the complete catalog contains 14 entries | All reverse, broader, private, recovery, configuration, capital, strategy, focus, and incident mutations remain disabled, `NOT_CONFIGURED`, or `OWNER_GATED` |
-| Public source authority | Production admits one exact immutable seven-record catalog before lifecycle start; `MarketEngine` solely owns USD-M liquidation transport and the liquidation cache is a passive projection. Deterministic tests opt into an exact process-local offline public-source mode. | Catalog admission proves built/imported/wired authority, not current liveness; the offline mode grants no production behavior |
-| Persistence | Existing Ledger owns the L06 compare-and-set primitive, command/idempotency receipts, operator-event cursor, identity graph, incidents, and boot/release evidence. Mutation-journal inventory reconciles global reserved row counts to every validated canonical lineage; orphan, contradictory, or concurrently moving evidence never becomes available. Ledger non-writability or incompatible/unknown schema downward-normalizes canonical supervisor truth. | No second database or file store; production L14 owners remain null/owner-gated |
+| Public source authority | Production admits one exact immutable seven-record catalog before lifecycle start; `MarketEngine` solely owns USD-M liquidation transport and the liquidation cache is a passive projection. TokenDetail candle reads use the same-origin server route and own no exchange WebSocket; TokenIcon has no jsDelivr/CoinCap fallback transport. Deterministic offline mode returns no icon URL, fails browser-reachable public endpoints before transport creation, and isolates profile, icon, and liquidation caches beneath `DATA_DIR`. | Catalog admission proves built/imported/wired authority, not current liveness; validated server-resolved CoinGecko image URLs remain possible outside deterministic offline mode, so exact-C browser network evidence is still required |
+| Persistence | Existing Ledger owns the L06 compare-and-set primitive, command/idempotency receipts, operator-event cursor, identity graph, incidents, and boot/release evidence. Mutation-journal inventory reconciles global reserved row counts to every validated canonical lineage; orphan, contradictory, or independently moving count/lineage evidence never becomes available or becomes mislabeled as durable corruption. Ledger non-writability or incompatible/unknown schema downward-normalizes canonical supervisor truth. | No second database or file store; production L14 owners remain null/owner-gated |
 | Quantity bridge | Caller-supplied canonical-format instrument identity plus content-derived SHA-256 revision structurally bind exact identity, step, and tolerance while bridging exact journal text to bounded Foundation binary64; stale revisions and lossy/invalid values fail closed. The revision is not a signature or source-authority grant. | No authorized production consumer; `NOT_CONFIGURED` |
 | Surface binding | `BINDING_READY` reports the accepted adapter/package mount state separately from each datum's canonical truth label and blocker code | It is not required-field completeness, production readiness, or `LIVE_PUBLIC`; absent values remain `MISSING`/`UNKNOWN` |
 | L12/L13/L14 | L12 owner availability is fail-closed; L13 exposes 27 roles as 11 bound, 13 owner-gated, 3 missing; L14 is structurally integrated | No canonical active subject/private truth, no accepted projector invocation, no production persistence instance, no dispatch |
@@ -60,12 +62,13 @@ These are focused source results, not the complete C-bound local acceptance:
 | --- | --- |
 | Root typecheck and build | Exit 0; server/web pass; Vite 1,880 modules; advisory large-chunk warning only |
 | Product Integration | `108/108` |
-| Product Control | `74/74`, including established-socket restart retention and later established-failure replacement |
-| System Integration | `372/372` after restart-terminalization hardening |
+| Product Control | `76/76`, including established-socket restart retention, later established-failure replacement, and automatic token-rendering transport ownership |
+| System Integration | `373/373` after restart-terminalization and independently advancing Ledger-inventory race hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9`, including independent-writer race, crash rollback, recovery, and replay proofs |
 | Living-input authority protocol | `14/14` against immutable D-LAUNCH-27 cutoff `d78be24f4da14632c857ee250b62e3fec33c2743` |
-| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
+| I00 proof / command / acceptance contracts | `47/47`; `28/28`; `34/34` |
+| Hostile repository/application gate | `82/82`; browser-reachable GET and forced-refresh owners attempted zero external public calls, and profile/icon/liquidation default caches were behaviorally read only beneath `DATA_DIR` |
 | Production runtime temporal/restart focus | `16/16`; one exact market row/timestamp cut is reused by both source freshness and due projection, with exact-step sibling refresh handoff plus hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
 | I00 performance contract | `41/41`, including exact canonical `OWNER:ownerPath` binding, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and a direct 10 ms reset/acknowledge/snapshot phase event-loop histogram that rejects interval substitution |
@@ -94,9 +97,8 @@ The exact reason-coded list is in `I00_PRODUCT_BUILD_STATE.md` and `fixtures/i00
 
 ## Next exact transition
 
-1. Regenerate closure reports from the proved D-LAUNCH-27 living pins and complete the final source gates.
-2. Create C with every intended tracked source/config/test/doc change and none of the five protected directives.
-3. From exact C, run the complete I00 local acceptance, including the deterministic scenarios, dependency startup, actual restart/reconciliation, performance campaign, and six-run browser/no-false-green sweep.
-4. If and only if every measurement passes, create sole-child S with the immutable `INTEGRATION_CANDIDATE_READY` receipt, then park read-only for a different Role 3 session.
+1. Treat the commit containing this state and its source-freeze receipt as replacement C; do not rewrite the rejected `9bde37b` checkpoint and permit no later source mutation.
+2. From exact C, run the complete I00 local acceptance, including deterministic scenarios, dependency startup, actual restart/reconciliation, the immutable performance campaign, and the six-run browser/no-false-green sweep.
+3. If and only if every measurement passes, create sole-child S using only allowed evidence/seal paths, render the immutable `INTEGRATION_CANDIDATE_READY` receipt, validate against exact C, and park read-only for a different Role 3 session.
 
 Role 2 may not certify its own candidate. No current-main write, push, deployment, private/signed call, or money action is part of this transition.

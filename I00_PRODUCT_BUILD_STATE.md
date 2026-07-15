@@ -6,7 +6,7 @@ Updated: `2026-07-15`
 
 Phase: `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
 
-Status: `CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
+Status: `REPLACEMENT_CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
 
 Candidate state: `NOT_CANDIDATE_READY`
 
@@ -16,8 +16,9 @@ Candidate state: `NOT_CANDIDATE_READY`
 | --- | --- |
 | Repository | `/Users/cosmosgeek/Desktop/i00-assembly` |
 | Integration branch | `i00-product-assembly-20260713` |
-| Pre-freeze committed baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
-| Source-freeze identity | This file is committed atomically in source-freeze commit **C**. C cannot self-name; only sole-child seal **S** records C and C's tree after the complete local acceptance. |
+| Initial clean restart baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
+| Rejected pre-evidence source-freeze checkpoint | Commit `9bde37bc716194c241fb20bda4fdca4e451b1915`; tree `b7747152c926b688545e6e123ce34b49c1b1198e`; parent `6b50cca34a5615e828e9606cd7201daf81272ec7`. Incomplete PF-001 coverage was found before evidence capture, so this attempted freeze was never sealed and produced no browser, performance, or complete-acceptance receipt. It remains immutable history and is not a Phase 3 `REJECTED_CANDIDATE` verdict. |
+| Replacement source-freeze identity | This file and `docs/archive/i00-phase2/REPLACEMENT_CANDIDATE_SOURCE_FREEZE_RECEIPT.md` are committed atomically in replacement source-freeze commit **C**. C cannot self-name; only sole-child seal **S** records C and C's tree after complete local acceptance. |
 | Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in S and the immutable candidate receipt after all C-bound measurements pass. |
 | Active writer | Fresh Role 2 integrator, limited to shared write/merge authority on this integration branch only |
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
@@ -85,10 +86,10 @@ Dashboard equivalence is likewise limited to `d04fdc71ffbd9c8266c969524a56e325ec
 
 | Finding | Dated disposition |
 | --- | --- |
-| PF-001 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Deterministic app and perimeter gates now enable an exact offline-public-source mode only inside the child process, require zero product egress after shutdown, and preserve a hostile nonzero tripwire. D-LAUNCH-22's dispositioned Binance socket attempt is historical authority evidence, not a current defect; no other deterministic test-time egress is admitted. |
+| PF-001 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / REPLACEMENT_FIXED`. Pre-evidence review of `9bde37bc716194c241fb20bda4fdca4e451b1915` found that its deterministic tripwire did not cover every browser-reachable public-source path, so Role 2 rejected that attempted C before any C-bound evidence or seal. Replacement source removes TokenDetail's direct Binance kline socket and TokenIcon's jsDelivr/CoinCap client fallback transports; deterministic offline mode suppresses icon resolution and fail-closes moneyflow, profile, profile warming, news, news-context, forced News refresh, calendar, FX, and source-logo before network access; profile, icon, and liquidation caches default beneath isolated `DATA_DIR`; and hostile gates exercise those browser-reachable routes under the tripwire. D-LAUNCH-22's dispositioned Binance socket attempt remains historical authority evidence, not a current defect; any other deterministic test-time egress is forbidden. |
 | PF-002 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. `MarketEngine` is the sole physical owner of `!forceOrder@arr`; `binance/liquidations.ts` is a passive bounded projection with no socket or raw-frame parser. One strictly admitted, immutable normalized print feeds both the Market view and the projection. |
 | PF-003 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Generated evidence normalizes only verified live owner-file transport modes and omits a moving descendant tip only after strict Git reachability. Missing, invalid, or unreachable tips remain explicitly classified rather than normalized away. |
-| PF-004 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Ledger inventory now reconciles global reserved journal/audit counts against the complete canonical registry, validates every lineage before capacity classification, and downgrades concurrent or unavailable count evidence without manufacturing corruption or availability. Hostile orphan and moving-registry races are covered. |
+| PF-004 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Ledger inventory now reconciles global reserved journal/audit counts against the complete canonical registry, validates every lineage before capacity classification, and downgrades concurrent or unavailable count/lineage evidence without manufacturing corruption or availability. Hostile orphan and independently moving-registry races are covered. |
 | PF-005 | `2026-07-15 MANDATORY_RECEIPT_LAW / FIXED`. Candidate receipt schema v2 encodes regenerated donor equality `16/16/16/16`; A-FORMAL and A-ACTION-EVIDENCE/S2 exclusions; Q C17 `4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a` as the sole direct parent of A17 `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; and explicit Ledger CAS plus Foundation quantity-bridge dispositions. Render and validate-only paths independently re-read the bound Git objects, introduction ancestry, request bytes, implementation blobs, and no-send/no-external-authority boundaries. |
 | PF-006 | `2026-07-15 ACCEPTED_DOCUMENTATION_CORRECTION / NON_CODE_BLOCKING`. The `fqie` SHA-256 is a deterministic structural/content binding over caller-supplied canonical-format `instrumentId`, step, and tolerance; it is not a signature or owner/source-authority grant. Recomputed self-consistent metadata is intentionally accepted. No production consumer exists. |
 | PF-007 | `2026-07-15 ACCEPTED_CANDIDATE_BLOCKER / FIXED`. Production construction validates the exact immutable seven-record public-source authority catalog before lifecycle admission. Duplicate, missing, counterfeit producer/path/class/consumer, or non-passive liquidation ownership fails closed; no static registry record can mint current liveness. |
@@ -130,6 +131,7 @@ The current living-input authority protocol passes `14/14` against immutable cut
 | L14 | Structural integration and persistence contracts exist; production persistence is null, command dispatch is false, and activation remains owner-gated. |
 | Dashboard mount | Accepted donor mounted into the existing app through the canonical Product provider and IP-CONTROL insertion requests; no duplicate shell or browser strategy truth. |
 | Startup | Dependency-driven production composition replaces arbitrary startup delays; owner evidence is projected through canonical components. |
+| Public-source browser boundary | TokenDetail candle reads use the same-origin server route and own no exchange WebSocket; TokenIcon has no jsDelivr/CoinCap fallback transport. Deterministic offline mode fails browser-reachable GET and forced-refresh owners closed before transport creation and isolates profile, icon, and liquidation caches under `DATA_DIR`. Validated server-resolved CoinGecko image URLs may exist outside deterministic offline mode, so the exact-C browser network campaign remains mandatory. |
 | Command result | `GET /api/product-integration/v1/commands/:commandId/result` requires exact command/idempotency/control identity and server-derived authentication; durable result is 200 terminal, 202 pending, 404 absent/substituted, or 503 unavailable/fail-closed. |
 | WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. Browser close truth is generation-bound: unopened retry failures retain the last established-socket close, and a later established close replaces or fail-closed clears it. Focused in-app-browser proof observed clean `1012 / service restart` surviving a failed retry, followed by a real established crash surfacing unclean `1006`; complete C-bound browser evidence remains pending. |
 | Restart terminalization | Success requires exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED`; active/failure/boot-lost evidence stays pending or attention-required; exact replay does not reissue. |
@@ -162,12 +164,13 @@ ledger-persistence, engine-supervisor
 | `npm run typecheck` | Exit 0; server and web pass |
 | `npm run build` | Exit 0; server and web pass; Vite 1,880 modules; advisory large-chunk warning only |
 | Product Integration | `108/108` |
-| Product Control | `74/74`, including restart truth surviving unopened retry failure and a later established failure replacing prior clean truth |
-| System Integration | `372/372` after restart-terminalization hardening |
+| Product Control | `76/76`, including restart truth surviving unopened retry failure, a later established failure replacing prior clean truth, and automatic token-rendering transport ownership |
+| System Integration | `373/373` after restart-terminalization and independently advancing Ledger-inventory race hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
-| I00 proof / command / acceptance contracts | `46/46`; `28/28`; `34/34` |
+| I00 proof / command / acceptance contracts | `47/47`; `28/28`; `34/34` |
+| Hostile repository/application gate | `82/82`; browser-reachable GET and forced-refresh owners attempted zero external public calls, and profile/icon/liquidation default caches were behaviorally read only beneath `DATA_DIR` |
 | Production runtime temporal/restart focus | `16/16`; each Product supervisor envelope reuses one validated canonical System snapshot for ops and exact last-200 embedded traces, while freeze-marker and identity truth remain freshly read; one exact market row/timestamp cut is reused by both source freshness and due projection, with one exact-step sibling refresh handoff; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
 | I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
@@ -222,10 +225,9 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 
 Next exact task:
 
-1. Regenerate the five closure reports against the D-LAUNCH-27 living pins and finish the final source/repository gates.
-2. Stage every intended source/config/test/doc path except the five protected directives; inspect the staged inventory and create C.
-3. Run `npm run test:i00:complete -- --run ...` from exact C with the immutable performance and browser receipts.
-4. If every measurement passes, update only the allowed evidence/seal paths, create sole-child S, run validate-only against exact C, and park read-only.
+1. Treat the commit containing this state and its source-freeze receipt as replacement C; do not rewrite rejected checkpoint `9bde37bc716194c241fb20bda4fdca4e451b1915` and permit no later source mutation.
+2. Run `npm run test:i00:complete -- --run ...` from exact C with immutable performance and browser receipts.
+3. If every measurement passes, update only allowed evidence/seal paths, create sole-child S, run validate-only against exact C, and park read-only.
 
 Files a replacement integrator must read, in order:
 

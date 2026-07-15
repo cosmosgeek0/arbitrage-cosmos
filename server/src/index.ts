@@ -28,6 +28,7 @@ import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
+import { deterministicOfflinePublicSourcesEnabled } from './binance/publicSourceMode.js';
 import {
   ingestLiquidationPrint,
   liquidationSeries,
@@ -504,7 +505,7 @@ app.use((_req, res, next) => {
   res.setHeader(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self' https://s3.tradingview.com; style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: https://cdn.jsdelivr.net https://assets.coincap.io https://coin-images.coingecko.com https://assets.coingecko.com https://*.tradingview.com; " +
+      "img-src 'self' data: https://coin-images.coingecko.com https://assets.coingecko.com https://*.tradingview.com; " +
       "connect-src 'self' ws: wss: https://*.tradingview.com; frame-src https://www.tradingview.com https://s.tradingview.com https://www.tradingview-widget.com; font-src 'self'; object-src 'none'; " +
       "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
@@ -1104,6 +1105,7 @@ const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
 const newsInFlight = new Map<number, Promise<boolean>>();
 
 async function refreshNews(catalogId: number): Promise<void> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('binance announcements unavailable');
   const url = `https://www.binance.com/bapi/apex/v1/public/apex/cms/article/catalog/list/query?catalogId=${catalogId}&pageNo=1&pageSize=16`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
@@ -1213,6 +1215,19 @@ app.post('/api/news/refresh', (req, res) => {
 });
 
 // ---- Market news context proxy (primary + venue + protocol + issuer + Tree/RSS/Lookonchain) ----
+function currentNewsContextStatus(): ReturnType<typeof newsContextStatus> {
+  if (!deterministicOfflinePublicSourcesEnabled()) return newsContextStatus();
+  return {
+    fetchedAt: null,
+    sources: 0,
+    live: 0,
+    delayed: 0,
+    errors: 0,
+    items: 0,
+    refreshing: false,
+  };
+}
+
 app.get('/api/news-context', (req, res) => {
   runAsync(res, async () => {
     try {
@@ -1220,6 +1235,10 @@ app.get('/api/news-context', (req, res) => {
       const limit = integerQuery(req.query.limit, 220, 20, 600);
       if (limit === null) {
         res.status(400).json({ error: 'news limit must be an integer between 20 and 600' });
+        return;
+      }
+      if (deterministicOfflinePublicSourcesEnabled()) {
+        res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
         return;
       }
       const payload = await getNewsContext(false);
@@ -1238,12 +1257,16 @@ app.post('/api/news-context/refresh', (req, res) => {
       res.status(400).json({ ok: false, error: 'news limit must be an integer between 20 and 600' });
       return;
     }
+    if (deterministicOfflinePublicSourcesEnabled()) {
+      res.status(503).json({ ok: false, error: 'news context unavailable', items: [], sources: [] });
+      return;
+    }
     try {
       const payload = await refreshNewsContextNow();
       res.json({ ok: true, ...payload, items: payload.items.slice(0, limit) });
     } catch (err) {
       safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
-      res.status(503).json({ ok: false, error: 'news context refresh failed', items: [], sources: [] });
+      res.status(503).json({ ok: false, error: 'news context unavailable', items: [], sources: [] });
     }
   });
 });
@@ -1255,6 +1278,10 @@ app.get('/api/news-stream', (req, res) => {
   const limit = integerQuery(req.query.limit, 220, 20, 600);
   if (limit === null) {
     res.status(400).json({ error: 'news stream limit must be an integer between 20 and 600' });
+    return;
+  }
+  if (deterministicOfflinePublicSourcesEnabled()) {
+    res.status(503).json({ error: 'news context unavailable', items: [], sources: [] });
     return;
   }
   if (newsStreamClients >= NEWS_STREAM_MAX_CLIENTS) {
@@ -1304,6 +1331,7 @@ let calCache: { at: number; items: CalItem[] } | null = null;
 let calInFlight: Promise<boolean> | null = null;
 
 async function refreshCalendar(): Promise<void> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('calendar unavailable');
   const now = new Date();
   const day = now.getDay();
   const mondayOffset = day === 0 ? -6 : 1 - day;
@@ -1386,6 +1414,7 @@ let fxCache: { at: number; rates: Record<string, number> } | null = null;
 let fxInFlight: Promise<void> | null = null;
 
 async function refreshFx(): Promise<void> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('fx unavailable');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
@@ -2081,9 +2110,17 @@ app.get('/api/token/profiles/status', (_req, res) => {
 });
 
 app.post('/api/token/profiles/warm', (_req, res) => {
+  if (deterministicOfflinePublicSourcesEnabled()) {
+    res.status(503).json({ started: false, error: 'profile warming unavailable' });
+    return;
+  }
   const rows = engine.allRows();
   const prices = new Map(rows.map((r) => [r.base, r.spot]));
-  void warmAllProfiles(rows.map((r) => r.base), (b) => prices.get(b) ?? null, STOCK_TOKENS);
+  void warmAllProfiles(rows.map((r) => r.base), (b) => prices.get(b) ?? null, STOCK_TOKENS)
+    .catch((error) => safeLogEvent('error_event', null, {
+      source: 'token.profile.warm',
+      message: error instanceof Error ? error.message : String(error),
+    }));
   res.json({ started: true, total: new Set(rows.map((r) => r.base)).size });
 });
 
@@ -2183,6 +2220,7 @@ function rememberSourceLogo(key: string, entry: SourceLogoEntry): void {
 }
 
 async function loadSourceLogo(domain: string, size: number): Promise<SourceLogoEntry> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('source logo unavailable');
   const key = `${domain}:${size}`;
   const cached = cachedSourceLogo(key);
   if (cached) return cached;
@@ -2484,7 +2522,7 @@ function connectionWatchmanSnapshot(
         : openFeeds === 0 ? 'outage' : 'degraded';
   const basis = basisRuntime.connectionStatus();
   const volume = volumeRuntime.connectionStatus();
-  const news = newsContextStatus();
+  const news = currentNewsContextStatus();
   const accountAgeMs = account.lastSyncTs ? now - account.lastSyncTs : null;
   const newsAgeMs = news.fetchedAt ? now - news.fetchedAt : null;
   const calendarAgeMs = calCache?.at ? now - calCache.at : null;
@@ -2730,7 +2768,7 @@ app.get('/api/system', (req, res) => {
         basis: basisRuntime.connectionStatus(),
         volume: volumeRuntime.connectionStatus(),
         liquidations: liquidationStats(),
-        news: newsContextStatus(),
+        news: currentNewsContextStatus(),
         calendar: {
           fetchedAt: calCache?.at ?? null,
           items: calCache?.items.length ?? 0,
@@ -2923,6 +2961,16 @@ app.post('/api/refresh', (req, res) => {
         ok: false,
         code: 'CONTROL_PREVIEW_REQUIRED',
         issues: ['Managed-runtime restart requires the canonical Product control preview and durable command receipt.'],
+        target,
+        ts: Date.now(),
+      });
+      return;
+    }
+    if (deterministicOfflinePublicSourcesEnabled()) {
+      res.status(503).json({
+        ok: false,
+        error: 'public source refresh unavailable',
+        issues: ['Deterministic offline public-source mode forbids refresh transport'],
         target,
         ts: Date.now(),
       });

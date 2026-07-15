@@ -48,10 +48,6 @@ const INTERVAL_LABEL: Record<IntervalKey, string> = {
   '1d': '1D', '3d': '3D', '1w': '1W', '1M': '1Mo',
 };
 
-interface BinanceKlineMsg {
-  k?: { t: number; o: string; h: string; l: string; c: string; v: string; q: string };
-}
-
 interface TokenProfile {
   id: string;
   name: string;
@@ -1639,14 +1635,14 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     if (!hasPerp && src === 'futures') setSrc('spot');
   }, [hasPerp, src]);
 
-  // ---- price series: real klines + the live public kline stream -----------
+  // ---- price series: server-owned public kline history --------------------
   useEffect(() => {
     const { interval, limit } = effective;
     const cacheKey = `${symbol}:${src}:${interval}:${limit}`;
     setCandles(tokenCandleCache.get(cacheKey)?.value ?? []);
     setCandleError(null);
-    // REST hydrates and periodically reconciles history; the exchange kline
-    // socket below owns live updates so the series does not jump on a 1s refetch.
+    // The same-origin public-source owner hydrates and periodically reconciles
+    // history. The browser never opens a second exchange transport.
     const poll = createSettledPoll<TvCandle[]>({
       intervalMs: 30_000,
       request: (signal) => fetchJson(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}&market=${src}`, { signal }),
@@ -1664,63 +1660,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     });
     poll.start();
     return poll.stop;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, range, ivl, src]);
-
-  useEffect(() => {
-    const { interval, limit } = effective;
-    let closed = false;
-    let generation = 0;
-    let retry: number | null = null;
-    let socket: WebSocket | null = null;
-    const host = src === 'futures' ? 'wss://fstream.binance.com/market/ws' : 'wss://stream.binance.com:9443/ws';
-    const clearRetry = () => {
-      if (retry !== null) window.clearTimeout(retry);
-      retry = null;
-    };
-    const connect = () => {
-      if (closed) return;
-      clearRetry();
-      const socketGeneration = ++generation;
-      const ws = new WebSocket(`${host}/${symbol.toLowerCase()}@kline_${interval}`);
-      socket = ws;
-      ws.onmessage = (ev) => {
-        if (closed || socket !== ws || generation !== socketGeneration) return;
-        try {
-          const msg = JSON.parse(String(ev.data)) as BinanceKlineMsg;
-          const k = msg.k;
-          if (!k) return;
-          const candidate: TvCandle = { t: Number(k.t), o: Number(k.o), h: Number(k.h), l: Number(k.l), c: Number(k.c), v: Number(k.v), qv: Number(k.q) };
-          const next = normalizeTvCandles([candidate])[0];
-          if (!next) return;
-          setCandleError(null);
-          setCandles((previous) => normalizeTvCandles([...previous, next]).slice(-limit));
-        } catch { /* malformed frame */ }
-      };
-      ws.onerror = () => {
-        if (socket === ws && generation === socketGeneration) ws.close();
-      };
-      ws.onclose = () => {
-        if (closed || socket !== ws || generation !== socketGeneration) return;
-        socket = null;
-        retry = window.setTimeout(connect, 3_000);
-      };
-    };
-    connect();
-    return () => {
-      closed = true;
-      generation += 1;
-      clearRetry();
-      const current = socket;
-      socket = null;
-      if (current) {
-        current.onopen = null;
-        current.onmessage = null;
-        current.onerror = null;
-        current.onclose = null;
-        current.close();
-      }
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, range, ivl, src]);
 

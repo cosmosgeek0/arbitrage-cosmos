@@ -119,7 +119,7 @@ export function runAuthorityScan(catalog) {
         const classification = file.startsWith('server/src/systemIntegration/') ? 'FORBIDDEN_IN_COMPOSER'
           : file === 'server/src/engine/marketData.ts' || /server\/src\/services\/(?:volumeRuntime|basisRuntime)\.ts/.test(file)
             ? 'ACCEPTED_EXISTING_PHYSICAL_PRODUCER'
-            : file === 'server/src/services/bookStream.ts' || file === 'web/src/pages/TokenDetail.tsx' ? 'UI_LOCAL_EXCEPTION_REVIEW'
+            : file === 'server/src/services/bookStream.ts' ? 'UI_LOCAL_EXCEPTION_REVIEW'
               : file.startsWith('server/src/intelligenceRuntime/') ? 'CANONICAL_RUNTIME_OR_MANUAL_SMOKE'
                 : file === 'server/src/binance/userStream.ts' ? 'PRIVATE_TRUTH_LEGACY_REVIEW'
                   : file === 'server/src/binance/ws.ts' ? 'TRANSPORT_LIBRARY'

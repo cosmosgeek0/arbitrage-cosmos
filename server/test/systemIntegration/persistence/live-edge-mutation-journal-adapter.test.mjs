@@ -640,6 +640,40 @@ test('registry movement during lineage or orphan reads downgrades transient cont
   }
 });
 
+test('inventory inspection downgrades an independently advancing registry to unavailable and then converges', () => {
+  const dataDir = tempDataDir('cosmos-live-edge-inventory-race-');
+  const ledger = new Ledger(dataDir);
+  try {
+    const clock = Object.freeze({ nowMs: () => T + 2 });
+    const independent = new LiveEdgeMutationJournalPersistenceAdapter(ledger, clock);
+    appendAndRead(independent, prepareInitialMutationAppend(canonicalInput(75)));
+    const winner = prepareInitialMutationAppend(canonicalInput(76));
+    let interleaved = false;
+    const racing = new LiveEdgeMutationJournalPersistenceAdapter({
+      getConfigValue: (...args) => ledger.getConfigValue(...args),
+      recentEvents: (...args) => {
+        if (!interleaved) {
+          interleaved = true;
+          assert.equal(independent.append(winner.request).disposition, 'COMMITTED_NEW');
+        }
+        return ledger.recentEvents(...args);
+      },
+      countEvents: (...args) => ledger.countEvents(...args),
+      compareAndSetConfigValueAndLogEvents: (...args) => ledger.compareAndSetConfigValueAndLogEvents(...args),
+    }, clock);
+
+    assert.throws(
+      () => racing.inspectInventory(),
+      (error) => error instanceof LiveEdgeMutationJournalAdapterError
+        && error.code === 'PERSISTENCE_UNAVAILABLE',
+    );
+    assert.equal(racing.inspectInventory().journalCount, 2);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('hard registry count capacity refuses the 65th journal without eviction or events', () => {
   const dataDir = tempDataDir('cosmos-live-edge-count-capacity-');
   const ledger = new Ledger(dataDir);

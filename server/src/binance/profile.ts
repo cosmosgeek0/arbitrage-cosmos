@@ -6,9 +6,11 @@
  * the global dominance snapshot refresh hourly. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
-const DISK = path.resolve(process.cwd(), process.env.PROFILE_CACHE ?? 'data/profile_cache.json');
+const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
+const DISK = path.resolve(process.cwd(), process.env.PROFILE_CACHE ?? path.join(DATA_ROOT, 'profile_cache.json'));
 const PROFILE_TTL = 60 * 60 * 1000; // 1h
 const CALL_GAP_MS = 2_500; // keyless CG throttles hard; stay polite
 const FETCH_TIMEOUT_MS = 12_000;
@@ -184,6 +186,7 @@ async function reserveRequestSlot(): Promise<void> {
 }
 
 async function politeJson<T>(urlValue: string): Promise<T> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('CoinGecko unavailable');
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || url.hostname !== 'api.coingecko.com' || !url.pathname.startsWith('/api/v3/')) {
     throw new Error('CoinGecko unavailable');
@@ -455,6 +458,7 @@ async function loadDominance(): Promise<Record<string, number>> {
 }
 
 export async function tokenProfile(base: string, opts?: { forceFull?: boolean }): Promise<TokenProfile | null> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('token profile unavailable');
   const key = canonicalBase(base);
   if (!key) return null;
   const hit = cache.get(key);
@@ -677,6 +681,7 @@ export async function warmAllProfiles(
   priceOf: (base: string) => number | null,
   stockTokens: Set<string>,
 ): Promise<void> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('profile warming unavailable');
   if (warm.running) return;
   const uniq = [...new Set(bases.map(canonicalBase).filter((b): b is string => Boolean(b)))].sort().slice(0, MAX_PROFILE_CACHE_ENTRIES);
   warm = { running: true, phase: 'bulk', startedAt: Date.now(), finishedAt: null, total: uniq.length, done: 0, ok: 0, na: 0, lite: 0, current: null, failed: [], suspect: [] };

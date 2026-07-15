@@ -6,7 +6,7 @@
  * Run: node server/test/gates.mjs   (after npm run build)
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -200,6 +200,11 @@ const serverIndex = readFileSync('server/src/index.ts', 'utf8');
 const marketEngineSource = readFileSync('server/src/engine/marketData.ts', 'utf8');
 const liquidationProjectionSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
 const productionFactorySource = readFileSync('server/src/systemIntegration/production/factory.ts', 'utf8');
+const tokenDetailSource = readFileSync('web/src/pages/TokenDetail.tsx', 'utf8');
+const tokenIconSource = readFileSync('web/src/components/TokenIcon.tsx', 'utf8');
+const profileSource = readFileSync('server/src/binance/profile.ts', 'utf8');
+const iconSource = readFileSync('server/src/binance/icons.ts', 'utf8');
+const liquidationSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
 check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
@@ -244,6 +249,77 @@ check(
     !/startNewsRefreshLoop|primeIconStartTimer|initialRefreshTimer|warmProfileStartTimer/.test(serverIndex)
 );
 check(
+  'automatic token rendering owns no direct exchange socket or fallback CDN transport',
+  !/(?:new\s+WebSocket|wss:\/\/)/.test(tokenDetailSource) &&
+    !/(?:cdn\.jsdelivr\.net|assets\.coincap\.io)/.test(tokenIconSource) &&
+    /const\s+chain\s*=\s*\[resolved\]\.filter\(Boolean\)/.test(tokenIconSource)
+);
+check(
+  'browser campaign public caches default under the isolated DATA_DIR',
+  [profileSource, iconSource, liquidationSource].every((source) => (
+    /process\.env\.DATA_DIR/.test(source) && /path\.resolve\(process\.env\.DATA_DIR\)/.test(source)
+  ))
+);
+
+const cacheProbeRoot = mkdtempSync(path.join(tmpdir(), 'cosmos-cache-defaults-'));
+try {
+  const cacheProbeData = path.join(cacheProbeRoot, 'isolated-data');
+  const cacheProbeCwd = path.join(cacheProbeRoot, 'unrelated-cwd');
+  mkdirSync(cacheProbeData, { recursive: true });
+  mkdirSync(cacheProbeCwd, { recursive: true });
+  const now = Date.now();
+  const bucket5 = String(Math.floor(now / 300_000) * 300_000);
+  const bucket1 = String(Math.floor(now / 3_600_000) * 3_600_000);
+  writeFileSync(path.join(cacheProbeData, 'icon_cache.json'), JSON.stringify({
+    BTC: 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png',
+  }));
+  writeFileSync(path.join(cacheProbeData, 'profile_cache.json'), JSON.stringify({
+    BTC: { id: 'bitcoin', idTs: now, profile: { id: 'bitcoin', name: 'Bitcoin', symbol: 'BTC', full: false, fetchedAt: now }, profileTs: now },
+  }));
+  writeFileSync(path.join(cacheProbeData, 'liquidations.json'), JSON.stringify({
+    since: now - 1_000,
+    books: { BTCUSDT: { m5: { [bucket5]: { long: 1, short: 2 } }, h1: { [bucket1]: { long: 1, short: 2 } } } },
+  }));
+
+  const moduleUrls = {
+    icons: `file://${path.resolve('server/dist/binance/icons.js')}`,
+    profile: `file://${path.resolve('server/dist/binance/profile.js')}`,
+    liquidations: `file://${path.resolve('server/dist/binance/liquidations.js')}`,
+  };
+  const cacheProbeScript = `
+    const icons = await import(${JSON.stringify(moduleUrls.icons)});
+    const profile = await import(${JSON.stringify(moduleUrls.profile)});
+    const liquidations = await import(${JSON.stringify(moduleUrls.liquidations)});
+    const out = {
+      icon: icons.resolveIcons(['BTC']).BTC ?? null,
+      cachedProfiles: profile.profileWarmStatus().cachedProfiles,
+      liquidationPoints: liquidations.liquidationSeries('BTCUSDT', 300000).points.length,
+    };
+    process.stdout.write(JSON.stringify(out));
+    process.exit(0);
+  `;
+  const cacheProbe = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '--eval', cacheProbeScript], {
+    cwd: cacheProbeCwd,
+    env: {
+      PATH: process.env.PATH,
+      DATA_DIR: cacheProbeData,
+      SKIP_DOTENV: '1',
+    },
+    encoding: 'utf8',
+    timeout: 10_000,
+  }));
+  check(
+    'profile, icon, and liquidation modules behaviorally read default caches only from DATA_DIR',
+    typeof cacheProbe.icon === 'string' && cacheProbe.icon.includes('coingecko.com') &&
+      cacheProbe.cachedProfiles === 1 && cacheProbe.liquidationPoints === 1,
+    JSON.stringify(cacheProbe),
+  );
+} catch (error) {
+  check('profile, icon, and liquidation modules behaviorally read default caches only from DATA_DIR', false, String(error));
+} finally {
+  rmSync(cacheProbeRoot, { recursive: true, force: true });
+}
+check(
   'legacy proposal Scanner has no production import, construction, tick, status, or mutation reachability',
   !/from\s+['"]\.\/engine\/scanner\.js['"]/.test(serverIndex) &&
     !/\bnew\s+Scanner\s*\(/.test(serverIndex) &&
@@ -284,9 +360,6 @@ const child = spawn(process.execPath, ['--import', './server/test/private-egress
     PORT: String(PORT),
     HOST,
     DATA_DIR: dataDir,
-    PROFILE_CACHE: path.join(dataDir, 'profile-cache.json'),
-    ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
-    LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
     SKIP_DOTENV: '1',
     BINANCE_API_KEY: 'sentinel-binance-api-key-not-a-secret',
     BINANCE_API_SECRET: 'sentinel-binance-api-secret-not-a-secret',
@@ -738,6 +811,30 @@ check(
   ))
 );
 
+const browserReachableUnavailableResponses = [
+  await get('/api/token/moneyflow?symbol=BTCUSDT&window=15m'),
+  await get('/api/token/profile?base=BTC'),
+  await get('/api/news?catalog=all'),
+  await get('/api/news-context?limit=220'),
+  await get('/api/news-stream?limit=220'),
+  await get('/api/calendar'),
+  await get('/api/fx'),
+  await get('/api/source-logo?domain=binance.com&sz=64'),
+  await post('/api/token/profiles/warm', {}),
+  await post('/api/news-context/refresh', { limit: 220 }),
+  await post('/api/refresh', { target: 'news' }),
+];
+check(
+  'browser-reachable public owners fail closed before deterministic-test egress',
+  browserReachableUnavailableResponses.every((response) => (
+    response.status >= 500 &&
+    response.status < 600 &&
+    typeof response.body?.error === 'string' &&
+    /unavailable/i.test(response.body.error) &&
+    !/https?:\/\//i.test(response.body.error)
+  ))
+);
+
 const fundX = (await get('/api/funding/extremes')).body;
 check(
   'funding extremes cannot fabricate rows without public source truth',
@@ -889,9 +986,10 @@ const iconsRes = await request('/api/icons?bases=BTC,ETH,TLM,BREV');
 const iconsBody = await iconsRes.json().catch(() => null);
 check('icon manifest endpoint responds', iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object');
 check(
-  'CSP allows coingecko + coincap image hosts',
+  'CSP allows only the server-resolved token image owner, not retired client fallback CDNs',
   (secRes.headers.get('content-security-policy') ?? '').includes('coingecko.com') &&
-    (secRes.headers.get('content-security-policy') ?? '').includes('coincap.io')
+    !(secRes.headers.get('content-security-policy') ?? '').includes('coincap.io') &&
+    !(secRes.headers.get('content-security-policy') ?? '').includes('cdn.jsdelivr.net')
 );
 
 await stopChild(child);

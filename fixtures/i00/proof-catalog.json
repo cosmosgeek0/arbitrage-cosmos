@@ -75,6 +75,8 @@
     { "id": "NO_INTEGRATION_DATABASE", "scope": "server/src/systemIntegration", "pattern": "better-sqlite3|new\\s+Database", "expectedHits": 0 },
     { "id": "NO_BROWSER_PRIVATE_BINANCE", "scope": "web/src", "pattern": "X-MBX-APIKEY|/sapi/v1/|/fapi/v1/order|/api/v3/order", "expectedHits": 0 },
     { "id": "NO_IP_PROOF_PRODUCTION_IMPORT", "scope": "server/test/i00Acceptance", "pattern": "from\\s+['\"][^'\"]*(?:server/src|web/src|packages/edge-protocol)[^'\"]*['\"]", "expectedHits": 0 },
+    { "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET", "scope": "web/src/pages/TokenDetail.tsx", "pattern": "new\\s+WebSocket|wss://", "expectedHits": 0 },
+    { "id": "NO_BROWSER_TOKEN_FALLBACK_CDN", "scope": "web/src/components/TokenIcon.tsx", "pattern": "cdn\\.jsdelivr\\.net|assets\\.coincap\\.io", "expectedHits": 0 },
     { "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL", "scope": "server/src", "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr", "expectedHits": 1 },
     { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 }
   ],
@@ -82,7 +84,6 @@
     { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
     { "id": "LEGACY_TRADE_SEND_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/trade/send'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
     { "id": "LEGACY_MARGIN_MUTATION_ROUTES", "path": "server/src/index.ts", "needle": "app.post('/api/loans/borrow'", "classification": "RESOLVED_RESTRICTED_FAIL_CLOSED", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "legacy margin mutations are fail-closed and have zero production consumers" },
-    { "id": "UI_LOCAL_BINANCE_SOCKET", "path": "web/src/pages/TokenDetail.tsx", "needle": "new WebSocket", "classification": "ACCEPTED_UI_LOCAL_EXCEPTION", "resolutionState": "RESOLVED", "evidence": "ARCHITECTURE.md Part II", "impact": "viewed-symbol delivery remains UI-local and cannot become broad authority" },
     { "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED", "path": null, "needle": null, "classification": "NOT_CONFIGURED", "resolutionState": "LIMITATION", "evidence": "fixtures/i00/living-director-input-acceptance.json", "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until production transport and schema-hash handshake are configured" }
   ],
   "canonicalRoutes": [

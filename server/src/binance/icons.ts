@@ -14,7 +14,8 @@ import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js'
 const CG = 'https://api.coingecko.com/api/v3';
 const ICON_TTL = 7 * 86400 * 1000; // successes: 7 days
 const ICON_RETRY = 180 * 1000; // failures: retry after 3 min
-const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? 'data/icon_cache.json');
+const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
+const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? path.join(DATA_ROOT, 'icon_cache.json'));
 // CoinGecko keyless throttles harder than its published limit — 1.3s gaps got
 // 429s that looked like "no logo". 4.5s converges slower but never lies.
 const RESOLVE_GAP_MS = 4500;

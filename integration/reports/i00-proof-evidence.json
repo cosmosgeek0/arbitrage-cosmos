@@ -168,7 +168,7 @@
     "scenarios": 22,
     "authorityConcepts": 13,
     "semanticStreams": 6,
-    "transportCandidates": 92,
+    "transportCandidates": 90,
     "provenanceItems": 23,
     "phase2Donors": 16
   },
@@ -566,6 +566,18 @@
         "passed": true
       },
       {
+        "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "NO_BROWSER_TOKEN_FALLBACK_CDN",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
         "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL",
         "expectedHits": 1,
         "hits": [
@@ -613,16 +625,6 @@
         "resolutionState": "RESOLVED",
         "evidence": "fixtures/i00/baseline-route-migration.json",
         "impact": "legacy margin mutations are fail-closed and have zero production consumers",
-        "observed": true
-      },
-      {
-        "id": "UI_LOCAL_BINANCE_SOCKET",
-        "path": "web/src/pages/TokenDetail.tsx",
-        "needle": "new WebSocket",
-        "classification": "ACCEPTED_UI_LOCAL_EXCEPTION",
-        "resolutionState": "RESOLVED",
-        "evidence": "ARCHITECTURE.md Part II",
-        "impact": "viewed-symbol delivery remains UI-local and cannot become broad authority",
         "observed": true
       },
       {
@@ -690,7 +692,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3261,
+        "line": 3309,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1084,16 +1086,6 @@
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
-        "file": "web/src/pages/TokenDetail.tsx",
-        "line": 1676,
-        "classification": "UI_LOCAL_EXCEPTION_REVIEW"
-      },
-      {
-        "file": "web/src/pages/TokenDetail.tsx",
-        "line": 1685,
-        "classification": "UI_LOCAL_EXCEPTION_REVIEW"
-      },
-      {
         "file": "web/src/store.tsx",
         "line": 371,
         "classification": "LOCAL_OPERATOR_DELIVERY"
@@ -1105,7 +1097,7 @@
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
         "file": "server/src/binance/liquidations.ts",
-        "line": 272
+        "line": 273
       },
       {
         "concept": "semantic-source",
@@ -3103,61 +3095,61 @@
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 73
+        "line": 74
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 118
+        "line": 119
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 154
+        "line": 155
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 377
+        "line": 378
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 627
+        "line": 628
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1764
+        "line": 1793
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1773
+        "line": 1802
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2163
+        "line": 2200
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2175
+        "line": 2212
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2185
+        "line": 2222
       },
       {
         "concept": "semantic-source",
@@ -13479,6 +13471,18 @@
         "expectedHits": 0
       },
       {
+        "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET",
+        "scope": "web/src/pages/TokenDetail.tsx",
+        "pattern": "new\\s+WebSocket|wss://",
+        "expectedHits": 0
+      },
+      {
+        "id": "NO_BROWSER_TOKEN_FALLBACK_CDN",
+        "scope": "web/src/components/TokenIcon.tsx",
+        "pattern": "cdn\\.jsdelivr\\.net|assets\\.coincap\\.io",
+        "expectedHits": 0
+      },
+      {
         "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL",
         "scope": "server/src",
         "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr",
@@ -13518,15 +13522,6 @@
         "resolutionState": "RESOLVED",
         "evidence": "fixtures/i00/baseline-route-migration.json",
         "impact": "legacy margin mutations are fail-closed and have zero production consumers"
-      },
-      {
-        "id": "UI_LOCAL_BINANCE_SOCKET",
-        "path": "web/src/pages/TokenDetail.tsx",
-        "needle": "new WebSocket",
-        "classification": "ACCEPTED_UI_LOCAL_EXCEPTION",
-        "resolutionState": "RESOLVED",
-        "evidence": "ARCHITECTURE.md Part II",
-        "impact": "viewed-symbol delivery remains UI-local and cannot become broad authority"
       },
       {
         "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED",
@@ -13898,5 +13893,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "95c2bf57123ae48f8b2e7e0cbb7cef637de5fccee0fb0c8a7786d59fd7e8bc80"
+  "evidenceSha256": "a430b86cea3114148c8218dd7400903640a1ef6f69c0c3aa4ac9efd674b9ddc7"
 }

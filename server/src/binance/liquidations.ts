@@ -5,7 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? 'data/liquidations.json');
+const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
+const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? path.join(DATA_ROOT, 'liquidations.json'));
 const FIVE_MIN = 5 * 60_000;
 const HOUR = 60 * 60_000;
 const KEEP_5M_MS = 48 * HOUR;

@@ -41,10 +41,6 @@ const ALIAS: Record<string, string> = {
   BNSOL: 'SOL',
 };
 
-const SPOTHQ = (base: string) =>
-  `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/svg/color/${base.toLowerCase()}.svg`;
-const COINCAP = (base: string) => `https://assets.coincap.io/assets/icons/${base.toLowerCase()}@2x.png`;
-
 // Binance tokenized equities (…B suffix): stocks, not crypto — no logo CDN has
 // them. They get a deliberate dark "stock badge" with the real equity ticker.
 const STOCK_TOKENS = new Set([
@@ -97,9 +93,10 @@ export function Monogram({ base, size }: { base: string; size: number }) {
 }
 
 /**
- * Real logo resolver with a fallback chain: server-resolved CoinGecko logo
- * (near-total coverage, cached to disk) → spothq CC0 SVG → coincap PNG →
- * gradient monogram. Every icon sits in a uniform circular badge with a
+ * Real logo resolver with one server-owned source: a validated CoinGecko logo
+ * URL, or the deterministic gradient monogram while that source is unavailable.
+ * The browser never creates a second CDN authority or fallback transport.
+ * Every icon sits in a uniform circular badge with a
  * hairline ring so all sources look consistent — never an empty circle, never
  * a jarring size mismatch. Monograms upgrade to the real logo in place once
  * the background resolver finds it.
@@ -118,7 +115,7 @@ export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number
   }, [base]);
 
   const resolved = iconUrl(base);
-  const chain = [resolved, SPOTHQ(base), COINCAP(base)].filter(Boolean) as string[];
+  const chain = [resolved].filter(Boolean) as string[];
 
   const inner =
     idx >= chain.length ? (

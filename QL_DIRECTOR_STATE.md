@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-41 (2026-07-15): compute-window burn — FIX-AUDIT + PORT-PLAN (both read-only, detached at afed4d5)
+
+Owner quota expires before C2. Two honest read-only tasks issued that attack the real schedule risks: RUN-F fix-coverage audit (re-verifies each committed R3 fix against its original repro + boundary — prevents a C3 rejection cycle, the 1-3-day risk) and RUN-G port planner (per-lane diff feasibility + ready port scripts for all 9 sealed shadow artifacts + namespace mapping per D-LAUNCH-30 — makes the post-landing burst zero-analysis). Both untracked-output-only, no writer conflicts, focused commands only.
+
 ## D-LAUNCH-40 (2026-07-15): shadow board COMPLETE — all sealed and pushed
 
 Replay 7666930, A1X e65cdca, A4X 6204667, A5X e8e005e sealed clean (+ earlier runbook 25a3762, ops cdf64b6, obs 20608c4, A2X 9ae6c22, A3X c6397f5, A1-A5 bases). ENTIRE speculative/preparation board is now DONE — nothing parallel remains by design (Queue.md law: no invented work). Sole active: RUN-A (role4-fix, at afed4d5 BACKUP-008 = 9+/15). Next trigger: INTEGRATION_CANDIDATE_READY + C2 SHA → v1..v5 + role3-c2 cut → 6-chat verification burst → landing → ~8-chat port burst.

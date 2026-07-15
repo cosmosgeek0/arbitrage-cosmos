@@ -1,6 +1,18 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
-# >>>>> RUN NOW — exactly these 5, all in the Codex app on the fresh account. RUN-A is the main one. Everything below OLD line = history, DO NOT RUN. <<<<<
+# >>>>> RUN NOW — RUN-A (running) + RUN-F + RUN-G. B/C/D/E are DONE. Below OLD line = history, DO NOT RUN. <<<<<
+
+## RUN-F — folder /Users/cosmosgeek/Desktop/fix-audit (NEW chat — the C3-preventer)
+```text
+You are the READ-ONLY FIX-COVERAGE AUDITOR (D-LAUNCH-41). Worktree detached at afed4d5 (role4-fix committed state; the fix owner keeps working — never contact or write its worktree). Your only output: FIX_AUDIT.md at your worktree root (untracked). For EACH finding already committed on branch role4-fix-20260715 (read git log — VAL-001, EGRESS-012, SHA-014, CPT-010, CLIENT-004, ROUTE-005, RETRY-006, WATCHDOG-007, BACKUP-008, plus any newer): (1) run the ORIGINAL repro command from /Users/cosmosgeek/Desktop/role3-verify/ROLE3_VERIFICATION_RECEIPT.md — must now show FIXED; (2) run the fix's regression test — must pass; (3) check the fix stayed inside the receipt's correction boundary (no scope creep, no weakened invariant); (4) verdict per finding: COVERED / PARTIAL (exact gap) / REGRESSION_RISK (exact evidence). Focused commands only, no full/browser/perf suites. This exists to catch a bad fix BEFORE C2 freezes so no C3 cycle happens. Usage limit → save file + stop; same message resumes. Stop at FIX_AUDIT_READY or precise BLOCKED.
+```
+
+## RUN-G — folder /Users/cosmosgeek/Desktop/port-plan (NEW chat — makes the final burst instant)
+```text
+You are the READ-ONLY PORT PLANNER (D-LAUNCH-41). Worktree detached at afed4d5 (near-final product shape; fix owner keeps working — never touch its worktree). Only output: PORT_PLAN.md + per-lane port scripts under portPlan/ at your worktree root (untracked). For EVERY sealed shadow artifact — A1 83c1624+A1X e65cdca, A2 ca1fb09+A2X 9ae6c22, A3 c345fbb+A3X c6397f5, A4 b5f4c47+A4X 6204667, A5 e0411ea+A5X e8e005e, ops cdf64b6, replay 7666930, obs 20608c4, runbook 25a3762 (read all via git show, branches *-20260715) — compute: exact changed-path list; diff-apply feasibility against THIS tree (clean apply / conflict list with file+reason); interface assumptions that changed since base 03857dc (check against current code); the port-phase target namespace per the ratified map in Main QL_DIRECTOR_STATE.md D-LAUNCH-30 (e.g. caseRuntime→runtime, providerAdapters→adapters); a ready `git diff base..tip | git apply`-style port script per lane with conflict fallbacks. NO writes outside your untracked outputs, no candidate edits, no merges. This exists so the post-landing port burst starts with zero analysis time. Usage limit → save + stop; same message resumes. Stop at PORT_PLAN_READY or precise BLOCKED.
+```
+
+
 
 ## RUN-A — folder /Users/cosmosgeek/Desktop/role4-fix (THE MAIN ONE)
 ```text

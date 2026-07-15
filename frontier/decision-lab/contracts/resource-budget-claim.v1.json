@@ -1,0 +1,58 @@
+{
+  "claimId": "frontier.decision-lab.blocked-scaffold-budget.v1",
+  "measurementMode": "UNAVAILABLE_PRESTAGE",
+  "cpu": {
+    "state": "UNAVAILABLE",
+    "unit": "host-cpu-percent",
+    "reason": "No mounted DecisionLab runtime or host CPU benchmark exists."
+  },
+  "memory": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes",
+    "reason": "No mounted DecisionLab process or RSS benchmark exists."
+  },
+  "disk": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-second",
+    "reason": "The pure scaffold has no disk transport and no host-disk benchmark."
+  },
+  "network": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-second",
+    "reason": "No network transport exists and no mounted host-network measurement is claimed."
+  },
+  "eventRate": {
+    "state": "UNAVAILABLE",
+    "unit": "reports-per-second",
+    "reason": "DecisionLab has no event queue, mounted runtime, or throughput benchmark."
+  },
+  "latency": {
+    "state": "UNAVAILABLE",
+    "unit": "host-milliseconds",
+    "reason": "Deterministic contract steps do not establish a mounted host-latency envelope."
+  },
+  "queue": {
+    "state": "UNAVAILABLE",
+    "unit": "events",
+    "reason": "No queue or backpressure runtime is implemented."
+  },
+  "storageGrowth": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-report",
+    "reason": "No persistence owner is mounted and no report-retention window is claimed."
+  },
+  "modelUse": {
+    "state": "UNAVAILABLE",
+    "unit": "calls-per-report",
+    "reason": "No model provider is mounted; the pure contract path has no model-use benchmark."
+  },
+  "structuralInputBounds": {
+    "claimClass": "DETERMINISTIC_CONTRACT_LIMIT_NOT_HOST_BUDGET",
+    "maximumDepth": 64,
+    "maximumNodes": 50000,
+    "maximumArrayLength": 4096,
+    "maximumObjectKeys": 1024,
+    "maximumStringLength": 16384,
+    "maximumAggregateTextLength": 1000000
+  }
+}

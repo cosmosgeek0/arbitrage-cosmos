@@ -1,0 +1,69 @@
+{
+  "requestId": "frontier.decision-lab.q-owner-artifact-admission.v1",
+  "extensionId": "frontier.decision-lab",
+  "requestVersion": "1.0.0",
+  "requestedOwner": "Q_RESEARCH",
+  "intendedSharedSeams": [
+    "quant/research:decision-level-counterfactual-owner-artifact-admission"
+  ],
+  "canonicalOwnerDecisions": [
+    "Q research must decide whether immutable predeclared policy payloads for the six Q-owned alternatives may be admitted at the requested seam.",
+    "Q research must decide the canonical reference grammar and point-in-time proof required for recorded decision, information-set, path, cost, outcome, and liability artifacts.",
+    "Q research must decide how the external L ExecutionPolicyCandidate dependency is materialized and owner-evaluated without granting DecisionLab policy or execution authority."
+  ],
+  "blockingFinding": {
+    "terminalLabel": "BLOCKED_OWNER_POLICY_ARTIFACT_UNAVAILABLE",
+    "missingQPolicyPayloadKinds": [
+      "NO_TRADE",
+      "EARLIER_TIMING",
+      "DELAYED_TIMING",
+      "THRESHOLD",
+      "ENTRY",
+      "EXIT"
+    ],
+    "missingRecordedArtifacts": [
+      "IMMUTABLE_DECISION_RECORD",
+      "POINT_IN_TIME_FEATURE_SET",
+      "POINT_IN_TIME_EVIDENCE_SET",
+      "RECORDED_MARKET_PATH",
+      "RECORDED_COST_SCENARIO",
+      "RECORDED_OUTCOME_AND_LIABILITY"
+    ],
+    "missingOwnerEvaluations": [
+      "COUNTERFACTUAL_OUTCOME_PER_PREDECLARED_ALTERNATIVE",
+      "Q_ASSISTED_VS_MARKET_ONLY_ABLATION",
+      "ONE_EVIDENCE_SOURCE_REMOVED_ABLATIONS",
+      "ONE_FEATURE_FAMILY_REMOVED_ABLATIONS"
+    ],
+    "externalDependency": "A materialized L ExecutionPolicyCandidate and owner evaluation would be required for EXECUTION_POLICY; DecisionLab does not request or invoke L directly."
+  },
+  "acceptedEvidenceBoundary": {
+    "q03EventAtlasRef": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q03/event_atlas.v1.json",
+    "q03EventAtlasSha256": "f8d59dea19be7a4f633f73deaccc3910b086c5a50fa03c07a1b4147ba297b21c",
+    "posture": "RECORDED_EVIDENCE_REFERENCE_ONLY",
+    "limitation": "DISCOVERY_ONLY_NOT_EVENT_TRUTH; later outcomes, decisions, point-in-time features, and raw rows are unavailable."
+  },
+  "requestedCapabilities": [
+    "Admit immutable Q-owned, predeclared alternative payload references for the six Q alternative kinds.",
+    "Admit exact recorded decision, point-in-time information-set, market-path, cost, outcome, and liability payload references.",
+    "Publish owner-evaluated counterfactual and one-at-a-time ablation result references without granting DecisionLab evaluation authority.",
+    "Adjudicate the external L execution-policy candidate dependency through Q-owned research composition."
+  ],
+  "blockedFacetRequests": [
+    "EXPERIMENT_PROVIDER remains fixture-validation only; no evaluation or registry write is requested.",
+    "COCKPIT_PROJECTION remains unmounted until the owner artifacts exist and independent acceptance is complete."
+  ],
+  "futureTests": [
+    "reject any alternative without an immutable exact-hash owner policy payload",
+    "reject any decision context without point-in-time decision, feature, evidence, path, cost, outcome, and liability references",
+    "prove all seven alternatives and every one-at-a-time ablation share the exact frozen information, path, and cost identities",
+    "prove Q owns admitted counterfactual and ablation results while DecisionLab remains descriptive and non-causal",
+    "prove the external L execution-policy candidate is materialized and owner-evaluated before its DecisionLab row becomes available"
+  ],
+  "egressDeclaration": "NONE",
+  "retentionRequest": "FIXTURE_ARTIFACTS_ONLY_NO_CANONICAL_WRITE",
+  "resourceBudgetClaimRef": "frontier/decision-lab/contracts/resource-budget-claim.v1.json",
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "mutationImplemented": false
+}

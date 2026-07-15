@@ -1,0 +1,44 @@
+{
+  "adapterId": "frontier.decision-lab.q15-experiment-card.v1",
+  "canonicalContractId": "Q15ExperimentCardV1",
+  "canonicalContractVersion": "Q15ExperimentCardV1@1",
+  "canonicalOwner": "git:6b18928c282f19128a033ed33910754cbdc2cbe0:quant/src/quant_edge/registry_ops/**",
+  "extensionId": "frontier.decision-lab",
+  "fieldMap": [
+    { "canonicalPath": "artifactIds", "localPath": "artifactIds", "transform": "IDENTITY" },
+    { "canonicalPath": "attemptedTrialIds", "localPath": "attemptedTrialIds", "transform": "IDENTITY" },
+    { "canonicalPath": "cardId", "localPath": "cardId", "transform": "IDENTITY" },
+    { "canonicalPath": "codeCommit", "localPath": "codeCommit", "transform": "IDENTITY" },
+    { "canonicalPath": "datasetManifestIds", "localPath": "datasetManifestIds", "transform": "IDENTITY" },
+    { "canonicalPath": "decision", "localPath": "decision", "transform": "IDENTITY" },
+    { "canonicalPath": "dependencyLockSha256", "localPath": "dependencyLockSha256", "transform": "IDENTITY" },
+    { "canonicalPath": "experimentId", "localPath": "experimentId", "transform": "IDENTITY" },
+    { "canonicalPath": "featureVersions", "localPath": "featureVersions", "transform": "IDENTITY" },
+    { "canonicalPath": "hypothesisId", "localPath": "hypothesisId", "transform": "IDENTITY" },
+    { "canonicalPath": "labelVersions", "localPath": "labelVersions", "transform": "IDENTITY" },
+    { "canonicalPath": "latencyResourceBenchmark", "localPath": "latencyResourceBenchmark", "transform": "IDENTITY" },
+    { "canonicalPath": "metricsAndIntervals", "localPath": "metricsAndIntervals", "transform": "IDENTITY" },
+    { "canonicalPath": "modelCardIds", "localPath": "modelCardIds", "transform": "IDENTITY" },
+    { "canonicalPath": "parameters", "localPath": "parameters", "transform": "IDENTITY" },
+    { "canonicalPath": "posture", "localPath": "posture", "transform": "IDENTITY" },
+    { "canonicalPath": "revision", "localPath": "revision", "transform": "IDENTITY" },
+    { "canonicalPath": "schema", "localPath": "schema", "transform": "IDENTITY" },
+    { "canonicalPath": "seed", "localPath": "seed", "transform": "IDENTITY" },
+    { "canonicalPath": "splitFoldIds", "localPath": "splitFoldIds", "transform": "IDENTITY" },
+    { "canonicalPath": "version", "localPath": "version", "transform": "IDENTITY" }
+  ],
+  "localFixtureSchema": "Q15ExperimentCardV1",
+  "lossy": false,
+  "testVectors": [
+    "frontier/decision-lab/fixtures/factory.mjs#Q15_EXPERIMENT_FIXTURE"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "4d0d4ed05eb710e7c99ed290fbf682a9d5a0754a38cd08fdf83219ae23db44a4"
+}

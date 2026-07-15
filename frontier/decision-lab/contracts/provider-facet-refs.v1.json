@@ -1,0 +1,22 @@
+{
+  "schema": "DecisionLabDockFacetRefsV1",
+  "version": 1,
+  "dockCommitSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "bindings": [
+    {
+      "facetClass": "EXPERIMENT_PROVIDER",
+      "ownerMapPointer": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/5",
+      "operation": "VALIDATE_FIXTURE",
+      "bindingHash": "1a28f00b6e2f9e042beb3923271caf2b0f376233fa7092e725ad07d15503a698",
+      "bindingStatus": "USABLE"
+    },
+    {
+      "facetClass": "COCKPIT_PROJECTION",
+      "ownerMapPointer": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4",
+      "operation": "PROJECT_FIXTURE",
+      "bindingHash": "588e54eb6cafc8ca0114e3f11eac55801fc4b4957d1f6a32bfb797f9754ffa00",
+      "bindingStatus": "USABLE"
+    }
+  ],
+  "privateBindingCreated": false
+}

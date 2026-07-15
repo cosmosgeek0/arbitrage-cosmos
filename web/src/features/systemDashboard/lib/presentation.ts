@@ -27,6 +27,7 @@ export const EXPECTED_COMPONENTS: SystemComponentId[] = [
   'market-universe',
   'intelligence-runtime',
   'market-intelligence',
+  'q-inference',
   'basis-engine',
   'volume-engine',
   'capital-supervision',
@@ -234,6 +235,7 @@ export function traceStage(componentId: SystemComponentId): TraceStage {
       return 'Evidence';
     case 'intelligence-runtime':
     case 'market-intelligence':
+    case 'q-inference':
       return 'Assessment';
     case 'basis-engine':
     case 'volume-engine':

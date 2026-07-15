@@ -890,7 +890,7 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
 }
 
 function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenarioId): readonly Readonly<ProductComponentProjection>[] {
-  const ids = ['public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime', 'market-intelligence', 'basis-engine', 'volume-engine', 'capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation', 'ledger-persistence', 'engine-supervisor'];
+  const ids = ['public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime', 'market-intelligence', 'q-inference', 'basis-engine', 'volume-engine', 'capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation', 'ledger-persistence', 'engine-supervisor'];
   return Object.freeze(ids.map((componentId, index) => Object.freeze({
     componentId,
     owner: fixtureOwner(componentId),
@@ -915,6 +915,7 @@ function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenario
 }
 
 function fixtureOwner(componentId: string): string {
+  if (componentId === 'q-inference') return 'quant/src/quant_edge/inference/**';
   if (componentId.includes('basis') || componentId.includes('volume')) return 'server/src/engine/**';
   if (componentId.includes('capital')) return 'server/src/capitalFoundation/**';
   if (componentId.includes('risk') || componentId.includes('execution') || componentId === 'reconciliation') return 'server/src/foundation/**';

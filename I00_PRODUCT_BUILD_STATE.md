@@ -164,7 +164,7 @@ ledger-persistence, engine-supervisor
 | `npm run typecheck` | Exit 0; server and web pass |
 | `npm run build` | Exit 0; server and web pass; Vite 1,880 modules; advisory large-chunk warning only |
 | Product Integration | `108/108` |
-| Product Control | `76/76`, including restart truth surviving unopened retry failure, a later established failure replacing prior clean truth, and automatic token-rendering transport ownership |
+| Product Control | `80/80`, including the exact ordered 14-component browser inventory, explicit missing-Q and non-green unavailable-Q projection, restart truth surviving unopened retry failure, a later established failure replacing prior clean truth, and automatic token-rendering transport ownership |
 | System Integration | `400/400` after traced validate-only production binding, durable canonical restart-truth refresh, restart-terminalization, and independently advancing Ledger-inventory race hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |

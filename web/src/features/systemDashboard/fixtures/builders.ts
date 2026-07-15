@@ -26,6 +26,7 @@ const OWNERS: Record<SystemComponentId, { owner: string; ownerPath: string }> = 
   'market-universe': { owner: 'universe', ownerPath: 'server/src/systemIntegration/universe' },
   'intelligence-runtime': { owner: 'intelligence', ownerPath: 'server/src/intelligenceRuntime' },
   'market-intelligence': { owner: 'intelligence', ownerPath: 'server/src/intelligenceFoundation' },
+  'q-inference': { owner: 'Q_INFERENCE', ownerPath: 'quant/src/quant_edge/inference' },
   'basis-engine': { owner: 'strategy', ownerPath: 'server/src/engine/basis' },
   'volume-engine': { owner: 'strategy', ownerPath: 'server/src/engine/volume' },
   'capital-supervision': { owner: 'capital', ownerPath: 'server/src/capitalFoundation' },
@@ -42,6 +43,7 @@ const DEPENDENCIES: Record<SystemComponentId, SystemComponentId[]> = {
   'market-universe': ['public-spot-source', 'public-usdm-source'],
   'intelligence-runtime': ['market-universe'],
   'market-intelligence': ['intelligence-runtime'],
+  'q-inference': ['market-intelligence'],
   'basis-engine': ['market-universe', 'market-intelligence'],
   'volume-engine': ['market-universe', 'market-intelligence'],
   'capital-supervision': ['basis-engine', 'volume-engine'],
@@ -333,7 +335,7 @@ export function makeSnapshot(options: SnapshotOptions): SystemSupervisorSnapshot
   };
 }
 
-/** All thirteen managed components in canonical order, each optionally
+/** All fourteen managed components in canonical order, each optionally
  *  overridden; a fixture can also drop members to exercise MISSING boxes. */
 export function makeAllComponents(
   now: number,

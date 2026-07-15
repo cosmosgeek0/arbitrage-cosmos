@@ -1,0 +1,10 @@
+9e67c3d0756782639b57190a3fd05b7a74e9afef8e36893fdee17a43336bce5d  frontier/venue-mesh/RESEARCH.md
+c92197f70c0e64d8c13cf5df0b9ef0bef6c0a363fedf8c6c91254b339e0af8ee  frontier/venue-mesh/contracts/v1/canonical-adapter-map.derived-feature.v1.json
+a3ebaee74a2292030b13219ea525f3a165c019484a4764b01bf8ab525de711aa  frontier/venue-mesh/contracts/v1/canonical-adapter-map.evidence.v1.json
+f8c81fa8c202ab1d2616563e0489f1cf4fa0dedd2f032ed9abb9381772aa379e  frontier/venue-mesh/contracts/v1/extension-descriptor.v1.json
+3c54cf586a162eaa24781c9414ee8c566a44e8a4f67898b6071be09b840cecf9  frontier/venue-mesh/contracts/v1/insertion-request.v1.json
+e2059692176f142aeccea1e079083126b37f8c12678e86665af110fd8b8f617c  frontier/venue-mesh/contracts/v1/max-safe-rate-claim.v1.json
+6075f918565f19682bd6c4e987cd8b8e6f9d3b14c187b9a73c8e3300eea598b3  frontier/venue-mesh/contracts/v1/resource-budget-claim.v1.json
+0fe890e3a6d768f3d101e027009de1ca6d36ac64dc3041dfcb8a85f3fe0008a6  frontier/venue-mesh/contracts/v1/venue-mesh-v1.schema.json
+72a7e2c6167311b35a4903dd2b923ab009fc0091162e50e36c498c5c8198ad34  frontier/venue-mesh/fixtures/honesty-corpus.v1.json
+d9889d1d61d63e111dec750f2dd41e2c76a5b47be211691bf5141b6c296eb13a  frontier/venue-mesh/fixtures/license-retention-matrix.v1.json

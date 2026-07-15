@@ -1,0 +1,10 @@
+{
+  "featureId": "venue_mesh.net_dislocation_bps",
+  "asOfNs": "1784144401000000000",
+  "inputLastEventNs": "1784144400000000000",
+  "status": "AVAILABLE",
+  "value": {
+    "mantissa": "-1019980019980",
+    "scale": "1000000000000"
+  }
+}

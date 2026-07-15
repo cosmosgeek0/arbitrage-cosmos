@@ -1,0 +1,48 @@
+{
+  "schema": "VenueAssetRegistryFixtureV1",
+  "version": 1,
+  "entries": [
+    {
+      "venue": "COINBASE",
+      "assetCode": "BTC",
+      "canonicalAssetId": "asset:bitcoin",
+      "provenanceRef": "fixture://venue-mesh/assets/coinbase-btc",
+      "verificationState": "VERIFIED"
+    },
+    {
+      "venue": "COINBASE",
+      "assetCode": "USD",
+      "canonicalAssetId": "currency:usd",
+      "provenanceRef": "fixture://venue-mesh/assets/coinbase-usd",
+      "verificationState": "VERIFIED"
+    },
+    {
+      "venue": "DERIBIT",
+      "assetCode": "BTC",
+      "canonicalAssetId": "asset:bitcoin",
+      "provenanceRef": "fixture://venue-mesh/assets/deribit-btc",
+      "verificationState": "VERIFIED"
+    },
+    {
+      "venue": "DERIBIT",
+      "assetCode": "USD",
+      "canonicalAssetId": "currency:usd",
+      "provenanceRef": "fixture://venue-mesh/assets/deribit-usd",
+      "verificationState": "VERIFIED"
+    },
+    {
+      "venue": "KRAKEN",
+      "assetCode": "USD",
+      "canonicalAssetId": "currency:usd",
+      "provenanceRef": "fixture://venue-mesh/assets/kraken-usd",
+      "verificationState": "VERIFIED"
+    },
+    {
+      "venue": "KRAKEN",
+      "assetCode": "XBT",
+      "canonicalAssetId": "asset:bitcoin",
+      "provenanceRef": "fixture://venue-mesh/assets/kraken-xbt",
+      "verificationState": "VERIFIED"
+    }
+  ]
+}

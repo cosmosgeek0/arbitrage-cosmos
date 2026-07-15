@@ -1,0 +1,56 @@
+{
+  "schema": "VenueLicenseRetentionMatrixV1",
+  "version": 1,
+  "researchedAtUtc": "2026-07-15T19:49:03Z",
+  "rows": [
+    {
+      "sourceId": "venue-mesh.coinbase.public-doc-fixture",
+      "owner": "Coinbase",
+      "upstreamOrigin": "Coinbase",
+      "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+      "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+      "termsUrl": "https://www.coinbase.com/legal/market_data",
+      "termsContentSha256": null,
+      "retentionPermission": "REVIEW_REQUIRED",
+      "redistributionPermission": "REVIEW_REQUIRED",
+      "sampling": "PINNED_DOCUMENTATION_EXAMPLES_ONLY",
+      "geography": "REVIEW_REQUIRED",
+      "authenticationRequirement": "NONE_FOR_DOCUMENTATION;RUNTIME_NOT_IMPLEMENTED",
+      "reviewedAtMs": 1784144943000,
+      "expiresAtMs": 1786736943000
+    },
+    {
+      "sourceId": "venue-mesh.kraken.public-doc-fixture",
+      "owner": "Kraken",
+      "upstreamOrigin": "Kraken",
+      "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+      "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+      "termsUrl": "https://www.kraken.com/en-ca/legal/global-terms",
+      "termsContentSha256": "69f899156b00e8d1e1bdaa114e66097baa57e9d31c62c68ca9d221bfbd360531",
+      "retentionPermission": "REVIEW_REQUIRED",
+      "redistributionPermission": "REVIEW_REQUIRED",
+      "sampling": "PINNED_DOCUMENTATION_EXAMPLES_ONLY",
+      "geography": "REVIEW_REQUIRED",
+      "authenticationRequirement": "NONE_FOR_DOCUMENTATION;RUNTIME_NOT_IMPLEMENTED",
+      "reviewedAtMs": 1784144943000,
+      "expiresAtMs": 1786736943000
+    },
+    {
+      "sourceId": "venue-mesh.deribit.public-doc-fixture",
+      "owner": "Deribit",
+      "upstreamOrigin": "Deribit",
+      "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+      "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+      "termsUrl": "https://support.deribit.com/hc/en-us/sections/25944487080477-Legal",
+      "termsContentSha256": null,
+      "retentionPermission": "REVIEW_REQUIRED",
+      "redistributionPermission": "REVIEW_REQUIRED",
+      "sampling": "PINNED_DOCUMENTATION_EXAMPLES_ONLY",
+      "geography": "REVIEW_REQUIRED",
+      "authenticationRequirement": "NONE_FOR_DOCUMENTATION;RUNTIME_NOT_IMPLEMENTED",
+      "reviewedAtMs": 1784144943000,
+      "expiresAtMs": 1786736943000
+    }
+  ],
+  "effectiveRule": "NO_MARKET_DATA_RETENTION_OR_REDISTRIBUTION_IS_AUTHORIZED_BY_THIS PRESTAGE MATRIX"
+}

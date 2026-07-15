@@ -1,0 +1,48 @@
+{
+  "schema": "VenueRawFixtureBundleV1",
+  "version": 1,
+  "venue": "COINBASE",
+  "product": {
+    "id": "BTC-USD",
+    "base_currency": "BTC",
+    "quote_currency": "USD",
+    "quote_increment": "0.01",
+    "base_increment": "0.00000001",
+    "status": "online",
+    "trading_disabled": false,
+    "cancel_only": false,
+    "limit_only": false,
+    "sourceUrl": "https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-all-known-trading-pairs",
+    "sourceContentSha256": "d79cd6d8473d8f35e9a8e85850e904d2b0faf1c9e6ae637d922a6fdc6d52a2f7"
+  },
+  "ticker": {
+    "type": "ticker",
+    "product_id": "BTC-USD",
+    "time": "2026-07-15T19:40:00.000Z",
+    "best_bid": "100.00",
+    "best_ask": "100.10",
+    "best_bid_size": "3.0",
+    "best_ask_size": "2.5"
+  },
+  "clock": {
+    "eventTimeUnit": "RFC3339",
+    "receiveTimeMs": 1784144400050,
+    "normalizationTimeMs": 1784144400100,
+    "featureCutoffTimeMs": 1784144401000,
+    "maximumFutureSkewMs": 0,
+    "maximumAgeMs": 1000
+  },
+  "source": {
+    "streamClass": "WEBSOCKET_TICKER_FIXTURE",
+    "connectionId": "vm.coinbase.fixture.1",
+    "sessionId": "vm.coinbase.session.1",
+    "sequence": 100,
+    "endpoint": "fixture://coinbase/ticker",
+    "previousLast": 99,
+    "currentFirst": 100,
+    "currentLast": 100,
+    "previousConnectionGeneration": 1,
+    "connectionGeneration": 1,
+    "resnapshotEstablished": false
+  }
+}

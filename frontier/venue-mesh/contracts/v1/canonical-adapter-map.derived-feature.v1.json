@@ -1,0 +1,31 @@
+{
+  "adapterId": "frontier.venue-mesh.derived-feature.v1",
+  "canonicalContractId": "FeatureValueV1",
+  "canonicalContractVersion": "1",
+  "canonicalOwner": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/features/values.py#FeatureValueV1",
+  "extensionId": "frontier.venue-mesh",
+  "fieldMap": [
+    { "canonicalPath": "featureId", "localPath": "featureId", "transform": "IDENTITY" },
+    { "canonicalPath": "asOfNs", "localPath": "asOfNs", "transform": "IDENTITY" },
+    { "canonicalPath": "inputLastEventNs", "localPath": "inputLastEventNs", "transform": "IDENTITY" },
+    { "canonicalPath": "status", "localPath": "status", "transform": "IDENTITY" },
+    { "canonicalPath": "value", "localPath": "value", "transform": "IDENTITY" }
+  ],
+  "localFixtureSchema": "FeatureValueV1",
+  "lossy": false,
+  "testVectors": [
+    "frontier/venue-mesh/fixtures/adapter/derived-roundtrip.v1.json"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [
+    { "canonicalUnit": "NANOSECONDS", "localUnit": "NANOSECONDS", "transform": "IDENTITY" },
+    { "canonicalUnit": "FIXED_POINT_1E12", "localUnit": "FIXED_POINT_1E12", "transform": "IDENTITY" }
+  ],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "c7997b33c2bf83e3563863fb0ea4e54e486c9efeb17fc55ce40dea46988c8860"
+}

@@ -1,0 +1,81 @@
+{
+  "schema": "VenueContextFixtureCorpusV1",
+  "version": 1,
+  "cutoffMs": 1784144401000,
+  "sources": [
+    {
+      "sourceId": "coinbase-official",
+      "upstreamOriginId": "coinbase-first-party",
+      "vendorFamilyId": "coinbase-first-party",
+      "copiedFromSourceId": null,
+      "relationship": "PRIMARY"
+    },
+    {
+      "sourceId": "coinbase-mirror",
+      "upstreamOriginId": "coinbase-first-party",
+      "vendorFamilyId": "coinbase-first-party",
+      "copiedFromSourceId": "coinbase-official",
+      "relationship": "MIRROR"
+    },
+    {
+      "sourceId": "kraken-official",
+      "upstreamOriginId": "kraken-first-party",
+      "vendorFamilyId": "kraken-first-party",
+      "copiedFromSourceId": null,
+      "relationship": "PRIMARY"
+    },
+    {
+      "sourceId": "project-blog",
+      "upstreamOriginId": null,
+      "vendorFamilyId": null,
+      "copiedFromSourceId": null,
+      "relationship": "UNKNOWN"
+    }
+  ],
+  "entries": [
+    {
+      "contextClass": "VENUE_STATUS",
+      "contextId": "context.coinbase.status.1",
+      "sourceId": "coinbase-official",
+      "upstreamOriginId": "coinbase-first-party",
+      "summary": "Synthetic fixture says the documented venue status was normal before cutoff.",
+      "provenanceRef": "fixture://venue-mesh/context/coinbase-status",
+      "publishedAtMs": 1784144399000,
+      "receivedAtMs": 1784144399050,
+      "sourceAuthority": "OFFICIAL_FIRST_PARTY"
+    },
+    {
+      "contextClass": "VENUE_STATUS",
+      "contextId": "context.coinbase.mirror.1",
+      "sourceId": "coinbase-mirror",
+      "upstreamOriginId": "coinbase-first-party",
+      "summary": "Synthetic mirror fixture copies the same upstream status.",
+      "provenanceRef": "fixture://venue-mesh/context/coinbase-mirror",
+      "publishedAtMs": 1784144399100,
+      "receivedAtMs": 1784144399200,
+      "sourceAuthority": "LICENSED_VENDOR"
+    },
+    {
+      "contextClass": "LISTING_NOTICE",
+      "contextId": "context.kraken.after-cutoff.1",
+      "sourceId": "kraken-official",
+      "upstreamOriginId": "kraken-first-party",
+      "summary": "Synthetic fixture arrives after the information-set cutoff.",
+      "provenanceRef": "fixture://venue-mesh/context/kraken-after-cutoff",
+      "publishedAtMs": 1784144402000,
+      "receivedAtMs": 1784144402050,
+      "sourceAuthority": "OFFICIAL_FIRST_PARTY"
+    },
+    {
+      "contextClass": "TOKEN_UNLOCK",
+      "contextId": "context.project.unofficial.1",
+      "sourceId": "project-blog",
+      "upstreamOriginId": "project-blog",
+      "summary": "Synthetic unofficial project claim has no canonical confirmation authority.",
+      "provenanceRef": "fixture://venue-mesh/context/unofficial-project-claim",
+      "publishedAtMs": 1784144398000,
+      "receivedAtMs": 1784144398100,
+      "sourceAuthority": "UNOFFICIAL_PROJECT_CLAIM"
+    }
+  ]
+}

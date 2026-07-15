@@ -1,0 +1,50 @@
+{
+  "schema": "VenueMeshHonestyCorpusV1",
+  "version": 1,
+  "requiredCases": [
+    "SAME_TICKER_DIFFERENT_ASSET",
+    "QUOTE_OR_MULTIPLIER_MISMATCH",
+    "SPOT_DERIVATIVE_MISMATCH",
+    "TIMESTAMP_UNIT_MISMATCH",
+    "PER_VENUE_FRESHNESS",
+    "SEQUENCE_GAP_RESNAPSHOT",
+    "REST_STREAM_DISAGREEMENT",
+    "DELISTED_OR_SUSPENDED",
+    "MAINTENANCE_AND_RATE_LIMIT",
+    "SPREAD_ERASED_BY_COSTS",
+    "RETENTION_FORBIDDEN_OR_UNPROVEN",
+    "COPIED_SOURCE_COLLAPSE",
+    "TERMS_REVISION_EXPIRY",
+    "POST_CUTOFF_CONTEXT",
+    "UNOFFICIAL_PROJECT_CLAIM",
+    "MISSING_IS_NOT_ZERO",
+    "OBSERVATION_NOT_ORDER_INSTRUCTION"
+  ],
+  "caseTests": {
+    "SAME_TICKER_DIFFERENT_ASSET": ["same ticker text with different asset identity is a collision"],
+    "QUOTE_OR_MULTIPLIER_MISMATCH": ["quote mismatch blocks comparison rather than applying implicit conversion", "contract multiplier mismatch blocks derivative comparison"],
+    "SPOT_DERIVATIVE_MISMATCH": ["spot and derivative identity never become fungible comparison legs"],
+    "TIMESTAMP_UNIT_MISMATCH": ["timestamp unit mismatch fails closed"],
+    "PER_VENUE_FRESHNESS": ["one stale venue prevents an aggregate green"],
+    "SEQUENCE_GAP_RESNAPSHOT": ["sequence gaps require a resnapshot"],
+    "REST_STREAM_DISAGREEMENT": ["REST-versus-stream disagreement preserves both observations and chooses no winner"],
+    "DELISTED_OR_SUSPENDED": ["delisted or suspended instruments are unavailable, never zero"],
+    "MAINTENANCE_AND_RATE_LIMIT": ["maintenance and rate pressure degrade source health explicitly"],
+    "SPREAD_ERASED_BY_COSTS": ["apparent spread dies after the complete synthetic cost stack"],
+    "RETENTION_FORBIDDEN_OR_UNPROVEN": ["source cards use the exact Q gate order and fail closed on unproven retention"],
+    "COPIED_SOURCE_COLLAPSE": ["copied and mirrored sources count as one independence family"],
+    "TERMS_REVISION_EXPIRY": ["terms revision and review expiry invalidate cached fixture eligibility"],
+    "POST_CUTOFF_CONTEXT": ["post-cutoff context and unofficial claims are rejected from the information set"],
+    "UNOFFICIAL_PROJECT_CLAIM": ["post-cutoff context and unofficial claims are rejected from the information set"],
+    "MISSING_IS_NOT_ZERO": ["missing source value never becomes numeric zero"],
+    "OBSERVATION_NOT_ORDER_INSTRUCTION": ["observation cannot become an order or mutation instruction"]
+  },
+  "globalExpectedPosture": {
+    "networkMode": "FIXTURE_ONLY",
+    "authorityClass": "NO_AUTHORITY",
+    "canonical": false,
+    "liveTransportOpened": false,
+    "canonicalStateWritten": false,
+    "moneyPathPresent": false
+  }
+}

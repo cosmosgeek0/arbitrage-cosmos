@@ -1,0 +1,109 @@
+{
+  "schema": "VenueSourceCardReviewInputsV1",
+  "version": 1,
+  "researchedAtUtc": "2026-07-15T19:49:03Z",
+  "cards": [
+    {
+      "sourceId": "venue-mesh.coinbase.public-doc-fixture",
+      "contractRevision": "coinbase-exchange-docs-2026-07-15",
+      "evaluatedAtMs": 1784144943000,
+      "canonicalProducerOwner": "server.intelligenceRuntime",
+      "hypothesisIds": ["SPOT_PERPETUAL_DIVERGENCE"],
+      "failureStateCodes": ["IDENTITY_UNKNOWN", "RATE_LIMITED", "SOURCE_STALE", "TERMS_REVIEW_REQUIRED"],
+      "sourcePolicy": {
+        "owner": "Coinbase Exchange documentation",
+        "upstreamOrigin": "Coinbase",
+        "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+        "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+        "termsUrl": "https://www.coinbase.com/legal/market_data",
+        "termsContentSha256": null,
+        "documentationContentSha256": "3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9",
+        "authenticationRequirement": "PUBLIC_DOCUMENTATION;NO_RUNTIME_ACCESS",
+        "geography": "REVIEW_REQUIRED",
+        "documentationExampleUse": "PINNED_SCHEMA_FIXTURE_ONLY",
+        "reviewedAtMs": 1784144943000,
+        "nextReviewAtMs": 1786736943000,
+        "retentionPermission": "REVIEW_REQUIRED",
+        "redistributionPermission": "REVIEW_REQUIRED"
+      },
+      "gateEvidenceDigests": {
+        "OFFICIAL_OR_LICENSED_ACCESS": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"],
+        "STABLE_IDENTITY_MAPPING": ["d79cd6d8473d8f35e9a8e85850e904d2b0faf1c9e6ae637d922a6fdc6d52a2f7"],
+        "TIMESTAMP_SEQUENCE_SEMANTICS": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"],
+        "RETENTION_PERMISSION": [],
+        "RESOURCE_RATE_BUDGET": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"],
+        "EXPLICIT_HYPOTHESIS_VALUE": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"],
+        "CANONICAL_PRODUCER_OWNERSHIP": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"],
+        "OBSERVABLE_FAILURE_STATE": ["3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"]
+      }
+    },
+    {
+      "sourceId": "venue-mesh.kraken.public-doc-fixture",
+      "contractRevision": "kraken-ws-v2-docs-2026-07-15",
+      "evaluatedAtMs": 1784144943000,
+      "canonicalProducerOwner": "server.intelligenceRuntime",
+      "hypothesisIds": ["SPOT_PERPETUAL_DIVERGENCE"],
+      "failureStateCodes": ["CHECKSUM_INVALID", "IDENTITY_UNKNOWN", "RATE_LIMITED", "TERMS_REVIEW_REQUIRED"],
+      "sourcePolicy": {
+        "owner": "Kraken Exchange documentation",
+        "upstreamOrigin": "Kraken",
+        "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+        "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+        "termsUrl": "https://www.kraken.com/en-ca/legal/global-terms",
+        "termsContentSha256": "69f899156b00e8d1e1bdaa114e66097baa57e9d31c62c68ca9d221bfbd360531",
+        "documentationContentSha256": "55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55",
+        "authenticationRequirement": "PUBLIC_DOCUMENTATION;NO_RUNTIME_ACCESS",
+        "geography": "REVIEW_REQUIRED",
+        "documentationExampleUse": "PINNED_SCHEMA_FIXTURE_ONLY",
+        "reviewedAtMs": 1784144943000,
+        "nextReviewAtMs": 1786736943000,
+        "retentionPermission": "REVIEW_REQUIRED",
+        "redistributionPermission": "REVIEW_REQUIRED"
+      },
+      "gateEvidenceDigests": {
+        "OFFICIAL_OR_LICENSED_ACCESS": ["55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55"],
+        "STABLE_IDENTITY_MAPPING": ["55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55"],
+        "TIMESTAMP_SEQUENCE_SEMANTICS": ["160bada19e919edc659c212702be6ba7343be5c208b8e722368e15ac3d32367a"],
+        "RETENTION_PERMISSION": [],
+        "RESOURCE_RATE_BUDGET": ["160bada19e919edc659c212702be6ba7343be5c208b8e722368e15ac3d32367a"],
+        "EXPLICIT_HYPOTHESIS_VALUE": ["55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55"],
+        "CANONICAL_PRODUCER_OWNERSHIP": ["55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55"],
+        "OBSERVABLE_FAILURE_STATE": ["160bada19e919edc659c212702be6ba7343be5c208b8e722368e15ac3d32367a"]
+      }
+    },
+    {
+      "sourceId": "venue-mesh.deribit.public-doc-fixture",
+      "contractRevision": "deribit-market-docs-2026-07-15",
+      "evaluatedAtMs": 1784144943000,
+      "canonicalProducerOwner": "server.intelligenceRuntime",
+      "hypothesisIds": ["SPOT_PERPETUAL_DIVERGENCE"],
+      "failureStateCodes": ["CONTRACT_IDENTITY_UNKNOWN", "SOURCE_STALE", "TERMS_REVIEW_REQUIRED"],
+      "sourcePolicy": {
+        "owner": "Deribit market-data documentation",
+        "upstreamOrigin": "Deribit",
+        "endpointClass": "PUBLIC_MARKET_DATA_DOCUMENTATION",
+        "accessMethod": "DOCUMENTATION_EXAMPLE_ONLY",
+        "termsUrl": "https://support.deribit.com/hc/en-us/sections/25944487080477-Legal",
+        "termsContentSha256": null,
+        "documentationContentSha256": "9a1df3ee594411330132ae7066896ea2515b4ab35027fce6d42a629b52953a44",
+        "authenticationRequirement": "PUBLIC_DOCUMENTATION;NO_RUNTIME_ACCESS",
+        "geography": "REVIEW_REQUIRED",
+        "documentationExampleUse": "PINNED_SCHEMA_FIXTURE_ONLY",
+        "reviewedAtMs": 1784144943000,
+        "nextReviewAtMs": 1786736943000,
+        "retentionPermission": "REVIEW_REQUIRED",
+        "redistributionPermission": "REVIEW_REQUIRED"
+      },
+      "gateEvidenceDigests": {
+        "OFFICIAL_OR_LICENSED_ACCESS": ["778419c4fe1f948f9e3e848be6a468e77e469aa8d5fe32b429ed688ed14ccfc9"],
+        "STABLE_IDENTITY_MAPPING": ["778419c4fe1f948f9e3e848be6a468e77e469aa8d5fe32b429ed688ed14ccfc9"],
+        "TIMESTAMP_SEQUENCE_SEMANTICS": ["9a1df3ee594411330132ae7066896ea2515b4ab35027fce6d42a629b52953a44"],
+        "RETENTION_PERMISSION": [],
+        "RESOURCE_RATE_BUDGET": ["9a1df3ee594411330132ae7066896ea2515b4ab35027fce6d42a629b52953a44"],
+        "EXPLICIT_HYPOTHESIS_VALUE": ["9a1df3ee594411330132ae7066896ea2515b4ab35027fce6d42a629b52953a44"],
+        "CANONICAL_PRODUCER_OWNERSHIP": ["778419c4fe1f948f9e3e848be6a468e77e469aa8d5fe32b429ed688ed14ccfc9"],
+        "OBSERVABLE_FAILURE_STATE": ["9a1df3ee594411330132ae7066896ea2515b4ab35027fce6d42a629b52953a44"]
+      }
+    }
+  ]
+}

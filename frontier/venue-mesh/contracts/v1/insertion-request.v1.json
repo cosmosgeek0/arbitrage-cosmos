@@ -1,0 +1,41 @@
+{
+  "requestId": "venue-mesh.future-canonical-insertion.v1",
+  "extensionId": "frontier.venue-mesh",
+  "requestVersion": "1.0.0",
+  "intendedSharedSeams": [
+    "intelligenceFoundation/evidence:canonical-MarketEvidenceEnvelopeV1-ingest",
+    "intelligenceRuntime:read-only-additional-venue-acquisition-lifecycle-adapter",
+    "liveEdge:executable-venue-identity-and-contract-conversion-decision",
+    "newsContext:reuse-existing-official-context-collector-output",
+    "productIntegration:optional-read-only-surface-projection-if-release-recipe-changes",
+    "quant/DataSourceCard:source-admission-license-and-retention-decision",
+    "systemIntegration/sourceRegistry:semantic-producer-registration"
+  ],
+  "canonicalOwnerDecisions": [
+    "Q must approve source cards, lawful retention, point-in-time capture, and hypothesis value before any canonical admission.",
+    "intelligenceRuntime and systemIntegration must own any future live public acquisition, lifecycle, rate state, and semantic producer registration.",
+    "L must decide executable instrument identity, contract conversion, availability, and venue semantics; F1 cannot infer them.",
+    "Existing newsContext collectors must be adapted, never duplicated.",
+    "Product owners must grant a future projection facet before any cockpit surface exists."
+  ],
+  "requestedCapabilities": ["VALIDATE_FIXTURE", "EVALUATE_FIXTURE"],
+  "egressDeclaration": "NONE_IN_PRESTAGE;FUTURE_PUBLIC_EGRESS_REQUIRES_CANONICAL_OWNER_APPROVAL",
+  "retentionRequest": "NONE_IN_PRESTAGE;TERMS_AND_Q_ADMISSION_REQUIRED",
+  "resourceBudgetClaimRef": "frontier/venue-mesh/contracts/v1/resource-budget-claim.v1.json",
+  "blockedFacetRequests": [
+    "CANONICAL_SOURCE_HEALTH_MAPPING_OWNER_REQUIRED",
+    "NONE_IN_F1_DOCK_RECIPE;COCKPIT_PROJECTION_NOT_GRANTED"
+  ],
+  "futureTests": [
+    "licensed-source and geography approval readback",
+    "canonical source-registry producer uniqueness",
+    "live public transport isolation with zero credential and private-endpoint reachability",
+    "restart gap resnapshot and rate-limit degradation under canonical lifecycle ownership",
+    "point-in-time capture retention and deletion-policy proof",
+    "L-owned executable identity and contract conversion proof",
+    "post-mount product-assurance isolation and removal proof"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "mutationImplemented": false
+}

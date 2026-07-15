@@ -1,0 +1,18 @@
+{
+  "claimId": "venue-mesh.fixture-budget.v1",
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "cpu": { "state": "UNAVAILABLE", "unit": "host-cpu-percent", "reason": "No mounted or production process exists in prestage." },
+  "memory": { "state": "UNAVAILABLE", "unit": "host-bytes", "reason": "No mounted or production process exists in prestage." },
+  "disk": { "state": "UNAVAILABLE", "unit": "host-bytes-per-second", "reason": "The module has no disk transport or persistence authority." },
+  "network": { "state": "MEASURED", "unit": "bytes", "limit": 0, "observed": 0 },
+  "eventRate": { "state": "MEASURED", "unit": "events-per-1000ms-fixture-window", "limit": 50, "observed": 50 },
+  "latency": {
+    "state": "MEASURED",
+    "unit": "deterministic-fixture-steps",
+    "limit": { "p50": 3, "p95": 5, "p99": 7 },
+    "observed": { "p50": 2, "p95": 4, "p99": 6 }
+  },
+  "queue": { "state": "MEASURED", "unit": "events", "limit": 8, "observed": 8, "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST" },
+  "storageGrowth": { "state": "MEASURED", "unit": "fixture-bytes-per-window", "limit": 2000, "observed": 1600 },
+  "modelUse": { "state": "MEASURED", "unit": "calls", "limit": 0, "observed": 0 }
+}

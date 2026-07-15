@@ -1,0 +1,92 @@
+{
+  "extensionId": "frontier.venue-mesh",
+  "displayName": "F1 VenueMesh cross-venue shadow sensor",
+  "extensionVersion": "0.1.0",
+  "dockContractVersion": "1.0.0",
+  "owner": "F1 VenueMesh prestage builder",
+  "purpose": "Prepare deterministic read-only additional-venue evidence fixtures and comparative shadow projections without live transport, execution, source admission, or canonical writes.",
+  "capabilityClass": "FIXTURE_ONLY_CROSS_VENUE_EVIDENCE_AND_DERIVED_FEATURE",
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "buildState": "PRESTAGE_READY",
+  "disposition": "ACTIVE",
+  "authorityClass": "NO_AUTHORITY",
+  "canonicalInputContractRefs": [
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/0",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/1",
+    "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/0"
+  ],
+  "canonicalOutputContractRefs": [
+    "git:73e1a1ff7daa48df8dac45713fc5f106842edafc:packages/edge-protocol/schema/edge-protocol-v1.schema.json#/$defs/MarketEvidenceEnvelopeV1",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/features/values.py#FeatureValueV1"
+  ],
+  "canonicalPolicyRefs": [
+    "frontier/dock/contracts/v1/hard-denials.json",
+    "frontier/directives/Frontier.md#4-f1--venuemesh-cross-venue-shadow-sensor"
+  ],
+  "adapterMapRefs": [
+    "frontier/venue-mesh/contracts/v1/canonical-adapter-map.evidence.v1.json",
+    "frontier/venue-mesh/contracts/v1/canonical-adapter-map.derived-feature.v1.json"
+  ],
+  "requestedCapabilities": ["VALIDATE_FIXTURE", "EVALUATE_FIXTURE"],
+  "requiredCapabilityRefs": ["DockV1:EVIDENCE:VALIDATE_FIXTURE", "DockV1:DERIVED_FEATURE:EVALUATE_FIXTURE"],
+  "optionalCapabilityRefs": ["DockV1:DESCRIBE"],
+  "hardDenialRefs": ["frontier/dock/contracts/v1/hard-denials.json"],
+  "latencyClass": "DETERMINISTIC_FIXTURE_STEPS",
+  "freshnessRequirement": "PER_VENUE_EVENT_OR_RECEIVE_CLOCK;UNKNOWN_OR_STALE_FAILS_CLOSED",
+  "completenessRequirement": "PRESERVE_IDENTITY_SEQUENCE_MISSINGNESS_PROVENANCE_AND_COST_UNCERTAINTY",
+  "determinismClass": "INJECTED_CLOCK_NO_RANDOMNESS",
+  "replayClass": "FIXTURE_REPLAY_ONLY",
+  "egressDeclaration": "NONE",
+  "networkMode": "FIXTURE_ONLY",
+  "secretMode": "NONE",
+  "resourceBudgetClaim": {
+    "claimId": "venue-mesh.fixture-budget.v1",
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "cpu": { "state": "UNAVAILABLE", "unit": "host-cpu-percent", "reason": "No mounted or production process exists in prestage." },
+    "memory": { "state": "UNAVAILABLE", "unit": "host-bytes", "reason": "No mounted or production process exists in prestage." },
+    "disk": { "state": "UNAVAILABLE", "unit": "host-bytes-per-second", "reason": "The module has no disk transport or persistence authority." },
+    "network": { "state": "MEASURED", "unit": "bytes", "limit": 0, "observed": 0 },
+    "eventRate": { "state": "MEASURED", "unit": "events-per-1000ms-fixture-window", "limit": 50, "observed": 50 },
+    "latency": { "state": "MEASURED", "unit": "deterministic-fixture-steps", "limit": { "p50": 3, "p95": 5, "p99": 7 }, "observed": { "p50": 2, "p95": 4, "p99": 6 } },
+    "queue": { "state": "MEASURED", "unit": "events", "limit": 8, "observed": 8, "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST" },
+    "storageGrowth": { "state": "MEASURED", "unit": "fixture-bytes-per-window", "limit": 2000, "observed": 1600 },
+    "modelUse": { "state": "MEASURED", "unit": "calls", "limit": 0, "observed": 0 }
+  },
+  "maxSafeRateClaim": { "measurementMode": "DETERMINISTIC_FIXTURE", "eventsPerWindow": 50, "windowSizeMs": 1000, "queueCapacity": 8, "backpressurePolicy": "FAIL_CLOSED" },
+  "dataSourceRefs": [
+    "frontier/venue-mesh/fixtures/venues/coinbase-btc-usd.v1.json",
+    "frontier/venue-mesh/fixtures/venues/coinbase-btc-usd-trade.v1.json",
+    "frontier/venue-mesh/fixtures/venues/kraken-xbt-usd.v1.json",
+    "frontier/venue-mesh/fixtures/venues/kraken-xbt-usd-book.v1.json",
+    "frontier/venue-mesh/fixtures/venues/deribit-btc-perpetual.v1.json",
+    "frontier/venue-mesh/fixtures/source-cards/review-inputs.v1.json",
+    "frontier/venue-mesh/fixtures/context/point-in-time.v1.json",
+    "frontier/venue-mesh/fixtures/context/capability-matrix.v1.json",
+    "frontier/venue-mesh/fixtures/license-retention-matrix.v1.json"
+  ],
+  "dataClassifications": ["SYNTHETIC_DOCUMENTATION_DERIVED_FIXTURES_NO_SECRETS"],
+  "licenseAndTermsRefs": ["frontier/venue-mesh/RESEARCH.md", "frontier/venue-mesh/fixtures/license-retention-matrix.v1.json"],
+  "retentionRequest": "FIXTURE_ONLY_NO_MARKET_DATA_RETENTION_AUTHORITY",
+  "failureModes": [
+    "FAIL_CLOSED_ON_IDENTITY_SCHEMA_TIME_SEQUENCE_FRESHNESS_OR_HASH_MISMATCH",
+    "FAIL_CLOSED_ON_UNKNOWN_COST_DEPTH_TERMS_OR_SOURCE_INDEPENDENCE",
+    "REQUEST_CANONICAL_OWNER_REVIEW_ON_RESOURCE_OR_INSERTION_NEED"
+  ],
+  "degradationBehavior": "NO_CANONICAL_STATE;EXPLICIT_UNAVAILABLE_OR_DEGRADATION_REQUEST",
+  "healthContractRef": "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/3;SOURCE_HEALTH_EVIDENCE_ONLY",
+  "cockpitProjectionRef": "UNAVAILABLE_IN_F1_DOCK_RECIPE;frontier/venue-mesh/preview/render-preview.mjs",
+  "testEntryPointRefs": ["frontier/venue-mesh/tests/venue-mesh.test.mjs", "frontier/venue-mesh/tests/isolation.test.mjs"],
+  "testReceiptRef": "frontier/venue-mesh/RECEIPT.md",
+  "knownLimitations": [
+    "READ_ONLY_UNWIRED_NO_CREDENTIALS_NO_ORDER_AUTHORITY",
+    "NO_LIVE_TRANSPORT_SOURCE_ADMISSION_CANONICAL_WRITE_OR_PRODUCTION_ISOLATION_PROOF",
+    "NO_EXECUTABILITY_EDGE_PROFITABILITY_OR_COCKPIT_CLAIM",
+    "SOURCE_SHA_IS_THE_IMMUTABLE_PREBUILD_DOCK_PARENT;FINAL_SEAL_HEAD_IS_RESOLVED_FROM_GIT"
+  ],
+  "insertionRequestRef": "frontier/venue-mesh/contracts/v1/insertion-request.v1.json",
+  "disablePlan": { "authority": "CANONICAL_OWNER_REQUIRED", "idempotent": true },
+  "rollbackPlan": { "authority": "CANONICAL_OWNER_REQUIRED", "pinnedVersion": "0.1.0" },
+  "uninstallPlan": { "authority": "CANONICAL_OWNER_REQUIRED", "deleteCanonicalEvidence": false },
+  "descriptorHash": "e77a215486fc559f65261f24ab3138a48757d10fcbe4629eae54d02d36e2a1cd"
+}

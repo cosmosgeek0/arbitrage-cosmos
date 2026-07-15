@@ -1,0 +1,37 @@
+{
+  "schema": "VenueSupplementalRawFixtureV1",
+  "version": 1,
+  "venue": "COINBASE",
+  "trade": {
+    "type": "match",
+    "product_id": "BTC-USD",
+    "trade_id": "2001",
+    "time": "2026-07-15T19:40:00.100Z",
+    "price": "100.20",
+    "size": "0.25",
+    "side": "sell"
+  },
+  "clock": {
+    "eventTimeUnit": "RFC3339",
+    "receiveTimeMs": 1784144400150,
+    "normalizationTimeMs": 1784144400200,
+    "featureCutoffTimeMs": 1784144401000,
+    "maximumFutureSkewMs": 0,
+    "maximumAgeMs": 1000
+  },
+  "source": {
+    "streamClass": "WEBSOCKET_MATCH_FIXTURE",
+    "connectionId": "vm.coinbase.fixture.1",
+    "sessionId": "vm.coinbase.session.1",
+    "sequence": 101,
+    "endpoint": "fixture://coinbase/matches",
+    "previousLast": 100,
+    "currentFirst": 101,
+    "currentLast": 101,
+    "previousConnectionGeneration": 1,
+    "connectionGeneration": 1,
+    "resnapshotEstablished": false
+  },
+  "documentationUrl": "https://docs.cdp.coinbase.com/exchange/websocket-feed/channels",
+  "documentationContentSha256": "3542734efeac3497cf0997926b160b50c231d08f33ca540931b1bba04244a3d9"
+}

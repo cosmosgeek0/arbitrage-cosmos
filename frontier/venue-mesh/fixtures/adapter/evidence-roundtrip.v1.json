@@ -1,0 +1,47 @@
+{
+  "schema": "MarketEvidenceEnvelopeV1",
+  "version": 1,
+  "revision": 0,
+  "evidenceId": "vm.ev.85e15517b05437add1f24426ee6a640b",
+  "traceId": "vm.trace.1caa91036ae38656e4bbeaee11e0",
+  "instrumentGraph": {
+    "venue": "COINBASE",
+    "product": "SPOT",
+    "symbol": "BTC-USD",
+    "canonicalAsset": "asset:bitcoin",
+    "spotSymbol": "BTC-USD",
+    "perpSymbol": null,
+    "borrowAsset": null,
+    "missingLegReason": null
+  },
+  "exchangeEventTimeMs": 1784144400000,
+  "localReceiveTimeMs": 1784144400050,
+  "normalizationTimeMs": 1784144400100,
+  "featureCutoffTimeMs": 1784144401000,
+  "source": {
+    "sourceType": "COINBASE_PUBLIC_FIXTURE",
+    "streamClass": "WEBSOCKET_TICKER_FIXTURE",
+    "connectionId": "vm.coinbase.fixture.1",
+    "sessionId": "vm.coinbase.session.1",
+    "sequence": 100,
+    "endpoint": "fixture://coinbase/ticker"
+  },
+  "rawPayloadHash": "6692fa9d10c18fed7d674315f208a22195016d9fe2b8c7f1cc2b8e84b978c2a9",
+  "normalizedSchemaHash": "c38f5021323411c4212906a615544f7008a0222100f2eb8d679ec039258b12b9",
+  "truthLabel": "SYNTHETIC",
+  "quality": {
+    "freshness": "FRESH",
+    "completeness": "COMPLETE",
+    "gapCount": 0,
+    "duplicate": false,
+    "reconstructed": false
+  },
+  "payloadKind": "BOOK_TICKER",
+  "payload": {
+    "bidPrice": "100",
+    "askPrice": "100.1",
+    "bidSize": "3",
+    "askSize": "2.5",
+    "availability": "AVAILABLE"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "adapterId": "frontier.venue-mesh.evidence.v1",
+  "canonicalContractId": "MarketEvidenceEnvelopeV1",
+  "canonicalContractVersion": "1",
+  "canonicalOwner": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/**; git:73e1a1ff7daa48df8dac45713fc5f106842edafc:packages/edge-protocol/schema/edge-protocol-v1.schema.json#/$defs/MarketEvidenceEnvelopeV1",
+  "extensionId": "frontier.venue-mesh",
+  "fieldMap": [
+    { "canonicalPath": "schema", "localPath": "schema", "transform": "IDENTITY" },
+    { "canonicalPath": "version", "localPath": "version", "transform": "IDENTITY" },
+    { "canonicalPath": "revision", "localPath": "revision", "transform": "IDENTITY" },
+    { "canonicalPath": "evidenceId", "localPath": "evidenceId", "transform": "IDENTITY" },
+    { "canonicalPath": "traceId", "localPath": "traceId", "transform": "IDENTITY" },
+    { "canonicalPath": "instrumentGraph", "localPath": "instrumentGraph", "transform": "IDENTITY" },
+    { "canonicalPath": "exchangeEventTimeMs", "localPath": "exchangeEventTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "localReceiveTimeMs", "localPath": "localReceiveTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "normalizationTimeMs", "localPath": "normalizationTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "featureCutoffTimeMs", "localPath": "featureCutoffTimeMs", "transform": "IDENTITY" },
+    { "canonicalPath": "source", "localPath": "source", "transform": "IDENTITY" },
+    { "canonicalPath": "rawPayloadHash", "localPath": "rawPayloadHash", "transform": "IDENTITY" },
+    { "canonicalPath": "normalizedSchemaHash", "localPath": "normalizedSchemaHash", "transform": "IDENTITY" },
+    { "canonicalPath": "truthLabel", "localPath": "truthLabel", "transform": "IDENTITY" },
+    { "canonicalPath": "quality", "localPath": "quality", "transform": "IDENTITY" },
+    { "canonicalPath": "payloadKind", "localPath": "payloadKind", "transform": "IDENTITY" },
+    { "canonicalPath": "payload", "localPath": "payload", "transform": "IDENTITY" }
+  ],
+  "localFixtureSchema": "MarketEvidenceEnvelopeV1",
+  "lossy": false,
+  "testVectors": [
+    "frontier/venue-mesh/fixtures/adapter/evidence-roundtrip.v1.json"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [
+    { "canonicalUnit": "MILLISECONDS", "localUnit": "MILLISECONDS", "transform": "IDENTITY" },
+    { "canonicalUnit": "FIXED_POINT_1E12", "localUnit": "FIXED_POINT_1E12", "transform": "IDENTITY" }
+  ],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "383e905ed56af4f44edea607b3098470209d730b944bd2106e3ef4bcf6f0df70"
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "VenueRawFixtureBundleV1",
+  "version": 1,
+  "venue": "KRAKEN",
+  "instrument": {
+    "symbol": "XBT/USD",
+    "base": "XBT",
+    "quote": "USD",
+    "price_increment": "0.1",
+    "qty_increment": "0.00000001",
+    "status": "online",
+    "sourceUrl": "https://docs.kraken.com/exchange/api-reference/spot-websocket-v2/instrument",
+    "sourceContentSha256": "55234e13e91abff82e4c3e52b7a1be0eafdf61929fdfb13d1cd0e4d884a2fb55"
+  },
+  "ticker": {
+    "symbol": "XBT/USD",
+    "timestamp": "2026-07-15T19:40:00.000Z",
+    "bid": "100.30",
+    "ask": "100.40",
+    "bid_qty": "1.5",
+    "ask_qty": "1.5"
+  },
+  "clock": {
+    "eventTimeUnit": "RFC3339",
+    "receiveTimeMs": 1784144400050,
+    "normalizationTimeMs": 1784144400100,
+    "featureCutoffTimeMs": 1784144401000,
+    "maximumFutureSkewMs": 0,
+    "maximumAgeMs": 1000
+  },
+  "source": {
+    "streamClass": "REST_TICKER_FIXTURE",
+    "connectionId": "vm.kraken.fixture.1",
+    "sessionId": "vm.kraken.session.1",
+    "sequence": null,
+    "endpoint": "fixture://kraken/ticker",
+    "previousLast": null,
+    "currentFirst": null,
+    "currentLast": null,
+    "previousConnectionGeneration": 1,
+    "connectionGeneration": 1,
+    "resnapshotEstablished": false,
+    "sequenceSemantics": "STATELESS_SNAPSHOT"
+  },
+  "sequenceSemantics": "NO_NUMERIC_SEQUENCE_IN_TICKER_FIXTURE;BOOK_CHECKSUM_IS_SEPARATE"
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "VenueRawFixtureBundleV1",
+  "version": 1,
+  "venue": "DERIBIT",
+  "instrument": {
+    "instrument_name": "BTC-PERPETUAL",
+    "kind": "future",
+    "base_currency": "BTC",
+    "quote_currency": "USD",
+    "settlement_currency": "BTC",
+    "expiration_timestamp": null,
+    "contract_size": "10",
+    "contract_size_unit": "USD_PER_CONTRACT",
+    "tick_size": "0.5",
+    "min_trade_amount": "10",
+    "is_active": true,
+    "sourceUrl": "https://docs.deribit.com/api-reference/market-data/public-get_instrument",
+    "sourceContentSha256": "778419c4fe1f948f9e3e848be6a468e77e469aa8d5fe32b429ed688ed14ccfc9"
+  },
+  "ticker": {
+    "instrument_name": "BTC-PERPETUAL",
+    "timestamp": 1784144400000,
+    "best_bid_price": "100.50",
+    "best_ask_price": "100.60",
+    "best_bid_amount": "20",
+    "best_ask_amount": "20",
+    "mark_price": "100.55",
+    "index_price": "100.45",
+    "current_funding": "-0.0001",
+    "open_interest": "5000"
+  },
+  "clock": {
+    "eventTimeUnit": "MS",
+    "receiveTimeMs": 1784144400050,
+    "normalizationTimeMs": 1784144400100,
+    "featureCutoffTimeMs": 1784144401000,
+    "maximumFutureSkewMs": 0,
+    "maximumAgeMs": 1000
+  },
+  "source": {
+    "streamClass": "PUBLIC_TICKER_FIXTURE",
+    "connectionId": "vm.deribit.fixture.1",
+    "sessionId": "vm.deribit.session.1",
+    "sequence": null,
+    "endpoint": "fixture://deribit/ticker",
+    "previousLast": null,
+    "currentFirst": null,
+    "currentLast": null,
+    "previousConnectionGeneration": 1,
+    "connectionGeneration": 1,
+    "resnapshotEstablished": false,
+    "sequenceSemantics": "STATELESS_SNAPSHOT"
+  }
+}

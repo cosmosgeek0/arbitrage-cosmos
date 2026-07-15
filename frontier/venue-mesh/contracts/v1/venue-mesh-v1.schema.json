@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "frontier.venue-mesh.v1",
+  "title": "VenueMesh fixture-only local contracts",
+  "$defs": {
+    "FixedPointV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mantissa", "scale"],
+      "properties": {
+        "mantissa": { "type": "string", "pattern": "^-?[0-9]+$" },
+        "scale": { "const": "1000000000000" }
+      }
+    },
+    "FeatureValueV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["featureId", "asOfNs", "inputLastEventNs", "status", "value"],
+      "properties": {
+        "featureId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "asOfNs": { "type": "string", "pattern": "^[0-9]+$" },
+        "inputLastEventNs": { "type": "string", "pattern": "^[0-9]+$" },
+        "status": { "enum": ["AVAILABLE", "STALE", "UNKNOWN", "DATA_INVALID"] },
+        "value": { "oneOf": [{ "$ref": "#/$defs/FixedPointV1" }, { "type": "null" }] }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "AVAILABLE" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/FixedPointV1" } } }, "else": { "properties": { "value": { "type": "null" } } } }
+      ]
+    },
+    "InstrumentGraphV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["venue", "product", "symbol", "canonicalAsset", "spotSymbol", "perpSymbol", "borrowAsset", "missingLegReason"],
+      "properties": {
+        "venue": { "type": "string" },
+        "product": { "enum": ["SPOT", "USDM_PERP", "MARGIN"] },
+        "symbol": { "type": "string" },
+        "canonicalAsset": { "type": "string" },
+        "spotSymbol": { "type": ["string", "null"] },
+        "perpSymbol": { "type": ["string", "null"] },
+        "borrowAsset": { "type": ["string", "null"] },
+        "missingLegReason": { "type": ["string", "null"] }
+      }
+    },
+    "EvidenceSourceV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceType", "streamClass", "connectionId", "sessionId", "sequence", "endpoint"],
+      "properties": {
+        "sourceType": { "type": "string" },
+        "streamClass": { "type": "string" },
+        "connectionId": { "type": "string" },
+        "sessionId": { "type": ["string", "null"] },
+        "sequence": { "type": ["integer", "null"], "minimum": 0 },
+        "endpoint": { "type": ["string", "null"] }
+      }
+    },
+    "EvidenceQualityV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["freshness", "completeness", "gapCount", "duplicate", "reconstructed"],
+      "properties": {
+        "freshness": { "enum": ["FRESH", "STALE", "UNKNOWN"] },
+        "completeness": { "enum": ["COMPLETE", "PARTIAL", "SAMPLED", "UNAVAILABLE", "UNKNOWN"] },
+        "gapCount": { "type": "integer", "minimum": 0 },
+        "duplicate": { "type": "boolean" },
+        "reconstructed": { "type": "boolean" }
+      }
+    },
+    "BookTickerPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bidPrice", "askPrice", "bidSize", "askSize", "availability"],
+      "properties": {
+        "bidPrice": { "type": "string" },
+        "askPrice": { "type": "string" },
+        "bidSize": { "type": ["string", "null"] },
+        "askSize": { "type": ["string", "null"] },
+        "availability": { "const": "AVAILABLE" }
+      }
+    },
+    "TradePayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tradeId", "price", "size", "makerSide"],
+      "properties": {
+        "tradeId": { "type": "string" },
+        "price": { "type": "string" },
+        "size": { "type": "string" },
+        "makerSide": { "enum": ["BUY", "SELL"] }
+      }
+    },
+    "BookPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bids", "asks", "checksum", "integrityState"],
+      "properties": {
+        "bids": { "type": "array", "minItems": 1, "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "string" }], "items": false } },
+        "asks": { "type": "array", "minItems": 1, "items": { "type": "array", "prefixItems": [{ "type": "string" }, { "type": "string" }], "items": false } },
+        "checksum": { "type": "string" },
+        "integrityState": { "enum": ["CHECKSUM_VERIFIED", "CHECKSUM_UNVERIFIED_FIXTURE"] }
+      }
+    },
+    "MarkPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["markPrice"],
+      "properties": { "markPrice": { "type": "string" } }
+    },
+    "IndexPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["indexPrice"],
+      "properties": { "indexPrice": { "type": "string" } }
+    },
+    "FundingPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fundingRate"],
+      "properties": { "fundingRate": { "type": "string" } }
+    },
+    "OpenInterestPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["openInterest"],
+      "properties": { "openInterest": { "type": "string" } }
+    },
+    "LiquidationPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "size", "side"],
+      "properties": { "price": { "type": "string" }, "size": { "type": "string" }, "side": { "enum": ["BUY", "SELL"] } }
+    },
+    "ContextPayloadV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contextId", "contextClass", "status", "provenanceRef"],
+      "properties": { "contextId": { "type": "string" }, "contextClass": { "type": "string" }, "status": { "type": "string" }, "provenanceRef": { "type": "string" } }
+    },
+    "MarketEvidenceEnvelopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "revision", "evidenceId", "traceId", "instrumentGraph", "exchangeEventTimeMs", "localReceiveTimeMs", "normalizationTimeMs", "featureCutoffTimeMs", "source", "rawPayloadHash", "normalizedSchemaHash", "truthLabel", "quality", "payloadKind", "payload"],
+      "properties": {
+        "schema": { "const": "MarketEvidenceEnvelopeV1" },
+        "version": { "const": 1 },
+        "revision": { "const": 0 },
+        "evidenceId": { "type": "string" },
+        "traceId": { "type": "string" },
+        "instrumentGraph": { "$ref": "#/$defs/InstrumentGraphV1" },
+        "exchangeEventTimeMs": { "type": ["integer", "null"] },
+        "localReceiveTimeMs": { "type": "integer" },
+        "normalizationTimeMs": { "type": "integer" },
+        "featureCutoffTimeMs": { "type": ["integer", "null"] },
+        "source": { "$ref": "#/$defs/EvidenceSourceV1" },
+        "rawPayloadHash": { "type": "string", "pattern": "^[a-f0-9]{16,128}$" },
+        "normalizedSchemaHash": { "type": "string", "pattern": "^[a-f0-9]{16,128}$" },
+        "truthLabel": { "const": "SYNTHETIC" },
+        "quality": { "$ref": "#/$defs/EvidenceQualityV1" },
+        "payloadKind": { "enum": ["TRADE", "BOOK_TICKER", "BOOK_SNAPSHOT", "BOOK_DELTA", "MARK", "INDEX", "FUNDING", "OPEN_INTEREST", "LIQUIDATION", "CONTEXT"] },
+        "payload": { "type": "object" }
+      },
+      "allOf": [
+        { "if": { "properties": { "payloadKind": { "const": "BOOK_TICKER" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/BookTickerPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "TRADE" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/TradePayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "enum": ["BOOK_SNAPSHOT", "BOOK_DELTA"] } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/BookPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "MARK" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/MarkPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "INDEX" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/IndexPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "FUNDING" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/FundingPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "OPEN_INTEREST" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/OpenInterestPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "LIQUIDATION" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/LiquidationPayloadV1" } } } },
+        { "if": { "properties": { "payloadKind": { "const": "CONTEXT" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/ContextPayloadV1" } } } }
+      ]
+    },
+    "VenueUnavailableEvidenceAdapterResultV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "canonicalEvidence", "unavailableObservation", "availability", "canonicalStateWritten", "authorityClass", "canonical", "networkMode"],
+      "properties": {
+        "schema": { "const": "VenueUnavailableEvidenceAdapterResultV1" },
+        "canonicalEvidence": { "type": "null" },
+        "unavailableObservation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema", "identityId", "payloadKind", "status", "value", "reasonCodes", "observedAtMs", "authorityClass", "canonical"],
+          "properties": {
+            "schema": { "const": "VenueUnavailableObservationV1" },
+            "identityId": { "type": "string" },
+            "payloadKind": { "type": "string" },
+            "status": { "const": "UNAVAILABLE" },
+            "value": { "type": "null" },
+            "reasonCodes": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "observedAtMs": { "type": "integer" },
+            "authorityClass": { "const": "NO_AUTHORITY" },
+            "canonical": { "const": false }
+          }
+        },
+        "availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["state", "reasonCodes"],
+          "properties": { "state": { "const": "UNAVAILABLE" }, "reasonCodes": { "type": "array", "minItems": 1, "items": { "type": "string" } } }
+        },
+        "canonicalStateWritten": { "const": false },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "canonical": { "const": false },
+        "networkMode": { "const": "FIXTURE_ONLY" }
+      }
+    },
+    "VenueDislocationProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "projectionId", "state", "reasonCodes", "identityComparison", "rawSpreadBps", "costStackBps", "netSpreadBps", "intendedBaseSize", "depthSufficient", "economicState", "featureValue", "evidenceIds", "costStack", "observationOnly", "action", "canonical", "authorityClass", "networkMode"],
+      "properties": {
+        "schema": { "const": "VenueDislocationProjectionV1" },
+        "projectionId": { "type": "string" },
+        "state": { "enum": ["AVAILABLE", "STALE", "UNKNOWN", "DATA_INVALID"] },
+        "reasonCodes": { "type": "array", "items": { "type": "string" } },
+        "identityComparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema", "comparable", "sameTickerText", "reasonCodes", "leftIdentityId", "rightIdentityId", "authorityClass"],
+          "properties": {
+            "schema": { "const": "VenueIdentityComparisonV1" },
+            "comparable": { "type": "boolean" },
+            "sameTickerText": { "type": "boolean" },
+            "reasonCodes": { "type": "array", "items": { "type": "string" } },
+            "leftIdentityId": { "type": "string" },
+            "rightIdentityId": { "type": "string" },
+            "authorityClass": { "const": "NO_AUTHORITY" }
+          }
+        },
+        "rawSpreadBps": { "type": ["string", "null"] },
+        "costStackBps": { "type": ["string", "null"] },
+        "netSpreadBps": { "type": ["string", "null"] },
+        "intendedBaseSize": { "type": ["string", "null"] },
+        "depthSufficient": { "type": "boolean" },
+        "economicState": { "enum": ["POSITIVE_SYNTHETIC_PROJECTION", "NON_VIABLE_AFTER_COSTS", "UNKNOWN"] },
+        "featureValue": { "$ref": "#/$defs/FeatureValueV1" },
+        "evidenceIds": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+        "costStack": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["buyFeeBps", "sellFeeBps", "tickRoundingBps", "latencyBps", "depthImpactBps"],
+              "properties": {
+                "buyFeeBps": { "type": "string" },
+                "sellFeeBps": { "type": "string" },
+                "tickRoundingBps": { "type": "string" },
+                "latencyBps": { "type": "string" },
+                "depthImpactBps": { "type": "string" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "observationOnly": { "const": true },
+        "action": { "type": "null" },
+        "canonical": { "const": false },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "AVAILABLE" } } },
+          "then": {
+            "properties": {
+              "rawSpreadBps": { "type": "string" },
+              "costStackBps": { "type": "string" },
+              "netSpreadBps": { "type": "string" },
+              "intendedBaseSize": { "type": "string" },
+              "depthSufficient": { "const": true },
+              "economicState": { "enum": ["POSITIVE_SYNTHETIC_PROJECTION", "NON_VIABLE_AFTER_COSTS"] },
+              "featureValue": { "allOf": [{ "$ref": "#/$defs/FeatureValueV1" }, { "properties": { "status": { "const": "AVAILABLE" } } }] }
+            }
+          },
+          "else": {
+            "properties": {
+              "rawSpreadBps": { "type": "null" },
+              "costStackBps": { "type": "null" },
+              "netSpreadBps": { "type": "null" },
+              "intendedBaseSize": { "type": "null" },
+              "costStack": { "type": "null" },
+              "depthSufficient": { "const": false },
+              "economicState": { "const": "UNKNOWN" }
+            }
+          }
+        },
+        { "if": { "properties": { "state": { "const": "STALE" } } }, "then": { "properties": { "featureValue": { "allOf": [{ "$ref": "#/$defs/FeatureValueV1" }, { "properties": { "status": { "const": "STALE" } } }] } } } },
+        { "if": { "properties": { "state": { "const": "UNKNOWN" } } }, "then": { "properties": { "featureValue": { "allOf": [{ "$ref": "#/$defs/FeatureValueV1" }, { "properties": { "status": { "const": "UNKNOWN" } } }] } } } },
+        { "if": { "properties": { "state": { "const": "DATA_INVALID" } } }, "then": { "properties": { "featureValue": { "allOf": [{ "$ref": "#/$defs/FeatureValueV1" }, { "properties": { "status": { "const": "DATA_INVALID" } } }] } } } }
+      ]
+    }
+  }
+}

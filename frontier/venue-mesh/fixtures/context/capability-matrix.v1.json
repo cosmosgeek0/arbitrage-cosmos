@@ -1,0 +1,16 @@
+{
+  "schema": "VenuePublicContextCapabilityMatrixV1",
+  "version": 1,
+  "evaluatedAtMs": 1784144943000,
+  "rows": [
+    { "contextClass": "ONCHAIN_FLOW", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No accepted source card or point-in-time capture contract is inherited." },
+    { "contextClass": "TOKEN_UNLOCK", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No accepted source card or lawful retention decision is inherited." },
+    { "contextClass": "TOKENOMICS_EVENT", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No accepted point-in-time tokenomics event source card is inherited." },
+    { "contextClass": "LIQUIDATION_SUMMARY", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No accepted liquidation-cluster or map source is inherited." },
+    { "contextClass": "BORROW_LENDING_CONDITION", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "L_EXECUTABLE_SEMANTICS", "reason": "L owns executable borrow truth; F1 has no private or signed source." },
+    { "contextClass": "OFFICIAL_PROJECT_EVENT", "status": "REFERENCE_ONLY", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "Only provenance-preserving fixture references are allowed." },
+    { "contextClass": "CANONICAL_NEWS_REFERENCE", "status": "ALREADY_OWNED_ADAPTER_REQUIRED", "canonicalOwner": "server.services.newsContext", "reason": "Existing official venue/news collectors must be reused through a future adapter." },
+    { "contextClass": "VENUE_DEPOSIT_WITHDRAWAL_RESTRICTION", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No admitted read-only restriction source exists; this is an observation class only and exposes no deposit, withdrawal, transfer, or money path." },
+    { "contextClass": "MACRO_CALENDAR", "status": "UNAVAILABLE_NOT_ADMITTED", "canonicalOwner": "Q_EXTERNAL_EVIDENCE", "reason": "No accepted point-in-time calendar source card is inherited." }
+  ]
+}

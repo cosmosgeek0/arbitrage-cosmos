@@ -1,0 +1,36 @@
+{
+  "schema": "VenueSupplementalRawFixtureV1",
+  "version": 1,
+  "venue": "KRAKEN",
+  "book": {
+    "symbol": "XBT/USD",
+    "timestamp": "2026-07-15T19:40:00.100Z",
+    "bids": [["100.30", "1.50"], ["100.20", "2.00"]],
+    "asks": [["100.40", "1.50"], ["100.50", "2.00"]],
+    "checksum": "3310070434"
+  },
+  "clock": {
+    "eventTimeUnit": "RFC3339",
+    "receiveTimeMs": 1784144400150,
+    "normalizationTimeMs": 1784144400200,
+    "featureCutoffTimeMs": 1784144401000,
+    "maximumFutureSkewMs": 0,
+    "maximumAgeMs": 1000
+  },
+  "source": {
+    "streamClass": "WEBSOCKET_BOOK_SNAPSHOT_FIXTURE",
+    "connectionId": "vm.kraken.fixture.2",
+    "sessionId": "vm.kraken.session.2",
+    "sequence": null,
+    "endpoint": "fixture://kraken/book",
+    "previousLast": null,
+    "currentFirst": null,
+    "currentLast": null,
+    "previousConnectionGeneration": 1,
+    "connectionGeneration": 1,
+    "resnapshotEstablished": false,
+    "sequenceSemantics": "STATELESS_SNAPSHOT"
+  },
+  "documentationUrl": "https://docs.kraken.com/exchange/api-reference/spot-websocket-v2/book",
+  "documentationContentSha256": "160bada19e919edc659c212702be6ba7343be5c208b8e722368e15ac3d32367a"
+}

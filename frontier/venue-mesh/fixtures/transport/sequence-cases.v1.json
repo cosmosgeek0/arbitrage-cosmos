@@ -1,0 +1,10 @@
+{
+  "schema": "VenueSequenceCaseCorpusV1",
+  "version": 1,
+  "cases": [
+    { "caseId": "contiguous", "previousLast": 99, "currentFirst": 100, "currentLast": 100, "previousConnectionGeneration": 1, "connectionGeneration": 1, "resnapshotEstablished": false, "expectedState": "CONTIGUOUS" },
+    { "caseId": "gap", "previousLast": 100, "currentFirst": 103, "currentLast": 103, "previousConnectionGeneration": 1, "connectionGeneration": 1, "resnapshotEstablished": false, "expectedState": "GAP" },
+    { "caseId": "reconnect-without-resnapshot", "previousLast": 100, "currentFirst": 1, "currentLast": 1, "previousConnectionGeneration": 1, "connectionGeneration": 2, "resnapshotEstablished": false, "expectedState": "RECONNECT_RESNAPSHOT_REQUIRED" },
+    { "caseId": "reconnect-with-resnapshot", "previousLast": 100, "currentFirst": 1, "currentLast": 1, "previousConnectionGeneration": 1, "connectionGeneration": 2, "resnapshotEstablished": true, "expectedState": "RESNAPSHOT_BASELINE" }
+  ]
+}

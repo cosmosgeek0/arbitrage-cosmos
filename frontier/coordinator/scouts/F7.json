@@ -1,0 +1,183 @@
+{
+  "module": "F7_CHRONOS",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L120-L216",
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L258-L318",
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L874-L894",
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L1035-L1157",
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L1293-L1340",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md#L60-L76",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/BACKEND_COMPONENTS.md#L158-L171",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/PARALLEL_BACKEND_RECEIPT.md#L20-L24",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/PARALLEL_BACKEND_RECEIPT.md#L70-L77",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/types.ts#L15-L36",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/types.ts#L58-L159",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/types.ts#L180-L227",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/event.ts#L94-L165",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/envelope.ts#L493-L625",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay/replay.ts#L31-L198",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/constants.ts#L39-L48",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/constants.ts#L109-L122",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/types.ts#L266-L291",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/application/types.ts#L61-L75",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/application/facade.ts#L519-L544",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/index.ts#L100-L120",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:F_BRIDGE_RECEIPT.md#L77-L113",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L07.md#L3-L8",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L07.md#L62-L102",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md#L24-L35",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md#L70-L112",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:WORKER_PROMPTS.md#L3-L17",
+    "git:56c47dad398c485b6653036c8b90c53f11061b1e:web/src/features/productControlRoom/fixtureBinding.ts#L19-L45",
+    "git:56c47dad398c485b6653036c8b90c53f11061b1e:IP_CONTROL_RECEIPT.md#L120-L137",
+    "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/cockpit/viewModel.ts#L112-L201",
+    "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/cockpit/viewModel.ts#L674-L715",
+    "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/diagnostics/boundary.ts#L384-L427",
+    "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/failureAtlas/atlas.ts#L638-L710",
+    "worktree:/Users/cosmosgeek/Desktop/role4-fix:role4-fix-20260715@bc39e9b989d37d12c77ed3854adca97a847f51de#observed=2026-07-15T17:20:21Z",
+    "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md#L3-L17",
+    "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md#L35-L59",
+    "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md#L93-L126",
+    "git:9ae6c22012e7c23ebebff827b527d4d64a263884:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md#L5-L27",
+    "git:9ae6c22012e7c23ebebff827b527d4d64a263884:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md#L159-L184",
+    "search:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src+web/src:IncidentEvidenceBundle|incident-evidence|buildProductControlRoomFixture#NO_MATCH",
+    "search:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/replay+server/src/systemIntegration:schemaHash|eventCatalog|codeRevision|codeSha|commitSha|modelRevision|modelVersion|deploymentRevision#NO_MATCH"
+  ],
+  "requiredDockFacets": [
+    "REPLAY_ADAPTER",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    {
+      "id": "IMMUTABLE_INPUTS",
+      "finding": "The scout worktree is detached at the exact accepted base f0168cb37bd04d21bc90591ab2256770de3b75bc. The governing Frontier file hashes exactly to 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad. Frontier sections 0-2, 9A, 10-12, and 17 were inspected before adjudication.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:120-216",
+        "/Users/cosmosgeek/Desktop/Frontier.md:874-894",
+        "/Users/cosmosgeek/Desktop/Frontier.md:1035-1157",
+        "/Users/cosmosgeek/Desktop/Frontier.md:1293-1340"
+      ]
+    },
+    {
+      "id": "CANONICAL_REPLAY_ALREADY_OWNED",
+      "finding": "Accepted Foundation replay already owns the versioned bounded envelope, canonical checksum, sourced event identity, deterministic total ordering, duplicate/regression/gap/truncation/corruption detection, injected virtual-clock dispatch, fail-closed replay, and single-capture read/write storage seam. Ledger is the sole durable event/checkpoint-history owner. Chronos must not create another replay engine, clock, store, ledger, event bus, recorder, runtime, or retention authority.",
+      "refs": [
+        "ARCHITECTURE.md:73-76",
+        "server/src/foundation/replay/types.ts:15-36",
+        "server/src/foundation/replay/types.ts:58-227",
+        "server/src/foundation/replay/event.ts:94-165",
+        "server/src/foundation/replay/envelope.ts:493-625",
+        "server/src/foundation/replay/replay.ts:31-198"
+      ]
+    },
+    {
+      "id": "DOMAIN_CHECKPOINT_AND_TWIN_DEDUP",
+      "finding": "Execution already owns deterministic checkpoint serialization/replay and restart recovery, while the L07 donor owns closed exchange-twin event reduction with model revision, seed, exact checkpoints, restore, and comparison. L07 is lane-accepted but explicitly not integrated-accepted and is not an ancestor of f0168cb. Chronos may consume these owner artifacts after director disposition; it may not reproduce their execution, fill, liability, recovery, or twin mechanics.",
+      "refs": [
+        "F_BRIDGE_RECEIPT.md:77-113",
+        "git:df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L07.md:3-8",
+        "git:df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L07.md:62-102"
+      ]
+    },
+    {
+      "id": "ACCEPTED_TRACE_AND_COCKPIT_OWNER",
+      "finding": "Accepted System Integration already owns the whole-machine supervisor projection, trace vocabulary, canonical SystemTraceEvent/SystemTraceSnapshot dialect, correlation deduplication, trace paging, and honest unknown/unavailable projection. Its owner-trace input is optional, production startup supplies no trace provider, and a missing or throwing owner provider becomes an empty list. This is a reusable projection seam, not proof of a complete product replay chain or incident-evidence bundle.",
+      "refs": [
+        "ARCHITECTURE.md:76",
+        "server/src/systemIntegration/contracts/constants.ts:39-48",
+        "server/src/systemIntegration/contracts/constants.ts:109-122",
+        "server/src/systemIntegration/contracts/types.ts:266-291",
+        "server/src/systemIntegration/application/types.ts:61-75",
+        "server/src/systemIntegration/application/facade.ts:519-544",
+        "server/src/index.ts:100-120"
+      ]
+    },
+    {
+      "id": "EXACT_REAL_DELTA_AT_ACCEPTED_BASE",
+      "finding": "A real residual F7 gap exists at f0168cb: ReplayEvent has only stream, sequence, free-form kind, sourced time, one correlation ID, and generic payload; storage has read/write by capture ID but no fixture catalog/list cursor; there is no immutable per-kind event catalog/schema hash, parent/causation chain, seeded-clock reference, first-class configuration/code/model/policy/deployment lineage, seven-label Chronos manifest, two-run comparison contract, ReplayDispatch-to-SystemTraceEvent exporter, or fixture proof spanning the full market-to-cockpit chain. Foundation replay is receipted BUILT_TESTED_DORMANT with no production wiring. Exact accepted-tree searches found none of the named incident-bundle/cockpit-fixture symbols or the missing replay revision/catalog symbols.",
+      "refs": [
+        "server/src/foundation/replay/types.ts:58-79",
+        "server/src/foundation/replay/types.ts:180-227",
+        "server/src/systemIntegration/contracts/types.ts:266-291",
+        "docs/archive/BACKEND_COMPONENTS.md:158-171",
+        "docs/archive/PARALLEL_BACKEND_RECEIPT.md:20-24",
+        "docs/archive/PARALLEL_BACKEND_RECEIPT.md:70-77"
+      ]
+    },
+    {
+      "id": "MANDATORY_INCIDENT_HANDOFF_ABSENT_AT_BASE",
+      "finding": "Frontier section 9A requires one selected replay fixture to traverse the existing cockpit fixture adapter and map exactly to the canonical incident-evidence bundle. At f0168cb, server/src/productAssurance does not exist, no IncidentEvidenceBundle or buildProductControlRoomFixture symbol exists, and no replay-to-incident adapter exists. The closest accepted SystemTraceSnapshot is generic trace evidence and cannot be privately relabeled as the missing canonical bundle.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:878-890",
+        "server/src/systemIntegration/contracts/types.ts:266-291",
+        "server/src/systemIntegration/application/facade.ts:519-544"
+      ]
+    },
+    {
+      "id": "EXACT_MOVING_OWNER",
+      "finding": "The canonical incident/material-event owners and cockpit APIs are assigned by the accepted authority receipt to the I00 integration candidate, whose candidate 098f7b9449ab3b1c26bda19f51537bfea01d4c48 was rejected with 15 findings. The sole Role-4 repair branch is still producing C2: during this inspection it advanced from b1a8af0edd3c847a382078985374e45bcd28f849 at 2026-07-15T17:18:31Z to clean bc39e9b989d37d12c77ed3854adca97a847f51de at 2026-07-15T17:20:21Z. Candidate-only contracts include IncidentCorrelationCockpitProjection, the INCIDENT_CORRELATION_ASSURANCE_CASE owner slot, the canonical cockpit section/view shape, redacted diagnostic bundles, and OperationalFailureRecord; the failure-record projector still returns FAILURE_RECORD_OWNER_CONTRACT_WAITING. None is accepted at f0168cb. This exact I00/Role-4 incident-cockpit owner movement blocks the mandatory §9A handoff.",
+      "refs": [
+        "AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md:24-35",
+        "QL_DIRECTOR_STATE.md:82-112",
+        "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/cockpit/viewModel.ts:112-201",
+        "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/diagnostics/boundary.ts:384-427",
+        "git:bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productAssurance/failureAtlas/atlas.ts:638-710"
+      ]
+    },
+    {
+      "id": "COCKPIT_FIXTURE_BINDING_NOT_ACCEPTED",
+      "finding": "The concrete buildProductControlRoomFixture adapter exists only in the IP-CONTROL donor at 56c47dad398c485b6653036c8b90c53f11061b1e, not at accepted f0168cb. Its receipt says BINDING_READY but DIRECTOR_MOUNT_REQUIRED and depends on final runtime trace/command/receipt contracts. It is part of the rejected/moving integration line, so Chronos cannot bind §9A to it as accepted immutable repository truth yet.",
+      "refs": [
+        "git:56c47dad398c485b6653036c8b90c53f11061b1e:web/src/features/productControlRoom/fixtureBinding.ts:19-45",
+        "git:56c47dad398c485b6653036c8b90c53f11061b1e:IP_CONTROL_RECEIPT.md:120-137",
+        "QL_DIRECTOR_STATE.md:106-112"
+      ]
+    },
+    {
+      "id": "SHADOW_AND_PORT_DEDUP",
+      "finding": "RUN-17 replay-shadow already defines the candidate-independent hostile stimulus corpus: 11 datasets, 64 events, omission/order/clock/restart/partial-fill/recovery coverage, and explicit insertion requests to Foundation replay and other owners. It is SHADOW_SPECULATIVE, owner adapters are unmounted, based on rejected candidate 098f7b9, and not an ancestor of f0168cb. A2X likewise remains speculative with C2/director adjudication outstanding. The director has armed P7 replay only after INTEGRATED_ACCEPTED. Re-scout must adopt or reference these sealed artifacts and deduplicate them; their existence neither makes F7 already owned nor authorizes implementation now.",
+      "refs": [
+        "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md:3-17",
+        "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md:35-59",
+        "git:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md:93-126",
+        "git:9ae6c22012e7c23ebebff827b527d4d64a263884:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md:5-27",
+        "git:9ae6c22012e7c23ebebff827b527d4d64a263884:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md:159-184",
+        "WORKER_PROMPTS.md:17"
+      ]
+    },
+    {
+      "id": "DOCK_DEPENDENCIES",
+      "finding": "F7 depends on exactly REPLAY_ADAPTER and COCKPIT_PROJECTION; no third facet is legal. REPLAY_ADAPTER must describe/list/materialize fixtures, compare fixture runs, and export fixture traces through Foundation replay/L/Ledger without owning scenario execution, replay state, or retention. COCKPIT_PROJECTION must describe/project the canonical read model and honest empty/unavailable/synthetic states without mounting, controls, health truth, or page authority. The generic accepted cockpit seam is reusable, but the exact §9A incident-evidence contract is moving and therefore cannot yet support a USABLE immutable binding.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:258-318",
+        "ARCHITECTURE.md:73-76",
+        "server/src/foundation/replay/types.ts:180-227",
+        "server/src/systemIntegration/contracts/types.ts:266-291"
+      ]
+    },
+    {
+      "id": "DISPOSITION_AND_UNBLOCK_CONDITION",
+      "finding": "Disposition is BLOCKED_OWNER_MOVING, not ALREADY_OWNED: the accepted replay owner lacks a measurable product-wide extension, but Frontier section 2 forbids approval while the mandatory canonical owner/contract is moving. Recommended accounting is buildState PLANNED, disposition BLOCKED, terminalLabel BLOCKED_OWNER_MOVING. Re-scout only after an immutable I00 C2 is independently verified and landed as INTEGRATED_ACCEPTED, then after the director records the P7 replay/A2X/IP-CONTROL port dispositions and exact accepted incident-evidence/cockpit contract versions. If the gap survives, approve only a removable fixture catalog/manifest/materialize/compare/trace-export adapter; otherwise deduplicate to ALREADY_OWNED.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:200-216",
+        "/Users/cosmosgeek/Desktop/Frontier.md:874-894",
+        "/Users/cosmosgeek/Desktop/Frontier.md:1293-1340",
+        "AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md:33-35",
+        "QL_DIRECTOR_STATE.md:82-112",
+        "WORKER_PROMPTS.md:17"
+      ]
+    },
+    {
+      "id": "INSPECTION_BOUNDARY",
+      "finding": "Only read-only inspection commands were run against accepted source, Git objects, receipts, and named worktrees. No module worktree was created, no source or tracked project file was edited, and no focused, full, browser, build, or heavy suite was run. The only writes are the two requested untracked scout outputs.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:1322-1324"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:20:21Z",
+  "contentHash": "fa54fa2985fd6a2ae3d8da83799a1954f4f18db59c2fd54804de0c1544298dd5"
+}

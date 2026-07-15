@@ -1,0 +1,233 @@
+{
+  "module": "F6_NERVE",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    {
+      "ref": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "sections": ["0", "1", "2", "3.1A", "9", "10", "11", "12", "17"],
+      "role": "sole Frontier authority"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md",
+      "lines": ["60-76", "128-153"],
+      "symbols": ["canonical domain owners", "stable identity and alias law"],
+      "role": "accepted owner map"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/types.ts",
+      "lines": ["41-76", "116-160", "242-252"],
+      "symbols": ["SourceDiagnosticEvidence", "DiagnosticsSnapshot"],
+      "role": "accepted application diagnostic evidence contracts"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/observability/derive.ts",
+      "lines": ["1039-1058", "1134-1206"],
+      "symbols": ["deriveDiagnostics"],
+      "role": "accepted pure metric derivation"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/lifecycle/queue.ts",
+      "lines": ["22-46", "175-214", "245-379"],
+      "symbols": ["QueueOfferResult", "BoundedInboundQueue"],
+      "role": "accepted source queue, bounded drop, and resync owner"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/spot/backpressure.ts",
+      "lines": ["110-250"],
+      "symbols": ["SpotBackpressureBuffer"],
+      "role": "accepted spot-source backpressure owner"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/types.ts",
+      "lines": ["144-151", "181-216", "266-304"],
+      "symbols": ["OpaqueIdentityAlias", "SystemQueueSnapshot", "SystemComponentSnapshot", "SystemTraceEvent", "SystemSupervisorSnapshot"],
+      "role": "accepted supervisor projection contracts"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/topology.ts",
+      "lines": ["6-90"],
+      "symbols": ["SYSTEM_TOPOLOGY_NODES", "SYSTEM_TOPOLOGY_EDGES"],
+      "role": "accepted application topology owner"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/traceIndex.ts",
+      "lines": ["28-31", "73-105", "144-250"],
+      "symbols": ["buildSystemTraceIndex"],
+      "role": "accepted bounded trace/correlation owner"
+    },
+    {
+      "ref": "df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/DECISIONS/D0017-l13-machine-graph-evidence.md",
+      "lines": ["28-39", "59-91"],
+      "role": "accepted L13 authority/dedup ruling"
+    },
+    {
+      "ref": "df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L13_ACCEPTANCE.md",
+      "lines": ["51-74"],
+      "role": "accepted L13 unwired synthetic-evidence receipt"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/PRODUCTION_AUDIT.md",
+      "lines": ["105-123"],
+      "role": "accepted deployment-observability residual ruling"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md",
+      "lines": ["70-84", "94-112", "126-132"],
+      "role": "current director gate and rejected-candidate record"
+    },
+    {
+      "ref": "098f7b9449ab3b1c26bda19f51537bfea01d4c48:server/src/productAssurance/projections/operationalTruth.ts",
+      "lines": ["249-305"],
+      "symbols": ["TelemetryPipelineInput", "projectTelemetryPipeline"],
+      "role": "overlapping Product Assurance owner in rejected candidate; not accepted Main"
+    },
+    {
+      "ref": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/cockpit/receipts/COCKPIT_PRESTAGE_RECEIPT.v1.json",
+      "lines": ["90-97"],
+      "role": "packet-local S5 cockpit prestage receipt; not integrated"
+    },
+    {
+      "ref": "20608c4b041b552b67c43c1f328038b0c492942f:fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+      "lines": ["5-15", "106-135"],
+      "role": "speculative observability shadow receipt; no authority or acceptance"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md",
+      "lines": ["20-35"],
+      "role": "AI-Ops WAITING_INTEGRATED_ACCEPTED gate"
+    },
+    {
+      "ref": "/Users/cosmosgeek/Desktop/role4-fix",
+      "branch": "role4-fix-20260715",
+      "observedHead": "b1a8af0edd3c847a382078985374e45bcd28f849",
+      "role": "current moving I00/Product Assurance repair owner"
+    },
+    {
+      "ref": "/Users/cosmosgeek/Desktop/f-coord/frontier/coordinator/FRONTIER_BOARD.md",
+      "lines": ["1-12"],
+      "role": "coordinator state: F6 SCOUT_LAUNCHED / WAITING_FOR_DOCK_SHA"
+    },
+    {
+      "ref": "/Users/cosmosgeek/Desktop/f-dock",
+      "observedHead": "df9c52cd2a428e3d3675cf0260c0d30052a4bbff",
+      "role": "F0 in-flight; no ProviderFacetBindingV1 receipt observed"
+    }
+  ],
+  "requiredDockFacets": [
+    "EVIDENCE",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    {
+      "id": "F6-BASE-001",
+      "result": "VERIFIED",
+      "detail": "The scout worktree is detached at accepted Main f0168cb37bd04d21bc90591ab2256770de3b75bc. Frontier.md hashes exactly to 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad."
+    },
+    {
+      "id": "F6-OWNER-002",
+      "result": "ALREADY_OWNED_PARTIAL",
+      "detail": "Foundation Observability owns pure application diagnostic derivation; Intelligence Runtime owns public-source lifecycle, freshness, sequence, bounded queues, drop/resync, and backpressure; System Integration owns the canonical whole-machine read projection, application dependency topology, root cause, attention, and bounded trace index; the existing Ledger remains the sole durable event/checkpoint owner. F6 must adapt to these owners and cannot create another collector, telemetry buffer, topology store, health owner, trace store, or persistence path."
+    },
+    {
+      "id": "F6-L13-003",
+      "result": "ALREADY_OWNED_DEDUP",
+      "detail": "Accepted L13 decision D0017 assigns topology to System Integration, behavior to Foundation Control, and metric derivation/health/alarm evaluation to Foundation Observability. Its acceptance is BUILT_AND_TESTED_UNWIRED and synthetic-owner-evidence only; it emits no telemetry and supplies no deployed cockpit proof."
+    },
+    {
+      "id": "F6-GAP-004",
+      "result": "PROVISIONAL_REAL_DELTA_AFTER_OWNER_FREEZE",
+      "detail": "Accepted f0168cb has no OpenTelemetry/OTLP mapping or receiver configuration and no host/kernel acquisition contract for process CPU or memory, socket churn, DNS, TLS, TCP reset/retransmission, disk stall/pressure, event-loop blocking, or eBPF. Exact source/API searches found only application socket/source facts, queue facts, SQLite writability, synthetic logical capacity, and process uptime; none is host/kernel/transport observation. The accepted production audit also leaves process supervision, log shipping, disk/retention alerts, and alert delivery to deployment configuration."
+    },
+    {
+      "id": "F6-MOVING-005",
+      "result": "BLOCKING",
+      "detail": "The overlapping Product Assurance operational-truth/observability owner exists only in rejected candidate 098f7b9449ab3b1c26bda19f51537bfea01d4c48 and associated packet receipts, not accepted Main. That candidate defines TelemetryPipelineInput/projectTelemetryPipeline for capacity, queue depth, drops, retries, persistent buffering, export freshness, retention, and ledger evidence. QL_DIRECTOR_STATE records 098f7b9 as REJECTED_CANDIDATE and assigns the fresh C2 repair to Role 4."
+    },
+    {
+      "id": "F6-MOVING-006",
+      "result": "BLOCKING_OWNER_SNAPSHOT",
+      "detail": "At 2026-07-15T17:18:36Z the exact moving owner was /Users/cosmosgeek/Desktop/role4-fix on branch role4-fix-20260715 at b1a8af0edd3c847a382078985374e45bcd28f849 with tracked modifications in STATE.md, Product Assurance/I00 interface and validator files, L15 amendment/restore files, and R3 backup-correction tests. The branch also contains moving watchdog, machine-node projection, attention-queue, and crash-readback corrections. A fresh C2, independent verification, director landing, and INTEGRATED_ACCEPTED remain outstanding."
+    },
+    {
+      "id": "F6-SHADOW-007",
+      "result": "NON_ACCEPTED_EVIDENCE",
+      "detail": "S5 cockpit receipt d4ff9c94 is packet-local and DIRECTOR_MOUNT_REQUIRED with no integration/live claim. Obs-shadow 20608c4 is SHADOW_SPECULATIVE with acceptanceStatus null, authorityEffect NONE, and CANONICAL_TELEMETRY_RUNTIME_EXPORT_NOT_CONFIGURED; its C2/director insertion requests cannot establish accepted ownership. AI-Ops remains WAITING_INTEGRATED_ACCEPTED, so a slow AI-analysis exporter isolation proof cannot yet be adjudicated against a canonical accepted export path."
+    },
+    {
+      "id": "F6-DOCK-008",
+      "result": "REQUIRED_NOT_YET_BOUND",
+      "detail": "Frontier section 3.1A requires exactly EVIDENCE and COCKPIT_PROJECTION for F6, each eventually bound by ProviderFacetBindingV1 with bindingStatus USABLE. F0 was observed in flight at df9c52cd2a428e3d3675cf0260c0d30052a4bbff with untracked frontier/dock source files but no binding receipt; the coordinator board still records F6 WAITING_FOR_DOCK_SHA. No BLOCKED or USABLE binding status is inferred before F0 seals."
+    },
+    {
+      "id": "F6-SCOPE-009",
+      "result": "SECTION_9_CAPABILITY_DISPOSITION",
+      "capabilities": [
+        {
+          "capability": "OpenTelemetry-compatible mappings and fixture receivers",
+          "status": "REAL_GAP_BUT_OWNER_MOVING",
+          "dedupBoundary": "map only into the eventual canonical host/transport observation contract; never create a parallel telemetry runtime"
+        },
+        {
+          "capability": "process/socket/DNS/TLS/TCP/CPU/memory/disk/event-loop/queue observations",
+          "status": "PARTIAL_REAL_GAP_BUT_OWNER_MOVING",
+          "dedupBoundary": "host/kernel/transport facts are absent; public-source sockets and queues are already Intelligence Runtime owned"
+        },
+        {
+          "capability": "trace/case/component correlation",
+          "status": "ALREADY_OWNED_ADAPTER_ONLY",
+          "dedupBoundary": "reuse Foundation identity aliases and System Integration trace index; case identity awaits accepted Product Assurance/AI-Ops owner"
+        },
+        {
+          "capability": "gap and telemetry-loss accounting",
+          "status": "PARTIAL_AND_OWNER_MOVING",
+          "dedupBoundary": "source sequence/drop accounting is already owned; end-to-end telemetry conservation is in non-accepted Product Assurance/obs-shadow evidence"
+        },
+        {
+          "capability": "dependency-topology fixtures",
+          "status": "ALREADY_OWNED_EXTENSION_ONLY",
+          "dedupBoundary": "System Integration owns the canonical application graph; F6 may later supply only low-level fixture extensions"
+        },
+        {
+          "capability": "golden-signal and saturation cockpit projections",
+          "status": "PARTIAL_AND_OWNER_MOVING",
+          "dedupBoundary": "freshness, lag, queue, and drops exist; real host RED/USE facts and accepted S5 mount do not"
+        },
+        {
+          "capability": "bounded buffers and drop accounting",
+          "status": "ALREADY_OWNED_FOR_SOURCE_PIPELINE",
+          "dedupBoundary": "reuse Intelligence Runtime and Product Assurance contracts; no competing F6 buffer"
+        },
+        {
+          "capability": "AI-analysis export cannot backpressure telemetry",
+          "status": "REAL_GAP_BUT_OWNER_MOVING",
+          "dedupBoundary": "accepted code contains only synchronous metric-sink throw containment, not slow/stalled exporter isolation; canonical AI export is not yet accepted"
+        },
+        {
+          "capability": "offline dashboards and hostile fixtures",
+          "status": "PARTIAL_REAL_GAP_BUT_OWNER_MOVING",
+          "dedupBoundary": "hostile application fixtures exist; no offline low-level Nerve dashboard; mounting remains cockpit-owner authority"
+        },
+        {
+          "capability": "eBPF deployment design and privilege matrix",
+          "status": "REAL_GAP_REFERENCE_ONLY",
+          "dedupBoundary": "future artifact must remain REFERENCE_ONLY, unprivileged, unmounted, and owner-gated"
+        },
+        {
+          "capability": "performance-law survival, sampling, and failure isolation",
+          "status": "INCOMPLETE_AND_OWNER_MOVING",
+          "dedupBoundary": "drop/gap visibility exists, but no accepted low-level sampling policy, slow-export isolation proof, or Nerve-removal survival proof exists"
+        }
+      ]
+    },
+    {
+      "id": "F6-RULING-010",
+      "result": "BLOCKED_OWNER_MOVING",
+      "detail": "Frontier section 9.1 is controlling: an observability owner is moving and its accepted evidence is incomplete, so the scout must record BLOCKED_OWNER_MOVING and stop. A future rescout may consider only the exact low-level residual after C2 is frozen, independently verified, landed as INTEGRATED_ACCEPTED, S5/obs-shadow/AI-Ops artifacts are dispositioned, and both F0 facets are sealed USABLE."
+    }
+  ],
+  "timestamp": "2026-07-15T17:18:36Z",
+  "contentHash": "a9da7fc91dde519ee99a4ba81c23da903c581ed78ac0c0328b4e4b3fd1bb57e0"
+}

@@ -1,0 +1,49 @@
+{
+  "module": "F10",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "/Users/cosmosgeek/Desktop/Frontier.md#sha256=4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad; sections 0-2, 3.1A, 9D, 10-12, 17",
+    "ARCHITECTURE.md:60-76; canonical component owners and systemIntegration/supervisor whole-machine read-projection owner",
+    "IP_ASSURANCE.md:127-148,234-252,421-436; expected inventory, telemetry completeness, cockpit projections, derived read-only claim graph",
+    "server/src/systemIntegration/supervisor/topology.ts:6-18,35-91; SystemTopologyNode, SystemTopologyEdge, SYSTEM_TOPOLOGY_NODES, SYSTEM_TOPOLOGY_EDGES, dependenciesFor, dependentsFor",
+    "server/src/systemIntegration/supervisor/rootCause.ts:118-204; projectRootCauses, dependency paths, affectedComponentIds, attention queue",
+    "server/src/systemIntegration/supervisor/traceIndex.ts:144-249; buildSystemTraceIndex, traceByCorrelationId, recentCorrelatedDecisions",
+    "server/src/systemIntegration/contracts/types.ts:153-179,189-225,266-304; source registry, component snapshots, dependency edges, trace events, supervisor snapshot",
+    "server/src/systemIntegration/adapters/sourceRegistry.ts:46-101; buildSystemSourceRegistry and duplicate semantic-producer rejection",
+    "server/src/intelligenceFoundation/contracts/types.ts:62-72,372-406; truth metadata, component descriptors, topology edges and snapshots",
+    "server/src/intelligenceFoundation/topology/registry.ts:680-935; topology queries, traversal, cycles and blocking paths",
+    "server/src/capitalFoundation/topology/projector.ts:261-322,333-805; active-capital lineage and recovery-path projection",
+    "web/src/components/SystemIntegrationSurface.tsx:76-195; accepted cockpit consumer for supervisor truth",
+    "server/test/systemIntegration/supervisor/projection.test.mjs:32-46,110-210,254-290; canonical graph, stale truth, trace dedup, missing-node rejection",
+    "server/test/systemIntegration/supervisor/truth.scenarios.test.mjs:22-60; root blocker and affected-component proof",
+    "server/test/systemIntegration/scenarios/acceptance.scenarios.test.mjs:331-387; exact-once SOURCE-to-SUPERVISOR transition trace",
+    "docs/archive/SYSTEM_CONVERGENCE_COMPONENTS.md:279-300; engine-supervisor ownership receipt",
+    "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md:378-425; accepted API and rendered cockpit evidence",
+    "QL_DIRECTOR_STATE.md:70-84,106-112; rejected I00 candidate and Role 4 C2 repair ownership",
+    "098f7b9449ab3b1c26bda19f51537bfea01d4c48:MISSION_COVERAGE_MATRIX.md:1-7; rejected-candidate mission coverage projection",
+    "098f7b9449ab3b1c26bda19f51537bfea01d4c48:server/src/productIntegration/runtime/managedInventory.ts:53-56,93-207; rejected-candidate managed inventory",
+    "role4-fix-20260715@b1a8af0edd3c847a382078985374e45bcd28f849; active moving I00/IP-ASSURANCE owner observed 2026-07-15T17:17:20Z",
+    "cdc3d75a38f74411eecb9ec9736dc404bc0a4cd1; Role 4 graph correction adding the missing q-inference machine node"
+  ],
+  "requiredDockFacets": [
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    "BASE_VERIFIED: worktree is detached at accepted Main f0168cb37bd04d21bc90591ab2256770de3b75bc; Frontier SHA-256 is the required 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad.",
+    "ACCEPTED_PARTIAL_OWNER: ARCHITECTURE.md assigns whole-machine read projection, root-cause graph, attention queue and trace index to server/src/systemIntegration/supervisor/**. Accepted source implements a 13-component dependency graph, source registry, affected-component projection and correlated trace index.",
+    "ACCEPTED_DOMAIN_PROVIDERS: intelligenceFoundation owns truth-bearing topology traversal/cycle/blocking queries; intelligenceRuntime owns source silence/staleness and evidence-to-feature lineage; capitalFoundation owns proposal-to-recovery/checkpoint topology. F10 must consume these providers and may not duplicate them.",
+    "ACCEPTED_GAP: no accepted query spans mission requirement -> authority -> component -> code/artifact -> data source -> feature/model/strategy -> decision -> command -> test/proof -> incident/recovery -> deployment revision -> cockpit surface. Accepted edge contracts do not carry all of source, version/hash, time, confidence and canonical owner.",
+    "REPORT_DEDUP: accepted source has partial equivalents for silent-component, duplicate-authority, stale-reference, blast-radius and onboarding concepts, but no repo-wide orphan, missing-proof, duplicate-authority, stale-reference, blast-radius or operator-onboarding report and no complete seven-report suite. These absences are provisional while the canonical owner moves.",
+    "CANONICAL_ASSURANCE_OWNER: accepted IP_ASSURANCE.md owns expected inventory, telemetry completeness, proof coverage and cockpit assurance; its S4/S5 design explicitly includes a derived read-only claim graph and release-bound expected-manifest/cockpit truth.",
+    "UNACCEPTED_EQUIVALENCE: rejected I00 candidate 098f7b9449ab3b1c26bda19f51537bfea01d4c48 contains mission coverage, managed inventory, owner-question coverage, missing-proof evaluation and cockpit projection machinery, but it is not an ancestor of accepted base f0168cb37bd04d21bc90591ab2256770de3b75bc.",
+    "EXACT_MOVING_OWNER: /Users/cosmosgeek/Desktop/role4-fix, branch role4-fix-20260715, observed HEAD b1a8af0edd3c847a382078985374e45bcd28f849 with tracked modifications. QL_DIRECTOR_STATE.md records candidate C rejection and assigns Role 4 the C2 repair plus mandatory fresh verification.",
+    "MOVING_GRAPH_PROOF: Role 4 commit cdc3d75a38f74411eecb9ec9736dc404bc0a4cd1 changes the canonical machine graph from 13 to 14 components by adding q-inference; the lane also changes managed inventory, mission coverage and attention projection. The cockpit contract remains schemaVersion 1 while its inventory changes.",
+    "DOCK_DEPENDENCY: Frontier's module-to-facet map gives F10 exactly one F0 dependency, COCKPIT_PROJECTION. Its accepted v1 read seam exists, but the I08/S5 canonical owner contract is not frozen; the candidate names DIRECTOR_ACCEPTED_S5_AND_I08_OWNER_CONTRACT_MISSING.",
+    "BLOCK_REASON: approving a real delta now could duplicate the moving I00/IP-ASSURANCE implementation, while declaring ALREADY_OWNED would overclaim rejected/unlanded code. Re-scout only after a director-accepted frozen C2 lands and F0 supplies the exact COCKPIT_PROJECTION canonicalOwnerRef, contract ref/hash and version.",
+    "SCOPE_COMPLIANCE: inspection commands only; no module worktree, source edit, commit, network call or test suite was run. Only SCOUT_F10.json and SCOUT_F10.md are created untracked at this scout root."
+  ],
+  "timestamp": "2026-07-15T17:17:20Z",
+  "contentHash": "a1b54e5e67c28d02b28e429a364906e2cc48b414385ef04cb4db06ec74591794"
+}

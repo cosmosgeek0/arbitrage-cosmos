@@ -1,0 +1,252 @@
+{
+  "module": "F8 EdgeMeter",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    {
+      "revision": "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "path": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "lines": "70-234,285-314,898-917,1035-1160,1285-1399",
+      "symbols": ["F8 EdgeMeter", "ADVISORY_ASSESSOR", "COCKPIT_PROJECTION"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "ARCHITECTURE.md",
+      "lines": "64-76",
+      "symbols": ["Canonical authority map"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/capitalFoundation/contracts/economics.ts",
+      "lines": "9-73",
+      "symbols": ["EconomicComponentKind", "EconomicComponent", "EconomicAttribution"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/capitalFoundation/economics/types.ts",
+      "lines": "12-140",
+      "symbols": ["EconomicScopeReference", "EconomicMeasures", "EconomicDimensions", "EconomicReport"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/capitalFoundation/economics/compose.ts",
+      "lines": "344-536",
+      "symbols": ["composeEconomicReport", "rollUpEconomicReports"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/foundation/readModel/canonicalize.ts",
+      "lines": "274-482",
+      "symbols": ["canonicalizeDecision", "canonicalizeProposal"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/intelligenceFoundation/outcomes/attribution.ts",
+      "lines": "72-101,155-339",
+      "symbols": ["attributeOutcome"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/foundation/calibration/types.ts",
+      "lines": "23-108,165-208",
+      "symbols": ["ProposalOutcomeInput", "ProposalOutcomeRecord", "CalibrationReport"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "packages/edge-protocol/schema/edge-protocol-v1.schema.json",
+      "lines": "61-113,261-318",
+      "symbols": ["EdgeOutcomeEnvelopeV1", "pnlAttribution"]
+    },
+    {
+      "revision": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "path": "quant/RECEIPTS/Q17_ACCEPTANCE.md",
+      "lines": "3-10,150-165,199-217",
+      "symbols": ["LANE_READY", "ABSTAIN_UNKNOWN", "DATA_INSUFFICIENT"]
+    },
+    {
+      "revision": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "path": "quant/src/quant_edge/validation/splits.py",
+      "lines": "43-75,139-323",
+      "symbols": ["WalkForwardSpecV1", "build_walk_forward_plan", "HoldoutGrantV1"]
+    },
+    {
+      "revision": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "path": "quant/src/quant_edge/validation/multiplicity.py",
+      "lines": "44-312",
+      "symbols": ["TrialLedgerV1", "pbo_cscv", "benjamini_hochberg"]
+    },
+    {
+      "revision": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "path": "quant/src/quant_edge/validation/dsr.py",
+      "lines": "46-115,178-232",
+      "symbols": ["DsrReportV1", "deflated_sharpe_ratio"]
+    },
+    {
+      "revision": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "path": "quant/src/quant_edge/ensemble/abstention.py",
+      "lines": "49-86,302-451",
+      "symbols": ["ABSTAIN_UNKNOWN", "decide_advisory"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "server/src/systemIntegration/supervisor/types.ts",
+      "lines": "84-107,150-159",
+      "symbols": ["SystemIntelligenceSummary", "SystemCapitalSummary", "SystemSupervisorSummary"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md",
+      "lines": "259-304,412-418",
+      "symbols": ["Exact economics responsibility", "Future read-model/cockpit seam"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "docs/archive/CAPITAL_SUPERVISION_RECEIPT.md",
+      "lines": "409-452",
+      "symbols": ["Dormant adapters", "Future control/API projection"]
+    },
+    {
+      "revision": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "path": "QL_PARALLEL_DAG.md",
+      "lines": "7,17,28",
+      "symbols": ["Q frozen", "L frozen", "I00 Role-4 active"]
+    }
+  ],
+  "requiredDockFacets": [
+    "ADVISORY_ASSESSOR",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "id": "F8-IDENTITY",
+      "assessment": "VERIFIED",
+      "finding": "The scout is detached at accepted Main f0168cb37bd04d21bc90591ab2256770de3b75bc, and the governing Frontier file has the required SHA-256 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad."
+    },
+    {
+      "id": "F8-DOCK-FACETS",
+      "assessment": "DEPENDENCY",
+      "finding": "Frontier lines 304-314 list exactly ADVISORY_ASSESSOR and COCKPIT_PROJECTION for F8. Advisory evaluation is fixture-only and shadow-only; cockpit work is limited to a panel/render/empty-state description. Facet usability remains a separate F0 release gate."
+    },
+    {
+      "id": "F8-INPUT-OWNERS",
+      "assessment": "PARTIAL_ALREADY_OWNED",
+      "owner": "Basis/Volume engines, Foundation read model, Ledger, intelligenceFoundation, Capital",
+      "refs": [
+        "ARCHITECTURE.md:64-76",
+        "server/src/foundation/readModel/canonicalize.ts:274-482",
+        "server/src/intelligenceFoundation/outcomes/attribution.ts:155-339",
+        "server/src/capitalFoundation/contracts/positions.ts:31-100"
+      ],
+      "finding": "Canonical proposals, decisions/reject codes, fill history, forward outcome evidence, liabilities/positions, and economic components have owners. No accepted artifact provides one immutable, forward-only reference contract joining proposal, fill, cost, liability, evidence, and Q lineage without copying owner truth. That cross-owner reference contract is a real F8 delta; source production and persistence are not."
+    },
+    {
+      "id": "F8-CAPITAL-DEDUP",
+      "assessment": "ALREADY_OWNED_REUSE_REQUIRED",
+      "owner": "capitalFoundation economics",
+      "refs": [
+        "server/src/capitalFoundation/contracts/economics.ts:17-73",
+        "server/src/capitalFoundation/economics/types.ts:78-136",
+        "server/src/capitalFoundation/economics/compose.ts:344-536",
+        "docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md:259-273,412-418"
+      ],
+      "finding": "Capital already owns exact-decimal gross, basis/directional, realized/unrealized, fee, spread/slippage, funding, borrow, execution-shortfall, one-leg, recovery, FX, and unresolved-residual composition, with missing/estimated/divergent states. F8 must consume EconomicReport/components by immutable reference and must not create another PnL taxonomy, net calculator, or accounting authority."
+    },
+    {
+      "id": "F8-Q-DEDUP",
+      "assessment": "ALREADY_OWNED_REUSE_REQUIRED",
+      "owner": "Frozen Q lane at 02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "refs": [
+        "quant/src/quant_edge/validation/splits.py@02b4ecc:43-75,139-323",
+        "quant/src/quant_edge/validation/multiplicity.py@02b4ecc:44-312",
+        "quant/src/quant_edge/validation/dsr.py@02b4ecc:46-115,178-232",
+        "quant/src/quant_edge/ensemble/abstention.py@02b4ecc:49-86,302-451"
+      ],
+      "finding": "Walk-forward partitions, embargo/purge/holdout rules, point-in-time identity, calibration, abstention, conformal/uncertainty evidence, trial accounting, PBO/BH, and DSR already belong to Q. F8 may store exact refs and project their values; it may not split data, recalibrate, choose trials, recompute selection controls, or collapse distinct Q counts into a fabricated selection-pressure scalar. Q is frozen and not moving, but its source is not an ancestor of accepted Main f0168cb."
+    },
+    {
+      "id": "F8-ATTRIBUTION-GAP",
+      "assessment": "REAL_DELTA",
+      "refs": [
+        "server/src/capitalFoundation/contracts/economics.ts:17-34",
+        "server/src/capitalFoundation/economics/types.ts:78-105"
+      ],
+      "finding": "Capital partially represents signal through gross/basis/directional measures and already represents execution, fees, slippage, funding, borrow, recovery, and residual. It has no explicit timing/latency component and no reject-economic component. No accepted report binds those owned measures to forward-only Q/MI outcomes to separate signal from timing and to show reject effects. This measurement-only binding is missing."
+    },
+    {
+      "id": "F8-BREAKDOWN-GAP",
+      "assessment": "REAL_DELTA",
+      "refs": [
+        "server/src/capitalFoundation/contracts/economics.ts:42-60",
+        "server/src/capitalFoundation/economics/types.ts:96-105"
+      ],
+      "finding": "Capital dimensions cover strategy, opportunity, config revision, stage, symbol, leg, and correlation. Strategy and symbol are therefore already owned. Venue, regime, attributed turnover, capacity, and latency are absent; capacity elsewhere is pretrade or operational state, not an economic breakdown. F8 may add only read-only breakdown keys backed by owner-supplied refs, with missing keys remaining unavailable."
+    },
+    {
+      "id": "F8-UNCERTAINTY-GAP",
+      "assessment": "REAL_DELTA_WITH_DEDUP",
+      "refs": [
+        "server/src/capitalFoundation/contracts/economics.ts:62-73",
+        "quant/src/quant_edge/ensemble/conformal.py@02b4ecc:523-701,1331-1688",
+        "quant/src/quant_edge/validation/multiplicity.py@02b4ecc:44-312",
+        "quant/src/quant_edge/validation/dsr.py@02b4ecc:46-115,178-232"
+      ],
+      "finding": "Capital already has exact estimated ranges and Q owns uncertainty, multiplicity, and deflated-performance evidence. No accepted Edge/PnL report projects an attribution interval beside exact Q trial/PBO/DSR refs and an explicit unresolved residual. F8's delta is the deterministic projection, never recomputation."
+    },
+    {
+      "id": "F8-OUTPUT-STATE-GAP",
+      "assessment": "REAL_DELTA",
+      "refs": [
+        "packages/edge-protocol/schema/edge-protocol-v1.schema.json:261-318",
+        "server/src/systemIntegration/supervisor/types.ts:84-107"
+      ],
+      "finding": "ABSTAIN_UNKNOWN exists at the protocol/Q boundary and Q has typed data-insufficiency evidence, while Capital has MISSING/UNKNOWN/PARTIAL/DIVERGENT. There is no canonical EdgeMeter report contract that emits explicit INSUFFICIENT_EVIDENCE, ABSTAIN_UNKNOWN, and NON_COMPARABLE outcomes. The protocol's optional pnlAttribution is an unshaped nullable object and has no accepted producer or consumer."
+    },
+    {
+      "id": "F8-REPORT-AND-COCKPIT-GAP",
+      "assessment": "REAL_DELTA",
+      "refs": [
+        "server/src/systemIntegration/supervisor/types.ts:84-107,150-159",
+        "docs/archive/CAPITAL_SUPERVISION_RECEIPT.md:409-452",
+        "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md:176-183"
+      ],
+      "finding": "systemIntegration exposes no economic/edge report in its supervisor summaries or routes, Capital's adapters are documented dormant, and the accepted cockpit mounts five surfaces without a PnL attribution projection. F8 may produce deterministic fixture reports and a future cockpit insertion request only; it may not mount a page, add routes, or claim runtime truth."
+    },
+    {
+      "id": "F8-AUTHORITY-BOUNDARY",
+      "assessment": "FORBIDDEN_OUTSIDE_DELTA",
+      "refs": [
+        "Frontier.md:898-917",
+        "packages/edge-protocol/schema/edge-protocol-v1.schema.json:61-113"
+      ],
+      "finding": "REAL, HYPOTHETICAL, and REPLAY evidence classes must remain distinct. Historical fit cannot become live evidence; hypothetical PnL cannot become realized PnL. No F8 output may mutate Capital, Risk, Q promotion, L execution, canonical state, or product composition, and no report may declare edge or profitability."
+    },
+    {
+      "id": "F8-LEGACY-PNL-DEDUP",
+      "assessment": "NOT_EQUIVALENT",
+      "refs": [
+        "server/src/services/account.ts:682-739",
+        "server/src/index.ts:1861-1899",
+        "web/src/pages/Pnl.tsx:121-134,221-280",
+        "web/src/App.tsx:49"
+      ],
+      "finding": "Legacy /api/pnl is float/average-cost Spot fill accounting summarized by day/symbol/fees. Its UI uses placeholders for funding/borrow and is not mounted as the pnl page. It is neither forward-only nor Q-referenced and does not close the F8 gap. It also must not be promoted into a competing canonical owner."
+    },
+    {
+      "id": "F8-OWNER-MOVEMENT",
+      "assessment": "NOT_BLOCKING_SCOUT_DELTA",
+      "refs": [
+        "QL_PARALLEL_DAG.md:7,17,28",
+        "Frontier.md:287-302,1293-1305,1322-1340"
+      ],
+      "finding": "Q at 02b4ecc and L at df6b472 are frozen; accepted Capital, Foundation calibration, and MI outcome owner blobs are stable. The active moving owner is I00 composition/cockpit repair, but §9B grants F8 no mounting authority and requires only a future projection request. Accepted Main also lacks the complete private fact adapters present in the unwired L donor; F8 must represent those inputs as unavailable and cannot import or race them. I00 movement blocks product insertion, not this fixture-only real-delta finding. F0 must separately record both required facets USABLE before the director may release an implementation worktree."
+    },
+    {
+      "id": "F8-DISPOSITION",
+      "assessment": "APPROVED_REAL_DELTA",
+      "finding": "Approve only a removable, deterministic, fixture-mode, measurement-only reference/report adapter: bind canonical owner artifacts immutably; project signal-versus-timing and reject effects where owner evidence permits; add the missing comparative breakdown/output-state contract; carry Capital/Q uncertainty and selection-control refs without recomputation; and emit a future cockpit request. Any economic taxonomy, data splitter, calibrator, abstention engine, source adapter, persistence, product wiring, Capital/Risk mutation, model selection, or profit declaration is deduplicated or forbidden."
+    }
+  ],
+  "timestamp": "2026-07-15T17:17:06Z",
+  "contentHash": "1adcc68de1a732217ec0de015c296f73910fc24c9e120840bcf28c5a3ef775e9"
+}

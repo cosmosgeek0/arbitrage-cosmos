@@ -1,0 +1,184 @@
+{
+  "module": "F5 ChangeRadar",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "/Users/cosmosgeek/Desktop/Frontier.md@sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad#L70-L104,L120-L216,L235-L318,L765-L829,L1035-L1157",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md#L60-L76,L228-L241",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md#L82-L112,L189",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_PARALLEL_DAG.md#L7-L17,L28,L42-L44",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md#L24-L35",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/services/newsContext.ts#NewsContextItem,OfficialSourceConfig,PRIMARY_SOURCES,VENUE_SOURCES,refreshNewsContext,fetchOfficialSources,fetchOfficialSource,commitNewsArchive",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/index.ts#refreshNews,refreshCalendar,connectionWatchmanSnapshot",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/adapters/sourceRegistry.ts#buildSystemSourceRegistry",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/types.ts#SystemSourceRegistryRecord,SystemComponentSnapshot,SystemTraceEvent,SystemSupervisorSnapshot",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/contracts/sourceCatalog.ts#RuntimeEndpointDefinition,sourceDefinition",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/contracts/sourceLifecycle.ts#SourceLifecycleTracker",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/capture/types.ts#CaptureEvidenceRecord,CaptureSourceVersionIdentity,CaptureCoordinatorSnapshot",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/types.ts#Provenance,TruthMetadata,EvidenceBase,NormalizedContext",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/universe/types.ts#RuntimeListingMetadata,RuntimeListingChange",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/universe/adapter.ts#listingChanges",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/universe/graph.ts#diffUniverseGraphs",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/rootCause.ts#projectRootCauses,severityFor",
+    "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/traceIndex.ts#buildSystemTraceIndex,traceByCorrelationId,recentCorrelatedDecisions",
+    "02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py#DataSourceCardV1,SourceCardReviewV1,evaluate_source_card",
+    "02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/EDGE_HYPOTHESIS_MAP.md#L118-L124",
+    "df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/binanceContracts/types.ts#BinanceOfficialSourceRecord,BinanceContractRecord,BinanceContractMatrix",
+    "df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/binanceContracts/manifest.ts#BINANCE_OFFICIAL_SOURCES",
+    "bc39e9b989d37d12c77ed3854adca97a847f51de:I00_PRODUCT_BUILD_STATE.md#L7-L23",
+    "bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productIntegration/runtime/types.ts#ProductRuntimeIncidentAvailability,ProductRuntimeSupervisorEnvelope",
+    "bc39e9b989d37d12c77ed3854adca97a847f51de:server/src/productIntegration/runtime/projection.ts#buildProductRuntimeSupervisorEnvelope",
+    "08e0beaa54c4c3ca9c24276785d6a302f751a226:AI_OPS_REUSE_INVENTORY.md#R06,R07,R11,R12,R14",
+    "9ae6c22012e7c23ebebff827b527d4d64a263884:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md#L5-L27,L159-L211"
+  ],
+  "requiredDockFacets": [
+    "EVIDENCE",
+    "ADVISORY_ASSESSOR",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    {
+      "id": "F5-BASE-001",
+      "classification": "VERIFIED",
+      "finding": "The scout is detached at the accepted Main base and the governing Frontier bytes match the supplied digest.",
+      "refs": [
+        "HEAD=f0168cb37bd04d21bc90591ab2256770de3b75bc",
+        "Frontier.sha256=4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-ACQUISITION-002",
+      "classification": "ALREADY_OWNED",
+      "finding": "Official macro, news, listing/delisting, maintenance, product-notice, exchange-status, calendar, cache, freshness, and refresh acquisition already belong to newsContext and index. F5 must consume narrow adapters and must not create a second scraper, source inventory, archive, cache, status collector, or refresh loop.",
+      "refs": [
+        "server/src/services/newsContext.ts:6-45,128-138,140-724,891-1198,1493-1536,1808-1957,2128-2383",
+        "server/src/index.ts:875-1171,2421-2594,2886-2896"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-REGISTRY-003",
+      "classification": "PARTIAL_OWNER",
+      "finding": "The runtime source catalog and system source registry already own endpoint/capability identity and single semantic-producer enforcement. Their accepted records do not contain the full official-document governance fields required by Frontier section 8.3. The Q DataSourceCard is a review-only donor and admits no source.",
+      "refs": [
+        "server/src/intelligenceRuntime/contracts/sourceCatalog.ts:9-25,30-154",
+        "server/src/systemIntegration/contracts/types.ts:153-179",
+        "server/src/systemIntegration/adapters/sourceRegistry.ts:51-101",
+        "02b4eccc:quant/src/quant_edge/lake/governance.py:193-352"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-EVIDENCE-004",
+      "classification": "PARTIAL_OWNER",
+      "finding": "Intelligence Foundation owns provenance/truth/evidence meanings, and Intelligence Runtime capture owns checksummed immutable capture and checkpoint primitives. The accepted evidence union is market/context shaped; no normalized official-document revision kind or lossless document-change adapter exists. Any extension requires the canonical owner, not a private ChangeEvent authority or store.",
+      "refs": [
+        "ARCHITECTURE.md:67-68,75",
+        "server/src/intelligenceFoundation/contracts/types.ts:21-72,86-199",
+        "server/src/intelligenceRuntime/capture/types.ts:73-94,125-171,191-245",
+        "server/src/intelligenceRuntime/capture/coordinator.ts:465-517,1260-1305"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-BINANCE-CONTRACTS-005",
+      "classification": "ALREADY_OWNED_SUBSET",
+      "finding": "The accepted L lane already has a dated, content-hashed Binance official-source and contract matrix covering API routes, schemas, rate limits, stream lifetimes, lifecycle and explicit documentation conflicts. It is a static documentary contract owner, not a polling, revision-lineage, or semantic-document-diff engine; F5 must adapt it rather than replace it.",
+      "refs": [
+        "df6b472:server/src/liveEdge/adapters/binanceContracts/types.ts:1-12,28-34,72-113,150-159,222-236,288-311,336-405",
+        "df6b472:server/src/liveEdge/adapters/binanceContracts/manifest.ts:12-233"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-LIVE-UNIVERSE-006",
+      "classification": "ALREADY_OWNED_SUBSET",
+      "finding": "The accepted universe owner already fingerprints and classifies live instrument/listing/filter metadata as ADDED, REMOVED, CHANGED, or UNCHANGED and protects against false delists. F5 must not recreate that exchange-info semantic change path. It does not cover arbitrary official documents, release notes, or dependency advisories.",
+      "refs": [
+        "server/src/intelligenceRuntime/universe/types.ts:60-104",
+        "server/src/intelligenceRuntime/universe/adapter.ts:418-455,917-974",
+        "server/src/intelligenceFoundation/universe/graph.ts:1006-1065,1394-1433"
+      ]
+    },
+    {
+      "id": "F5-REAL-DELTA-007",
+      "classification": "REAL_DELTA",
+      "finding": "After deduplication, the accepted product still lacks immutable official-document revision snapshots, normalized document semantics, formatting-only suppression, semantic before/after diffing, supersession/retraction chains, multi-source document conflicts, installed-dependency advisory matching, and the complete Frontier section 8.5 historical offline corpus.",
+      "refs": [
+        "Frontier.md:790-803,809-825",
+        "quant/EDGE_HYPOTHESIS_MAP.md@02b4eccc:118-124",
+        "server/src/services/newsContext.ts:891-948,1153-1163,2789-2794",
+        ".github/workflows/ci.yml:21-35"
+      ]
+    },
+    {
+      "id": "F5-REAL-MAPPING-008",
+      "classification": "REAL_DELTA_WITH_OWNER_REUSE",
+      "finding": "Source-to-capability metadata, component topology, root-cause severity, trace indexing, and cockpit projection primitives exist. No accepted index maps an official-document clause/change to exact contracts, adapters, tests, runbooks, and affected components, and no change-specific severity/urgency law or ChangeRadar timeline exists.",
+      "refs": [
+        "server/src/intelligenceRuntime/contracts/sourceCatalog.ts:9-18,111-153",
+        "server/src/intelligenceFoundation/topology/registry.ts:642-828,1020-1045",
+        "server/src/systemIntegration/supervisor/rootCause.ts:21-82,118-204",
+        "server/src/systemIntegration/supervisor/traceIndex.ts:144-250"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-STALE-009",
+      "classification": "ALREADY_OWNED",
+      "finding": "Canonical source lifecycle already derives SILENT and STALE deterministically. F5 may add document observations through an approved adapter, but it must not create a second freshness authority.",
+      "refs": [
+        "server/src/intelligenceRuntime/contracts/sourceLifecycle.ts:76-141,361-436",
+        "server/src/intelligenceFoundation/evidence/common.ts:338-347"
+      ]
+    },
+    {
+      "id": "F5-DEDUP-OFFLINE-010",
+      "classification": "PATTERN_ALREADY_OWNED_DELTA_MISSING",
+      "finding": "Injected public transport, deterministic clocks, canonical checksums, bounded conflict detection, and network-denial fixtures already exist as reusable patterns. F5-specific historical fixtures and hostile network-off proofs do not exist.",
+      "refs": [
+        "server/src/intelligenceRuntime/contracts/types.ts:25-37,128-147",
+        "server/src/intelligenceRuntime/capture/checksum.ts:4-24",
+        "server/test/intelligenceRuntime/fixtures/binance-public-fixtures.mjs:4-57",
+        "server/test/systemIntegration/fixtures/egress-tripwire.mjs:27-128"
+      ]
+    },
+    {
+      "id": "F5-BLOCK-INCIDENT-011",
+      "classification": "OWNER_MISSING_IN_MOVING_CANDIDATE",
+      "finding": "F5's required incident/change-case destination cannot be bound. The active I00 repair contract exposes ProductRuntimeIncidentAvailability but fixes incidents to readonly never[], and its projection reports NOT_CONFIGURED with blocker INCIDENT_OWNER_NOT_CONFIGURED. The Ledger primitive persists owner-supplied transitions only and is not incident policy.",
+      "refs": [
+        "bc39e9b9:server/src/productIntegration/runtime/types.ts:283-287,499-500",
+        "bc39e9b9:server/src/productIntegration/runtime/projection.ts:826-831",
+        "08e0beaa:AI_OPS_REUSE_INVENTORY.md:121-129,182-201"
+      ]
+    },
+    {
+      "id": "F5-BLOCK-TICKET-012",
+      "classification": "OWNER_NOT_ACCEPTED",
+      "finding": "No canonical advisory ticket/test-request proposal owner exists in accepted Main. The only prospective incident-to-case/escalation work is AI-Ops A2X SHADOW_SPECULATIVE: it opens no router, publishes no incident, performs no delivery or acknowledgement, and its insertion requests explicitly await C2, director adjudication, accepted incident/case ownership, dispatcher delivery, and readback.",
+      "refs": [
+        "08e0beaa:AI_OPS_REUSE_INVENTORY.md:121-129,216-234,307-311",
+        "9ae6c220:fixtures/aiOps/caseRuntime/AI_OPS_A2X_SHADOW_RECEIPT.md:5-27,159-211"
+      ]
+    },
+    {
+      "id": "F5-BLOCK-MOVING-013",
+      "classification": "BLOCKED_OWNER_MOVING",
+      "finding": "The prior I00 candidate 098f7b9449ab3b1c26bda19f51537bfea01d4c48 is formally REJECTED. role4-fix-20260715 is the sole repair owner and must produce C2 followed by fresh verification before landing. The ref advanced during this scout from b1a8af0edd3c847a382078985374e45bcd28f849 to bc39e9b989d37d12c77ed3854adca97a847f51de; at final observation its state remained NOT_CANDIDATE_READY. This moving graph/cockpit/incident seam blocks F5 adjudication under Frontier section 2.",
+      "refs": [
+        "QL_DIRECTOR_STATE.md:82-112",
+        "QL_PARALLEL_DAG.md:28,42-44",
+        "bc39e9b9:I00_PRODUCT_BUILD_STATE.md:7-23",
+        "observedAt=2026-07-15T17:23:07Z"
+      ]
+    },
+    {
+      "id": "F5-RULING-014",
+      "classification": "DISPOSITION",
+      "finding": "Seal BLOCKED_OWNER_MOVING now. Rescout only after a fresh C2 is independently accepted and the canonical incident/case/advisory-proposal and cockpit insertion seams are ratified. If those seams freeze as expected, approve only the real delta in F5-REAL-DELTA-007 and F5-REAL-MAPPING-008; all acquisition, registry, evidence, lifecycle, universe, durability, graph, and cockpit primitives remain reuse-only.",
+      "refs": [
+        "Frontier.md:200-216",
+        "AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md:24-35"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:23:07Z",
+  "contentHash": "sha256:c0c316cd982a6a1ad52c325818db2e793ad43885a799b8322a64a640614dc0e6"
+}

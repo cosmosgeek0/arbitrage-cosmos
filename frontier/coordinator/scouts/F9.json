@@ -1,0 +1,218 @@
+{
+  "module": "F9 Narrator",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    {
+      "ref": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "sections": ["0-2", "9C", "10-12", "17"],
+      "lines": "145-180,184-216,287-318,925-940,1035-1151,1285-1399",
+      "role": "controlling Frontier directive"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md",
+      "lines": "55-78",
+      "role": "accepted canonical authority map; systemIntegration/supervisor owns whole-machine read projection"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/projection.ts",
+      "lines": "371-432,460-525",
+      "symbols": ["buildSystemSupervisorProjection"],
+      "role": "accepted deterministic condenser and exact-component validation"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/types.ts",
+      "lines": "38-220",
+      "symbols": ["SystemSupervisorProjectionInput", "SystemSupervisorReadModel"],
+      "role": "accepted root-cause, attention, summary, trace, and recent-decision contract"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/traceIndex.ts",
+      "lines": "28-47,144-250",
+      "symbols": ["buildSystemTraceIndex"],
+      "role": "accepted bounded deterministic chronology"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/rootCause.ts",
+      "lines": "118-204",
+      "symbols": ["projectRootCauses"],
+      "role": "accepted root blockers, attention, and recommended operator action"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:web/src/lib/systemIntegration.ts",
+      "lines": "214-273",
+      "symbols": ["refreshSystemIntegration", "acquirePolling", "useSystemIntegration"],
+      "role": "accepted authenticated supervisor client and 5000 ms poller"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:web/src/components/SystemIntegrationSurface.tsx",
+      "lines": "16-18,42-73,76-195",
+      "symbols": ["SystemIntegrationSurface"],
+      "role": "accepted shared five-page cockpit renderer and exact presentation gaps"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:server/test/systemIntegration/supervisor/projection.test.mjs",
+      "lines": "32-39,110-210,254-290,330-379",
+      "role": "accepted stale, contradiction, missing-node, overflow, purity, determinism, and null-preservation proofs"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md",
+      "lines": "169-205",
+      "role": "accepted supervisor API, polling client, and shared-renderer receipt"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:IP_CONTROL_RECEIPT.md",
+      "lines": "28-49,107-137",
+      "role": "IP-CONTROL five-second owner-view, incident, bound, and fail-closed donor receipt"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:IP_CONTROL_STATE.md",
+      "lines": "24-62",
+      "role": "IP-CONTROL shared 5000 ms binding and DIRECTOR_MOUNT_REQUIRED state"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:IP_CONTROL_MOUNT_REQUEST.md",
+      "lines": "11-33,48-70",
+      "role": "explicit unmounted final owner-view, incident, cursor-continuity, and revision seams"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:web/src/lib/productIntegration/model.ts",
+      "lines": "121-136,237-310",
+      "symbols": ["FiveSecondOwnerView"],
+      "role": "moving IP-CONTROL five-second view and incident/material-cursor contracts"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:web/src/features/productControlRoom/components/OwnerViewPanel.tsx",
+      "lines": "7-35",
+      "role": "moving concise owner-view projection"
+    },
+    {
+      "ref": "56c47dad398c485b6653036c8b90c53f11061b1e:web/src/features/productControlRoom/components/IncidentCursorPanel.tsx",
+      "lines": "3-26",
+      "role": "moving incident reason and operator-action projection"
+    },
+    {
+      "ref": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/cockpit/reference/cockpit-view-model.mjs",
+      "lines": "31-95",
+      "role": "A-COCKPIT exact expected/current/stale/silent/missing inventory, recovery, chronology, and provenance projection"
+    },
+    {
+      "ref": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d:fixtures/productAssurance/systemic/cockpit/receipts/COCKPIT_PRESTAGE_RECEIPT.v1.json",
+      "lines": "3-15,21-44,90-97",
+      "role": "packet-local COCKPIT_PRESTAGE_READY and director-mount-required receipt"
+    },
+    {
+      "ref": "f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md",
+      "lines": "82-92,106-112,120-132",
+      "role": "rejected I00 candidate, sole Role-4 repair owner, and AI-Ops post-acceptance port gate"
+    },
+    {
+      "ref": "6204667e22d128ceae9eda732340b8f1d39577f2:web/src/aiOps/types.ts",
+      "lines": "1-49,92-109,183-267,596-639",
+      "role": "shadow AI-Ops inventory, timeline, incident, action, and five-level cockpit contracts"
+    },
+    {
+      "ref": "6204667e22d128ceae9eda732340b8f1d39577f2:web/src/aiOps/views/OverviewView.tsx",
+      "lines": "30-58,89-178",
+      "role": "shadow five-second cards and expected-to-reporting inventory view"
+    },
+    {
+      "ref": "6204667e22d128ceae9eda732340b8f1d39577f2:web/src/aiOps/views/IncidentWorkspace.tsx",
+      "lines": "19-115,190-267",
+      "role": "shadow plain-language incident chronology, expected/observed state, hypotheses, and actions"
+    },
+    {
+      "ref": "6204667e22d128ceae9eda732340b8f1d39577f2:fixtures/aiOps/ui/AI_OPS_A4X_SHADOW_RECEIPT.md",
+      "lines": "3-18,91-116",
+      "role": "SHADOW_SPECULATIVE, fixture-only, unmounted AI-Ops A4X receipt"
+    },
+    {
+      "ref": "df9c52cd2a428e3d3675cf0260c0d30052a4bbff:frontier/directives/Frontier.md",
+      "lines": "287-318",
+      "role": "current directive-only F0 ref; no sealed Dock binding existed at observation time"
+    }
+  ],
+  "requiredDockFacets": [
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    {
+      "requirement": "pure deterministic condenser from versioned supervisor snapshots",
+      "finding": "OWNED_ACCEPTED_SUBSTRATE",
+      "detail": "buildSystemSupervisorProjection already performs the pure versioned whole-machine projection, validates the exact 13-component input set, and emits root causes, attention, summaries, traces, and recent decisions. F9 must reuse it rather than create a second supervisor."
+    },
+    {
+      "requirement": "product, money, evidence, execution, recovery, telemetry, infrastructure, and AI-ops summary cards",
+      "finding": "PARTIAL_ACCEPTED_AND_MOVING_OWNER",
+      "detail": "Accepted summaries cover sourceCoverage, strategies, intelligence, capital, risk, execution, reconciliation, and ledger, not the exact F9 taxonomy; accepted production wiring is also incomplete. The missing product-wide and AI-Ops presentation is already assigned to the IP-CONTROL/A-COCKPIT and AI-Ops A4 lines."
+    },
+    {
+      "requirement": "expected-versus-observed inventory counts including silent and missing components",
+      "finding": "PARTIAL_ACCEPTED_AND_MOVING_OWNER",
+      "detail": "Accepted Main has a fixed 13-component expected set and fail-closed missing-node validation, but no complete rendered expected/observed/silent/missing denominator. A-COCKPIT d4ff9c9 and AI-Ops A4 6204667 contain that exact projection outside accepted Main."
+    },
+    {
+      "requirement": "material-change and incident chronology",
+      "finding": "PARTIAL_ACCEPTED_AND_MOVING_OWNER",
+      "detail": "Accepted Main has a bounded deterministic trace index and recent correlated decisions, but not one material-change plus incident chronology. IP-CONTROL owns the material cursor and incident projection; AI-Ops A2/A4 own incident runtime and incident workspace on unaccepted branches."
+    },
+    {
+      "requirement": "what changed / why it matters / what is blocked / owner action",
+      "finding": "GAP_ON_ACCEPTED_BASE_OWNER_MOVING",
+      "detail": "Accepted Main exposes root causes and recommendedOperatorAction but no explicit four-field plain-language contract, and the shared renderer does not render that action. IP-CONTROL's OwnerViewPanel/IncidentCursorPanel and AI-Ops A4's IncidentWorkspace are the active presentation owners for this residual."
+    },
+    {
+      "requirement": "deterministic templates that work without an LLM",
+      "finding": "PARTIAL_ACCEPTED_AND_MOVING_OWNER",
+      "detail": "Accepted projections, ordering, serialization, and current code-to-words rendering are deterministic, but there is no complete F9 narrative template contract. Adding one now would race IP-CONTROL and AI-Ops presentation ownership."
+    },
+    {
+      "requirement": "optional non-authoritative LLM rendering fixtures",
+      "finding": "ABSENT_ACCEPTED_ASSIGNED_TO_MOVING_OWNER",
+      "detail": "No accepted authoritative or subordinate LLM narration path was found. AI-Ops A3/A4 own provider and cockpit fixture work, but those artifacts remain SHADOW_SPECULATIVE and unmounted."
+    },
+    {
+      "requirement": "overflow, stale-input, contradictory-input, and missing-denominator tests",
+      "finding": "PARTIAL_ACCEPTED_AND_MOVING_OWNER",
+      "detail": "Accepted supervisor tests prove stale fail-closed behavior, conflicting trace rejection, missing-node rejection, trace bounds, deterministic serialization, purity, and null preservation. Narrator-card overflow and missing-denominator degradation remain unproved at accepted Main; A-COCKPIT and AI-Ops A5 own the richer assurance/harness lane."
+    },
+    {
+      "requirement": "no new website, control plane, health authority, alert owner, or green-from-liveness behavior",
+      "finding": "CANONICAL_OWNER_CONSTRAINT",
+      "detail": "ARCHITECTURE assigns the whole-machine projection, root-cause graph, attention queue, and trace index to server/src/systemIntegration/supervisor. Frontier assigns cockpit and narrative presentation to IP-CONTROL and AI-Ops. A new F9 authority now would violate one-concept/one-owner."
+    },
+    {
+      "finding": "EXACT_MOVING_IP_CONTROL_OWNER",
+      "owner": "I00/IP-CONTROL product cockpit",
+      "candidateSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+      "candidateState": "REJECTED_CANDIDATE",
+      "activeBranch": "role4-fix-20260715",
+      "observedHead": "bc39e9b989d37d12c77ed3854adca97a847f51de",
+      "observedWorktreeState": "clean",
+      "detail": "IP-CONTROL 56c47dad398c485b6653036c8b90c53f11061b1e and A-COCKPIT d4ff9c94c9fec9477481223c4b33d8f671a34f6d are ancestors of the rejected I00 candidate, not accepted base f0168cb. Role 4 is the sole active repair owner and must freeze C2 for fresh verification."
+    },
+    {
+      "finding": "EXACT_MOVING_AI_OPS_OWNER",
+      "owner": "post-I00 AI-Ops cockpit and narrative program",
+      "a2Sha": "9ae6c22012e7c23ebebff827b527d4d64a263884",
+      "a4Sha": "6204667e22d128ceae9eda732340b8f1d39577f2",
+      "state": "SHADOW_SPECULATIVE_WAITING_INTEGRATED_ACCEPTED",
+      "detail": "A2 owns incident/case projection and A4 already contains the closest exact F9 cockpit/narrative surface. Both must be freshly ported from the eventual accepted I00 SHA, remounted, and independently accepted; shadow receipts confer no accepted ownership."
+    },
+    {
+      "finding": "F0_DEPENDENCY",
+      "requiredFacet": "COCKPIT_PROJECTION",
+      "observedDockHead": "df9c52cd2a428e3d3675cf0260c0d30052a4bbff",
+      "observedDockState": "BUILDING_UNTRACKED_NOT_SEALED",
+      "detail": "F9 has exactly one required Dock facet. At observation time the committed Dock head was still directive-only and untracked frontier/dock/src work had begun, but there was no committed Dock receipt, ProviderFacetBindingV1, or recorded USABLE/BLOCKED status, so this scout does not invent one."
+    },
+    {
+      "finding": "DISPOSITION_RATIONALE",
+      "detail": "ALREADY_OWNED would falsely promote unmounted donor and shadow work. APPROVED_REAL_DELTA would authorize a parallel cockpit/narrative owner while both canonical owners are actively converging. Frontier Section 2 therefore requires BLOCKED_OWNER_MOVING. Re-scout only after I00 C2 is accepted and the AI-Ops port/mount ownership is adjudicated, then evaluate only the residual four-part plain-language narrative and any still-missing hostile proofs."
+    }
+  ],
+  "timestamp": "2026-07-15T17:21:13Z",
+  "contentHash": "5014d3cd5f070f263e18276bc941add833751ebe76366a1fd8127e52f3449235"
+}

@@ -1,0 +1,248 @@
+{
+  "module": "F4 OperatorGym",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "sha256:/Users/cosmosgeek/Desktop/Frontier.md=4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+    "/Users/cosmosgeek/Desktop/Frontier.md:70-234",
+    "/Users/cosmosgeek/Desktop/Frontier.md:235-334",
+    "/Users/cosmosgeek/Desktop/Frontier.md:705-764",
+    "/Users/cosmosgeek/Desktop/Frontier.md:1035-1160",
+    "/Users/cosmosgeek/Desktop/Frontier.md:1285-1356",
+    "ARCHITECTURE.md:60-76",
+    "server/src/foundation/scenarios/types.ts:6-28,153-176",
+    "server/src/foundation/scenarios/generator.ts:510-529,603-624",
+    "server/src/foundation/replay/capture.ts:63-355",
+    "server/src/foundation/replay/replay.ts:31-199",
+    "server/src/foundation/replay/virtualClock.ts:5-27",
+    "server/src/systemIntegration/controls/service.ts:83-210",
+    "server/src/systemIntegration/supervisor/projection.ts:435-525",
+    "server/src/systemIntegration/supervisor/types.ts:195-221",
+    "docs/archive/BACKEND_COMPONENTS.md:158-171,188-201",
+    "docs/archive/SYSTEM_CONVERGENCE_COMPONENTS.md:279-300",
+    "IP_ASSURANCE.md:234-280,421-450",
+    "fixtures/productAssurance/generated/SYSTEMIC_ASSURANCE_DEDUP_MATRIX.md:5-22",
+    "QL_PARALLEL_DAG.md:23-47",
+    "QL_DIRECTOR_STATE.md:70-108",
+    "WORKER_PROMPTS.md:3-28,77-90",
+    "git-object:25a3762cac93f2cad8045720ef00ae2f134d7966:fixtures/runbookShadow/receipts/RUNBOOK_SHADOW_RECEIPT.v1.json:1-9,121-184",
+    "git-object:25a3762cac93f2cad8045720ef00ae2f134d7966:test/runbookShadow/lib/runner.mjs:721-783",
+    "git-object:25a3762cac93f2cad8045720ef00ae2f134d7966:fixtures/runbookShadow/insertion-requests.v1.json:7-44",
+    "git-object:7666930d7620c81c6d596343b0a72b1a9ebeb23b:fixtures/replayShadow/REPLAY_SHADOW_RECEIPT.md:3-18,45-59,84-126",
+    "git-object:20608c4b041b552b67c43c1f328038b0c492942f:fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json:2-13,48-78,106-136",
+    "git-object:cdf64b678539a7d63cb406d70b0ca491d40d1a05:fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json:2-21,275-312",
+    "git-object:e65cdca872e4cd6e35a8e18c12b71f16597c80d3:fixtures/aiOps/contracts/receipts/A1X_SHADOW_READY_RECEIPT.md:1-7,35-38,122-150",
+    "git-object:6204667e22d128ceae9eda732340b8f1d39577f2:fixtures/aiOps/ui/AI_OPS_A4X_SHADOW_RECEIPT.md:1-17,54-58,91-116",
+    "git-object:e8e005edff82dd752e949a275a0aff571fc19ef8:fixtures/aiOps/harness/receipts/A5X_SHADOW_GAP_RECEIPT.md:1-17,171-205"
+  ],
+  "requiredDockFacets": [
+    "SCENARIO_REFERENCE",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "BLOCKED_OWNER_MOVING",
+  "evidence": [
+    {
+      "kind": "BASE_AND_DIRECTIVE_VERIFICATION",
+      "head": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "detached": true,
+      "frontierSha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "result": "MATCH"
+    },
+    {
+      "kind": "DOCK_FACET_BINDING",
+      "facets": [
+        {
+          "facet": "SCENARIO_REFERENCE",
+          "reason": "F4 consumes immutable scenario identity, version, hash, fixture schema, seed, clock, lineage, and expected canonical posture references; F4 evaluates drills but cannot execute or redefine the canonical L/assurance truth owner."
+        },
+        {
+          "facet": "COCKPIT_PROJECTION",
+          "reason": "F4 consumes canonical read-model fields and an honest synthetic/unavailable render contract for its five-level training projection; mounting, controls, health truth, and page authority remain I00/IP-CONTROL owned."
+        }
+      ],
+      "excludedFacet": {
+        "facet": "REPLAY_ADAPTER",
+        "reason": "Frontier.md:302-310 makes the module-to-facet map exhaustive and lists only SCENARIO_REFERENCE and COCKPIT_PROJECTION for F4; F4 pause/replay/rewind must adapt the canonical replay owner without inventing an unlisted Dock dependency."
+      }
+    },
+    {
+      "kind": "ACCEPTED_CANONICAL_SUBSTRATE",
+      "owners": [
+        {
+          "concept": "Synthetic scenario facts",
+          "owner": "server/src/foundation/scenarios/**",
+          "symbols": ["SCENARIO_KINDS", "ScenarioBundle", "generateScenario", "generateScenarioCatalog", "scenarioToReplayInputs"],
+          "boundary": "SYNTHETIC_TEST, executionAuthority NONE; facts only, never training or production authority."
+        },
+        {
+          "concept": "Deterministic replay",
+          "owner": "server/src/foundation/replay/**",
+          "symbols": ["PrePostReplayCapture", "replayEnvelope", "DeterministicVirtualClock"],
+          "boundary": "Synchronous forward virtual-clock dispatch; the clock rejects backwards movement and provides no interactive drill session or rewind API."
+        },
+        {
+          "concept": "Whole-machine/cockpit truth",
+          "owner": "server/src/systemIntegration/supervisor/**",
+          "symbols": ["buildSystemSupervisorProjection", "SystemSupervisorReadModel", "buildSystemTraceIndex"],
+          "boundary": "Read-only canonical projection and trace substrate; no training hierarchy, learner action, score, or proficiency state."
+        },
+        {
+          "concept": "Operational controls",
+          "owner": "server/src/systemIntegration/controls/** and foundation/control/**",
+          "symbols": ["SystemControlService", "DeterministicSupervisor"],
+          "boundary": "Canonical operational control authority; F4 simulation controls may not call, copy, or widen it."
+        },
+        {
+          "concept": "Durable history",
+          "owner": "server/src/ledger.ts",
+          "symbols": ["Ledger"],
+          "boundary": "Sole durable store; any later training record needs a narrow adapter and cannot create a second ledger."
+        }
+      ]
+    },
+    {
+      "kind": "SECTION_7_2_CAPABILITY_MAP",
+      "capabilities": [
+        {
+          "proposal": "Fixture-only five-level cockpit training projection",
+          "classification": "MOVING_OVERLAP",
+          "ownerEvidence": "System supervisor is accepted substrate; IP-ASSURANCE S5 and ip-assur-cockpit@d4ff9c94 define the five-level projection but remain director-mount dependent.",
+          "remainingDelta": "No accepted OperatorGym projection or drill-session state across the five levels."
+        },
+        {
+          "proposal": "Deterministic drill runner",
+          "classification": "MOVING_OVERLAP",
+          "ownerEvidence": "runbook-shadow@25a3762 contains runDrill/runAllDrills and eight executable zero-capital system drills, but is SHADOW_SPECULATIVE and C2/director gated.",
+          "remainingDelta": "No accepted learner-session runner, learner action intake, or human result receipt."
+        },
+        {
+          "proposal": "Scenario timeline and event injection",
+          "classification": "ACCEPTED_SUBSTRATE_PLUS_MOVING_CORPUS",
+          "ownerEvidence": "Foundation ScenarioBundle/scenarioToReplayInputs/replayEnvelope own deterministic facts and dispatch; replay-shadow@7666930 adds unported event tapes and campaign definitions.",
+          "remainingDelta": "F4 may orchestrate immutable references only; it must not duplicate scenario or replay owners."
+        },
+        {
+          "proposal": "Hidden expected actions and objective scoring",
+          "classification": "REAL_DELTA_NOT_YET_RELEASABLE",
+          "ownerEvidence": "Accepted scenarios carry facts, not a hidden human answer key; RUN-19 scores visible system assertions PASS/FAIL, not learner actions.",
+          "remainingDelta": "Hidden exercise control, learner-action oracle, and objective scoring are absent."
+        },
+        {
+          "proposal": "Time-to-detect, time-to-contain, and time-to-recover",
+          "classification": "REAL_DELTA_NOT_YET_RELEASABLE",
+          "ownerEvidence": "No matching accepted tracked source symbol or human drill measurement contract was found.",
+          "remainingDelta": "All three deterministic drill-relative measures are absent."
+        },
+        {
+          "proposal": "Missed-warning and unsafe-action scoring",
+          "classification": "REAL_DELTA_NOT_YET_RELEASABLE",
+          "ownerEvidence": "No matching accepted tracked source owner was found.",
+          "remainingDelta": "Scoring rubric, evidence binding, and fail-closed unsafe-action model are absent."
+        },
+        {
+          "proposal": "Runbook selection and step evidence",
+          "classification": "MOVING_OVERLAP_WITH_REAL_DELTA",
+          "ownerEvidence": "RUN-19 binds drill evidence; A1X@e65cdca defines unsigned runbook manifests and graduation targets, all speculative and pending fresh port/acceptance.",
+          "remainingDelta": "No accepted operator selection, per-step learner evidence, or adherence score."
+        },
+        {
+          "proposal": "Pause, replay, and rewind",
+          "classification": "ACCEPTED_SUBSTRATE_WITH_REAL_DELTA",
+          "ownerEvidence": "replayEnvelope and DeterministicVirtualClock own deterministic forward replay; advanceTo rejects backwards movement.",
+          "remainingDelta": "Training-local pause/cursor/resume/rewind orchestration is absent and must not alter canonical replay semantics."
+        },
+        {
+          "proposal": "Post-drill reconstruction",
+          "classification": "ACCEPTED_SUBSTRATE_PLUS_MOVING_OVERLAP",
+          "ownerEvidence": "Supervisor trace index and replay envelope are accepted; A4X/observability/failure-atlas work is pending port.",
+          "remainingDelta": "No record joins injections, observed truth, learner actions, runbook steps, measures, score, and recovery."
+        },
+        {
+          "proposal": "Owner notes and learning record",
+          "classification": "REAL_DELTA_NOT_YET_RELEASABLE",
+          "ownerEvidence": "No accepted training note/learning contract exists; RUN-19 explicitly requests a future existing-Ledger seam and creates no drill-history store.",
+          "remainingDelta": "Bounded owner notes and post-drill learning records are absent."
+        },
+        {
+          "proposal": "Certification state per scenario and product revision",
+          "classification": "MOVING_NEIGHBOR_WITH_REAL_DELTA",
+          "ownerEvidence": "A1X graduation contracts concern AI-Ops capability/runbook graduation, not human proficiency, and are speculative.",
+          "remainingDelta": "Human proficiency/certification, revision binding, expiry, and evidence provenance are absent."
+        },
+        {
+          "proposal": "Safe training controls with unmistakable SIMULATION labeling",
+          "classification": "ACCEPTED_SAFETY_VOCABULARY_WITH_REAL_DELTA",
+          "ownerEvidence": "Accepted scenario truth is SYNTHETIC_TEST with executionAuthority NONE; canonical operational controls remain separate.",
+          "remainingDelta": "No isolated training-control facade or OperatorGym session label/control contract exists."
+        }
+      ]
+    },
+    {
+      "kind": "SECTION_7_3_INITIAL_DRILL_MAP",
+      "drills": [
+        {"id": 1, "drill": "public source silently stale", "classification": "OWNED_PRIMITIVE_PLUS_MOVING_DRILL", "ownerEvidence": "Intelligence Runtime freshness/source lifecycle, System Integration probes, Foundation stale/silent scenarios, RUN-19 source-loss/stale-truth."},
+        {"id": 2, "drill": "private truth unavailable", "classification": "OWNED_PRIMITIVE_PLUS_MOVING_DRILL", "ownerEvidence": "System Integration account-truth/restart barriers and RUN-19 stale-truth; canonical I00 owner still moving."},
+        {"id": 3, "drill": "Spot/Futures temporal skew", "classification": "OWNED_PRIMITIVE", "ownerEvidence": "Foundation STALE_SPOT_FRESH_FUTURES scenario and canonical freshness/risk evidence."},
+        {"id": 4, "drill": "order timeout with unknown exchange outcome", "classification": "OWNED_PRIMITIVE_PLUS_MOVING_CORPUS", "ownerEvidence": "Foundation execution ambiguity/recovery/reconciliation owners; replay-shadow campaign definitions pending port."},
+        {"id": 5, "drill": "partial fill and failed hedge", "classification": "OWNED_PRIMITIVE", "ownerEvidence": "Foundation PARTIAL_FILL_SECOND_LEG_REJECT scenario plus execution/reconciliation proofs."},
+        {"id": 6, "drill": "restart with pending mutation", "classification": "OWNED_PRIMITIVE_PLUS_MOVING_DRILL", "ownerEvidence": "Foundation execution checkpoint/restart barriers and RUN-19 restart-during-ambiguity."},
+        {"id": 7, "drill": "liability/recovery required", "classification": "OWNED_PRIMITIVE", "ownerEvidence": "Capital position/supervision plus Foundation execution/reconciliation recovery authorities."},
+        {"id": 8, "drill": "exchange throttling", "classification": "OWNED_PRIMITIVE_PLUS_MOVING_CORPUS", "ownerEvidence": "Intelligence Runtime throttle/rate-budget/backoff owners; replay-shadow definitions pending port."},
+        {"id": 9, "drill": "venue maintenance during exposure", "classification": "UNRESOLVED_OVERLAP", "ownerEvidence": "No exact accepted drill found; canonical L/external-source, Capital, Risk, and reconciliation seams plus pending assurance/ops artifacts must be adjudicated first."},
+        {"id": 10, "drill": "telemetry loss while product remains alive", "classification": "MOVING_OVERLAP", "ownerEvidence": "IP-ASSURANCE telemetry law and obs-shadow telemetry-loss contracts; P8 port is armed but unaccepted."},
+        {"id": 11, "drill": "disk/queue pressure", "classification": "OWNED_QUEUE_PRIMITIVE_PLUS_MOVING_OPS", "ownerEvidence": "Intelligence Runtime backpressure/queue truth; disk/combined operations fixture owner is pending P6/P8 port."},
+        {"id": 12, "drill": "watchdog death", "classification": "MOVING_OVERLAP", "ownerEvidence": "IP-OPS/assurance law, ops-shadow, and RUN-19 watchdog-failure; ports remain unaccepted."},
+        {"id": 13, "drill": "out-of-band page failure", "classification": "MOVING_OVERLAP", "ownerEvidence": "IP-ASSURANCE S5/cockpit and obs-shadow own the projected failure evidence; mounting/paging remains unresolved."},
+        {"id": 14, "drill": "canary loss cap", "classification": "MOVING_OVERLAP", "ownerEvidence": "AI-Ops A5/A5X contains speculative canary oracles; canonical deployment/canary owner and loss-cap authority remain outside F4."},
+        {"id": 15, "drill": "rollback failure", "classification": "OWNED_CONTROL_PRIMITIVE_PLUS_MOVING_OPS_DRILL", "ownerEvidence": "Foundation control rollback semantics; ops-shadow/RUN-19 rollback and restore artifacts await P6/P9 port."},
+        {"id": 16, "drill": "stale model or drift demotion", "classification": "MOVING_CANONICAL_OWNER", "ownerEvidence": "IP_ASSURANCE assigns abstain/demotion to Q/runtime; accepted Q and I00 port/admission state must settle before an F4 wrapper is scoped."},
+        {"id": 17, "drill": "AI plane unavailable", "classification": "MOVING_CANONICAL_OWNER", "ownerEvidence": "AI_OPS_AUTHORITY_RESOLUTION_RECEIPT defines DIAGNOSTIC_PLANE_UNAVAILABLE; AI-Ops artifacts await post-INTEGRATED_ACCEPTED port and acceptance."},
+        {"id": 18, "drill": "hostile prompt/evidence injection", "classification": "MOVING_OVERLAP", "ownerEvidence": "IP-ASSURANCE diagnostic boundary plus A5/A5X adversarial fixtures; not accepted/mounted at base."},
+        {"id": 19, "drill": "contradictory green indicators", "classification": "OWNED_TRUTH_PRIMITIVE_PLUS_MOVING_DRILL", "ownerEvidence": "System supervisor root-cause/truth owner and IP-ASSURANCE false-green law; scored cockpit drill overlaps moving S5/A5/obs work."},
+        {"id": 20, "drill": "global halt and owner recovery", "classification": "OWNED_CONTROL_PRIMITIVE_PLUS_MOVING_DRILL", "ownerEvidence": "SystemControlService/kill-switch authority plus RUN-19 emergency-stop; training wrapper remains unaccepted."}
+      ]
+    },
+    {
+      "kind": "ACCEPTED_TREE_NEGATIVE_SEARCH",
+      "command": "git grep -n -E -i '(operator.?gym|training orchestration|hidden expected action|time[-_ ]to[-_ ]detect|time[-_ ]to[-_ ]contain|time[-_ ]to[-_ ]recover|missed[-_ ]warning|unsafe[-_ ]action|post[-_ ]drill|proficiency record|certification state|learning record|owner notes)' f0168cb37bd04d21bc90591ab2256770de3b75bc -- 'server/**' 'web/**' 'quant/**' 'fixtures/**' 'test/**'",
+      "result": "NO_MATCHES",
+      "interpretation": "The accepted tree has no dedicated human-training/scoring/proficiency layer. This proves a likely narrow real delta, but does not override the moving-owner stop."
+    },
+    {
+      "kind": "EXACT_MOVING_OWNER",
+      "owner": "I00 Role-4 fix and post-landing P6-P9 port program",
+      "durableStateAtBase": {
+        "candidate": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+        "candidateDisposition": "REJECTED_CANDIDATE",
+        "activeOwnerRef": "role4-fix-20260715",
+        "activeOwnerRecordedCommit": "afed4d512b0ab46e0e0e81be1be472f9fb905a70",
+        "nextSequence": "replacement C2 -> fresh verification -> INTEGRATED_ACCEPTED landing -> P6 ops, P7 replay, P8 observability, P9 runbook ports -> full lane acceptance"
+      },
+      "directOverlapArtifacts": [
+        {"lane": "P9 runbook", "sealedShadowTip": "25a3762cac93f2cad8045720ef00ae2f134d7966", "status": "SHADOW_SPECULATIVE; C2_PLUS_DIRECTOR_ADJUDICATION_REQUIRED"},
+        {"lane": "P7 replay", "sealedShadowTip": "7666930d7620c81c6d596343b0a72b1a9ebeb23b", "status": "SHADOW_SPECULATIVE; future post-C2 port"},
+        {"lane": "P8 observability", "sealedShadowTip": "20608c4b041b552b67c43c1f328038b0c492942f", "status": "SHADOW_SPECULATIVE; C2/director port required"},
+        {"lane": "P6 operations", "sealedShadowTip": "cdf64b678539a7d63cb406d70b0ca491d40d1a05", "status": "SHADOW_SPECULATIVE; port/acceptance absent"},
+        {"lane": "P1 runbook/graduation contracts", "sealedShadowTip": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3", "status": "SHADOW_SPECULATIVE; fresh port/owner decisions required"},
+        {"lane": "P4 cockpit/forensics", "sealedShadowTip": "6204667e22d128ceae9eda732340b8f1d39577f2", "status": "SHADOW_SPECULATIVE; canonical mount absent"},
+        {"lane": "P5 adversarial scenarios", "sealedShadowTip": "e8e005edff82dd752e949a275a0aff571fc19ef8", "status": "SHADOW_SPECULATIVE; post-port integration/readback required"}
+      ],
+      "whyBlocking": "Frontier §7.1 and §17 require BLOCKED_OWNER_MOVING when an overlapping owner is moving or not yet adjudicable. RUN-19 directly overlaps the drill runner/runbook/history seams, while P7-P9 and the canonical cockpit/assurance seams are explicitly queued for future accepted-SHA port and revalidation."
+    },
+    {
+      "kind": "DISPOSITION_RATIONALE",
+      "notAlreadyOwned": "The human-training layer is not owned: hidden learner actions, TTD/TTC/TTR, missed-warning/unsafe-action scoring, learner notes, proficiency/certification, and post-drill learning remain absent.",
+      "notApprovedNow": "Approval would race the exact runbook/replay/observability/operations/cockpit owners scheduled to move and would violate the mandatory §7.1 dedup gate.",
+      "recommendation": "BLOCKED_OWNER_MOVING",
+      "reScoutTrigger": "After INTEGRATED_ACCEPTED and canonical P6-P9 plus relevant cockpit/AI-Ops port receipts are sealed, re-run the F4 dedup scout. If gaps remain, approve only the narrow human-training/scoring/proficiency layer over canonical scenario, replay, runbook, cockpit, control, and Ledger adapters."
+    },
+    {
+      "kind": "HASH_CANONICALIZATION",
+      "algorithm": "SHA-256",
+      "input": "UTF-8 bytes emitted by jq -cS 'del(.contentHash)' SCOUT_F4.json, including its single trailing LF",
+      "scope": "Scout-local receipt hash; coordinator owns final canonicalization"
+    }
+  ],
+  "timestamp": "2026-07-15T17:14:12Z",
+  "contentHash": "sha256:5eb05cc25f665b98292439914aa4258f4545dfb5bdbcd886c727d0c9d5ef24af"
+}

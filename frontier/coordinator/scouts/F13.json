@@ -1,0 +1,300 @@
+{
+  "module": "F13 DecisionLab",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    {
+      "id": "frontier-directive",
+      "repository": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "locations": [
+        "lines 70-104: read-only scout, isolation, and resource law",
+        "lines 120-180: accepted-owner dedup and one-owner law",
+        "lines 184-216: lifecycle, disposition, and moving-owner accounting",
+        "lines 258-318: provider-facet binding law and exact F13 facet map",
+        "lines 1011-1031: F13 DecisionLab requirements and prohibitions",
+        "lines 1035-1157: path, worker, and cross-module acceptance law",
+        "lines 1285-1340: scout receipt and Dock release gates"
+      ]
+    },
+    {
+      "id": "accepted-main-decision-owner",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "ARCHITECTURE.md:64-76: strategy, evidence/outcome, Capital, execution/reconciliation, Ledger, and supervisor owners",
+        "server/src/engine/v0/types.ts:103-152,194-218: Decision, DecisionKind, and EngineProposal",
+        "server/src/foundation/contracts/opportunity.ts:1-17,49-88,149-180: CanonicalOpportunity/Decision/Proposal and no cross-strategy score",
+        "server/src/foundation/readModel/canonicalize.ts:267-500: canonicalizeDecision and canonicalizeProposal",
+        "server/src/services/basisRuntime.ts:170-198: ignored and repeated decisions are not all durably emitted"
+      ]
+    },
+    {
+      "id": "accepted-main-outcome-owner",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "server/src/intelligenceFoundation/contracts/types.ts:327-364: FrozenPreEventRecord, OutcomeMetrics, and OutcomeLabel",
+        "server/src/intelligenceFoundation/outcomes/freeze.ts:111-212: freezePreEvent, cutoff-at-or-before-trigger, immutable sorted evidence/features",
+        "server/src/intelligenceFoundation/outcomes/attribution.ts:72-101,155-218,320-339: no-look-ahead outcome attribution with MFE/MAE/time-to-peak",
+        "server/src/intelligenceFoundation/outcomes/cohorts.ts:56-155: accepted/rejected/observed outcome cohorts",
+        "docs/archive/MARKET_INTELLIGENCE_RECEIPT.md:42-68,79-100: accepted owner boundary and deterministic outcome proof"
+      ]
+    },
+    {
+      "id": "accepted-main-calibration-replay-ledger",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "server/src/foundation/calibration/types.ts:1-7,42-98,165-208: immutable proposal outcomes and observational no-mutation calibration",
+        "server/src/foundation/replay/types.ts:38-230 and server/src/foundation/replay/replay.ts:1-199: bounded deterministic recorded-event replay",
+        "server/src/ledger.ts:17-48,225-277: sole durable event-history owner",
+        "docs/archive/BACKEND_COMPONENTS.md:158-171,218-246: accepted replay, calibration, and Ledger ownership receipts"
+      ]
+    },
+    {
+      "id": "accepted-main-economic-and-protocol-owners",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "server/src/capitalFoundation/contracts/economics.ts:9-73: exact economic component taxonomy and provenance",
+        "server/src/capitalFoundation/economics/types.ts:12-140: exact EconomicMeasures and EconomicReport",
+        "server/src/capitalFoundation/economics/compose.ts:344-536: composeEconomicReport and rollUpEconomicReports",
+        "docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md:259-273: accepted exact-economics responsibility and non-responsibility",
+        "EDGE_PROTOCOL_V1.md:1-43: frozen Q/L interchange has no semantic ownership",
+        "packages/edge-protocol/schema/edge-protocol-v1.schema.json:245-318: advisory abstention and projected outcome cohorts/costs/MFE/MAE"
+      ]
+    },
+    {
+      "id": "accepted-main-cockpit-owner",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "server/src/systemIntegration/contracts/types.ts:293-304: SystemSupervisorSnapshot schemaVersion 1",
+        "server/src/systemIntegration/supervisor/types.ts:181-221: SystemSupervisorProjectionInput and SystemSupervisorReadModel",
+        "server/src/systemIntegration/supervisor/projection.ts:460-525: buildSystemSupervisorProjection",
+        "docs/DASHBOARD_TRUTH.md:9-30: canonical snapshot, UNKNOWN, synthetic, and mounting truth law"
+      ]
+    },
+    {
+      "id": "frozen-q-label-feature-owner",
+      "repository": "/Users/cosmosgeek/Desktop/quant-edge-research-20260712",
+      "commit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "locations": [
+        "quant/RECEIPTS/Q05.md:28-47,100-107: point-in-time labels/outcomes/dispositions and synthetic-only limitations",
+        "quant/src/quant_edge/labels/identity.py:26-139,217-234: VersionSetV1 and SampleIdentityV1 cutoff/window/cost identity",
+        "quant/src/quant_edge/labels/disposition.py:15-21,72-119,144-198: ACTED/REJECTED/EXPIRED/MISSED/QUIET_CONTROL/DATA_INVALID dispositions",
+        "quant/src/quant_edge/labels/outcomes.py:53-141,190-229,257-370: horizon, cost, MFE/MAE, spread, residual-return, and sample-outcome contracts",
+        "quant/src/quant_edge/features/values.py:49-83: FeatureValueV1 point-in-time no-future-input law",
+        "quant/src/quant_edge/features/diagnostics.py:15-22: adversarial feature-family ablation is explicitly deferred"
+      ]
+    },
+    {
+      "id": "frozen-q-validation-and-experiment-owner",
+      "repository": "/Users/cosmosgeek/Desktop/quant-edge-research-20260712",
+      "commit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "locations": [
+        "quant/src/quant_edge/validation/comparison.py:57-163,184-235: Q14 model-level ComparisonReportV1 and compare_models",
+        "quant/src/quant_edge/validation/leakage.py:52-118,121-255: temporal leakage audit/assessment",
+        "quant/src/quant_edge/validation/stress.py:57-119,186-250: versioned cost/threshold stress",
+        "quant/src/quant_edge/registry_ops/contracts.py:389-466: ExperimentCardV1 / Q15ExperimentCardV1",
+        "quant/src/quant_edge/registry_ops/contracts.py:670-934: model-level ShadowScoreBatchV1, ShadowComparisonV1, and DelayedFeedbackV1",
+        "quant/DECISIONS/Q15-001-RESEARCH-REGISTRY.md:9-25,58-81: Q owns its offline research registry and lifecycle",
+        "quant/RECEIPTS/Q15.md:37-79: synthetic registry/shadow owner boundary",
+        "quant/RECEIPTS/Q17.md:91-105: reference-only ablation candidates and unavailable real-evidence ablation",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md:205-218: Q accepted, non-loadable, LANE_READY, and parked"
+      ]
+    },
+    {
+      "id": "frozen-l-policy-and-liability-owner",
+      "repository": "/Users/cosmosgeek/Desktop/live-execution-proof-20260712",
+      "commit": "df6b472993ca9659ce09cf5f72004981c6835f0d",
+      "locations": [
+        "server/src/liveEdge/adapters/executionPolicy/types.ts:218-357: ExecutionPolicyCandidate/Input/Evaluation/Decision",
+        "server/src/liveEdge/adapters/executionPolicy/policy.ts:807-835,869-920,1163-1189: candidate comparison, policy evaluation, immutable decision, and public evaluators",
+        "live-edge-receipts/DECISIONS/D0013-l08-execution-policy.md:1-10: pure execution-mechanics comparison with no execution or external-action authority",
+        "server/src/liveEdge/adapters/reverseBasisLifecycle/types.ts:226-244,363-418: liability observation and reverse-basis exposure truth",
+        "server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts:142-185,215-224: exposure/economics and residual-liability owner evidence",
+        "server/src/liveEdge/adapters/exposureRecoveryProjection/projection.ts:448-493,731-755: residual exposure/liability validation and no-hidden-exposure law"
+      ]
+    },
+    {
+      "id": "owner-state-and-movement",
+      "repository": "/Users/cosmosgeek/Desktop/f13-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "observedAt": "2026-07-15T17:31:56Z",
+      "locations": [
+        "QL_PARALLEL_DAG.md:7,17: Q and L frozen LANE_READY donor tips",
+        "QL_PARALLEL_DAG.md:23-28: I00 candidate rejected and Role-4 repair active",
+        "QL_DIRECTOR_STATE.md:207-218: Q complete/frozen and I00 owns later fan-in",
+        "/Users/cosmosgeek/Desktop/role4-fix/I00_PRODUCT_BUILD_STATE.md:7-24: replacement candidate source-frozen, local acceptance pending, not self-verified, not candidate-ready"
+      ],
+      "movingRef": "role4-fix-20260715@bc39e9b989d37d12c77ed3854adca97a847f51de",
+      "ruling": "Moving product composition/cockpit mounting owner only; not an accepted DecisionLab-equivalent owner and not a change to the accepted supervisor-v1 fixture projection contract."
+    }
+  ],
+  "requiredDockFacets": [
+    "EXPERIMENT_PROVIDER",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "id": "F13-IDENTITY",
+      "assessment": "VERIFIED",
+      "finding": "The scout is detached at accepted Main f0168cb37bd04d21bc90591ab2256770de3b75bc, and the governing Frontier file has the required SHA-256 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad.",
+      "refs": [
+        "frontier-directive"
+      ]
+    },
+    {
+      "id": "F13-DOCK-FACETS",
+      "assessment": "DEPENDENCY",
+      "finding": "Frontier lines 302-318 list exactly EXPERIMENT_PROVIDER and COCKPIT_PROJECTION for F13. Experiment work is description/fixture validation only; cockpit work is panel/required-field/render/empty-state description only. This scout does not declare either binding USABLE; exact F0 bindings remain a separate release gate.",
+      "refs": [
+        "frontier-directive",
+        "frozen-q-validation-and-experiment-owner",
+        "accepted-main-cockpit-owner"
+      ]
+    },
+    {
+      "id": "F13-DECISION-ENVELOPES",
+      "assessment": "OWNED_FRAGMENTS_PLUS_REAL_DELTA",
+      "finding": "Main engines own current ignore/watch/focus/proposal/reject decisions, Market Intelligence freezes ACCEPTED/REJECTED/OBSERVED contexts, Q owns ACTED/REJECTED/EXPIRED/MISSED disposition records and advisory abstention, and the protocol projects ACTED/REJECTED/EXPIRED/MISSED/CONTROL. No accepted type preserves one immutable accepted/rejected/abstained/missed-opportunity decision context. Main runtimes also suppress some ignore/repeat decisions, so the current engine/read-model seam is not a complete all-decision history.",
+      "refs": [
+        "accepted-main-decision-owner",
+        "accepted-main-outcome-owner",
+        "accepted-main-economic-and-protocol-owners",
+        "frozen-q-label-feature-owner"
+      ]
+    },
+    {
+      "id": "F13-ALTERNATIVE-REFERENCES",
+      "assessment": "OWNED_POLICY_INPUTS_PLUS_REAL_DELTA",
+      "finding": "Q already owns research experiments, model comparisons, threshold/cost stress, and versioned sample identities; L already owns execution-policy candidates, evaluation, and selection. Those owners must remain canonical. Missing is a bounded predeclared reference envelope for one historical decision covering no-trade, timing, threshold, entry, exit, and execution-policy alternatives. F13 may bind immutable owner IDs/revisions only; it may not create a missing policy, call L's evaluator, optimize an alternative, or select one.",
+      "refs": [
+        "frozen-q-label-feature-owner",
+        "frozen-q-validation-and-experiment-owner",
+        "frozen-l-policy-and-liability-owner"
+      ]
+    },
+    {
+      "id": "F13-CUTOFF-AND-FEATURES",
+      "assessment": "ALREADY_OWNED_REUSE_REQUIRED",
+      "finding": "Market Intelligence FrozenPreEventRecord already enforces evidenceCutoffTimeMs at or before trigger and freezes sorted evidence/features. Q SampleIdentityV1 and FeatureValueV1 already bind feature cutoff, label interval, completeness, versions, and input-last-event no-future law. F13 must retain exact refs to those records and must not define another feature, evidence, or time authority.",
+      "refs": [
+        "accepted-main-outcome-owner",
+        "frozen-q-label-feature-owner"
+      ]
+    },
+    {
+      "id": "F13-EVIDENCE-ABLATIONS",
+      "assessment": "REAL_DELTA_WITH_EXPLICIT_Q_GAP",
+      "finding": "No accepted report performs the decision-level predeclared Q-assisted-versus-market-only, one-source-removed, and one-feature-family-removed comparisons required by section 9G. Q explicitly lists adversarial feature-family ablation as deferred, and Q17 records framework ablation candidates as REFERENCE_ONLY with real-evidence ablation unavailable. The allowable F13 delta is a deterministic fixture/report projection over exact owner-supplied inputs with unavailable states; it is not a feature computation, model-training, or Q-validation implementation.",
+      "refs": [
+        "frozen-q-label-feature-owner",
+        "frozen-q-validation-and-experiment-owner"
+      ]
+    },
+    {
+      "id": "F13-IDENTICAL-PATH-AND-COST",
+      "assessment": "REAL_DELTA_CONSTRAINT",
+      "finding": "Q identities already version cost assumptions and bind exact event/cutoff/horizon evidence; L candidates bind exact revisions. No accepted decision comparator requires every alternative to carry the same immutable market-path digest and identical cost-assumption identity. The missing delta is the fail-closed equality constraint and report evidence, not a second market simulator or cost engine.",
+      "refs": [
+        "frozen-q-label-feature-owner",
+        "frozen-l-policy-and-liability-owner",
+        "accepted-main-economic-and-protocol-owners"
+      ]
+    },
+    {
+      "id": "F13-OUTCOME-DECOMPOSITION",
+      "assessment": "OWNED_INPUTS_PLUS_REAL_DELTA",
+      "finding": "Market Intelligence and Q already own MFE/MAE and timing/costed outcome primitives; Capital owns exact realized economic composition; L owns residual exposure/liability truth and execution-policy duration/cost evidence. Q ResidualOutcomeV1 is market-residual return, not residual liability. No accepted one-decision report keeps MFE, MAE, time in exposure, realized costs, hypothetical costs, uncertainty, and residual-liability refs together while preserving REAL/HYPOTHETICAL/REPLAY distinctions. That reference-only decomposition is missing; F13 cannot recompute or relabel owner truth.",
+      "refs": [
+        "accepted-main-outcome-owner",
+        "accepted-main-economic-and-protocol-owners",
+        "frozen-q-label-feature-owner",
+        "frozen-l-policy-and-liability-owner"
+      ]
+    },
+    {
+      "id": "F13-BIAS-WARNINGS",
+      "assessment": "REAL_DELTA_WITH_OWNED_METADATA",
+      "finding": "Q leakage/survivorship metadata and Market Intelligence forensics provide underlying evidence, but no accepted decision report emits the full selection, survivorship, hindsight, copied-source-dependence, and confounding warning set. F13 may deterministically project named warnings and missingness from immutable provenance; it may not claim causal identification or fabricate warning clearance.",
+      "refs": [
+        "accepted-main-outcome-owner",
+        "frozen-q-validation-and-experiment-owner"
+      ]
+    },
+    {
+      "id": "F13-DETERMINISTIC-FIXTURES-AND-REPORTS",
+      "assessment": "REAL_DELTA_WITH_REPLAY_DEDUP",
+      "finding": "Foundation already owns bounded deterministic recorded-event replay, and Q's accepted evidence is synthetic/fixture-oriented. Neither accepted source nor receipts contain a DecisionLab fixture or one-decision deterministic report. F13 may consume recorded/synthetic owner refs and produce module-local deterministic reports; it must not create another replay store, event ledger, source collector, or runtime subscription.",
+      "refs": [
+        "accepted-main-calibration-replay-ledger",
+        "frozen-q-label-feature-owner",
+        "frozen-q-validation-and-experiment-owner"
+      ]
+    },
+    {
+      "id": "F13-EXPERIMENT-REGISTRY-AND-INSERTION",
+      "assessment": "ALREADY_OWNED_REUSE_REQUIRED",
+      "finding": "Q15 already owns ExperimentCardV1, immutable research cards, shadow batches/comparisons, delayed feedback, its registry, and model lifecycle. F13 may validate fixture references through EXPERIMENT_PROVIDER and emit a Q-only insertion request. It may not persist canonical cards, own a registry/history, assign treatment, record exposure/outcomes, stop/promote/rollback, or mutate Q.",
+      "refs": [
+        "frozen-q-validation-and-experiment-owner",
+        "frontier-directive"
+      ]
+    },
+    {
+      "id": "F13-COCKPIT-PROJECTION",
+      "assessment": "GENERIC_OWNER_PLUS_REAL_DELTA",
+      "finding": "Accepted supervisor v1 owns canonical whole-machine read projection and fail-closed truth labels, but has no DecisionLab summary or report fields. F13 may describe a module-local fixture panel and future insertion request only. Mounting, routes, controls, health, attention policy, and page authority remain I00/IP-CONTROL-owned.",
+      "refs": [
+        "accepted-main-cockpit-owner",
+        "frontier-directive"
+      ]
+    },
+    {
+      "id": "F13-EQUIVALENCE-SEARCH",
+      "assessment": "NO_EQUIVALENT_SYMBOL_FOUND",
+      "finding": "Targeted accepted-source searches for DecisionLab/counterfactual, decision alternatives, identical or same market path, Q-assisted versus market-only, copied-source, source-removal, feature-family ablation, time-in-exposure, and residual-liability comparison found zero semantic implementations in accepted Main and frozen Q. Frozen L produced one unrelated literal about Binance's market-only host, not a decision comparison. Exact symbol inspection then confirmed only the separately owned primitives listed in this receipt.",
+      "refs": [
+        "accepted-main-decision-owner",
+        "accepted-main-outcome-owner",
+        "accepted-main-economic-and-protocol-owners",
+        "frozen-q-label-feature-owner",
+        "frozen-q-validation-and-experiment-owner",
+        "frozen-l-policy-and-liability-owner"
+      ]
+    },
+    {
+      "id": "F13-OWNER-MOVEMENT",
+      "assessment": "NOT_BLOCKING_SCOUT_DELTA",
+      "finding": "Q at 02b4ecc and L at df6b472 are frozen and parked. The exact moving owner is the unaccepted I00 product composition/cockpit repair at role4-fix-20260715@bc39e9b989d37d12c77ed3854adca97a847f51de; its state is local-acceptance-pending and not candidate-ready. It does not own an F13-equivalent report and cannot replace accepted Main as the scout basis. The stable accepted supervisor-v1 contract is sufficient for a fixture-only panel description, while actual mounting remains deferred. If F0 binds COCKPIT_PROJECTION only to a moving candidate contract rather than accepted supervisor v1, F13 must not be released until the facet is USABLE.",
+      "refs": [
+        "owner-state-and-movement",
+        "accepted-main-cockpit-owner",
+        "frozen-q-validation-and-experiment-owner",
+        "frozen-l-policy-and-liability-owner"
+      ]
+    },
+    {
+      "id": "F13-DISPOSITION",
+      "assessment": "APPROVED_REAL_DELTA",
+      "finding": "Approve only a removable, immutable, deterministic, fixture-only one-decision report/reference adapter. It may bind canonical decision, cutoff, feature/evidence, Q experiment/outcome, L policy/liability, Capital economics, shared market-path, and shared cost-identity refs; fail closed on missing/mismatched refs; project predeclared ablation results and named warnings; and write a Q-only insertion request. It may not create a scanner, feature/outcome engine, policy, simulator, calibrator, selector, registry, queue, store, replay/ledger owner, cockpit mount, promotion, execution, or causal/profit claim.",
+      "refs": [
+        "frontier-directive",
+        "accepted-main-decision-owner",
+        "accepted-main-outcome-owner",
+        "accepted-main-calibration-replay-ledger",
+        "accepted-main-economic-and-protocol-owners",
+        "accepted-main-cockpit-owner",
+        "frozen-q-label-feature-owner",
+        "frozen-q-validation-and-experiment-owner",
+        "frozen-l-policy-and-liability-owner"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:31:56Z",
+  "contentHash": "874b1a13a051c0ceac61e403d901d54b6e59bde9b5fb5d214e6a7fb4769426bf"
+}

@@ -1,0 +1,186 @@
+{
+  "module": "F11_LABEL_FORGE",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L70-L234,L258-L316,L964-L982,L1035-L1160,L1285-L1340",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:STATE.md",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:MISSION.md",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md#L60-L76",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:DIRECTOR.md",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_PARALLEL_DAG.md#L7-L28",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md#L207-L213",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/QUANT_EDGE_BUILD_STATE.md#L7-L26,L41-L43,L63-L84",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py#L71-L88,L355-L560",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/docs/Q02_STORAGE_RESEARCH.md#L119-L125",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q02_ACCEPTANCE.md#L3-L24,L59-L74",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/identity.py#L26-L139",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/outcomes.py#L53-L87,L166-L426,L693-L748",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#L15-L33,L72-L198",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/stages.py#L17-L27,L46-L176",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/controls.py#L26-L35,L41-L172,L229-L308",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/manifest.py#L24-L239",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/survival/contracts.py#L40-L48",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/survival/targets.py#L18-L25,L80-L95",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/docs/Q05_LABEL_FACTORY_DESIGN.md#L17-L80",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q05.md#L28-L62,L100-L107",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q05_ACCEPTANCE.md#L1-L13,L26-L52",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/registry_ops/contracts.py#L521-L618,L881-L997",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/registry_ops/store.py#L1081-L1251,L1901-L2030",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q15_ACCEPTANCE.md#L1-L24,L47-L77",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/ensemble/calibration.py#L79-L269,L528-L625,L787-L973",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/EDGE_HYPOTHESIS_MAP.md#L136-L152",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/types.ts#L327-L364",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/freeze.ts#L111-L212",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/attribution.ts#L155-L339",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/calibration/types.ts#L1-L7,L42-L108,L165-L208",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/calibration/aggregate.ts#L251-L324,L383-L468",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/volume/detector.ts#L150-L175",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis/types.ts#L214-L227",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/supervisor/types.ts#L150-L220",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/services/newsContext.ts#L1013-L1042,L2789-L2794",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:EDGE_PROTOCOL_V1.md#L6-L30,L115-L275"
+  ],
+  "requiredDockFacets": [
+    "ANNOTATION_ADAPTER",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "kind": "BASE_AND_DIRECTIVE_VERIFICATION",
+      "status": "VERIFIED",
+      "finding": "The scout worktree was detached and tracked-clean at the accepted Main base f0168cb37bd04d21bc90591ab2256770de3b75bc before receipt creation. Frontier.md matched the required SHA-256 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad."
+    },
+    {
+      "kind": "CANONICAL_Q_OWNER_STATE",
+      "status": "FROZEN_NOT_MOVING",
+      "owner": "Q research lane",
+      "ownerSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "finding": "QL_PARALLEL_DAG.md, QL_DIRECTOR_STATE.md, and quant/QUANT_EDGE_BUILD_STATE.md identify Q as accepted, complete, LANE_READY, and parked with no further builder action authorized. The accepted Q Git object is the authoritative donor even though its source is not reachable from the accepted Main base."
+    },
+    {
+      "kind": "DEDUP_Q02_OWNER_ANNOTATION",
+      "status": "ALREADY_OWNED",
+      "owner": "Q02 lake governance",
+      "symbols": [
+        "VisibleEvidenceRefV1",
+        "OwnerAnnotationV1",
+        "OwnerAnnotationOutcomeLinkV1"
+      ],
+      "finding": "Q02 already owns immutable event/hash targeting, annotator identity, annotation time, evidence cutoff, visible evidence IDs/hashes/availability, outcome blinding, controlled tags, rationale, content identity, and append-only later objective-outcome linkage. Its annotations remain WEAK_SUPERVISION_ONLY and outcome links OBJECTIVE_REFERENCE_ONLY. F11 must adapt these contracts, not create a third annotation authority."
+    },
+    {
+      "kind": "DEDUP_Q05_LABEL_OUTCOME_FACTORY",
+      "status": "ALREADY_OWNED",
+      "owner": "Q05 label and matched-control factory",
+      "symbols": [
+        "VersionSetV1",
+        "SampleIdentityV1",
+        "SampleOutcomesV1",
+        "EventDisposition",
+        "StageAssignmentV1",
+        "ControlMatchSpecV1",
+        "LabelManifestV1"
+      ],
+      "finding": "Q05 already owns point-in-time cutoff and version identity, exact horizons, objective later outcomes, MFE/MAE, first passage, cost and opportunity decay, censoring/unavailable states, stage/disposition labels, leakage-aware matched controls, survival targets, and reproducible manifests. F11 must not rebuild setup, invalidation, already-moved, liquidity, horizon, adverse-excursion, post-outcome, control, or manifest truth."
+    },
+    {
+      "kind": "DEDUP_Q15_REGISTRY_GOVERNANCE",
+      "status": "ALREADY_OWNED",
+      "owner": "Q15 research registry",
+      "symbols": [
+        "DelayedFeedbackV1",
+        "OwnerAnnotationV1",
+        "AnnotationOutcomeLinkV1",
+        "record_owner_annotation",
+        "link_annotation_outcome",
+        "promote_challenger"
+      ],
+      "finding": "Q15 already owns chronology-checked durable annotation/outcome insertion and sole offline research promotion. Q02 and Q15 expose two accepted, non-identical OwnerAnnotationV1 shapes, so the future F0 adapter must bind an exact canonical owner, contract, and version; F11 cannot add a dataset, store, or promotion path."
+    },
+    {
+      "kind": "DEDUP_Q_EXTERNAL_CONTEXT_GOVERNANCE",
+      "status": "ALREADY_OWNED",
+      "owner": "Q H8/Q12/Q15",
+      "finding": "Q's H8_EXTERNAL_CONTEXT_EVENTS hypothesis already requires verified publication and receipt clocks, market-only comparison, already-priced/time-shift/source-outage controls, multiple-testing families, and later-regime promotion criteria. Q12 owns model-score calibration and Q15 owns registry/promotion. F11 may supply deterministic expert-specific fixtures and reports only; it may not create a second hypothesis, calibration engine, weighting policy, or promotion authority."
+    },
+    {
+      "kind": "DEDUP_MAIN_OBJECTIVE_AND_STRATEGY_TRUTH",
+      "status": "ALREADY_OWNED",
+      "owner": "intelligenceFoundation plus Basis/Volume engines",
+      "finding": "Main already freezes pre-event evidence and attributes objective horizons, laterMoved, MFE/MAE, liquidity/depth survival, and execution feasibility. Volume owns move_already_extended and liquidity rejects; Basis/Volume own invalidation and proposal lifecycle semantics. F11 may annotate canonical references but may not recompute them."
+    },
+    {
+      "kind": "DEDUP_MAIN_CALIBRATION_AND_NEWS",
+      "status": "ALREADY_OWNED",
+      "owner": "foundation calibration and newsContext",
+      "finding": "Foundation already owns proposal-outcome/Brier calibration with no strategy-mutation authority, and newsContext owns current news ingestion plus title-level first-party-before-relay deduplication. Neither is expert-annotation calibration or a source-dependence graph; F11 must reuse them without opening a live browsing, ingestion, or generic calibration owner."
+    },
+    {
+      "kind": "DEDUP_COCKPIT_AUTHORITY",
+      "status": "ALREADY_OWNED",
+      "owner": "systemIntegration supervisor and I00/IP-CONTROL",
+      "finding": "The supervisor owns canonical whole-machine read projection and currently has no annotation-specific summary. F11 may describe an honest fixture projection and insertion request only; mounting, controls, health truth, and page authority remain outside F11."
+    },
+    {
+      "kind": "REAL_DELTA_EXPERT_CLAIM_PROVENANCE",
+      "status": "MISSING",
+      "finding": "No accepted owner provides a typed expert-source claim versus observed-fact discriminator with expert/source identity, claim publication time, receipt time, and numeric amount already moved at receipt. Q02 has opaque annotator/rationale plus four controlled tags, not this structure."
+    },
+    {
+      "kind": "REAL_DELTA_ANNOTATION_LIFECYCLE",
+      "status": "MISSING",
+      "finding": "No accepted owner provides annotation confidence posture, parent/revision/supersession lineage, inter-rater disagreement, adjudication, annotation expiry, or retraction. Q05 EXPIRED is an event disposition, not annotation expiry, and Q02 deliberately does not express calibrated probability semantics."
+    },
+    {
+      "kind": "REAL_DELTA_EXPERT_EVALUATION_AND_DEPENDENCE",
+      "status": "MISSING",
+      "finding": "No accepted implementation evaluates expert-source incremental value against a market-only baseline conditioned by asset, horizon, and regime, or emits source-dependence/copy-cluster warnings. The surviving delta is an expert-specific fixture evaluator/report subordinate to Q's existing H8 criteria, outcomes, validation, registry, and promotion law."
+    },
+    {
+      "kind": "REAL_DELTA_EXPORT_AND_PROJECTION",
+      "status": "MISSING",
+      "finding": "No accepted external lossless point-in-time annotation export fixture targets the Q02/Q15 insertion seam, and no annotation-specific cockpit projection contract exists. The permissible delta is fixture-only ANNOTATION_ADAPTER export plus COCKPIT_PROJECTION description/insertion requests, with explicit empty, unavailable, and synthetic states."
+    },
+    {
+      "kind": "NEGATIVE_SEARCH_PROOF",
+      "status": "NO_EQUIVALENT_FOUND",
+      "finding": "Commit-scoped searches of accepted Q source found no expert-source claim contract, inter-rater/adjudication contract, annotation retraction or expiry, source-dependence/copy-cluster contract, market-only expert baseline evaluator, or annotation export adapter. Accepted Main searches found no annotation cockpit panel or projection. The only annotation revision match was Q15's fixed schemaRevision field, not revision history."
+    },
+    {
+      "kind": "STRICT_DELTA_BOUNDARY",
+      "status": "REQUIRED",
+      "finding": "Any F11 implementation must be annotation-only and fixture-only: no new Q dataset/store, objective labels, matched controls, outcome engine, model calibration engine, hypothesis/promotion policy, news ingestion, strategy semantics, Edge Protocol mutation, cockpit mount, live web/network access, expert-opinion-to-truth conversion, or fixed expert weights."
+    },
+    {
+      "kind": "DOCK_DEPENDENCIES",
+      "status": "REQUIRED_FOR_RELEASE",
+      "facets": [
+        "ANNOTATION_ADAPTER",
+        "COCKPIT_PROJECTION"
+      ],
+      "finding": "Frontier's exact module-to-facet map lists only these two F0 facets for F11. Each must ultimately be sealed USABLE against an exact canonical owner, contract, and version."
+    },
+    {
+      "kind": "RELEASE_GATE_PENDING",
+      "status": "NOT_A_SCOUT_DISPOSITION_BLOCKER",
+      "owner": "F0 Dock branch f-dock-0715f",
+      "observedCommittedTip": "df9c52cd2a428e3d3675cf0260c0d30052a4bbff",
+      "finding": "F0 was intentionally still moving and had not sealed an exact Dock receipt when inspected. Frontier Section 17 expressly runs read-only scouts while F0 runs, then requires both an approved real-delta receipt and every dependent facet USABLE before any implementation worktree. The coordinator must withhold F11 release, and must record a blocked dependent module if F0 later seals either required facet BLOCKED."
+    },
+    {
+      "kind": "DISPOSITION_RATIONALE",
+      "status": "APPROVED_REAL_DELTA",
+      "finding": "ALREADY_OWNED is false because the expert-claim, annotation-lifecycle, source-dependence, expert-evaluation, and adapter/projection gaps are exact and source-backed. BLOCKED_OWNER_MOVING is false for this Q-label dedup because the canonical Q owner is frozen at 02b4eccc8d2ef53b830cafae06e5175715fa6ebb; F0's concurrent construction is a separate mechanical release gate."
+    },
+    {
+      "kind": "HASH_CANONICALIZATION",
+      "algorithm": "SHA-256",
+      "input": "UTF-8 bytes emitted by jq -cS 'del(.contentHash)' SCOUT_F11.json, including its single trailing LF",
+      "scope": "Scout-local receipt hash; coordinator owns final canonicalization"
+    }
+  ],
+  "timestamp": "2026-07-15T17:26:54Z",
+  "contentHash": "04e244e7cbe372fc9fd6fdec162c8627c3a2ae23f22750e95c5fd2fdf5c5d2e3"
+}

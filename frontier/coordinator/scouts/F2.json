@@ -1,0 +1,150 @@
+{
+  "module": "F2_PORTFOLIO_LAB",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#L563-L635",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md#L64-L76",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md#L82-L84",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#L56-L75",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/fromAccount.ts#L129-L263",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/scenarios/index.ts#L1-L31",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/scenarios/types.ts#L19-L142",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/topology/types.ts#L20-L152",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/scenarios/types.ts#L6-L177",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/scenarios/generator.ts#L510-L623",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/evaluator.ts#L187-L272",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/reducer.ts#L515-L765",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/reconciliation/engine.ts#L353-L897",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/universe/types.ts#L95-L205",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/universe/graph.ts#L1095-L1444",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/routes/router.ts#L95-L140",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:web/src/store.tsx#L36-L60",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/validation/stress.py#L57-L250",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/QUANT_EDGE_BUILD_STATE.md#L7-L24",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts#L403-L463",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/exposureRecoveryProjection/types.ts#L47-L317",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_PARALLEL_DAG.md#L7-L28",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_DIRECTOR_STATE.md#L70-L112"
+  ],
+  "requiredDockFacets": [
+    "ADVISORY_ASSESSOR",
+    "SCENARIO_REFERENCE",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "id": "AUTHORITY_BOUNDARY",
+      "finding": "Frontier section 5 assigns F2 only deterministic whole-portfolio snapshot composition, relationship analysis, scenario orchestration, comparative reports, and a cockpit projection over immutable canonical owner outputs. It grants no forecast, sizing, risk-policy, execution, reconciliation, or canonical-truth authority.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:563-635",
+        "ARCHITECTURE.md:64-76"
+      ]
+    },
+    {
+      "id": "CAPITAL_DEDUP",
+      "finding": "Capital already owns account and budget projection, allocation capacity, position truth, exact economics, supervision, and decision-chain topology. F2 must consume those snapshots and must not create a second allocator, position store, economics calculator, supervision policy, or topology owner.",
+      "refs": [
+        "server/src/capitalFoundation/budgets/types.ts:56-75",
+        "server/src/capitalFoundation/budgets/fromAccount.ts:129-263",
+        "server/src/capitalFoundation/allocation/allocator.ts:437-620",
+        "server/src/capitalFoundation/positions/projection.ts:205-427",
+        "server/src/capitalFoundation/economics/compose.ts:344-536",
+        "server/src/capitalFoundation/topology/projector.ts:261-822"
+      ]
+    },
+    {
+      "id": "CAPITAL_NO_PORTFOLIO_RUNNER",
+      "finding": "The accepted Capital receipt explicitly records no production cross-lane scenario runner. The Capital scenarios namespace exports compatibility adapters and bindings, not a portfolio scenario engine or comparative scenario report.",
+      "refs": [
+        "docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md:82-84",
+        "server/src/capitalFoundation/scenarios/index.ts:1-31",
+        "server/src/capitalFoundation/scenarios/types.ts:19-142",
+        "docs/archive/CAPITAL_SUPERVISION_RECEIPT.md:338-386"
+      ]
+    },
+    {
+      "id": "FOUNDATION_DEDUP",
+      "finding": "Foundation already owns deterministic single-symbol synthetic fact generation, plan-level risk, execution state and data-only recovery recommendations, replay, and exchange-versus-local reconciliation. F2 must reference these owners and must not duplicate their scenario facts, risk verdicts, reducers, or reconciliation mechanics.",
+      "refs": [
+        "server/src/foundation/scenarios/types.ts:6-177",
+        "server/src/foundation/scenarios/generator.ts:510-623",
+        "server/src/foundation/risk/evaluator.ts:187-272",
+        "server/src/foundation/execution/reducer.ts:515-765",
+        "server/src/foundation/execution/recovery.ts:21-117",
+        "server/src/foundation/reconciliation/engine.ts:353-897"
+      ]
+    },
+    {
+      "id": "Q_DEDUP",
+      "finding": "The frozen accepted Q lane owns historical atlas and replay, feature and model evidence, earlier-only analogs, calibration and abstention, bootstrap and per-sample cost stress, and experiment/model registries. Q cost stress varies costs and latency for strategy samples; it does not join or stress a whole portfolio. F2 must consume Q artifacts and must not recreate those primitives.",
+      "refs": [
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/QUANT_EDGE_BUILD_STATE.md:7-24",
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q14_ACCEPTANCE.md:61-70",
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/validation/stress.py:57-250",
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q15_ACCEPTANCE.md:58-75",
+        "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q17_ACCEPTANCE.md:199-218"
+      ]
+    },
+    {
+      "id": "L_DEDUP",
+      "finding": "The frozen accepted L donor owns deterministic exchange-twin and single-subject exposure-recovery scenario mechanics. Its inputs are one product/symbol or one subject/strategy/proposal/symbol, not a whole-portfolio campaign. F2 must delegate fill, fee, liability, partial-leg, reconciliation, and recovery behavior to L/Foundation rather than model it independently.",
+      "refs": [
+        "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts:403-463",
+        "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/exposureRecoveryProjection/types.ts:47-317",
+        "/Users/cosmosgeek/Desktop/live-execution-proof-20260712/LIVE_EXECUTION_BUILD_STATE.md:292-311"
+      ]
+    },
+    {
+      "id": "REAL_GAP_PORTFOLIO_MODEL",
+      "finding": "No accepted owner composes one immutable snapshot across positions, proposals, liabilities, collateral, venue exposure, and strategy clusters. No accepted implementation derives portfolio concentration, shared factors, cross-asset correlations, or an asset-sector-venue-collateral-strategy financial relationship graph. Existing Capital topology is a decision-chain graph and Intelligence universe topology is a market-node/alias graph.",
+      "refs": [
+        "server/src/capitalFoundation/topology/types.ts:20-152",
+        "server/src/intelligenceFoundation/universe/types.ts:95-205",
+        "server/src/intelligenceFoundation/universe/graph.ts:1095-1444"
+      ]
+    },
+    {
+      "id": "REAL_GAP_ORCHESTRATION_REPORT",
+      "finding": "No accepted production owner runs cross-portfolio sweeps over canonical liquidity, capacity, funding, borrow, fee, slippage, and latency outputs; evaluates correlation-to-one, correlation breaks or sign flips, depeg, collateral haircut, crowding, shared-collateral contagion, trapped-position and recovery burden; or emits a comparative scenario matrix and drilldown carrying origin, seed, horizon, assumptions, missing dependencies, uncertainty, comparative-versus-absolute labels, no-sizing explanation, and ABSTAIN_UNKNOWN behavior.",
+      "refs": [
+        "docs/archive/CAPITAL_SUPERVISION_COMPONENTS.md:82-84",
+        "server/src/foundation/scenarios/types.ts:47-177",
+        "server/src/systemIntegration/routes/router.ts:95-140",
+        "web/src/store.tsx:36-60",
+        "web/src/App.tsx:43-58"
+      ]
+    },
+    {
+      "id": "DOCK_DEPENDENCIES",
+      "finding": "F2 depends on exactly ADVISORY_ASSESSOR, SCENARIO_REFERENCE, and COCKPIT_PROJECTION. The first is advisory/shadow evaluation only; the second is immutable describe/list/schema validation only; the third is an honest panel/read-model projection only. F2 may not privately redefine any Dock envelope or acquire sizing, execution, mounting, controls, health, or page authority.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:291-308",
+        "/Users/cosmosgeek/Desktop/Frontier.md:320-334",
+        "EDGE_PROTOCOL_V1.md:25-43",
+        "packages/edge-protocol/schema/edge-protocol-v1.schema.json:139-259",
+        "server/src/foundation/scenarios/types.ts:6-10",
+        "server/src/systemIntegration/contracts/types.ts:293-304",
+        "server/src/systemIntegration/supervisor/types.ts:195-221"
+      ]
+    },
+    {
+      "id": "OWNER_MOVEMENT_CHECK",
+      "finding": "Q is frozen at 02b4eccc8d2ef53b830cafae06e5175715fa6ebb and L is frozen donor-ready at df6b472993ca9659ce09cf5f72004981c6835f0d. The active Role-4/I00 repair owns integration and mounting, not F2 portfolio-scenario semantics; its inspected change from rejected candidate 098f7b9 to b1a8af0 did not touch quant, liveEdge, capitalFoundation, or foundation. It is therefore a later port/release dependency, not a moving canonical owner that prevents this real-delta adjudication.",
+      "refs": [
+        "QL_PARALLEL_DAG.md:7-28",
+        "QL_DIRECTOR_STATE.md:70-112"
+      ]
+    },
+    {
+      "id": "RELEASE_GATE",
+      "finding": "This scout approval does not authorize an implementation worktree. Frontier section 17 deliberately runs scouts while F0 is built; the coordinator must still pin the exact accepted F0 Dock SHA and confirm all three required facets are USABLE before F2 can be released. Their current state is PENDING_F0, not a scout disposition blocker.",
+      "refs": [
+        "/Users/cosmosgeek/Desktop/Frontier.md:1293-1340"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:15:03Z",
+  "contentHash": "a8fda84dddd1ed1339924a9ba59753a873cd6db95b192173d3457c304d253d02"
+}

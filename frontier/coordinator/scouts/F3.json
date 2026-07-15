@@ -1,0 +1,307 @@
+{
+  "module": "F3 StrategyArena",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    {
+      "id": "frontier-directive",
+      "repository": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "locations": [
+        "lines 70-104: director and read-only scout law",
+        "lines 120-180: existing-owner and anti-sprawl law",
+        "lines 184-216: dispositions and moving-owner accounting",
+        "lines 258-334: provider-facet binding law and F3 facet map",
+        "lines 639-701: F3 StrategyArena contract",
+        "lines 1068-1145: isolation, worker, and acceptance law",
+        "lines 1287-1340: scout and Dock release gates"
+      ]
+    },
+    {
+      "id": "accepted-main-authority-and-gap",
+      "repository": "/Users/cosmosgeek/Desktop/f3-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "ARCHITECTURE.md:64-76: Basis, Volume, Capital, Foundation, and supervisor ownership",
+        "server/src/foundation/contracts/opportunity.ts:4-15,66-69,149-180: no cross-strategy score and incomparable source-local ranks",
+        "server/src/foundation/readModel/readModel.ts:20-29,110-122,459-467: read-only ordering without cross-strategy scoring",
+        "server/test/foundation/readModel/read-model.mjs:314-326: source-scoped rank proof",
+        "STATE.md:49-55: real outcome/calibration and no-look-ahead promotion gates remain future work",
+        "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md:443-459: accepted future-work boundary"
+      ]
+    },
+    {
+      "id": "accepted-main-owned-primitives",
+      "repository": "/Users/cosmosgeek/Desktop/f3-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "server/src/engine/basis/index.ts:5-22 and server/src/engine/volume/index.ts:6-27: canonical strategy-owner seams",
+        "server/src/engine/basis/replay.ts:15-76 and server/src/engine/volume/runner.ts:17-112: single-engine deterministic replay primitives",
+        "server/src/engine/basis/priority.ts:12-63 and server/src/engine/volume/priority.ts:16-45: strategy-local priorities only",
+        "server/src/foundation/replay/types.ts:58-208 and server/src/foundation/replay/replay.ts:31-198: generic deterministic event replay",
+        "server/src/foundation/risk/types.ts:85-193,246-270,410-424: one-plan risk assumptions and verdicts",
+        "server/src/foundation/execution/recovery.ts:21-123: canonical data-only mechanical recovery recommendation",
+        "server/src/capitalFoundation/economics/compose.ts:344-536: canonical cost and recovery economics",
+        "server/src/capitalFoundation/opportunities/types.ts:38-70 and opportunities/eligibility.ts:468-505: canonical conflict discovery",
+        "server/src/capitalFoundation/allocation/types.ts:23-76 and allocation/allocator.ts:437-539: canonical capacity and allocation decisions",
+        "server/src/intelligenceFoundation/outcomes/attribution.ts:155-340 and outcomes/cohorts.ts:56-155: realized outcome attribution and cohorts",
+        "server/src/intelligenceFoundation/forensics/analyzer.ts:210-286: false-positive forensics",
+        "web/src/pages/Strategies.tsx:93-160: Basis-only strategy screen, not an arena"
+      ]
+    },
+    {
+      "id": "accepted-main-cockpit-contract",
+      "repository": "/Users/cosmosgeek/Desktop/f3-scout",
+      "commit": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "locations": [
+        "ARCHITECTURE.md:76: systemIntegration/supervisor owns the read-only whole-machine projection",
+        "server/src/systemIntegration/contracts/types.ts:293-304: SystemSupervisorSnapshot schemaVersion 1",
+        "server/src/systemIntegration/supervisor/types.ts:195-221: SystemSupervisorReadModel",
+        "server/src/systemIntegration/supervisor/projection.ts:460-525: buildSystemSupervisorProjection",
+        "server/src/systemIntegration/routes/router.ts:95-98: read-only supervisor route",
+        "docs/DASHBOARD_TRUTH.md:9-30: canonical snapshot and UNKNOWN/synthetic render law"
+      ]
+    },
+    {
+      "id": "accepted-q-model-validation-owner",
+      "repository": "/Users/cosmosgeek/Desktop/quant-edge-research-20260712",
+      "commit": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "locations": [
+        "quant/QUANT_EDGE_BUILD_STATE.md:3-10,17-43,63-84: Q LANE_READY and parked",
+        "quant/RECEIPTS/Q17_ACCEPTANCE.md:199-218: final accepted Q handoff",
+        "quant/src/quant_edge/registry_ops/contracts.py:158-205,239-517: artifact, dataset, model, experiment, and registration references",
+        "quant/src/quant_edge/registry_ops/contracts.py:521-878,1063-1103: model promotion, champion, shadow comparison, and retirement contracts",
+        "quant/src/quant_edge/validation/comparison.py:109-163,184-345: model-ID comparison",
+        "quant/src/quant_edge/validation/splits.py:43-103,109-217,234-323: purged/embargoed walk-forward and holdout",
+        "quant/src/quant_edge/validation/multiplicity.py:45-113,121-312: trial ledger, PBO, BH, and effective trials",
+        "quant/src/quant_edge/validation/stress.py:57-86,146-162,208-250: cost, latency, and recovery stress",
+        "quant/src/quant_edge/ensemble/stacking.py:107-302,444-521: model-specialist OOF stacking",
+        "quant/src/quant_edge/ensemble/abstention.py:1-7,97-132,445-520: model advisory abstention",
+        "quant/src/quant_edge/labels/disposition.py:15-21,73-105,144-198: immutable ACTED/REJECTED/EXPIRED/MISSED dispositions",
+        "quant/DECISIONS/Q14-001-VALIDATION-FACTORY.md:12-17,34-55,95-98: validation ownership and declared limits",
+        "quant/DECISIONS/Q15-001-RESEARCH-REGISTRY.md:61-78: model lifecycle scope"
+      ]
+    },
+    {
+      "id": "accepted-l-scenario-recovery-owner",
+      "repository": "/Users/cosmosgeek/Desktop/live-execution-proof-20260712",
+      "commit": "df6b472993ca9659ce09cf5f72004981c6835f0d",
+      "locations": [
+        "LIVE_EXECUTION_BUILD_STATE.md:254-306,321-352,516-546: accepted L lane and exchange-twin/recovery boundaries",
+        "server/src/liveEdge/adapters/exchangeTwin/types.ts:403-463: TwinScenarioState and TwinScenarioInput",
+        "server/src/liveEdge/adapters/exchangeTwin/twin.ts:1138-1206,2482-2523: deterministic scenario validation/execution owner"
+      ]
+    },
+    {
+      "id": "stable-ip-control-mount-owner",
+      "repository": "/Users/cosmosgeek/Desktop/f3-scout",
+      "commit": "56c47dad398c485b6653036c8b90c53f11061b1e",
+      "locations": [
+        "IP_CONTROL_RECEIPT.md:1-8,26-52: BINDING_READY fixture/provider/surface contract",
+        "IP_CONTROL_STATE.md:18-67: product-supervisor.v1 and DIRECTOR_MOUNT_REQUIRED boundary"
+      ]
+    },
+    {
+      "id": "current-owner-movement",
+      "repository": "/Users/cosmosgeek/Desktop/f3-scout",
+      "observedAt": "2026-07-15T17:15:43Z",
+      "locations": [
+        "QL_PARALLEL_DAG.md:7-17: frozen accepted Q and L lane tips",
+        "QL_PARALLEL_DAG.md:23-28,51-65: rejected I00 candidate and active role4-fix composition owner",
+        "WORKTREE_LEDGER.md:5: protected active-writer accounting"
+      ],
+      "movingRef": "role4-fix-20260715@b1a8af0edd3c847a382078985374e45bcd28f849",
+      "ruling": "Moving composition/mounting owner only; no StrategyArena-equivalent owner and no change to accepted supervisor v1 projection contract."
+    }
+  ],
+  "requiredDockFacets": [
+    "EXPERIMENT_PROVIDER",
+    "SCENARIO_REFERENCE",
+    "COCKPIT_PROJECTION"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "capability": "complete frozen strategy package and immutable evaluation snapshot",
+      "status": "REAL_DELTA",
+      "finding": "No accepted Main or Q contract binds canonicalStrategyRef/hash, Q refs, evidence refs, capital/risk assumptions, execution cost/recovery refs, campaign/policy, fixture clock, seed, holdout, and missing inputs as one immutable whole-strategy snapshot. Q contracts stop at dataset/model/experiment identities.",
+      "refs": [
+        "frontier-directive",
+        "accepted-main-authority-and-gap",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "evaluation campaigns and comparative whole-strategy reports",
+      "status": "REAL_DELTA",
+      "finding": "No accepted owner has a campaign whose unit is an entire frozen strategy package. Q comparison contracts bind baseline_model_id/challenger_model_id; accepted Main explicitly has no cross-strategy score.",
+      "refs": [
+        "accepted-main-authority-and-gap",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "shadow portfolios",
+      "status": "REAL_DELTA",
+      "finding": "Main Capital budgets are reconciled account-bound projections, Q shadow records are model predictions, and engine replays are single-engine decision traces. None implements counterfactual portfolio accounting, exposure/netting, or same-event multi-strategy shadow state.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "purged/embargoed walk-forward replay and untouched holdout",
+      "status": "OWNED_PRIMITIVE_PLUS_REAL_DELTA",
+      "finding": "Q14 already owns split, purge, embargo, holdout-grant, and multiplicity algorithms. F3's delta is deterministic orchestration of those exact provider results over complete strategy packages; it must not reimplement Q14 mathematics or open the holdout during iteration.",
+      "refs": [
+        "accepted-q-model-validation-owner",
+        "accepted-main-owned-primitives"
+      ]
+    },
+    {
+      "capability": "same-event comparison across strategies",
+      "status": "REAL_DELTA",
+      "finding": "Accepted Q same-event shadow comparison is model-level, while Main's canonical read model preserves source-local rank and expressly refuses cross-strategy comparison. No complete-strategy comparator exists.",
+      "refs": [
+        "accepted-main-authority-and-gap",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "cost-, latency-, capacity-, and recovery-aware scoring",
+      "status": "OWNED_INPUTS_PLUS_REAL_DELTA",
+      "finding": "Capital owns exact economics/capacity decisions, Foundation owns risk and mechanical recovery, L owns scenario/recovery evidence, and Q14 owns sample stress. No owner composes those immutable inputs into a multi-metric whole-strategy tournament score; F3 may compare referenced assumptions but cannot recreate or mutate their authorities.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner",
+        "accepted-l-scenario-recovery-owner"
+      ]
+    },
+    {
+      "capability": "opportunity overlap and capital-contention analysis",
+      "status": "OWNED_DECISION_AUTHORITY_PLUS_REAL_DELTA",
+      "finding": "Capital already owns canonical same-symbol/shared-instrument/exclusive-claim conflicts and GRANTED/CAPPED/BLOCKED allocation. Missing is an evaluation-only comparative analysis inside a shadow campaign. F3 must consume conflict/allocation references and emit advice only.",
+      "refs": [
+        "accepted-main-owned-primitives"
+      ]
+    },
+    {
+      "capability": "abstention quality",
+      "status": "OWNED_SEMANTICS_PLUS_REAL_DELTA",
+      "finding": "Basis/Volume own named reject/ignore decisions and Q12 owns model advisory abstention semantics. No accepted owner computes outcome-conditioned abstention quality for a whole strategy across a declared campaign.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "false-positive and missed-opportunity attribution",
+      "status": "OWNED_OUTCOME_TRUTH_PLUS_REAL_DELTA",
+      "finding": "intelligenceFoundation owns frozen realized-outcome attribution/cohorts and false-positive forensics; Q owns immutable disposition labels. Missing is comparative aggregation across frozen strategy packages. F3 must reference owner outputs and cannot become the canonical outcome ledger or F8 forward attribution owner.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "stability across regimes and symbols",
+      "status": "OWNED_EVIDENCE_PLUS_REAL_DELTA",
+      "finding": "Q provides regime/symbol strata and model-validation primitives; engines provide local per-symbol stability signals. No accepted source produces a cross-strategy regime/symbol stability distribution or campaign scorecard.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "comparative ranking and reproducible tournament scorecards",
+      "status": "REAL_DELTA",
+      "finding": "Existing engine ranks are strategy-local and Q ranks models. The accepted read model explicitly prevents treating local ranks as comparable. No multi-metric whole-strategy ranking, stability report, trial-pressure record, or reproducible scorecard exists.",
+      "refs": [
+        "accepted-main-authority-and-gap",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "strategy retirement and demotion recommendations",
+      "status": "MODEL_LIFECYCLE_OWNED_STRATEGY_ADVICE_GAP",
+      "finding": "Q15 retirement and champion/challenger operations are model-only. Engine proposal expiry, symbol retirement, attention demotion, and active-position exits are different concepts. A deterministic advisory recommendation about a strategy package is missing; F3 receives no lifecycle or promotion authority.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "ensemble or meta-allocation proposals",
+      "status": "MODEL_ENSEMBLE_AND_CAPITAL_AUTHORITY_OWNED_STRATEGY_ADVICE_GAP",
+      "finding": "Q12 OOF stacking combines model specialists and Capital owns actual allocation. Neither is a strategy-level ensemble/meta-allocation advisory. F3 may produce a canonical advisory proposal only and never assign capital.",
+      "refs": [
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "cockpit comparison and evidence drill-down",
+      "status": "GENERIC_PROJECTION_OWNER_PLUS_REAL_DELTA",
+      "finding": "Accepted supervisor v1 owns fail-closed read projection and render truth, but contains only aggregate Basis/Volume summaries; the accepted Strategies page is Basis-only. F3 may build a deterministic module-local comparison panel description/projection and later request insertion, while I00/IP-CONTROL retain mounting, controls, health, and page authority.",
+      "refs": [
+        "accepted-main-cockpit-contract",
+        "accepted-main-owned-primitives",
+        "stable-ip-control-mount-owner"
+      ]
+    },
+    {
+      "capability": "anti-overfitting law",
+      "status": "OWNED_VALIDATION_PRIMITIVES_PLUS_REAL_DELTA",
+      "finding": "Q14 already owns purge/embargo/holdout/multiplicity primitives. F3 must bind them into whole-strategy campaigns, record all trials and correlated model sources, use multiple metrics, count costs/rejects/ambiguity/recovery/capacity, and never infer production edge or promotion from a winning backtest.",
+      "refs": [
+        "frontier-directive",
+        "accepted-q-model-validation-owner"
+      ]
+    },
+    {
+      "capability": "literal accepted-tree implementation search",
+      "status": "NEGATIVE_EVIDENCE",
+      "finding": "At f0168cb, tracked case-insensitive searches returned 0 matches for StrategyArena/whole strategy/strategy package/tournament; 0 for purged/embargoed/walk-forward; 0 for shadow portfolio; 0 for evaluation campaign/evaluation snapshot/same-event comparison; 0 for ensemble/meta-allocation; 0 for regime stability; and 0 for scorecard. The sole strategy-retirement/demotion match is mission prose at MISSION.md:716, not implementation.",
+      "refs": [
+        "accepted-main-authority-and-gap"
+      ]
+    },
+    {
+      "capability": "moving-owner adjudication",
+      "status": "NOT_BLOCKED",
+      "finding": "Q and L are frozen accepted lanes. The active role4-fix owner changes future I00 composition/mounting, not a StrategyArena-equivalent capability and not the accepted supervisor v1 contract. Missing F3 mounting is an insertion request, not a scout blocker. No overlapping F3 owner is moving.",
+      "refs": [
+        "accepted-q-model-validation-owner",
+        "accepted-l-scenario-recovery-owner",
+        "accepted-main-cockpit-contract",
+        "current-owner-movement"
+      ]
+    },
+    {
+      "capability": "Dock release prerequisites",
+      "status": "RELEASE_DEPENDENCY_NOT_SCOUT_BLOCKER",
+      "finding": "F3 depends on exactly EXPERIMENT_PROVIDER, SCENARIO_REFERENCE, and COCKPIT_PROJECTION. Accepted non-moving canonical candidates exist in Q, L, and Main supervisor v1. This scout approval does not itself release a worktree: the coordinator must still read F0's sealed receipt and require all three bindings to be USABLE at one exact Dock SHA.",
+      "refs": [
+        "frontier-directive",
+        "accepted-q-model-validation-owner",
+        "accepted-l-scenario-recovery-owner",
+        "accepted-main-cockpit-contract"
+      ]
+    },
+    {
+      "capability": "dedup and authority boundary",
+      "status": "MANDATORY_SCOPE",
+      "finding": "Approve only immutable strategy-package snapshots, whole-strategy campaign orchestration, shadow comparative reports, strategy-level scorecards, and advisory recommendations. Do not create a strategy/model/experiment registry, split or stress algorithm, scanner, proposal queue, replay/evidence/outcome store, allocator, risk/recovery authority, cockpit mount, treatment assignment, exposure ledger, canary, early-stop, rollback, promotion, or execution path.",
+      "refs": [
+        "frontier-directive",
+        "accepted-main-authority-and-gap",
+        "accepted-main-owned-primitives",
+        "accepted-q-model-validation-owner",
+        "accepted-l-scenario-recovery-owner",
+        "accepted-main-cockpit-contract"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:15:43Z",
+  "contentHash": "sha256:c5564a9a179c8d3dbe2c2b34e952f9f731de3a83c2209cd3e20244546b207c40"
+}

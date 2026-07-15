@@ -1,0 +1,267 @@
+{
+  "module": "F1 VenueMesh",
+  "run": "0715f",
+  "baseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceRefs": [
+    "sha256:4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad:/Users/cosmosgeek/Desktop/Frontier.md#sections-0-2,3.1A,4,10-12,17",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:ARCHITECTURE.md#Part-II:64-77,228-239",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:MISSION.md:101-107",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:STATE.md:8-27,47-52",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/constants.ts:12-44",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/types.ts:21-150",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/contracts/validation.ts:278-310",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/sourceFacts.ts:3-164",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/common.ts:26-190",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/evidence/quality.ts:11-110",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/universe/types.ts:9-205",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/universe/graph.ts:628-689,1095-1383",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/features/bank.ts:48-107,175-260,685-724",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/contracts/sourceCatalog.ts:9-130",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/contracts/types.ts:7-125,128-175",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/contracts/sourceLifecycle.ts:114-150,361-380",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/books/types.ts:14-75,120-155,213-242",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/derivatives/types.ts:285-314",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceRuntime/derivatives/enricher.ts:972-1008",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/adapters/sourceRegistry.ts:1-101",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/systemIntegration/contracts/dialects.ts:163-237",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/services/newsContext.ts:6-95,295-409,862-947,1013-1081,1447-1487,1865-1887,2637-2647,2789-2794",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis/liquidity.ts:25-160",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/lake/governance.py:32-69,193-352,355-438",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/bootstrap/coverage.py:39-77,224-304",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/bootstrap/sources.py:99-333,370-440",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/features/registry.py:35-155",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/derivatives/leadlag.py:20-110,240-292",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/derivatives/costs.py:11-139",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/EDGE_HYPOTHESIS_MAP.md:100-116,136-152",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/docs/Q00_ACTUAL_SOURCE_REUSE_MATRIX.md:37-61,65-95",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q03.md:28-42,135-142",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q17_ACCEPTANCE.md:3-17,199-218",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/binanceInstrumentSpecs/types.ts:3-92",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts:16-45,80-166",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/twin.ts:1138-1154,2474-2554",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md:3-6,72-103",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:QL_PARALLEL_DAG.md:7-17,28-30,51-57",
+    "git:b14387b0321e2b87e92e11329a97830347002f15:frontier/coordinator/FRONTIER_BOARD.md:1-21",
+    "git:b14387b0321e2b87e92e11329a97830347002f15:frontier/coordinator/FRONTIER_WORKERS.md:7-9,59-61"
+  ],
+  "requiredDockFacets": [
+    "EVIDENCE",
+    "DERIVED_FEATURE"
+  ],
+  "disposition": "APPROVED_REAL_DELTA",
+  "evidence": [
+    {
+      "id": "F1-E00",
+      "scope": "authority and inspection base",
+      "status": "VERIFIED",
+      "finding": "The scout is detached at the exact authorized base f0168cb37bd04d21bc90591ab2256770de3b75bc, and the controlling Frontier file matches SHA-256 4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad. Inspection found no F1 implementation worktree; the coordinator board records F1 as scout-only and WAITING_FOR_DOCK_SHA.",
+      "refs": [
+        "git rev-parse HEAD",
+        "shasum -a 256 /Users/cosmosgeek/Desktop/Frontier.md",
+        "b14387b0:frontier/coordinator/FRONTIER_BOARD.md:3-7,21"
+      ]
+    },
+    {
+      "id": "F1-E01",
+      "scope": "canonical ownership and moving-owner adjudication",
+      "status": "OWNERS_STABLE",
+      "finding": "Q and L are immutable accepted lane owners, not moving owners: Q is ACCEPTED/LANE_READY at 02b4eccc8d2ef53b830cafae06e5175715fa6ebb and L is LANE_READY_BUILT_AND_TESTED_UNWIRED at df6b472993ca9659ce09cf5f72004981c6835f0d. Role4-fix is moving product integration, but the Q DataSourceCard/FeatureRegistry and L exchange-twin blobs are byte-identical between the rejected integration candidate and Role4 HEAD. Frontier sections 0, 1, and 4 explicitly authorize PRESTAGE_ONLY work against accepted Q/L contract references while the product candidate remains untouched. Therefore Role4 is a later mount gate, not BLOCKED_OWNER_MOVING for this removable scout delta.",
+      "refs": [
+        "02b4eccc:quant/QUANT_EDGE_BUILD_STATE.md:7-26,63-67",
+        "02b4eccc:quant/RECEIPTS/Q17_ACCEPTANCE.md:3-17,216-218",
+        "df6b4729:LIVE_EXECUTION_BUILD_STATE.md:225-262",
+        "df6b4729:live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md:3-6,72-103",
+        "f0168cb:QL_PARALLEL_DAG.md:7,17,28,51-57",
+        "Frontier.md:5-9,78-104,122-139,488-496"
+      ]
+    },
+    {
+      "id": "F1-E02",
+      "scope": "F0 Dock dependency",
+      "status": "RELEASE_GATE_PENDING",
+      "finding": "The controlling module-to-facet map lists exactly EVIDENCE and DERIVED_FEATURE for F1; COCKPIT_PROJECTION is not listed and cannot be invented. F0 is presently only at its directive-pin commit and has not sealed ProviderFacetBindingV1 records or a final Dock SHA. This keeps mechanical release at WAITING_FOR_DOCK_SHA but does not alter the proved real-delta disposition, because section 17 deliberately runs scouts while F0 is being frozen.",
+      "refs": [
+        "Frontier.md:302-318,1293-1299,1317-1324,1340",
+        "f-dock-0715f@df9c52cd2a428e3d3675cf0260c0d30052a4bbff",
+        "b14387b0:frontier/coordinator/FRONTIER_BOARD.md:6-7"
+      ]
+    },
+    {
+      "id": "F1-E03",
+      "scope": "instrument and symbol identity; spot, perpetual, futures, and options capability; identity honesty tests",
+      "status": "PARTIAL_OWNER_PLUS_REAL_DELTA",
+      "owner": "intelligenceFoundation universe/identity; intelligenceRuntime universe; L Binance instrument specifications",
+      "finding": "Accepted owners already validate Binance identities, listing status, filters, aliases, and same-universe alias collisions. The canonical InstrumentIdentity collapses every non-Binance venue to OTHER, has no canonical asset identifier or contract multiplier, and PRODUCT_FAMILIES has no dated-futures or options family. Runtime universe supports only SPOT and USD_M_PERPETUAL; L's registry supports only SPOT, USD_M_PERPETUAL, and MARGIN and fixes contractSize to null. F1 therefore has a bounded real delta for venue-specific identity maps, dated-future/options capability descriptors, multiplier/quote/spot-derivative mismatch fixtures, and cross-venue same-ticker collision fixtures, without creating a second canonical universe.",
+      "refs": [
+        "f0168cb:server/src/intelligenceFoundation/contracts/constants.ts:15-16",
+        "f0168cb:server/src/intelligenceFoundation/contracts/types.ts:74-84",
+        "f0168cb:server/src/intelligenceFoundation/contracts/validation.ts:278-310",
+        "f0168cb:server/src/intelligenceFoundation/universe/types.ts:9-18,51-66,163-205",
+        "f0168cb:server/src/intelligenceFoundation/universe/graph.ts:628-689,1302-1343",
+        "df6b4729:server/src/liveEdge/adapters/binanceInstrumentSpecs/types.ts:3-12,44-76"
+      ]
+    },
+    {
+      "id": "F1-E04",
+      "scope": "public BBA, trades, depth, funding, mark/index, open interest, official payload fixtures, canonical adapter maps",
+      "status": "BINANCE_OWNED_ADDITIONAL_VENUES_MISSING",
+      "owner": "intelligenceRuntime semantic source catalog and physical MarketEngine/BasisRuntime/VolumeRuntime producers; intelligenceFoundation normalizers",
+      "finding": "The accepted runtime and evidence catalogs provide Binance Spot/USD-M endpoint, clock, sequence, BBA, trade, depth, funding, mark/index, open-interest, liquidation, and borrow semantics. RUNTIME_ENDPOINTS contains only Binance Spot/USD-M, BINANCE_SOURCE_FACTS is Binance-only, and prepareContext requires a BinanceSourceKey. No venue-neutral source catalog or accepted public market-data adapter for a second venue exists; non-perpetual USD-M is deliberately outside the current runtime path. The real delta is fixture-first, injected, additional-venue adapter maps and cached official example payloads that project into canonical evidence; creating competing Binance sockets, caches, source registries, or physical producers is forbidden.",
+      "refs": [
+        "f0168cb:ARCHITECTURE.md:67-68,228-239",
+        "f0168cb:server/src/intelligenceRuntime/contracts/sourceCatalog.ts:30-90",
+        "f0168cb:server/src/intelligenceFoundation/evidence/sourceFacts.ts:3-164",
+        "f0168cb:server/src/intelligenceFoundation/evidence/common.ts:26-110,155-188",
+        "02b4eccc:quant/docs/Q00_ACTUAL_SOURCE_REUSE_MATRIX.md:44-50,83-95",
+        "02b4eccc:quant/EDGE_HYPOTHESIS_MAP.md:100-116"
+      ]
+    },
+    {
+      "id": "F1-E05",
+      "scope": "venue and receive clocks; data age; timestamp/sequence/unit normalization; gaps; reconnects; rate limits; schema revisions; injected transports and simulators",
+      "status": "GENERIC_OWNER_REUSE_SOURCE_SPECIFIC_DELTA",
+      "owner": "intelligenceRuntime RuntimeSourceEvent/SourceLifecycleTracker/local book/rate budget; intelligenceFoundation TruthMetadata and sequence assessment; Q timestamp/source-card contracts",
+      "finding": "Canonical contracts already separate source event, source transaction, receive, processing, and evaluation time; track lifecycle, age, invalid/duplicate/out-of-order/gap/drop/coalesce/reconnect/rate state; provide injected REST/WebSocket ports; and require gap/resnapshot behavior. Q owns explicit timestamp-unit and source-card review semantics. F1 may add only venue-specific timestamp/unit/sequence/schema-version mappings plus deterministic rate-budget, reconnect, gap, timestamp-unit mismatch, and resnapshot fixtures. It must not introduce another lifecycle, clock schema, transport runtime, or source registry.",
+      "refs": [
+        "f0168cb:server/src/intelligenceFoundation/contracts/types.ts:34-72",
+        "f0168cb:server/src/intelligenceFoundation/evidence/quality.ts:11-110",
+        "f0168cb:server/src/intelligenceRuntime/contracts/types.ts:7-125,128-175",
+        "f0168cb:server/src/intelligenceRuntime/contracts/sourceLifecycle.ts:114-150,361-380",
+        "f0168cb:server/src/intelligenceRuntime/books/types.ts:18-31,61-75,120-139",
+        "02b4eccc:quant/src/quant_edge/lake/governance.py:32-69,193-352",
+        "02b4eccc:quant/docs/Q03_SOURCE_CONTRACT_REFRESH.md:20-22,54-63,79-95"
+      ]
+    },
+    {
+      "id": "F1-E06",
+      "scope": "market status, trading phase, maintenance, deposit/withdrawal restrictions, product suspension, delisting",
+      "status": "ACQUISITION_ALREADY_OWNED_ADAPTER_DELTA",
+      "owner": "server/src/services/newsContext.ts plus intelligenceFoundation listing observations",
+      "finding": "The accepted product already collects official Coinbase product phases; Kraken, OKX, Bybit, Upbit/Bithumb, Deribit, and CME notices; OKX deposit/withdrawal suspension; Bybit maintenance; and official exchange status feeds. IntelligenceFoundation preserves raw listing status and tradingAllowed. F1 must not add another collector/cache. The missing extension is a fixture-only, lossless Q/F0 evidence adapter and source cards for those observations, including delisted/suspended honesty cases; current news rows are contextual items, not canonical per-instrument venue-health evidence.",
+      "refs": [
+        "f0168cb:server/src/services/newsContext.ts:295-409,862-888,1013-1081,1865-1887,2637-2647",
+        "f0168cb:server/src/intelligenceFoundation/universe/types.ts:51-66,121-130",
+        "Frontier.md:122-139,164,509"
+      ]
+    },
+    {
+      "id": "F1-E07",
+      "scope": "adapter-specific source health, data quality, one venue stale while another is current, maintenance/rate degradation, venue-health read model",
+      "status": "GENERIC_OWNER_PLUS_COMPARATIVE_DELTA",
+      "owner": "intelligenceRuntime source snapshots and health aggregation; systemIntegration loss-aware dialects/supervisor",
+      "finding": "Accepted runtime snapshots already own silence, staleness, processing lag, malformed/duplicate/out-of-order/gap/drop/reconnect/rate/error/authority/completeness truth; systemIntegration maps UNKNOWN and SAMPLED fail-closed and rejects duplicate semantic producers. F1 may not duplicate those semantics. No comparative multi-venue health model exists, so the real delta is a fixture-only venue-health projection that losslessly maps each adapter into canonical states and can represent one venue stale while another remains current.",
+      "refs": [
+        "f0168cb:server/src/intelligenceRuntime/contracts/types.ts:75-125",
+        "f0168cb:server/src/intelligenceRuntime/contracts/sourceLifecycle.ts:114-150,361-380",
+        "f0168cb:server/src/systemIntegration/contracts/dialects.ts:163-237",
+        "f0168cb:server/src/systemIntegration/adapters/sourceRegistry.ts:46-101"
+      ]
+    },
+    {
+      "id": "F1-E08",
+      "scope": "REST-versus-WebSocket disagreement; comparable cross-venue snapshots; agreement/disagreement calculator",
+      "status": "REAL_DELTA",
+      "finding": "The only accepted disagreement contract compares Binance current open interest with Binance open-interest history. Local books own product-specific snapshot/delta reconciliation, not cross-source or cross-venue comparison. No generic REST/stream disagreement, comparable cross-venue shadow snapshot, cross-venue agreement calculator, or current-versus-stale venue comparator exists. These deterministic, evidence-only projections are genuine F1 work.",
+      "refs": [
+        "f0168cb:server/src/intelligenceRuntime/derivatives/types.ts:285-314",
+        "f0168cb:server/src/intelligenceRuntime/derivatives/enricher.ts:972-1008",
+        "f0168cb:server/src/intelligenceRuntime/books/types.ts:14-75,213-242",
+        "02b4eccc:quant/EDGE_HYPOTHESIS_MAP.md:100-116"
+      ]
+    },
+    {
+      "id": "F1-E09",
+      "scope": "advisory dislocation and leadership with fee, tick, latency, licensing, and executable-depth caveats; apparent-spread honesty test",
+      "status": "SAME_VENUE_OWNED_CROSS_VENUE_DELTA",
+      "owner": "MarketFeatureBank and Q lead-lag for Spot/perpetual evidence; Basis/Q/L for economics and exchange semantics",
+      "finding": "MarketFeatureBank already owns Spot/perpetual divergence and first-move leadership, Q owns evidence-only Spot/perpetual lag analysis, and Basis/Q/L own fees, slippage, intended-size depth, borrow/funding/recovery, filters, and executable venue semantics. F1 must not calculate canonical net edge or emit order instructions. No venue-aware cross-venue leadership/dislocation projection exists; the current feature bank is keyed by raw symbol and groups by product family, so feeding several venues would risk mixing identically named symbols. A venue-specific advisory shadow that reports unknown when fees, tick sizes, latency, depth, or licensing are unavailable is a real delta.",
+      "refs": [
+        "f0168cb:server/src/intelligenceFoundation/features/bank.ts:48-107,175-260,701-724",
+        "f0168cb:server/src/engine/basis/liquidity.ts:25-160",
+        "02b4eccc:quant/src/quant_edge/derivatives/leadlag.py:20-110,240-292",
+        "02b4eccc:quant/src/quant_edge/derivatives/costs.py:11-139",
+        "df6b4729:server/src/liveEdge/adapters/exchangeTwin/types.ts:16-45,80-166"
+      ]
+    },
+    {
+      "id": "F1-E10",
+      "scope": "public/official context: on-chain flow, unlock/tokenomics, liquidation clusters/maps, public borrow/lending, official project events, news, macro",
+      "status": "PARTIAL_OWNER_PLUS_REAL_DELTA",
+      "owner": "Q external-evidence/source-card owner; accepted newsContext and calendar acquisition; Binance liquidation/borrow owners",
+      "finding": "Official news, macro, project, issuer, venue-status, and calendar acquisition already exists and must be adapted rather than copied. Binance liquidation observations and private/account borrow truth also have owners; private truth is forbidden to F1. Accepted Q evidence explicitly says external announcements/on-chain/cross-venue evidence is NOT_CONFIGURED and no announcement, unlock, or on-chain source passed source-card gates. Structured lawful on-chain flow, unlock schedules, liquidation-cluster/map evidence, public lending/borrow conditions, and point-in-time source cards are therefore real delta. Relay headlines such as Lookonchain remain claims/reference context, not chain-native canonical facts.",
+      "refs": [
+        "f0168cb:server/src/services/newsContext.ts:6-95,295-409,411-705,1013-1081,1468-1487",
+        "f0168cb:server/src/index.ts:995-1024,1085-1170",
+        "f0168cb:server/src/intelligenceFoundation/evidence/sourceFacts.ts:102-150",
+        "02b4eccc:quant/docs/Q00_ACTUAL_SOURCE_REUSE_MATRIX.md:65-79",
+        "02b4eccc:quant/EDGE_HYPOTHESIS_MAP.md:136-152"
+      ]
+    },
+    {
+      "id": "F1-E11",
+      "scope": "source cards; license/retention matrix; source independence/copy clusters; terms revision and fixture expiry",
+      "status": "Q_CONTRACT_OWNED_MATERIALIZATION_DELTA",
+      "owner": "Q DataSourceCardV1/source review/retention contracts",
+      "finding": "Q already owns the eight-gate review-only DataSourceCardV1, structured archive license/retention evidence, and fail-closed retention planning. F1 must use those contracts. Q03 materializes exactly three cards (Binance archive, canonical bridge, Tardis reference), all review-only; it does not cover the F1 venue/context set or every Frontier field. Accepted newsContext deduplicates normalized titles and prioritizes first-party rows, but it discards duplicates rather than preserving upstream publisher/vendor/copy-family relationships. No source-independence graph, shared-upstream family count, geography/auth/review-expiry matrix, terms-revision invalidation, or cached-fixture eligibility expiry exists. Those source-card materializations and copy-cluster/terms fixtures are genuine delta.",
+      "refs": [
+        "02b4eccc:quant/src/quant_edge/lake/governance.py:32-69,193-352",
+        "02b4eccc:quant/src/quant_edge/bootstrap/coverage.py:39-77,224-304",
+        "02b4eccc:quant/src/quant_edge/bootstrap/sources.py:370-440",
+        "02b4eccc:quant/src/quant_edge/lake/retention.py:40-184",
+        "f0168cb:server/src/services/newsContext.ts:925-947,1013-1035,1447-1466,2789-2794"
+      ]
+    },
+    {
+      "id": "F1-E12",
+      "scope": "point-in-time cutoff, unofficial claims, unknown-not-zero, and missing-source honesty",
+      "status": "GENERIC_OWNER_REUSE_FIXTURE_DELTA",
+      "owner": "intelligenceFoundation frozen outcomes and Q point-in-time contracts",
+      "finding": "Canonical owners already preserve null/UNKNOWN/UNAVAILABLE and reject future evidence at the information cutoff. F1 must reuse those laws for post-cutoff unlock/on-chain/liquidation fixtures and keep unofficial or unverifiable project claims REFERENCE_ONLY or UNAVAILABLE. The delta is source-specific fixtures and mappings, not another cutoff or truth schema.",
+      "refs": [
+        "f0168cb:server/src/intelligenceFoundation/contracts/constants.ts:18-30",
+        "f0168cb:server/src/intelligenceFoundation/evidence/quality.ts:82-110",
+        "f0168cb:server/src/intelligenceFoundation/outcomes/internal.ts:59-105",
+        "f0168cb:server/src/intelligenceFoundation/outcomes/freeze.ts:111-212",
+        "02b4eccc:quant/src/quant_edge/lake/governance.py:355-438"
+      ]
+    },
+    {
+      "id": "F1-E13",
+      "scope": "fixture-only UI projection",
+      "status": "BOUNDARY_REQUIRES_DOCK_ADJUDICATION",
+      "owner": "systemIntegration supervisor and existing cockpit",
+      "finding": "The product cockpit already renders canonical supervisor truth and must not gain a competing health owner. Frontier section 4 asks for a fixture-only UI projection, but the controlling release map gives F1 only EVIDENCE and DERIVED_FEATURE and forbids inventing COCKPIT_PROJECTION. Implementation may include only an isolated non-authoritative preview if the sealed Dock makes that legal; otherwise it must record an insertion request and stop that piece.",
+      "refs": [
+        "f0168cb:ARCHITECTURE.md:76",
+        "Frontier.md:302-318,519-531",
+        "Frontier.md:1074-1093"
+      ]
+    },
+    {
+      "id": "F1-E14",
+      "scope": "no execution or order authority",
+      "status": "BOUNDARY",
+      "owner": "L exchange twin and canonical Basis/Risk/Capital/Execution owners",
+      "finding": "L remains the sole exchange-truth and executable-venue-semantics owner. Its accepted twin is synthetic, non-sendable, and limited to Spot/USD-M. F1 observations must remain READ_ONLY, SHADOW_ONLY, NO_AUTHORITY, and never become an order instruction or a claim of tradable cross-venue arbitrage. No live networks, subscriptions, keys, private endpoints, signing, deposits, withdrawals, or orders are within the approved delta.",
+      "refs": [
+        "Frontier.md:492-496,533-555",
+        "df6b4729:server/src/liveEdge/adapters/exchangeTwin/types.ts:16-45,147-166",
+        "df6b4729:server/src/liveEdge/adapters/exchangeTwin/twin.ts:1138-1154,2474-2554",
+        "df6b4729:live-edge-receipts/RECEIPTS/L17_ACCEPTANCE.md:72-103"
+      ]
+    },
+    {
+      "id": "F1-E15",
+      "scope": "disposition synthesis",
+      "status": "APPROVED_REAL_DELTA",
+      "finding": "A meaningful delta remains after dedup: venue-specific read-only identity/capability maps and collision fixtures; additional-venue injected public evidence adapters and source cards; REST/stream plus cross-venue agreement snapshots; venue-comparative health, leadership, and dislocation shadows; structured proved-missing public-context adapters; and source-independence, terms, retention, review/expiry fixtures. Existing Binance acquisition, normalization, lifecycle, Q source/feature governance, L exchange semantics, news/calendar collection, economics, supervisor, and cockpit remain canonical and must only be referenced or narrowly adapted. This recommendation does not release a worktree: the coordinator still requires a sealed exact Dock SHA and USABLE EVIDENCE and DERIVED_FEATURE bindings.",
+      "refs": [
+        "Frontier.md:133-139,488-559,1293-1299,1322,1340",
+        "02b4eccc:quant/EDGE_HYPOTHESIS_MAP.md:100-116,136-152",
+        "02b4eccc:quant/docs/Q00_ACTUAL_SOURCE_REUSE_MATRIX.md:75-95"
+      ]
+    }
+  ],
+  "timestamp": "2026-07-15T17:16:22Z",
+  "contentHash": "310ba7e6d6051d75a3a7dc2ce97ec0b63246bc229eb7bb2a0ef0fb7652954048"
+}

@@ -111,12 +111,48 @@ deployment, push, merge, or current-main mutation was authorized or performed.
 
 ## Post-commit clean proof
 
-The initial exact correction commit was
-`11b42c52a0136b7e83ad8e9ce424e41bec114a71`. With empty Git status and all five
+The exact reachable correction source is
+`9d20c6a7cbde15237e73076e8c528a84775c50ca`, tree
+`9ef0e0a7f30e4c826bb538c518f72d3b176aedb8`. With empty Git status and all five
 protected root paths still absent, `bash ops/tests/i00/run-all.sh` exited `0`:
-`12` scripts passed, `0` failed, with `660` additive assertions. This receipt
-update is the only amendment after that aggregate; the implementation and test
-bytes exercised by it are unchanged.
+`12` scripts passed, `0` failed, with `660` additive assertions.
 
-The clean-detached performance measurement is recorded after this receipt-only
-amendment so its tested SHA remains an independently reproducible Git object.
+An isolated no-local clone was detached at that exact commit, again with none
+of the five protected root inputs present. `npm ci --offline --no-audit
+--no-fund` installed the lockfile-defined `229` packages, the server build
+passed, and the exact command below exited `0` after the real default 60-second
+three-boot campaign:
+
+```sh
+npm run test:i00:performance -- \
+  --tested-sha=9d20c6a7cbde15237e73076e8c528a84775c50ca
+```
+
+The immutable measurement result is:
+
+- relative receipt path:
+  `test/i00/performance/evidence/local-proxy-performance-20260715143531579-48618-9d20c6a7.json`;
+- byte length: `186549`;
+- receipt SHA-256:
+  `2a78ea3a20af75be09f64093b44f03844dd5e71b05e900fa992a3e5e4fcabf3b`;
+- schema/run: `i00.local-proxy-performance.v1` /
+  `20260715143531579-48618-9d20c6a7`;
+- source: exact detached commit/tree above,
+  `CLEAN_DETACHED_CANDIDATE_WITH_PACKAGED_OWNER_DIRECTIVES`, with all five rows
+  labeled `CANDIDATE_COMMITTED_VERIFIER_INPUT`;
+- source bundle identities: server bundle
+  `9d2ad8a3023502c18298b40ae54c2e00d1fbe89baf8a32ea89b0133ee0eb5b96`
+  and harness tree
+  `cb44f6180a7f5cf5bb89984eb10b0f4b43183eb17a8adad4556a09f535be8055`;
+- validation: `schemaValid=true`, continuity `passed=true`, no invariant
+  failures, degradation truth `CANONICAL_NON_GREEN_VISIBLE`, and overall SLO
+  `PASS`;
+- production capacity remains honestly `UNKNOWN`; the short-window RSS slope
+  and other unexposed or unexercised metrics remain explicitly
+  `NOT_CONFIGURED` or `OWNER_GATED`.
+
+The source checkout was clean when admitted. The harness then exclusively
+created the receipt below its evidence directory, which correctly became the
+sole post-run untracked path; it was not used to retroactively prove source
+cleanliness. This documentation-only child preserves the exact tested commit
+as its direct parent.

@@ -86,7 +86,9 @@ async function expectedDirectDependencyIds(sourcePath) {
 const fixtureNames = [
   'entry-inventory.v1.json', 'schema-reuse-map.v1.json', 'adapted-schemas.v1.json', 'capability-matrix.v1.json',
   'identity-provider-matrix.v1.json', 'hard-denials.v1.json', 'action-classes.v1.json',
-  'classification-manifest.v1.json', 'runbook-templates.v1.json', 'reliability-targets.v1.json', 'policy-bundle.synthetic.v1.json',
+  'classification-manifest.v1.json', 'runbook-templates.v1.json', 'runbook-manifest-instances.v1.json',
+  'reliability-targets.v1.json', 'capability-graduation-target-instances.v1.json',
+  'action-class-fixture-instances.v1.json', 'mechanical-authority-manifests.v1.json', 'policy-bundle.synthetic.v1.json',
   'decision-log-design.synthetic.v1.json', 'control-insertion-requests.v1.json',
   'insertion-requests.v1.json', 'unfinished-interfaces.v1.json',
 ];
@@ -101,13 +103,17 @@ const staticArtifactsByFixture = {
   'hard-denials.v1.json': contracts.AI_OPS_ARTIFACTS.hardDenials,
   'action-classes.v1.json': contracts.AI_OPS_ARTIFACTS.actionClasses,
   'runbook-templates.v1.json': contracts.AI_OPS_ARTIFACTS.runbookTemplates,
+  'runbook-manifest-instances.v1.json': contracts.AI_OPS_ARTIFACTS.runbookManifestInstances,
   'reliability-targets.v1.json': contracts.AI_OPS_ARTIFACTS.reliabilityTargets,
+  'capability-graduation-target-instances.v1.json': contracts.AI_OPS_ARTIFACTS.capabilityGraduationTargetInstances,
+  'action-class-fixture-instances.v1.json': contracts.AI_OPS_ARTIFACTS.actionClassFixtureInstances,
   'policy-bundle.synthetic.v1.json': contracts.AI_OPS_ARTIFACTS.policyBundleFixture,
   'decision-log-design.synthetic.v1.json': contracts.AI_OPS_ARTIFACTS.decisionLogDesign,
   'control-insertion-requests.v1.json': contracts.AI_OPS_ARTIFACTS.controlInsertionRequests,
   'insertion-requests.v1.json': contracts.AI_OPS_ARTIFACTS.insertionRequests,
   'unfinished-interfaces.v1.json': contracts.AI_OPS_ARTIFACTS.unfinishedInterfaces,
 };
+const dynamicFixtureNames = new Set(['classification-manifest.v1.json', 'mechanical-authority-manifests.v1.json']);
 
 test('artifact sealing snapshots attacker-controlled payloads exactly once before hashing', () => {
   let descriptorReads = 0;
@@ -146,7 +152,7 @@ test('all generated fixtures exactly match sealed source artifacts and their con
   assert.equal(Object.keys(staticArtifactsByFixture).length, Object.keys(contracts.AI_OPS_ARTIFACTS).length);
   for (const fixtureName of fixtureNames) {
     const fixture = JSON.parse(await readFile(resolve(fixtureDirectory, fixtureName), 'utf8'));
-    if (fixtureName !== 'classification-manifest.v1.json') assert.deepEqual(fixture, staticArtifactsByFixture[fixtureName], fixtureName);
+    if (!dynamicFixtureNames.has(fixtureName)) assert.deepEqual(fixture, staticArtifactsByFixture[fixtureName], fixtureName);
     const { contentHash, ...body } = fixture;
     assert.equal(contentHash, contracts.sha256Canonical(body), fixtureName);
     assert.equal(fixture.state, 'SHADOW_SPECULATIVE');
@@ -191,6 +197,27 @@ test('mechanical classification fixture binds actual A1 source bytes', async () 
   assert.equal(fixture.payload.entries.filter((row) => row.resourceId.startsWith('aiops-hard-denial-fixture-') && row.actionClass === 'D').length, 14);
 });
 
+test('A1X mechanical authority fixture binds current source bytes and exact transitive roots', async () => {
+  const fixture = JSON.parse(await readFile(resolve(fixtureDirectory, 'mechanical-authority-manifests.v1.json'), 'utf8'));
+  const sourceEntries = fixture.payload.classification.entries.filter((row) => row.classifiedPath.startsWith('server/src/aiOps/contracts/') && !row.classifiedPath.includes('#'));
+  const expectedSourcePaths = (await readdir(sourceDirectory))
+    .filter((name) => name.endsWith('.ts'))
+    .map((name) => `server/src/aiOps/contracts/${name}`)
+    .sort();
+  assert.deepEqual([...new Set(sourceEntries.map((entry) => entry.classifiedPath))].sort(), expectedSourcePaths);
+  for (const entry of sourceEntries) {
+    const bytes = await readFile(resolve(repositoryRoot, entry.classifiedPath));
+    assert.equal(entry.evidenceDigestAlgorithm, 'SHA-256');
+    assert.equal(entry.evidenceRevision, `SHADOW_WORKTREE_FROM_${contracts.AI_OPS_A1X_SEALED_BASE_SHA}`);
+    assert.equal(entry.evidenceDigest, createHash('sha256').update(bytes).digest('hex'), entry.resourceId);
+  }
+  assert.equal(fixture.payload.rootManifests.length, 31);
+  assert.equal(fixture.payload.unsignedPayloadDigest, contracts.sha256Canonical((({ unsignedPayloadDigest, ownerSignature, ...unsigned }) => unsigned)(fixture.payload)));
+  assert.equal(fixture.payload.ownerSignature.signedPayloadDigest, fixture.payload.unsignedPayloadDigest);
+  assert.equal(fixture.payload.ownerSignature.signatureState, 'OWNER_SIGNATURE_REQUIRED');
+  assert.equal(fixture.payload.operationalAuthorityCreated, false);
+});
+
 test('entry inventory binds exact current bytes for every base blob and owner file', async () => {
   const allowedDispositions = ['ADAPT', 'MISSING_REQUIRED', 'REFERENCE_ONLY', 'REJECT_DUPLICATE', 'REUSE'];
   assert.deepEqual([...new Set(contracts.AI_OPS_ENTRY_INVENTORY.map((row) => row.disposition))].sort(), allowedDispositions);
@@ -206,7 +233,8 @@ test('entry inventory binds exact current bytes for every base blob and owner fi
     'canonical.cockpit-owner', 'monitoring.browser-synthetic', 'monitoring.synthetic-probe',
     'mechanism.worktree-scope', 'mechanism.test-acceptance', 'mechanism.release-assembly',
     'mechanism.canary-evidence', 'mechanism.rollback-switch', 'docs.director-rulebook', 'docs.blueprint',
-    'docs.engine', 'docs.project-memory', 'docs.design-playbook',
+    'docs.engine', 'docs.project-memory', 'docs.design-playbook', 'authority.aiops-identity-draft',
+    'authority.aiops-reliability-targets-draft',
   ];
   const rowsById = new Map(contracts.AI_OPS_ENTRY_INVENTORY.map((row) => [row.entryId, row]));
   for (const entryId of requiredEntryIds) assert.ok(rowsById.has(entryId), entryId);

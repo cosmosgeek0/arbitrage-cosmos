@@ -1,0 +1,2993 @@
+{
+  "artifactId": "aiops-mechanical-authority-manifest-set",
+  "contentHash": "3ec9a556565d4e047daa072c46564437295dadf56620951033ad7a7501274b70",
+  "createdAtMs": 1784001600000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": {
+    "activationState": "UNSIGNED_INACTIVE",
+    "algorithm": "REUSED_SORTED_DFS_TRANSITIVE_CLOSURE_V1",
+    "classification": {
+      "entries": [
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_A_RECONNECT_STREAM_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-runbook-RECONNECT_STREAM",
+            "a1x-target-RECONNECT_STREAM"
+          ],
+          "evidenceDigest": "65b74990f8727d1acf78e71626bd51bb8e62694a77f5a7030c2f905086940155",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_A_RECONNECT_STREAM_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-action-fixture-class-A",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-runbook-RECONNECT_STREAM",
+            "a1x-target-RECONNECT_STREAM",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "B",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_B_SERVICE_RESTART_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "command-owner"
+          ],
+          "evidenceDigest": "77c50e1fc8bc281458c1090630f94a99ad64bad7acc48568666777147af6dbe4",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_B_SERVICE_RESTART_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-action-fixture-class-B",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "command-owner",
+            "control-registry-owner"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_C_CODE_TEST_PATCH_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-PATCH_CATEGORY_CODE_AND_TEST"
+          ],
+          "evidenceDigest": "34fdc681c9250e7d2401d62b70c67979e20d4a5dee59c55269b038a1108ed4a9",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_C_CODE_TEST_PATCH_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-action-fixture-class-C",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-PATCH_CATEGORY_CODE_AND_TEST"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_D_SIGN_ORDER_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "31a78e69fa8909c694e9b86347c4d94b6c0f22e12e36c718d761d2caf47680b6",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/action-class-fixture-instances.v1.json#AI_OPS_ACTION_FIXTURE_CLASS_D_SIGN_ORDER_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [
+            "AI_OPS_DENY_ORDER_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "a1x-action-fixture-class-D",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "aiops-prestage-20260714:AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "aiops-prestage-20260714:AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+          "evidenceRevision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+          "hardDenialIds": [],
+          "kind": "DONOR_CONTRACT",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-identity-draft",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "aiops-prestage-20260714:AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "aiops-prestage-20260714:AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+          "evidenceRevision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+          "hardDenialIds": [],
+          "kind": "DONOR_CONTRACT",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-reliability-targets-draft",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "18f0e0d26c5257842a6bac244d82a590686ddd4b486bea493e065b81895736ae",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REBUILD_BOUNDED_DERIVED_CACHE_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "5538fc08c2cd2e7eb0d9c805f1ba21b56b7c0c51ce208a8a41deaa689a93664c",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REBUILD_BOUNDED_DERIVED_CACHE_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-REBUILD_BOUNDED_DERIVED_CACHE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RECONNECT_STREAM_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RECONNECT_STREAM",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "5d298ff4378507ee0df54ef087483aff75b6d2ac7b8392d347493a5a4cd4b4d9",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RECONNECT_STREAM_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-RECONNECT_STREAM",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RECONNECT_STREAM",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REFRESH_BOUNDED_METADATA_CACHE_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "3786781295f9ba2051b9eb786893ccf79750fc84c6bba2f8ee30101448f20048",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REFRESH_BOUNDED_METADATA_CACHE_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-REFRESH_BOUNDED_METADATA_CACHE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "2864a334b326ef411568b0f679ced63c0e06da5909ff7b207fe96e5324fb0f16",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "f9f2b4194745e5a3fd9c2b870e8691af195455d10a6eb6d4215d2da01c648d06",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESNAPSHOT_READ_MODEL_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESNAPSHOT_READ_MODEL",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "9c4a58d9391f9eed532c367071434110b8240936c9c089c6364a62279b5fe04d",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESNAPSHOT_READ_MODEL_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-RESNAPSHOT_READ_MODEL",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESNAPSHOT_READ_MODEL",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESTART_CLASSIFIED_STATELESS_CHILD_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "3761e50c87c57273c2224094e907c5b9b3ef196af9bc51c7eb734226a3127a6c",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESTART_CLASSIFIED_STATELESS_CHILD_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-RESTART_CLASSIFIED_STATELESS_CHILD",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESUBSCRIBE_REPLAY_SAFE_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "d241c2df20c538a955c5899c811ae14f359f8a73d7c7feaaa5b028cfc15bff73",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_RESUBSCRIBE_REPLAY_SAFE_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-RESUBSCRIBE_REPLAY_SAFE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_INSTANCE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+            "aiops-runbook-templates",
+            "command-owner",
+            "remediation-owner"
+          ],
+          "evidenceDigest": "388e3bb6bc445b8f6001615654b370ace24f2cc7278f32cee3e11623ddf1cc2d",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/runbook-manifest-instances.v1.json#AI_OPS_RUNBOOK_MANIFEST_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_INSTANCE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "a1x-runbook-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft",
+            "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "cb90df1dd4355d3f398c1cdbe57bbbe0b86c66cafcac46e893a66875d2348685",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_MODEL_REVISION_RUNTIME_DIAGNOSTIC_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "5fc3570df52b98412939611f93da13dc660af1e0defc5c90afb3c548da544db2",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_MODEL_REVISION_RUNTIME_DIAGNOSTIC_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-MODEL_REVISION_RUNTIME_DIAGNOSTIC",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_ALGORITHM_FEATURE_MODEL_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "4bab7c6c34d19276e6a56948ae865aeeb9d45d069d2c99fd138a761c644468e3",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_ALGORITHM_FEATURE_MODEL_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PATCH_CATEGORY_ALGORITHM_FEATURE_MODEL",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_CODE_AND_TEST_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "1e389cd66dd633277a74e5cf494236cbb70749626c68e295a19a01087f366295",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_CODE_AND_TEST_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PATCH_CATEGORY_CODE_AND_TEST",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_RUNBOOK_POLICY_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "8d1de32b6e46cd278041d7892923384e3a27396edf50c166737502ea8ad1c34c",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_RUNBOOK_POLICY_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PATCH_CATEGORY_RUNBOOK_POLICY",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_UI_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "f49431bce44dc6e0a4b3666fd7f041d0455f5cc7f1e26cd167805434eafc2e15",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_UI_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PATCH_CATEGORY_UI",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PROMPT_REVISION_INCIDENT_DIAGNOSIS_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "a7b276e88640ee6474fb98249f94005a008fd5eae5ceacbdb3458718b2c2b86f",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PROMPT_REVISION_INCIDENT_DIAGNOSIS_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PROMPT_REVISION_INCIDENT_DIAGNOSIS",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PROVIDER_ROUTE_RUNTIME_DIAGNOSTIC_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "d5517c7562e29a567b61da5a30bb6c6ac3f26ffb597d0e5dd62e00dc848f596d",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_PROVIDER_ROUTE_RUNTIME_DIAGNOSTIC_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-PROVIDER_ROUTE_RUNTIME_DIAGNOSTIC",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REBUILD_BOUNDED_DERIVED_CACHE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "b08cc9c0f2af3d5d1c8967642489df76d440ede199fce070b1b8c73ab4a5ae2f",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REBUILD_BOUNDED_DERIVED_CACHE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RECONNECT_STREAM_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "a75be61677d631b7901b3ce0346a3e9b2311449f4d10dba63021dfc7f996dbc0",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RECONNECT_STREAM_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-RECONNECT_STREAM",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REFRESH_BOUNDED_METADATA_CACHE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "d75d0b543ee8d8dc98fa49a555fa2f01ff384ae8cff7a57988381dd1899cab8c",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REFRESH_BOUNDED_METADATA_CACHE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "43d79b308b1c8acefc678d19b54a0f0af9c10230173740a937f0848443b19fbc",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "f212851e3e615d0fb0b9b9f751844c5d62d619d2d98306df45c9322876e1af6e",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESNAPSHOT_READ_MODEL_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "7c6391413700b1be57281310a2143275549923cd13d8d4a56a1786b937de3b2b",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESNAPSHOT_READ_MODEL_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-RESNAPSHOT_READ_MODEL",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESTART_CLASSIFIED_STATELESS_CHILD_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "f058b85f494ed3e57a6b5ee087ec3e6d6885b99a0951fb602b1c6173e3ff22c9",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESTART_CLASSIFIED_STATELESS_CHILD_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESUBSCRIBE_REPLAY_SAFE_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "7c1eff96e9e498c3b901af8ed596996fa1516a346da8f963ef5bb43a524a39ba",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_RESUBSCRIBE_REPLAY_SAFE_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_V1",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "evidenceDigest": "ff41b624416859c806b7d0b7e98ab4462fe0f3bd6a221aa56e15dc5a4f43b045",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "fixtures/aiOps/contracts/capability-graduation-target-instances.v1.json#AI_OPS_GRADUATION_TARGET_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_V1",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+          "transitiveDependencyIds": [
+            "a1x-identity-draft",
+            "a1x-reliability-targets-draft"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/instances.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-classification-manifest",
+            "aiops-identity-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "8494c96997bea01487621d3a08f9968275c49a1bbf9a01d4e7937eabd7393733",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/instances.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-a1x-instances",
+          "transitiveDependencyIds": [
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/runbook-templates.v1.json#RECONNECT_STREAM",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-runbook-templates"
+          ],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+          ],
+          "resourceId": "aiops-class-a-shadow-candidate",
+          "transitiveDependencyIds": [
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/classification.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "5f4452796c2f427d76230866f571c28a33e4404ac756f9653bf1fba1bf966ea8",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/classification.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-classification-manifest",
+          "transitiveDependencyIds": [
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "B",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/controls.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner"
+          ],
+          "evidenceDigest": "40bf021cf30b13e0acf7064041fa99304ed2e015e4919231a0322728e513c3dc",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/controls.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "CONTROL_INSERTION_REQUEST",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-control-insertion-requests",
+          "transitiveDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "B",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/policy.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-identity-adapter",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "ledger-adapter"
+          ],
+          "evidenceDigest": "bf002209d12647f4f5125d4be220b0591331392274d68c036ac4f734de4ff446",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/policy.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "PERSISTENCE_PORT",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-decision-log-port",
+          "transitiveDependencyIds": [
+            "aiops-identity-adapter",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_ORDER_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_ORDER_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-01",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_FUNDS_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_FUNDS_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-02",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-03",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_OWNER_GATE_BYPASS",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_OWNER_GATE_BYPASS"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-04",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-05",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_SELF_POLICY_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_SELF_POLICY_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-06",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-07",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-08",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-09",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-10",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-11",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_SAFETY_CONTROL_DISABLE"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-12",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-13",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "D",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/aiOps/contracts/hard-denials.v1.json#AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidenceRevision": "owner-file-20260714",
+          "hardDenialIds": [
+            "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+          ],
+          "kind": "FIXTURE",
+          "reasonCodes": [
+            "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+          ],
+          "resourceId": "aiops-hard-denial-fixture-14",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/identity.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "s6-evaluators"
+          ],
+          "evidenceDigest": "45bf1e9cd1b1dee5b7be079bc9e0c023525247e93d2204c46717c22521d26bfd",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/identity.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-identity-adapter",
+          "transitiveDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/policy.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-identity-adapter",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter"
+          ],
+          "evidenceDigest": "bf002209d12647f4f5125d4be220b0591331392274d68c036ac4f734de4ff446",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/policy.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-policy-adapter",
+          "transitiveDependencyIds": [
+            "aiops-identity-adapter",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/runbooks.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "remediation-owner",
+            "s6-evaluators"
+          ],
+          "evidenceDigest": "3861bf2c2a7fab9c2f9ff66231d8503c6363e631cf52a7e17dae5cf7fb08a82f",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/runbooks.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "RUNBOOK",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-runbook-templates",
+          "transitiveDependencyIds": [
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/artifacts.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-a1x-instances",
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-insertion-requests",
+            "aiops-source-schemas",
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "fe668d2db58cc1bb935d4b4fb0bf3dde3198313a8205b8bf90ee87e12296ee88",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/artifacts.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-artifacts",
+          "transitiveDependencyIds": [
+            "aiops-a1x-instances",
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-insertion-requests",
+            "aiops-source-schemas",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/authority.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-source-shared",
+            "product-assurance-diagnostic-boundary"
+          ],
+          "evidenceDigest": "d54b5f0f614f1e23f0b454049a6b5366d0a63ffad0cc30e4f92f6c34eabaa82c",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/authority.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "POLICY",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-authority",
+          "transitiveDependencyIds": [
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time",
+            "product-assurance-diagnostic-boundary"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/index.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-a1x-instances",
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-artifacts",
+            "aiops-source-authority",
+            "aiops-source-insertion-requests",
+            "aiops-source-schemas",
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "3ff8a4cb679b4a76ce50741ae582588522b38b62d0b8d52e6b2bcd2f9e651212",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/index.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-index",
+          "transitiveDependencyIds": [
+            "aiops-a1x-instances",
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-artifacts",
+            "aiops-source-authority",
+            "aiops-source-insertion-requests",
+            "aiops-source-schemas",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/insertionRequests.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "50d7e5c4195414d50e8bd9d358e8ff31d72242f17fd1f836ffdb495070b110d2",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/insertionRequests.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-insertion-requests",
+          "transitiveDependencyIds": [
+            "aiops-source-shared",
+            "foundation-canonical-json",
+            "foundation-time"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/schemas.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared"
+          ],
+          "evidenceDigest": "029eba0c6049c28ebf5b506815fc8d492cc43fa4d0f205676c4cd9c4491fa4ab",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/schemas.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-schemas",
+          "transitiveDependencyIds": [
+            "aiops-classification-manifest",
+            "aiops-control-insertion-requests",
+            "aiops-decision-log-port",
+            "aiops-identity-adapter",
+            "aiops-policy-adapter",
+            "aiops-runbook-templates",
+            "aiops-source-authority",
+            "aiops-source-shared",
+            "command-owner",
+            "control-registry-owner",
+            "foundation-canonical-json",
+            "foundation-time",
+            "ledger-adapter",
+            "ledger-owner",
+            "product-assurance-diagnostic-boundary",
+            "remediation-owner",
+            "s6-boundary-schema",
+            "s6-evaluators"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/aiOps/contracts/shared.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "foundation-canonical-json",
+            "foundation-time"
+          ],
+          "evidenceDigest": "eea40abc44502bb366ac6af437f490dc1ca0ac1b5f81d2e59ee1ba9b592f051e",
+          "evidenceDigestAlgorithm": "SHA-256",
+          "evidencePath": "server/src/aiOps/contracts/shared.ts",
+          "evidenceRevision": "SHADOW_WORKTREE_FROM_83c1624d4a582eace27321182de35c372babbc1a",
+          "hardDenialIds": [],
+          "kind": "ADAPTER",
+          "reasonCodes": [
+            "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+          ],
+          "resourceId": "aiops-source-shared",
+          "transitiveDependencyIds": [
+            "foundation-canonical-json",
+            "foundation-time"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "control-registry-owner"
+          ],
+          "evidenceDigest": "7dca4a1cb3c11f8a468d71d808a2933329b9538f",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "command-owner",
+          "transitiveDependencyIds": [
+            "control-registry-owner"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/productIntegration/runtime/controls.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "5338ceace7e97b51045b6928fd0c6c287d58093c",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/productIntegration/runtime/controls.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "control-registry-owner",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/foundation/contracts/identity.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "4f4aac43a685f9a4f3635e7eabcc0610917ea761",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/foundation/contracts/identity.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "foundation-canonical-json",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/foundation/contracts/time.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "7672fbfc23a286ac856348dbf244dcab2c937672",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/foundation/contracts/time.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "foundation-time",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "ledger-owner"
+          ],
+          "evidenceDigest": "ef035124b0a2e7c63beed8ac2284365599de988b",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "ledger-adapter",
+          "transitiveDependencyIds": [
+            "ledger-owner"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/ledger.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "cb2433266dde597de22b873db68c4e5c33d34a1b",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/ledger.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "ledger-owner",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/productAssurance/diagnostics/boundary.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "foundation-canonical-json"
+          ],
+          "evidenceDigest": "7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/productAssurance/diagnostics/boundary.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "product-assurance-diagnostic-boundary",
+          "transitiveDependencyIds": [
+            "foundation-canonical-json"
+          ],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "server/src/productAssurance/remediation/campaign.ts",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "5b858894af4e31af0922a5e84e07b9cd795caf20",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "server/src/productAssurance/remediation/campaign.ts",
+          "evidenceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+          "hardDenialIds": [],
+          "kind": "CANONICAL_OWNER",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "remediation-owner",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+          "cycleMemberIds": [],
+          "directDependencyIds": [],
+          "evidenceDigest": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+          "evidenceRevision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+          "hardDenialIds": [],
+          "kind": "DONOR_CONTRACT",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "s6-boundary-schema",
+          "transitiveDependencyIds": [],
+          "unresolvedDependencyIds": []
+        },
+        {
+          "actionClass": "C",
+          "authorityCreated": false,
+          "classifiedPath": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+          "cycleMemberIds": [],
+          "directDependencyIds": [
+            "s6-boundary-schema"
+          ],
+          "evidenceDigest": "9d8399e6c0d2a74a892bf759342a75e40eabd867",
+          "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+          "evidencePath": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+          "evidenceRevision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+          "hardDenialIds": [],
+          "kind": "DONOR_CONTRACT",
+          "reasonCodes": [
+            "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+          ],
+          "resourceId": "s6-evaluators",
+          "transitiveDependencyIds": [
+            "s6-boundary-schema"
+          ],
+          "unresolvedDependencyIds": []
+        }
+      ],
+      "generator": {
+        "algorithm": "SORTED_DFS_TRANSITIVE_CLOSURE_V1",
+        "id": "ai-ops-a1-transitive-classifier",
+        "version": 1
+      },
+      "inputDigest": "345a8b7efb0d6f3d53ed8e37be2869d2a2fca2d40d6dad7b3226175a0fc51da5",
+      "manifestDigest": "dc5233dabd978ad168add45897f59cbf5eb44b0136ed0731750ea771be1c3f80",
+      "operationalAuthorityCreated": false,
+      "schema": "AI_OPS_CLASSIFICATION_MANIFEST_V1",
+      "sourceRevision": "83c1624d4a582eace27321182de35c372babbc1a"
+    },
+    "classificationInputDigest": "345a8b7efb0d6f3d53ed8e37be2869d2a2fca2d40d6dad7b3226175a0fc51da5",
+    "classificationManifestDigest": "dc5233dabd978ad168add45897f59cbf5eb44b0136ed0731750ea771be1c3f80",
+    "identityDraft": {
+      "branch": "aiops-prestage-20260714",
+      "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+      "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+      "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+      "readOnly": true,
+      "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+      "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+    },
+    "operationalAuthorityCreated": false,
+    "ownerSignature": {
+      "algorithm": null,
+      "authorityCreated": false,
+      "expiresAtMs": null,
+      "keyReference": null,
+      "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+      "signatureBytesBase64Url": null,
+      "signatureState": "OWNER_SIGNATURE_REQUIRED",
+      "signedAtMs": null,
+      "signedPayloadDigest": "9c970785193147843342c75b18a58d2db3bc4dbefdb666f91fc4da80dc3cae76",
+      "signerIdentityId": null,
+      "signerRole": "AI_OPS_OWNER"
+    },
+    "reliabilityDraft": {
+      "branch": "aiops-prestage-20260714",
+      "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+      "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+      "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+      "readOnly": true,
+      "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+      "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+    },
+    "rootManifests": [
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "41eae857fc0bdc1cec53a17e01ed384c2b493ef0796e0f8ac177735368f18327",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-RECONNECT_STREAM",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "2b9e9a1e25b743f22c95513fa8c4f5cc8a238a42141ea426aab9390fe4508bf6",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "5d94b37abeeee71fe78631e0007f1682080a56feb566269cb43a63c867af00ed",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-RESNAPSHOT_READ_MODEL",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "309f4bb942deab1960cc9616d714c75ef296b1f44065f81aeb417e3454c1f8d6",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "e13b03cf20f4a677c18e66b7f2de16db58d80f0ade6eb53067f600adbf7596da",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "e46209bc0e1aa932c5ee3c0353c7c57741a00063d0a4fb776215954a565f5641",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "9890c7176a46faa7a33b5d25e328231b03be7bfe0765b01ad248eb35a4a979de",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "109980c26d4be3b86a4e55de40c4d7d8bef6b123db21363178e460b2a364e597",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "49d6bf184464d844d65191b255e1deddf99626f4c98263a5d4ff0c45e6dde027",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "ff45bbcb59e2b06cc9e78a22ac312726c18603924603ec9a8d8eaef0f47fd348",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "9a64005d560edd1db7d4b3fd2af86a7c3ba6b289293a6297dab26229b3fa8ec4",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PROMPT_REVISION_INCIDENT_DIAGNOSIS",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "d295e9c20297e13ac4c7208ac5e1cbf40288129fa82bd8b95bb021dbb6880b6b",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PROVIDER_ROUTE_RUNTIME_DIAGNOSTIC",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "53a2235eb56f7462c7d7fe916ac14bf4c8f2f1e78afa5c49d6c116b457614a94",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-MODEL_REVISION_RUNTIME_DIAGNOSTIC",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "8b83e03bf98430e9d6c084c9f0ade4e00048db85a88c75fd1a5e56a9da69bf65",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PATCH_CATEGORY_CODE_AND_TEST",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "3cb467d765ce5e11facc59a51f1404b38a98536a3f5c1e694f27abe32bac301e",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PATCH_CATEGORY_UI",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "02ca0c03508229f7ca386a73a380de5616bcc0063b761187aa110239954727a6",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PATCH_CATEGORY_ALGORITHM_FEATURE_MODEL",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "16e4d2ee2f9013d1fd4244d6d63dea9f78794d06288b2c444d107770db5176b5",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "GRADUATION_TARGET",
+        "rootResourceId": "a1x-target-PATCH_CATEGORY_RUNBOOK_POLICY",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RECONNECT_STREAM",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "4af948b970e0cb2fe2e517048820d832894e67567474415c0c0de2bd5d285e14",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-RECONNECT_STREAM",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RECONNECT_STREAM",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "acd4cff9a6ce1339b1bce35f9d5896f6be9b6c87df75f925ec9521497d6545e2",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-RESUBSCRIBE_REPLAY_SAFE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESUBSCRIBE_REPLAY_SAFE",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESNAPSHOT_READ_MODEL",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "a519b2b70bd6e34cf78584fc3b23863c3e2c281955aee353428ff6aa335c1669",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-RESNAPSHOT_READ_MODEL",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESNAPSHOT_READ_MODEL",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "fbf7e8fdcbbe50b05ba66de75a3dcaa3d35601cf7aecf790006299107054a55c",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-REFRESH_BOUNDED_METADATA_CACHE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REFRESH_BOUNDED_METADATA_CACHE",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "e41dca9ae7646761c355551b388fdd8a9f65de2f8c728f2c464ee24c25691805",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-REBUILD_BOUNDED_DERIVED_CACHE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REBUILD_BOUNDED_DERIVED_CACHE",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "40812dc72a3dc60ebf44fc13ff9a4b6fdc5be797ebdcd82da9b4976443aaf4d8",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-RESTART_CLASSIFIED_STATELESS_CHILD",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RESTART_CLASSIFIED_STATELESS_CHILD",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "4459c25f316a7c5e004cecd3699a242ed02f76648244140e60a1c0f3b13613a4",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "8cc43d19a5befdb3625b85181b776e2e40a89a21a6bcf6abf3d232d598899b9a",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "160d1c947a4ed1ad22016808efc4c95e40cd663704d2aa851ce5f4a95ab99afb",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+          "aiops-runbook-templates",
+          "command-owner",
+          "remediation-owner"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "aac406ba9ad495198e8fec778cdf109e10645aa221f5615317cac33b9e5cd93a",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "RUNBOOK",
+        "rootResourceId": "a1x-runbook-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "A",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-runbook-RECONNECT_STREAM",
+          "a1x-target-RECONNECT_STREAM"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "2a10832684c93d01200d92b9db523bc61dba863bdf112c229960192b24b52f33",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "rootKind": "ACTION_FIXTURE",
+        "rootResourceId": "a1x-action-fixture-class-A",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-runbook-RECONNECT_STREAM",
+          "a1x-target-RECONNECT_STREAM",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "B",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "command-owner"
+        ],
+        "effectiveActionClass": "B",
+        "entryDigest": "a97e856152cebb05dc5e91bd6f8f17a6551dad781aa91a366cf819783877deb0",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "ACTION_FIXTURE",
+        "rootResourceId": "a1x-action-fixture-class-B",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "command-owner",
+          "control-registry-owner"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "C",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-PATCH_CATEGORY_CODE_AND_TEST"
+        ],
+        "effectiveActionClass": "C",
+        "entryDigest": "1427a8a4d964f47933bee3bccd27c5fa0c76adf77febf265f167d3bc73081f44",
+        "hardDenialIds": [],
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "rootKind": "ACTION_FIXTURE",
+        "rootResourceId": "a1x-action-fixture-class-C",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft",
+          "a1x-target-PATCH_CATEGORY_CODE_AND_TEST"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "authorityCreated": false,
+        "cycleMemberIds": [],
+        "declaredActionClass": "D",
+        "directDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "effectiveActionClass": "D",
+        "entryDigest": "4f9545823a9b5f2ea404aa27827926eac1ddd17b140195c96ed2ea6915b88551",
+        "hardDenialIds": [
+          "AI_OPS_DENY_ORDER_MUTATION"
+        ],
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "rootKind": "ACTION_FIXTURE",
+        "rootResourceId": "a1x-action-fixture-class-D",
+        "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_INSTANCE_V1",
+        "transitiveDependencyIds": [
+          "a1x-identity-draft",
+          "a1x-reliability-targets-draft"
+        ],
+        "unresolvedDependencyIds": []
+      }
+    ],
+    "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_SET_V1",
+    "sealedA1BaseSha": "83c1624d4a582eace27321182de35c372babbc1a",
+    "sourceRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+    "state": "SHADOW_SPECULATIVE",
+    "unsignedPayloadDigest": "9c970785193147843342c75b18a58d2db3bc4dbefdb666f91fc4da80dc3cae76"
+  },
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 1,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_SET_ENVELOPE_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

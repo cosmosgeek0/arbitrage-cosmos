@@ -1,11 +1,55 @@
 {
   "artifactId": "aiops-classification-manifest",
-  "contentHash": "d40b2b4f20a152acb625a1520134296ff4a1f20207a08c5e6710d5756b1f2f1a",
+  "contentHash": "91588b8ca3c8cec0785b6c94eadb698e694ae81ea5ef895a10ce01d04a8eed1c",
   "createdAtMs": 1784001600000,
   "environment": "SHADOW",
   "owner": "AI_OPS_A1_CONTRACTS",
   "payload": {
     "entries": [
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/instances.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-identity-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "8494c96997bea01487621d3a08f9968275c49a1bbf9a01d4e7937eabd7393733",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/instances.ts",
+        "evidenceRevision": "SHADOW_WORKTREE_FROM_03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-a1x-instances",
+        "transitiveDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
       {
         "actionClass": "C",
         "authorityCreated": false,
@@ -557,6 +601,7 @@
         "classifiedPath": "server/src/aiOps/contracts/artifacts.ts",
         "cycleMemberIds": [],
         "directDependencyIds": [
+          "aiops-a1x-instances",
           "aiops-classification-manifest",
           "aiops-control-insertion-requests",
           "aiops-identity-adapter",
@@ -567,7 +612,7 @@
           "aiops-source-schemas",
           "aiops-source-shared"
         ],
-        "evidenceDigest": "0b4c1f70256075ed489ab45769d6b921a80f5e4055da74f643a5348a4de7feae",
+        "evidenceDigest": "fe668d2db58cc1bb935d4b4fb0bf3dde3198313a8205b8bf90ee87e12296ee88",
         "evidenceDigestAlgorithm": "SHA-256",
         "evidencePath": "server/src/aiOps/contracts/artifacts.ts",
         "evidenceRevision": "SHADOW_WORKTREE_FROM_03857dcdaff8d8b12627d27ddcc97505da1f2f86",
@@ -578,6 +623,7 @@
         ],
         "resourceId": "aiops-source-artifacts",
         "transitiveDependencyIds": [
+          "aiops-a1x-instances",
           "aiops-classification-manifest",
           "aiops-control-insertion-requests",
           "aiops-decision-log-port",
@@ -634,6 +680,7 @@
         "classifiedPath": "server/src/aiOps/contracts/index.ts",
         "cycleMemberIds": [],
         "directDependencyIds": [
+          "aiops-a1x-instances",
           "aiops-classification-manifest",
           "aiops-control-insertion-requests",
           "aiops-identity-adapter",
@@ -645,7 +692,7 @@
           "aiops-source-schemas",
           "aiops-source-shared"
         ],
-        "evidenceDigest": "605d46599e6383986ce7b7baf7084bd20ab2bbd63a939ae17d6e4a7de4b9a1aa",
+        "evidenceDigest": "3ff8a4cb679b4a76ce50741ae582588522b38b62d0b8d52e6b2bcd2f9e651212",
         "evidenceDigestAlgorithm": "SHA-256",
         "evidencePath": "server/src/aiOps/contracts/index.ts",
         "evidenceRevision": "SHADOW_WORKTREE_FROM_03857dcdaff8d8b12627d27ddcc97505da1f2f86",
@@ -656,6 +703,7 @@
         ],
         "resourceId": "aiops-source-index",
         "transitiveDependencyIds": [
+          "aiops-a1x-instances",
           "aiops-classification-manifest",
           "aiops-control-insertion-requests",
           "aiops-decision-log-port",
@@ -988,8 +1036,8 @@
       "id": "ai-ops-a1-transitive-classifier",
       "version": 1
     },
-    "inputDigest": "8ee5e8c7ac3ba4a32f605773f79950e65b0fd9cc52ef177f49e7e557a331fa8c",
-    "manifestDigest": "96ca72137a114434bcaa5f7704410e2adf1cf651a271b8faf39605424feedf81",
+    "inputDigest": "76d4af5e10a3bef509c4fa2e7e410bf901653557f9b3aa3ee1bf0c351cb1ca35",
+    "manifestDigest": "16a593f52b871cda19d97dee9e34919b07d6c2c4792e955f998e412e241c2de7",
     "operationalAuthorityCreated": false,
     "schema": "AI_OPS_CLASSIFICATION_MANIFEST_V1",
     "sourceRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86"

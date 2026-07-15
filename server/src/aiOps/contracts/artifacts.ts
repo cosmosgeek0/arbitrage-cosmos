@@ -11,6 +11,13 @@ import {
 import { generateClassificationManifest, type AiOpsClassificationResource } from './classification.js';
 import { AI_OPS_CONTROL_REGISTRY_INSERTION_REQUESTS } from './controls.js';
 import { AI_OPS_IDENTITIES, AI_OPS_PROVIDER_CREDENTIAL_MATRIX } from './identity.js';
+import {
+  AI_OPS_A1X_SEALED_BASE_SHA,
+  AI_OPS_ACTION_CLASS_FIXTURE_INSTANCES,
+  AI_OPS_CAPABILITY_GRADUATION_TARGET_INSTANCES,
+  AI_OPS_RUNBOOK_MANIFEST_INSTANCES,
+  generateA1xMechanicalAuthorityManifestSet,
+} from './instances.js';
 import { AI_OPS_INSERTION_REQUESTS } from './insertionRequests.js';
 import { AI_OPS_DECISION_LOG_DESIGN_FIXTURE, AI_OPS_SYNTHETIC_POLICY_BUNDLE_FIXTURE } from './policy.js';
 import { AI_OPS_CAPABILITY_RELIABILITY_TARGETS, AI_OPS_RUNBOOK_TEMPLATES } from './runbooks.js';
@@ -140,6 +147,8 @@ const AI_OPS_ENTRY_INVENTORY_INPUTS: readonly AiOpsEntryInventoryInput[] = [
   { entryId: 'authority.time-amendment', owner: 'OWNER', path: '/Users/cosmosgeek/Desktop/OWNER TIME-OPTIMIZATION AMENDMENT.txt', revision: 'owner-file-20260714', digestAlgorithm: 'SHA-256', digest: '46549feced327d805c6057ecedffc8b65469c6537e5ce64b8c0a4f559eb1da30', disposition: 'REFERENCE_ONLY', resolvedAtShadowBase: false, authorityCreated: false },
   { entryId: 'authority.resolution-receipt', owner: 'MAIN_DIRECTOR', path: '/Users/cosmosgeek/Desktop/Main/AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md', revision: 'main-observed-20260714', digestAlgorithm: 'SHA-256', digest: '51d9343f747c7f652bbcd53137b06dec2f760268a9799ea57fbe077eaef898f0', disposition: 'REFERENCE_ONLY', resolvedAtShadowBase: false, authorityCreated: false },
   { entryId: 'authority.d-launch-29', owner: 'MAIN_DIRECTOR', path: '/Users/cosmosgeek/Desktop/Main/QL_DIRECTOR_STATE.md', revision: '2b32317dbf89907bcf529231247f1f9a63235d49', digestAlgorithm: 'SHA-256', digest: 'db90f7165ec577e19bab0dd4abca29b647ffb7b2d5be677c9b7f4faa5de80878', disposition: 'REFERENCE_ONLY', resolvedAtShadowBase: false, authorityCreated: false },
+  { entryId: 'authority.aiops-identity-draft', mappedRequirement: 'Read-only identity and provider-state owner-decision draft', owner: 'OWNER_SIGNATURE_REQUIRED', path: '/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_IDENTITY_MATRIX_DRAFT.md', revision: '08e0beaa54c4c3ca9c24276785d6a302f751a226', digestAlgorithm: 'GIT_BLOB_SHA1', digest: '82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6', disposition: 'REFERENCE_ONLY', currentStatus: 'DRAFT_REQUIRES_OWNER_SIGNATURE', resolvedAtShadowBase: false, authorityCreated: false },
+  { entryId: 'authority.aiops-reliability-targets-draft', mappedRequirement: 'Read-only numerical reliability-target owner-decision draft', owner: 'OWNER_SIGNATURE_REQUIRED', path: '/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_RELIABILITY_TARGETS_DRAFT.md', revision: '08e0beaa54c4c3ca9c24276785d6a302f751a226', digestAlgorithm: 'GIT_BLOB_SHA1', digest: '4097bb6a5234f4c5dc456dac4c9928e7ef3266c5', disposition: 'REFERENCE_ONLY', currentStatus: 'DRAFT_REQUIRES_OWNER_SIGNATURE', resolvedAtShadowBase: false, authorityCreated: false },
 ];
 
 export const AI_OPS_ENTRY_INVENTORY: readonly Readonly<AiOpsEntryInventoryRow>[] = immutableClone(
@@ -152,6 +161,11 @@ export const AI_OPS_SCHEMA_REUSE_MAP = immutableClone([
   { targetContract: 'AI_OPS_ACTION_CLASS_V1', donor: 'S6 SelfCorrectionClassPolicyV1 and CandidateV1', mode: 'ADAPT', adaptation: 'Reuse evidence grammar only; never cast A-D because directive section 7 meanings differ.' },
   { targetContract: 'AI_OPS_DECISION_LOG_PORT_V1', donor: 'S6 AppendRetentionReceiptV1 and Ledger adapter', mode: 'ADAPT', adaptation: 'Expose append/readback port over Ledger; do not create storage.' },
   { targetContract: 'AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1', donor: 'S6 repair evidence and Product Assurance remediation campaign', mode: 'ADAPT', adaptation: 'Unsigned insertion-only templates with numerical per-capability targets.' },
+  { targetContract: 'AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1', donor: 'AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1', mode: 'ADAPT', adaptation: 'Materialize one unsigned inactive instance per Class-A action with action-specific parameters, resources, conflicts, bounds, readback, compensation and owner-signature placeholder.' },
+  { targetContract: 'AI_OPS_CAPABILITY_GRADUATION_TARGET_INSTANCE_V1', donor: 'AI_OPS_CAPABILITY_RELIABILITY_TARGETS_V1', mode: 'ADAPT', adaptation: 'Bind every existing numerical target row to the read-only prestage drafts, a measurement profile and an exact unsigned owner-signing payload.' },
+  { targetContract: 'AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1', donor: 'AI_OPS_ACTION_CLASS_V1', mode: 'ADAPT', adaptation: 'Create one sealed synthetic request instance for each A-D disposition without effect or provider authority.' },
+  { targetContract: 'AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1', donor: 'AI_OPS_OWNER_SIGNATURE_V1', mode: 'ADAPT', adaptation: 'Bind the exact unsigned payload digest while all signer, key, signature and time fields remain null and authority remains false.' },
+  { targetContract: 'AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_SET_V1', donor: 'AI_OPS_CLASSIFICATION_MANIFEST_V1', mode: 'ADAPT', adaptation: 'Reuse the sorted DFS classifier unchanged and project 31 target, runbook and action-fixture roots with explicit direct, transitive, unresolved, cycle and hard-denial evidence.' },
   { targetContract: 'AI_OPS_INSERTION_REQUESTS_V1', donor: 'S6 InsertionRequestRowV1', mode: 'REUSE', adaptation: 'Same DRAFT and PENDING_BACKEND grammar with AI Ops seams.' },
 ]);
 
@@ -231,6 +245,7 @@ export const AI_OPS_LOCAL_SOURCE_RESOURCE_ID_BY_PATH: Readonly<Record<string, st
   'server/src/aiOps/contracts/controls.ts': 'aiops-control-insertion-requests',
   'server/src/aiOps/contracts/identity.ts': 'aiops-identity-adapter',
   'server/src/aiOps/contracts/index.ts': 'aiops-source-index',
+  'server/src/aiOps/contracts/instances.ts': 'aiops-a1x-instances',
   'server/src/aiOps/contracts/insertionRequests.ts': 'aiops-source-insertion-requests',
   'server/src/aiOps/contracts/policy.ts': 'aiops-policy-adapter',
   'server/src/aiOps/contracts/runbooks.ts': 'aiops-runbook-templates',
@@ -258,10 +273,11 @@ export const AI_OPS_CLASSIFICATION_INPUTS: readonly Readonly<AiOpsClassification
   resource('aiops-control-insertion-requests', 'CONTROL_INSERTION_REQUEST', 'server/src/aiOps/contracts/controls.ts', 'product-runtime.controls', ['aiops-source-authority', 'aiops-source-shared', 'control-registry-owner', 'command-owner'], 'B'),
   resource('aiops-source-insertion-requests', 'ADAPTER', 'server/src/aiOps/contracts/insertionRequests.ts', 's6.insertion-draft', ['aiops-source-shared'], 'C'),
   resource('aiops-source-schemas', 'ADAPTER', 'server/src/aiOps/contracts/schemas.ts', 's6.boundary-schema', ['aiops-classification-manifest', 'aiops-control-insertion-requests', 'aiops-identity-adapter', 'aiops-policy-adapter', 'aiops-runbook-templates', 'aiops-source-authority', 'aiops-source-shared'], 'C'),
+  resource('aiops-a1x-instances', 'ADAPTER', 'server/src/aiOps/contracts/instances.ts', 'authority.activation-directive', ['aiops-source-authority', 'aiops-classification-manifest', 'aiops-identity-adapter', 'aiops-runbook-templates', 'aiops-source-shared'], 'C'),
   resource('aiops-class-a-shadow-candidate', 'RUNBOOK', 'fixtures/aiOps/contracts/runbook-templates.v1.json#RECONNECT_STREAM', 'authority.activation-directive', ['aiops-runbook-templates'], 'A', [], 'AI_OPS_ACTION_RECONNECT_STREAM'),
   resource('aiops-classification-manifest', 'POLICY', 'server/src/aiOps/contracts/classification.ts', 'foundation.canonical-json', ['aiops-source-authority', 'aiops-source-shared', 'aiops-identity-adapter', 'aiops-policy-adapter', 'aiops-decision-log-port', 'aiops-runbook-templates', 'aiops-control-insertion-requests'], 'C'),
-  resource('aiops-source-artifacts', 'ADAPTER', 'server/src/aiOps/contracts/artifacts.ts', 'authority.activation-directive', ['aiops-source-shared', 'aiops-source-authority', 'aiops-identity-adapter', 'aiops-policy-adapter', 'aiops-runbook-templates', 'aiops-control-insertion-requests', 'aiops-source-insertion-requests', 'aiops-source-schemas', 'aiops-classification-manifest'], 'C'),
-  resource('aiops-source-index', 'ADAPTER', 'server/src/aiOps/contracts/index.ts', 'authority.activation-directive', ['aiops-source-shared', 'aiops-source-authority', 'aiops-identity-adapter', 'aiops-classification-manifest', 'aiops-runbook-templates', 'aiops-policy-adapter', 'aiops-control-insertion-requests', 'aiops-source-insertion-requests', 'aiops-source-schemas', 'aiops-source-artifacts'], 'C'),
+  resource('aiops-source-artifacts', 'ADAPTER', 'server/src/aiOps/contracts/artifacts.ts', 'authority.activation-directive', ['aiops-source-shared', 'aiops-source-authority', 'aiops-identity-adapter', 'aiops-policy-adapter', 'aiops-runbook-templates', 'aiops-control-insertion-requests', 'aiops-source-insertion-requests', 'aiops-source-schemas', 'aiops-classification-manifest', 'aiops-a1x-instances'], 'C'),
+  resource('aiops-source-index', 'ADAPTER', 'server/src/aiOps/contracts/index.ts', 'authority.activation-directive', ['aiops-source-shared', 'aiops-source-authority', 'aiops-identity-adapter', 'aiops-classification-manifest', 'aiops-runbook-templates', 'aiops-policy-adapter', 'aiops-control-insertion-requests', 'aiops-source-insertion-requests', 'aiops-source-schemas', 'aiops-source-artifacts', 'aiops-a1x-instances'], 'C'),
   ...AI_OPS_HARD_DENIALS.map((denial) => resource(
     `aiops-hard-denial-fixture-${String(denial.directiveRow).padStart(2, '0')}`,
     'FIXTURE',
@@ -274,6 +290,10 @@ export const AI_OPS_CLASSIFICATION_INPUTS: readonly Readonly<AiOpsClassification
 ]);
 
 export const AI_OPS_CLASSIFICATION_MANIFEST_TEMPLATE = generateClassificationManifest(AI_OPS_SHADOW_BASE_SHA, AI_OPS_CLASSIFICATION_INPUTS);
+export const AI_OPS_A1X_MECHANICAL_AUTHORITY_MANIFEST_TEMPLATE = generateA1xMechanicalAuthorityManifestSet(
+  AI_OPS_A1X_SEALED_BASE_SHA,
+  AI_OPS_CLASSIFICATION_INPUTS,
+);
 
 export const AI_OPS_ARTIFACTS = Object.freeze({
   entryInventory: sealArtifact('AI_OPS_ENTRY_INVENTORY_V1', 'aiops-entry-inventory', AI_OPS_ENTRY_INVENTORY),
@@ -284,7 +304,10 @@ export const AI_OPS_ARTIFACTS = Object.freeze({
   hardDenials: sealArtifact('AI_OPS_HARD_DENIALS_V1', 'aiops-hard-denials', AI_OPS_HARD_DENIALS),
   actionClasses: sealArtifact('AI_OPS_ACTION_CLASSES_V1', 'aiops-action-classes', AI_OPS_ACTION_CLASS_DEFINITIONS),
   runbookTemplates: sealArtifact('AI_OPS_RUNBOOK_TEMPLATES_V1', 'aiops-runbook-templates', AI_OPS_RUNBOOK_TEMPLATES),
+  runbookManifestInstances: sealArtifact('AI_OPS_RUNBOOK_MANIFEST_INSTANCES_V1', 'aiops-runbook-manifest-instances', AI_OPS_RUNBOOK_MANIFEST_INSTANCES),
   reliabilityTargets: sealArtifact('AI_OPS_CAPABILITY_RELIABILITY_TARGETS_V1', 'aiops-capability-reliability-targets', AI_OPS_CAPABILITY_RELIABILITY_TARGETS),
+  capabilityGraduationTargetInstances: sealArtifact('AI_OPS_CAPABILITY_GRADUATION_TARGET_INSTANCES_V1', 'aiops-capability-graduation-target-instances', AI_OPS_CAPABILITY_GRADUATION_TARGET_INSTANCES),
+  actionClassFixtureInstances: sealArtifact('AI_OPS_ACTION_CLASS_FIXTURE_INSTANCES_V1', 'aiops-action-class-fixture-instances', AI_OPS_ACTION_CLASS_FIXTURE_INSTANCES),
   policyBundleFixture: sealArtifact('AI_OPS_POLICY_BUNDLE_FIXTURE_V1', 'aiops-policy-bundle-fixture', AI_OPS_SYNTHETIC_POLICY_BUNDLE_FIXTURE),
   decisionLogDesign: sealArtifact('AI_OPS_DECISION_LOG_DESIGN_V1', 'aiops-decision-log-design', AI_OPS_DECISION_LOG_DESIGN_FIXTURE),
   controlInsertionRequests: sealArtifact('AI_OPS_CONTROL_INSERTION_REQUESTS_V1', 'aiops-control-insertion-requests', AI_OPS_CONTROL_REGISTRY_INSERTION_REQUESTS),

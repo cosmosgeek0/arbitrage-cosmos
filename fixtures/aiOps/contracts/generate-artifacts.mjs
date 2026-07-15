@@ -11,9 +11,11 @@ const contractModuleUrl = pathToFileURL(resolve(repositoryRoot, 'server/dist/aiO
 const contractModule = await import(contractModuleUrl);
 const {
   AI_OPS_ARTIFACTS,
+  AI_OPS_A1X_SEALED_BASE_SHA,
   AI_OPS_CLASSIFICATION_INPUTS,
   AI_OPS_LOCAL_SOURCE_RESOURCE_ID_BY_PATH,
   AI_OPS_SHADOW_BASE_SHA,
+  generateA1xMechanicalAuthorityManifestSet,
   generateClassificationManifest,
   sealArtifact,
 } = contractModule;
@@ -127,22 +129,37 @@ for (const sourcePath of expectedSourcePaths) {
   }
 }
 
-const boundClassificationInputs = await Promise.all(AI_OPS_CLASSIFICATION_INPUTS.map(async (resource) => {
-  if (!resource.classifiedPath.startsWith('server/src/aiOps/contracts/') || resource.classifiedPath.includes('#')) return resource;
-  const bytes = await readFile(resolve(repositoryRoot, resource.classifiedPath));
-  return {
-    ...resource,
-    evidencePath: resource.classifiedPath,
-    evidenceDigest: createHash('sha256').update(bytes).digest('hex'),
-    evidenceDigestAlgorithm: 'SHA-256',
-    evidenceRevision: `SHADOW_WORKTREE_FROM_${AI_OPS_SHADOW_BASE_SHA}`,
-  };
-}));
+async function bindLocalSourceEvidence(resources, baseSha) {
+  return Promise.all(resources.map(async (resource) => {
+    if (!resource.classifiedPath.startsWith('server/src/aiOps/contracts/') || resource.classifiedPath.includes('#')) return resource;
+    const bytes = await readFile(resolve(repositoryRoot, resource.classifiedPath));
+    return {
+      ...resource,
+      evidencePath: resource.classifiedPath,
+      evidenceDigest: createHash('sha256').update(bytes).digest('hex'),
+      evidenceDigestAlgorithm: 'SHA-256',
+      evidenceRevision: `SHADOW_WORKTREE_FROM_${baseSha}`,
+    };
+  }));
+}
+
+const boundClassificationInputs = await bindLocalSourceEvidence(AI_OPS_CLASSIFICATION_INPUTS, AI_OPS_SHADOW_BASE_SHA);
 const classificationManifest = generateClassificationManifest(AI_OPS_SHADOW_BASE_SHA, boundClassificationInputs);
 const boundClassificationArtifact = sealArtifact(
   'AI_OPS_CLASSIFICATION_MANIFEST_ENVELOPE_V1',
   'aiops-classification-manifest',
   classificationManifest,
+);
+const boundA1xAuthorityInputs = await bindLocalSourceEvidence(AI_OPS_CLASSIFICATION_INPUTS, AI_OPS_A1X_SEALED_BASE_SHA);
+const authorityManifestSet = generateA1xMechanicalAuthorityManifestSet(
+  AI_OPS_A1X_SEALED_BASE_SHA,
+  boundA1xAuthorityInputs,
+  `SHADOW_WORKTREE_FROM_${AI_OPS_A1X_SEALED_BASE_SHA}`,
+);
+const boundAuthorityManifestArtifact = sealArtifact(
+  'AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_SET_ENVELOPE_V1',
+  'aiops-mechanical-authority-manifest-set',
+  authorityManifestSet,
 );
 
 const OUTPUTS = Object.freeze({
@@ -155,7 +172,11 @@ const OUTPUTS = Object.freeze({
   'action-classes.v1.json': AI_OPS_ARTIFACTS.actionClasses,
   'classification-manifest.v1.json': boundClassificationArtifact,
   'runbook-templates.v1.json': AI_OPS_ARTIFACTS.runbookTemplates,
+  'runbook-manifest-instances.v1.json': AI_OPS_ARTIFACTS.runbookManifestInstances,
   'reliability-targets.v1.json': AI_OPS_ARTIFACTS.reliabilityTargets,
+  'capability-graduation-target-instances.v1.json': AI_OPS_ARTIFACTS.capabilityGraduationTargetInstances,
+  'action-class-fixture-instances.v1.json': AI_OPS_ARTIFACTS.actionClassFixtureInstances,
+  'mechanical-authority-manifests.v1.json': boundAuthorityManifestArtifact,
   'policy-bundle.synthetic.v1.json': AI_OPS_ARTIFACTS.policyBundleFixture,
   'decision-log-design.synthetic.v1.json': AI_OPS_ARTIFACTS.decisionLogDesign,
   'control-insertion-requests.v1.json': AI_OPS_ARTIFACTS.controlInsertionRequests,

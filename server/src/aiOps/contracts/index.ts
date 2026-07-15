@@ -3,6 +3,7 @@ export * from './authority.js';
 export * from './identity.js';
 export * from './classification.js';
 export * from './runbooks.js';
+export * from './instances.js';
 export * from './policy.js';
 export * from './controls.js';
 export * from './insertionRequests.js';

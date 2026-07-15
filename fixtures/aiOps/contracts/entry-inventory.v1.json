@@ -1,6 +1,6 @@
 {
   "artifactId": "aiops-entry-inventory",
-  "contentHash": "8db24b87cfea552a2344614da3caa8e3532a7bda5983707fe8dc8d5c190330f2",
+  "contentHash": "6fa2b766144e4e882f19334a47bf2553b3763183aba6cc05638500ad80e2bb31",
   "createdAtMs": 1784001600000,
   "environment": "SHADOW",
   "owner": "AI_OPS_A1_CONTRACTS",
@@ -1343,6 +1343,40 @@
       "path": "/Users/cosmosgeek/Desktop/Main/QL_DIRECTOR_STATE.md",
       "resolvedAtShadowBase": false,
       "revision": "2b32317dbf89907bcf529231247f1f9a63235d49",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DRAFT_REQUIRES_OWNER_SIGNATURE",
+      "digest": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.aiops-identity-draft",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Read-only identity and provider-state owner-decision draft",
+      "owner": "OWNER_SIGNATURE_REQUIRED",
+      "path": "/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+      "resolvedAtShadowBase": false,
+      "revision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+      "testEntrypoints": [
+        "test/aiOps/contracts/artifacts-purity.test.mjs"
+      ]
+    },
+    {
+      "authorityCreated": false,
+      "currentStatus": "DRAFT_REQUIRES_OWNER_SIGNATURE",
+      "digest": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+      "digestAlgorithm": "GIT_BLOB_SHA1",
+      "disposition": "REFERENCE_ONLY",
+      "entryId": "authority.aiops-reliability-targets-draft",
+      "insertionRequestIds": [],
+      "mappedRequirement": "Read-only numerical reliability-target owner-decision draft",
+      "owner": "OWNER_SIGNATURE_REQUIRED",
+      "path": "/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+      "resolvedAtShadowBase": false,
+      "revision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
       "testEntrypoints": [
         "test/aiOps/contracts/artifacts-purity.test.mjs"
       ]

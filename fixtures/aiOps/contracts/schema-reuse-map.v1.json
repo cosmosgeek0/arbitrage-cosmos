@@ -1,6 +1,6 @@
 {
   "artifactId": "aiops-schema-reuse-map",
-  "contentHash": "2b536817890d1c9d7d0946a5f5b644bd7165c0a173bb4c54ab920d03ea761400",
+  "contentHash": "8e21c12247cb374f684f208f13917ce8cd3f15295f980215392cc9b97dbf110f",
   "createdAtMs": 1784001600000,
   "environment": "SHADOW",
   "owner": "AI_OPS_A1_CONTRACTS",
@@ -34,6 +34,36 @@
       "donor": "S6 repair evidence and Product Assurance remediation campaign",
       "mode": "ADAPT",
       "targetContract": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1"
+    },
+    {
+      "adaptation": "Materialize one unsigned inactive instance per Class-A action with action-specific parameters, resources, conflicts, bounds, readback, compensation and owner-signature placeholder.",
+      "donor": "AI_OPS_RUNBOOK_MANIFEST_TEMPLATE_V1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1"
+    },
+    {
+      "adaptation": "Bind every existing numerical target row to the read-only prestage drafts, a measurement profile and an exact unsigned owner-signing payload.",
+      "donor": "AI_OPS_CAPABILITY_RELIABILITY_TARGETS_V1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_CAPABILITY_GRADUATION_TARGET_INSTANCE_V1"
+    },
+    {
+      "adaptation": "Create one sealed synthetic request instance for each A-D disposition without effect or provider authority.",
+      "donor": "AI_OPS_ACTION_CLASS_V1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1"
+    },
+    {
+      "adaptation": "Bind the exact unsigned payload digest while all signer, key, signature and time fields remain null and authority remains false.",
+      "donor": "AI_OPS_OWNER_SIGNATURE_V1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1"
+    },
+    {
+      "adaptation": "Reuse the sorted DFS classifier unchanged and project 31 target, runbook and action-fixture roots with explicit direct, transitive, unresolved, cycle and hard-denial evidence.",
+      "donor": "AI_OPS_CLASSIFICATION_MANIFEST_V1",
+      "mode": "ADAPT",
+      "targetContract": "AI_OPS_MECHANICAL_AUTHORITY_MANIFEST_SET_V1"
     },
     {
       "adaptation": "Same DRAFT and PENDING_BACKEND grammar with AI Ops seams.",

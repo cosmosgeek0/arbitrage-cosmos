@@ -1,6 +1,6 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
-# >>>>> RUN NOW — only RUN-A (running). F/G DONE. ARMED sections below fire on triggers — everything pre-built, zero wait. <<<<<
+# >>>>> RUN NOW — RUN-A (running) + FRONTIER: 14 blocks in /Users/cosmosgeek/Desktop/f-coord/frontier/coordinator/FRONTIER_WORKERS.md (BLOCK 1 = F0 → folder f-dock; BLOCKS 2-14 = scouts F1-F13 → folders f1-scout..f13-scout). ARMED sections below fire on triggers. <<<<<
 
 ## ARMED V-SHARDS + VERIFIER — the instant role4 prints INTEGRATION_CANDIDATE_READY with the C2 SHA, replace <C2> in all six blocks and paste into six NEW chats. Worktrees v1..v5 + role3-c2 are ALREADY CUT; each block pins itself to C2 with one command.
 

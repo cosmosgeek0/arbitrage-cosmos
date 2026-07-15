@@ -81,7 +81,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const [mode, lockDir, rawValue, secondaryValue] = process.argv.slice(2);
+const [mode, suppliedLockDir, rawValue, secondaryValue, tertiaryValue] = process.argv.slice(2);
+const lockDir = path.resolve(suppliedLockDir);
 const OWNER_SCHEMA = 'cosmos-lock-owner.v1';
 const MAX_PID = 2147483647;
 const MAX_PID_BYTES = 32;
@@ -251,113 +252,102 @@ function parseOwner(bytes, pid) {
   return owner.identitySha256 === expectedIdentity ? owner : null;
 }
 
-function classify() {
-  const graceMs = Number(rawValue);
+function classifyDirectory(directory, graceMs) {
   if (!Number.isSafeInteger(graceMs) || graceMs < 0 || graceMs > 30000) {
-    emit('UNKNOWN', 'INVALID_GRACE');
-    return;
+    return { state: 'UNKNOWN', reason: 'INVALID_GRACE', pid: '' };
   }
   let lockStat;
   try {
-    lockStat = fs.lstatSync(lockDir);
+    lockStat = fs.lstatSync(directory);
   } catch (error) {
-    emit(error?.code === 'ENOENT' ? 'ABSENT' : 'UNKNOWN',
-      error?.code === 'ENOENT' ? 'LOCK_ABSENT' : 'LOCK_STAT_UNAVAILABLE');
-    return;
+    return {
+      state: error?.code === 'ENOENT' ? 'ABSENT' : 'UNKNOWN',
+      reason: error?.code === 'ENOENT' ? 'LOCK_ABSENT' : 'LOCK_STAT_UNAVAILABLE',
+      pid: '',
+    };
   }
-  if (lockStat.isSymbolicLink() || !lockStat.isDirectory()) {
-    emitObserved('MALFORMED', 'LOCK_PATH_UNSAFE');
-    return;
-  }
-  function emitObserved(state, reason, pid = '') {
+  function observed(state, reason, pid = '') {
     try {
-      const finalStat = fs.lstatSync(lockDir);
+      const finalStat = fs.lstatSync(directory);
       if (!sameFile(lockStat, finalStat)
           || lockStat.mode !== finalStat.mode
           || lockStat.isDirectory() !== finalStat.isDirectory()
           || lockStat.isSymbolicLink() !== finalStat.isSymbolicLink()) {
-        emit('UNKNOWN', 'LOCK_CHANGED_DURING_READ', pid);
-        return;
+        return { state: 'UNKNOWN', reason: 'LOCK_CHANGED_DURING_READ', pid };
       }
     } catch {
-      emit('UNKNOWN', 'LOCK_CHANGED_DURING_READ', pid);
-      return;
+      return { state: 'UNKNOWN', reason: 'LOCK_CHANGED_DURING_READ', pid };
     }
-    emit(state, reason, pid);
+    return { state, reason, pid };
+  }
+  if (lockStat.isSymbolicLink() || !lockStat.isDirectory()) {
+    return observed('MALFORMED', 'LOCK_PATH_UNSAFE');
   }
   const fresh = lockAgeMs(lockStat) < graceMs;
-  const pidFile = boundedRegular(path.join(lockDir, 'pid'), MAX_PID_BYTES);
+  const pidFile = boundedRegular(path.join(directory, 'pid'), MAX_PID_BYTES);
   if (pidFile.status === 'MISSING') {
-    emitObserved(fresh ? 'INITIALIZING' : 'MALFORMED',
+    return observed(fresh ? 'INITIALIZING' : 'MALFORMED',
       fresh ? 'PID_NOT_PUBLISHED' : 'PID_MISSING');
-    return;
   }
   if (pidFile.status === 'UNSAFE' || pidFile.status === 'TOO_LARGE') {
-    emitObserved('MALFORMED', pidFile.status === 'UNSAFE' ? 'PID_PATH_UNSAFE' : 'PID_TOO_LARGE');
-    return;
+    return observed('MALFORMED',
+      pidFile.status === 'UNSAFE' ? 'PID_PATH_UNSAFE' : 'PID_TOO_LARGE');
   }
   if (pidFile.status !== 'OK') {
-    emitObserved('UNKNOWN', 'PID_READ_UNAVAILABLE');
-    return;
+    return observed('UNKNOWN', 'PID_READ_UNAVAILABLE');
   }
   const pidText = pidFile.bytes.toString('utf8');
   if (!/^[1-9][0-9]{0,9}\n$/.test(pidText)) {
-    emitObserved('MALFORMED', 'PID_FORMAT_INVALID');
-    return;
+    return observed('MALFORMED', 'PID_FORMAT_INVALID');
   }
   const pid = Number(pidText.trim());
   if (!Number.isSafeInteger(pid) || pid > MAX_PID) {
-    emitObserved('MALFORMED', 'PID_RANGE_INVALID');
-    return;
+    return observed('MALFORMED', 'PID_RANGE_INVALID');
   }
   const firstIdentity = inspectProcess(pid);
   if (firstIdentity.status === 'DEAD') {
-    emitObserved('DEAD', 'OWNER_NOT_RUNNING', pid);
-    return;
+    return observed('DEAD', 'OWNER_NOT_RUNNING', pid);
   }
   if (firstIdentity.status !== 'LIVE') {
-    emitObserved('UNKNOWN', 'OWNER_IDENTITY_UNAVAILABLE', pid);
-    return;
+    return observed('UNKNOWN', 'OWNER_IDENTITY_UNAVAILABLE', pid);
   }
-  const ownerFile = boundedRegular(path.join(lockDir, 'owner.json'), MAX_OWNER_BYTES);
+  const ownerFile = boundedRegular(path.join(directory, 'owner.json'), MAX_OWNER_BYTES);
   if (ownerFile.status === 'MISSING') {
-    emitObserved(fresh ? 'INITIALIZING' : 'UNKNOWN',
+    return observed(fresh ? 'INITIALIZING' : 'UNKNOWN',
       fresh ? 'IDENTITY_NOT_PUBLISHED' : 'IDENTITY_MISSING', pid);
-    return;
   }
   if (ownerFile.status === 'UNSAFE' || ownerFile.status === 'TOO_LARGE') {
-    emitObserved('MALFORMED',
+    return observed('MALFORMED',
       ownerFile.status === 'UNSAFE' ? 'OWNER_PATH_UNSAFE' : 'OWNER_TOO_LARGE', pid);
-    return;
   }
   if (ownerFile.status !== 'OK') {
-    emitObserved('UNKNOWN', 'OWNER_READ_UNAVAILABLE', pid);
-    return;
+    return observed('UNKNOWN', 'OWNER_READ_UNAVAILABLE', pid);
   }
   const owner = parseOwner(ownerFile.bytes, pid);
   if (!owner) {
-    emitObserved('MALFORMED', 'OWNER_RECORD_INVALID', pid);
-    return;
+    return observed('MALFORMED', 'OWNER_RECORD_INVALID', pid);
   }
   const finalIdentity = inspectProcess(pid);
   if (finalIdentity.status === 'DEAD') {
-    emitObserved('DEAD', 'OWNER_NOT_RUNNING', pid);
-    return;
+    return observed('DEAD', 'OWNER_NOT_RUNNING', pid);
   }
   if (finalIdentity.status !== 'LIVE'
       || finalIdentity.identityKind !== firstIdentity.identityKind
       || finalIdentity.identitySha256 !== firstIdentity.identitySha256) {
-    emitObserved('UNKNOWN', 'OWNER_IDENTITY_CHANGED_DURING_READ', pid);
-    return;
+    return observed('UNKNOWN', 'OWNER_IDENTITY_CHANGED_DURING_READ', pid);
   }
   if (owner.identityKind !== finalIdentity.identityKind
       || owner.bootIdentitySha256 !== finalIdentity.bootIdentitySha256
       || owner.startIdentitySha256 !== finalIdentity.startIdentitySha256
       || owner.identitySha256 !== finalIdentity.identitySha256) {
-    emitObserved('STALE', 'OWNER_IDENTITY_MISMATCH', pid);
-    return;
+    return observed('STALE', 'OWNER_IDENTITY_MISMATCH', pid);
   }
-  emitObserved('LIVE', 'OWNER_IDENTITY_MATCH', pid);
+  return observed('LIVE', 'OWNER_IDENTITY_MATCH', pid);
+}
+
+function classify() {
+  const result = classifyDirectory(lockDir, Number(rawValue));
+  emit(result.state, result.reason, result.pid);
 }
 
 function writeOwner() {
@@ -365,6 +355,7 @@ function writeOwner() {
   if (!Number.isSafeInteger(pid) || pid < 1 || pid > MAX_PID) throw new Error('invalid pid');
   const dirBefore = fs.lstatSync(lockDir);
   if (dirBefore.isSymbolicLink() || !dirBefore.isDirectory()) throw new Error('invalid lock directory');
+  if (directoryToken(lockDir) !== secondaryValue) throw new Error('lock identity changed before publication');
   const identity = inspectProcess(pid);
   if (identity.status !== 'LIVE') throw new Error('owner identity unavailable');
   const owner = {
@@ -385,7 +376,8 @@ function writeOwner() {
     fs.renameSync(ownerTemp, path.join(lockDir, 'owner.json'));
     const dirAfter = fs.lstatSync(lockDir);
     const afterIdentity = inspectProcess(pid);
-    if (!sameFile(dirBefore, dirAfter) || afterIdentity.status !== 'LIVE'
+    if (!sameFile(dirBefore, dirAfter) || directoryToken(lockDir) !== secondaryValue
+        || afterIdentity.status !== 'LIVE'
         || afterIdentity.identitySha256 !== identity.identitySha256) {
       throw new Error('owner changed during publication');
     }
@@ -395,61 +387,250 @@ function writeOwner() {
   }
 }
 
-function claimExactDirectory(guardDir, expectedToken) {
-  if (!/^[0-9]+:[0-9]+$/.test(expectedToken ?? '')) throw new Error('invalid lock token');
-  const guardStat = fs.lstatSync(guardDir);
-  if (!guardStat.isDirectory() || guardStat.isSymbolicLink()) throw new Error('unsafe reclaim guard');
-  if (directoryToken(lockDir) !== expectedToken) throw new Error('lock identity changed');
-  const claimed = path.join(guardDir, 'claimed');
+function validateToken(value) {
+  if (!/^[0-9]+:[0-9]+$/.test(value ?? '')) throw new Error('invalid lock token');
+  return value;
+}
+
+function claimPathForToken(token) {
+  validateToken(token);
+  return `${lockDir}.claim.${token.replace(':', '-')}`;
+}
+
+function tokenFromClaimPath(claimed) {
+  const prefix = `${lockDir}.claim.`;
+  if (!claimed.startsWith(prefix)) throw new Error('claim outside lock family');
+  const match = claimed.slice(prefix.length).match(/^([0-9]+)-([0-9]+)$/);
+  if (!match) throw new Error('invalid claim generation');
+  return `${match[1]}:${match[2]}`;
+}
+
+function requireAbsent(target, label) {
   try {
-    fs.lstatSync(claimed);
-    throw new Error('reclaim destination exists');
+    fs.lstatSync(target);
+    throw new Error(`${label} exists`);
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
+}
+
+function moveCanonicalToClaim(expectedToken) {
+  validateToken(expectedToken);
+  if (directoryToken(lockDir) !== expectedToken) throw new Error('lock identity changed');
+  const claimed = claimPathForToken(expectedToken);
+  requireAbsent(claimed, 'lock claim destination');
   fs.renameSync(lockDir, claimed);
-  if (directoryToken(claimed) !== expectedToken) throw new Error('claimed lock identity changed');
+  const actualToken = directoryToken(claimed);
+  if (actualToken !== expectedToken) {
+    throw new Error('claimed lock identity changed');
+  }
+  return claimed;
+}
+
+function deleteExactClaim(claimed, expectedToken) {
+  if (directoryToken(claimed) !== validateToken(expectedToken)) {
+    throw new Error('refusing to delete a replaced lock claim');
+  }
   fs.rmSync(claimed, { recursive: true });
 }
 
+function listClaimPaths() {
+  const parent = path.dirname(lockDir);
+  const prefix = `${path.basename(lockDir)}.claim.`;
+  let entries;
+  try {
+    entries = fs.readdirSync(parent, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
+  }
+  const claims = entries.filter((entry) => entry.name.startsWith(prefix));
+  if (claims.length > 8) throw new Error('too many lock mutation claims');
+  return claims.map((entry) => {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error('unsafe lock mutation claim');
+    const claimed = path.join(parent, entry.name);
+    tokenFromClaimPath(claimed);
+    const stat = fs.lstatSync(claimed);
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsafe lock mutation claim');
+    return claimed;
+  }).sort();
+}
+
+function legacyGuardObservation() {
+  const legacy = `${lockDir}.mutation`;
+  let stat;
+  try {
+    stat = fs.lstatSync(legacy);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    return { state: 'UNKNOWN', reason: 'MUTATION_GUARD_STAT_UNAVAILABLE', pid: '' };
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    return { state: 'MALFORMED', reason: 'MUTATION_GUARD_PATH_UNSAFE', pid: '' };
+  }
+  let entries;
+  try { entries = fs.readdirSync(legacy); } catch {
+    return { state: 'UNKNOWN', reason: 'MUTATION_GUARD_READ_UNAVAILABLE', pid: '' };
+  }
+  if (entries.length === 0) {
+    return { state: 'MALFORMED', reason: 'ORPHANED_MUTATION_GUARD', pid: '' };
+  }
+  return { state: 'UNKNOWN', reason: 'LEGACY_MUTATION_GUARD_UNVERIFIED', pid: '' };
+}
+
+function migrateLegacyGuard(graceMs) {
+  if (!Number.isSafeInteger(graceMs) || graceMs < 0 || graceMs > 30000) {
+    throw new Error('invalid legacy mutation grace');
+  }
+  const legacy = `${lockDir}.mutation`;
+  let stat;
+  try {
+    stat = fs.lstatSync(legacy);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('unsafe legacy mutation guard');
+  const entries = fs.readdirSync(legacy).sort();
+  if (entries.length === 0) {
+    if (lockAgeMs(stat) < graceMs) throw new Error('legacy mutation guard is still within grace');
+    try { fs.rmdirSync(legacy); } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    return;
+  }
+  if (entries.length !== 1 || entries[0] !== 'claimed') {
+    throw new Error('legacy mutation guard has unknown contents');
+  }
+  requireAbsent(lockDir, 'canonical lock generation');
+  const oldClaim = path.join(legacy, 'claimed');
+  const token = directoryToken(oldClaim);
+  const claimed = claimPathForToken(token);
+  requireAbsent(claimed, 'migrated lock claim destination');
+  fs.renameSync(oldClaim, claimed);
+  if (directoryToken(claimed) !== token) throw new Error('migrated lock claim identity changed');
+  fs.rmdirSync(legacy);
+}
+
+function classifyFamily() {
+  const graceMs = Number(rawValue);
+  const canonical = classifyDirectory(lockDir, graceMs);
+  const legacy = legacyGuardObservation();
+  const claims = listClaimPaths();
+  if (legacy) {
+    if (claims.length > 0) return emit('UNKNOWN', 'LEGACY_AND_GENERATION_CLAIMS_PRESENT');
+    if (canonical.state === 'ABSENT') return emit(legacy.state, legacy.reason, legacy.pid);
+    return emit('UNKNOWN', `LEGACY_MUTATION_GUARD_WITH_${canonical.state}`, canonical.pid);
+  }
+  if (claims.length === 0) return emit(canonical.state, canonical.reason, canonical.pid);
+  if (claims.length !== 1 || canonical.state !== 'ABSENT') {
+    return emit('UNKNOWN', 'LOCK_GENERATION_CONFLICT');
+  }
+  const claimed = claims[0];
+  const expectedToken = tokenFromClaimPath(claimed);
+  const actualToken = directoryToken(claimed);
+  if (actualToken !== expectedToken) return emit('UNKNOWN', 'MUTATION_CLAIM_TOKEN_MISMATCH');
+  const result = classifyDirectory(claimed, graceMs);
+  return emit(result.state, `MUTATION_CLAIM_${result.reason}`, result.pid);
+}
+
+function recoverMutationFamily() {
+  migrateLegacyGuard(Number(rawValue));
+  const claims = listClaimPaths();
+  if (claims.length > 0 && classifyDirectory(lockDir, 0).state !== 'ABSENT') {
+    throw new Error('canonical and claimed lock generations conflict');
+  }
+  for (const claimed of claims) {
+    const expectedToken = tokenFromClaimPath(claimed);
+    const actualToken = directoryToken(claimed);
+    if (actualToken !== expectedToken) {
+      throw new Error('lock mutation claim token mismatch');
+    }
+    const result = classifyDirectory(claimed, 0);
+    if (result.state === 'DEAD' || result.state === 'STALE') {
+      deleteExactClaim(claimed, expectedToken);
+      continue;
+    }
+    throw new Error(`lock mutation claim is ${result.state}`);
+  }
+  process.stdout.write('MUTATION_FAMILY_RECOVERED\n');
+}
+
+function assertMutationFenceClear() {
+  if (legacyGuardObservation() || listClaimPaths().length > 0) {
+    throw new Error('lock mutation residue appeared during acquisition');
+  }
+  process.stdout.write('MUTATION_FENCE_CLEAR\n');
+}
+
+function discardCreatedLock() {
+  const token = validateToken(rawValue);
+  const claimed = moveCanonicalToClaim(token);
+  deleteExactClaim(claimed, token);
+  process.stdout.write('DISCARDED\n');
+}
+
 function claimForReclamation() {
-  claimExactDirectory(rawValue, secondaryValue);
+  const expectedToken = validateToken(rawValue);
+  const expectedState = secondaryValue;
+  if (expectedState !== 'DEAD' && expectedState !== 'STALE') {
+    throw new Error('invalid reclaim state');
+  }
+  const claimed = moveCanonicalToClaim(expectedToken);
+  const result = classifyDirectory(claimed, 0);
+  if (result.state !== 'DEAD' && result.state !== 'STALE') {
+    throw new Error('lock owner became consequential during reclamation');
+  }
+  deleteExactClaim(claimed, expectedToken);
   process.stdout.write('RECLAIMED\n');
 }
 
 function releaseOwnedLock() {
-  const guardDir = rawValue;
-  const pid = Number(secondaryValue);
+  const pid = Number(rawValue);
   if (!Number.isSafeInteger(pid) || pid < 1 || pid > MAX_PID) throw new Error('invalid release pid');
-  const pidFile = boundedRegular(path.join(lockDir, 'pid'), MAX_PID_BYTES);
-  if (pidFile.status !== 'OK' || pidFile.bytes.toString('utf8') !== `${pid}\n`) {
-    throw new Error('release pid does not own lock');
+  const before = classifyDirectory(lockDir, 0);
+  if (before.state === 'ABSENT') {
+    const claims = listClaimPaths();
+    if (claims.length !== 1) throw new Error('release claim is unavailable');
+    const existingClaim = claims[0];
+    const existingToken = tokenFromClaimPath(existingClaim);
+    if (directoryToken(existingClaim) !== existingToken) {
+      throw new Error('release claim token mismatch');
+    }
+    const existingOwner = classifyDirectory(existingClaim, 0);
+    if (existingOwner.state !== 'LIVE' || existingOwner.pid !== pid) {
+      throw new Error('release claim owner identity mismatch');
+    }
+    deleteExactClaim(existingClaim, existingToken);
+    process.stdout.write('RELEASED\n');
+    return;
   }
-  const ownerFile = boundedRegular(path.join(lockDir, 'owner.json'), MAX_OWNER_BYTES);
-  if (ownerFile.status !== 'OK') throw new Error('release owner record unavailable');
-  const owner = parseOwner(ownerFile.bytes, pid);
-  if (!owner) throw new Error('release owner record invalid');
-  const identity = inspectProcess(pid);
-  if (identity.status !== 'LIVE'
-      || owner.identityKind !== identity.identityKind
-      || owner.bootIdentitySha256 !== identity.bootIdentitySha256
-      || owner.startIdentitySha256 !== identity.startIdentitySha256
-      || owner.identitySha256 !== identity.identitySha256) {
+  if (before.state !== 'LIVE' || before.pid !== pid) {
     throw new Error('release owner identity mismatch');
   }
-  claimExactDirectory(guardDir, directoryToken(lockDir));
+  const token = directoryToken(lockDir);
+  const claimed = moveCanonicalToClaim(token);
+  const after = classifyDirectory(claimed, 0);
+  if (after.state !== 'LIVE' || after.pid !== pid) {
+    throw new Error('release owner changed during claim');
+  }
+  deleteExactClaim(claimed, token);
   process.stdout.write('RELEASED\n');
 }
 
 try {
   if (mode === 'classify') classify();
+  else if (mode === 'family') classifyFamily();
   else if (mode === 'write') writeOwner();
   else if (mode === 'token') process.stdout.write(`${directoryToken(lockDir)}\n`);
+  else if (mode === 'recover') recoverMutationFamily();
+  else if (mode === 'fence') assertMutationFenceClear();
+  else if (mode === 'discard') discardCreatedLock();
   else if (mode === 'claim') claimForReclamation();
   else if (mode === 'release') releaseOwnedLock();
   else throw new Error('invalid mode');
 } catch {
-  if (mode === 'classify') emit('UNKNOWN', 'CLASSIFIER_FAILURE');
+  if (mode === 'classify' || mode === 'family') emit('UNKNOWN', 'CLASSIFIER_FAILURE');
   else process.exitCode = 1;
 }
 NODE
@@ -476,33 +657,57 @@ classify_lock() {
   esac
 }
 
+classify_lock_family() {
+  local dir="$1" grace="${LOCK_OWNER_GRACE_SEC:-5}" out rest
+  LOCK_STATE=UNKNOWN
+  LOCK_REASON=CLASSIFIER_FAILURE
+  LOCK_OWNER_PID=""
+  case "$grace" in
+    0|[1-9]|[1-2][0-9]|30) ;;
+    *) return 0 ;;
+  esac
+  if out="$(_lock_owner_tool family "$dir" "$((10#$grace * 1000))")"; then
+    LOCK_STATE="${out%%|*}"
+    rest="${out#*|}"
+    LOCK_REASON="${rest%%|*}"
+    LOCK_OWNER_PID="${rest#*|}"
+  fi
+  case "$LOCK_STATE" in
+    ABSENT|LIVE|INITIALIZING|DEAD|STALE|MALFORMED|UNKNOWN) ;;
+    *) LOCK_STATE=UNKNOWN; LOCK_REASON=INVALID_CLASSIFIER_OUTPUT; LOCK_OWNER_PID="" ;;
+  esac
+}
+
+recover_lock_family() {
+  local dir="$1" grace="${LOCK_OWNER_GRACE_SEC:-5}"
+  case "$grace" in
+    0|[1-9]|[1-2][0-9]|30) ;;
+    *) return 1 ;;
+  esac
+  _lock_owner_tool recover "$dir" "$((10#$grace * 1000))"
+}
+
 acquire_lock() {
-  local dir="$1" deadline guard created_token reclaim_state reclaimed
+  local dir="$1" deadline created_token reclaim_state
   deadline=$(( $(now_epoch) + LOCK_TIMEOUT_SEC ))
-  guard="${dir}.mutation"
   mkdir -p "$(dirname "$dir")"
   while :; do
-    reclaimed=0
-    if (umask 077; mkdir "$guard") 2>/dev/null; then
+    if recover_lock_family "$dir" >/dev/null 2>&1; then
       if (umask 077; mkdir "$dir") 2>/dev/null; then
         created_token=""
         if created_token="$(_lock_owner_tool token "$dir" "")" \
-          && _lock_owner_tool write "$dir" "$$"; then
-          if rmdir "$guard" 2>/dev/null; then
+          && _lock_owner_tool write "$dir" "$$" "$created_token"; then
+          if _lock_owner_tool fence "$dir" >/dev/null 2>&1; then
             return 0
           fi
-          ops_log "lock mutation guard could not be released after publication: $guard"
-          _lock_owner_tool release "$dir" "$guard" "$$" >/dev/null 2>&1 || true
-          rmdir "$guard" 2>/dev/null || true
-          return 1
+          ops_log "lock generation claim appeared during owner publication: $dir"
+          _lock_owner_tool release "$dir" "$$" >/dev/null 2>&1 || true
+          continue
         fi
         ops_log "lock owner identity publication failed: $dir"
         if [ -n "${created_token:-}" ]; then
-          _lock_owner_tool claim "$dir" "$guard" "$created_token" >/dev/null 2>&1 || true
-        else
-          rmdir "$dir" 2>/dev/null || true
+          _lock_owner_tool discard "$dir" "$created_token" >/dev/null 2>&1 || true
         fi
-        rmdir "$guard" 2>/dev/null || true
         return 1
       fi
       classify_lock "$dir"
@@ -510,17 +715,13 @@ acquire_lock() {
         DEAD|STALE)
           reclaim_state="$LOCK_STATE"
           if created_token="$(_lock_owner_tool token "$dir" "")" \
-            && _lock_owner_tool claim "$dir" "$guard" "$created_token" >/dev/null; then
-            reclaimed=1
+            && _lock_owner_tool claim "$dir" "$created_token" "$reclaim_state" >/dev/null; then
+            ops_log "removed $reclaim_state lock $dir after claimed owner/inode revalidation"
+            continue
           fi
           ;;
         ABSENT|LIVE|INITIALIZING|MALFORMED|UNKNOWN) : ;;
       esac
-      rmdir "$guard" 2>/dev/null || true
-      if [ "$reclaimed" = 1 ]; then
-        ops_log "removed $reclaim_state lock $dir after guarded owner/inode revalidation"
-        continue
-      fi
     fi
     if [ "$(now_epoch)" -ge "$deadline" ]; then
       return 1
@@ -529,25 +730,15 @@ acquire_lock() {
   done
 }
 release_lock() {
-  local dir="$1" guard deadline result
-  guard="${dir}.mutation"
+  local dir="$1" deadline
   deadline=$(( $(now_epoch) + LOCK_TIMEOUT_SEC ))
   while :; do
-    if (umask 077; mkdir "$guard") 2>/dev/null; then
-      result=1
-      if _lock_owner_tool release "$dir" "$guard" "$$" >/dev/null; then
-        result=0
-      else
-        ops_log "refusing to release lock not owned by this exact process generation: $dir"
-      fi
-      rmdir "$guard" 2>/dev/null || {
-        ops_log "lock mutation guard could not be released: $guard"
-        return 1
-      }
-      return "$result"
+    if _lock_owner_tool release "$dir" "$$" >/dev/null; then
+      return 0
     fi
+    recover_lock_family "$dir" >/dev/null 2>&1 || true
     if [ "$(now_epoch)" -ge "$deadline" ]; then
-      ops_log "timed out waiting to release guarded lock: $dir"
+      ops_log "refusing to release lock not owned by this exact process generation: $dir"
       return 1
     fi
     sleep 1

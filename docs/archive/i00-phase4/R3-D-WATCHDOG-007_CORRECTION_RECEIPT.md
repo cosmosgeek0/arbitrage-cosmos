@@ -29,6 +29,13 @@ It exited nonzero in the first dead-owner scenario because the status had no
 deploy-lock classification and the dead lock was still treated as a live
 deployment. No original L15 donor test was edited to obtain the red result.
 
+The independent fix-coverage audit later reproduced a second crash boundary:
+an empty sibling `deploy.lock.mutation` directory could survive its creator,
+while the canonical lock was absent. The watchdog reported `ABSENT /
+LOCK_ABSENT`, and every future acquirer timed out on the anonymous directory.
+The audit-hostile regression was added before the follow-up correction and
+failed exactly at that assertion: expected `MALFORMED`, observed `ABSENT`.
+
 ## Smallest safe correction
 
 - `common.sh` remains the one mkdir-lock owner. A successful acquirer now
@@ -55,15 +62,22 @@ deployment. No original L15 donor test was edited to obtain the red result.
   is critical and fail-closed. The watchdog never deletes, rewrites, touches,
   or ages out any lock.
 - Existing deploy and rollback acquisition may reclaim only a classified dead
-  or stale owner. Acquisition, owner publication and its failure cleanup,
-  reclamation, and release all share one atomic sibling mutation guard.
-  Reclamation reclassifies the exact guarded directory, revalidates its
-  device/inode token, and renames only that directory beneath the guard before
-  deletion. Release additionally proves the canonical PID plus boot/start
-  process generation before making the same guarded rename. A newly published
-  live lock therefore cannot be deleted by a reclaimer or an obsolete releaser.
-  `LIVE`, `INITIALIZING`, `MALFORMED`, and `UNKNOWN` remain blocking. The
-  existing dead-owner deploy regression remains green.
+  or stale owner. New code creates no reusable anonymous mutation guard.
+  Owner publication is fenced to the exact canonical device/inode generation;
+  reclamation and release atomically move that generation to the unique sibling
+  `deploy.lock.claim.<device>-<inode>`, reclassify it there, and delete only the
+  exact dead/stale generation or the exact current process generation. Claims
+  are bounded, token-checked, and included in the watchdog's read-only family
+  classification. A dead claim is observable and recoverable, a live claim
+  blocks contenders until its exact owner completes release, and incomplete,
+  unverifiable, conflicting, or replaced claims remain loud and fail-closed.
+  No claim is ever renamed back over the canonical path, eliminating the
+  ordinary-rename ABA window. A legacy empty `.mutation` directory is reported
+  immediately and retired only after the bounded publication grace; its old
+  nested `claimed` form is migrated to the same typed generation family.
+  Concurrent reclaimers and an obsolete releaser therefore cannot delete or
+  overwrite a new live winner. The existing dead-owner deploy regression
+  remains green.
 - `status.json` now retains `deployLockState` and `deployLockReason` on every
   pass, and fields not observed during a proven-owner/fail-closed skip remain
   `unknown`. The watchdog writes its local JSONL finding before invoking the
@@ -100,13 +114,13 @@ ops/live/bin/watchdog.sh
 ```
 
 The effective runtime tree is
-`a7ef13b0b81444f7c4021b168669c25fd8180cb6`; its full 31-file root digest is
-`83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc`.
+`9d100a76252dbc92a0e31ca16ba5ab8312cbbecb`; its full 31-file root digest is
+`f8b5713aa207d809dc0570b7fa43c39d8b034ca6a60e678ecea2a5b5af8b0f00`.
 The separate contract binds each before/after Git blob and SHA-256, this
 receipt, the focused regression, the exact full effective inventory, and the
 ordered base-to-effective tree/digest transition. It contains no wildcard,
-placeholder, null authorization, or advance authorization for
-`R3-D-BACKUP-008`.
+placeholder, or null authorization; its already-closed second entry remains
+the exact `R3-D-BACKUP-008` path set chained from this new effective root.
 
 The integrated verifier still re-proves the immutable donor commit, trees,
 receipt, ancestry, and all 17 donor test blobs, then permits only the exact
@@ -135,13 +149,16 @@ symlink target remains untouched.
 
 Measured before the finding commit:
 
-- additive hostile regression: exit `0`, `132/132`, including two concurrent
-  stale-lock reclaimers serializing without deleting the newly live winner, a
-  foreign process generation being unable to release that winner,
-  non-canonical grace failing closed without aborting, and a hanging alert hook
-  plus descendant being killed without suppressing local evidence or later
-  checks, whether the hook waits or exits successfully. A dead lock is also
-  proven unable to suppress frozen-deploy and missing-backup evidence;
+- additive hostile regression: exit `0`, `177/177`, including two concurrent
+  stale-lock reclaimers serializing without deleting the newly live winner, an
+  age-gated orphan legacy guard recovered through a two-contender handoff, a
+  dead crash claim recovered by the next owner, an incomplete claim remaining
+  loud and fail-closed, and a live claim blocking a contender until its exact
+  owner deletes that claim without canonical restoration. A foreign process
+  generation remains unable to release the winner; non-canonical grace remains
+  fail-closed without aborting; and hanging, waiting-descendant, and
+  exited-descendant alert hooks cannot suppress local evidence or later checks.
+  A dead lock also cannot suppress frozen-deploy and missing-backup evidence;
 - unchanged donor watchdog suite: exit `0`, `34/34`;
 - unchanged donor deploy suite: exit `0`, `52/52`, including dead-owner
   reclamation and live-lock refusal;

@@ -82,7 +82,7 @@ write_status() { # live ready tunnel skipped frozen backupFresh streak lockState
 # --- deploy ownership: skip only a proven owner or bounded publication race -------
 LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
 case "$LOCK_STREAK" in (*[!0-9]*|"") LOCK_STREAK=0 ;; esac
-classify_lock "$DEPLOY_LOCK"
+classify_lock_family "$DEPLOY_LOCK"
 DEPLOY_LOCK_STATE="$LOCK_STATE"
 DEPLOY_LOCK_REASON="$LOCK_REASON"
 case "$DEPLOY_LOCK_STATE" in

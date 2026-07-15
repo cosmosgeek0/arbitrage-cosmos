@@ -56,7 +56,9 @@ printf '%s\n%s\n' "$APP_UNIT" "$TUNNEL_UNIT" > "$MOCK_ACTIVE_UNITS"
 
 reset_scenario() {
   local name="$1"
-  rm -rf "$DEPLOY_LOCK"
+  rm -rf "$DEPLOY_LOCK" "${DEPLOY_LOCK}.mutation"
+  find "$(dirname "$DEPLOY_LOCK")" -maxdepth 1 -type d \
+    -name "$(basename "$DEPLOY_LOCK").claim.*" -exec rm -rf {} + 2>/dev/null || true
   export WATCHDOG_STATE_DIR="$TEST_TMP/$name"
   : > "$MOCK_SYSTEMCTL_LOG"
   : > "$MOCK_ALERT_LOG"
@@ -123,7 +125,7 @@ launch_competing_owner() {
     set -eu
     . "$1"
     LOCK_TIMEOUT_SEC=10
-    LOCK_OWNER_GRACE_SEC=5
+    LOCK_OWNER_GRACE_SEC="${LOCK_OWNER_GRACE_SEC:-5}"
     acquire_lock "$2" || exit 1
     : > "$3"
     while [ ! -e "$4" ]; do sleep 0.05; done
@@ -228,6 +230,168 @@ pass_assertion
 : > "$LOSER_STOP"
 wait "$LOSER_PID"
 forget_owner_pid "$LOSER_PID"
+
+note "an orphaned mutation guard is loud, age-gated, and recoverable"
+reset_scenario orphaned-mutation
+mkdir -p "${DEPLOY_LOCK}.mutation"
+run_watchdog
+assert_eq "$(lock_state)" MALFORMED
+assert_eq "$(lock_reason)" ORPHANED_MUTATION_GUARD
+assert_contains "$(cat "$MOCK_ALERT_LOG")" 'critical DEPLOY_LOCK_MALFORMED'
+assert_checks_continued
+export LOCK_OWNER_GRACE_SEC=1
+assert_failure bash -c '
+  set -eu
+  . "$1"
+  LOCK_TIMEOUT_SEC=0
+  acquire_lock "$2"
+' _ "$COMMON" "$DEPLOY_LOCK"
+[ -d "${DEPLOY_LOCK}.mutation" ] || fail_test "fresh legacy guard was retired inside grace"
+pass_assertion
+sleep 1
+launch_competing_owner orphan-contender-a
+ORPHAN_A_PID=$COMPETING_PID
+launch_competing_owner orphan-contender-b
+ORPHAN_B_PID=$COMPETING_PID
+attempt=0
+while [ ! -e "$TEST_TMP/orphan-contender-a-ready" ] && [ ! -e "$TEST_TMP/orphan-contender-b-ready" ]; do
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 200 ] || fail_test "orphaned mutation guard was not recovered"
+  sleep 0.05
+done
+sleep 2
+if [ -e "$TEST_TMP/orphan-contender-a-ready" ] && [ -e "$TEST_TMP/orphan-contender-b-ready" ]; then
+  fail_test "both orphan-guard contenders acquired the same live lock"
+fi
+pass_assertion
+run_watchdog
+assert_eq "$(lock_state)" LIVE
+assert_lock_retained
+if [ -e "$TEST_TMP/orphan-contender-a-ready" ]; then
+  ORPHAN_WINNER_PID=$ORPHAN_A_PID
+  ORPHAN_LOSER_PID=$ORPHAN_B_PID
+  ORPHAN_WINNER_STOP="$TEST_TMP/orphan-contender-a-stop"
+  ORPHAN_LOSER_READY="$TEST_TMP/orphan-contender-b-ready"
+  ORPHAN_LOSER_STOP="$TEST_TMP/orphan-contender-b-stop"
+else
+  ORPHAN_WINNER_PID=$ORPHAN_B_PID
+  ORPHAN_LOSER_PID=$ORPHAN_A_PID
+  ORPHAN_WINNER_STOP="$TEST_TMP/orphan-contender-b-stop"
+  ORPHAN_LOSER_READY="$TEST_TMP/orphan-contender-a-ready"
+  ORPHAN_LOSER_STOP="$TEST_TMP/orphan-contender-a-stop"
+fi
+: > "$ORPHAN_WINNER_STOP"
+wait "$ORPHAN_WINNER_PID"
+forget_owner_pid "$ORPHAN_WINNER_PID"
+attempt=0
+while [ ! -e "$ORPHAN_LOSER_READY" ]; do
+  kill -0 "$ORPHAN_LOSER_PID" 2>/dev/null \
+    || fail_test "waiting orphan-guard contender exited before handoff"
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 200 ] || fail_test "orphan-guard contender never acquired after handoff"
+  sleep 0.05
+done
+pass_assertion
+: > "$ORPHAN_LOSER_STOP"
+wait "$ORPHAN_LOSER_PID"
+forget_owner_pid "$ORPHAN_LOSER_PID"
+[ ! -e "$DEPLOY_LOCK" ] || fail_test "orphan-guard handoff left the canonical lock"
+pass_assertion
+[ ! -e "${DEPLOY_LOCK}.mutation" ] || fail_test "orphan mutation guard survived recovery"
+pass_assertion
+if find "$(dirname "$DEPLOY_LOCK")" -maxdepth 1 -type d \
+  -name "$(basename "$DEPLOY_LOCK").claim.*" -print -quit | grep -q .; then
+  fail_test "orphan-guard handoff left a generation claim"
+fi
+pass_assertion
+export LOCK_OWNER_GRACE_SEC=5
+
+note "a dead crash claim is observable and recovered by the next acquirer"
+reset_scenario dead-generation-claim
+mkdir -p "$DEPLOY_LOCK"
+printf '999999\n' > "$DEPLOY_LOCK/pid"
+CLAIM_TOKEN="$(bash -c '. "$1"; _lock_owner_tool token "$2" ""' _ "$COMMON" "$DEPLOY_LOCK")"
+CLAIM_PATH="${DEPLOY_LOCK}.claim.$(printf '%s' "$CLAIM_TOKEN" | tr : -)"
+mv "$DEPLOY_LOCK" "$CLAIM_PATH"
+run_watchdog
+assert_eq "$(lock_state)" DEAD
+assert_eq "$(lock_reason)" MUTATION_CLAIM_OWNER_NOT_RUNNING
+assert_contains "$(cat "$MOCK_ALERT_LOG")" 'critical DEPLOY_LOCK_DEAD'
+assert_checks_continued
+[ -d "$CLAIM_PATH" ] || fail_test "watchdog mutated a dead crash claim"
+pass_assertion
+start_lock_owner dead-claim-recovery
+run_watchdog
+assert_eq "$(lock_state)" LIVE
+assert_lock_retained
+stop_lock_owner
+[ ! -e "$CLAIM_PATH" ] || fail_test "dead crash claim survived successful handoff"
+pass_assertion
+
+note "a live claim blocks contenders until its exact owner completes release"
+reset_scenario live-generation-claim
+start_lock_owner live-claim-release
+CLAIM_TOKEN="$(bash -c '. "$1"; _lock_owner_tool token "$2" ""' _ "$COMMON" "$DEPLOY_LOCK")"
+CLAIM_PATH="${DEPLOY_LOCK}.claim.$(printf '%s' "$CLAIM_TOKEN" | tr : -)"
+mv "$DEPLOY_LOCK" "$CLAIM_PATH"
+run_watchdog
+assert_eq "$(lock_state)" LIVE
+assert_eq "$(lock_reason)" MUTATION_CLAIM_OWNER_IDENTITY_MATCH
+[ ! -e "$DEPLOY_LOCK" ] || fail_test "watchdog restored the claimed live generation"
+pass_assertion
+[ -d "$CLAIM_PATH" ] || fail_test "watchdog mutated the claimed live generation"
+pass_assertion
+launch_competing_owner live-claim-contender
+LIVE_CLAIM_CONTENDER_PID=$COMPETING_PID
+sleep 2
+[ ! -e "$TEST_TMP/live-claim-contender-ready" ] \
+  || fail_test "contender acquired while a proven live claim remained"
+pass_assertion
+stop_lock_owner
+[ ! -e "$CLAIM_PATH" ] || fail_test "exact owner left its live release claim"
+pass_assertion
+attempt=0
+while [ ! -e "$TEST_TMP/live-claim-contender-ready" ]; do
+  kill -0 "$LIVE_CLAIM_CONTENDER_PID" 2>/dev/null \
+    || fail_test "live-claim contender exited before owner handoff"
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 200 ] || fail_test "live-claim contender never acquired after owner release"
+  sleep 0.05
+done
+pass_assertion
+: > "$TEST_TMP/live-claim-contender-stop"
+wait "$LIVE_CLAIM_CONTENDER_PID"
+forget_owner_pid "$LIVE_CLAIM_CONTENDER_PID"
+[ ! -e "$DEPLOY_LOCK" ] || fail_test "live-claim handoff left the canonical lock"
+pass_assertion
+if find "$(dirname "$DEPLOY_LOCK")" -maxdepth 1 -type d \
+  -name "$(basename "$DEPLOY_LOCK").claim.*" -print -quit | grep -q .; then
+  fail_test "live-claim handoff left a generation claim"
+fi
+pass_assertion
+
+note "an incomplete crash claim is loud and fails closed"
+reset_scenario incomplete-generation-claim
+mkdir -p "$DEPLOY_LOCK"
+CLAIM_TOKEN="$(bash -c '. "$1"; _lock_owner_tool token "$2" ""' _ "$COMMON" "$DEPLOY_LOCK")"
+CLAIM_PATH="${DEPLOY_LOCK}.claim.$(printf '%s' "$CLAIM_TOKEN" | tr : -)"
+mv "$DEPLOY_LOCK" "$CLAIM_PATH"
+export LOCK_OWNER_GRACE_SEC=0
+run_watchdog
+assert_eq "$(lock_state)" MALFORMED
+assert_eq "$(lock_reason)" MUTATION_CLAIM_PID_MISSING
+assert_contains "$(cat "$MOCK_ALERT_LOG")" 'critical DEPLOY_LOCK_MALFORMED'
+assert_checks_continued
+assert_failure bash -c '
+  set -eu
+  . "$1"
+  LOCK_TIMEOUT_SEC=0
+  LOCK_OWNER_GRACE_SEC=0
+  acquire_lock "$2"
+' _ "$COMMON" "$DEPLOY_LOCK"
+[ -d "$CLAIM_PATH" ] || fail_test "incomplete crash claim was guessed away"
+pass_assertion
+export LOCK_OWNER_GRACE_SEC=5
 
 note "a recycled live PID with mismatched start identity is stale and cannot suppress checks"
 reset_scenario stale

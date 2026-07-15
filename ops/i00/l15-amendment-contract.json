@@ -21,46 +21,46 @@
     {
       "findingId": "R3-D-WATCHDOG-007",
       "baseLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
-      "effectiveLiveTree": "a7ef13b0b81444f7c4021b168669c25fd8180cb6",
+      "effectiveLiveTree": "9d100a76252dbc92a0e31ca16ba5ab8312cbbecb",
       "baseRootDigestSha256": "6c0f6ed75273758a05cc009d0ee2ecab77f0c009c2f783043550706d4a3bc0bf",
-      "effectiveRootDigestSha256": "83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc",
+      "effectiveRootDigestSha256": "f8b5713aa207d809dc0570b7fa43c39d8b034ca6a60e678ecea2a5b5af8b0f00",
       "changedFiles": [
         {
           "path": "ops/live/bin/common.sh",
           "mode": "100755",
           "beforeGitBlob": "8286001701820c5cf948882545c34e607f8265fc",
           "beforeSha256": "190cc72426cc2186647385166b58ba08e8f42202a8b3d05ba04561b4627044bc",
-          "afterGitBlob": "21aa129e2f11e0ba6186f30f33c5ece22f7a1ff9",
-          "afterSha256": "0d1129a2af4893c2d9a16b479daa2823d8573f437a19e38968b84aa67d6b6989"
+          "afterGitBlob": "32f841f00ac981cfcf09948443025063fa5d0b61",
+          "afterSha256": "0d635d8e4d8d87e65532c98405bcb7ba6054520c8140f3b07258396cea561f87"
         },
         {
           "path": "ops/live/bin/watchdog.sh",
           "mode": "100755",
           "beforeGitBlob": "7b6de64310d34915bdb272083f742a8df735765e",
           "beforeSha256": "7d35a870d3ee67c38d47a8c3afb12a1316b77b8c99db2c04acda8efea42512bd",
-          "afterGitBlob": "0ca21cfc46fd0e7905badd2479655a40e18789ff",
-          "afterSha256": "39b36ae7eed191a78e9fd28d5c3e0e227929d6dd8925eba90e680b21715befab"
+          "afterGitBlob": "66fe95e0ab1d7165b8ccb2c13a20bb564edaf771",
+          "afterSha256": "3e554005c869958e660798f9c9ee045fcfc1913ff7ac7e4bc4d4205b7130ccab"
         }
       ],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-WATCHDOG-007_CORRECTION_RECEIPT.md",
-        "gitBlob": "b184f8507e994d15e652c1792855939685405bf9",
-        "sha256": "85280e0de3fc2a8f18a80ba2bee70766834dfe552c873b5e56bbc18933d5ca71"
+        "gitBlob": "9f5631fd7124cf28aaa98fa78aea8325d63b732a",
+        "sha256": "256746130d1433948be724f2bea4b1c2573893a53282dac3311a3148e68c15d2"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-r3-d-watchdog-007.sh",
-          "gitBlob": "f1c919d7a9603be1920142bc650829063bf4c3bf",
-          "sha256": "c07606cf5d1d6aed230e5d16a50634b108fb1ce287924bfb2d14f608eeca6ae1"
+          "gitBlob": "36f2217a5ee3c2fb899d3af42165c4a88ac880ab",
+          "sha256": "00aa0d94baddfd7827ff0d21ee34de1c95e0df079f29c8ce28f838d1434ed3e7"
         }
       ]
     },
     {
       "findingId": "R3-D-BACKUP-008",
-      "baseLiveTree": "a7ef13b0b81444f7c4021b168669c25fd8180cb6",
-      "effectiveLiveTree": "7e6b708368e5b89655d9096faca04a6cdbd2e1b6",
-      "baseRootDigestSha256": "83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc",
-      "effectiveRootDigestSha256": "7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033",
+      "baseLiveTree": "9d100a76252dbc92a0e31ca16ba5ab8312cbbecb",
+      "effectiveLiveTree": "0f5c1a1267cf63cb2d4bdc2015d867c6131e173d",
+      "baseRootDigestSha256": "f8b5713aa207d809dc0570b7fa43c39d8b034ca6a60e678ecea2a5b5af8b0f00",
+      "effectiveRootDigestSha256": "7e5e905f5a11d15987f9e829a0d91de50f6e618ee0c75d9d50e714515f97c0d3",
       "changedFiles": [
         {
           "path": "ops/live/bin/restore-drill.sh",
@@ -81,8 +81,8 @@
       ],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md",
-        "gitBlob": "e20c44c17d0d005831beaa605a28249429e5ce1d",
-        "sha256": "ac90d966f5bad8dc061b05b3758561d4a7e305ae9e1294f4344017eccffc3b9e"
+        "gitBlob": "9258e84a513cbee3461c57857cd8ab1a4f1760c6",
+        "sha256": "da126f19620c05f8e5fac5301097b1df388bddf0572f944cd247e3e1a5be65af"
       },
       "regressionTests": [
         {
@@ -94,8 +94,8 @@
     }
   ],
   "effectiveLive": {
-    "tree": "7e6b708368e5b89655d9096faca04a6cdbd2e1b6",
-    "rootDigestSha256": "7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033",
+    "tree": "0f5c1a1267cf63cb2d4bdc2015d867c6131e173d",
+    "rootDigestSha256": "7e5e905f5a11d15987f9e829a0d91de50f6e618ee0c75d9d50e714515f97c0d3",
     "fileCount": 31,
     "files": [
       {
@@ -149,8 +149,8 @@
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "21aa129e2f11e0ba6186f30f33c5ece22f7a1ff9",
-        "sha256": "0d1129a2af4893c2d9a16b479daa2823d8573f437a19e38968b84aa67d6b6989"
+        "gitBlob": "32f841f00ac981cfcf09948443025063fa5d0b61",
+        "sha256": "0d635d8e4d8d87e65532c98405bcb7ba6054520c8140f3b07258396cea561f87"
       },
       {
         "path": "bin/deploy.sh",
@@ -185,8 +185,8 @@
       {
         "path": "bin/watchdog.sh",
         "mode": "100755",
-        "gitBlob": "0ca21cfc46fd0e7905badd2479655a40e18789ff",
-        "sha256": "39b36ae7eed191a78e9fd28d5c3e0e227929d6dd8925eba90e680b21715befab"
+        "gitBlob": "66fe95e0ab1d7165b8ccb2c13a20bb564edaf771",
+        "sha256": "3e554005c869958e660798f9c9ee045fcfc1913ff7ac7e4bc4d4205b7130ccab"
       },
       {
         "path": "cloudflare/README.md",

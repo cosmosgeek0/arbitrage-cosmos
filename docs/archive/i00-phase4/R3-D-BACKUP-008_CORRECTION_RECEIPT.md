@@ -94,13 +94,13 @@ BACKUP-008 is the second ordered entry in the separate post-integration
 amendment contract, chained from the WATCHDOG-007 effective tree and digest:
 
 - base effective live tree:
-  `a7ef13b0b81444f7c4021b168669c25fd8180cb6`;
+  `9d100a76252dbc92a0e31ca16ba5ab8312cbbecb`;
 - base effective root digest:
-  `83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc`;
+  `f8b5713aa207d809dc0570b7fa43c39d8b034ca6a60e678ecea2a5b5af8b0f00`;
 - corrected effective live tree:
-  `7e6b708368e5b89655d9096faca04a6cdbd2e1b6`;
+  `0f5c1a1267cf63cb2d4bdc2015d867c6131e173d`;
 - corrected 31-file root digest:
-  `7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033`.
+  `7e5e905f5a11d15987f9e829a0d91de50f6e618ee0c75d9d50e714515f97c0d3`.
 
 The entry authorizes exactly these two runtime replacements and one additive
 focused regression:

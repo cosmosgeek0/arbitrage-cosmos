@@ -124,3 +124,19 @@ copied, created, or fabricated to turn this unrelated gate green.
 
 This receipt is committed atomically with the correction. The final Phase 4
 closure receipt will bind this correction's exact commit SHA.
+
+## Clean-tree cross-family follow-up
+
+After the correction commit, `npm test` exited `0` from a clean worktree. The
+clean `npm run test:all` then passed through the complete `401/401` System
+Integration family before the I00 proof family exposed two source-evidence
+maintenance gaps: this correction had moved static source line anchors, and
+the already-fixed `R3-VAL-001` detached-Git regression had placed Git process
+control directly in a purity-scanned test file.
+
+Commit `3511a8d942bd23849ea932f64a9b0d79ade29258` moved that real Git control back
+behind the already authorized local-acceptance harness and retained explicit
+detached-head, exact-revision, and zero-status-byte assertions. The canonical
+report generator was then rerun for this finding; it changed only the affected
+source line anchors and the evidence digest, without changing any authority,
+transport, disposition, donor, Q, runtime, or product-state claim.

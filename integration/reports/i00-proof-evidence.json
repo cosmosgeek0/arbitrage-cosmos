@@ -583,7 +583,7 @@
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
-            "line": 232,
+            "line": 239,
             "ruleId": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL"
           }
         ],
@@ -662,27 +662,27 @@
       },
       {
         "file": "server/src/binance/ws.ts",
-        "line": 69,
+        "line": 94,
         "classification": "TRANSPORT_LIBRARY"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 218,
+        "line": 225,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 223,
+        "line": 230,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 226,
+        "line": 233,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 232,
+        "line": 239,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -1097,7 +1097,7 @@
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
         "file": "server/src/binance/liquidations.ts",
-        "line": 273
+        "line": 274
       },
       {
         "concept": "semantic-source",
@@ -1157,13 +1157,13 @@
         "concept": "semantic-source",
         "declaration": "interface BinanceStreamOptions",
         "file": "server/src/binance/ws.ts",
-        "line": 7
+        "line": 18
       },
       {
         "concept": "semantic-source",
         "declaration": "class BinanceStream",
         "file": "server/src/binance/ws.ts",
-        "line": 40
+        "line": 59
       },
       {
         "concept": "capital-authority",
@@ -6893,19 +6893,19 @@
         "concept": "semantic-source",
         "declaration": "type PublicSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 74
+        "line": 75
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceProjectionEvidence",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 91
+        "line": 92
       },
       {
         "concept": "semantic-source",
         "declaration": "interface IntelligenceSourceCut",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 105
+        "line": 106
       },
       {
         "concept": "semantic-source",
@@ -13940,5 +13940,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "ebb1277e7cca9624eceb7a601c3cb88ebb9f547611112f8bc16db98950eedbf1"
+  "evidenceSha256": "773964b74a0855151b6ac3a770dcc5bc5cb357db30c7b6b568aceff14ffd5d38"
 }

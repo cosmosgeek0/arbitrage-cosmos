@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-37 (2026-07-15): second acceleration order (90dcac299155) — six shadow packets RUN-14..19; C2 V-shard plan armed
+
+RUN-9 untouched (at cdc3d75, fixing Highs). Order's packets 1-2 map onto SEALED A2/A3 shadows → ruled ADOPT_EXISTING + gap-fill extension rounds in the same worktrees (A2X/A3X, entry-gate classification mandatory). Four NEW packets cut at 098f7b9: ops-shadow, replay-shadow, obs-shadow, runbook-shadow (branches *-20260715; disjoint namespaces fixtures/{ops,replay,obs,runbook}Shadow/** + tests; l15-infra/preverify consumed read-only). Same-machine rule: static/focused work only while RUN-9 owns heavy suites. COLLISION MATRIX: 6 packets pairwise disjoint; zero overlap with role4-fix (canonical server/web), aiOps port namespaces, or any sealed lane. Receipts: immutable per-packet in-worktree. C2 PLAN RE-ARMED per order: V1-V5 read-only shards at exact C2 + ONE fresh Role-3 sole verdict owner; corrections → C3 → repeat.
+
 ## D-LAUNCH-36 (2026-07-15): all four R9 analysis shards sealed — ALL 15 FINDINGS INDEPENDENTLY CONFIRMED VALID
 
 R9-A/B/C/D all ANALYSIS_READY (receipts untracked in r9-a..d worktrees). Every assigned finding reproduced and ruled VALID — zero DISPUTED, zero INCONCLUSIVE. Consequence: RUN-9 must fix all 15 (no refusal path remains); the analyses carry minimal-correction + regression-test recipes RUN-9 can consume read-only. r9-a..d PARKED. Sole active: RUN-9. Next: INTEGRATION_CANDIDATE_READY with C2 → 5 fresh shards + fresh Role-3 verifier.

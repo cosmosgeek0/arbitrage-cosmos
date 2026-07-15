@@ -1,0 +1,68 @@
+{
+  "adapterId": "frontier.strategy-arena.scenario-reference.v1",
+  "canonicalContractId": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ScenarioReferenceV1",
+  "canonicalContractVersion": "ScenarioReferenceV1@1",
+  "canonicalOwner": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/6",
+  "extensionId": "frontier.strategy-arena",
+  "fieldMap": [
+    {
+      "canonicalPath": "scenarioId",
+      "localPath": "scenarioId",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "scenarioVersion",
+      "localPath": "scenarioVersion",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "scenarioHash",
+      "localPath": "scenarioHash",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "extensionProviderRef",
+      "localPath": "extensionProviderRef",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "fixtureSchemaRef",
+      "localPath": "fixtureSchemaRef",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "seed",
+      "localPath": "seed",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "clockRef",
+      "localPath": "clockRef",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "lineageRefs",
+      "localPath": "lineageRefs",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "expectedCanonicalPostureRefs",
+      "localPath": "expectedCanonicalPostureRefs",
+      "transform": "IDENTITY"
+    }
+  ],
+  "localFixtureSchema": "ScenarioReferenceV1",
+  "lossy": false,
+  "testVectors": [
+    "frontier/dock/examples/scenario-reference.v1.json"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "c4e45f303e75048a9ffec99bc1528d0875e0cd6e2c0fc565c58612ac266f086e"
+}

@@ -1,0 +1,84 @@
+{
+  "adapterId": "frontier.strategy-arena.product-surface-projection.v1",
+  "canonicalContractId": "git:56c47dad398c485b6653036c8b90c53f11061b1e:web/src/lib/productIntegration/model.ts#ProductSurfaceProjection",
+  "canonicalContractVersion": "product-supervisor.v1",
+  "canonicalOwner": "git:2c98ae653ba97e6383c29697283288346de28bdb:web/src/lib/productIntegration/model.ts",
+  "extensionId": "frontier.strategy-arena",
+  "fieldMap": [
+    {
+      "canonicalPath": "surfaceId",
+      "localPath": "surfaceId",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "label",
+      "localPath": "label",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "bindingState",
+      "localPath": "bindingState",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "truthLabel",
+      "localPath": "truthLabel",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "canonicalSource",
+      "localPath": "canonicalSource",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "evaluatedAtMs",
+      "localPath": "evaluatedAtMs",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "summary",
+      "localPath": "summary",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "blocker",
+      "localPath": "blocker",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "controlIds",
+      "localPath": "controlIds",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "correlationId",
+      "localPath": "correlationId",
+      "transform": "IDENTITY"
+    },
+    {
+      "canonicalPath": "evidence",
+      "localPath": "evidence",
+      "transform": "IDENTITY"
+    }
+  ],
+  "localFixtureSchema": "ProductSurfaceProjection",
+  "lossy": false,
+  "testVectors": [
+    "frontier/strategy-arena/preview/product-surface-projection.v1.json"
+  ],
+  "timeSemantics": {
+    "clock": "INJECTED_FIXTURE",
+    "eventTime": "PRESERVE_EXACT",
+    "receiveTime": "PRESERVE_EXACT"
+  },
+  "unitMap": [
+    {
+      "canonicalUnit": "utc-millis",
+      "localUnit": "utc-millis",
+      "transform": "IDENTITY"
+    }
+  ],
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "unsupportedFields": [],
+  "adapterHash": "8b7c8f27d2420fac4786552f5cdcedfa918bd28aaf403318ef47fd8f09edec9e"
+}

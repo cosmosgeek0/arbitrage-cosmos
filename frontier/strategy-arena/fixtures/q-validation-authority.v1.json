@@ -1,0 +1,152 @@
+{
+  "datasetDigest": "701e256d7beb6161812ed2d5edba16069856c1ded12e996b987c7e758249724b",
+  "datasetDigestRef": {
+    "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+    "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+    "posture": "SYNTHETIC_ONLY",
+    "projectionSha256": "99fb6a3c9ee41f7b1895d7f46e69793948a01dfb179cda2e65413089cff8400a",
+    "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/datasetDigest",
+    "schemaId": "Q14DatasetDigestV1",
+    "schemaVersion": "1"
+  },
+  "folds": [
+    {
+      "embargoedCount": 1,
+      "foldId": "fold-01",
+      "groupConflictCount": 0,
+      "purgedCount": 0,
+      "status": "VALID",
+      "validationEndCutoffNs": "1772090000000000000",
+      "validationSampleIds": [
+        "s-0013",
+        "s-0014",
+        "s-0015",
+        "s-0016",
+        "s-0017",
+        "s-0018",
+        "s-0019",
+        "s-0020",
+        "s-0021",
+        "s-0022",
+        "s-0023",
+        "s-0024",
+        "s-0025"
+      ],
+      "validationStartCutoffNs": "1772046800000000000"
+    },
+    {
+      "embargoedCount": 1,
+      "foldId": "fold-02",
+      "groupConflictCount": 0,
+      "purgedCount": 0,
+      "status": "VALID",
+      "validationEndCutoffNs": "1772136800000000000",
+      "validationSampleIds": [
+        "s-0026",
+        "s-0027",
+        "s-0028",
+        "s-0029",
+        "s-0030",
+        "s-0031",
+        "s-0032",
+        "s-0033",
+        "s-0034",
+        "s-0035",
+        "s-0036",
+        "s-0037",
+        "s-0038"
+      ],
+      "validationStartCutoffNs": "1772093600000000000"
+    },
+    {
+      "embargoedCount": 1,
+      "foldId": "fold-03",
+      "groupConflictCount": 0,
+      "purgedCount": 0,
+      "status": "VALID",
+      "validationEndCutoffNs": "1772183600000000000",
+      "validationSampleIds": [
+        "s-0039",
+        "s-0040",
+        "s-0041",
+        "s-0042",
+        "s-0043",
+        "s-0044",
+        "s-0045",
+        "s-0046",
+        "s-0047",
+        "s-0048",
+        "s-0049",
+        "s-0050",
+        "s-0051"
+      ],
+      "validationStartCutoffNs": "1772140400000000000"
+    },
+    {
+      "embargoedCount": 1,
+      "foldId": "fold-04",
+      "groupConflictCount": 0,
+      "purgedCount": 0,
+      "status": "VALID",
+      "validationEndCutoffNs": "1772226800000000000",
+      "validationSampleIds": [
+        "s-0052",
+        "s-0053",
+        "s-0054",
+        "s-0055",
+        "s-0056",
+        "s-0057",
+        "s-0058",
+        "s-0059",
+        "s-0060",
+        "s-0061",
+        "s-0062",
+        "s-0063"
+      ],
+      "validationStartCutoffNs": "1772187200000000000"
+    }
+  ],
+  "holdoutAccessState": "SEALED_REQUIRES_NEW_Q_GRANT_AND_REPLAY_BUNDLE",
+  "holdoutPolicyRef": {
+    "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+    "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+    "posture": "SYNTHETIC_ONLY",
+    "projectionSha256": "af8915a48b59e6dcbcab7d63969400d32c5d2706dd7e9f948dd5c3db4d87f83e",
+    "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/spec",
+    "schemaId": "Q14HoldoutPolicyV1",
+    "schemaVersion": "1"
+  },
+  "planStatus": "VALID",
+  "planStatusRef": {
+    "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+    "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+    "posture": "SYNTHETIC_ONLY",
+    "projectionSha256": "bb3389e2cbcd7bf4d4fcbf732e19b71490126f21ec98b92ce63ac9f464e845c1",
+    "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/status",
+    "schemaId": "Q14PlanStatusV1",
+    "schemaVersion": "1"
+  },
+  "posture": "FIXTURE_CONFORMANCE_ONLY",
+  "schema": "QValidationAuthorityProjectionV1",
+  "sourceArtifactRef": {
+    "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+    "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+    "posture": "SYNTHETIC_ONLY",
+    "projectionSha256": null,
+    "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json",
+    "schemaId": "Q14ValidationGoldenV1",
+    "schemaVersion": "1"
+  },
+  "validationFoldsDigest": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+  "validationFoldsRef": {
+    "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+    "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+    "posture": "SYNTHETIC_ONLY",
+    "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+    "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+    "schemaId": "Q14ValidationFoldsV1",
+    "schemaVersion": "1"
+  },
+  "version": 1,
+  "qAuthorityHash": "3cdddbb87e6c1ae4e701db1963f13d4c3fa4a6655a7abba9837b0fcb15fd2965"
+}

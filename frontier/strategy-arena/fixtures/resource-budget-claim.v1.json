@@ -1,0 +1,64 @@
+{
+  "claimId": "strategy-arena.fixture-budget.v1",
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "cpu": {
+    "state": "UNAVAILABLE",
+    "unit": "host-cpu-percent",
+    "reason": "No host-performance or production-runtime claim is made in prestage."
+  },
+  "memory": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes",
+    "reason": "No mounted process exists to measure production memory."
+  },
+  "disk": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-second",
+    "reason": "Fixture campaigns open no runtime storage transport."
+  },
+  "network": {
+    "state": "MEASURED",
+    "unit": "bytes",
+    "limit": 0,
+    "observed": 0
+  },
+  "eventRate": {
+    "state": "MEASURED",
+    "unit": "events-per-1000ms-fixture-window",
+    "limit": 64,
+    "observed": 64
+  },
+  "latency": {
+    "state": "MEASURED",
+    "unit": "deterministic-fixture-steps",
+    "limit": {
+      "p50": 1,
+      "p95": 1,
+      "p99": 1
+    },
+    "observed": {
+      "p50": 1,
+      "p95": 1,
+      "p99": 1
+    }
+  },
+  "queue": {
+    "state": "MEASURED",
+    "unit": "events",
+    "limit": 1,
+    "observed": 1,
+    "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST"
+  },
+  "storageGrowth": {
+    "state": "MEASURED",
+    "unit": "fixture-bytes-per-window",
+    "limit": 262144,
+    "observed": 131072
+  },
+  "modelUse": {
+    "state": "MEASURED",
+    "unit": "calls",
+    "limit": 0,
+    "observed": 0
+  }
+}

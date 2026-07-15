@@ -1,0 +1,62 @@
+{
+  "surfaceId": "control-room",
+  "label": "StrategyArena research comparison",
+  "bindingState": "DIRECTOR_MOUNT_REQUIRED",
+  "truthLabel": "SYNTHETIC_ONLY",
+  "canonicalSource": "frontier/strategy-arena/preview/tournament-scorecard.v1.json",
+  "evaluatedAtMs": 1772226800000,
+  "summary": "2 frozen strategy packages; selection pressure unavailable; final holdout not implemented",
+  "blocker": "FRONTIER_PRESTAGE_UNMOUNTED",
+  "controlIds": [],
+  "correlationId": "064f43563206d9190d30c62943c2e29913a822355ad44cfc45b3ee51b48ed65d",
+  "evidence": [
+    {
+      "fieldId": "campaign-hash",
+      "label": "campaign hash",
+      "value": "f5c46cbc3bc88e03f4d956b10ccfbdcd8c9a189b3614f700648eee7a97d6b4fe",
+      "truthLabel": "SYNTHETIC_ONLY",
+      "canonicalSource": "frontier/strategy-arena/fixtures/tournament-campaign.v1.json#campaignHash",
+      "unavailableReason": null
+    },
+    {
+      "fieldId": "report-hash",
+      "label": "report hash",
+      "value": "064f43563206d9190d30c62943c2e29913a822355ad44cfc45b3ee51b48ed65d",
+      "truthLabel": "SYNTHETIC_ONLY",
+      "canonicalSource": "frontier/strategy-arena/preview/tournament-scorecard.v1.json#reportHash",
+      "unavailableReason": null
+    },
+    {
+      "fieldId": "q-authority-hash",
+      "label": "Q authority projection hash",
+      "value": "3cdddbb87e6c1ae4e701db1963f13d4c3fa4a6655a7abba9837b0fcb15fd2965",
+      "truthLabel": "SYNTHETIC_ONLY",
+      "canonicalSource": "frontier/strategy-arena/fixtures/q-validation-authority.v1.json#qAuthorityHash",
+      "unavailableReason": null
+    },
+    {
+      "fieldId": "scorecard-hashes",
+      "label": "scorecard hashes",
+      "value": "95258bd89e37b38b74e4f29949bbc921776107ecf43a98ca4ff8723c0b2236fb,965f94b112f474481272961430d0b73bfe59dc5802f490a2c69b9514a3e3f7ce",
+      "truthLabel": "SYNTHETIC_ONLY",
+      "canonicalSource": "frontier/strategy-arena/preview/tournament-scorecard.v1.json#scorecards",
+      "unavailableReason": null
+    },
+    {
+      "fieldId": "selection-pressure-state",
+      "label": "whole-strategy selection pressure",
+      "value": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE",
+      "truthLabel": "MISSING",
+      "canonicalSource": "frontier/strategy-arena/preview/tournament-scorecard.v1.json#strategyTrialEvidenceState",
+      "unavailableReason": "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+    },
+    {
+      "fieldId": "final-holdout-state",
+      "label": "whole-strategy final holdout",
+      "value": "SEALED_REQUIRES_NEW_Q_GRANT_AND_REPLAY_BUNDLE",
+      "truthLabel": "MISSING",
+      "canonicalSource": "frontier/strategy-arena/fixtures/q-validation-authority.v1.json#holdoutAccessState",
+      "unavailableReason": "NEW_Q_WHOLE_STRATEGY_GRANT_AND_REPLAY_BUNDLE_REQUIRED"
+    }
+  ]
+}

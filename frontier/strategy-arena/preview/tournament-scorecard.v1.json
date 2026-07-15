@@ -1,0 +1,1431 @@
+{
+  "schema": "StrategyArenaReportV1",
+  "version": 1,
+  "campaignId": "campaign.strategy-arena.fixture.001",
+  "campaignHash": "f5c46cbc3bc88e03f4d956b10ccfbdcd8c9a189b3614f700648eee7a97d6b4fe",
+  "campaignPhase": "ITERATION",
+  "evaluationPolicyVersion": "strategy-arena-policy.1.0.0",
+  "evaluationPolicyHash": "ace33ca3ba4324f552ccb7c5f5c2a28e5f5e29d4aff7f975d5052f15dc3266cc",
+  "fixtureClock": {
+    "clockId": "fixture://strategy-arena/clock/q14-validation-window",
+    "evaluationCutoffMs": 1772226800000
+  },
+  "seed": 20260716,
+  "qAuthorityHash": "3cdddbb87e6c1ae4e701db1963f13d4c3fa4a6655a7abba9837b0fcb15fd2965",
+  "qValidationFoldsDigest": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+  "strategyTrialEvidenceState": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE",
+  "strategyRecordedTrialCount": null,
+  "strategySelectionPressureRefs": [],
+  "selectionPressureReasonCodes": [
+    "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+  ],
+  "ownerReferenceAttestationHash": "0d2482f770746b4dbc93a09f37be0f92193dc3465d550b4e613fe5e931b474cd",
+  "ownerReferenceAttestationClass": "CALLER_SUPPLIED_PINNED_IDENTITY_ATTESTATION",
+  "ownerReferenceCount": 14,
+  "sameEventComparison": {
+    "eventCount": 4,
+    "comparisons": [
+      {
+        "eventId": "E1",
+        "eventContextHash": "6cdff4a20052bfafc3f0729f47f0b4a5f2baea84b47cdf3fa5e4ca729d43ad34",
+        "strategies": [
+          {
+            "snapshotId": "snapshot.basis.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "180",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          },
+          {
+            "snapshotId": "snapshot.volume.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "125",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          }
+        ]
+      },
+      {
+        "eventId": "E2",
+        "eventContextHash": "2761dfe1527b9dc657b5aecf7fc5c43938f0191d4d5820a2a7d1536db27d2d9a",
+        "strategies": [
+          {
+            "snapshotId": "snapshot.basis.v1",
+            "decisionDisposition": "REJECTED",
+            "economicState": "NO_EXPOSURE",
+            "fixtureNetOutcomeMicros": null,
+            "shadowExposureState": "NO_EXPOSURE",
+            "allocationState": "NOT_REQUESTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          },
+          {
+            "snapshotId": "snapshot.volume.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "-70",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          }
+        ]
+      },
+      {
+        "eventId": "E3",
+        "eventContextHash": "fe465de78bdee11644371946bec7f741b4a24eebd9ca1444551f2d5107e1d4d2",
+        "strategies": [
+          {
+            "snapshotId": "snapshot.basis.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "145",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          },
+          {
+            "snapshotId": "snapshot.volume.v1",
+            "decisionDisposition": "REJECTED",
+            "economicState": "NO_EXPOSURE",
+            "fixtureNetOutcomeMicros": null,
+            "shadowExposureState": "NO_EXPOSURE",
+            "allocationState": "NOT_REQUESTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          }
+        ]
+      },
+      {
+        "eventId": "E4",
+        "eventContextHash": "3595531e633b8d796c3d7cb3e7b9de5b61859a288396ef0be8e90389b91cf54f",
+        "strategies": [
+          {
+            "snapshotId": "snapshot.basis.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "105",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          },
+          {
+            "snapshotId": "snapshot.volume.v1",
+            "decisionDisposition": "ACTED",
+            "economicState": "AVAILABLE",
+            "fixtureNetOutcomeMicros": "80",
+            "shadowExposureState": "SHADOW_EXPOSED",
+            "allocationState": "GRANTED",
+            "canonicalOutcome": false,
+            "alternativeDecisionComputed": false
+          }
+        ]
+      }
+    ],
+    "oneSharedContextPerEvent": true,
+    "automaticWinnerSelected": false
+  },
+  "opportunityOverlapAndContention": {
+    "method": "GLOBAL_DECLARED_SHADOW_WINDOW_INTERSECTION",
+    "overlapCount": 2,
+    "overlaps": [
+      {
+        "eventIds": [
+          "E1",
+          "E1"
+        ],
+        "observationHashes": [
+          "a330e70b3e1c1fd8123def70c2eeee2bad59f31f2a4b7051536d67660875e822",
+          "b0d12ba7b01276d17559d45fd17b3326ad48567dfb91140d3e60b49e37ace7c2"
+        ],
+        "snapshotIds": [
+          "snapshot.basis.v1",
+          "snapshot.volume.v1"
+        ],
+        "overlapStartMs": 1772046800000,
+        "overlapEndMs": 1772046805000,
+        "overlapDurationMs": 5000,
+        "allocationPerformed": false
+      },
+      {
+        "eventIds": [
+          "E4",
+          "E4"
+        ],
+        "observationHashes": [
+          "2b5cf331eb25b477e4c812e0c49f96cb86e2c2ff2a783be563f048e530702e2c",
+          "cef14e2106a3a232be4ea5f4003f15cf7f3f3ecf747457b161d471453fdd500a"
+        ],
+        "snapshotIds": [
+          "snapshot.basis.v1",
+          "snapshot.volume.v1"
+        ],
+        "overlapStartMs": 1772097200000,
+        "overlapEndMs": 1772097205000,
+        "overlapDurationMs": 5000,
+        "allocationPerformed": false
+      }
+    ],
+    "ownerDeclaredContentionRefs": [
+      "fixture://capital/contention/E4"
+    ],
+    "capitalConflictInferred": false,
+    "allocationPerformed": false
+  },
+  "scorecards": [
+    {
+      "schema": "StrategyArenaScorecardV1",
+      "version": 1,
+      "snapshotId": "snapshot.basis.v1",
+      "strategySnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+      "canonicalStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis",
+      "canonicalStrategyHash": "fa6ff1969828e980710cd273a3e207239dfb64ba",
+      "qExperimentAndModelRefs": [],
+      "sourceFamilyIds": [
+        "strategy:f63149662b6cada5b4cbf300f5ae5913fe84f7abf8b9d2ee27df8c67bea69cda"
+      ],
+      "comparability": "COMPARABLE_SYNTHETIC_FIXTURE",
+      "unknownReasons": [],
+      "eventCount": 4,
+      "decisions": {
+        "ACTED": 3,
+        "REJECTED": 1,
+        "EXPIRED": 0,
+        "MISSED": 0,
+        "QUIET_CONTROL": 0,
+        "DATA_INVALID": 0
+      },
+      "nonActionQuality": {
+        "mappedDispositionContract": "EventDisposition",
+        "dispositions": [
+          "EXPIRED",
+          "MISSED",
+          "QUIET_CONTROL",
+          "REJECTED"
+        ],
+        "total": 1,
+        "helpful": 1,
+        "harmful": 0,
+        "unknown": 0,
+        "qualityPpm": 1000000
+      },
+      "falsePositiveCount": 0,
+      "falsePositiveRatePpm": 0,
+      "missedOpportunityCount": 0,
+      "ambiguityCount": 1,
+      "ambiguityRatePpm": 250000,
+      "capacityConstraintCount": 0,
+      "capacityConstraintRatePpm": 0,
+      "ownerDeclaredContentionCount": 1,
+      "costSurvivalRatePpm": 1000000,
+      "costs": {
+        "feesMicros": "60",
+        "slippageMicros": "30",
+        "fundingBorrowMicros": "15",
+        "latencyMicros": "15",
+        "recoveryMicros": "10",
+        "totalMicros": "130"
+      },
+      "shadowPortfolio": {
+        "reality": "HYPOTHETICAL_REPLAY",
+        "canonical": false,
+        "attributionComputed": false,
+        "valuationUnit": "USDT_MICROS",
+        "fixtureNetOutcomeMicros": "430",
+        "maximumDrawdownMicros": "0",
+        "exposedEventCount": 3,
+        "noExposureEventCount": 1,
+        "unknownExposureEventCount": 0,
+        "peakDemandUnits": 10,
+        "peakGrantedUnits": 10,
+        "exposureWindows": [
+          {
+            "eventId": "E1",
+            "observationHash": "a330e70b3e1c1fd8123def70c2eeee2bad59f31f2a4b7051536d67660875e822",
+            "openedAtMs": 1772046800000,
+            "closedAtMs": 1772046805000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "180"
+          },
+          {
+            "eventId": "E3",
+            "observationHash": "a927cd034fb552233d7e34a0406551de40458fe500dc1c6112342232fb08b51f",
+            "openedAtMs": 1772093600000,
+            "closedAtMs": 1772093605000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "145"
+          },
+          {
+            "eventId": "E4",
+            "observationHash": "cef14e2106a3a232be4ea5f4003f15cf7f3f3ecf747457b161d471453fdd500a",
+            "openedAtMs": 1772097200000,
+            "closedAtMs": 1772097205000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "105"
+          }
+        ],
+        "realizationOrder": "SHADOW_EXPOSURE_CLOSE_TIME"
+      },
+      "stability": {
+        "slices": [
+          {
+            "sliceId": "fold:fold-01",
+            "fixtureNetOutcomeMicros": "180"
+          },
+          {
+            "sliceId": "fold:fold-02",
+            "fixtureNetOutcomeMicros": "250"
+          },
+          {
+            "sliceId": "regime:CALM",
+            "fixtureNetOutcomeMicros": "180"
+          },
+          {
+            "sliceId": "regime:STRESSED",
+            "fixtureNetOutcomeMicros": "250"
+          },
+          {
+            "sliceId": "symbol:BTCUSDT",
+            "fixtureNetOutcomeMicros": "325"
+          },
+          {
+            "sliceId": "symbol:ETHUSDT",
+            "fixtureNetOutcomeMicros": "105"
+          }
+        ],
+        "worstSlice": {
+          "sliceId": "symbol:ETHUSDT",
+          "fixtureNetOutcomeMicros": "105"
+        }
+      },
+      "metricOrder": [
+        "FIXTURE_NET_OUTCOME_MICROS",
+        "COST_SURVIVAL_RATE_PPM",
+        "NON_ACTION_QUALITY_PPM",
+        "FALSE_POSITIVE_RATE_PPM_INVERTED",
+        "RECOVERY_BURDEN_MICROS_INVERTED",
+        "AMBIGUITY_RATE_PPM_INVERTED",
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+        "WORST_SLICE_NET_MICROS"
+      ],
+      "metricDirections": {
+        "AMBIGUITY_RATE_PPM_INVERTED": "MAXIMIZE",
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": "MAXIMIZE",
+        "COST_SURVIVAL_RATE_PPM": "MAXIMIZE",
+        "FALSE_POSITIVE_RATE_PPM_INVERTED": "MAXIMIZE",
+        "FIXTURE_NET_OUTCOME_MICROS": "MAXIMIZE",
+        "NON_ACTION_QUALITY_PPM": "MAXIMIZE",
+        "RECOVERY_BURDEN_MICROS_INVERTED": "MAXIMIZE",
+        "WORST_SLICE_NET_MICROS": "MAXIMIZE"
+      },
+      "metricValues": {
+        "FIXTURE_NET_OUTCOME_MICROS": "430",
+        "COST_SURVIVAL_RATE_PPM": 1000000,
+        "NON_ACTION_QUALITY_PPM": 1000000,
+        "FALSE_POSITIVE_RATE_PPM_INVERTED": 1000000,
+        "RECOVERY_BURDEN_MICROS_INVERTED": "-10",
+        "AMBIGUITY_RATE_PPM_INVERTED": 750000,
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": 1000000,
+        "WORST_SLICE_NET_MICROS": "105"
+      },
+      "reality": "HYPOTHETICAL_REPLAY",
+      "attributionComputed": false,
+      "scorecardHash": "95258bd89e37b38b74e4f29949bbc921776107ecf43a98ca4ff8723c0b2236fb"
+    },
+    {
+      "schema": "StrategyArenaScorecardV1",
+      "version": 1,
+      "snapshotId": "snapshot.volume.v1",
+      "strategySnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+      "canonicalStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/volume",
+      "canonicalStrategyHash": "db13a8a375b73eefc8c02f301957694b60e4a6ab",
+      "qExperimentAndModelRefs": [],
+      "sourceFamilyIds": [
+        "strategy:23ddc737d68caa41fc8a7005b4a9f68d825810573dbcbd9904a288fb84320c70"
+      ],
+      "comparability": "COMPARABLE_SYNTHETIC_FIXTURE",
+      "unknownReasons": [],
+      "eventCount": 4,
+      "decisions": {
+        "ACTED": 3,
+        "REJECTED": 1,
+        "EXPIRED": 0,
+        "MISSED": 0,
+        "QUIET_CONTROL": 0,
+        "DATA_INVALID": 0
+      },
+      "nonActionQuality": {
+        "mappedDispositionContract": "EventDisposition",
+        "dispositions": [
+          "EXPIRED",
+          "MISSED",
+          "QUIET_CONTROL",
+          "REJECTED"
+        ],
+        "total": 1,
+        "helpful": 0,
+        "harmful": 1,
+        "unknown": 0,
+        "qualityPpm": 0
+      },
+      "falsePositiveCount": 1,
+      "falsePositiveRatePpm": 333333,
+      "missedOpportunityCount": 1,
+      "ambiguityCount": 1,
+      "ambiguityRatePpm": 250000,
+      "capacityConstraintCount": 0,
+      "capacityConstraintRatePpm": 0,
+      "ownerDeclaredContentionCount": 1,
+      "costSurvivalRatePpm": 1000000,
+      "costs": {
+        "feesMicros": "60",
+        "slippageMicros": "30",
+        "fundingBorrowMicros": "15",
+        "latencyMicros": "15",
+        "recoveryMicros": "25",
+        "totalMicros": "145"
+      },
+      "shadowPortfolio": {
+        "reality": "HYPOTHETICAL_REPLAY",
+        "canonical": false,
+        "attributionComputed": false,
+        "valuationUnit": "USDT_MICROS",
+        "fixtureNetOutcomeMicros": "135",
+        "maximumDrawdownMicros": "70",
+        "exposedEventCount": 3,
+        "noExposureEventCount": 1,
+        "unknownExposureEventCount": 0,
+        "peakDemandUnits": 10,
+        "peakGrantedUnits": 10,
+        "exposureWindows": [
+          {
+            "eventId": "E1",
+            "observationHash": "b0d12ba7b01276d17559d45fd17b3326ad48567dfb91140d3e60b49e37ace7c2",
+            "openedAtMs": 1772046800000,
+            "closedAtMs": 1772046805000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "125"
+          },
+          {
+            "eventId": "E2",
+            "observationHash": "252d58f82842095f9d00b9a4ab2d8f670ffccf0b7ab80e8e19b34ab9a5657b5b",
+            "openedAtMs": 1772050400000,
+            "closedAtMs": 1772050405000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "-70"
+          },
+          {
+            "eventId": "E4",
+            "observationHash": "2b5cf331eb25b477e4c812e0c49f96cb86e2c2ff2a783be563f048e530702e2c",
+            "openedAtMs": 1772097200000,
+            "closedAtMs": 1772097205000,
+            "demandUnits": 10,
+            "grantedUnits": 10,
+            "allocationState": "GRANTED",
+            "fixtureNetOutcomeMicros": "80"
+          }
+        ],
+        "realizationOrder": "SHADOW_EXPOSURE_CLOSE_TIME"
+      },
+      "stability": {
+        "slices": [
+          {
+            "sliceId": "fold:fold-01",
+            "fixtureNetOutcomeMicros": "55"
+          },
+          {
+            "sliceId": "fold:fold-02",
+            "fixtureNetOutcomeMicros": "80"
+          },
+          {
+            "sliceId": "regime:CALM",
+            "fixtureNetOutcomeMicros": "55"
+          },
+          {
+            "sliceId": "regime:STRESSED",
+            "fixtureNetOutcomeMicros": "80"
+          },
+          {
+            "sliceId": "symbol:BTCUSDT",
+            "fixtureNetOutcomeMicros": "125"
+          },
+          {
+            "sliceId": "symbol:ETHUSDT",
+            "fixtureNetOutcomeMicros": "10"
+          }
+        ],
+        "worstSlice": {
+          "sliceId": "symbol:ETHUSDT",
+          "fixtureNetOutcomeMicros": "10"
+        }
+      },
+      "metricOrder": [
+        "FIXTURE_NET_OUTCOME_MICROS",
+        "COST_SURVIVAL_RATE_PPM",
+        "NON_ACTION_QUALITY_PPM",
+        "FALSE_POSITIVE_RATE_PPM_INVERTED",
+        "RECOVERY_BURDEN_MICROS_INVERTED",
+        "AMBIGUITY_RATE_PPM_INVERTED",
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+        "WORST_SLICE_NET_MICROS"
+      ],
+      "metricDirections": {
+        "AMBIGUITY_RATE_PPM_INVERTED": "MAXIMIZE",
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": "MAXIMIZE",
+        "COST_SURVIVAL_RATE_PPM": "MAXIMIZE",
+        "FALSE_POSITIVE_RATE_PPM_INVERTED": "MAXIMIZE",
+        "FIXTURE_NET_OUTCOME_MICROS": "MAXIMIZE",
+        "NON_ACTION_QUALITY_PPM": "MAXIMIZE",
+        "RECOVERY_BURDEN_MICROS_INVERTED": "MAXIMIZE",
+        "WORST_SLICE_NET_MICROS": "MAXIMIZE"
+      },
+      "metricValues": {
+        "FIXTURE_NET_OUTCOME_MICROS": "135",
+        "COST_SURVIVAL_RATE_PPM": 1000000,
+        "NON_ACTION_QUALITY_PPM": 0,
+        "FALSE_POSITIVE_RATE_PPM_INVERTED": 666667,
+        "RECOVERY_BURDEN_MICROS_INVERTED": "-25",
+        "AMBIGUITY_RATE_PPM_INVERTED": 750000,
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": 1000000,
+        "WORST_SLICE_NET_MICROS": "10"
+      },
+      "reality": "HYPOTHETICAL_REPLAY",
+      "attributionComputed": false,
+      "scorecardHash": "965f94b112f474481272961430d0b73bfe59dc5802f490a2c69b9514a3e3f7ce"
+    }
+  ],
+  "ranking": {
+    "method": "PARETO_FRONT_PEELING",
+    "metricOrder": [
+      "FIXTURE_NET_OUTCOME_MICROS",
+      "COST_SURVIVAL_RATE_PPM",
+      "NON_ACTION_QUALITY_PPM",
+      "FALSE_POSITIVE_RATE_PPM_INVERTED",
+      "RECOVERY_BURDEN_MICROS_INVERTED",
+      "AMBIGUITY_RATE_PPM_INVERTED",
+      "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+      "WORST_SLICE_NET_MICROS"
+    ],
+    "metricDirections": {
+      "FIXTURE_NET_OUTCOME_MICROS": "MAXIMIZE",
+      "COST_SURVIVAL_RATE_PPM": "MAXIMIZE",
+      "NON_ACTION_QUALITY_PPM": "MAXIMIZE",
+      "FALSE_POSITIVE_RATE_PPM_INVERTED": "MAXIMIZE",
+      "RECOVERY_BURDEN_MICROS_INVERTED": "MAXIMIZE",
+      "AMBIGUITY_RATE_PPM_INVERTED": "MAXIMIZE",
+      "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": "MAXIMIZE",
+      "WORST_SLICE_NET_MICROS": "MAXIMIZE"
+    },
+    "tiers": [
+      [
+        "snapshot.basis.v1"
+      ],
+      [
+        "snapshot.volume.v1"
+      ]
+    ],
+    "excluded": [],
+    "singleMetricWinnerSelected": false,
+    "automaticWinnerSelected": false,
+    "canonicalLifecycleChanged": false,
+    "selectionPressureState": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE",
+    "selectionPressureAdjusted": false,
+    "reasonCodes": [
+      "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+    ]
+  },
+  "sourceDependenceWarnings": [],
+  "lifecycleAdvisories": [
+    {
+      "schema": "StrategyLifecycleAdvisoryV1",
+      "version": 1,
+      "state": "ABSTAIN_UNKNOWN",
+      "reviewClass": "SELECTION_PRESSURE_UNAVAILABLE",
+      "targetStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis",
+      "targetStrategyHash": "fa6ff1969828e980710cd273a3e207239dfb64ba",
+      "targetSnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+      "campaignHash": "f5c46cbc3bc88e03f4d956b10ccfbdcd8c9a189b3614f700648eee7a97d6b4fe",
+      "evidenceScorecardHash": "95258bd89e37b38b74e4f29949bbc921776107ecf43a98ca4ff8723c0b2236fb",
+      "reasonCodes": [
+        "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+      ],
+      "ownerSeam": "STRATEGY_AND_Q_OWNER_REVIEW_REQUIRED",
+      "authorityClass": "NO_AUTHORITY",
+      "canonical": false,
+      "mutationPerformed": false,
+      "advisoryHash": "a93a6175550ba2fcfde485b292bad8604751596ecefb4dda17ee915d57deeda5"
+    },
+    {
+      "schema": "StrategyLifecycleAdvisoryV1",
+      "version": 1,
+      "state": "ABSTAIN_UNKNOWN",
+      "reviewClass": "SELECTION_PRESSURE_UNAVAILABLE",
+      "targetStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/volume",
+      "targetStrategyHash": "db13a8a375b73eefc8c02f301957694b60e4a6ab",
+      "targetSnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+      "campaignHash": "f5c46cbc3bc88e03f4d956b10ccfbdcd8c9a189b3614f700648eee7a97d6b4fe",
+      "evidenceScorecardHash": "965f94b112f474481272961430d0b73bfe59dc5802f490a2c69b9514a3e3f7ce",
+      "reasonCodes": [
+        "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+      ],
+      "ownerSeam": "STRATEGY_AND_Q_OWNER_REVIEW_REQUIRED",
+      "authorityClass": "NO_AUTHORITY",
+      "canonical": false,
+      "mutationPerformed": false,
+      "advisoryHash": "4a8d6330d9c5efc58d0b2fc83af7a1c0aae9b5f8947e2f5e0f0ef491024532b9"
+    }
+  ],
+  "metaAllocationAdvisory": {
+    "schema": "StrategyMetaAllocationAdvisoryV1",
+    "version": 1,
+    "state": "NO_PROPOSAL",
+    "reviewClass": "SELECTION_PRESSURE_UNAVAILABLE",
+    "candidateStrategies": [
+      {
+        "strategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis",
+        "strategyHash": "fa6ff1969828e980710cd273a3e207239dfb64ba",
+        "snapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "evidenceScorecardHash": "95258bd89e37b38b74e4f29949bbc921776107ecf43a98ca4ff8723c0b2236fb"
+      }
+    ],
+    "campaignHash": "f5c46cbc3bc88e03f4d956b10ccfbdcd8c9a189b3614f700648eee7a97d6b4fe",
+    "relativeWeightsPpm": null,
+    "capitalAmounts": null,
+    "ownerSeam": "CAPITAL_AND_RISK_OWNER_REVIEW_REQUIRED",
+    "authorityClass": "NO_AUTHORITY",
+    "canonical": false,
+    "allocationPerformed": false,
+    "mutationPerformed": false,
+    "advisoryHash": "1de82e17fb4fcb06b5e0ddba4458ab4b53a1347d9534469967e65ad81cda4d1c"
+  },
+  "evidenceIndex": {
+    "strategies": [
+      {
+        "snapshotId": "snapshot.basis.v1",
+        "snapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "canonicalStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis",
+        "qExperimentAndModelRefs": [],
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "f63149662b6cada5b4cbf300f5ae5913fe84f7abf8b9d2ee27df8c67bea69cda",
+            "gitObjectSha": "fa6ff1969828e980710cd273a3e207239dfb64ba",
+            "posture": "CANONICAL_SOURCE",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/basis",
+            "schemaId": "CanonicalStrategyTree",
+            "schemaVersion": "1"
+          }
+        ],
+        "capitalRiskAssumptionRefs": [
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          }
+        ],
+        "executionCostAndRecoveryRefs": [
+          {
+            "contentSha256": "c3bf70a72a5d87d6899e0cc21a7dcd106842e6de57002c8fcbd08decdea097f9",
+            "gitObjectSha": "fbe134a0b95496dc718db1fb10412ca57712afe7",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts",
+            "schemaId": "LTwinScenarioAndRecoveryTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          }
+        ]
+      },
+      {
+        "snapshotId": "snapshot.volume.v1",
+        "snapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+        "canonicalStrategyRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/volume",
+        "qExperimentAndModelRefs": [],
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "23ddc737d68caa41fc8a7005b4a9f68d825810573dbcbd9904a288fb84320c70",
+            "gitObjectSha": "db13a8a375b73eefc8c02f301957694b60e4a6ab",
+            "posture": "CANONICAL_SOURCE",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/engine/volume",
+            "schemaId": "CanonicalStrategyTree",
+            "schemaVersion": "1"
+          }
+        ],
+        "capitalRiskAssumptionRefs": [
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          }
+        ],
+        "executionCostAndRecoveryRefs": [
+          {
+            "contentSha256": "c3bf70a72a5d87d6899e0cc21a7dcd106842e6de57002c8fcbd08decdea097f9",
+            "gitObjectSha": "fbe134a0b95496dc718db1fb10412ca57712afe7",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts",
+            "schemaId": "LTwinScenarioAndRecoveryTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          }
+        ]
+      }
+    ],
+    "events": [
+      {
+        "eventId": "E1",
+        "eventContextHash": "6cdff4a20052bfafc3f0729f47f0b4a5f2baea84b47cdf3fa5e4ca729d43ad34",
+        "qSplitMembershipRef": {
+          "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+          "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+          "posture": "SYNTHETIC_ONLY",
+          "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+          "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+          "schemaId": "Q14ValidationFoldsV1",
+          "schemaVersion": "1"
+        },
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "outcomeFactHash": "9fd60926bbbc012519d3f08fbac44aea404a1d5e6540f5a93a2841798b1e5fe5",
+        "outcomeOwnerRef": {
+          "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+          "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+          "posture": "OWNER_CONTRACT",
+          "projectionSha256": null,
+          "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+          "schemaId": "IntelligenceOutcomeTypes",
+          "schemaVersion": "1"
+        }
+      },
+      {
+        "eventId": "E2",
+        "eventContextHash": "2761dfe1527b9dc657b5aecf7fc5c43938f0191d4d5820a2a7d1536db27d2d9a",
+        "qSplitMembershipRef": {
+          "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+          "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+          "posture": "SYNTHETIC_ONLY",
+          "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+          "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+          "schemaId": "Q14ValidationFoldsV1",
+          "schemaVersion": "1"
+        },
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "outcomeFactHash": "8fa7289d5a75fd16a56b3369c8e628023584456e31ec5721adcc41582ce5e5c7",
+        "outcomeOwnerRef": {
+          "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+          "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+          "posture": "OWNER_CONTRACT",
+          "projectionSha256": null,
+          "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+          "schemaId": "IntelligenceOutcomeTypes",
+          "schemaVersion": "1"
+        }
+      },
+      {
+        "eventId": "E3",
+        "eventContextHash": "fe465de78bdee11644371946bec7f741b4a24eebd9ca1444551f2d5107e1d4d2",
+        "qSplitMembershipRef": {
+          "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+          "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+          "posture": "SYNTHETIC_ONLY",
+          "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+          "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+          "schemaId": "Q14ValidationFoldsV1",
+          "schemaVersion": "1"
+        },
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "outcomeFactHash": "c4a7b66ddd9916257493638f7fd59d0f08f586eb607119dc83b84cd87eacba61",
+        "outcomeOwnerRef": {
+          "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+          "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+          "posture": "OWNER_CONTRACT",
+          "projectionSha256": null,
+          "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+          "schemaId": "IntelligenceOutcomeTypes",
+          "schemaVersion": "1"
+        }
+      },
+      {
+        "eventId": "E4",
+        "eventContextHash": "3595531e633b8d796c3d7cb3e7b9de5b61859a288396ef0be8e90389b91cf54f",
+        "qSplitMembershipRef": {
+          "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+          "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+          "posture": "SYNTHETIC_ONLY",
+          "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+          "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+          "schemaId": "Q14ValidationFoldsV1",
+          "schemaVersion": "1"
+        },
+        "evidenceSnapshotRefs": [
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "outcomeFactHash": "a6f74ec5e5234d40cabd09a61ab6077eb7d8937f6d70cc27ece33400721e39d8",
+        "outcomeOwnerRef": {
+          "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+          "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+          "posture": "OWNER_CONTRACT",
+          "projectionSha256": null,
+          "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+          "schemaId": "IntelligenceOutcomeTypes",
+          "schemaVersion": "1"
+        }
+      }
+    ],
+    "observations": [
+      {
+        "observationId": "observation.snapshot.basis.v1.E2",
+        "observationHash": "62a23db1fc756b2918ae9091b72d7c8aeaef23c7a1d975d6eef27eca3784d018",
+        "eventId": "E2",
+        "strategySnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "1e0cddccfd745f2d8b3c950d05964520f6280117553b0b3e93cd3356cbc18ff1",
+        "exposureFactHash": "d26bb6fa68ad2bb4634741c3adb4abfcb9d40d323e6ffc7fd3bb70c9bc195bb3"
+      },
+      {
+        "observationId": "observation.snapshot.volume.v1.E2",
+        "observationHash": "252d58f82842095f9d00b9a4ab2d8f670ffccf0b7ab80e8e19b34ab9a5657b5b",
+        "eventId": "E2",
+        "strategySnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "72e6d4bd51edc0bd1d3ee175fc80492e9304b6b4b8a45b6d3bb7aed60f5b963b",
+        "exposureFactHash": "3920ddd576fe0b41fbfc2c56c3a2fc7acd876607b1690ad45f45738852ad5133"
+      },
+      {
+        "observationId": "observation.snapshot.basis.v1.E4",
+        "observationHash": "cef14e2106a3a232be4ea5f4003f15cf7f3f3ecf747457b161d471453fdd500a",
+        "eventId": "E4",
+        "strategySnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "f1503fb0d936574f89926cd7345c7feddf216e061883f17424c9b91efd49c751",
+        "exposureFactHash": "1d905bdd1fc3df78f1ad67a89fda1bf2f8704706dc34bada5127c3d5c07e82ab"
+      },
+      {
+        "observationId": "observation.snapshot.volume.v1.E4",
+        "observationHash": "2b5cf331eb25b477e4c812e0c49f96cb86e2c2ff2a783be563f048e530702e2c",
+        "eventId": "E4",
+        "strategySnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "3eea0ec0d03d5e11c38f0e09eccea62c13d1aae4b45a52217a25bd2cc09db55b",
+        "exposureFactHash": "26870ecba706db8469d3858c34ea7c3d71ee7506d82e16b3538c09e999260bef"
+      },
+      {
+        "observationId": "observation.snapshot.basis.v1.E1",
+        "observationHash": "a330e70b3e1c1fd8123def70c2eeee2bad59f31f2a4b7051536d67660875e822",
+        "eventId": "E1",
+        "strategySnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "917f93b87194e1599a318c271cfe44dbc45ecddfb6cf855eb4e9fae340615a68",
+        "exposureFactHash": "ab4030dc80b1c4d0b11796d51c30c381b68d420461e8acf1230071262c921487"
+      },
+      {
+        "observationId": "observation.snapshot.volume.v1.E1",
+        "observationHash": "b0d12ba7b01276d17559d45fd17b3326ad48567dfb91140d3e60b49e37ace7c2",
+        "eventId": "E1",
+        "strategySnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "f4082a372c71f15fc5f0e263002d3d29d281e0c2020b77dcf7a2dbda9b3a2977",
+        "exposureFactHash": "6d8fb8e39bbbd170d54e0b8b1557c17065a89ec1a792cc2189b46e799f98cd06"
+      },
+      {
+        "observationId": "observation.snapshot.basis.v1.E3",
+        "observationHash": "a927cd034fb552233d7e34a0406551de40458fe500dc1c6112342232fb08b51f",
+        "eventId": "E3",
+        "strategySnapshotHash": "966e9fbc365c750fdfb9a56f1dc98a95709be10a5e853be7707ea233c942ddf8",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "e1ae43ac1d4e86f9a2870c92fa5f0047d834dde788778840917196e6a34c91e3",
+        "exposureFactHash": "ef862890d7ca7d04e0c213bd179d136cb7d9001fd1e553bed5f285e741d6af76"
+      },
+      {
+        "observationId": "observation.snapshot.volume.v1.E3",
+        "observationHash": "cabf9c8443bd454d9a63f96dcbd6f443db5cc686f64b58e59a020dba5d88832f",
+        "eventId": "E3",
+        "strategySnapshotHash": "c2673139fb172d8af86c2585bb1ad1e6d37964f56a3162ee54ec36ff7de7bbc1",
+        "ownerEvidenceRefs": [
+          {
+            "contentSha256": "3998cfe32649f527a6bdba064d029cb292a26208781269b1ff4bfdff705275f1",
+            "gitObjectSha": "f1d67f847cd982c18a5809f6851545ee7bf5c020",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/labels/disposition.py#EventDisposition",
+            "schemaId": "EventDisposition",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "9c6c34727bd2796eca8fc5514727425b17a037fd7388c3ab93a43d601d69677a",
+            "gitObjectSha": "53ef386730e701829003f2c3991550abb9e20419",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/allocation/types.ts",
+            "schemaId": "CapitalAllocationTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a",
+            "gitObjectSha": "0bd0eac74dd8197282cc591bb9d73df29e40af9f",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+            "schemaId": "CapitalEconomicReport",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "a0df76f2cd91991c6c5424be33fb421888cd191a83303de200a69799313e75d9",
+            "gitObjectSha": "d8b28d80a70f75ad7a6aca5311e6bf86c52e8d60",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/execution/recovery.ts",
+            "schemaId": "FoundationRecoveryGuidance",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "58475311e6e687e0fb36a0fe2dfcaa5303033e549a44f0ab29d671c4c88ca3c3",
+            "gitObjectSha": "13c594d105143d586dec7798a29d9561d60cf96c",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/risk/types.ts",
+            "schemaId": "FoundationRiskTypes",
+            "schemaVersion": "1"
+          },
+          {
+            "contentSha256": "5e2e48d2aff325c96c13c1abd3ce8ef8e285b1d9c4e025fc05a56214bcf60472",
+            "gitObjectSha": "ef01e6976bcaed9a1c6b64bdd9d01b98c3663c3d",
+            "posture": "OWNER_CONTRACT",
+            "projectionSha256": null,
+            "ref": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/intelligenceFoundation/outcomes/types.ts",
+            "schemaId": "IntelligenceOutcomeTypes",
+            "schemaVersion": "1"
+          }
+        ],
+        "economicFactHash": "b74d35d92e09bd632dde829b3a1a33688f6069295b9b4b08b9e816b91e76503f",
+        "exposureFactHash": "a86c526ee4858ac0aecc016fb6b40b7a61d43c44506551525788b9a6a07ddf0e"
+      }
+    ]
+  },
+  "limitations": [
+    "All event, economics, exposure, and capacity facts are deterministic synthetic fixture projections; none is canonical product truth.",
+    "Q alone owns datasets, splits, purge, embargo, holdout access, global holdout one-use, multiplicity, model comparison, and registry lifecycle.",
+    "Capital, Risk, L, outcome, and strategy owners alone own canonical accounting, exposure, decisions, recovery, and strategy behavior.",
+    "StrategyArena aggregates caller-supplied fixture facts; it does not compute realized attribution, residual decomposition, or decision alternatives.",
+    "Final-holdout evaluation is not implemented: Q must issue a new whole-strategy grant and immutable replay bundle bound to the exact campaign, policy, seed, snapshots, models, and facts.",
+    "Campaign-bound whole-strategy trial and multiplicity evidence is unavailable; raw fixture Pareto tiers are selection-pressure-unadjusted and lifecycle/meta-allocation proposals abstain.",
+    "Owner-reference resolution is a caller-supplied pinned-identity attestation; accepted-source object/content/projection bytes are independently checked only by the module-local build-time suite.",
+    "Comparative rankings and any future owner-review advisories have no promotion, allocation, lifecycle, or execution authority.",
+    "No mounted behavior, production isolation, runtime safety, live readiness, edge, or profitability is proven."
+  ],
+  "truthClass": "ADVISORY",
+  "canonical": false,
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "reality": "HYPOTHETICAL_REPLAY",
+  "shadowOnly": true,
+  "attributionComputed": false,
+  "decisionAlternativesComputed": false,
+  "promotionAuthorized": false,
+  "allocationAuthorized": false,
+  "executionAuthorized": false,
+  "lifecycleMutationPerformed": false,
+  "reportHash": "064f43563206d9190d30c62943c2e29913a822355ad44cfc45b3ee51b48ed65d"
+}

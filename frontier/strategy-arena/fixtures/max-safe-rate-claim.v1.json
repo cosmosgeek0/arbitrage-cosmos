@@ -1,0 +1,7 @@
+{
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "eventsPerWindow": 64,
+  "windowSizeMs": 1000,
+  "queueCapacity": 1,
+  "backpressurePolicy": "FAIL_CLOSED"
+}

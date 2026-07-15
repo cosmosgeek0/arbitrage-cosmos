@@ -1,0 +1,181 @@
+{
+  "adapterMapRefs": [
+    "frontier/strategy-arena/contracts/v1/cockpit-projection-adapter-map.v1.json",
+    "frontier/strategy-arena/contracts/v1/experiment-provider-adapter-map.v1.json",
+    "frontier/strategy-arena/contracts/v1/scenario-reference-adapter-map.v1.json"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "buildState": "PRESTAGE_READY",
+  "canonicalInputContractRefs": [
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/5",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/6",
+    "frontier/strategy-arena/contracts/v1/strategy-arena-v1.schema.json#/$defs/StrategyArenaCampaignV1"
+  ],
+  "canonicalOutputContractRefs": [
+    "frontier/strategy-arena/contracts/v1/strategy-arena-v1.schema.json#/$defs/StrategyArenaReportV1",
+    "git:56c47dad398c485b6653036c8b90c53f11061b1e:web/src/lib/productIntegration/model.ts#ProductSurfaceProjection"
+  ],
+  "canonicalPolicyRefs": [
+    "frontier/directives/Frontier.md#6-f3--strategyarena-whole-strategy-tournament",
+    "frontier/dock/contracts/v1/hard-denials.json"
+  ],
+  "capabilityClass": "WHOLE_STRATEGY_COMPARATIVE_FIXTURE",
+  "cockpitProjectionRef": "frontier/strategy-arena/preview/product-surface-projection.v1.json",
+  "completenessRequirement": "PRESERVE_UNKNOWN_AND_OWNER_MISSINGNESS",
+  "dataClassifications": [
+    "SYNTHETIC_FIXTURE_NO_SECRETS",
+    "READ_ONLY_OWNER_REFERENCES"
+  ],
+  "dataSourceRefs": [
+    "frontier/strategy-arena/fixtures/tournament-campaign.v1.json",
+    "frontier/strategy-arena/fixtures/q-validation-owner-slices.v1.json",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/spec",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q15/registry_cards.v1.json#/experimentCard",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts"
+  ],
+  "degradationBehavior": "ABSTAIN_UNKNOWN_OR_CANONICAL_OWNER_REVIEW_REQUIRED",
+  "determinismClass": "INJECTED_CLOCK_NO_RANDOMNESS",
+  "disablePlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "idempotent": true
+  },
+  "displayName": "F3 StrategyArena",
+  "disposition": "ACTIVE",
+  "dockContractVersion": "1.0.0",
+  "egressDeclaration": "NONE",
+  "extensionId": "frontier.strategy-arena",
+  "extensionVersion": "1.0.0",
+  "failureModes": [
+    "FAIL_CLOSED_ON_OWNER_REF_HASH_OR_Q_SEMANTIC_MISMATCH",
+    "FINAL_HOLDOUT_UNSUPPORTED_WITHOUT_NEW_Q_GRANT_AND_REPLAY_BUNDLE",
+    "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING",
+    "ABSTAIN_UNKNOWN_ON_REQUIRED_METRIC_UNAVAILABLE",
+    "REQUEST_DEGRADATION_ON_RESOURCE_LIMIT"
+  ],
+  "freshnessRequirement": "EXACT_IMMUTABLE_OWNER_REFERENCE_OR_UNKNOWN",
+  "hardDenialRefs": [
+    "frontier/dock/contracts/v1/hard-denials.json"
+  ],
+  "healthContractRef": "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/3",
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "insertionRequestRef": "frontier/strategy-arena/fixtures/insertion-request.v1.json",
+  "knownLimitations": [
+    "RESEARCH_ONLY",
+    "NO_REGISTRY_AUTHORITY",
+    "NO_PROMOTION_AUTHORITY",
+    "NO_EXECUTION",
+    "NO_PRODUCTION_ISOLATION_OR_RUNTIME_SAFETY_PROOF",
+    "FINAL_HOLDOUT_NOT_IMPLEMENTED_REQUIRES_NEW_Q_GRANT_AND_REPLAY_BUNDLE",
+    "CAMPAIGN_BOUND_WHOLE_STRATEGY_SELECTION_PRESSURE_UNAVAILABLE",
+    "OWNER_REFERENCE_RESOLUTION_IS_CALLER_ATTESTED_NOT_SOURCE_BYTE_VERIFIED_AT_RUNTIME"
+  ],
+  "latencyClass": "DETERMINISTIC_FIXTURE_STEPS",
+  "licenseAndTermsRefs": [
+    "frontier/strategy-arena/RECEIPT.md#research-action-receipt"
+  ],
+  "maxSafeRateClaim": {
+    "backpressurePolicy": "FAIL_CLOSED",
+    "eventsPerWindow": 64,
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "queueCapacity": 1,
+    "windowSizeMs": 1000
+  },
+  "networkMode": "FIXTURE_ONLY",
+  "optionalCapabilityRefs": [
+    "frontier/scenario-bank:F12-accepted-provider-artifact"
+  ],
+  "owner": "F3 StrategyArena prestage worker",
+  "purpose": "Compare complete frozen strategy packages in deterministic synthetic campaigns and emit non-authoritative comparative reports and owner-review advisories.",
+  "replayClass": "SYNTHETIC_WALK_FORWARD_FIXTURE_ONLY",
+  "requestedCapabilities": [
+    "DESCRIBE",
+    "PROJECT_FIXTURE",
+    "VALIDATE_FIXTURE"
+  ],
+  "requiredCapabilityRefs": [
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/5",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/6"
+  ],
+  "resourceBudgetClaim": {
+    "claimId": "strategy-arena.fixture-budget.v1",
+    "cpu": {
+      "reason": "No host-performance or production-runtime claim is made in prestage.",
+      "state": "UNAVAILABLE",
+      "unit": "host-cpu-percent"
+    },
+    "disk": {
+      "reason": "Fixture campaigns open no runtime storage transport.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes-per-second"
+    },
+    "eventRate": {
+      "limit": 64,
+      "observed": 64,
+      "state": "MEASURED",
+      "unit": "events-per-1000ms-fixture-window"
+    },
+    "latency": {
+      "limit": {
+        "p50": 1,
+        "p95": 1,
+        "p99": 1
+      },
+      "observed": {
+        "p50": 1,
+        "p95": 1,
+        "p99": 1
+      },
+      "state": "MEASURED",
+      "unit": "deterministic-fixture-steps"
+    },
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "memory": {
+      "reason": "No mounted process exists to measure production memory.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes"
+    },
+    "modelUse": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "calls"
+    },
+    "network": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "bytes"
+    },
+    "queue": {
+      "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST",
+      "limit": 1,
+      "observed": 1,
+      "state": "MEASURED",
+      "unit": "events"
+    },
+    "storageGrowth": {
+      "limit": 262144,
+      "observed": 131072,
+      "state": "MEASURED",
+      "unit": "fixture-bytes-per-window"
+    }
+  },
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "rollbackPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "pinnedVersion": "1.0.0"
+  },
+  "secretMode": "NONE",
+  "sourceSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "testEntryPointRefs": [
+    "frontier/strategy-arena/tests/strategy-arena.test.mjs"
+  ],
+  "testReceiptRef": "frontier/strategy-arena/RECEIPT.md",
+  "uninstallPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "deleteCanonicalEvidence": false
+  },
+  "descriptorHash": "d21ad373bf1836ac3b91e88c8d0fb35e5505e03797477484f08ed92c06407e00"
+}

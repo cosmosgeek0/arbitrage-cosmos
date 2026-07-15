@@ -1,0 +1,56 @@
+{
+  "requestId": "strategy-arena.future-mount.v1",
+  "extensionId": "frontier.strategy-arena",
+  "requestVersion": "1.0.0",
+  "intendedSharedSeams": [
+    "frontier/scenario-bank:F12-ScenarioReferenceV1-provider-read",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin:read-only-L-scenario-recovery-effect-assumption-projection",
+    "quant/generated/q14:validation-safe-folds-dataset-status-and-holdout-policy-leaf-projection",
+    "quant/src/quant_edge/registry_ops:Q-owner-issued-campaign-bound-whole-strategy-selection-pressure-bundle-with-trial-ledger-and-multiplicity-evidence",
+    "quant/src/quant_edge/registry_ops:read-only-experiment-card-and-owner-reviewed-StrategyArena-advisory-intake",
+    "quant/src/quant_edge/validation:Q-owner-issued-whole-strategy-final-holdout-grant-and-immutable-replay-bundle-with-global-one-use",
+    "server/src/capitalFoundation/allocation:read-only-capacity-assumption-projection-and-owner-reviewed-meta-allocation-advisory-intake",
+    "server/src/capitalFoundation/economics:read-only-cost-assumption-projection",
+    "server/src/engine/basis:read-only-frozen-strategy-package-export-and-owner-reviewed-lifecycle-advisory-intake",
+    "server/src/engine/volume:read-only-frozen-strategy-package-export-and-owner-reviewed-lifecycle-advisory-intake",
+    "server/src/foundation/execution:read-only-recovery-assumption-projection",
+    "server/src/foundation/risk:read-only-risk-assumption-projection-and-owner-reviewed-meta-allocation-advisory-intake",
+    "server/src/intelligenceFoundation/outcomes:read-only-outcome-contract-projection",
+    "server/src/systemIntegration/supervisor:read-only-StrategyArena-cockpit-projection"
+  ],
+  "canonicalOwnerDecisions": [
+    "Q must issue a new whole-strategy grant and immutable replay bundle bound to the exact campaign, policy, seed, snapshots, models, and facts before any final-holdout work; Q remains responsible for global one-use enforcement.",
+    "Basis and Volume owners must define the accepted frozen strategy-package export rather than allowing F3 to infer package lineage.",
+    "Capital, Risk, Foundation execution/recovery, and outcome owners must approve read-only assumption projections; F3 never turns those projections into canonical facts.",
+    "The accepted L owner at df6b472993ca9659ce09cf5f72004981c6835f0d must approve an immutable read-only exchange-twin scenario, latency, effect, and recovery evidence projection; the current type ref and ScenarioReference lineage are assumptions only and F3 never executes the twin.",
+    "Strategy and Q owners decide whether a retirement or demotion review has any lifecycle consequence.",
+    "Capital and Risk owners decide whether any relative research-set suggestion warrants a separately authorized allocation review.",
+    "A fresh post-acceptance integrator decides whether to mount the read-only cockpit projection.",
+    "F12 must provide an accepted ScenarioReferenceV1 artifact before its definitions replace the sealed Dock conformance exemplar."
+  ],
+  "requestedCapabilities": [
+    "DESCRIBE",
+    "PROJECT_FIXTURE",
+    "VALIDATE_FIXTURE"
+  ],
+  "egressDeclaration": "NONE",
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "resourceBudgetClaimRef": "frontier/strategy-arena/fixtures/resource-budget-claim.v1.json",
+  "blockedFacetRequests": [],
+  "futureTests": [
+    "Q validation-safe folds, dataset digest, status, and holdout-policy leaf readback without whole-plan or final-holdout payload exposure",
+    "Q campaign-bound whole-strategy selection-pressure bundle readback with exact policy, seed, ordered snapshot hashes, validation-slice hash, trial ledger, and multiplicity evidence",
+    "New Q whole-strategy grant and replay-bundle scope plus global holdout one-use readback before any final-holdout implementation",
+    "Basis and Volume frozen package identity, seed, policy, evidence, and optional Q-lineage readback",
+    "Capital allocation/economics, Risk, Foundation recovery, and outcome owner-reference readback without canonical mutation",
+    "Accepted L exchange-twin scenario, latency, effect, and recovery assumption readback at df6b472993ca9659ce09cf5f72004981c6835f0d without scenario execution or transport",
+    "Canonical strategy and Q owner review of advisory intake without lifecycle mutation",
+    "Capital and Risk owner review without automatic weights, reservations, or allocation",
+    "Post-mount import, process, crash, restart, and removal isolation proof",
+    "Read-only product supervisor projection without recomputed truth or controls",
+    "Accepted F12 provider reference replacement and non-execution proof"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "mutationImplemented": false
+}

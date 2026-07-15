@@ -1,0 +1,3907 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://f-arena.invalid/frontier/strategy-arena/contracts/v1/strategy-arena-v1.schema.json",
+  "title": "StrategyArena fixture contracts V1",
+  "description": "Closed non-authoritative deterministic fixture contracts. Runtime validators additionally enforce cross-record hashes, owner resolution, arithmetic identities, and Q source semantics.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/StrategyEvaluationSnapshotV1"
+    },
+    {
+      "$ref": "#/$defs/StrategyArenaEventContextV1"
+    },
+    {
+      "$ref": "#/$defs/StrategyObservationV1"
+    },
+    {
+      "$ref": "#/$defs/StrategyArenaCampaignV1"
+    },
+    {
+      "$ref": "#/$defs/StrategyArenaReportV1"
+    }
+  ],
+  "$defs": {
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "GitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "GitRef": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^git:[a-f0-9]{40}:(?!/)(?![^#]*\\.\\.)(?![^#]*//)(?![^#]*/(?:#|$))[^*?\\[\\]{}#]+(?:#.+)?$"
+    },
+    "FixtureUri": {
+      "type": "string",
+      "pattern": "^fixture://"
+    },
+    "Micros": {
+      "type": "string",
+      "maxLength": 14,
+      "pattern": "^(?:0|-?(?:[1-9][0-9]{0,11}|1000000000000))$"
+    },
+    "NonNegativeMicros": {
+      "type": "string",
+      "maxLength": 13,
+      "pattern": "^(?:0|[1-9][0-9]{0,11}|1000000000000)$"
+    },
+    "NonNegativeDecimal": {
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^(?:0|[1-9][0-9]*)$"
+    },
+    "NullableMicros": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Micros"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "NullablePpm": {
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ImmutableOwnerRefV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "gitObjectSha",
+        "contentSha256",
+        "projectionSha256",
+        "schemaId",
+        "schemaVersion",
+        "posture"
+      ],
+      "properties": {
+        "ref": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "gitObjectSha": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "contentSha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "projectionSha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schemaId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schemaVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "posture": {
+          "enum": [
+            "CANONICAL_SOURCE",
+            "OWNER_CONTRACT",
+            "OWNER_EVIDENCE",
+            "SYNTHETIC_ONLY"
+          ]
+        }
+      }
+    },
+    "FixtureClockV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clockId",
+        "evaluationCutoffMs"
+      ],
+      "properties": {
+        "clockId": {
+          "$ref": "#/$defs/FixtureUri"
+        },
+        "evaluationCutoffMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "CostMicrosV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fees",
+        "slippage",
+        "fundingBorrow",
+        "latency",
+        "recovery"
+      ],
+      "properties": {
+        "fees": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMicros"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "slippage": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMicros"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fundingBorrow": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMicros"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latency": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMicros"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recovery": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeMicros"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CompleteCostMicrosV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fees",
+        "slippage",
+        "fundingBorrow",
+        "latency",
+        "recovery"
+      ],
+      "properties": {
+        "fees": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "slippage": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "fundingBorrow": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "latency": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "recovery": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        }
+      }
+    },
+    "SyntheticOutcomeProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "state",
+        "outcomeClass",
+        "ambiguityState",
+        "reality",
+        "ownerContractRef",
+        "fixtureFactRef",
+        "attributionComputed",
+        "reasonCodes",
+        "outcomeFactHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "SyntheticOutcomeProjectionV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "state": {
+          "enum": [
+            "AVAILABLE",
+            "UNKNOWN"
+          ]
+        },
+        "outcomeClass": {
+          "enum": [
+            "FAVORABLE",
+            "UNFAVORABLE",
+            "NEUTRAL",
+            "UNKNOWN"
+          ]
+        },
+        "ambiguityState": {
+          "enum": [
+            "CLEAR",
+            "AMBIGUOUS",
+            "UNKNOWN"
+          ]
+        },
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "ownerContractRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "fixtureFactRef": {
+          "$ref": "#/$defs/FixtureUri"
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "outcomeFactHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "AVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcomeClass": {
+                "enum": [
+                  "FAVORABLE",
+                  "UNFAVORABLE",
+                  "NEUTRAL"
+                ]
+              },
+              "ambiguityState": {
+                "enum": [
+                  "CLEAR",
+                  "AMBIGUOUS"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "outcomeClass": {
+                "const": "UNKNOWN"
+              },
+              "ambiguityState": {
+                "const": "UNKNOWN"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "minItems": 1,
+                "maxItems": 128,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SyntheticEconomicProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "state",
+        "reality",
+        "valuationUnit",
+        "grossOutcomeMicros",
+        "costMicros",
+        "fixtureNetOutcomeMicros",
+        "accountingStatus",
+        "ownerContractRef",
+        "fixtureFactRef",
+        "attributionComputed",
+        "reasonCodes",
+        "economicFactHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "SyntheticEconomicProjectionV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "state": {
+          "enum": [
+            "AVAILABLE",
+            "NO_EXPOSURE",
+            "UNKNOWN"
+          ]
+        },
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "valuationUnit": {
+          "const": "USDT_MICROS"
+        },
+        "grossOutcomeMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "costMicros": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CostMicrosV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "accountingStatus": {
+          "enum": [
+            "FIXTURE_PROVIDED",
+            "INCOMPLETE",
+            "DIVERGENT",
+            "NOT_APPLICABLE",
+            "UNAVAILABLE"
+          ]
+        },
+        "ownerContractRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "fixtureFactRef": {
+          "$ref": "#/$defs/FixtureUri"
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "economicFactHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "AVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "grossOutcomeMicros": {
+                "$ref": "#/$defs/Micros"
+              },
+              "costMicros": {
+                "$ref": "#/$defs/CompleteCostMicrosV1"
+              },
+              "fixtureNetOutcomeMicros": {
+                "$ref": "#/$defs/Micros"
+              },
+              "accountingStatus": {
+                "const": "FIXTURE_PROVIDED"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NO_EXPOSURE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "grossOutcomeMicros": {
+                "type": "null"
+              },
+              "costMicros": {
+                "type": "null"
+              },
+              "fixtureNetOutcomeMicros": {
+                "type": "null"
+              },
+              "accountingStatus": {
+                "const": "NOT_APPLICABLE"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "accountingStatus": {
+                "enum": [
+                  "INCOMPLETE",
+                  "DIVERGENT",
+                  "UNAVAILABLE"
+                ]
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "minItems": 1,
+                "maxItems": 128,
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNKNOWN"
+              },
+              "accountingStatus": {
+                "const": "INCOMPLETE"
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "properties": {
+                  "grossOutcomeMicros": {
+                    "type": "null"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "fixtureNetOutcomeMicros": {
+                    "type": "null"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "null"
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "object",
+                    "properties": {
+                      "fees": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "object",
+                    "properties": {
+                      "slippage": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "object",
+                    "properties": {
+                      "fundingBorrow": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "object",
+                    "properties": {
+                      "latency": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "costMicros": {
+                    "type": "object",
+                    "properties": {
+                      "recovery": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNKNOWN"
+              },
+              "accountingStatus": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "grossOutcomeMicros": {
+                "type": "null"
+              },
+              "costMicros": {
+                "type": "null"
+              },
+              "fixtureNetOutcomeMicros": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ShadowExposureProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "state",
+        "reality",
+        "openedAtMs",
+        "closedAtMs",
+        "capacityUnit",
+        "valuationAsset",
+        "demandUnits",
+        "grantedUnits",
+        "allocationState",
+        "ownerContractRef",
+        "fixtureFactRef",
+        "reasonCodes",
+        "exposureFactHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "ShadowExposureProjectionV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "state": {
+          "enum": [
+            "SHADOW_EXPOSED",
+            "NO_EXPOSURE",
+            "UNKNOWN"
+          ]
+        },
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "openedAtMs": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "closedAtMs": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capacityUnit": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valuationAsset": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "demandUnits": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grantedUnits": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allocationState": {
+          "enum": [
+            "GRANTED",
+            "CAPPED",
+            "BLOCKED",
+            "NOT_REQUESTED",
+            "UNKNOWN"
+          ]
+        },
+        "ownerContractRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "fixtureFactRef": {
+          "$ref": "#/$defs/FixtureUri"
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "exposureFactHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "SHADOW_EXPOSED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "openedAtMs": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "closedAtMs": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "capacityUnit": {
+                "const": "FIXTURE_CAPACITY_UNITS"
+              },
+              "valuationAsset": {
+                "const": "USDT_MICROS"
+              },
+              "demandUnits": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000000
+              },
+              "grantedUnits": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000000
+              },
+              "allocationState": {
+                "enum": [
+                  "GRANTED",
+                  "CAPPED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NO_EXPOSURE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "openedAtMs": {
+                "type": "null"
+              },
+              "closedAtMs": {
+                "type": "null"
+              },
+              "grantedUnits": {
+                "const": 0
+              },
+              "allocationState": {
+                "enum": [
+                  "BLOCKED",
+                  "NOT_REQUESTED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NO_EXPOSURE"
+              },
+              "allocationState": {
+                "const": "NOT_REQUESTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "demandUnits": {
+                "const": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NO_EXPOSURE"
+              },
+              "allocationState": {
+                "const": "BLOCKED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "demandUnits": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000000
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "openedAtMs": {
+                "type": "null"
+              },
+              "closedAtMs": {
+                "type": "null"
+              },
+              "capacityUnit": {
+                "type": "null"
+              },
+              "valuationAsset": {
+                "type": "null"
+              },
+              "demandUnits": {
+                "type": "null"
+              },
+              "grantedUnits": {
+                "type": "null"
+              },
+              "allocationState": {
+                "const": "UNKNOWN"
+              },
+              "reasonCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "minItems": 1,
+                "maxItems": 128,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "QFoldProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "foldId",
+        "status",
+        "validationSampleIds",
+        "validationStartCutoffNs",
+        "validationEndCutoffNs",
+        "purgedCount",
+        "embargoedCount",
+        "groupConflictCount"
+      ],
+      "properties": {
+        "foldId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "const": "VALID"
+        },
+        "validationSampleIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "validationStartCutoffNs": {
+          "$ref": "#/$defs/NonNegativeDecimal"
+        },
+        "validationEndCutoffNs": {
+          "$ref": "#/$defs/NonNegativeDecimal"
+        },
+        "purgedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "embargoedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "groupConflictCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "QValidationAuthorityProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "posture",
+        "sourceArtifactRef",
+        "validationFoldsRef",
+        "validationFoldsDigest",
+        "datasetDigestRef",
+        "datasetDigest",
+        "planStatusRef",
+        "planStatus",
+        "holdoutPolicyRef",
+        "folds",
+        "holdoutAccessState",
+        "qAuthorityHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "QValidationAuthorityProjectionV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "posture": {
+          "const": "FIXTURE_CONFORMANCE_ONLY"
+        },
+        "sourceArtifactRef": {
+          "const": {
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json",
+            "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+            "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+            "projectionSha256": null,
+            "schemaId": "Q14ValidationGoldenV1",
+            "schemaVersion": "1",
+            "posture": "SYNTHETIC_ONLY"
+          }
+        },
+        "validationFoldsRef": {
+          "const": {
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/folds",
+            "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+            "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+            "projectionSha256": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71",
+            "schemaId": "Q14ValidationFoldsV1",
+            "schemaVersion": "1",
+            "posture": "SYNTHETIC_ONLY"
+          }
+        },
+        "validationFoldsDigest": {
+          "const": "45d95a79c9ed28fedc488538405aa22c4684d4373fa82f59e5bd2daafad9ed71"
+        },
+        "datasetDigestRef": {
+          "const": {
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/datasetDigest",
+            "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+            "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+            "projectionSha256": "99fb6a3c9ee41f7b1895d7f46e69793948a01dfb179cda2e65413089cff8400a",
+            "schemaId": "Q14DatasetDigestV1",
+            "schemaVersion": "1",
+            "posture": "SYNTHETIC_ONLY"
+          }
+        },
+        "datasetDigest": {
+          "const": "701e256d7beb6161812ed2d5edba16069856c1ded12e996b987c7e758249724b"
+        },
+        "planStatusRef": {
+          "const": {
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/status",
+            "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+            "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+            "projectionSha256": "bb3389e2cbcd7bf4d4fcbf732e19b71490126f21ec98b92ce63ac9f464e845c1",
+            "schemaId": "Q14PlanStatusV1",
+            "schemaVersion": "1",
+            "posture": "SYNTHETIC_ONLY"
+          }
+        },
+        "planStatus": {
+          "const": "VALID"
+        },
+        "holdoutPolicyRef": {
+          "const": {
+            "ref": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/generated/q14/q14_validation_golden_v1.json#/plan/spec",
+            "gitObjectSha": "d13141000460086c60918a8c8e99123f7049c750",
+            "contentSha256": "539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9",
+            "projectionSha256": "af8915a48b59e6dcbcab7d63969400d32c5d2706dd7e9f948dd5c3db4d87f83e",
+            "schemaId": "Q14HoldoutPolicyV1",
+            "schemaVersion": "1",
+            "posture": "SYNTHETIC_ONLY"
+          }
+        },
+        "folds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QFoldProjectionV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "holdoutAccessState": {
+          "const": "SEALED_REQUIRES_NEW_Q_GRANT_AND_REPLAY_BUNDLE"
+        },
+        "qAuthorityHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "StrategyArenaPolicyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "policyId",
+        "policyVersion",
+        "minimumComparableEvents",
+        "maximumFalsePositiveRatePpm",
+        "maximumAmbiguityRatePpm",
+        "maximumRecoveryBurdenMicros",
+        "maximumCapacityConstraintRatePpm",
+        "demotionRequiresBreaches",
+        "retirementRequiresBreaches",
+        "metricOrder",
+        "metricDirections",
+        "policyHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyArenaPolicyV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "policyId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "policyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "minimumComparableEvents": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "maximumFalsePositiveRatePpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maximumAmbiguityRatePpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "maximumRecoveryBurdenMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "maximumCapacityConstraintRatePpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "demotionRequiresBreaches": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "retirementRequiresBreaches": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "metricOrder": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "FIXTURE_NET_OUTCOME_MICROS",
+              "COST_SURVIVAL_RATE_PPM",
+              "NON_ACTION_QUALITY_PPM",
+              "FALSE_POSITIVE_RATE_PPM_INVERTED",
+              "RECOVERY_BURDEN_MICROS_INVERTED",
+              "AMBIGUITY_RATE_PPM_INVERTED",
+              "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+              "WORST_SLICE_NET_MICROS"
+            ]
+          },
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "metricDirections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "FIXTURE_NET_OUTCOME_MICROS",
+            "COST_SURVIVAL_RATE_PPM",
+            "NON_ACTION_QUALITY_PPM",
+            "FALSE_POSITIVE_RATE_PPM_INVERTED",
+            "RECOVERY_BURDEN_MICROS_INVERTED",
+            "AMBIGUITY_RATE_PPM_INVERTED",
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+            "WORST_SLICE_NET_MICROS"
+          ],
+          "properties": {
+            "FIXTURE_NET_OUTCOME_MICROS": {
+              "const": "MAXIMIZE"
+            },
+            "COST_SURVIVAL_RATE_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "NON_ACTION_QUALITY_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "FALSE_POSITIVE_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "RECOVERY_BURDEN_MICROS_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "AMBIGUITY_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "WORST_SLICE_NET_MICROS": {
+              "const": "MAXIMIZE"
+            }
+          }
+        },
+        "policyHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "StrategyEvaluationSnapshotV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "snapshotId",
+        "canonicalStrategyRef",
+        "canonicalStrategyHash",
+        "canonicalStrategyContentSha256",
+        "qExperimentAndModelRefs",
+        "evidenceSnapshotRefs",
+        "capitalRiskAssumptionRefs",
+        "executionCostAndRecoveryRefs",
+        "evaluationCampaignId",
+        "evaluationPolicyVersion",
+        "evaluationPolicyHash",
+        "fixtureClock",
+        "seed",
+        "holdoutPolicyRef",
+        "knownMissingInputs",
+        "snapshotHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyEvaluationSnapshotV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "canonicalStrategyRef": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "canonicalStrategyHash": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "canonicalStrategyContentSha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "qExperimentAndModelRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "evidenceSnapshotRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "capitalRiskAssumptionRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "executionCostAndRecoveryRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "evaluationCampaignId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "evaluationPolicyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "evaluationPolicyHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "fixtureClock": {
+          "$ref": "#/$defs/FixtureClockV1"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "holdoutPolicyRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "knownMissingInputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "snapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "ScenarioReferenceV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenarioId",
+        "scenarioVersion",
+        "scenarioHash",
+        "extensionProviderRef",
+        "fixtureSchemaRef",
+        "seed",
+        "clockRef",
+        "lineageRefs",
+        "expectedCanonicalPostureRefs"
+      ],
+      "properties": {
+        "scenarioId": {
+          "const": "frontier.scenario-bank.example"
+        },
+        "scenarioVersion": {
+          "const": "1.0.0"
+        },
+        "scenarioHash": {
+          "const": "c6fda794de08e979b4e47cd3d8372e9d28c724ea31ef15fb0cf6982c962dcbb7"
+        },
+        "extensionProviderRef": {
+          "const": "F12"
+        },
+        "fixtureSchemaRef": {
+          "const": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ScenarioReferenceV1"
+        },
+        "seed": {
+          "const": 715
+        },
+        "clockRef": {
+          "const": "fixture://clock/fixed-2026-07-15"
+        },
+        "lineageRefs": {
+          "const": [
+            "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts"
+          ]
+        },
+        "expectedCanonicalPostureRefs": {
+          "const": [
+            "git:c57610cb5f7d56efb61e53ae27057fbe92a6a2f6:IP_ASSURANCE.md",
+            "git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/faults/harness.ts#evaluateCanonicalFaultHarness"
+          ]
+        }
+      }
+    },
+    "StrategyArenaEventContextV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "eventId",
+        "sampleId",
+        "qFoldId",
+        "partition",
+        "eventTimeMs",
+        "receiveTimeMs",
+        "symbol",
+        "regime",
+        "qSplitMembershipRef",
+        "scenarioHash",
+        "evidenceSnapshotRefs",
+        "outcome",
+        "eventContextHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyArenaEventContextV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sampleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "qFoldId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "partition": {
+          "const": "WALK_FORWARD_VALIDATION"
+        },
+        "eventTimeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "receiveTimeMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "regime": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "qSplitMembershipRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "scenarioHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "evidenceSnapshotRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "outcome": {
+          "$ref": "#/$defs/SyntheticOutcomeProjectionV1"
+        },
+        "eventContextHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "StrategyObservationV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "observationId",
+        "strategySnapshotHash",
+        "eventContextHash",
+        "decisionDisposition",
+        "servingPosture",
+        "decisionOwnerRef",
+        "decisionReasonCodes",
+        "economics",
+        "shadowExposure",
+        "capitalContentionRefs",
+        "ownerEvidenceRefs",
+        "observationHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyObservationV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "observationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "strategySnapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "eventContextHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "decisionDisposition": {
+          "enum": [
+            "ACTED",
+            "REJECTED",
+            "EXPIRED",
+            "MISSED",
+            "QUIET_CONTROL",
+            "DATA_INVALID"
+          ]
+        },
+        "servingPosture": {
+          "enum": [
+            "ADVISORY",
+            "ABSTAIN_UNKNOWN"
+          ]
+        },
+        "decisionOwnerRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "decisionReasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "economics": {
+          "$ref": "#/$defs/SyntheticEconomicProjectionV1"
+        },
+        "shadowExposure": {
+          "$ref": "#/$defs/ShadowExposureProjectionV1"
+        },
+        "capitalContentionRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureUri"
+          },
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "ownerEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "observationHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "const": "ACTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "servingPosture": {
+                "const": "ADVISORY"
+              },
+              "economics": {
+                "properties": {
+                  "state": {
+                    "const": "AVAILABLE"
+                  }
+                }
+              },
+              "shadowExposure": {
+                "properties": {
+                  "state": {
+                    "const": "SHADOW_EXPOSED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "const": "DATA_INVALID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "servingPosture": {
+                "const": "ABSTAIN_UNKNOWN"
+              },
+              "economics": {
+                "properties": {
+                  "state": {
+                    "const": "UNKNOWN"
+                  }
+                }
+              },
+              "shadowExposure": {
+                "properties": {
+                  "state": {
+                    "const": "UNKNOWN"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "enum": [
+                  "REJECTED",
+                  "EXPIRED",
+                  "MISSED",
+                  "QUIET_CONTROL"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "economics": {
+                "properties": {
+                  "state": {
+                    "const": "NO_EXPOSURE"
+                  }
+                }
+              },
+              "shadowExposure": {
+                "properties": {
+                  "state": {
+                    "const": "NO_EXPOSURE"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "StrategyArenaCampaignV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "campaignId",
+        "campaignPhase",
+        "evaluationPolicy",
+        "fixtureClock",
+        "seed",
+        "qValidationAuthority",
+        "strategyTrialEvidenceState",
+        "strategyRecordedTrialCount",
+        "strategySelectionPressureRefs",
+        "selectionPressureReasonCodes",
+        "strategySnapshots",
+        "scenarioReferences",
+        "eventContexts",
+        "observations",
+        "campaignHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyArenaCampaignV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "campaignId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "campaignPhase": {
+          "const": "ITERATION"
+        },
+        "evaluationPolicy": {
+          "$ref": "#/$defs/StrategyArenaPolicyV1"
+        },
+        "fixtureClock": {
+          "$ref": "#/$defs/FixtureClockV1"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "qValidationAuthority": {
+          "$ref": "#/$defs/QValidationAuthorityProjectionV1"
+        },
+        "strategyTrialEvidenceState": {
+          "const": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE"
+        },
+        "strategyRecordedTrialCount": {
+          "type": "null"
+        },
+        "strategySelectionPressureRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 0,
+          "maxItems": 0
+        },
+        "selectionPressureReasonCodes": {
+          "type": "array",
+          "items": {
+            "const": "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "strategySnapshots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyEvaluationSnapshotV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "scenarioReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ScenarioReferenceV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "eventContexts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyArenaEventContextV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "observations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyObservationV1"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "campaignHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "DecisionCountsV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ACTED",
+        "REJECTED",
+        "EXPIRED",
+        "MISSED",
+        "QUIET_CONTROL",
+        "DATA_INVALID"
+      ],
+      "properties": {
+        "ACTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "REJECTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "EXPIRED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "MISSED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "QUIET_CONTROL": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "DATA_INVALID": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "NonActionQualityV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mappedDispositionContract",
+        "dispositions",
+        "total",
+        "helpful",
+        "harmful",
+        "unknown",
+        "qualityPpm"
+      ],
+      "properties": {
+        "mappedDispositionContract": {
+          "const": "EventDisposition"
+        },
+        "dispositions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "EXPIRED",
+              "MISSED",
+              "QUIET_CONTROL",
+              "REJECTED"
+            ]
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "helpful": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "harmful": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "qualityPpm": {
+          "$ref": "#/$defs/NullablePpm"
+        }
+      }
+    },
+    "CostAggregateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feesMicros",
+        "slippageMicros",
+        "fundingBorrowMicros",
+        "latencyMicros",
+        "recoveryMicros",
+        "totalMicros"
+      ],
+      "properties": {
+        "feesMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "slippageMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "fundingBorrowMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "latencyMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "recoveryMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "totalMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        }
+      }
+    },
+    "CompleteCostAggregateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feesMicros",
+        "slippageMicros",
+        "fundingBorrowMicros",
+        "latencyMicros",
+        "recoveryMicros",
+        "totalMicros"
+      ],
+      "properties": {
+        "feesMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "slippageMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "fundingBorrowMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "latencyMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "recoveryMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "totalMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        }
+      }
+    },
+    "UnavailableCostAggregateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feesMicros",
+        "slippageMicros",
+        "fundingBorrowMicros",
+        "latencyMicros",
+        "recoveryMicros",
+        "totalMicros"
+      ],
+      "properties": {
+        "feesMicros": {
+          "type": "null"
+        },
+        "slippageMicros": {
+          "type": "null"
+        },
+        "fundingBorrowMicros": {
+          "type": "null"
+        },
+        "latencyMicros": {
+          "type": "null"
+        },
+        "recoveryMicros": {
+          "type": "null"
+        },
+        "totalMicros": {
+          "type": "null"
+        }
+      }
+    },
+    "ExposureWindowV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "observationHash",
+        "openedAtMs",
+        "closedAtMs",
+        "demandUnits",
+        "grantedUnits",
+        "allocationState",
+        "fixtureNetOutcomeMicros"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "observationHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "openedAtMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "closedAtMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "demandUnits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "grantedUnits": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "allocationState": {
+          "enum": [
+            "GRANTED",
+            "CAPPED"
+          ]
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/Micros"
+        }
+      }
+    },
+    "ShadowPortfolioV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reality",
+        "canonical",
+        "attributionComputed",
+        "valuationUnit",
+        "fixtureNetOutcomeMicros",
+        "maximumDrawdownMicros",
+        "exposedEventCount",
+        "noExposureEventCount",
+        "unknownExposureEventCount",
+        "peakDemandUnits",
+        "peakGrantedUnits",
+        "exposureWindows",
+        "realizationOrder"
+      ],
+      "properties": {
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "valuationUnit": {
+          "const": "USDT_MICROS"
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "maximumDrawdownMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "exposedEventCount": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "noExposureEventCount": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unknownExposureEventCount": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "peakDemandUnits": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "peakGrantedUnits": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exposureWindows": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExposureWindowV1"
+              },
+              "maxItems": 32
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realizationOrder": {
+          "const": "SHADOW_EXPOSURE_CLOSE_TIME"
+        }
+      }
+    },
+    "ComparableShadowPortfolioV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reality",
+        "canonical",
+        "attributionComputed",
+        "valuationUnit",
+        "fixtureNetOutcomeMicros",
+        "maximumDrawdownMicros",
+        "exposedEventCount",
+        "noExposureEventCount",
+        "unknownExposureEventCount",
+        "peakDemandUnits",
+        "peakGrantedUnits",
+        "exposureWindows",
+        "realizationOrder"
+      ],
+      "properties": {
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "valuationUnit": {
+          "const": "USDT_MICROS"
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/Micros"
+        },
+        "maximumDrawdownMicros": {
+          "$ref": "#/$defs/NonNegativeMicros"
+        },
+        "exposedEventCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "noExposureEventCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "unknownExposureEventCount": {
+          "const": 0
+        },
+        "peakDemandUnits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "peakGrantedUnits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000000
+        },
+        "exposureWindows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExposureWindowV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "realizationOrder": {
+          "const": "SHADOW_EXPOSURE_CLOSE_TIME"
+        }
+      }
+    },
+    "UnavailableShadowPortfolioV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reality",
+        "canonical",
+        "attributionComputed",
+        "valuationUnit",
+        "fixtureNetOutcomeMicros",
+        "maximumDrawdownMicros",
+        "exposedEventCount",
+        "noExposureEventCount",
+        "unknownExposureEventCount",
+        "peakDemandUnits",
+        "peakGrantedUnits",
+        "exposureWindows",
+        "realizationOrder"
+      ],
+      "properties": {
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "valuationUnit": {
+          "const": "USDT_MICROS"
+        },
+        "fixtureNetOutcomeMicros": {
+          "type": "null"
+        },
+        "maximumDrawdownMicros": {
+          "type": "null"
+        },
+        "exposedEventCount": {
+          "type": "null"
+        },
+        "noExposureEventCount": {
+          "type": "null"
+        },
+        "unknownExposureEventCount": {
+          "type": "null"
+        },
+        "peakDemandUnits": {
+          "type": "null"
+        },
+        "peakGrantedUnits": {
+          "type": "null"
+        },
+        "exposureWindows": {
+          "type": "null"
+        },
+        "realizationOrder": {
+          "const": "SHADOW_EXPOSURE_CLOSE_TIME"
+        }
+      }
+    },
+    "StabilitySliceV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sliceId",
+        "fixtureNetOutcomeMicros"
+      ],
+      "properties": {
+        "sliceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?:fold|regime|symbol):"
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/Micros"
+        }
+      }
+    },
+    "StabilityV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slices",
+        "worstSlice"
+      ],
+      "properties": {
+        "slices": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/StabilitySliceV1"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worstSlice": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/StabilitySliceV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ComparableStabilityV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slices",
+        "worstSlice"
+      ],
+      "properties": {
+        "slices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StabilitySliceV1"
+          },
+          "minItems": 3,
+          "maxItems": 96
+        },
+        "worstSlice": {
+          "$ref": "#/$defs/StabilitySliceV1"
+        }
+      }
+    },
+    "UnavailableStabilityV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slices",
+        "worstSlice"
+      ],
+      "properties": {
+        "slices": {
+          "type": "null"
+        },
+        "worstSlice": {
+          "type": "null"
+        }
+      }
+    },
+    "MetricValuesV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "FIXTURE_NET_OUTCOME_MICROS",
+        "COST_SURVIVAL_RATE_PPM",
+        "NON_ACTION_QUALITY_PPM",
+        "FALSE_POSITIVE_RATE_PPM_INVERTED",
+        "RECOVERY_BURDEN_MICROS_INVERTED",
+        "AMBIGUITY_RATE_PPM_INVERTED",
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+        "WORST_SLICE_NET_MICROS"
+      ],
+      "properties": {
+        "FIXTURE_NET_OUTCOME_MICROS": {
+          "$ref": "#/$defs/Micros"
+        },
+        "COST_SURVIVAL_RATE_PPM": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "NON_ACTION_QUALITY_PPM": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "FALSE_POSITIVE_RATE_PPM_INVERTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "RECOVERY_BURDEN_MICROS_INVERTED": {
+          "$ref": "#/$defs/Micros"
+        },
+        "AMBIGUITY_RATE_PPM_INVERTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "WORST_SLICE_NET_MICROS": {
+          "$ref": "#/$defs/Micros"
+        }
+      }
+    },
+    "StrategyArenaScorecardV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "snapshotId",
+        "strategySnapshotHash",
+        "canonicalStrategyRef",
+        "canonicalStrategyHash",
+        "qExperimentAndModelRefs",
+        "sourceFamilyIds",
+        "comparability",
+        "unknownReasons",
+        "eventCount",
+        "decisions",
+        "nonActionQuality",
+        "falsePositiveCount",
+        "falsePositiveRatePpm",
+        "missedOpportunityCount",
+        "ambiguityCount",
+        "ambiguityRatePpm",
+        "capacityConstraintCount",
+        "capacityConstraintRatePpm",
+        "ownerDeclaredContentionCount",
+        "costSurvivalRatePpm",
+        "costs",
+        "shadowPortfolio",
+        "stability",
+        "metricOrder",
+        "metricDirections",
+        "metricValues",
+        "reality",
+        "attributionComputed",
+        "scorecardHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyArenaScorecardV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "strategySnapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "canonicalStrategyRef": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "canonicalStrategyHash": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "qExperimentAndModelRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "sourceFamilyIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "comparability": {
+          "enum": [
+            "COMPARABLE_SYNTHETIC_FIXTURE",
+            "ABSTAIN_UNKNOWN"
+          ]
+        },
+        "unknownReasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 291,
+          "uniqueItems": true
+        },
+        "eventCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "decisions": {
+          "$ref": "#/$defs/DecisionCountsV1"
+        },
+        "nonActionQuality": {
+          "$ref": "#/$defs/NonActionQualityV1"
+        },
+        "falsePositiveCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "falsePositiveRatePpm": {
+          "$ref": "#/$defs/NullablePpm"
+        },
+        "missedOpportunityCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ambiguityCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "ambiguityRatePpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "capacityConstraintCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "capacityConstraintRatePpm": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "ownerDeclaredContentionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "costSurvivalRatePpm": {
+          "$ref": "#/$defs/NullablePpm"
+        },
+        "costs": {
+          "$ref": "#/$defs/CostAggregateV1"
+        },
+        "shadowPortfolio": {
+          "$ref": "#/$defs/ShadowPortfolioV1"
+        },
+        "stability": {
+          "$ref": "#/$defs/StabilityV1"
+        },
+        "metricOrder": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "FIXTURE_NET_OUTCOME_MICROS",
+              "COST_SURVIVAL_RATE_PPM",
+              "NON_ACTION_QUALITY_PPM",
+              "FALSE_POSITIVE_RATE_PPM_INVERTED",
+              "RECOVERY_BURDEN_MICROS_INVERTED",
+              "AMBIGUITY_RATE_PPM_INVERTED",
+              "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+              "WORST_SLICE_NET_MICROS"
+            ]
+          },
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "metricDirections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "FIXTURE_NET_OUTCOME_MICROS",
+            "COST_SURVIVAL_RATE_PPM",
+            "NON_ACTION_QUALITY_PPM",
+            "FALSE_POSITIVE_RATE_PPM_INVERTED",
+            "RECOVERY_BURDEN_MICROS_INVERTED",
+            "AMBIGUITY_RATE_PPM_INVERTED",
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+            "WORST_SLICE_NET_MICROS"
+          ],
+          "properties": {
+            "FIXTURE_NET_OUTCOME_MICROS": {
+              "const": "MAXIMIZE"
+            },
+            "COST_SURVIVAL_RATE_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "NON_ACTION_QUALITY_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "FALSE_POSITIVE_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "RECOVERY_BURDEN_MICROS_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "AMBIGUITY_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "WORST_SLICE_NET_MICROS": {
+              "const": "MAXIMIZE"
+            }
+          }
+        },
+        "metricValues": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/MetricValuesV1"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "scorecardHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "comparability": {
+                "const": "COMPARABLE_SYNTHETIC_FIXTURE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unknownReasons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "minItems": 0,
+                "maxItems": 0
+              },
+              "decisions": {
+                "properties": {
+                  "ACTED": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              "nonActionQuality": {
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "qualityPpm": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000000
+                  }
+                }
+              },
+              "falsePositiveRatePpm": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "costSurvivalRatePpm": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000000
+              },
+              "costs": {
+                "$ref": "#/$defs/CompleteCostAggregateV1"
+              },
+              "shadowPortfolio": {
+                "$ref": "#/$defs/ComparableShadowPortfolioV1"
+              },
+              "stability": {
+                "$ref": "#/$defs/ComparableStabilityV1"
+              },
+              "metricValues": {
+                "$ref": "#/$defs/MetricValuesV1"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "comparability": {
+                "const": "ABSTAIN_UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unknownReasons": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "minItems": 1,
+                "maxItems": 291,
+                "uniqueItems": true
+              },
+              "costs": {
+                "$ref": "#/$defs/UnavailableCostAggregateV1"
+              },
+              "shadowPortfolio": {
+                "$ref": "#/$defs/UnavailableShadowPortfolioV1"
+              },
+              "stability": {
+                "$ref": "#/$defs/UnavailableStabilityV1"
+              },
+              "metricValues": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RankingV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "metricOrder",
+        "metricDirections",
+        "tiers",
+        "excluded",
+        "singleMetricWinnerSelected",
+        "automaticWinnerSelected",
+        "canonicalLifecycleChanged",
+        "selectionPressureState",
+        "selectionPressureAdjusted",
+        "reasonCodes"
+      ],
+      "properties": {
+        "method": {
+          "const": "PARETO_FRONT_PEELING"
+        },
+        "metricOrder": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "FIXTURE_NET_OUTCOME_MICROS",
+              "COST_SURVIVAL_RATE_PPM",
+              "NON_ACTION_QUALITY_PPM",
+              "FALSE_POSITIVE_RATE_PPM_INVERTED",
+              "RECOVERY_BURDEN_MICROS_INVERTED",
+              "AMBIGUITY_RATE_PPM_INVERTED",
+              "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+              "WORST_SLICE_NET_MICROS"
+            ]
+          },
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "metricDirections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "FIXTURE_NET_OUTCOME_MICROS",
+            "COST_SURVIVAL_RATE_PPM",
+            "NON_ACTION_QUALITY_PPM",
+            "FALSE_POSITIVE_RATE_PPM_INVERTED",
+            "RECOVERY_BURDEN_MICROS_INVERTED",
+            "AMBIGUITY_RATE_PPM_INVERTED",
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED",
+            "WORST_SLICE_NET_MICROS"
+          ],
+          "properties": {
+            "FIXTURE_NET_OUTCOME_MICROS": {
+              "const": "MAXIMIZE"
+            },
+            "COST_SURVIVAL_RATE_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "NON_ACTION_QUALITY_PPM": {
+              "const": "MAXIMIZE"
+            },
+            "FALSE_POSITIVE_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "RECOVERY_BURDEN_MICROS_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "AMBIGUITY_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "CAPACITY_CONSTRAINT_RATE_PPM_INVERTED": {
+              "const": "MAXIMIZE"
+            },
+            "WORST_SLICE_NET_MICROS": {
+              "const": "MAXIMIZE"
+            }
+          }
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true
+          },
+          "maxItems": 8
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "singleMetricWinnerSelected": {
+          "const": false
+        },
+        "automaticWinnerSelected": {
+          "const": false
+        },
+        "canonicalLifecycleChanged": {
+          "const": false
+        },
+        "selectionPressureState": {
+          "const": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE"
+        },
+        "selectionPressureAdjusted": {
+          "const": false
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "const": "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    "SameEventStrategyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotId",
+        "decisionDisposition",
+        "economicState",
+        "fixtureNetOutcomeMicros",
+        "shadowExposureState",
+        "allocationState",
+        "canonicalOutcome",
+        "alternativeDecisionComputed"
+      ],
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "decisionDisposition": {
+          "enum": [
+            "ACTED",
+            "REJECTED",
+            "EXPIRED",
+            "MISSED",
+            "QUIET_CONTROL",
+            "DATA_INVALID"
+          ]
+        },
+        "economicState": {
+          "enum": [
+            "AVAILABLE",
+            "NO_EXPOSURE",
+            "UNKNOWN"
+          ]
+        },
+        "fixtureNetOutcomeMicros": {
+          "$ref": "#/$defs/NullableMicros"
+        },
+        "shadowExposureState": {
+          "enum": [
+            "SHADOW_EXPOSED",
+            "NO_EXPOSURE",
+            "UNKNOWN"
+          ]
+        },
+        "allocationState": {
+          "enum": [
+            "GRANTED",
+            "CAPPED",
+            "BLOCKED",
+            "NOT_REQUESTED",
+            "UNKNOWN"
+          ]
+        },
+        "canonicalOutcome": {
+          "const": false
+        },
+        "alternativeDecisionComputed": {
+          "const": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "const": "ACTED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "economicState": {
+                "const": "AVAILABLE"
+              },
+              "fixtureNetOutcomeMicros": {
+                "$ref": "#/$defs/Micros"
+              },
+              "shadowExposureState": {
+                "const": "SHADOW_EXPOSED"
+              },
+              "allocationState": {
+                "enum": [
+                  "GRANTED",
+                  "CAPPED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "const": "DATA_INVALID"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "economicState": {
+                "const": "UNKNOWN"
+              },
+              "fixtureNetOutcomeMicros": {
+                "type": "null"
+              },
+              "shadowExposureState": {
+                "const": "UNKNOWN"
+              },
+              "allocationState": {
+                "const": "UNKNOWN"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "decisionDisposition": {
+                "enum": [
+                  "REJECTED",
+                  "EXPIRED",
+                  "MISSED",
+                  "QUIET_CONTROL"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "economicState": {
+                "const": "NO_EXPOSURE"
+              },
+              "fixtureNetOutcomeMicros": {
+                "type": "null"
+              },
+              "shadowExposureState": {
+                "const": "NO_EXPOSURE"
+              },
+              "allocationState": {
+                "enum": [
+                  "BLOCKED",
+                  "NOT_REQUESTED"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SameEventComparisonV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "eventContextHash",
+        "strategies"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "eventContextHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "strategies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SameEventStrategyV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      }
+    },
+    "SameEventComparisonSetV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventCount",
+        "comparisons",
+        "oneSharedContextPerEvent",
+        "automaticWinnerSelected"
+      ],
+      "properties": {
+        "eventCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "comparisons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SameEventComparisonV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "oneSharedContextPerEvent": {
+          "const": true
+        },
+        "automaticWinnerSelected": {
+          "const": false
+        }
+      }
+    },
+    "OpportunityOverlapItemV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventIds",
+        "observationHashes",
+        "snapshotIds",
+        "overlapStartMs",
+        "overlapEndMs",
+        "overlapDurationMs",
+        "allocationPerformed"
+      ],
+      "properties": {
+        "eventIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "observationHashes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Sha256"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "snapshotIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "overlapStartMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "overlapEndMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "overlapDurationMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "allocationPerformed": {
+          "const": false
+        }
+      }
+    },
+    "OpportunityOverlapSetV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "overlapCount",
+        "overlaps",
+        "ownerDeclaredContentionRefs",
+        "capitalConflictInferred",
+        "allocationPerformed"
+      ],
+      "properties": {
+        "method": {
+          "const": "GLOBAL_DECLARED_SHADOW_WINDOW_INTERSECTION"
+        },
+        "overlapCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "overlaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/OpportunityOverlapItemV1"
+          }
+        },
+        "ownerDeclaredContentionRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FixtureUri"
+          },
+          "uniqueItems": true
+        },
+        "capitalConflictInferred": {
+          "const": false
+        },
+        "allocationPerformed": {
+          "const": false
+        }
+      }
+    },
+    "SourceDependenceWarningV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotIds",
+        "sharedDerivedSourceFamilyIds",
+        "sharedQEvidenceRefs",
+        "independentConfirmationCount",
+        "reasonCode"
+      ],
+      "properties": {
+        "snapshotIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "sharedDerivedSourceFamilyIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "sharedQEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 0,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "independentConfirmationCount": {
+          "const": 1
+        },
+        "reasonCode": {
+          "const": "CORRELATED_SOURCES_COUNT_AS_ONE_EVIDENCE_FAMILY"
+        }
+      }
+    },
+    "StrategyLifecycleAdvisoryV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "state",
+        "reviewClass",
+        "targetStrategyRef",
+        "targetStrategyHash",
+        "targetSnapshotHash",
+        "campaignHash",
+        "evidenceScorecardHash",
+        "reasonCodes",
+        "ownerSeam",
+        "authorityClass",
+        "canonical",
+        "mutationPerformed",
+        "advisoryHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyLifecycleAdvisoryV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "state": {
+          "const": "ABSTAIN_UNKNOWN"
+        },
+        "reviewClass": {
+          "const": "SELECTION_PRESSURE_UNAVAILABLE"
+        },
+        "targetStrategyRef": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "targetStrategyHash": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "targetSnapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "campaignHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "evidenceScorecardHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 1,
+          "maxItems": 292,
+          "uniqueItems": true,
+          "contains": {
+            "const": "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        "ownerSeam": {
+          "const": "STRATEGY_AND_Q_OWNER_REVIEW_REQUIRED"
+        },
+        "authorityClass": {
+          "const": "NO_AUTHORITY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "mutationPerformed": {
+          "const": false
+        },
+        "advisoryHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "MetaCandidateV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategyRef",
+        "strategyHash",
+        "snapshotHash",
+        "evidenceScorecardHash"
+      ],
+      "properties": {
+        "strategyRef": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "strategyHash": {
+          "$ref": "#/$defs/GitSha"
+        },
+        "snapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "evidenceScorecardHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "StrategyMetaAllocationAdvisoryV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "state",
+        "reviewClass",
+        "candidateStrategies",
+        "campaignHash",
+        "relativeWeightsPpm",
+        "capitalAmounts",
+        "ownerSeam",
+        "authorityClass",
+        "canonical",
+        "allocationPerformed",
+        "mutationPerformed",
+        "advisoryHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyMetaAllocationAdvisoryV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "state": {
+          "enum": [
+            "ABSTAIN_UNKNOWN",
+            "NO_PROPOSAL"
+          ]
+        },
+        "reviewClass": {
+          "enum": [
+            "INSUFFICIENT_COMPARABLE_EVIDENCE",
+            "SELECTION_PRESSURE_UNAVAILABLE"
+          ]
+        },
+        "candidateStrategies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetaCandidateV1"
+          },
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "campaignHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "relativeWeightsPpm": {
+          "type": "null"
+        },
+        "capitalAmounts": {
+          "type": "null"
+        },
+        "ownerSeam": {
+          "const": "CAPITAL_AND_RISK_OWNER_REVIEW_REQUIRED"
+        },
+        "authorityClass": {
+          "const": "NO_AUTHORITY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "allocationPerformed": {
+          "const": false
+        },
+        "mutationPerformed": {
+          "const": false
+        },
+        "advisoryHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "ABSTAIN_UNKNOWN"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reviewClass": {
+                "const": "INSUFFICIENT_COMPARABLE_EVIDENCE"
+              },
+              "candidateStrategies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/MetaCandidateV1"
+                },
+                "minItems": 0,
+                "maxItems": 0,
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "NO_PROPOSAL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reviewClass": {
+                "const": "SELECTION_PRESSURE_UNAVAILABLE"
+              },
+              "candidateStrategies": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/MetaCandidateV1"
+                },
+                "minItems": 1,
+                "maxItems": 8,
+                "uniqueItems": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    "EvidenceStrategyV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshotId",
+        "snapshotHash",
+        "canonicalStrategyRef",
+        "qExperimentAndModelRefs",
+        "evidenceSnapshotRefs",
+        "capitalRiskAssumptionRefs",
+        "executionCostAndRecoveryRefs"
+      ],
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "snapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "canonicalStrategyRef": {
+          "$ref": "#/$defs/GitRef"
+        },
+        "qExperimentAndModelRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "evidenceSnapshotRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "capitalRiskAssumptionRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "executionCostAndRecoveryRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        }
+      }
+    },
+    "EvidenceEventV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "eventContextHash",
+        "qSplitMembershipRef",
+        "evidenceSnapshotRefs",
+        "outcomeFactHash",
+        "outcomeOwnerRef"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "eventContextHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "qSplitMembershipRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        },
+        "evidenceSnapshotRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "outcomeFactHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "outcomeOwnerRef": {
+          "$ref": "#/$defs/ImmutableOwnerRefV1"
+        }
+      }
+    },
+    "EvidenceObservationV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observationId",
+        "observationHash",
+        "eventId",
+        "strategySnapshotHash",
+        "ownerEvidenceRefs",
+        "economicFactHash",
+        "exposureFactHash"
+      ],
+      "properties": {
+        "observationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "observationHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "strategySnapshotHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "ownerEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true
+        },
+        "economicFactHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "exposureFactHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    },
+    "EvidenceIndexV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategies",
+        "events",
+        "observations"
+      ],
+      "properties": {
+        "strategies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceStrategyV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceEventV1"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "observations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceObservationV1"
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      }
+    },
+    "StrategyArenaReportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "version",
+        "campaignId",
+        "campaignHash",
+        "campaignPhase",
+        "evaluationPolicyVersion",
+        "evaluationPolicyHash",
+        "fixtureClock",
+        "seed",
+        "qAuthorityHash",
+        "qValidationFoldsDigest",
+        "strategyTrialEvidenceState",
+        "strategyRecordedTrialCount",
+        "strategySelectionPressureRefs",
+        "selectionPressureReasonCodes",
+        "ownerReferenceAttestationHash",
+        "ownerReferenceAttestationClass",
+        "ownerReferenceCount",
+        "sameEventComparison",
+        "opportunityOverlapAndContention",
+        "scorecards",
+        "ranking",
+        "sourceDependenceWarnings",
+        "lifecycleAdvisories",
+        "metaAllocationAdvisory",
+        "evidenceIndex",
+        "limitations",
+        "truthClass",
+        "canonical",
+        "authorityClass",
+        "networkMode",
+        "reality",
+        "shadowOnly",
+        "attributionComputed",
+        "decisionAlternativesComputed",
+        "promotionAuthorized",
+        "allocationAuthorized",
+        "executionAuthorized",
+        "lifecycleMutationPerformed",
+        "reportHash"
+      ],
+      "properties": {
+        "schema": {
+          "const": "StrategyArenaReportV1"
+        },
+        "version": {
+          "const": 1
+        },
+        "campaignId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "campaignHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "campaignPhase": {
+          "const": "ITERATION"
+        },
+        "evaluationPolicyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "evaluationPolicyHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "fixtureClock": {
+          "$ref": "#/$defs/FixtureClockV1"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "qAuthorityHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "qValidationFoldsDigest": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "strategyTrialEvidenceState": {
+          "const": "UNAVAILABLE_NO_Q_WHOLE_STRATEGY_TRIAL_LINKAGE"
+        },
+        "strategyRecordedTrialCount": {
+          "type": "null"
+        },
+        "strategySelectionPressureRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ImmutableOwnerRefV1"
+          },
+          "minItems": 0,
+          "maxItems": 0
+        },
+        "selectionPressureReasonCodes": {
+          "type": "array",
+          "items": {
+            "const": "CAMPAIGN_BOUND_Q_SELECTION_BUNDLE_MISSING"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "ownerReferenceAttestationHash": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "ownerReferenceAttestationClass": {
+          "const": "CALLER_SUPPLIED_PINNED_IDENTITY_ATTESTATION"
+        },
+        "ownerReferenceCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "sameEventComparison": {
+          "$ref": "#/$defs/SameEventComparisonSetV1"
+        },
+        "opportunityOverlapAndContention": {
+          "$ref": "#/$defs/OpportunityOverlapSetV1"
+        },
+        "scorecards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyArenaScorecardV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "ranking": {
+          "$ref": "#/$defs/RankingV1"
+        },
+        "sourceDependenceWarnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceDependenceWarningV1"
+          }
+        },
+        "lifecycleAdvisories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StrategyLifecycleAdvisoryV1"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        },
+        "metaAllocationAdvisory": {
+          "$ref": "#/$defs/StrategyMetaAllocationAdvisoryV1"
+        },
+        "evidenceIndex": {
+          "$ref": "#/$defs/EvidenceIndexV1"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true
+        },
+        "truthClass": {
+          "const": "ADVISORY"
+        },
+        "canonical": {
+          "const": false
+        },
+        "authorityClass": {
+          "const": "NO_AUTHORITY"
+        },
+        "networkMode": {
+          "const": "FIXTURE_ONLY"
+        },
+        "reality": {
+          "const": "HYPOTHETICAL_REPLAY"
+        },
+        "shadowOnly": {
+          "const": true
+        },
+        "attributionComputed": {
+          "const": false
+        },
+        "decisionAlternativesComputed": {
+          "const": false
+        },
+        "promotionAuthorized": {
+          "const": false
+        },
+        "allocationAuthorized": {
+          "const": false
+        },
+        "executionAuthorized": {
+          "const": false
+        },
+        "lifecycleMutationPerformed": {
+          "const": false
+        },
+        "reportHash": {
+          "$ref": "#/$defs/Sha256"
+        }
+      }
+    }
+  }
+}

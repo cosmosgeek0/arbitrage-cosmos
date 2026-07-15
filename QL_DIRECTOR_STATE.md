@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-46 (2026-07-16): Frontier build harvest — F1/F2/F3/F8 PRESTAGE_READY sealed; F13 honestly BLOCKED
+
+Verified clean seals: F1 VenueMesh e435c1f0, F2 PortfolioLab 56a08f4e, F3 StrategyArena 3c9c794e, F8 EdgeMeter 7a658b98 — all PRESTAGE_READY, clean trees, module-local only. F13 DecisionLab committed a sealed BLOCKED checkpoint 2c29de4e (BLOCKED_OWNER_POLICY_ARTIFACT_UNAVAILABLE — needs an owner policy artifact that does not exist pre-landing; per §2 no ready claim, worktree parked, re-adjudicate post-landing). All five branches pushed. Frontier program now fully PARKED per §17 action 8: waits for INTEGRATED_ACCEPTED + FRONTIER_PORT_AUTHORIZED. Outstanding rescouts post-landing: F4/F5/F6/F7/F9/F10 (owner-moving), F11 (dock facet), F12 (never scouted). Critical path: role4-fix at 37eeb5b0 "seal correction closure checkpoint" — approaching final battery/C2.
+
 ## D-LAUNCH-45 (2026-07-16): F0 sealed — mechanical Dock release executed
 
 F0 FRONTIER_CONTRACT_READY at e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5 (28/28 conformance, directive pinned df9c52cd, 7/8 facets USABLE; ANNOTATION_ADAPTER blocked → F11 gets NO worktree per §17 facet law). Released 5 implementation worktrees at exact DOCK_SHA: f-venue(F1) f-lab(F2) f-arena(F3) f-edge(F8) f-decide(F13), handoffs in coordinator DOCK_RELEASE.md (verbatim §17 template, substitutions only). F12 scout still owed (owner pasted F11 block into f12-scout — duplicate F11 receipt, discarded). F4/F5/F6/F7/F9/F10 BLOCKED_OWNER_MOVING → rescout post-landing. Board updated; coordinator + f-dock branches pushed.

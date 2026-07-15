@@ -1,0 +1,126 @@
+{
+  "extensionId": "frontier.portfolio-lab",
+  "displayName": "F2 PortfolioLab",
+  "extensionVersion": "0.1.0",
+  "dockContractVersion": "1.0.0",
+  "owner": "F2 PortfolioLab Frontier prestage builder",
+  "purpose": "Orchestrate deterministic whole-portfolio fixture counterfactuals over immutable caller-supplied owner outputs and emit comparative shadow-only advisory reports.",
+  "capabilityClass": "WHOLE_PORTFOLIO_COUNTERFACTUAL_ADVISORY",
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "sourceSha": "5cac88062c701800a08c602bd191ce796a175421",
+  "buildState": "PRESTAGE_READY",
+  "disposition": "ACTIVE",
+  "authorityClass": "NO_AUTHORITY",
+  "canonicalInputContractRefs": [
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/2",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4",
+    "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/6",
+    "frontier/portfolio-lab/contracts/v1/portfolio-lab-v1.schema.json#/$defs/PortfolioSnapshotV1",
+    "frontier/portfolio-lab/contracts/v1/portfolio-lab-v1.schema.json#/$defs/PortfolioScenarioEvaluationInputV1"
+  ],
+  "canonicalOutputContractRefs": [],
+  "canonicalPolicyRefs": [
+    "frontier/dock/contracts/v1/hard-denials.json",
+    "frontier/dock/contracts/v1/adapter-rules.json",
+    "frontier/dock/contracts/v1/canonical-owner-map.json",
+    "ARCHITECTURE.md#part-ii-canonical-authority-map"
+  ],
+  "adapterMapRefs": [
+    "frontier/portfolio-lab/contracts/v1/advisory-assessor.adapter-map.v1.json",
+    "frontier/portfolio-lab/contracts/v1/scenario-reference.adapter-map.v1.json",
+    "frontier/portfolio-lab/contracts/v1/cockpit-projection.adapter-map.v1.json"
+  ],
+  "requestedCapabilities": ["EVALUATE_FIXTURE", "VALIDATE_FIXTURE", "PROJECT_FIXTURE"],
+  "requiredCapabilityRefs": [
+    "DockV1:ADVISORY_ASSESSOR:EVALUATE_FIXTURE",
+    "DockV1:SCENARIO_REFERENCE:VALIDATE_FIXTURE",
+    "DockV1:COCKPIT_PROJECTION:PROJECT_FIXTURE"
+  ],
+  "optionalCapabilityRefs": ["DockV1:DESCRIBE"],
+  "hardDenialRefs": ["frontier/dock/contracts/v1/hard-denials.json"],
+  "latencyClass": "DETERMINISTIC_FIXTURE_STEPS_ONLY",
+  "freshnessRequirement": "EXACT_IMMUTABLE_OWNER_SNAPSHOT_REFERENCE_OR_UNKNOWN",
+  "completenessRequirement": "PRESERVE_MISSING_DEPENDENCIES_AND_ABSTAIN_WHEN_REQUIRED_INPUT_IS_UNKNOWN",
+  "determinismClass": "INJECTED_CLOCK_EXPLICIT_SEED_FINITE_CALLER_TABLE_NO_RANDOMNESS",
+  "replayClass": "FINITE_FIXTURE_TABLE_REPLAY_ONLY",
+  "egressDeclaration": "NONE",
+  "networkMode": "FIXTURE_ONLY",
+  "secretMode": "NONE",
+  "resourceBudgetClaim": {
+    "claimId": "portfolio-lab.fixture-budget.v1",
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "cpu": { "state": "UNAVAILABLE", "unit": "host-cpu-percent", "reason": "Prestage fixture steps do not prove mounted host CPU consumption." },
+    "memory": { "state": "UNAVAILABLE", "unit": "host-bytes", "reason": "No mounted PortfolioLab process exists for a production memory measurement." },
+    "disk": { "state": "UNAVAILABLE", "unit": "host-bytes-per-second", "reason": "PortfolioLab opens no storage transport and makes no mounted disk-throughput claim." },
+    "network": { "state": "MEASURED", "unit": "bytes", "limit": 0, "observed": 0 },
+    "eventRate": { "state": "MEASURED", "unit": "events-per-1000ms-fixture-window", "limit": 20, "observed": 20 },
+    "latency": { "state": "MEASURED", "unit": "deterministic-fixture-steps", "limit": { "p50": 1, "p95": 1, "p99": 1 }, "observed": { "p50": 1, "p95": 1, "p99": 1 } },
+    "queue": { "state": "MEASURED", "unit": "events", "limit": 0, "observed": 0, "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST" },
+    "storageGrowth": { "state": "MEASURED", "unit": "fixture-bytes-per-window", "limit": 0, "observed": 0 },
+    "modelUse": { "state": "MEASURED", "unit": "calls", "limit": 0, "observed": 0 }
+  },
+  "maxSafeRateClaim": {
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "eventsPerWindow": 20,
+    "windowSizeMs": 1000,
+    "queueCapacity": 0,
+    "backpressurePolicy": "FAIL_CLOSED"
+  },
+  "dataSourceRefs": [
+    "frontier/portfolio-lab/fixtures/owner-output-evidence.v1.json",
+    "frontier/portfolio-lab/fixtures/portfolio-snapshot.v1.json",
+    "frontier/portfolio-lab/fixtures/acceptance-corpus.v1.json",
+    "frontier/portfolio-lab/fixtures/historical-bootstrap-source.v1.json"
+  ],
+  "dataClassifications": [
+    "SYNTHETIC_FIXTURE_NO_SECRETS",
+    "IMMUTABLE_OWNER_REFERENCE_ONLY",
+    "HASH_BOUND_UNACCEPTED_SYNTHETIC_OWNER_OUTPUT_STUBS",
+    "UNACCEPTED_SYNTHETIC_BOOTSTRAP_ARCHIVE_TABLE_STUB",
+    "NOT_OBSERVED_HISTORY"
+  ],
+  "licenseAndTermsRefs": ["frontier/portfolio-lab/research/RESEARCH_RECEIPT.md"],
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "failureModes": [
+    "FAIL_CLOSED_ON_DOCK_FACET_OR_FILE_HASH_MISMATCH",
+    "FAIL_CLOSED_ON_OWNER_EVIDENCE_STATUS_OR_HASH_MISMATCH",
+    "FAIL_CLOSED_ON_OWNER_VALUE_OR_CONTEXT_OUTSIDE_FINITE_CLAIM_ALLOWLIST",
+    "FAIL_CLOSED_ON_OWNER_CLAIM_OR_SOURCE_DERIVATION_DRIFT",
+    "FAIL_CLOSED_ON_UNKNOWN_REQUIRED_SCENARIO_INPUT",
+    "FAIL_CLOSED_ON_DANGLING_OWNER_OUTPUT_REFERENCE",
+    "FAIL_CLOSED_ON_UNIT_OR_EXACT_ATOM_DRIFT",
+    "DEGRADATION_REQUEST_ON_RESOURCE_ENVELOPE_EXCESS"
+  ],
+  "degradationBehavior": "ABSTAIN_OR_REJECT_WITHOUT_CANONICAL_STATE_WRITE_FALSE_GREEN_OR_AUTHORITY_WIDENING",
+  "healthContractRef": "frontier/dock/contracts/v1/canonical-shared-owner-references.json#/references/3",
+  "cockpitProjectionRef": "frontier/portfolio-lab/preview/portfolio-lab.v1.json",
+  "testEntryPointRefs": [
+    "frontier/portfolio-lab/tests/contracts.test.mjs",
+    "frontier/portfolio-lab/tests/analysis.test.mjs",
+    "frontier/portfolio-lab/tests/campaign.test.mjs",
+    "frontier/portfolio-lab/tests/acceptance-corpus.test.mjs",
+    "frontier/portfolio-lab/tests/dock-boundaries.test.mjs",
+    "frontier/portfolio-lab/tests/owner-claim-derivation.test.mjs",
+    "frontier/portfolio-lab/tests/resources.test.mjs",
+    "frontier/portfolio-lab/tests/schema-parity.test.mjs",
+    "frontier/portfolio-lab/tests/packet.test.mjs",
+    "frontier/portfolio-lab/tests/hashes.test.mjs"
+  ],
+  "testReceiptRef": "frontier/portfolio-lab/RECEIPT.md",
+  "knownLimitations": [
+    "FIXTURE_COMPATIBILITY_EVIDENCE_ONLY",
+    "CALLER_SUPPLIED_IMPACTS_NOT_RECALCULATED_OWNER_TRUTH",
+    "OWNER_OUTPUTS_AND_F12_REFERENCES_ARE_UNACCEPTED_SYNTHETIC_PRESTAGE_STUBS",
+    "NO_ACCEPTED_FIELD_LEVEL_OWNER_ADAPTERS",
+    "NO_ACCEPTED_RECORDED_HISTORY",
+    "NO_ACCEPTED_PORTFOLIO_LEVEL_CANONICAL_ADVISORY_OUTPUT_ADAPTER",
+    "NO_ACCEPTED_PORTFOLIO_LAB_PRODUCT_SURFACE_ID_OR_MOUNT",
+    "NO_PRODUCTION_ISOLATION_RUNTIME_SAFETY_OR_HOST_PERFORMANCE_PROOF",
+    "NO_LIVE_SIZING_CAPITAL_RISK_EXECUTION_OR_HEALTH_AUTHORITY"
+  ],
+  "insertionRequestRef": "frontier/portfolio-lab/fixtures/insertion-request.v1.json",
+  "disablePlan": { "authority": "CANONICAL_OWNER_REQUIRED", "idempotent": true },
+  "rollbackPlan": { "authority": "CANONICAL_OWNER_REQUIRED", "pinnedVersion": "0.1.0" },
+  "uninstallPlan": { "authority": "CANONICAL_OWNER_REQUIRED", "deleteCanonicalEvidence": false },
+  "descriptorHash": "aa9a961dfad3fc1e369a0513bb7b1c2b5ac96baee1cfbd671b77f225bc56fa74"
+}

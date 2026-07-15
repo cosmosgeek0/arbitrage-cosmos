@@ -1640,6 +1640,7 @@ async function verifyReportParity() {
 export async function verifyReportParityAtRevision(environment, revision, tempRoot) {
   const sealedRoot = path.join(tempRoot, 'sealed-report-parity-untouched');
   const generatedRoot = path.join(tempRoot, 'sealed-report-parity-generated');
+  const checkouts = [];
   for (const checkoutRoot of [sealedRoot, generatedRoot]) {
     await commandOutput('git', ['clone', '--no-hardlinks', '--no-checkout', '--quiet', ROOT, checkoutRoot], ROOT, environment, 8 * 1024 * 1024);
     await commandOutput('git', ['checkout', '--detach', '--quiet', revision], checkoutRoot, environment, 8 * 1024 * 1024);
@@ -1667,6 +1668,12 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
       8 * 1024 * 1024,
     )).stdout;
     if (observedStatus.length !== 0) throw new Error('SEALED_REPORT_PARITY_CHECKOUT_DIRTY');
+    checkouts.push(Object.freeze({
+      checkout: path.basename(checkoutRoot),
+      headSha: observedHead,
+      branch: observedBranch,
+      statusByteLength: observedStatus.length,
+    }));
   }
 
   const regeneration = await runCommand({
@@ -1691,10 +1698,21 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
   return Object.freeze({
     id: 'sealed_generated_report_parity',
     revision,
+    checkouts: Object.freeze(checkouts),
     regeneration,
     artifacts: Object.freeze(artifacts),
     passed: regeneration.passed && artifacts.every((artifact) => artifact.matchesGenerator),
   });
+}
+
+export async function verifyCurrentHeadReportParityRegression(tempRoot) {
+  const environment = safeEnvironment(tempRoot);
+  const revision = (await gitOutput(
+    ['rev-parse', '--verify', '--end-of-options', 'HEAD^{commit}'],
+    environment,
+  )).toString('utf8').trim();
+  if (!/^[0-9a-f]{40}$/u.test(revision)) throw new Error('REPORT_PARITY_HEAD_INVALID');
+  return verifyReportParityAtRevision(environment, revision, tempRoot);
 }
 
 export function validateBrowserDocument(document, expectedHead, expectedTree, schema = JSON.parse(readFileSync(BROWSER_SCHEMA_PATH, 'utf8'))) {

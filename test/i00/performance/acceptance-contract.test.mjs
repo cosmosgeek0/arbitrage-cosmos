@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -34,7 +33,7 @@ import {
   validateQArchiveInventory,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
-  verifyReportParityAtRevision,
+  verifyCurrentHeadReportParityRegression,
 } from './local-acceptance.mjs';
 import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
 
@@ -516,35 +515,15 @@ test('independent validation requires a clean detached worktree pinned to exact 
 test('sealed report parity reads the exact revision from clean detached checkouts', async (context) => {
   const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-sealed-report-parity-'));
   context.after(() => rmSync(tempRoot, { recursive: true, force: true }));
-  const revision = execFileSync(
-    'git',
-    ['rev-parse', '--verify', 'HEAD^{commit}'],
-    { encoding: 'utf8' },
-  ).trim();
-  const environment = Object.freeze({
-    PATH: process.env.PATH,
-    HOME: tempRoot,
-    TMPDIR: os.tmpdir(),
-    TZ: 'UTC',
-    LC_ALL: 'C',
-    CI: '1',
-  });
+  const result = await verifyCurrentHeadReportParityRegression(tempRoot);
 
-  const result = await verifyReportParityAtRevision(environment, revision, tempRoot);
-
-  assert.equal(result.revision, revision);
+  assert.match(result.revision, /^[0-9a-f]{40}$/u);
   assert.equal(result.regeneration.passed, true);
   assert.ok(result.artifacts.length > 0);
-  for (const checkout of ['sealed-report-parity-untouched', 'sealed-report-parity-generated']) {
-    const cwd = path.join(tempRoot, checkout);
-    assert.equal(execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { cwd, encoding: 'utf8' }).trim(), revision);
-    assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8' }).trim(), '');
-  }
-  assert.equal(execFileSync(
-    'git',
-    ['status', '--porcelain=v1', '--untracked-files=all'],
-    { cwd: path.join(tempRoot, 'sealed-report-parity-untouched'), encoding: 'utf8' },
-  ).trim(), '');
+  assert.deepEqual(result.checkouts, [
+    { checkout: 'sealed-report-parity-untouched', headSha: result.revision, branch: '', statusByteLength: 0 },
+    { checkout: 'sealed-report-parity-generated', headSha: result.revision, branch: '', statusByteLength: 0 },
+  ]);
 });
 
 test('pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S', () => {

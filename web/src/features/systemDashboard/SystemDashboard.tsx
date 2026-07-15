@@ -91,9 +91,7 @@ export function SystemDashboard(props: SystemDashboardProps) {
 
         <PostureStrip snapshot={snapshot} nowMs={nowMs} />
         <ExposureBanner snapshot={snapshot} />
-        {props.readOnlyProjection !== true && (
-          <AttentionQueuePanel snapshot={snapshot} onControl={props.mutate} busy={busy} />
-        )}
+        <AttentionQueuePanel snapshot={snapshot} onControl={props.mutate} busy={busy} />
         <MachineGraph snapshot={snapshot} />
         <SourceHealthPanel snapshot={snapshot} nowMs={nowMs} />
         <EnginesPanel snapshot={snapshot} nowMs={nowMs} onTrace={setSelectedCorrelationId} />

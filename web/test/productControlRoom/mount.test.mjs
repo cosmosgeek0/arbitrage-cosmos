@@ -196,7 +196,17 @@ test('product mount uses live trace reads and structurally omits donor action su
   assert.match(controlRoom, /readOnlyProjection/);
   assert.match(controlRoom, /traceRequestRef\.current === requestId/);
   assert.doesNotMatch(controlRoom, /mutate=\{\(\) => undefined\}/);
-  assert.match(dashboard, /props\.readOnlyProjection !== true && \(/);
+  const attentionQueueIndex = dashboard.indexOf('<AttentionQueuePanel');
+  const readOnlyGateIndex = dashboard.indexOf('props.readOnlyProjection !== true && (');
+  const controlsPanelIndex = dashboard.indexOf('<ControlsPanel');
+  assert.ok(attentionQueueIndex >= 0);
+  assert.ok(readOnlyGateIndex >= 0);
+  assert.ok(controlsPanelIndex >= 0);
+  assert.ok(attentionQueueIndex < readOnlyGateIndex);
+  assert.ok(readOnlyGateIndex < controlsPanelIndex);
+  assert.match(dashboard, /<AttentionQueuePanel[\s\S]*onControl=\{props\.mutate\}[\s\S]*\/>/);
+  assert.equal((dashboard.match(/props\.readOnlyProjection !== true && \(/g) ?? []).length, 1);
+  assert.match(dashboard, /\{props\.readOnlyProjection !== true && \([\s\S]*<ControlsPanel/);
   assert.doesNotMatch(css, /aria-label="Controls"/);
   assert.doesNotMatch(css, /aria-label="Attention queue"/);
 });

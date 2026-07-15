@@ -1,0 +1,117 @@
+{
+  "schema": "OPS_SHADOW_INSERTION_REQUESTS_V1",
+  "packet": "RUN-16",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityEffect": "NONE",
+  "requestsApplied": false,
+  "requests": [
+    {
+      "id": "OPS-SHADOW-IR-RESTORE-001",
+      "status": "DRAFT_NOT_APPLIED",
+      "classification": "REFERENCE_ONLY",
+      "targetOwner": "accepted L15 restore owner with I00 operations adapter",
+      "currentBlocker": "BLOCKED_DONOR_AMENDMENT",
+      "request": "Add an owner-approved production restore path that stages the complete database, evidence, and model set on the target filesystem; proves every digest, SQLite integrity check, foreign-key check, and expected inventory; proves every app connection inactive; retains the prior set; and performs one reversible atomic generation switch without deleting the prior set.",
+      "requiredEvidence": [
+        "exact accepted restore-owner revision",
+        "exact target filesystem and atomic-switch capability",
+        "pre-switch app-inactive and connection-drain readback",
+        "complete staged-set manifest and hashes",
+        "SQLite integrity and foreign-key results",
+        "retained-prior-set identity",
+        "post-switch reconciliation and recovery readback",
+        "hostile failure proof for every pre-switch and post-switch cut"
+      ],
+      "forbiddenEffects": [
+        "no in-place overwrite of the live database",
+        "no deletion of the prior set before post-switch proof",
+        "no shadow-owned shared state-layout contract",
+        "no activation or production mutation from RUN-16"
+      ]
+    },
+    {
+      "id": "OPS-SHADOW-IR-SYSTEMD-002",
+      "status": "DRAFT_NOT_APPLIED",
+      "classification": "REFERENCE_ONLY",
+      "targetOwner": "future C2 Linux verification owner",
+      "currentBlocker": "SYSTEMD_TOOLING_ABSENT_ON_DARWIN",
+      "request": "On an isolated Linux validation image, run systemd-analyze verify with recursive errors enabled against the exact accepted units and fake dependency tree, then run offline security and timer-calendar checks. Do not invoke systemctl or activate any unit.",
+      "requiredEvidence": [
+        "systemd version and target distribution",
+        "exact unit hashes",
+        "systemd-analyze verify --recursive-errors=yes exit code and output",
+        "offline security assessment",
+        "timer calendar expansions"
+      ],
+      "forbiddenEffects": [
+        "no daemon reload",
+        "no unit enable, start, stop, or restart",
+        "no target-host mutation"
+      ]
+    },
+    {
+      "id": "OPS-SHADOW-IR-CLOUDFLARE-003",
+      "status": "DRAFT_NOT_APPLIED",
+      "classification": "REFERENCE_ONLY",
+      "targetOwner": "director and accepted Cloudflare boundary owner",
+      "currentBlocker": "TARGET_TUNNEL_MANAGEMENT_MODEL_NOT_ADJUDICATED",
+      "request": "At port time, adjudicate locally managed versus remotely managed tunnel operation against the accepted target architecture. If the accepted local YAML remains, validate its exact rendered copy with cloudflared ingress validate and ingress rule only, proving the intended hostname maps to numeric loopback and every unmatched hostname maps to the terminal 404.",
+      "requiredEvidence": [
+        "management-model decision",
+        "exact cloudflared version",
+        "redacted rendered-config hash",
+        "ingress validation exit code",
+        "intended-host rule result",
+        "unmatched-host terminal-404 result",
+        "origin-side Access JWT readback"
+      ],
+      "forbiddenEffects": [
+        "no tunnel login, create, route, run, update, service install, or diagnostic command from RUN-16",
+        "no tunnel token, account certificate, Access service secret, or real hostname in packet artifacts",
+        "no DNS or Cloudflare mutation"
+      ]
+    },
+    {
+      "id": "OPS-SHADOW-IR-WATCHDOG-004",
+      "status": "DRAFT_NOT_APPLIED",
+      "classification": "REFERENCE_ONLY",
+      "targetOwner": "canonical supervisor, cockpit, and external operations evidence owners",
+      "currentBlocker": "REAL_TARGET_AND_PAGING_READBACK_ABSENT",
+      "request": "Mount independently sourced watchdog, tunnel, backup-freshness, freeze, and paging-delivery receipts into canonical supervisor and cockpit truth without recomputing health in OPS-SHADOW.",
+      "requiredEvidence": [
+        "independent probe identity and dependency separation",
+        "bounded observation freshness",
+        "page delivery or explicit delivery failure receipt",
+        "target service and tunnel readback",
+        "canonical supervisor projection",
+        "cockpit missing and stale behavior"
+      ],
+      "forbiddenEffects": [
+        "no shadow-synthesized healthy state",
+        "no in-process self-proof for total host loss",
+        "no route, schema, startup, or cockpit edit from RUN-16"
+      ]
+    },
+    {
+      "id": "OPS-SHADOW-IR-OWNER-INPUTS-005",
+      "status": "DRAFT_NOT_APPLIED",
+      "classification": "REFERENCE_ONLY",
+      "targetOwner": "owner-authorized activation program",
+      "currentBlocker": "EXTERNAL_INPUTS_AND_AUTHORIZATION_ABSENT",
+      "request": "Supply exact target, safe SQLite version, capacity and soak receipt, Access team and audience, exact secret ARN and region, alert destination, trusted build identity, and durable action-scoped authorization only through the owner activation program.",
+      "requiredEvidence": [
+        "exact target and environment identity",
+        "supported SQLite version readback",
+        "target capacity and degradation receipt",
+        "redacted Access and Secrets Manager identities",
+        "durable external authorization",
+        "result and reconciliation receipt targets"
+      ],
+      "forbiddenEffects": [
+        "no real value in repository, prompt, log, screenshot, or shadow receipt",
+        "no ambient or static AWS credentials",
+        "no activation inferred from template completeness"
+      ]
+    }
+  ]
+}

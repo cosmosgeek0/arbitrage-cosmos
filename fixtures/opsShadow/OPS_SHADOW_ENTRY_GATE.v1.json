@@ -1,0 +1,350 @@
+{
+  "schema": "OPS_SHADOW_ENTRY_GATE_V1",
+  "packet": "RUN-16",
+  "task": "OPS-SHADOW",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "targetTerminalState": "OPS_SHADOW_READY",
+  "acceptanceClaimed": false,
+  "prestageReadyClaimed": false,
+  "integratedAcceptedClaimed": false,
+  "authorityGranted": false,
+  "deploymentPerformed": false,
+  "networkMutationPerformed": false,
+  "credentialMutationPerformed": false,
+  "moneyMutationPerformed": false,
+  "authorityEffect": "NONE",
+  "launchAuthority": {
+    "decision": "D-LAUNCH-37",
+    "decisionCommit": "d090d006019e21b150fa7b74831240695d8791e3",
+    "orderId": "90dcac299155"
+  },
+  "base": {
+    "branch": "ops-shadow-20260715",
+    "sha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+    "opsLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71"
+  },
+  "donor": {
+    "name": "l15-deploy-infra-20260712",
+    "acceptedCommit": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
+    "acceptedCommitTree": "e401435d6a650aee8a29c3da4495b4db426be017",
+    "implementationCommit": "9a82d4715c73ebe4156638c2bf5e8a2c02373bbf",
+    "implementationTree": "f6715c9a7b1e26121e3f1a9051bdd5290f9bfb07",
+    "opsLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
+    "opsTestsTree": "f3348a74ef22d9ca2faee431ea8cc5df63f552af",
+    "receiptBlob": "7fc3520d4fede577937c6dd48c191b1e5d212061",
+    "currentBaseParity": "EXACT_OPS_LIVE_TREE_MATCH"
+  },
+  "classificationVocabulary": [
+    "ADOPT_EXISTING",
+    "ADAPT_EXISTING",
+    "MISSING_BUILD",
+    "REFERENCE_ONLY",
+    "REJECT_DUPLICATE"
+  ],
+  "exclusivePathRoots": [
+    "fixtures/opsShadow",
+    "test/opsShadow"
+  ],
+  "researchBasis": [
+    {
+      "topic": "systemd units, credentials, timers, and offline verification",
+      "reviewedAt": "2026-07-15",
+      "sources": [
+        "https://systemd.io/CREDENTIALS/",
+        "https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html",
+        "https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html",
+        "https://www.freedesktop.org/software/systemd/man/latest/systemd.timer.html",
+        "https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html"
+      ]
+    },
+    {
+      "topic": "Cloudflare locally managed tunnel ingress and validation",
+      "reviewedAt": "2026-07-15",
+      "sources": [
+        "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/",
+        "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/configure-tunnels/run-parameters/"
+      ]
+    },
+    {
+      "topic": "AWS Secrets Manager exact secret retrieval and temporary role credentials",
+      "reviewedAt": "2026-07-15",
+      "sources": [
+        "https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html",
+        "https://docs.aws.amazon.com/IAM/latest/UserGuide/securing_access-keys.html",
+        "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html"
+      ]
+    },
+    {
+      "topic": "SQLite live backup and journal-safe recovery boundaries",
+      "reviewedAt": "2026-07-15",
+      "sources": [
+        "https://www.sqlite.org/howtocorrupt.html"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "OPS-SYSTEMD-UNITS",
+      "proposedItem": "testable app, tunnel, watchdog, backup, and restore-drill systemd units and timers",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/systemd/cosmos-app.service",
+        "ops/live/systemd/cloudflared.service",
+        "ops/live/systemd/cosmos-watchdog.service",
+        "ops/live/systemd/cosmos-watchdog.timer",
+        "ops/live/systemd/cosmos-backup.service",
+        "ops/live/systemd/cosmos-backup.timer",
+        "ops/live/systemd/cosmos-restore-drill.service",
+        "ops/live/systemd/cosmos-restore-drill.timer",
+        "ops/live/systemd/journald-cosmos.conf.template"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/systemd/cosmos-app-i00.conf.template",
+        "ops/templates/i00/systemd/cosmos-secrets-provider.service.template"
+      ],
+      "provingTests": [
+        "ops/tests/test-systemd-units.sh",
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The accepted donor owns the units; I00 already adds credential delivery without replacing them. A shadow copy would create a competing service owner."
+    },
+    {
+      "id": "OPS-WATCHDOG",
+      "proposedItem": "external watchdog with bounded restart, deploy-lock stand-down, tunnel, freeze, and backup alarms",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/watchdog.sh",
+        "ops/live/env/cosmos-watchdog.env.template"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [
+        "ops/tests/test-watchdog.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The donor watchdog already restarts only on bounded liveness failure and treats readiness failure as alert-only. New watchdog logic is a rejected duplicate."
+    },
+    {
+      "id": "OPS-BACKUP",
+      "proposedItem": "application-consistent SQLite and evidence backup with integrity, retention, and freshness proof",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/backup.sh",
+        "ops/live/env/cosmos-backup.env.template"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/backup-verify.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-backup-restore.sh",
+        "ops/tests/i00/test-backup-and-restore-adapters.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The donor uses SQLite online backup and atomic publication; I00 already adds safe-version, full-integrity, and foreign-key gates."
+    },
+    {
+      "id": "OPS-RESTORE-ISOLATED",
+      "proposedItem": "guarded restore and periodic isolated restore drill",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/restore.sh",
+        "ops/live/bin/restore-drill.sh"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/restore-drill-verify.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-backup-restore.sh",
+        "ops/tests/test-restore-drill.sh",
+        "ops/tests/i00/test-backup-and-restore-adapters.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "Isolated restore is already checksum and integrity checked, disjoint from DATA_DIR, and exercised with fake paths."
+    },
+    {
+      "id": "OPS-RESTORE-PRODUCTION",
+      "proposedItem": "same-filesystem staged, fully verified, retained-prior-set atomic production restore",
+      "classification": "REFERENCE_ONLY",
+      "ownerPaths": [
+        "ops/live/bin/restore.sh",
+        "IP_OPS_STATE.md"
+      ],
+      "adaptationPaths": [
+        "ops/docs/i00/RELEASE_AND_RECOVERY_RUNBOOK.md"
+      ],
+      "provingTests": [],
+      "shadowBuildPaths": [],
+      "rationale": "Current state is BLOCKED_DONOR_AMENDMENT. Exclusive paths cannot alter the accepted restore owner or invent a shared state-layout contract; OPS-SHADOW records an insertion request only."
+    },
+    {
+      "id": "OPS-ROLLBACK",
+      "proposedItem": "schema-floor and exposure-gated atomic rollback",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/rollback.sh",
+        "ops/live/bin/deploy.sh"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/rollback-switch.sh",
+        "ops/i00/bin/release-switch.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-rollback.sh",
+        "ops/tests/test-deploy.sh",
+        "ops/tests/i00/test-static-safety.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The donor owns atomic switching and fail-closed rollback policy; I00 already supplies canonical preflight and delegation."
+    },
+    {
+      "id": "OPS-CLOUDFLARE",
+      "proposedItem": "Cloudflare tunnel and Access templates with loopback origin and terminal refusal rule",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/cloudflare/cloudflared-config.yml.template",
+        "ops/live/cloudflare/access-app.json.template",
+        "ops/live/systemd/cloudflared.service"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/cloudflare/origin-access-overlay.yml.template",
+        "ops/i00/bin/verify-cloudflare-readback.mjs"
+      ],
+      "provingTests": [
+        "ops/tests/test-cloudflare-templates.sh",
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The accepted local tunnel template has placeholders, a numeric loopback origin, and final 404. I00 already adds Access enforcement and readback validation."
+    },
+    {
+      "id": "OPS-SECRETS-IAM",
+      "proposedItem": "least-privilege Secrets Manager IAM template for one exact secret",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/aws/iam-secrets-policy.json.template"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/aws/iam-secrets-exact-policy.json.template",
+        "ops/templates/i00/aws/iam-secrets-customer-kms-policy.json.template"
+      ],
+      "provingTests": [
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The donor exact-resource policy is already tightened by I00 exact-suffix and optional KMS constraints. A new policy owner is unnecessary."
+    },
+    {
+      "id": "OPS-SECRETS-PROVIDER",
+      "proposedItem": "instance-role Secrets Manager provider and systemd credential delivery with fake validation",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/i00/bin/secrets-provider.mjs",
+        "ops/templates/i00/aws/secrets-provider.json.template",
+        "ops/templates/i00/systemd/cosmos-secrets-provider.service.template",
+        "ops/templates/i00/systemd/cosmos-app-i00.conf.template"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [
+        "ops/tests/i00/test-secrets-provider.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The donor omission was already adapted by I00 with exact ARN, AWSCURRENT, ambient-credential refusal, fake CLI injection, 0600 materialization, and non-disclosure tests."
+    },
+    {
+      "id": "OPS-LOCAL-FAKE-HARNESSES",
+      "proposedItem": "local and fake executable validation of operational templates",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/tests/helpers.sh",
+        "ops/tests/fixtures/mock-systemctl.sh",
+        "ops/tests/fixtures/fake-app.mjs",
+        "ops/tests/i00/fixtures/fake-aws.sh"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [
+        "ops/tests/test-systemd-units.sh",
+        "ops/tests/test-watchdog.sh",
+        "ops/tests/test-backup-restore.sh",
+        "ops/tests/test-restore-drill.sh",
+        "ops/tests/test-rollback.sh",
+        "ops/tests/test-cloudflare-templates.sh",
+        "ops/tests/test-secret-scanner.sh",
+        "ops/tests/i00/test-secrets-provider.sh"
+      ],
+      "shadowBuildPaths": [],
+      "rationale": "The accepted donor and I00 already provide mock systemctl, loopback fake app, fake AWS, fake SQLite, temporary roots, and hostile fail-closed cases."
+    },
+    {
+      "id": "OPS-RUN16-CONFORMANCE",
+      "proposedItem": "packet-local donor parity, classification, scope, and fail-closed conformance harness",
+      "classification": "ADAPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/RECEIPT.md",
+        "ops/i00/donor-contract.json",
+        "server/test/private-egress-tripwire.mjs"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "shadowBuildPaths": [
+        "test/opsShadow/contract.mjs",
+        "test/opsShadow/entry-gate.test.mjs",
+        "test/opsShadow/owner-conformance.test.mjs",
+        "test/opsShadow/network-boundary.test.mjs",
+        "test/opsShadow/receipt-binding.test.mjs",
+        "test/opsShadow/run-focused.mjs",
+        "test/opsShadow/validate-receipt.mjs"
+      ],
+      "rationale": "This harness reads and tests accepted owners; it owns no unit, script, provider, state, route, startup seam, or external effect."
+    },
+    {
+      "id": "OPS-RUN16-METADATA",
+      "proposedItem": "RUN-16 donor-first inventory, insertion requests, and immutable shadow receipt",
+      "classification": "MISSING_BUILD",
+      "ownerPaths": [],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "shadowBuildPaths": [
+        "fixtures/opsShadow/OPS_SHADOW_ENTRY_GATE.v1.json",
+        "fixtures/opsShadow/OPS_SHADOW_INSERTION_REQUESTS.v1.json",
+        "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json"
+      ],
+      "rationale": "No RUN-16 packet-local classification or immutable receipt exists at the base. Metadata changes no canonical product state."
+    },
+    {
+      "id": "OPS-REAL-ACTIVATION",
+      "proposedItem": "real systemd, AWS, Cloudflare, DNS, tunnel, secret, host, deployment, or service mutation",
+      "classification": "REFERENCE_ONLY",
+      "ownerPaths": [
+        "IP_OPS_STATE.md",
+        "ops/docs/i00/ACTIVATION_AND_BOUNDARY_RUNBOOK.md"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "shadowBuildPaths": [],
+      "rationale": "External activation is owner-gated, unavailable to this packet, and excluded from all claims."
+    },
+    {
+      "id": "OPS-NEW-OPERATIONAL-OWNER",
+      "proposedItem": "new shadow-owned systemd, watchdog, backup, restore, rollback, tunnel, IAM, or secret-provider implementation",
+      "classification": "REJECT_DUPLICATE",
+      "ownerPaths": [
+        "ops/live",
+        "ops/i00",
+        "ops/templates/i00"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "shadowBuildPaths": [],
+      "rationale": "One concept already has one accepted owner. Creating operational copies inside a fixture namespace would be duplication, not a port."
+    }
+  ],
+  "limitations": [
+    "The current host is Darwin arm64 and has no systemd-analyze, cloudflared, AWS CLI, or cfn-guard binary; native vendor validation is not claimed.",
+    "No full, browser, performance, soak, target-host, or deployment suite is authorized under the same-machine rule.",
+    "Production restore remains BLOCKED_DONOR_AMENDMENT and is represented only by a draft insertion request.",
+    "Cloudflare local-versus-remote tunnel management must be adjudicated at a future port against the accepted target architecture.",
+    "C2 does not exist in this worktree; any possible port waits for C2 and director adjudication.",
+    "No target Linux version, filesystem atomic-swap capability, safe SQLite target version, capacity receipt, external paging receipt, or real vendor readback is present.",
+    "The broader I00 release/preflight test was attempted but cannot load better-sqlite3 because this worktree has no hydrated node_modules; it is not green evidence, and dependency hydration is outside RUN-16 scope."
+  ]
+}

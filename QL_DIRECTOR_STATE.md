@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-40 (2026-07-15): shadow board COMPLETE — all sealed and pushed
+
+Replay 7666930, A1X e65cdca, A4X 6204667, A5X e8e005e sealed clean (+ earlier runbook 25a3762, ops cdf64b6, obs 20608c4, A2X 9ae6c22, A3X c6397f5, A1-A5 bases). ENTIRE speculative/preparation board is now DONE — nothing parallel remains by design (Queue.md law: no invented work). Sole active: RUN-A (role4-fix, at afed4d5 BACKUP-008 = 9+/15). Next trigger: INTEGRATION_CANDIDATE_READY + C2 SHA → v1..v5 + role3-c2 cut → 6-chat verification burst → landing → ~8-chat port burst.
+
 ## D-LAUNCH-39 (2026-07-15): wave-20 — runbook sealed; replay resume + A1X/A4X/A5X gap-fill extensions (owner compute-window priority)
 
 Runbook-shadow SEALED (25a3762, pushed). Replay-shadow stopped uncommitted → RUN-20 resume. Owner directive: burn available limits NOW on isolated portable work. RULING: three more honest gap-fill extensions exist against the POST_I00 directive (entry-gate law binds each): A1X manifest/graduation instances (§6.16/§7), A4X remaining §10 views, A5X §16 mandatory scenario fixtures — in the sealed A1/A4/A5 worktrees (unparked, sole writers). Static/focused work only. On the "was parallel the cause" question, on record: the 15 findings are integration-seam + honesty defects only whole-product verification exposes; a serial build reaches the same gate with the same (or more) findings later — parallelism moved work earlier, it did not create the gate.

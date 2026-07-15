@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-43 (2026-07-15): zero-wait pre-arming — V-shard/verifier worktrees cut + all trigger blocks pre-written
+
+v1..v5 + role3-c2 worktrees pre-cut detached at afed4d5 (each block self-pins via git checkout --detach <C2> at trigger — worktree cut + block writing no longer costs trigger-time). Full paste-ready V1-V5 + ROLE3-C2 blocks armed (fresh verifier must also check the 4 FIX_AUDIT adjudications). Port burst P1-P9 + AI-Ops integrator/verifier pre-specified consuming the sealed PORT_PLAN scripts. Remaining trigger latency ≈ paste time only.
+
 ## D-LAUNCH-42 (2026-07-15): FIX_AUDIT + PORT_PLAN sealed; 4 fix defects delivered to role4 pre-freeze
 
 RUN-F FIX_AUDIT_READY: 9 fixes COVERED; R3-VAL-001 PARTIAL (exact-S parity still passed:false; regression lacks own pass-bit assert), R3-D-CLEAN-009 PARTIAL (full commands deferred to final battery by law), R3-D-WATCHDOG-007 REGRESSION_RISK (permanent silent-lockout path, missing orphan-guard case), R3-D-BACKUP-008 REGRESSION_RISK (staged-inode mutation of verified bytes). Evidence-delivery paste issued to role4 chat BEFORE C2 freeze — this is the C3-prevention working. RUN-G PORT_PLAN_READY: 9 per-lane port scripts + feasibility + namespace mapping under ~/Desktop/port-plan/portPlan/ (untracked) — post-landing burst is now zero-analysis. Both worktrees parked read-only; outputs untracked by design.

@@ -4,6 +4,7 @@
  * force order closes a LONG position; BUY closes a SHORT. */
 import fs from 'node:fs';
 import path from 'node:path';
+import type { FeedStatus } from './ws.js';
 
 const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
 const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? path.join(DATA_ROOT, 'liquidations.json'));
@@ -270,7 +271,7 @@ export function startLiquidationProjection(options: LiquidationProjectionOptions
   maintenanceTimer.unref?.();
 }
 
-export function observeLiquidationSourceStatus(status: 'connecting' | 'open' | 'closed'): void {
+export function observeLiquidationSourceStatus(status: FeedStatus): void {
   if (stopped) return;
   wsState = status === 'open' ? 'live' : status === 'connecting' ? 'connecting' : 'down';
   if (status === 'open') lastActivityAt = Date.now();

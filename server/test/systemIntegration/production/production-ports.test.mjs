@@ -487,6 +487,31 @@ test('disconnected transport never emits READY or LIVE_PUBLIC despite a fresh ca
   assert.equal(world.ports.runtimes.market.health(world.ctx()).timestamp, null);
 });
 
+test('public retry cooldown and exhaustion remain explicit non-green source truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{ symbol: 'BTCUSDT', hasSpot: true, hasPerp: true }];
+  await startMarket(world);
+  world.spot.set('BTCUSDT', START - 100);
+
+  world.market.feeds['spot-miniticker'] = 'cooldown';
+  const coolingDown = world.ports.components['public-spot-source'].readComponentSnapshot();
+  assert.equal(coolingDown.domainObservedState, 'COOLDOWN');
+  assert.equal(coolingDown.sourceLifecycle, 'BACKING_OFF');
+  assert.equal(coolingDown.readiness, 'BLOCKED');
+  assert.ok(coolingDown.blockerCodes.includes('SOURCE_TRANSPORT_COOLDOWN'));
+  assert.equal(coolingDown.releaseStatuses.includes('LIVE_PUBLIC'), false);
+
+  world.market.feeds['spot-miniticker'] = 'exhausted';
+  world.clock.now = START + 20_000;
+  const exhausted = world.ports.components['public-spot-source'].readComponentSnapshot();
+  assert.equal(exhausted.domainObservedState, 'EXHAUSTED');
+  assert.equal(exhausted.sourceLifecycle, 'FAILED');
+  assert.equal(exhausted.readiness, 'BLOCKED');
+  assert.ok(exhausted.blockerCodes.includes('SOURCE_RETRY_BUDGET_EXHAUSTED'));
+  assert.equal(exhausted.blockerCodes.includes('SOURCE_TRANSPORT_DISCONNECTED'), false);
+  assert.equal(exhausted.releaseStatuses.includes('LIVE_PUBLIC'), false);
+});
+
 test('stale source evidence remains visible but is downgraded from live authority', async () => {
   const world = createWorld();
   world.market.rows = [{ symbol: 'BTCUSDT', hasSpot: true, hasPerp: false }];

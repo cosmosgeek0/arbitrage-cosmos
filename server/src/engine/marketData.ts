@@ -209,7 +209,14 @@ export class MarketEngine {
       const prev = this.feeds[name];
       this.feeds[name] = status;
       if (prev !== status && status !== 'connecting') {
-        this.safeLog(status === 'open' ? 'ws.open' : 'ws.closed', null, { feed: name });
+        const event = status === 'open'
+          ? 'ws.open'
+          : status === 'cooldown'
+            ? 'ws.cooldown'
+            : status === 'exhausted'
+              ? 'ws.exhausted'
+              : 'ws.closed';
+        this.safeLog(event, null, { feed: name, status });
       }
     };
 

@@ -372,9 +372,17 @@ export class VolumeRuntime {
     const previous = this.streamStatus.get(name);
     this.streamStatus.set(name, status);
     if (previous === status || status === 'connecting') return;
-    this.safeLog(status === 'open' ? 'ws.open' : 'ws.closed', null, {
+    const event = status === 'open'
+      ? 'ws.open'
+      : status === 'cooldown'
+        ? 'ws.cooldown'
+        : status === 'exhausted'
+          ? 'ws.exhausted'
+          : 'ws.closed';
+    this.safeLog(event, null, {
       feed: name,
       source: 'volume-runtime',
+      status,
     });
   }
 

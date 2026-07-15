@@ -1,0 +1,136 @@
+{
+  "schema": "AI_OPS_A2X_ENTRY_GATE_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "candidateReferenceSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "sealedArtifactSha": "ca1fb094e19d0ccc6a8397ee08a65a662d051bd3",
+  "actualMergeBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "candidateReferenceIsAncestor": false,
+  "rows": [
+    {
+      "item": "provider-neutral observation normalization, replay identity, deduplication, storm admission, severity, and model-depth projection",
+      "classification": "ADOPT_EXISTING",
+      "buildDisposition": "NO_BUILD",
+      "owner": "A2 sealed incident runtime",
+      "evidence": "types.ts and incident.ts"
+    },
+    {
+      "item": "provider-neutral CloudEvents-style envelope mapping into the existing A2 observation contract",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_LANE_ADAPTER",
+      "owner": "A2 case-runtime intake boundary",
+      "evidence": "eventIntake.ts delegates to normalizeObservation"
+    },
+    {
+      "item": "immutable multi-provider intake replay corpus",
+      "classification": "MISSING_BUILD",
+      "buildDisposition": "BUILD_FIXTURE",
+      "owner": "A2 focused fixtures",
+      "evidence": "a2x-replay-fixtures.v1.json"
+    },
+    {
+      "item": "escalation lifecycle states and diagnostic owner-attention signal",
+      "classification": "ADOPT_EXISTING",
+      "buildDisposition": "NO_BUILD",
+      "owner": "A2 case and diagnostic runtime",
+      "evidence": "types.ts, caseState.ts, and diagnostic.ts"
+    },
+    {
+      "item": "case-local escalation intent bound to Product Assurance REQUEST_OWNER_HANDOFF adjudication and a signed synthetic incident-owner receipt",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_LANE_ADAPTER",
+      "owner": "Product Assurance diagnostic boundary plus A2 projection",
+      "evidence": "escalation.ts"
+    },
+    {
+      "item": "notification, pager, attention ordering, delivery, acknowledgement, remediation, or global severity owner",
+      "classification": "REJECT_DUPLICATE",
+      "buildDisposition": "NO_BUILD",
+      "owner": "SystemIntegration supervisor and canonical dispatcher",
+      "evidence": "ARCHITECTURE.md Part II"
+    },
+    {
+      "item": "aggregate calls, tools, web, tokens, cost, latency, wall-time, per-case, provider, and global budgets",
+      "classification": "ADOPT_EXISTING",
+      "buildDisposition": "NO_BUILD",
+      "owner": "A2 sealed budget runtime",
+      "evidence": "types.ts and budget.ts"
+    },
+    {
+      "item": "provider-neutral signed synthetic input, output, cached, cache-write, reasoning token, measured-cost, and pricing-lineage detail",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_LANE_ADAPTER",
+      "owner": "A2 measured-usage projection",
+      "evidence": "budget.ts"
+    },
+    {
+      "item": "read-only signed synthetic request, input-token, output-token, total-token, concurrency, cooldown, and freshness projection",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_LANE_ADAPTER",
+      "owner": "A2 provider availability projection",
+      "evidence": "budget.ts"
+    },
+    {
+      "item": "canonical aggregate provider rate, concurrency, cooldown, price, and atomic reservation authority",
+      "classification": "REFERENCE_ONLY",
+      "buildDisposition": "INSERTION_REQUEST",
+      "owner": "A3 provider route and intelligenceRuntime rate-budget owners",
+      "evidence": "insertion-requests.a2x.v1.json"
+    },
+    {
+      "item": "competing rate limiter, reservation ledger, provider SDK, network client, or provider router",
+      "classification": "REJECT_DUPLICATE",
+      "buildDisposition": "NO_BUILD",
+      "owner": "A3, intelligenceRuntime, and SystemIntegration",
+      "evidence": "ARCHITECTURE.md Part II"
+    },
+    {
+      "item": "signed context manifest plus fresh-session and model-run handoff",
+      "classification": "ADOPT_EXISTING",
+      "buildDisposition": "NO_BUILD",
+      "owner": "A2 sealed context and diagnostic runtime",
+      "evidence": "context.ts and diagnostic.ts"
+    },
+    {
+      "item": "immutable bounded one-time handoff consumption state, receipt, and restart verification",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_LANE_ADAPTER",
+      "owner": "A2 session-handoff projection",
+      "evidence": "context.ts"
+    },
+    {
+      "item": "production signing, durable CAS, canonical session identity, and one-time launch authority",
+      "classification": "REFERENCE_ONLY",
+      "buildDisposition": "INSERTION_REQUEST",
+      "owner": "I00 trust and Ledger",
+      "evidence": "insertion-requests.a2x.v1.json"
+    },
+    {
+      "item": "generic deterministic replay engine, durable store, inbox, outbox, DLQ, and case snapshot replay",
+      "classification": "ADOPT_EXISTING",
+      "buildDisposition": "NO_BUILD",
+      "owner": "Foundation replay, Ledger, and A2 sealed persistence runtime",
+      "evidence": "foundation/replay plus caseState.ts and persistence.ts"
+    },
+    {
+      "item": "second replay engine, database, event bus, queue, socket, filesystem runtime, or package-root discovery",
+      "classification": "REJECT_DUPLICATE",
+      "buildDisposition": "NO_BUILD",
+      "owner": "Foundation replay, Ledger, SystemIntegration, and I00 assembly",
+      "evidence": "ARCHITECTURE.md Part II"
+    },
+    {
+      "item": "dirty-worktree exclusive-path audit over Git porcelain XY status columns",
+      "classification": "ADAPT_EXISTING",
+      "buildDisposition": "BUILD_TEST_HARNESS",
+      "owner": "A2 focused verification harness",
+      "evidence": "purity-network-deny.test.mjs"
+    },
+    {
+      "item": "durable A2X event, usage, and session replay fixtures",
+      "classification": "MISSING_BUILD",
+      "buildDisposition": "BUILD_FIXTURE",
+      "owner": "A2 focused fixtures",
+      "evidence": "a2x-replay-fixtures.v1.json"
+    }
+  ]
+}

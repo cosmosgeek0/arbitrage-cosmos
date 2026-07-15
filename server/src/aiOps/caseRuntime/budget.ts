@@ -3,6 +3,7 @@ import type {
   ShadowBudgetCaps,
   ShadowBudgetState,
   ShadowCriticalityProof,
+  ShadowSignature,
   ShadowUsage,
   ShadowUsageReceipt,
 } from './types.js';
@@ -41,6 +42,16 @@ function validateSignerPort(verifier: Readonly<ShadowSyntheticSignerPort>): void
   if (verifier.posture !== 'SYNTHETIC_ONLY') throw new TypeError('A2 signer posture must remain synthetic-only');
   if (typeof verifier.signDigest !== 'function' || typeof verifier.verifyDigest !== 'function') {
     throw new TypeError('A2 signer methods are unavailable');
+  }
+}
+
+function validateOwnerFactSignature(signature: Readonly<ShadowSignature>, label: string): void {
+  assertClosedKeys(signature, ['posture', 'algorithm', 'keyId', 'signature'], label);
+  if (signature.posture !== 'SYNTHETIC_ONLY') throw new TypeError(`${label} posture must remain synthetic-only`);
+  assertIdentifier(signature.algorithm, `${label}.algorithm`);
+  assertIdentifier(signature.keyId, `${label}.keyId`);
+  if (typeof signature.signature !== 'string' || !/^[A-Za-z0-9_-]{16,512}$/u.test(signature.signature)) {
+    throw new TypeError(`${label} bytes malformed`);
   }
 }
 
@@ -651,4 +662,400 @@ export function projectProviderRoute(
       ? [selected === primarySnapshot ? 'PRIMARY_PROVIDER_SELECTED' : 'PREQUALIFIED_FALLBACK_SELECTED']
       : [eligibleButBudgetBlocked ? 'DIAGNOSTIC_BUDGET_EXHAUSTED' : 'DIAGNOSTIC_PROVIDER_UNAVAILABLE']),
   });
+}
+
+export type ShadowUsageCostAuthority = 'OWNER_PRICE_TABLE' | 'PROVIDER_REPORTED' | 'UNAVAILABLE';
+
+export interface ShadowProviderUsageMeasurement {
+  readonly schema: 'AI_OPS_A2_PROVIDER_USAGE_MEASUREMENT_V1';
+  readonly usageId: string;
+  readonly caseId: string;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly occurredAtMs: number;
+  readonly calls: number;
+  readonly toolCalls: number;
+  readonly webQueries: number;
+  /** Canonical input total. Cache-read and cache-write tokens are subsets of this value. */
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cachedInputTokens: number;
+  readonly cacheWriteInputTokens: number;
+  /** Reasoning tokens are a subset of outputTokens. */
+  readonly reasoningOutputTokens: number;
+  readonly costMicrounits: number | null;
+  readonly costAuthority: ShadowUsageCostAuthority;
+  readonly pricingRevision: string | null;
+  readonly latencyMs: number;
+  readonly wallTimeMs: number;
+  /** Digest of the injected provider or price-owner usage fact. This adapter does not mint that authority. */
+  readonly sourceDigest: string;
+  readonly sourceSignature: Readonly<ShadowSignature>;
+}
+
+export interface ShadowDetailedUsage {
+  readonly schema: 'AI_OPS_A2_DETAILED_USAGE_V1';
+  readonly shadowStatus: typeof SHADOW_A2_STATUS;
+  readonly usageId: string;
+  readonly caseId: string;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly occurredAtMs: number;
+  readonly sourceDigest: string;
+  readonly sourceSignature: Readonly<ShadowSignature>;
+  readonly factVerification: 'SYNTHETIC_ONLY';
+  readonly tokens: Readonly<{
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly totalTokens: number;
+    readonly cachedInputTokens: number;
+    readonly cacheWriteInputTokens: number;
+    readonly uncachedInputTokens: number;
+    readonly reasoningOutputTokens: number;
+    readonly nonReasoningOutputTokens: number;
+  }>;
+  readonly cost: Readonly<{
+    readonly costMicrounits: number | null;
+    readonly unit: 'USD_MICRO' | 'UNAVAILABLE';
+    readonly authority: ShadowUsageCostAuthority;
+    readonly pricingRevision: string | null;
+  }>;
+  /**
+   * Existing A2 aggregate-budget shape, only when cost is known. A null cost
+   * cannot be collapsed to a fabricated zero to obtain budget admission.
+   */
+  readonly budgetUsage: Readonly<ShadowUsage> | null;
+  readonly operationalAuthority: 'NONE';
+  readonly detailDigest: string;
+}
+
+const PROVIDER_USAGE_MEASUREMENT_KEYS = Object.freeze([
+  'schema', 'usageId', 'caseId', 'providerId', 'modelId', 'occurredAtMs', 'calls', 'toolCalls', 'webQueries',
+  'inputTokens', 'outputTokens', 'cachedInputTokens', 'cacheWriteInputTokens', 'reasoningOutputTokens',
+  'costMicrounits', 'costAuthority', 'pricingRevision', 'latencyMs', 'wallTimeMs', 'sourceDigest',
+  'sourceSignature',
+] as const);
+
+function providerUsageFactPayload(input: Readonly<ShadowProviderUsageMeasurement>): object {
+  const { sourceDigest: _sourceDigest, sourceSignature: _sourceSignature, ...payload } = input;
+  return payload;
+}
+
+/**
+ * Normalizes provider usage detail without importing a provider SDK or price
+ * table. Token totals are checked from injected facts; cost stays unavailable
+ * until a provider or pricing owner supplies it.
+ */
+export function canonicalizeProviderUsage(
+  input: Readonly<ShadowProviderUsageMeasurement>,
+  verifier: Readonly<ShadowSyntheticSignerPort>,
+): Readonly<ShadowDetailedUsage> {
+  input = snapshotInertJson(input, 'provider usage measurement') as Readonly<ShadowProviderUsageMeasurement>;
+  validateSignerPort(verifier);
+  assertClosedKeys(input, PROVIDER_USAGE_MEASUREMENT_KEYS, 'provider usage measurement');
+  if (input.schema !== 'AI_OPS_A2_PROVIDER_USAGE_MEASUREMENT_V1') throw new TypeError('provider usage measurement schema invalid');
+  assertIdentifier(input.usageId, 'providerUsage.usageId');
+  assertIdentifier(input.caseId, 'providerUsage.caseId');
+  assertIdentifier(input.providerId, 'providerUsage.providerId');
+  assertIdentifier(input.modelId, 'providerUsage.modelId');
+  assertUtc(input.occurredAtMs, 'providerUsage.occurredAtMs');
+  for (const key of [
+    'calls', 'toolCalls', 'webQueries', 'inputTokens', 'outputTokens', 'cachedInputTokens',
+    'cacheWriteInputTokens', 'reasoningOutputTokens', 'latencyMs', 'wallTimeMs',
+  ] as const) assertSafeNonNegative(input[key], `providerUsage.${key}`);
+  assertDigest(input.sourceDigest, 'providerUsage.sourceDigest');
+  if (!(['OWNER_PRICE_TABLE', 'PROVIDER_REPORTED', 'UNAVAILABLE'] as const).includes(input.costAuthority)) {
+    throw new TypeError('provider usage cost authority invalid');
+  }
+
+  const cacheAttributedInputTokens = checkedAdd(
+    input.cachedInputTokens,
+    input.cacheWriteInputTokens,
+    'providerUsage.cacheAttributedInputTokens',
+  );
+  if (cacheAttributedInputTokens > input.inputTokens) {
+    throw new TypeError('cache-read and cache-write tokens must be subsets of input tokens');
+  }
+  if (input.reasoningOutputTokens > input.outputTokens) {
+    throw new TypeError('reasoning tokens must be a subset of output tokens');
+  }
+  const totalTokens = checkedAdd(input.inputTokens, input.outputTokens, 'providerUsage.totalTokens');
+
+  if (input.costMicrounits === null) {
+    if (input.costAuthority !== 'UNAVAILABLE' || input.pricingRevision !== null) {
+      throw new TypeError('unknown provider usage cost must remain unavailable without a pricing revision');
+    }
+  } else {
+    assertSafeNonNegative(input.costMicrounits, 'providerUsage.costMicrounits');
+    if (input.costAuthority === 'UNAVAILABLE' || input.pricingRevision === null) {
+      throw new TypeError('known provider usage cost requires authority and a pricing revision');
+    }
+    assertIdentifier(input.pricingRevision, 'providerUsage.pricingRevision');
+  }
+  validateOwnerFactSignature(input.sourceSignature, 'providerUsage.sourceSignature');
+  if (input.sourceDigest !== digestValue(providerUsageFactPayload(input))) {
+    throw new TypeError('provider usage source digest does not bind its measured fact');
+  }
+  if (verifier.verifyDigest(input.sourceDigest, input.sourceSignature) !== true) {
+    throw new TypeError('provider usage source signature invalid');
+  }
+
+  const tokens = Object.freeze({
+    inputTokens: input.inputTokens,
+    outputTokens: input.outputTokens,
+    totalTokens,
+    cachedInputTokens: input.cachedInputTokens,
+    cacheWriteInputTokens: input.cacheWriteInputTokens,
+    uncachedInputTokens: input.inputTokens - cacheAttributedInputTokens,
+    reasoningOutputTokens: input.reasoningOutputTokens,
+    nonReasoningOutputTokens: input.outputTokens - input.reasoningOutputTokens,
+  });
+  const cost = Object.freeze({
+    costMicrounits: input.costMicrounits,
+    unit: input.costMicrounits === null ? 'UNAVAILABLE' as const : 'USD_MICRO' as const,
+    authority: input.costAuthority,
+    pricingRevision: input.pricingRevision,
+  });
+  const budgetUsage = input.costMicrounits === null ? null : Object.freeze({
+    calls: input.calls,
+    toolCalls: input.toolCalls,
+    webQueries: input.webQueries,
+    tokens: totalTokens,
+    costMicrounits: input.costMicrounits,
+    latencyMs: input.latencyMs,
+    wallTimeMs: input.wallTimeMs,
+  });
+  const core = Object.freeze({
+    schema: 'AI_OPS_A2_DETAILED_USAGE_V1' as const,
+    shadowStatus: SHADOW_A2_STATUS,
+    usageId: input.usageId,
+    caseId: input.caseId,
+    providerId: input.providerId,
+    modelId: input.modelId,
+    occurredAtMs: input.occurredAtMs,
+    sourceDigest: input.sourceDigest,
+    sourceSignature: Object.freeze({ ...input.sourceSignature }),
+    factVerification: 'SYNTHETIC_ONLY' as const,
+    tokens,
+    cost,
+    budgetUsage,
+    operationalAuthority: 'NONE' as const,
+  });
+  return Object.freeze({ ...core, detailDigest: digestValue(core) });
+}
+
+export interface ShadowProviderRateDimension {
+  readonly limit: number | null;
+  readonly remaining: number | null;
+  readonly resetAtMs: number | null;
+}
+
+export interface ShadowProviderRateSnapshot {
+  readonly schema: 'AI_OPS_A2_PROVIDER_RATE_SNAPSHOT_V1';
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly policyRevision: string;
+  readonly observedAtMs: number;
+  readonly expiresAtMs: number;
+  readonly cooldownUntilMs: number | null;
+  readonly concurrency: Readonly<{
+    readonly active: number | null;
+    readonly maximum: number | null;
+  }>;
+  readonly dimensions: Readonly<{
+    readonly requests: Readonly<ShadowProviderRateDimension>;
+    readonly inputTokens: Readonly<ShadowProviderRateDimension>;
+    readonly outputTokens: Readonly<ShadowProviderRateDimension>;
+    readonly totalTokens: Readonly<ShadowProviderRateDimension>;
+  }>;
+  readonly authority: 'OWNER_PROJECTION';
+  readonly atomicReservation: false;
+  /** Integrity lineage supplied by the canonical rate owner, not created here. */
+  readonly ownerFactDigest: string;
+  readonly ownerFactSignature: Readonly<ShadowSignature>;
+}
+
+export interface ShadowProviderRateRequest {
+  readonly requests: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly totalTokens: number;
+  readonly concurrencySlots: number;
+}
+
+export interface ShadowProviderRateProjection {
+  readonly schema: 'AI_OPS_A2_PROVIDER_RATE_PROJECTION_V1';
+  readonly shadowStatus: typeof SHADOW_A2_STATUS;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly policyRevision: string;
+  readonly evaluatedAtMs: number;
+  readonly ownerFactDigest: string;
+  readonly ownerFactSignature: Readonly<ShadowSignature>;
+  readonly factVerification: 'SYNTHETIC_ONLY';
+  readonly snapshotDigest: string;
+  readonly requestDigest: string;
+  readonly available: boolean;
+  readonly diagnosticState: 'READY' | 'DIAGNOSTIC_PLANE_UNAVAILABLE';
+  readonly atomicReservation: false;
+  readonly reservationCreated: false;
+  readonly operationalAuthority: 'NONE';
+  readonly reasonCodes: readonly string[];
+  readonly projectionDigest: string;
+}
+
+const RATE_DIMENSION_KEYS = Object.freeze([
+  'requests', 'inputTokens', 'outputTokens', 'totalTokens',
+] as const);
+const RATE_REASON_NAMES: Readonly<Record<(typeof RATE_DIMENSION_KEYS)[number], string>> = Object.freeze({
+  requests: 'REQUESTS',
+  inputTokens: 'INPUT_TOKENS',
+  outputTokens: 'OUTPUT_TOKENS',
+  totalTokens: 'TOTAL_TOKENS',
+});
+const MAX_PROVIDER_RATE_SNAPSHOT_TTL_MS = DAY_MS;
+
+function validateRateDimension(
+  dimension: Readonly<ShadowProviderRateDimension>,
+  label: string,
+  observedAtMs: number,
+): void {
+  assertClosedKeys(dimension, ['limit', 'remaining', 'resetAtMs'], label);
+  const unavailable = dimension.limit === null && dimension.remaining === null && dimension.resetAtMs === null;
+  const complete = dimension.limit !== null && dimension.remaining !== null && dimension.resetAtMs !== null;
+  if (!unavailable && !complete) throw new TypeError(`${label} must be wholly known or wholly unavailable`);
+  if (!complete) return;
+  assertSafeNonNegative(dimension.limit, `${label}.limit`);
+  assertSafeNonNegative(dimension.remaining, `${label}.remaining`);
+  assertUtc(dimension.resetAtMs, `${label}.resetAtMs`);
+  if (dimension.remaining > dimension.limit) throw new TypeError(`${label}.remaining cannot exceed its limit`);
+  if (dimension.resetAtMs <= observedAtMs) throw new TypeError(`${label}.resetAtMs must follow observation time`);
+}
+
+function providerRateFactPayload(snapshot: Readonly<ShadowProviderRateSnapshot>): object {
+  const { ownerFactDigest: _ownerFactDigest, ownerFactSignature: _ownerFactSignature, ...payload } = snapshot;
+  return payload;
+}
+
+function validateRateSnapshot(
+  snapshot: Readonly<ShadowProviderRateSnapshot>,
+  verifier: Readonly<ShadowSyntheticSignerPort>,
+): void {
+  validateSignerPort(verifier);
+  assertClosedKeys(snapshot, [
+    'schema', 'providerId', 'modelId', 'policyRevision', 'observedAtMs', 'expiresAtMs', 'cooldownUntilMs',
+    'concurrency', 'dimensions', 'authority', 'atomicReservation', 'ownerFactDigest', 'ownerFactSignature',
+  ], 'provider rate snapshot');
+  if (snapshot.schema !== 'AI_OPS_A2_PROVIDER_RATE_SNAPSHOT_V1') throw new TypeError('provider rate snapshot schema invalid');
+  assertIdentifier(snapshot.providerId, 'rateSnapshot.providerId');
+  assertIdentifier(snapshot.modelId, 'rateSnapshot.modelId');
+  assertIdentifier(snapshot.policyRevision, 'rateSnapshot.policyRevision');
+  assertUtc(snapshot.observedAtMs, 'rateSnapshot.observedAtMs');
+  assertUtc(snapshot.expiresAtMs, 'rateSnapshot.expiresAtMs');
+  if (
+    snapshot.expiresAtMs <= snapshot.observedAtMs
+    || snapshot.expiresAtMs - snapshot.observedAtMs > MAX_PROVIDER_RATE_SNAPSHOT_TTL_MS
+  ) throw new TypeError('provider rate snapshot expiry invalid');
+  if (snapshot.cooldownUntilMs !== null) assertUtc(snapshot.cooldownUntilMs, 'rateSnapshot.cooldownUntilMs');
+  if (snapshot.authority !== 'OWNER_PROJECTION') throw new TypeError('provider rate snapshot authority invalid');
+  if (snapshot.atomicReservation !== false) throw new TypeError('provider rate snapshot cannot claim an atomic reservation');
+  assertDigest(snapshot.ownerFactDigest, 'rateSnapshot.ownerFactDigest');
+  assertClosedKeys(snapshot.concurrency, ['active', 'maximum'], 'rateSnapshot.concurrency');
+  const concurrencyUnavailable = snapshot.concurrency.active === null && snapshot.concurrency.maximum === null;
+  const concurrencyComplete = snapshot.concurrency.active !== null && snapshot.concurrency.maximum !== null;
+  if (!concurrencyUnavailable && !concurrencyComplete) throw new TypeError('provider concurrency must be wholly known or wholly unavailable');
+  if (concurrencyComplete) {
+    assertSafeNonNegative(snapshot.concurrency.active, 'rateSnapshot.concurrency.active');
+    assertSafeNonNegative(snapshot.concurrency.maximum, 'rateSnapshot.concurrency.maximum');
+    if (snapshot.concurrency.active > snapshot.concurrency.maximum) throw new TypeError('active provider concurrency cannot exceed its maximum');
+  }
+  assertClosedKeys(snapshot.dimensions, RATE_DIMENSION_KEYS, 'rateSnapshot.dimensions');
+  for (const key of RATE_DIMENSION_KEYS) {
+    validateRateDimension(snapshot.dimensions[key], `rateSnapshot.dimensions.${key}`, snapshot.observedAtMs);
+  }
+  validateOwnerFactSignature(snapshot.ownerFactSignature, 'rateSnapshot.ownerFactSignature');
+  if (snapshot.ownerFactDigest !== digestValue(providerRateFactPayload(snapshot))) {
+    throw new TypeError('provider rate owner digest does not bind its projected fact');
+  }
+  if (verifier.verifyDigest(snapshot.ownerFactDigest, snapshot.ownerFactSignature) !== true) {
+    throw new TypeError('provider rate owner signature invalid');
+  }
+}
+
+function validateRateRequest(request: Readonly<ShadowProviderRateRequest>): void {
+  assertClosedKeys(request, [
+    'requests', 'inputTokens', 'outputTokens', 'totalTokens', 'concurrencySlots',
+  ], 'provider rate request');
+  for (const key of ['requests', 'inputTokens', 'outputTokens', 'totalTokens', 'concurrencySlots'] as const) {
+    assertSafeNonNegative(request[key], `rateRequest.${key}`);
+  }
+  if (checkedAdd(request.inputTokens, request.outputTokens, 'rateRequest.totalTokens') !== request.totalTokens) {
+    throw new TypeError('provider rate request total tokens must equal input plus output tokens');
+  }
+}
+
+/**
+ * Projects availability from an injected owner snapshot. It does not decrement
+ * counters, acquire a semaphore, reserve capacity, or perform provider I/O.
+ */
+export function projectProviderRateAvailability(
+  snapshot: Readonly<ShadowProviderRateSnapshot>,
+  request: Readonly<ShadowProviderRateRequest>,
+  evaluatedAtMs: number,
+  verifier: Readonly<ShadowSyntheticSignerPort>,
+): Readonly<ShadowProviderRateProjection> {
+  snapshot = snapshotInertJson(snapshot, 'provider rate snapshot') as Readonly<ShadowProviderRateSnapshot>;
+  request = snapshotInertJson(request, 'provider rate request') as Readonly<ShadowProviderRateRequest>;
+  validateRateSnapshot(snapshot, verifier);
+  validateRateRequest(request);
+  assertUtc(evaluatedAtMs, 'evaluatedAtMs');
+  const reasons: string[] = [];
+  if (evaluatedAtMs < snapshot.observedAtMs) reasons.push('RATE_SNAPSHOT_NOT_YET_OBSERVED');
+  if (evaluatedAtMs >= snapshot.expiresAtMs) reasons.push('RATE_SNAPSHOT_STALE');
+  if (snapshot.cooldownUntilMs !== null && evaluatedAtMs < snapshot.cooldownUntilMs) reasons.push('RATE_COOLDOWN_ACTIVE');
+  if (request.concurrencySlots > 0) {
+    if (snapshot.concurrency.active === null || snapshot.concurrency.maximum === null) {
+      reasons.push('RATE_CONCURRENCY_UNKNOWN');
+    } else if (
+      snapshot.concurrency.active > snapshot.concurrency.maximum - request.concurrencySlots
+    ) {
+      reasons.push('RATE_CONCURRENCY_EXHAUSTED');
+    }
+  }
+  for (const key of RATE_DIMENSION_KEYS) {
+    if (request[key] === 0) continue;
+    const dimension = snapshot.dimensions[key];
+    const reasonName = RATE_REASON_NAMES[key];
+    if (dimension.limit === null || dimension.remaining === null || dimension.resetAtMs === null) {
+      reasons.push(`RATE_${reasonName}_UNKNOWN`);
+    } else if (evaluatedAtMs >= dimension.resetAtMs) {
+      reasons.push(`RATE_${reasonName}_WINDOW_ELAPSED`);
+    } else if (request[key] > dimension.remaining) {
+      reasons.push(`RATE_${reasonName}_EXHAUSTED`);
+    }
+  }
+  const reasonCodes = Object.freeze([...new Set(reasons)].sort(compareCodeUnitStrings));
+  const snapshotDigest = digestValue(snapshot);
+  const requestDigest = digestValue({ snapshotDigest, request, evaluatedAtMs });
+  const available = reasonCodes.length === 0;
+  const core = Object.freeze({
+    schema: 'AI_OPS_A2_PROVIDER_RATE_PROJECTION_V1' as const,
+    shadowStatus: SHADOW_A2_STATUS,
+    providerId: snapshot.providerId,
+    modelId: snapshot.modelId,
+    policyRevision: snapshot.policyRevision,
+    evaluatedAtMs,
+    ownerFactDigest: snapshot.ownerFactDigest,
+    ownerFactSignature: Object.freeze({ ...snapshot.ownerFactSignature }),
+    factVerification: 'SYNTHETIC_ONLY' as const,
+    snapshotDigest,
+    requestDigest,
+    available,
+    diagnosticState: available ? 'READY' as const : 'DIAGNOSTIC_PLANE_UNAVAILABLE' as const,
+    atomicReservation: false as const,
+    reservationCreated: false as const,
+    operationalAuthority: 'NONE' as const,
+    reasonCodes,
+  });
+  return Object.freeze({ ...core, projectionDigest: digestValue(core) });
 }

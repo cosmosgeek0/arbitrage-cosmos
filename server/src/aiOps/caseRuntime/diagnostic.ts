@@ -115,7 +115,7 @@ export interface ShadowDiagnosticResult extends ShadowDiagnosticResultInput {
   readonly operationalAuthority: 'NONE';
 }
 
-function assertDiagnosticResultIntegrity(result: Readonly<ShadowDiagnosticResult>): void {
+export function assertDiagnosticResultIntegrity(result: Readonly<ShadowDiagnosticResult>): void {
   assertClosedKeys(result, [
     'schema', 'shadowStatus', 'diagnosisId', 'diagnosisDigest', 'caseId', 'generation', 'evidenceBundleDigest',
     'createdAtMs', 'expiresAtMs', 'observedFacts', 'hypotheses', 'supportingEvidencePointerIds',

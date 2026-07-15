@@ -495,3 +495,441 @@ export function verifyFreshSessionHandoff(
   }
   return Object.freeze({ shadowStatus: SHADOW_A2_STATUS, valid: reasons.length === 0, reasonCodes: Object.freeze([...new Set(reasons)].sort()) });
 }
+
+const MAX_HANDOFF_CONSUMPTION_RECEIPTS = 4_096;
+const MAX_HANDOFF_CONSUMPTION_STATE_BYTES = 8 * 1024 * 1024;
+const HANDOFF_CONSUMPTION_RECEIPT_KEYS = Object.freeze([
+  'schema', 'shadowStatus', 'operationalAuthority', 'receiptId', 'stateRevision', 'handoffId', 'sessionId',
+  'consumerId', 'audience', 'nextOwner', 'caseId', 'caseRevision', 'generation', 'manifestPayloadDigest',
+  'manifestEnvelopeDigest', 'handoffPayloadDigest', 'handoffEnvelopeDigest', 'expectedManifestLineageDigest',
+  'consumedAtMs', 'priorChainDigest', 'chainDigest', 'receiptDigest',
+] as const);
+const HANDOFF_CONSUMPTION_STATE_KEYS = Object.freeze([
+  'schema', 'shadowStatus', 'operationalAuthority', 'revision', 'capacity', 'receipts', 'chainDigest', 'stateDigest',
+] as const);
+
+export interface ShadowHandoffConsumptionCapacity {
+  readonly maximumReceipts: number;
+  readonly maximumStateBytes: number;
+}
+
+export interface ShadowHandoffConsumptionReceipt {
+  readonly schema: 'AI_OPS_A2_HANDOFF_CONSUMPTION_RECEIPT_V1';
+  readonly shadowStatus: typeof SHADOW_A2_STATUS;
+  readonly operationalAuthority: 'NONE';
+  readonly receiptId: string;
+  readonly stateRevision: number;
+  readonly handoffId: string;
+  readonly sessionId: string;
+  readonly consumerId: string;
+  readonly audience: string;
+  readonly nextOwner: string;
+  readonly caseId: string;
+  readonly caseRevision: number;
+  readonly generation: number;
+  readonly manifestPayloadDigest: string;
+  readonly manifestEnvelopeDigest: string;
+  readonly handoffPayloadDigest: string;
+  readonly handoffEnvelopeDigest: string;
+  readonly expectedManifestLineageDigest: string;
+  readonly consumedAtMs: number;
+  readonly priorChainDigest: string;
+  readonly chainDigest: string;
+  readonly receiptDigest: string;
+}
+
+/**
+ * A deterministic, serializable shadow projection only. It neither owns a
+ * store nor grants persistence authority; canonical CAS remains a Ledger
+ * owner insertion request.
+ */
+export interface ShadowHandoffConsumptionState {
+  readonly schema: 'AI_OPS_A2_HANDOFF_CONSUMPTION_STATE_V1';
+  readonly shadowStatus: typeof SHADOW_A2_STATUS;
+  readonly operationalAuthority: 'NONE';
+  readonly revision: number;
+  readonly capacity: Readonly<ShadowHandoffConsumptionCapacity>;
+  readonly receipts: readonly Readonly<ShadowHandoffConsumptionReceipt>[];
+  readonly chainDigest: string;
+  readonly stateDigest: string;
+}
+
+export interface ShadowHandoffConsumptionResult {
+  readonly shadowStatus: typeof SHADOW_A2_STATUS;
+  readonly operationalAuthority: 'NONE';
+  readonly disposition: 'CONSUMED' | 'IDEMPOTENT' | 'CONFLICT';
+  readonly changed: boolean;
+  readonly reasonCodes: readonly ('HANDOFF_CONSUMED' | 'HANDOFF_ALREADY_CONSUMED' | 'HANDOFF_CONSUMPTION_IDENTITY_CONFLICT' | 'STATE_REVISION_CONFLICT')[];
+  readonly state: Readonly<ShadowHandoffConsumptionState>;
+  readonly receipt: Readonly<ShadowHandoffConsumptionReceipt> | null;
+}
+
+export const DEFAULT_SHADOW_HANDOFF_CONSUMPTION_CAPACITY: Readonly<ShadowHandoffConsumptionCapacity> = Object.freeze({
+  maximumReceipts: 1_024,
+  maximumStateBytes: 2 * 1024 * 1024,
+});
+
+function validateHandoffConsumptionCapacity(capacity: Readonly<ShadowHandoffConsumptionCapacity>): void {
+  assertClosedKeys(capacity, ['maximumReceipts', 'maximumStateBytes'], 'handoff consumption capacity');
+  assertPositive(capacity.maximumReceipts, 'capacity.maximumReceipts');
+  assertPositive(capacity.maximumStateBytes, 'capacity.maximumStateBytes');
+  if (
+    capacity.maximumReceipts > MAX_HANDOFF_CONSUMPTION_RECEIPTS
+    || capacity.maximumStateBytes > MAX_HANDOFF_CONSUMPTION_STATE_BYTES
+  ) throw new TypeError('handoff consumption capacity exceeds absolute shadow bounds');
+}
+
+function emptyHandoffConsumptionChainDigest(): string {
+  return digestValue({
+    schema: 'AI_OPS_A2_HANDOFF_CONSUMPTION_CHAIN_V1',
+    shadowStatus: SHADOW_A2_STATUS,
+    operationalAuthority: 'NONE',
+    receipts: [],
+  });
+}
+
+function expectedManifestLineageDigest(expected: Readonly<ShadowManifestVerificationInput>): string {
+  const {
+    nowMs: _nowMs,
+    ...lineage
+  } = expected;
+  return digestValue(lineage);
+}
+
+function handoffConsumptionReceiptId(
+  handoffId: string,
+  consumerId: string,
+  stateRevision: number,
+): string {
+  return shadowSpeculativeId('a2-handoff-consumption', { handoffId, consumerId, stateRevision });
+}
+
+function handoffConsumptionReceiptChainPayload(
+  receipt: Readonly<Omit<ShadowHandoffConsumptionReceipt, 'chainDigest' | 'receiptDigest'>>,
+): object {
+  return {
+    schema: receipt.schema,
+    shadowStatus: receipt.shadowStatus,
+    operationalAuthority: receipt.operationalAuthority,
+    receiptId: receipt.receiptId,
+    stateRevision: receipt.stateRevision,
+    handoffId: receipt.handoffId,
+    sessionId: receipt.sessionId,
+    consumerId: receipt.consumerId,
+    audience: receipt.audience,
+    nextOwner: receipt.nextOwner,
+    caseId: receipt.caseId,
+    caseRevision: receipt.caseRevision,
+    generation: receipt.generation,
+    manifestPayloadDigest: receipt.manifestPayloadDigest,
+    manifestEnvelopeDigest: receipt.manifestEnvelopeDigest,
+    handoffPayloadDigest: receipt.handoffPayloadDigest,
+    handoffEnvelopeDigest: receipt.handoffEnvelopeDigest,
+    expectedManifestLineageDigest: receipt.expectedManifestLineageDigest,
+    consumedAtMs: receipt.consumedAtMs,
+    priorChainDigest: receipt.priorChainDigest,
+  };
+}
+
+function sealHandoffConsumptionReceipt(
+  receipt: Readonly<ShadowHandoffConsumptionReceipt>,
+): Readonly<ShadowHandoffConsumptionReceipt> {
+  return Object.freeze({ ...receipt });
+}
+
+function handoffConsumptionStateCore(
+  revision: number,
+  capacity: Readonly<ShadowHandoffConsumptionCapacity>,
+  receipts: readonly Readonly<ShadowHandoffConsumptionReceipt>[],
+  chainDigest: string,
+): Readonly<Omit<ShadowHandoffConsumptionState, 'stateDigest'>> {
+  return Object.freeze({
+    schema: 'AI_OPS_A2_HANDOFF_CONSUMPTION_STATE_V1' as const,
+    shadowStatus: SHADOW_A2_STATUS,
+    operationalAuthority: 'NONE' as const,
+    revision,
+    capacity: Object.freeze({ ...capacity }),
+    receipts: Object.freeze(receipts.map(sealHandoffConsumptionReceipt)),
+    chainDigest,
+  });
+}
+
+function sealHandoffConsumptionState(
+  state: Readonly<ShadowHandoffConsumptionState>,
+): Readonly<ShadowHandoffConsumptionState> {
+  return Object.freeze({
+    ...state,
+    capacity: Object.freeze({ ...state.capacity }),
+    receipts: Object.freeze(state.receipts.map(sealHandoffConsumptionReceipt)),
+  });
+}
+
+function validateHandoffConsumptionReceipt(
+  receipt: Readonly<ShadowHandoffConsumptionReceipt>,
+  expectedStateRevision: number,
+  expectedPriorChainDigest: string,
+): void {
+  assertClosedKeys(receipt, HANDOFF_CONSUMPTION_RECEIPT_KEYS, 'handoff consumption receipt');
+  if (
+    receipt.schema !== 'AI_OPS_A2_HANDOFF_CONSUMPTION_RECEIPT_V1'
+    || receipt.shadowStatus !== SHADOW_A2_STATUS
+    || receipt.operationalAuthority !== 'NONE'
+  ) throw new TypeError('handoff consumption receipt schema, status, or authority invalid');
+  assertIdentifier(receipt.receiptId, 'receipt.receiptId');
+  assertSafeNonNegative(receipt.stateRevision, 'receipt.stateRevision');
+  if (receipt.stateRevision !== expectedStateRevision) throw new TypeError('handoff consumption receipt revision is not contiguous');
+  assertIdentifier(receipt.handoffId, 'receipt.handoffId');
+  assertIdentifier(receipt.sessionId, 'receipt.sessionId');
+  assertIdentifier(receipt.consumerId, 'receipt.consumerId');
+  assertIdentifier(receipt.audience, 'receipt.audience');
+  assertIdentifier(receipt.nextOwner, 'receipt.nextOwner');
+  assertIdentifier(receipt.caseId, 'receipt.caseId');
+  assertSafeNonNegative(receipt.caseRevision, 'receipt.caseRevision');
+  assertSafeNonNegative(receipt.generation, 'receipt.generation');
+  assertDigest(receipt.manifestPayloadDigest, 'receipt.manifestPayloadDigest');
+  assertDigest(receipt.manifestEnvelopeDigest, 'receipt.manifestEnvelopeDigest');
+  assertDigest(receipt.handoffPayloadDigest, 'receipt.handoffPayloadDigest');
+  assertDigest(receipt.handoffEnvelopeDigest, 'receipt.handoffEnvelopeDigest');
+  assertDigest(receipt.expectedManifestLineageDigest, 'receipt.expectedManifestLineageDigest');
+  assertUtc(receipt.consumedAtMs, 'receipt.consumedAtMs');
+  assertDigest(receipt.priorChainDigest, 'receipt.priorChainDigest');
+  assertDigest(receipt.chainDigest, 'receipt.chainDigest');
+  assertDigest(receipt.receiptDigest, 'receipt.receiptDigest');
+  if (receipt.priorChainDigest !== expectedPriorChainDigest) throw new TypeError('handoff consumption receipt chain predecessor mismatch');
+  if (receipt.receiptId !== handoffConsumptionReceiptId(receipt.handoffId, receipt.consumerId, receipt.stateRevision)) {
+    throw new TypeError('handoff consumption receipt identity mismatch');
+  }
+  const { chainDigest: _chainDigest, receiptDigest: _receiptDigest, ...withoutDigests } = receipt;
+  const chainDigest = digestValue(handoffConsumptionReceiptChainPayload(withoutDigests));
+  if (receipt.chainDigest !== chainDigest) throw new TypeError('handoff consumption receipt chain digest mismatch');
+  if (receipt.receiptDigest !== digestValue({ ...withoutDigests, chainDigest })) {
+    throw new TypeError('handoff consumption receipt digest mismatch');
+  }
+}
+
+function validateHandoffConsumptionState(
+  rawState: Readonly<ShadowHandoffConsumptionState>,
+): Readonly<ShadowHandoffConsumptionState> {
+  const state = snapshotInertJson(rawState, 'handoff consumption state') as Readonly<ShadowHandoffConsumptionState>;
+  assertClosedKeys(state, HANDOFF_CONSUMPTION_STATE_KEYS, 'handoff consumption state');
+  if (
+    state.schema !== 'AI_OPS_A2_HANDOFF_CONSUMPTION_STATE_V1'
+    || state.shadowStatus !== SHADOW_A2_STATUS
+    || state.operationalAuthority !== 'NONE'
+  ) throw new TypeError('handoff consumption state schema, status, or authority invalid');
+  assertSafeNonNegative(state.revision, 'state.revision');
+  validateHandoffConsumptionCapacity(state.capacity);
+  if (!Array.isArray(state.receipts) || state.receipts.length > state.capacity.maximumReceipts) {
+    throw new TypeError('handoff consumption receipt collection exceeds capacity');
+  }
+  if (state.revision !== state.receipts.length) throw new TypeError('handoff consumption state revision does not match its receipt ledger');
+  let chainDigest = emptyHandoffConsumptionChainDigest();
+  let previousConsumedAtMs = -1;
+  const handoffIds = new Set<string>();
+  for (let index = 0; index < state.receipts.length; index += 1) {
+    const receipt = state.receipts[index];
+    validateHandoffConsumptionReceipt(receipt, index + 1, chainDigest);
+    if (handoffIds.has(receipt.handoffId)) throw new TypeError('handoff consumption state contains a duplicate handoff');
+    if (receipt.consumedAtMs < previousConsumedAtMs) throw new TypeError('handoff consumption receipt time regressed');
+    handoffIds.add(receipt.handoffId);
+    previousConsumedAtMs = receipt.consumedAtMs;
+    chainDigest = receipt.chainDigest;
+  }
+  assertDigest(state.chainDigest, 'state.chainDigest');
+  assertDigest(state.stateDigest, 'state.stateDigest');
+  if (state.chainDigest !== chainDigest) throw new TypeError('handoff consumption state chain digest mismatch');
+  const core = handoffConsumptionStateCore(state.revision, state.capacity, state.receipts, state.chainDigest);
+  if (state.stateDigest !== digestValue(core)) throw new TypeError('handoff consumption state digest mismatch');
+  if (Buffer.byteLength(canonicalJson(state), 'utf8') > state.capacity.maximumStateBytes) {
+    throw new RangeError('handoff consumption state exceeds its byte capacity');
+  }
+  return sealHandoffConsumptionState(state);
+}
+
+export function createHandoffConsumptionState(
+  capacity: Readonly<ShadowHandoffConsumptionCapacity> = DEFAULT_SHADOW_HANDOFF_CONSUMPTION_CAPACITY,
+): Readonly<ShadowHandoffConsumptionState> {
+  capacity = snapshotInertJson(capacity, 'handoff consumption capacity') as Readonly<ShadowHandoffConsumptionCapacity>;
+  validateHandoffConsumptionCapacity(capacity);
+  const core = handoffConsumptionStateCore(0, capacity, [], emptyHandoffConsumptionChainDigest());
+  return validateHandoffConsumptionState(Object.freeze({ ...core, stateDigest: digestValue(core) }));
+}
+
+function handoffConsumptionResult(
+  disposition: ShadowHandoffConsumptionResult['disposition'],
+  changed: boolean,
+  reasonCode: ShadowHandoffConsumptionResult['reasonCodes'][number],
+  state: Readonly<ShadowHandoffConsumptionState>,
+  receipt: Readonly<ShadowHandoffConsumptionReceipt> | null,
+): Readonly<ShadowHandoffConsumptionResult> {
+  return Object.freeze({
+    shadowStatus: SHADOW_A2_STATUS,
+    operationalAuthority: 'NONE',
+    disposition,
+    changed,
+    reasonCodes: Object.freeze([reasonCode]),
+    state,
+    receipt,
+  });
+}
+
+function verificationInputAt(
+  expected: Readonly<ShadowManifestVerificationInput>,
+  nowMs: number,
+): Readonly<ShadowManifestVerificationInput> {
+  return Object.freeze({ ...expected, nowMs });
+}
+
+function assertConsumableHandoff(
+  handoff: Readonly<ShadowFreshSessionHandoff>,
+  manifest: Readonly<ShadowSignedContextManifest>,
+  sessionId: string,
+  expectedManifest: Readonly<ShadowManifestVerificationInput>,
+  expectedNextOwner: string,
+  consumedHandoffIds: readonly string[],
+  limits: Readonly<ShadowContextLimits>,
+  signer: Readonly<ShadowSyntheticSignerPort>,
+): void {
+  const verification = verifyFreshSessionHandoff(
+    handoff,
+    manifest,
+    sessionId,
+    expectedManifest,
+    expectedNextOwner,
+    consumedHandoffIds,
+    limits,
+    signer,
+  );
+  if (!verification.valid) {
+    throw new TypeError(`fresh-session handoff cannot be consumed: ${verification.reasonCodes.join(',')}`);
+  }
+}
+
+export function consumeFreshSessionHandoff(
+  current: Readonly<ShadowHandoffConsumptionState>,
+  expectedRevision: number,
+  handoff: Readonly<ShadowFreshSessionHandoff>,
+  manifest: Readonly<ShadowSignedContextManifest>,
+  sessionId: string,
+  expectedManifest: Readonly<ShadowManifestVerificationInput>,
+  expectedNextOwner: string,
+  consumerId: string,
+  consumedAtMs: number,
+  limits: Readonly<ShadowContextLimits>,
+  signer: Readonly<ShadowSyntheticSignerPort>,
+): Readonly<ShadowHandoffConsumptionResult> {
+  current = validateHandoffConsumptionState(current);
+  handoff = snapshotInertJson(handoff, 'fresh-session handoff consumption input') as Readonly<ShadowFreshSessionHandoff>;
+  manifest = snapshotInertJson(manifest, 'fresh-session manifest consumption input') as Readonly<ShadowSignedContextManifest>;
+  expectedManifest = snapshotInertJson(expectedManifest, 'fresh-session expected manifest consumption input') as Readonly<ShadowManifestVerificationInput>;
+  limits = snapshotInertJson(limits, 'fresh-session context limits') as Readonly<ShadowContextLimits>;
+  assertSafeNonNegative(expectedRevision, 'expectedRevision');
+  assertIdentifier(handoff.handoffId, 'handoff.handoffId');
+  assertIdentifier(sessionId, 'sessionId');
+  assertIdentifier(expectedNextOwner, 'expectedNextOwner');
+  assertIdentifier(consumerId, 'consumerId');
+  assertUtc(consumedAtMs, 'consumedAtMs');
+  assertUtc(expectedManifest.nowMs, 'expectedManifest.nowMs');
+  if (expectedManifest.nowMs !== consumedAtMs) throw new TypeError('handoff consumption time must match manifest verification time');
+
+  const existing = current.receipts.find((receipt) => receipt.handoffId === handoff.handoffId);
+  assertConsumableHandoff(
+    handoff,
+    manifest,
+    sessionId,
+    verificationInputAt(expectedManifest, existing?.consumedAtMs ?? consumedAtMs),
+    expectedNextOwner,
+    current.receipts.filter((receipt) => receipt.handoffId !== handoff.handoffId).map((receipt) => receipt.handoffId),
+    limits,
+    signer,
+  );
+  const handoffEnvelopeDigest = digestValue(handoff);
+  const manifestEnvelopeDigest = digestValue(manifest);
+  const lineageDigest = expectedManifestLineageDigest(expectedManifest);
+  if (existing !== undefined) {
+    const exactRetry = (
+      existing.sessionId === sessionId
+      && existing.consumerId === consumerId
+      && existing.nextOwner === expectedNextOwner
+      && existing.handoffPayloadDigest === handoff.payloadDigest
+      && existing.handoffEnvelopeDigest === handoffEnvelopeDigest
+      && existing.manifestPayloadDigest === manifest.payloadDigest
+      && existing.manifestEnvelopeDigest === manifestEnvelopeDigest
+      && existing.expectedManifestLineageDigest === lineageDigest
+    );
+    if (!exactRetry) {
+      return handoffConsumptionResult('CONFLICT', false, 'HANDOFF_CONSUMPTION_IDENTITY_CONFLICT', current, existing);
+    }
+    return handoffConsumptionResult('IDEMPOTENT', false, 'HANDOFF_ALREADY_CONSUMED', current, existing);
+  }
+  if (expectedRevision !== current.revision) {
+    return handoffConsumptionResult('CONFLICT', false, 'STATE_REVISION_CONFLICT', current, null);
+  }
+  if (current.receipts.length >= current.capacity.maximumReceipts) {
+    throw new RangeError('handoff consumption receipt capacity exhausted');
+  }
+  const lastReceipt = current.receipts.at(-1);
+  if (lastReceipt !== undefined && consumedAtMs < lastReceipt.consumedAtMs) {
+    throw new TypeError('handoff consumption time cannot regress');
+  }
+  const stateRevision = current.revision + 1;
+  if (!Number.isSafeInteger(stateRevision)) throw new RangeError('handoff consumption state revision overflow');
+  const withoutDigests = Object.freeze({
+    schema: 'AI_OPS_A2_HANDOFF_CONSUMPTION_RECEIPT_V1' as const,
+    shadowStatus: SHADOW_A2_STATUS,
+    operationalAuthority: 'NONE' as const,
+    receiptId: handoffConsumptionReceiptId(handoff.handoffId, consumerId, stateRevision),
+    stateRevision,
+    handoffId: handoff.handoffId,
+    sessionId,
+    consumerId,
+    audience: handoff.audience,
+    nextOwner: expectedNextOwner,
+    caseId: handoff.caseId,
+    caseRevision: handoff.caseRevision,
+    generation: handoff.generation,
+    manifestPayloadDigest: manifest.payloadDigest,
+    manifestEnvelopeDigest,
+    handoffPayloadDigest: handoff.payloadDigest,
+    handoffEnvelopeDigest,
+    expectedManifestLineageDigest: lineageDigest,
+    consumedAtMs,
+    priorChainDigest: current.chainDigest,
+  });
+  const chainDigest = digestValue(handoffConsumptionReceiptChainPayload(withoutDigests));
+  const receipt = sealHandoffConsumptionReceipt(Object.freeze({
+    ...withoutDigests,
+    chainDigest,
+    receiptDigest: digestValue({ ...withoutDigests, chainDigest }),
+  }));
+  const receipts = Object.freeze([...current.receipts, receipt]);
+  const core = handoffConsumptionStateCore(stateRevision, current.capacity, receipts, chainDigest);
+  const state = validateHandoffConsumptionState(Object.freeze({ ...core, stateDigest: digestValue(core) }));
+  return handoffConsumptionResult('CONSUMED', true, 'HANDOFF_CONSUMED', state, state.receipts.at(-1) ?? null);
+}
+
+export function serializeHandoffConsumptionState(
+  state: Readonly<ShadowHandoffConsumptionState>,
+): string {
+  return canonicalJson(validateHandoffConsumptionState(state));
+}
+
+export function resumeHandoffConsumptionState(
+  serialized: string,
+): Readonly<ShadowHandoffConsumptionState> {
+  if (
+    typeof serialized !== 'string'
+    || Buffer.byteLength(serialized, 'utf8') > MAX_HANDOFF_CONSUMPTION_STATE_BYTES
+  ) throw new TypeError('serialized handoff consumption state is missing or oversized');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    throw new TypeError('serialized handoff consumption state is invalid JSON');
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new TypeError('handoff consumption state must be an object');
+  }
+  if (canonicalJson(parsed) !== serialized) throw new TypeError('serialized handoff consumption state must be canonical');
+  return validateHandoffConsumptionState(parsed as ShadowHandoffConsumptionState);
+}

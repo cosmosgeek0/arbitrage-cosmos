@@ -40,7 +40,9 @@ test('production runtime contains no ambient I/O, clock, randomness, environment
 
 test('all touched paths remain inside the three provisional A2 path families', () => {
   const status = execFileSync('git', ['status', '--porcelain=v1', '-uall'], { cwd: root, encoding: 'utf8' });
-  const statusPaths = status.trim().split('\n').filter(Boolean).map((line) => line.slice(3));
+  // Do not trim the full porcelain stream: a leading space is the first XY
+  // status column for an unstaged modification and is part of the format.
+  const statusPaths = status.split('\n').filter(Boolean).map((line) => line.slice(3));
   const committedPaths = execFileSync('git', [
     'diff', '--name-only', '03857dcdaff8d8b12627d27ddcc97505da1f2f86...HEAD',
   ], { cwd: root, encoding: 'utf8' }).trim().split('\n').filter(Boolean);

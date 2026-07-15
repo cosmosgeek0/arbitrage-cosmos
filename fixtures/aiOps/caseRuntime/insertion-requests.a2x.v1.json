@@ -1,0 +1,58 @@
+{
+  "schema": "AI_OPS_A2X_SHADOW_INSERTION_REQUESTS_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityCreated": false,
+  "candidateReferenceSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "sealedArtifactSha": "ca1fb094e19d0ccc6a8397ee08a65a662d051bd3",
+  "actualMergeBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "rows": [
+    {
+      "requestId": "A2X-I00-INTAKE-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "Product incident router and SystemIntegration material-event owners",
+      "seam": "provider-neutral envelope delivery, source cursor ownership, incident publication, and acknowledgement",
+      "need": "Bind the pure A2X CloudEvents-style adapter to the accepted incident router, owner-controlled cursor and gap semantics, canonical material-event vocabulary, durable acknowledgement, and readback. Preserve the singleton router and do not promote the lane adapter into a transport owner.",
+      "missingBehavior": "A2X maps injected events to shadow observations only; it opens no listener, advances no source cursor, publishes nothing, and acknowledges nothing."
+    },
+    {
+      "requestId": "A2X-I00-PERSIST-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "Ledger and SystemIntegration persistence",
+      "seam": "atomic event intake and fresh-session handoff consumption CAS",
+      "need": "Bind event admission and one-time handoff consumption to the singleton Ledger using exact revision CAS, capacity refusal, canonical keys, restart readback, and transactionally consistent case transitions. Preserve conflicting-replay evidence and compaction watermarks.",
+      "missingBehavior": "A2X state and receipts are immutable deterministic projections; no production durability or exactly-once claim is made."
+    },
+    {
+      "requestId": "A2X-I00-ESCALATION-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "SystemIntegration supervisor attention and canonical effect dispatcher",
+      "seam": "owner-attention insertion, escalation delivery, acknowledgement, and readback",
+      "need": "Consume only Product Assurance-authorized REQUEST_OWNER_HANDOFF candidates after canonical incident-to-case and target-owner readback, apply canonical attention ordering and deduplication, deliver through the accepted dispatcher, and return bounded NOT_ATTEMPTED, PENDING, ACKNOWLEDGED, FAILED, or UNKNOWN evidence without granting A2 operational authority.",
+      "missingBehavior": "A2X emits case-local no-authority intent only and never claims notification, delivery, acknowledgement, remediation, or global severity ownership."
+    },
+    {
+      "requestId": "A2X-A3-PROVIDER-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "A3 provider route and intelligenceRuntime rate-budget owners",
+      "seam": "canonical provider usage, price facts, rate windows, concurrency, cooldown, and atomic reservation",
+      "need": "Supply accepted provider/model usage schemas, registered production trust for price-table or provider-reported cost lineage and fresh rate-limit observations, and an atomic aggregate reservation spanning requests, input tokens, output tokens, concurrency, and cooldown. Bind reservation and measured-usage digests to the selected diagnostic run.",
+      "missingBehavior": "A2X validates injected owner projections and measured token/cost detail only; unknown cost remains unavailable and atomic reservation remains false."
+    },
+    {
+      "requestId": "A2X-I00-TRUST-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "I00 trust and fresh-session launch owner",
+      "seam": "production signing, trust registration, rotation, durable consumption, and replay adjudication",
+      "need": "Register the accepted signer, verify current trust roots, bind issuance and consumption to canonical session identity, and persist exactly one successful consumer with owner-backed conflict readback.",
+      "missingBehavior": "A2X signatures remain SYNTHETIC_ONLY and its consumption reducer has no persistence or launch authority."
+    },
+    {
+      "requestId": "A2X-I00-GATES-001",
+      "status": "INSERTION_REQUIRED",
+      "owner": "I00 assembly, Product Assurance registry, and director",
+      "seam": "accepted contracts, test discovery, component registry, STATE, and adjudication",
+      "need": "After C2 and director adjudication, port only approved A2X rows into a fresh accepted worktree, bind accepted schemas and owners, update shared discovery and project state, and rerun the complete acceptance loop.",
+      "missingBehavior": "RUN-14 edits no package root, shared schema, router, startup, registry, STATE, candidate, or accepted worktree and creates no acceptance status."
+    }
+  ]
+}

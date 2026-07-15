@@ -72,6 +72,8 @@ printf 'BINANCE_API_SECRET=FAKE_BUT_FORBIDDEN_HERE\n' >> "$TEST_TMP/secret.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/secret.env"
 
 note "receipt validators require hashed external evidence and reject forged proof states"
+EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'
+ALTERNATE_SHA='1111111111111111111111111111111111111111'
 cat > "$TEST_TMP/release-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RELEASE","releaseId":"i00-0123456789abcdef0123456789abcdef01234567","testedSha":"0123456789abcdef0123456789abcdef01234567","artifactManifestSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"VALIDATED_NOT_DEPLOYED","recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
@@ -93,7 +95,7 @@ const tested = '0123456789abcdef0123456789abcdef01234567';
 const prior = 'fedcba9876543210fedcba9876543210fedcba98';
 const write = (path, value) => writeFileSync(join(root, path), `${JSON.stringify(value)}\n`);
 write('deployment/release-manifest.json', {releaseId:`i00-${tested}`,testedSha:tested,files:[{path:'server/dist/index.js',sha256:'a'.repeat(64)}]});
-write('deployment/target-readback.json', {status:'DEPLOYMENT_READBACK_VALID',deployedSha:tested,releaseId:`i00-${tested}`,blocker:null,observedAtUtc:'2026-07-13T00:01:10Z'});
+write('deployment/target-readback.json', {status:'DEPLOYMENT_READBACK_VALID',testedSha:tested,deployedSha:tested,releaseId:`i00-${tested}`,blocker:null,observedAtUtc:'2026-07-13T00:01:10Z'});
 write('deployment/cloudflare-boundary.json', {status:'CLOUDFLARE_BOUNDARY_VERIFIED',hostname:'control.private.invalid',observedAtUtc:'2026-07-13T00:01:11Z'});
 write('deployment/watchdog.json', {status:'WATCHDOG_HEALTHY',source:'OWNER_READBACK',observedAtUtc:'2026-07-13T00:01:12Z'});
 write('deployment/backup.json', {kind:'BACKUP',status:'BACKUP_VERIFIED',sourceSha:tested,recordedAtUtc:'2026-07-13T00:01:13Z'});
@@ -165,54 +167,95 @@ writeFileSync(rollbackPath, `${JSON.stringify({
 })}\n`);
 NODE
 
-assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+DEPLOYMENT_ARGS=(--kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" --expected-sha "$EXPECTED_SHA")
+assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" "${DEPLOYMENT_ARGS[@]}"
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/rollback-receipt.json" --kind ROLLBACK --evidence-root "$EVIDENCE_ROOT"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT --expected-sha "$EXPECTED_SHA"
+
+note "deployment receipt rejects a self-consistent alternate SHA against the candidate anchor"
+cp -R "$EVIDENCE_ROOT" "$TEST_TMP/evidence-alternate"
+cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-alternate.json"
+node - "$TEST_TMP/evidence-alternate" "$TEST_TMP/deploy-alternate.json" "$ALTERNATE_SHA" <<'NODE'
+const { createHash } = require('node:crypto');
+const { readFileSync, writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+const [root, receiptPath, alternate] = process.argv.slice(2);
+const releaseId = `i00-${alternate}`;
+const rewrite = (relativePath, mutate) => {
+  const path = join(root, relativePath);
+  const value = JSON.parse(readFileSync(path, 'utf8'));
+  mutate(value);
+  writeFileSync(path, `${JSON.stringify(value)}\n`);
+};
+rewrite('deployment/release-manifest.json', (value) => {
+  value.testedSha = alternate;
+  value.releaseId = releaseId;
+});
+rewrite('deployment/target-readback.json', (value) => {
+  value.testedSha = alternate;
+  value.deployedSha = alternate;
+  value.releaseId = releaseId;
+});
+rewrite('deployment/backup.json', (value) => { value.sourceSha = alternate; });
+rewrite('deployment/reconciliation.json', (value) => { value.deployedSha = alternate; });
+const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+receipt.testedSha = alternate;
+receipt.deployedSha = alternate;
+receipt.releaseId = releaseId;
+for (const reference of Object.values(receipt.evidence)) {
+  reference.sha256 = createHash('sha256')
+    .update(readFileSync(join(root, reference.path)))
+    .digest('hex');
+}
+writeFileSync(receiptPath, `${JSON.stringify(receipt)}\n`);
+NODE
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-alternate.json" --kind DEPLOYMENT --evidence-root "$TEST_TMP/evidence-alternate" --expected-sha "$EXPECTED_SHA"
 
 cp "$EVIDENCE_ROOT/deployment/watchdog.json" "$TEST_TMP/watchdog-valid.json"
 printf '{"fixture":"self-authored-but-hashed"}\n' > "$EVIDENCE_ROOT/deployment/watchdog.json"
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-semantic-forgery.json"
 node -e 'const c=require("crypto"),fs=require("fs"),p=process.argv[1],e=process.argv[2],v=JSON.parse(fs.readFileSync(p));v.evidence.watchdog.sha256=c.createHash("sha256").update(fs.readFileSync(e)).digest("hex");fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-semantic-forgery.json" "$EVIDENCE_ROOT/deployment/watchdog.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-semantic-forgery.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-semantic-forgery.json" "${DEPLOYMENT_ARGS[@]}"
 mv "$TEST_TMP/watchdog-valid.json" "$EVIDENCE_ROOT/deployment/watchdog.json"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-hash-mismatch.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.evidence.backup.sha256="b".repeat(64);fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-hash-mismatch.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-hash-mismatch.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-hash-mismatch.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-missing-file.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.evidence.backup.path="deployment/missing.json";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-missing-file.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-missing-file.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-missing-file.json" "${DEPLOYMENT_ARGS[@]}"
 
 ln -s target-readback.json "$EVIDENCE_ROOT/deployment/target-readback-link.json"
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-symlink.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.evidence.targetReadback.path="deployment/target-readback-link.json";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-symlink.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-symlink.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-symlink.json" "${DEPLOYMENT_ARGS[@]}"
 
 printf '{"fixture":"outside"}\n' > "$TEST_TMP/outside-evidence.json"
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-escape.json"
 node -e 'const c=require("crypto"),fs=require("fs"),p=process.argv[1],outside=process.argv[2],v=JSON.parse(fs.readFileSync(p));v.evidence.releaseManifest={path:"../outside-evidence.json",sha256:c.createHash("sha256").update(fs.readFileSync(outside)).digest("hex")};fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-escape.json" "$TEST_TMP/outside-evidence.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-escape.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-escape.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-legacy-booleans.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.serviceReadback={requiredServicesReady:true,reconciled:true};fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-legacy-booleans.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-legacy-booleans.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-legacy-booleans.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-failed-status.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.status="FAILED";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-failed-status.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-failed-status.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-failed-status.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-bad-chronology.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.completedAtUtc="2026-07-13T00:03:00Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-bad-chronology.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-bad-chronology.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-bad-chronology.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-missing-evidence.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));delete v.evidence.restore;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-missing-evidence.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-missing-evidence.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-missing-evidence.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/deploy-receipt.json" "$TEST_TMP/deploy-duplicate-evidence.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.evidence.backup={...v.evidence.restore};fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/deploy-duplicate-evidence.json"
-assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-duplicate-evidence.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-duplicate-evidence.json" "${DEPLOYMENT_ARGS[@]}"
 
 cp "$TEST_TMP/rollback-receipt.json" "$TEST_TMP/rollback-same-sha.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.fromSha=v.toSha;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/rollback-same-sha.json"

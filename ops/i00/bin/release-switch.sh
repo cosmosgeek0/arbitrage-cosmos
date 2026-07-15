@@ -94,7 +94,7 @@ RESULT=$?
 set -e
 if [ "$RESULT" = 0 ] && [ "$SIMULATION" != 1 ]; then
   [ -f "$RECONCILIATION_RECEIPT" ] || { printf 'I00_OPS_BLOCKED: post-switch reconciliation receipt is missing\n' >&2; RESULT=1; }
-  if [ "$RESULT" = 0 ]; then node "$SCRIPT_DIR/validate-receipt.mjs" --input "$RESULT_RECEIPT" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" >/dev/null || RESULT=1; fi
+  if [ "$RESULT" = 0 ]; then node "$SCRIPT_DIR/validate-receipt.mjs" --input "$RESULT_RECEIPT" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" --expected-sha "$CANDIDATE_SHA" >/dev/null || RESULT=1; fi
 fi
 cleanup_delegate_env
 trap - EXIT

@@ -13,10 +13,11 @@ Rejected candidate **C** is `098f7b9449ab3b1c26bda19f51537bfea01d4c48`. Its sole
 ## Phase 4 correction state
 
 - Governing verifier receipt: `/Users/cosmosgeek/Desktop/role3-verify/ROLE3_VERIFICATION_RECEIPT.md`; SHA-256 `90613c8273e5c866603dbaa74106f2ff436c06e320a95a0cbdbc4c55c0d5ae1d`.
-- Accepted findings: `15`; fixed: `2`; evidence-refused: `0`; pending: `13`.
-- Fixed finding set: `R3-VAL-001`, `R3-D-EGRESS-012`.
+- Accepted findings: `15`; fixed: `3`; evidence-refused: `0`; pending: `12`.
+- Fixed finding set: `R3-VAL-001`, `R3-D-EGRESS-012`, `R3-D-SHA-014`.
 - The complete validator now consumes the bounded command result's `stdout` bytes when verifying exact clean-detached revision identity. Its focused contract is `42/42`, including a real two-clone detached-checkout regression that failed before the correction.
 - Effectful public-source startup now requires one explicit positive egress admission before the existing `MarketEngine` may call its REST universe owner or activate any WebSocket owner. An unadmitted verifier-style boot remains loopback-only, reports `WARMING` with `public-spot-source` as root blocker, and made zero external host attempts in the exact sandboxed runtime probe. The focused process perimeter is `2/2`, stream lifecycle remains `8/8`, production composition/ports are `32/32`, and the application gate is `82/82`.
+- Deployment readback and deployment-receipt validation now require an independently supplied full candidate SHA and bind the tested SHA, deployed SHA, release ID, release manifest, and target readback to that anchor. The verifier's two mismatched artifacts and a fully self-consistent alternate-SHA evidence set now fail closed; focused readback and receipt coverage is `16/16` and `52/52`.
 - The post-fix root `npm test` reached the independently accepted pending `R3-D-CLEAN-009` boundary and exited `1` only when `A_CASE_S4_SAFE_PURITY` required an intentionally absent protected owner directive. All preceding build, engine, financial-safety, storage/AWS, Node-focused, stream-lifecycle, perimeter, and Product Assurance groups passed. No protected input is being copied or fabricated to force green.
 - No D-LAUNCH-19/20 donor, disposition, or Q-ancestry claim changes. No protected owner directive was created, copied, edited, staged, or committed.
 

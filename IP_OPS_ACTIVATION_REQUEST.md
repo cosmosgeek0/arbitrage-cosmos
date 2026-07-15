@@ -129,7 +129,8 @@ node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind trade-re
 node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind recovery-readiness --max-age-sec 30
 
 node ops/i00/bin/verify-readback.mjs \
-  --input <OWNER_INPUT_DEPLOYMENT_READBACK_JSON> --max-age-sec 30
+  --input <OWNER_INPUT_DEPLOYMENT_READBACK_JSON> --max-age-sec 30 \
+  --expected-sha <OWNER_INPUT_FULL_TESTED_SHA>
 
 node ops/i00/bin/verify-cloudflare-readback.mjs \
   --input <OWNER_INPUT_CLOUDFLARE_READBACK_JSON> --max-age-sec 30 \

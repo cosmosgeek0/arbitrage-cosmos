@@ -26,6 +26,8 @@ node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.dep
 assert_failure node "$I00_ROOT/bin/probe.mjs" "${PROBE[@]}" --kind dependency
 
 note "artifact-only deployment readback remains honestly blocked"
+EXPECTED_SHA=0123456789abcdef0123456789abcdef01234567
+ALTERNATE_SHA=1111111111111111111111111111111111111111
 cat > "$TEST_TMP/readback.json" <<'JSON'
 {
   "testedSha":"0123456789abcdef0123456789abcdef01234567",
@@ -46,8 +48,15 @@ cat > "$TEST_TMP/readback.json" <<'JSON'
   "observedAtUtc":"2026-07-13T00:00:00Z"
 }
 JSON
-READBACK_ARGS=(--input "$TEST_TMP/readback.json" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z)
+READBACK_ARGS=(--input "$TEST_TMP/readback.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z)
 assert_success node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback.json" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
+cp "$TEST_TMP/readback.json" "$TEST_TMP/readback-alternate-tested.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.testedSha=process.argv[2];fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback-alternate-tested.json" "$ALTERNATE_SHA"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback-alternate-tested.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
+cp "$TEST_TMP/readback.json" "$TEST_TMP/readback-alternate-deployed.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8")),sha=process.argv[2];v.testedSha=sha;v.deployedSha=sha;v.releaseId=`i00-${sha}`;v.currentDeploymentBlocker=null;v.services=[{id:"cosmos-app",state:"READY",source:"READBACK"}];for(const [field,state] of Object.entries({origin:"PRIVATE",tunnel:"HEALTHY",access:"ENFORCED",watchdog:"HEALTHY"}))v[field]={state,source:"READBACK"};v.lastBackup={status:"BACKUP_VERIFIED",recordedAtUtc:"2026-07-13T00:00:00Z",receiptSha256:"a".repeat(64)};v.lastRestoreDrill={status:"ISOLATED_DRILL_PASS",recordedAtUtc:"2026-07-13T00:00:00Z",receiptSha256:"b".repeat(64)};v.rollbackCandidate="f".repeat(40);fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback-alternate-deployed.json" "$ALTERNATE_SHA"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback-alternate-deployed.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.currentDeploymentBlocker=null;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback.json"
 assert_failure node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.currentDeploymentBlocker="BLOCKED";v.services[0]={id:"cosmos-app",state:"READY",source:"NOT_CONFIGURED"};fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback.json"

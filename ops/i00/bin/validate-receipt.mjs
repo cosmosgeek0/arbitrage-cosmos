@@ -126,12 +126,13 @@ function requireEvidenceUtc(document, field, label, recordedAtUtc) {
   if (!isUtc(document?.[field]) || Date.parse(document[field]) > Date.parse(recordedAtUtc)) fail(`${label}.${field} is invalid or later than the receipt`);
 }
 
-function validateDeploymentEvidence(value, documents) {
+function validateDeploymentEvidence(value, documents, expectedSha) {
   const { releaseManifest, targetReadback, cloudflareBoundary, watchdog, backup, restore, reconciliation, authorization } = documents;
-  if (releaseManifest?.releaseId !== value.releaseId || releaseManifest?.testedSha !== value.testedSha
+  if (releaseManifest?.releaseId !== `i00-${expectedSha}` || releaseManifest?.testedSha !== expectedSha
       || !Array.isArray(releaseManifest?.files) || releaseManifest.files.length === 0) fail('deployment release manifest evidence is semantically invalid');
-  if (targetReadback?.status !== 'DEPLOYMENT_READBACK_VALID' || targetReadback?.deployedSha !== value.deployedSha
-      || targetReadback?.releaseId !== value.releaseId || targetReadback?.blocker !== null) fail('deployment target readback evidence is semantically invalid');
+  if (targetReadback?.status !== 'DEPLOYMENT_READBACK_VALID' || targetReadback?.testedSha !== expectedSha
+      || targetReadback?.deployedSha !== expectedSha || targetReadback?.releaseId !== `i00-${expectedSha}`
+      || targetReadback?.blocker !== null) fail('deployment target readback evidence is semantically invalid');
   requireEvidenceUtc(targetReadback, 'observedAtUtc', 'deployment target readback', value.recordedAtUtc);
   if (cloudflareBoundary?.status !== 'CLOUDFLARE_BOUNDARY_VERIFIED' || typeof cloudflareBoundary.hostname !== 'string') fail('deployment Cloudflare evidence is semantically invalid');
   requireEvidenceUtc(cloudflareBoundary, 'observedAtUtc', 'deployment Cloudflare evidence', value.recordedAtUtc);
@@ -186,11 +187,13 @@ switch (args.kind) {
     if (!['ASSEMBLED_NOT_DEPLOYED', 'VALIDATED_NOT_DEPLOYED'].includes(value.status)) fail('release receipt cannot claim deployment');
     break;
   case 'DEPLOYMENT':
+    if (!isFullSha(args['expected-sha'])) fail('--expected-sha must be a full Git SHA for DEPLOYMENT');
     requireExactKeys(value, ['schemaVersion', 'kind', 'releaseId', 'testedSha', 'deployedSha', 'evidence', 'status', 'startedAtUtc', 'completedAtUtc', 'recordedAtUtc'], 'deployment receipt');
     sha('testedSha'); sha('deployedSha');
-    if (value.status !== 'DEPLOYED_PROVED' || value.releaseId !== `i00-${value.deployedSha}` || value.testedSha !== value.deployedSha) fail('deployment receipt SHA/status is contradictory');
+    if (value.status !== 'DEPLOYED_PROVED' || value.testedSha !== args['expected-sha']
+        || value.deployedSha !== args['expected-sha'] || value.releaseId !== `i00-${args['expected-sha']}`) fail('deployment receipt SHA/status is contradictory');
     requireChronology(value, 'deployment receipt');
-    validateDeploymentEvidence(value, validateEvidence(args['evidence-root'], value.evidence, DEPLOYMENT_EVIDENCE, 'deployment receipt'));
+    validateDeploymentEvidence(value, validateEvidence(args['evidence-root'], value.evidence, DEPLOYMENT_EVIDENCE, 'deployment receipt'), args['expected-sha']);
     break;
   case 'ROLLBACK':
     requireExactKeys(value, ['schemaVersion', 'kind', 'fromSha', 'toSha', 'evidence', 'status', 'startedAtUtc', 'completedAtUtc', 'recordedAtUtc'], 'rollback receipt');

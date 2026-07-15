@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-36 (2026-07-15): all four R9 analysis shards sealed — ALL 15 FINDINGS INDEPENDENTLY CONFIRMED VALID
+
+R9-A/B/C/D all ANALYSIS_READY (receipts untracked in r9-a..d worktrees). Every assigned finding reproduced and ruled VALID — zero DISPUTED, zero INCONCLUSIVE. Consequence: RUN-9 must fix all 15 (no refusal path remains); the analyses carry minimal-correction + regression-test recipes RUN-9 can consume read-only. r9-a..d PARKED. Sole active: RUN-9. Next: INTEGRATION_CANDIDATE_READY with C2 → 5 fresh shards + fresh Role-3 verifier.
+
 ## D-LAUNCH-35 (2026-07-15): owner acceleration order executed — finding inventory reconciled; 4 read-only R9 shards launched
 
 Commander order (screenshot): RUN-9 stays sole writer; reconcile finding count; spare account = 4 read-only finding-analysis shards; no broad audit during RUN-9; C2 → 5 shards + fresh verifier. RECONCILIATION: receipt is authoritative — exactly 15 findings = 3 Critical (VAL-001, EGRESS-012, SHA-014) + 11 High (002-011,015) + 1 Medium (STATE-013); commander's "14" was arithmetic slip. R9-A..D worktrees cut detached at 098f7b9 (RUN-10..13): assigned splits A=VAL/SHA/STATE, B=EGRESS/RETRY/CLIENT, C=RESTART/ROUTE/CRASH/BACKUP/CLEAN, D=WATCHDOG/CPT-010/CPT-011/CHAIN; per-finding verdict VALID/DISPUTED/INCONCLUSIVE + coverage check of role4-fix commits; no heavy suites (RUN-9 owns them). A1/A4/A5 shadow extensions NOT launched (capacity already saturated; optional later). C2 plan re-armed: 5 read-only shards + separate fresh Role-3 verifier at exact C2.

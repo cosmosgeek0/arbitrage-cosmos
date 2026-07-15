@@ -9,7 +9,7 @@ import {
 import { loadL15AmendmentContract } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '187ef4af88744c252b95f2350b086f6321de590dea57732c1fede03a2ab6f7b9';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'aa5b758a35e55d6133ffceb4e79691cf3181c186168824af5ce6cd8b86a8ac95';
 const args = parseArgs(process.argv.slice(2), new Set(['contract-only', 'integrated']));
 const here = dirname(fileURLToPath(import.meta.url));
 const contractPath = resolve(args.contract ?? resolve(here, '../donor-contract.json'));

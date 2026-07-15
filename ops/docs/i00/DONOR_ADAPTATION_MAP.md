@@ -14,7 +14,7 @@ without changing any accepted-donor, disposition, or ancestry receipt.
 | Immutable install, atomic current/previous switch | `ops/live/bin/deploy.sh` | `release-switch.sh` validates SHA-keyed package, disk, schema, exposure, ambiguity, and recovery, then delegates | owner-gated |
 | Rollback and migration floor | `ops/live/bin/rollback.sh` | `rollback-switch.sh` adds final canonical preflight, then delegates | owner-gated |
 | Application-consistent SQLite/WAL backup | `ops/live/bin/backup.sh` | `backup-verify.sh` adds safe-version, full integrity, and FK gates | built/tested |
-| Guarded restore and isolated drill | donor restore scripts | `restore-drill-verify.sh` adds safe-version/full-integrity/FK proof without production mutation | built/tested; production restore remains donor-owner gated |
+| Guarded restore and isolated drill | donor restore scripts | `R3-D-BACKUP-008` adds the closed immutable archive-snapshot/member-preflight/publication amendment; `restore-drill-verify.sh` adds safe-version/full-integrity/FK proof without production mutation | built/tested; production restore remains explicit incident-recovery owner only |
 | External watchdog and bounded restarts | donor watchdog/timer | no duplicate; `R3-D-WATCHDOG-007` adds a closed owner-identity classifier amendment, while CloudWatch templates supplement external visibility | built/tested |
 | App and cloudflared service owners | donor systemd units | additive app credential drop-in only | owner-gated |
 | Optional Q service | no accepted command yet | honest placeholder template; cannot install unchanged | `NOT_CONFIGURED` |

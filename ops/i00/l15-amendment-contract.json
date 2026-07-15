@@ -54,11 +54,48 @@
           "sha256": "c07606cf5d1d6aed230e5d16a50634b108fb1ce287924bfb2d14f608eeca6ae1"
         }
       ]
+    },
+    {
+      "findingId": "R3-D-BACKUP-008",
+      "baseLiveTree": "a7ef13b0b81444f7c4021b168669c25fd8180cb6",
+      "effectiveLiveTree": "e62dd469387b78b07a37396a86d0c4942a65c4db",
+      "baseRootDigestSha256": "83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc",
+      "effectiveRootDigestSha256": "6012fe7b34e585953ddbf114b90d5cc16a00112fc43093be51743f541399a5c8",
+      "changedFiles": [
+        {
+          "path": "ops/live/bin/restore-drill.sh",
+          "mode": "100755",
+          "beforeGitBlob": "f1cdaf282185a9e4d559766c21cf4725b9f925a8",
+          "beforeSha256": "a5ef7885b68a92164ed249dfb44695f2b8b92d86fc5e6845530d5966228a4ce8",
+          "afterGitBlob": "c3a02480a7a598122c99912a7eff19f729756c4c",
+          "afterSha256": "d5e102de8a146b508358613a492cbe24e18646d81a8f1453c9a1c2fd45b804f4"
+        },
+        {
+          "path": "ops/live/bin/restore.sh",
+          "mode": "100755",
+          "beforeGitBlob": "f46b5487b3d0f8704a061fda40e62d705a6f8cf4",
+          "beforeSha256": "348f5dae60be07cc162ac2ff35dacec219b58d87ccf947258cb6045c9d8bb2b2",
+          "afterGitBlob": "a88c7ba79c88f66f815303eed4a2e70db1145aea",
+          "afterSha256": "27f8f0a55fa292e19c6bd2cfa797ee9908b6a4773f43d5f63c83ae34b71fd4f6"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md",
+        "gitBlob": "9033d6ac05d8f71081a86b9a718aa8d5d8cc5213",
+        "sha256": "fec746e5cca4e4719671b7fb0f6c37e2e77cebbfa9ad47c44e5d093d3c5fe6e5"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-r3-d-backup-008.sh",
+          "gitBlob": "3f4cafd454c0dbe092083c0ca47b9023b188222b",
+          "sha256": "5e9bd7a58860b96f1b3e7674fde77162160eacaf01b417f2f950effd8d6a199f"
+        }
+      ]
     }
   ],
   "effectiveLive": {
-    "tree": "a7ef13b0b81444f7c4021b168669c25fd8180cb6",
-    "rootDigestSha256": "83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc",
+    "tree": "e62dd469387b78b07a37396a86d0c4942a65c4db",
+    "rootDigestSha256": "6012fe7b34e585953ddbf114b90d5cc16a00112fc43093be51743f541399a5c8",
     "fileCount": 31,
     "files": [
       {
@@ -130,14 +167,14 @@
       {
         "path": "bin/restore-drill.sh",
         "mode": "100755",
-        "gitBlob": "f1cdaf282185a9e4d559766c21cf4725b9f925a8",
-        "sha256": "a5ef7885b68a92164ed249dfb44695f2b8b92d86fc5e6845530d5966228a4ce8"
+        "gitBlob": "c3a02480a7a598122c99912a7eff19f729756c4c",
+        "sha256": "d5e102de8a146b508358613a492cbe24e18646d81a8f1453c9a1c2fd45b804f4"
       },
       {
         "path": "bin/restore.sh",
         "mode": "100755",
-        "gitBlob": "f46b5487b3d0f8704a061fda40e62d705a6f8cf4",
-        "sha256": "348f5dae60be07cc162ac2ff35dacec219b58d87ccf947258cb6045c9d8bb2b2"
+        "gitBlob": "a88c7ba79c88f66f815303eed4a2e70db1145aea",
+        "sha256": "27f8f0a55fa292e19c6bd2cfa797ee9908b6a4773f43d5f63c83ae34b71fd4f6"
       },
       {
         "path": "bin/rollback.sh",

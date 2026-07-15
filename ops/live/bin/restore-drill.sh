@@ -47,13 +47,60 @@ if [ -z "$LATEST" ]; then
 fi
 BACKUP_PATH="$BACKUP_DIR/$LATEST"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/cosmos-restore-drill.XXXXXX")"
+# Validate the temp root before mktemp. A TMPDIR symlinked inside DATA_DIR
+# would otherwise make the supposedly isolated drill mutate production before
+# it had performed its isolation check.
+canonical_drill_path() {
+  "$NODE" - "$1" <<'NODE'
+const fs = require('node:fs');
+const path = require('node:path');
+const input = process.argv[2];
+try {
+  if (typeof input !== 'string' || input.length === 0 || /[\0-\x1f\x7f]/.test(input)) {
+    throw new Error('unsafe path');
+  }
+  const absolute = path.isAbsolute(input) ? input : `${process.cwd()}${path.sep}${input}`;
+  const suffix = [];
+  let ancestor = absolute;
+  for (;;) {
+    try { fs.lstatSync(ancestor); break; } catch (error) {
+      if (error?.code !== 'ENOENT' && error?.code !== 'ENOTDIR') throw error;
+      const component = path.basename(ancestor);
+      if (!component || component === '.' || component === '..') throw new Error('dot traversal');
+      suffix.unshift(component);
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) throw error;
+      ancestor = parent;
+    }
+  }
+  const resolved = fs.realpathSync.native(ancestor);
+  if (suffix.length > 0 && !fs.statSync(resolved).isDirectory()) throw new Error('bad ancestor');
+  process.stdout.write(path.join(resolved, ...suffix));
+} catch (error) {
+  process.stderr.write(`cannot safely canonicalize drill path: ${error?.code ?? error?.message}\n`);
+  process.exit(1);
+}
+NODE
+}
+DRILL_TEMP_ROOT="${TMPDIR:-/tmp}"
+DRILL_TEMP_CANON="$(canonical_drill_path "$DRILL_TEMP_ROOT")" \
+  || die_code 1 "restore drill FAILED: cannot safely resolve TMPDIR"
+[ -d "$DRILL_TEMP_CANON" ] \
+  || die_code 1 "restore drill FAILED: TMPDIR is not an existing directory"
+DATA_CANON="$(canonical_drill_path "$DATA_DIR")" \
+  || die_code 1 "restore drill FAILED: cannot safely resolve DATA_DIR"
+case "$DRILL_TEMP_CANON" in
+  "$DATA_CANON"|"$DATA_CANON"/*)
+    die_code 1 "restore drill FAILED: TMPDIR is inside DATA_DIR"
+    ;;
+esac
+
+TMP="$(mktemp -d "$DRILL_TEMP_CANON/cosmos-restore-drill.XXXXXX")"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
 # Defense in depth: the drill target must be disjoint from the live state store.
-TMP_CANON="$(canonical_path "$TMP")"
-DATA_CANON="$(canonical_path "$DATA_DIR")"
+TMP_CANON="$(canonical_drill_path "$TMP")"
 case "$TMP_CANON" in
   "$DATA_CANON"|"$DATA_CANON"/*)
     write_report false "DRILL_TARGET_NOT_ISOLATED" "[]" "$LATEST"
@@ -77,6 +124,14 @@ if "$SCRIPT_DIR/restore.sh" "$@"; then
   add_check restore true "restore.sh succeeded into isolated target"
 else
   add_check restore false "restore.sh exited nonzero"
+  add_check eventsCount false "restore failed before an immutable events-count comparison could complete"
+  add_check evidenceArchives false "restore failed before an immutable archive-count comparison could complete"
+  add_check archiveIntegrity false "restore failed before archive hash, size, and member-inventory verification completed"
+  if [ ! -e "$TMP/restore" ] && [ ! -L "$TMP/restore" ]; then
+    add_check targetAbsentAfterFailure true "failed restore did not create its isolated target"
+  else
+    add_check targetAbsentAfterFailure false "failed restore mutated or created its isolated target"
+  fi
   FAILED=1
 fi
 
@@ -89,7 +144,31 @@ if [ "$FAILED" = 0 ]; then
     FAILED=1
   fi
 
-  WANT_COUNT="$(json_get "$BACKUP_PATH/manifest.json" eventsCount || echo -1)"
+  if DECLARED_ARCHIVES="$(json_get "$TMP/restore/restore-report.json" declaredEvidenceArchives)" \
+      && RESTORED_ARCHIVES="$(json_get "$TMP/restore/restore-report.json" evidenceArchives)"; then
+    if [ "$DECLARED_ARCHIVES" = "$RESTORED_ARCHIVES" ]; then
+      add_check evidenceArchives true "restored $RESTORED_ARCHIVES declared evidence archives"
+    else
+      add_check evidenceArchives false "manifest declares $DECLARED_ARCHIVES archives, restore reported $RESTORED_ARCHIVES"
+      FAILED=1
+    fi
+  else
+    add_check evidenceArchives false "archive inventory or restore report was unreadable"
+    FAILED=1
+  fi
+
+  if VERIFIED_ARCHIVES="$(json_get "$TMP/restore/restore-report.json" verifiedEvidenceArchives)" \
+      && ARCHIVE_VERIFICATION="$(json_get "$TMP/restore/restore-report.json" archiveVerification)" \
+      && [ "$ARCHIVE_VERIFICATION" = "EXACT_MANIFEST_INVENTORY_HASH_SIZE_MEMBER_VERIFIED" ] \
+      && [ -n "${RESTORED_ARCHIVES:-}" ] \
+      && [ "$VERIFIED_ARCHIVES" = "$RESTORED_ARCHIVES" ]; then
+    add_check archiveIntegrity true "exact manifest inventory plus immutable archive hashes, sizes, and member inventories verified for $VERIFIED_ARCHIVES archives"
+  else
+    add_check archiveIntegrity false "restore report did not prove exact archive inventory, hashes, sizes, and members"
+    FAILED=1
+  fi
+
+  WANT_COUNT="$(json_get "$TMP/restore/restore-report.json" declaredEventsCount || echo -1)"
   GOT_COUNT="$("$SQLITE" "$TMP/restore/cosmos.db" 'SELECT COUNT(*) FROM events;' 2>/dev/null || echo -2)"
   if [ "$WANT_COUNT" = "-1" ]; then
     add_check eventsCount true "manifest recorded no events table; skipped"

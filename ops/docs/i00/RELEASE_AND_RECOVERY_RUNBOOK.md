@@ -115,11 +115,14 @@ cannot return a proved success until the hashed semantic receipt validates.
   both provenance contracts plus the immutable full effective inventory before
   use.
 - Restore drills always use isolated temporary directories.
-- I00 proves only isolated restore and performs no production swap. Before live
-  activation, the L15 owner must amend its production restore path to stage on
-  the target filesystem, preserve DB/evidence/model payloads, stop every app
-  connection, fully verify the staged set, retain the prior set, and switch
-  atomically under explicit authorization.
+- I00 proves only isolated restore and performs no production swap. The closed
+  `R3-D-BACKUP-008` amendment makes the L15 incident-recovery owner snapshot and
+  verify the complete manifest/database/archive cohort before target creation,
+  stage verified DB/evidence/report bytes on the target filesystem, require the
+  app service to be provably inactive, identity-bind each publication, and
+  restore the prior owned set on failure. Live activation must still rehearse
+  the exact target filesystem and service-manager behavior under separate
+  operator authorization; no activation is claimed here.
 - Never copy a live WAL database file alone, remove an open database, or delete
   the prior database before the new database is verified and switched.
 

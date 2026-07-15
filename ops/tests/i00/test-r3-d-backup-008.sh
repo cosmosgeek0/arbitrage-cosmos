@@ -170,6 +170,126 @@ assert_eq "$(cat "$GOOD_TARGET/evidence/single-evidence.txt")" original-single-f
 assert_eq "$(node -e 'process.stdout.write(String(require(process.argv[1]).evidenceArchives))' "$GOOD_TARGET/restore-report.json")" 3
 assert_eq "$(node -e 'process.stdout.write(require(process.argv[1]).archiveVerification)' "$GOOD_TARGET/restore-report.json")" EXACT_MANIFEST_INVENTORY_HASH_SIZE_MEMBER_VERIFIED
 
+run_stage_mutation_case() {
+  local slug="$1" stage_line="$2" suffix="$3" mutation="$4"
+  local expected_mutation="$5" expected_error="$6"
+  local target="$ROOT/stage-race-$slug-target"
+  local ready="$ROOT/stage-race-$slug-ready"
+  local continue_marker="$ROOT/stage-race-$slug-continue"
+  local output="$ROOT/stage-race-$slug-output.txt"
+
+  COSMOS_RESTORE_TEST_MODE=1 \
+    RESTORE_TEST_STAGE_READY_MARKER="$ready" \
+    RESTORE_TEST_STAGE_CONTINUE_MARKER="$continue_marker" \
+    run_restore "$BASE_BACKUP" "$target" >"$output" 2>&1 &
+  local restore_pid=$!
+  local barrier_wait=0
+  while [ ! -s "$ready" ] && kill -0 "$restore_pid" 2>/dev/null \
+      && [ "$barrier_wait" -lt 1000 ]; do
+    sleep 0.01
+    barrier_wait=$((barrier_wait + 1))
+  done
+  if [ ! -s "$ready" ]; then
+    kill "$restore_pid" 2>/dev/null || true
+    wait "$restore_pid" 2>/dev/null || true
+    fail_test "$slug restore did not expose the deterministic staged-mutation barrier"
+  fi
+  pass_assertion
+
+  local staged_path
+  staged_path="$(sed -n "${stage_line}p" "$ready")"
+  [ -n "$staged_path" ] || fail_test "$slug barrier omitted staged path $stage_line"
+  if [ -n "$suffix" ]; then staged_path="$staged_path/$suffix"; fi
+
+  local mutation_proof mutation_rc
+  set +e
+  mutation_proof="$(node - "$staged_path" "$mutation" <<'NODE'
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+
+const [file, mutation] = process.argv.slice(2);
+const before = fs.lstatSync(file, { bigint: true });
+if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n || before.size < 1n) {
+  throw new Error('staged object is not a private nonempty regular file');
+}
+const descriptor = fs.openSync(file, 'r+');
+let changed = false;
+try {
+  if (mutation === 'flip') {
+    const beforeHash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    const offset = Number(before.size - 1n);
+    const byte = Buffer.alloc(1);
+    if (fs.readSync(descriptor, byte, 0, 1, offset) !== 1) throw new Error('short staged read');
+    byte[0] ^= 0xff;
+    if (fs.writeSync(descriptor, byte, 0, 1, offset) !== 1) throw new Error('short staged write');
+    fs.fsyncSync(descriptor);
+    const afterHash = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+    changed = beforeHash !== afterHash;
+  } else if (mutation === 'grow') {
+    const grownSize = before.size + 1n;
+    fs.ftruncateSync(descriptor, Number(grownSize));
+    fs.fsyncSync(descriptor);
+    changed = true;
+  } else {
+    throw new Error(`unknown staged mutation ${mutation}`);
+  }
+} finally {
+  fs.closeSync(descriptor);
+}
+const after = fs.lstatSync(file, { bigint: true });
+const { dev: beforeDevice } = before;
+const { dev: afterDevice } = after;
+process.stdout.write([
+  beforeDevice === afterDevice && before.ino === after.ino,
+  before.size === after.size,
+  changed,
+].join('|'));
+NODE
+  )"
+  mutation_rc=$?
+  set -e
+  printf 'continue\n' > "$continue_marker"
+
+  local completion_wait=0
+  while kill -0 "$restore_pid" 2>/dev/null && [ "$completion_wait" -lt 500 ]; do
+    sleep 0.01
+    completion_wait=$((completion_wait + 1))
+  done
+  if kill -0 "$restore_pid" 2>/dev/null; then
+    kill "$restore_pid" 2>/dev/null || true
+    wait "$restore_pid" 2>/dev/null || true
+    fail_test "$slug staged mutation did not fail within the five-second proof bound"
+  fi
+  local restore_rc
+  set +e
+  wait "$restore_pid"
+  restore_rc=$?
+  set -e
+  [ "$mutation_rc" -eq 0 ] \
+    || fail_test "could not mutate the $slug staged object: $mutation_proof"
+  assert_eq "$mutation_proof" "$expected_mutation"
+  [ "$restore_rc" -ne 0 ] || fail_test "$slug staged mutation published successfully"
+  pass_assertion
+  assert_contains "$(cat "$output")" "$expected_error"
+  assert_not_file "$target"
+}
+
+note "same-inode same-size staged database mutation fails before publication"
+run_stage_mutation_case database 1 '' flip 'true|true|true' \
+  'staged cosmos.db content changed before publication'
+
+note "same-inode same-size staged evidence mutation fails before publication"
+run_stage_mutation_case evidence 2 'source-evidence/proof.txt' flip 'true|true|true' \
+  'staged evidence content changed before publication'
+
+note "same-inode same-size staged report mutation fails before publication"
+run_stage_mutation_case report 3 '' flip 'true|true|true' \
+  'staged restore-report.json content changed before publication'
+
+note "sparse staged growth is rejected before hashing beyond the trusted size"
+run_stage_mutation_case sparse-growth 1 '' grow 'true|false|true' \
+  'staged cosmos.db content changed before publication'
+
 note "the selected backup and restore target are disjoint immutable boundaries"
 BACKUP_NESTED_TARGET="$BASE_BACKUP/nested-target"
 assert_failure_contains "restore target and selected backup overlap" \

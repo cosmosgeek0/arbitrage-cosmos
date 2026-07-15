@@ -394,6 +394,7 @@ if (!sameIdentity(directoryBefore, directoryAfter)
 fs.writeFileSync(path.join(snapshot, 'plan.json'), `${JSON.stringify({
   backupId: manifest.backupId,
   dbSha256: database.sha256,
+  dbBytes: database.bytes,
   eventsCount: manifest.eventsCount,
   archives,
 }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
@@ -406,6 +407,8 @@ BACKUP_ID="$(json_get "$SNAPSHOT/plan.json" backupId)" \
   || die_code 1 "private restore plan has no backupId"
 WANT_SHA="$(json_get "$SNAPSHOT/plan.json" dbSha256)" \
   || die_code 1 "private restore plan has no dbSha256"
+WANT_BYTES="$(json_get "$SNAPSHOT/plan.json" dbBytes)" \
+  || die_code 1 "private restore plan has no dbBytes"
 INTEGRITY="$("$SQLITE" "$SNAPSHOT/cosmos.db" 'PRAGMA integrity_check;' 2>/dev/null || echo error)"
 [ "$INTEGRITY" = "ok" ] || die_code 1 "backup integrity FAILED: $INTEGRITY"
 EVENTS_COUNT="$("$SQLITE" "$SNAPSHOT/cosmos.db" 'SELECT COUNT(*) FROM events;' 2>/dev/null || echo -1)"
@@ -665,23 +668,32 @@ PROD_BOOL=false
 [ "$IS_PRODUCTION" = 1 ] && PROD_BOOL=true
 if ! "$NODE" - "$SNAPSHOT" "$TARGET_CANON" "$DATA_CANON" "$FORCE" \
     "$IS_PRODUCTION" "$(now_utc)" "$BACKUP_ID" "$WANT_SHA" \
-    "$DECLARED_EVENTS_COUNT" "$EVENTS_COUNT" "$RESTORED_EVIDENCE" <<'NODE'
+    "$WANT_BYTES" "$DECLARED_EVENTS_COUNT" "$EVENTS_COUNT" "$RESTORED_EVIDENCE" <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const [
   snapshot, target, dataDir, forceRaw, productionRaw, timestamp, backupId,
-  dbSha256, declaredEventsRaw, eventsRaw, evidenceRaw,
+  dbSha256, dbBytesRaw, declaredEventsRaw, eventsRaw, evidenceRaw,
 ] = process.argv.slice(2);
 const force = forceRaw === '1';
 const production = productionRaw === '1';
+const dbBytes = Number(dbBytesRaw);
 const declaredEventsCount = Number(declaredEventsRaw);
 const eventsCount = Number(eventsRaw);
 const evidenceArchives = Number(evidenceRaw);
 const ownedNames = ['cosmos.db', 'cosmos.db-wal', 'cosmos.db-shm', 'evidence', 'restore-report.json'];
 const testMode = process.env.COSMOS_RESTORE_TEST_MODE === '1';
 const failAfterPublish = testMode ? (process.env.RESTORE_TEST_FAIL_AFTER_PUBLISH ?? '') : '';
+const stageReadyMarker = testMode ? (process.env.RESTORE_TEST_STAGE_READY_MARKER ?? '') : '';
+const stageContinueMarker = testMode ? (process.env.RESTORE_TEST_STAGE_CONTINUE_MARKER ?? '') : '';
+const MAX_EVIDENCE_PROOF_ENTRIES = 250001;
+const MAX_EVIDENCE_PROOF_BYTES = 256n * 1024n * 1024n * 1024n;
+
+if (!Number.isSafeInteger(dbBytes) || dbBytes <= 0) {
+  fail('private restore plan database size is invalid');
+}
 
 function fail(message) { throw new Error(message); }
 function identity(stat) {
@@ -695,10 +707,275 @@ function sameIdentity(left, right) {
     && left.mode === right.mode && left.type === right.type;
 }
 function statIdentity(name) { return identity(fs.lstatSync(name, { bigint: true })); }
+function stableMetadata(stat) {
+  const {
+    dev, ino, mode, nlink, size, mtimeNs, ctimeNs,
+  } = stat;
+  return {
+    dev, ino, mode, nlink, size, mtimeNs, ctimeNs,
+    type: stat.isDirectory() ? 'd' : stat.isFile() ? 'f' : 'other',
+  };
+}
+function sameStableMetadata(left, right) {
+  const { dev: leftDevice } = left;
+  const { dev: rightDevice } = right;
+  return leftDevice === rightDevice && left.ino === right.ino
+    && left.mode === right.mode && left.nlink === right.nlink
+    && left.size === right.size && left.mtimeNs === right.mtimeNs
+    && left.ctimeNs === right.ctimeNs && left.type === right.type;
+}
+function frameHash(hash, value) {
+  const bytes = Buffer.from(String(value), 'utf8');
+  const length = Buffer.allocUnsafe(8);
+  length.writeBigUInt64BE(BigInt(bytes.length));
+  hash.update(length);
+  hash.update(bytes);
+}
+function contentProof(root, options = {}) {
+  const treeHash = crypto.createHash('sha256');
+  const entries = [];
+  const openFlags = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW
+    | fs.constants.O_NONBLOCK;
+  if (typeof fs.constants.O_NOFOLLOW !== 'number'
+      || typeof fs.constants.O_NONBLOCK !== 'number') {
+    fail('runtime lacks stable no-follow content-proof support');
+  }
+  const expected = options.expected ?? null;
+  const mismatchLabel = options.mismatchLabel ?? `${root} violates its bounded content proof`;
+  const expectedByPath = new Map();
+  const expectedChildren = new Map();
+  if (expected !== null) {
+    if (!Array.isArray(expected.entries) || expected.entries.length === 0) {
+      fail(`${mismatchLabel}: expected proof is empty or malformed`);
+    }
+    for (const entry of expected.entries) {
+      if (typeof entry?.path !== 'string' || expectedByPath.has(entry.path)) {
+        fail(`${mismatchLabel}: expected proof has duplicate or malformed paths`);
+      }
+      expectedByPath.set(entry.path, entry);
+      if (entry.path === '.') continue;
+      const separator = entry.path.lastIndexOf('/');
+      const parent = separator < 1 ? '.' : entry.path.slice(0, separator);
+      const child = separator < 0 ? entry.path : entry.path.slice(separator + 1);
+      if (child.length === 0) fail(`${mismatchLabel}: expected proof has an empty name`);
+      const children = expectedChildren.get(parent) ?? [];
+      children.push(child);
+      expectedChildren.set(parent, children);
+    }
+    for (const children of expectedChildren.values()) children.sort();
+  }
+  const maxEntries = expected === null
+    ? options.maxEntries
+    : expected.entries.length;
+  const maxTotalBytes = expected === null
+    ? options.maxTotalBytes
+    : expected.entries.reduce(
+      (total, entry) => total + (entry.type === 'f' ? BigInt(entry.size) : 0n), 0n,
+    );
+  if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0
+      || typeof maxTotalBytes !== 'bigint' || maxTotalBytes < 0n) {
+    fail(`${mismatchLabel}: content-proof limits are invalid`);
+  }
+  let scheduledEntries = 1;
+  let totalFileBytes = 0n;
+  const tasks = [{ kind: 'visit', name: root, logical: '.' }];
+
+  while (tasks.length > 0) {
+    const task = tasks.pop();
+    if (task.kind === 'finish-directory') {
+      const namedAfter = fs.lstatSync(task.name, { bigint: true });
+      if (!sameStableMetadata(task.beforeMetadata, stableMetadata(namedAfter))) {
+        fail(`${mismatchLabel}: directory changed while its content was measured`);
+      }
+      continue;
+    }
+    const { name, logical } = task;
+    if (entries.length >= maxEntries) {
+      fail(`${mismatchLabel}: entry count exceeds its trusted bound`);
+    }
+    const namedBefore = fs.lstatSync(name, { bigint: true });
+    const beforeMetadata = stableMetadata(namedBefore);
+    const expectedEntry = expected === null ? null : expectedByPath.get(logical);
+    if (expected !== null && !expectedEntry) {
+      fail(`${mismatchLabel}: unexpected path ${logical}`);
+    }
+    if (expectedEntry) {
+      const actualPermissions = Number(namedBefore.mode & 0o7777n);
+      const rawExpectedMode = expectedEntry.permissions ?? expectedEntry.mode;
+      const expectedPermissions = typeof rawExpectedMode === 'bigint'
+        ? Number(rawExpectedMode & 0o7777n)
+        : Number(rawExpectedMode) & 0o7777;
+      if (beforeMetadata.type !== expectedEntry.type
+          || actualPermissions !== expectedPermissions
+          || (beforeMetadata.type === 'f' && namedBefore.size !== BigInt(expectedEntry.size))) {
+        fail(`${mismatchLabel}: type, mode, or size changed at ${logical}`);
+      }
+    }
+    if (namedBefore.isDirectory() && !namedBefore.isSymbolicLink()) {
+      entries.push({ path: logical, ...beforeMetadata, sha256: null });
+      frameHash(treeHash, 'directory');
+      frameHash(treeHash, logical);
+      frameHash(treeHash, Number(namedBefore.mode & 0o7777n));
+      const trustedNames = expected === null ? null : (expectedChildren.get(logical) ?? []);
+      const names = [];
+      const directory = fs.opendirSync(name);
+      try {
+        for (;;) {
+          const child = directory.readSync();
+          if (child === null) break;
+          if (scheduledEntries >= maxEntries
+              || (trustedNames !== null && names.length >= trustedNames.length)) {
+            fail(`${mismatchLabel}: directory entry count exceeds its trusted bound`);
+          }
+          names.push(child.name);
+          scheduledEntries += 1;
+        }
+      } finally {
+        directory.closeSync();
+      }
+      names.sort();
+      if (trustedNames !== null
+          && (names.length !== trustedNames.length
+            || names.some((child, index) => child !== trustedNames[index]))) {
+        fail(`${mismatchLabel}: directory inventory changed at ${logical}`);
+      }
+      frameHash(treeHash, names.length);
+      tasks.push({ kind: 'finish-directory', name, beforeMetadata });
+      for (let index = names.length - 1; index >= 0; index -= 1) {
+        const child = names[index];
+        tasks.push({ kind: 'visit', name: path.join(name, child), logical: `${logical}/${child}` });
+      }
+      continue;
+    }
+    if (!namedBefore.isFile() || namedBefore.isSymbolicLink() || namedBefore.nlink !== 1n) {
+      fail(`${mismatchLabel}: proof contains a link or special entry`);
+    }
+    totalFileBytes += namedBefore.size;
+    if (namedBefore.size < 0n || totalFileBytes > maxTotalBytes) {
+      fail(`${mismatchLabel}: file bytes exceed their trusted bound`);
+    }
+    const descriptor = fs.openSync(name, openFlags);
+    let sha256;
+    try {
+      const openedBefore = fs.fstatSync(descriptor, { bigint: true });
+      const openedBeforeMetadata = stableMetadata(openedBefore);
+      if (!openedBefore.isFile() || openedBefore.nlink !== 1n
+          || !sameStableMetadata(beforeMetadata, openedBeforeMetadata)) {
+        fail(`${name} changed before its content proof was held`);
+      }
+      const fileHash = crypto.createHash('sha256');
+      const buffer = Buffer.allocUnsafe(1024 * 1024);
+      let measured = 0n;
+      while (measured < openedBefore.size) {
+        const remaining = openedBefore.size - measured;
+        const requested = remaining < BigInt(buffer.length) ? Number(remaining) : buffer.length;
+        const count = fs.readSync(descriptor, buffer, 0, requested, null);
+        if (count === 0) fail(`${mismatchLabel}: short read at ${logical}`);
+        fileHash.update(buffer.subarray(0, count));
+        measured += BigInt(count);
+      }
+      const overflow = Buffer.allocUnsafe(1);
+      if (fs.readSync(descriptor, overflow, 0, 1, null) !== 0) {
+        fail(`${mismatchLabel}: file grew beyond its trusted size at ${logical}`);
+      }
+      const openedAfter = fs.fstatSync(descriptor, { bigint: true });
+      const namedAfter = fs.lstatSync(name, { bigint: true });
+      if (measured !== openedBefore.size
+          || !sameStableMetadata(openedBeforeMetadata, stableMetadata(openedAfter))
+          || !sameStableMetadata(openedBeforeMetadata, stableMetadata(namedAfter))) {
+        fail(`${mismatchLabel}: file changed while its content was measured at ${logical}`);
+      }
+      sha256 = fileHash.digest('hex');
+      if (expectedEntry && typeof expectedEntry.sha256 === 'string'
+          && sha256 !== expectedEntry.sha256) {
+        fail(`${mismatchLabel}: file hash changed at ${logical}`);
+      }
+    } finally {
+      fs.closeSync(descriptor);
+    }
+    entries.push({ path: logical, ...beforeMetadata, sha256 });
+    frameHash(treeHash, 'file');
+    frameHash(treeHash, logical);
+    frameHash(treeHash, Number(namedBefore.mode & 0o7777n));
+    frameHash(treeHash, namedBefore.size);
+    frameHash(treeHash, sha256);
+  }
+  if (scheduledEntries !== entries.length
+      || (expected !== null && entries.length !== expected.entries.length)) {
+    fail(`${mismatchLabel}: measured inventory is incomplete`);
+  }
+  return { sha256: treeHash.digest('hex'), entries };
+}
+function sameProofMetadata(left, right, includeTimes) {
+  if (left.entries.length !== right.entries.length) return false;
+  return left.entries.every((entry, index) => {
+    const other = right.entries[index];
+    const { dev: entryDevice } = entry;
+    const { dev: otherDevice } = other;
+    return entry.path === other.path && entry.type === other.type
+      && entryDevice === otherDevice && entry.ino === other.ino
+      && entry.mode === other.mode && entry.nlink === other.nlink
+      && entry.size === other.size
+      && (!includeTimes
+        || (entry.mtimeNs === other.mtimeNs && entry.ctimeNs === other.ctimeNs));
+  });
+}
+function sameExactProof(left, right) {
+  return left.sha256 === right.sha256 && sameProofMetadata(left, right, true);
+}
+function assertExactProof(name, expected, label) {
+  const mismatchLabel = `${label} content changed before publication`;
+  const actual = contentProof(name, { expected, mismatchLabel });
+  if (!sameExactProof(actual, expected)) fail(`${label} content changed before publication`);
+  return actual;
+}
+function assertPublishedProof(name, expected, label) {
+  const mismatchLabel = `${label} content changed during publication`;
+  const actual = contentProof(name, { expected, mismatchLabel });
+  if (actual.sha256 !== expected.sha256 || !sameProofMetadata(actual, expected, false)) {
+    fail(`${label} content changed during publication`);
+  }
+  return actual;
+}
+function soleFileSha256(proof, label) {
+  if (proof.entries.length !== 1 || proof.entries[0].type !== 'f'
+      || typeof proof.entries[0].sha256 !== 'string') {
+    fail(`${label} is not one proved regular file`);
+  }
+  return proof.entries[0].sha256;
+}
 function exists(name) {
   try { fs.lstatSync(name); return true; } catch (error) {
     if (error?.code === 'ENOENT') return false;
     throw error;
+  }
+}
+function waitForTestStageMutation(databaseStage, stagedEvidence, stagedReport) {
+  if (stageReadyMarker === '' && stageContinueMarker === '') return;
+  if (!path.isAbsolute(stageReadyMarker) || !path.isAbsolute(stageContinueMarker)
+      || stageReadyMarker === stageContinueMarker) {
+    fail('restore test stage markers must be distinct absolute paths');
+  }
+  if (exists(stageReadyMarker) || exists(stageContinueMarker)) {
+    fail('restore test stage markers must begin absent');
+  }
+  fs.writeFileSync(stageReadyMarker, [
+    path.resolve(databaseStage),
+    path.resolve(stagedEvidence),
+    path.resolve(stagedReport),
+    '',
+  ].join('\n'), {
+    encoding: 'utf8', flag: 'wx', mode: 0o600,
+  });
+  const waiter = new Int32Array(new SharedArrayBuffer(4));
+  const deadline = Date.now() + 10_000;
+  while (!exists(stageContinueMarker)) {
+    if (Date.now() >= deadline) fail('restore test stage mutation barrier timed out');
+    Atomics.wait(waiter, 0, 0, 10);
+  }
+  const marker = fs.lstatSync(stageContinueMarker);
+  if (!marker.isFile() || marker.isSymbolicLink()) {
+    fail('restore test stage continue marker is unsafe');
   }
 }
 function directoryIdentity(name) {
@@ -767,7 +1044,16 @@ if (visible.length > 0 && !force) fail('target became non-empty before staging')
 
 const nonce = `${process.pid}.${crypto.randomBytes(12).toString('hex')}`;
 const stages = new Map();
-function rememberStage(name) { stages.set(name, statIdentity(name)); }
+const stageProofs = new Map();
+function rememberStage(name, expected, label) {
+  const proof = contentProof(name, {
+    expected,
+    mismatchLabel: `${label} content does not match its trusted source`,
+  });
+  stages.set(name, statIdentity(name));
+  stageProofs.set(name, proof);
+  return proof;
+}
 function removeIfOurs(name, expected, errors) {
   if (!exists(name)) return;
   const actual = statIdentity(name);
@@ -838,15 +1124,47 @@ let rollbackCreated = false;
 let failure;
 
 try {
+  const databaseSnapshotProof = contentProof(path.join(snapshot, 'cosmos.db'), {
+    maxEntries: 1,
+    maxTotalBytes: BigInt(dbBytes),
+    mismatchLabel: 'private cosmos.db snapshot exceeds its verified bounds',
+  });
+  if (soleFileSha256(databaseSnapshotProof, 'private cosmos.db snapshot')
+      !== dbSha256.toLowerCase()
+      || databaseSnapshotProof.entries[0].size !== BigInt(dbBytes)) {
+    fail('private cosmos.db snapshot does not match the verified database');
+  }
   copyRegularExclusive(path.join(snapshot, 'cosmos.db'), dbStage, 0o600);
-  rememberStage(dbStage);
+  const databaseStageProof = rememberStage(
+    dbStage, databaseSnapshotProof, 'staged cosmos.db',
+  );
+  if (soleFileSha256(databaseStageProof, 'staged cosmos.db') !== dbSha256.toLowerCase()) {
+    fail('staged cosmos.db content does not match the verified database');
+  }
+  const snapshotEvidenceProof = contentProof(path.join(snapshot, 'evidence'), {
+    maxEntries: MAX_EVIDENCE_PROOF_ENTRIES,
+    maxTotalBytes: MAX_EVIDENCE_PROOF_BYTES,
+    mismatchLabel: 'private evidence snapshot exceeds its verified bounds',
+  });
   fs.mkdirSync(evidenceStage, { mode: 0o700 });
   if (evidenceArchives > 0) {
     for (const name of fs.readdirSync(path.join(snapshot, 'evidence'))) {
       copyEntry(path.join(snapshot, 'evidence', name), path.join(evidenceStage, name));
     }
   }
-  rememberStage(evidenceStage);
+  const snapshotEvidenceAfter = contentProof(path.join(snapshot, 'evidence'), {
+    expected: snapshotEvidenceProof,
+    mismatchLabel: 'private evidence snapshot changed while staging',
+  });
+  if (!sameExactProof(snapshotEvidenceAfter, snapshotEvidenceProof)) {
+    fail('private evidence snapshot changed while staging');
+  }
+  const evidenceStageProof = rememberStage(
+    evidenceStage, snapshotEvidenceProof, 'staged evidence',
+  );
+  if (evidenceStageProof.sha256 !== snapshotEvidenceProof.sha256) {
+    fail('staged evidence content does not match the verified snapshot');
+  }
   const report = {
     ts: timestamp,
     backupId,
@@ -860,11 +1178,34 @@ try {
     verifiedEvidenceArchives: evidenceArchives,
     archiveVerification: 'EXACT_MANIFEST_INVENTORY_HASH_SIZE_MEMBER_VERIFIED',
   };
-  fs.writeFileSync(reportStage, `${JSON.stringify(report, null, 2)}\n`, {
+  const reportBytes = `${JSON.stringify(report, null, 2)}\n`;
+  const expectedReportSha256 = crypto.createHash('sha256').update(reportBytes).digest('hex');
+  const expectedReportProof = {
+    entries: [{
+      path: '.', type: 'f', permissions: 0o600,
+      size: BigInt(Buffer.byteLength(reportBytes)), sha256: expectedReportSha256,
+    }],
+  };
+  fs.writeFileSync(reportStage, reportBytes, {
     encoding: 'utf8', flag: 'wx', mode: 0o600,
   });
-  rememberStage(reportStage);
+  const reportStageProof = rememberStage(
+    reportStage, expectedReportProof, 'staged restore-report.json',
+  );
+  if (soleFileSha256(reportStageProof, 'staged restore report') !== expectedReportSha256) {
+    fail('staged restore report content does not match its verified bytes');
+  }
   assertTargetBound('post-staging target binding');
+  waitForTestStageMutation(dbStage, evidenceStage, reportStage);
+
+  const publications = [[dbStage, 'cosmos.db']];
+  if (evidenceArchives > 0) publications.push([evidenceStage, 'evidence']);
+  publications.push([reportStage, 'restore-report.json']);
+  for (const [stage, name] of publications) {
+    const expectedProof = stageProofs.get(stage);
+    if (!expectedProof) fail(`missing owned staging content proof for ${name}`);
+    assertExactProof(stage, expectedProof, `staged ${name}`);
+  }
 
   fs.mkdirSync(rollback, { mode: 0o700 });
   rollbackCreated = true;
@@ -879,18 +1220,20 @@ try {
     if (!sameIdentity(original, movedIdentity)) fail(`moved original ${name} changed identity`);
   }
 
-  const publications = [[dbStage, 'cosmos.db']];
-  if (evidenceArchives > 0) publications.push([evidenceStage, 'evidence']);
-  publications.push([reportStage, 'restore-report.json']);
   for (const [stage, name] of publications) {
     assertTargetBound(`pre-publish binding for ${name}`);
     const stagedIdentity = stages.get(stage);
     if (!stagedIdentity) fail(`missing owned staging identity for ${name}`);
+    const expectedProof = stageProofs.get(stage);
+    if (!expectedProof) fail(`missing owned staging content proof for ${name}`);
+    assertExactProof(stage, expectedProof, `staged ${name}`);
     fs.renameSync(stage, name);
     published.set(name, stagedIdentity);
     stages.delete(stage);
+    stageProofs.delete(stage);
     const publishedIdentity = statIdentity(name);
     if (!sameIdentity(publishedIdentity, stagedIdentity)) fail(`published ${name} changed identity`);
+    assertPublishedProof(name, expectedProof, `published ${name}`);
     if (failAfterPublish === name) fail(`injected restore test failure after publishing ${name}`);
   }
   if (evidenceArchives === 0) {
@@ -899,6 +1242,7 @@ try {
     removeIfOurs(evidenceStage, stagedEvidenceIdentity, errors);
     if (errors.length > 0) fail(errors.join('; '));
     stages.delete(evidenceStage);
+    stageProofs.delete(evidenceStage);
   }
   assertTargetBound('post-publish target binding');
   commitComplete = true;

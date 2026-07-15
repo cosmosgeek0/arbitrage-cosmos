@@ -27,6 +27,14 @@ pre-correction restore consumed the substituted archive, created the target,
 and returned success. The existing donor backup/restore and drill suites had
 therefore been false-green at `30/30` and `11/11` for this boundary.
 
+The independent fix-coverage audit then replayed the committed correction and
+identified a second, post-verification publication race. The database,
+evidence, and report staging paths were target-visible and identity-bound, but
+their bytes were not re-proved. A deterministic barrier mutated the staged
+database through its already-open inode without changing device, inode, or
+size. The pre-audit correction returned success and published the changed
+bytes while its restore report retained the earlier verified database hash.
+
 ## Security contract
 
 The selected backup is mutable input until it has been copied through held,
@@ -51,6 +59,16 @@ manifest and archive format, including evidence paths whose root is either a
 directory or one regular file. No new backup, store, ledger, archive, or
 restore owner was created.
 
+Publication is proved per object: the exact staged bytes are proved immediately
+before rename and the same inode and content are proved immediately after it.
+The typed report is published last. The existing target contract preserves
+unrelated entries and exposes mutable canonical paths, so it cannot provide a
+portable atomic snapshot across the database, evidence directory, and report.
+No simultaneous multi-path snapshot or ongoing same-UID target-integrity claim
+is made. Production restore still requires the service to be proved inactive;
+any mutation after an object's completed publication proof is a subsequent
+target mutation, not proof that different staged bytes were published.
+
 ## Correction
 
 `ops/live/bin/restore.sh` now:
@@ -68,10 +86,19 @@ restore owner was created.
   private `0700` tree, compares exact inventories, and supports the producer's
   regular-file evidence roots;
 - stages only verified database, evidence, and typed restore-report bytes;
+- derives bounded expected path, type, mode, size, and content-hash proofs from
+  the private database/evidence snapshot and exact in-memory report bytes;
+- re-proves every staged object immediately before publication with iterative
+  expected-inventory traversal, exact-size reads, a one-byte overflow probe,
+  stable held-descriptor metadata, and artifact-specific failure evidence;
+- re-proves each published object immediately after rename, allows only the
+  rename-induced timestamp transition already captured by the held identity,
+  publishes the report last, and commits after its exact post-rename proof;
 - publishes owned target paths behind identity checks, rolls every moved path
   back on failure, preserves loud recovery evidence when rollback is
   incomplete, and removes exclusively created target suffixes after a failed
-  first publication.
+  first publication. Rollback preserves the same moved original inode; it does
+  not claim unchanged bytes if another same-UID writer mutates that inode.
 
 `ops/live/bin/restore-drill.sh` now validates `TMPDIR` before `mktemp`, refuses
 aliases into the live data tree, consumes only the isolated restore report, and
@@ -98,9 +125,9 @@ amendment contract, chained from the WATCHDOG-007 effective tree and digest:
 - base effective root digest:
   `f8b5713aa207d809dc0570b7fa43c39d8b034ca6a60e678ecea2a5b5af8b0f00`;
 - corrected effective live tree:
-  `0f5c1a1267cf63cb2d4bdc2015d867c6131e173d`;
+  `d016e6ffb2b805cf52d31728c8635221db56c2f6`;
 - corrected 31-file root digest:
-  `7e5e905f5a11d15987f9e829a0d91de50f6e618ee0c75d9d50e714515f97c0d3`.
+  `94f7dffc6583b471e8d193f8ec95c3f5dc12a2a0081b8e10a342e9ac5c26e524`.
 
 The entry authorizes exactly these two runtime replacements and one additive
 focused regression:
@@ -120,13 +147,19 @@ path is admitted.
 
 - pre-fix clean-archive regression: exit `1` at the accepted archive
   substitution, proving the exploit;
-- corrected additive regression: exit `0`, `89/89`;
+- corrected additive regression: exit `0`, `109/109`;
 - unchanged donor backup/restore suite: exit `0`, `30/30`;
 - unchanged donor restore-drill suite: exit `0`, `11/11`;
-- standard ops aggregate: exit `0`, 12/12 files and `384` assertions;
-- secret/endpoint scanner: exit `0`, `13/13`, after the aggregate first
-  reproduced a hostname false positive for JavaScript `.dev` property access;
+- secret/endpoint scanner: exit `0`, `13/13`;
 - Bash syntax and Git whitespace checks: exit `0`;
+- independent hostile review of the exact staged-publication boundary:
+  `APPROVED`; same-inode/same-size byte flips in the staged database, one
+  evidence leaf, and the exact restore report all fail before publication with
+  the target absent; a one-byte sparse growth also fails inside the five-second
+  regression bound without hashing beyond the trusted size. The review also
+  reproduced a mutation after one object's completed publication proof while a
+  later large object was being read; that is why this receipt does not claim a
+  simultaneous or ongoing mutable-target snapshot;
 - host archive implementation exercised: bsdtar `3.5.3`; the implementation
   also accepts the bounded GNU numeric-owner listing grammar, but GNU tar was
   not installed on this host for a second runtime execution.
@@ -136,7 +169,8 @@ archives, symlink/hardlink/FIFO/traversal members, duplicate/case/Unicode
 collisions, truncated and bounded-resource archives, regular-file roots,
 target/backup aliases, live-data aliases, service-state ambiguity, immutable
 target preservation, complete and incomplete rollback, absent-target rollback,
-explicit drill evidence, and production database non-mutation.
+staged database/evidence/report mutation, bounded sparse growth, explicit drill
+evidence, and production database non-mutation.
 
 The cross-suite correction changes only the spelling of device-number reads:
 ECMAScript object destructuring retrieves the same `fs.Stats` properties while
@@ -144,8 +178,9 @@ avoiding source tokens that the deliberately conservative hostname scanner must
 reject. Restore identity comparisons and every accepted runtime behavior remain
 unchanged.
 
-The effective I00 adapter, donor contract, release/preflight, and repository
-gates are rerun after the exact contract bytes are sealed. Final complete
+The effective I00 adapter, donor contract, standard ops aggregate,
+release/preflight, and repository gates are rerun after the exact contract
+bytes are sealed. Final complete
 Phase 4 acceptance and C2/S2 evidence remain pending. No live/test order,
 private or signed exchange call, transfer, withdrawal, deployment, push, merge,
 or external mutation was performed.

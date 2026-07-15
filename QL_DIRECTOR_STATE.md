@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-33 (2026-07-15): INTEGRATION_CANDIDATE_READY verified — Role 3 launched (RUN-8)
+
+I00 sealed candidate readiness: C=098f7b9 (frozen replacement candidate), seal S=517bd63 verified sole child of C, token in state file, branch pushed. Shard harvest: shards 1+5 SHARD_RECEIPT_READY; 2/3/6 evidence-complete-or-partial without token; 4 precise environment BLOCKED (detached copies lack the 5 protected owner inputs / attached-exec authorization) — RULING: all shard receipts are ADVISORY evidence for Role 3; no shard fix cycles; Role 3 (sole verdict owner) reruns critical classes per wave-16 block. RUN-8 issued with C pinned = 098f7b9. Next: VERIFIED_CANDIDATE → my Phase-5 landing (INTEGRATED_ACCEPTED) → 6-chat AI-Ops port burst + egress patch + post-landing admissions.
+
 ## D-LAUNCH-32 (2026-07-15): A2 shadow sealed — SHADOW_ARTIFACT_READY (ca1fb09)
 
 Verified: 2 commits on aiops-shadow-a2-20260715, scope 100% inside caseRuntime namespaces (zero leaks), receipt with SHADOW_ARTIFACT_READY, no acceptance/prestage claim. Branch pushed. ALL FIVE shadow lanes now sealed + preflight sealed — wave 18 complete. Sole active session: I00 integrator (resume from 9bde37b+). Next triggers: INTEGRATION_CANDIDATE_READY → cut c-shard-1..6 + Role 3.

@@ -13,10 +13,10 @@
       "type": "object", "additionalProperties": false,
       "required": ["branch", "headSha", "treeSha", "worktreeState", "protectedOwnerDirectives", "serverBundleSha256", "harnessTreeSha256"],
       "properties": {
-        "branch": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "branch": { "enum": ["i00-product-assembly-20260713", "DETACHED"] },
         "headSha": { "$ref": "#/$defs/sha" },
         "treeSha": { "$ref": "#/$defs/sha" },
-        "worktreeState": { "const": "FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE" },
+        "worktreeState": { "enum": ["FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE", "CLEAN_DETACHED_CANDIDATE_WITH_PACKAGED_OWNER_DIRECTIVES"] },
         "protectedOwnerDirectives": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/protectedOwnerDirective" } },
         "serverBundleSha256": { "$ref": "#/$defs/sha" },
         "harnessTreeSha256": { "$ref": "#/$defs/sha" }
@@ -84,7 +84,7 @@
       "properties": {
         "path": { "enum": ["I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md", "IP_CONTROL.md", "IP_OPS.md", "IP_PROOF.md", "IP_RUNTIME.md"] },
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "gitStatus": { "const": "UNTRACKED_PROTECTED_OWNER_INPUT" }
+        "gitStatus": { "enum": ["UNTRACKED_PROTECTED_OWNER_INPUT", "CANDIDATE_COMMITTED_VERIFIER_INPUT"] }
       }
     },
     "summary": {

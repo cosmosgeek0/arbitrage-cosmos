@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
@@ -15,6 +15,7 @@ import {
   PROTECTED_OWNER_DIRECTIVES,
   REQUIRED_LIMITATIONS,
   evaluateBound,
+  loadProtectedOwnerDirectiveBundle,
 } from '../../../../test/i00/performance/contract.mjs';
 import { BASELINE_LIVE_COMPONENT_IDS } from '../../../../test/i00/performance/local-proxy-soak.mjs';
 import { computeGitSourceFreeze } from '../../../i00/complete-acceptance-receipt.mjs';
@@ -26,7 +27,8 @@ if (!sourceRootArg || !receiptPathArg || !/^[0-9a-f]{40}$/.test(headSha) || !/^[
 const sourceRoot = path.resolve(sourceRootArg);
 const receiptPath = path.resolve(receiptPathArg);
 const evidenceRoot = path.join(sourceRoot, 'test/i00/performance/evidence');
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const repositoryRoot = realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'));
+if (realpathSync(sourceRoot) === repositoryRoot) throw new Error('fixture source root must not be the repository root');
 mkdirSync(evidenceRoot, { recursive: true });
 mkdirSync(path.dirname(receiptPath), { recursive: true });
 
@@ -34,13 +36,23 @@ const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const SHA = 'a'.repeat(64);
 const startedAtUtc = '2026-07-12T23:58:00.000Z';
 const endedAtUtc = '2026-07-12T23:59:00.000Z';
-const protectedOwnerDirectives = PROTECTED_OWNER_DIRECTIVES.map((directive) => {
-  const source = path.join(repositoryRoot, directive.path);
-  const destination = path.join(sourceRoot, directive.path);
-  mkdirSync(path.dirname(destination), { recursive: true });
-  copyFileSync(source, destination);
-  if (sha256(readFileSync(destination)) !== directive.sha256) throw new Error(`protected directive drift: ${directive.path}`);
-  return { ...directive, gitStatus: 'UNTRACKED_PROTECTED_OWNER_INPUT' };
+const verifierBundle = loadProtectedOwnerDirectiveBundle(repositoryRoot);
+const protectedOwnerDirectives = verifierBundle.members.map((member) => {
+  const destination = path.join(sourceRoot, member.path);
+  const existing = lstatSync(destination, { throwIfNoEntry: false });
+  if (existing === undefined) writeFileSync(destination, member.content, { flag: 'wx', mode: 0o600 });
+  else if (!existing.isFile() || existing.isSymbolicLink()) throw new Error(`protected directive destination unsafe: ${member.path}`);
+  let descriptor;
+  try {
+    descriptor = openSync(destination, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const info = fstatSync(descriptor);
+    const content = readFileSync(descriptor);
+    if (!info.isFile() || info.size !== member.byteLength || !content.equals(member.content)
+        || sha256(content) !== member.sha256) throw new Error(`protected directive drift: ${member.path}`);
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+  return { path: member.path, sha256: member.sha256, gitStatus: 'UNTRACKED_PROTECTED_OWNER_INPUT' };
 });
 let frozenManifest = {
   format: 'GIT_BLOBS_PLUS_PROTECTED_OWNER_DIRECTIVE_HASHES_V2',

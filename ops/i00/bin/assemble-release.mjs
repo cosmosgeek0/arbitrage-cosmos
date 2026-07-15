@@ -14,6 +14,7 @@ import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-val
 import { readCompiledLedgerCompatibility } from '../ledger-compatibility.mjs';
 import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 import { expectedBuildAttestation, verifyBuildAttestation } from './verify-build-attestation.mjs';
+import { loadProtectedOwnerDirectiveBundle } from '../../../test/i00/performance/contract.mjs';
 
 const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'aa5b758a35e55d6133ffceb4e79691cf3181c186168824af5ce6cd8b86a8ac95';
 const args = parseArgs(process.argv.slice(2), new Set(['rollback-barrier', 'simulation-source']));
@@ -57,6 +58,7 @@ const required = [
   'test/i00/performance/local-proxy-soak.mjs',
   'test/i00/performance/app-probe.mjs',
   'test/i00/performance/schema.v1.json',
+  'test/i00/performance/protected-owner-directives.bundle.v1.json',
   'test/i00/performance/browser-receipt.schema.v2.json',
   'test/i00/performance/browser-measurement.schema.v1.json',
   'test/i00/performance/browser-capture.schema.v3.json',
@@ -65,6 +67,7 @@ const required = [
 for (const relative of required) {
   if (!existsSync(resolve(source, relative))) fail(`release input missing ${relative}`);
 }
+loadProtectedOwnerDirectiveBundle(source);
 for (const forbidden of ['accepted-ops-live', 'install-receipt.json']) {
   if (existsSync(resolve(source, 'ops/i00', forbidden))) {
     fail(`source ops/i00 contains reserved installed-bundle path ${forbidden}`);
@@ -259,9 +262,10 @@ try {
   }
   for (const relative of [
     'contract.mjs', 'local-acceptance.mjs', 'local-proxy-soak.mjs', 'app-probe.mjs',
-    'schema.v1.json', 'browser-receipt.schema.v2.json', 'browser-measurement.schema.v1.json',
+    'schema.v1.json', 'protected-owner-directives.bundle.v1.json', 'browser-receipt.schema.v2.json', 'browser-measurement.schema.v1.json',
     'browser-capture.schema.v3.json', 'browser-restart-measurement.schema.v1.json',
   ]) cpSync(resolve(source, 'test/i00/performance', relative), resolve(staging, 'test/i00/performance', relative));
+  loadProtectedOwnerDirectiveBundle(staging);
   for (const artifact of acceptance.receipt.browserReceipt.artifacts) {
     const destinationPath = resolve(staging, artifact.relativePath);
     mkdirSync(resolve(destinationPath, '..'), { recursive: true });

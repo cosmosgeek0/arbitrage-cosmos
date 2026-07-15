@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -17,6 +17,9 @@ import {
   LOCAL_PROXY_SLOS,
   PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
   PROTECTED_OWNER_DIRECTIVES,
+  PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH,
+  PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
+  PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS,
   Q_DONOR_SHA,
   Q_DONOR_TREE,
   Q_RECEIPT_SHA256,
@@ -29,6 +32,7 @@ import {
   sha256,
   summarize,
   validateJsonSchema,
+  validateProtectedOwnerDirectiveBundleDocument,
   writeImmutableJson,
 } from './contract.mjs';
 import {
@@ -47,12 +51,261 @@ import {
   parseSoakArgs,
   phaseEventLoopSummaryValid,
   processReport,
+  resolveProtectedOwnerDirectivesForPerformance,
   validatePerformanceDocument,
   waitForMeasurementBaseline,
 } from './local-proxy-soak.mjs';
+import { runGitEvidence } from '../verify-scope.mjs';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const HEAD = 'a'.repeat(40);
+
+test('protected owner directives resolve from immutable package in clean detached verifier', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'i00-clean-detached-directives-'));
+  const runGit = (args) => runGitEvidence({ cwd: root, args, output: 'text' }).stdout.trim();
+  const bundleBytes = readFileSync(path.join(HERE, 'protected-owner-directives.bundle.v1.json'));
+  const bundleDocument = JSON.parse(bundleBytes);
+  const mutateDocument = (mutate, expected) => {
+    const candidate = structuredClone(bundleDocument);
+    mutate(candidate);
+    assert.throws(() => validateProtectedOwnerDirectiveBundleDocument(candidate), expected);
+  };
+  try {
+    mkdirSync(path.join(root, path.dirname(PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH)), { recursive: true });
+    writeFileSync(path.join(root, PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH), bundleBytes);
+    writeFileSync(path.join(root, '.gitignore'), `${PROTECTED_OWNER_DIRECTIVES[0].path}\n`);
+    writeFileSync(path.join(root, 'README.md'), 'clean detached verifier fixture\n');
+    runGit(['init', '-q']);
+    runGit(['config', 'user.name', 'I00 verifier fixture']);
+    runGit(['config', 'user.email', 'i00-verifier@example.invalid']);
+    runGit(['add', '.']);
+    runGit(['commit', '-q', '-m', 'candidate with immutable verifier package']);
+    const candidateSha = runGit(['rev-parse', 'HEAD']);
+    const candidateTree = runGit(['rev-parse', 'HEAD^{tree}']);
+    runGit(['checkout', '-q', '--detach', candidateSha]);
+
+    const resolved = resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha });
+    assert.equal(resolved.mode, 'CLEAN_DETACHED_PACKAGED');
+    assert.equal(resolved.branch, 'DETACHED');
+    assert.equal(resolved.headSha, candidateSha);
+    assert.equal(resolved.treeSha, candidateTree);
+    assert.equal(resolved.worktreeState, PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE);
+    assert.deepEqual(resolved.protectedOwnerDirectives, PROTECTED_OWNER_DIRECTIVES.map((entry) => ({
+      ...entry,
+      gitStatus: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS,
+    })));
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: 'a'.repeat(40) }),
+      /TESTED_SHA_DOES_NOT_EQUAL_SOURCE_HEAD/,
+    );
+    writeFileSync(path.join(root, '.git', 'HEAD'), `${candidateTree}\n`);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateTree }),
+      /SOURCE_HEAD_COMMIT_REQUIRED/,
+    );
+    writeFileSync(path.join(root, '.git', 'HEAD'), `${candidateSha}\n`);
+
+    runGit(['update-index', '--assume-unchanged', 'README.md']);
+    writeFileSync(path.join(root, 'README.md'), 'assume-unchanged forgery\n');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_INDEX_FLAGS_FORBIDDEN/,
+    );
+    writeFileSync(path.join(root, 'README.md'), 'clean detached verifier fixture\n');
+    runGit(['update-index', '--no-assume-unchanged', 'README.md']);
+
+    runGit(['update-index', '--skip-worktree', 'README.md']);
+    writeFileSync(path.join(root, 'README.md'), 'skip-worktree forgery\n');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_INDEX_FLAGS_FORBIDDEN/,
+    );
+    writeFileSync(path.join(root, 'README.md'), 'clean detached verifier fixture\n');
+    runGit(['update-index', '--no-skip-worktree', 'README.md']);
+
+    const fsmonitorHook = path.join(root, '.git', 'hooks', 'clean009-fsmonitor');
+    writeFileSync(fsmonitorHook, '#!/bin/sh\nprintf "token\\n"\n');
+    chmodSync(fsmonitorHook, 0o700);
+    runGit(['config', 'core.fsmonitor', fsmonitorHook]);
+    runGit(['status', '--porcelain=v1', '--untracked-files=all']);
+    writeFileSync(path.join(root, 'README.md'), 'fsmonitor forgery\n');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_SOURCE_DIRTY_PATHS/,
+    );
+    writeFileSync(path.join(root, 'README.md'), 'clean detached verifier fixture\n');
+    runGit(['config', '--unset', 'core.fsmonitor']);
+
+    const cleanFilter = path.join(root, '.git', 'hooks', 'clean009-clean');
+    const smudgeFilter = path.join(root, '.git', 'hooks', 'clean009-smudge');
+    writeFileSync(cleanFilter, '#!/bin/sh\ncat >/dev/null\nprintf "clean detached verifier fixture\\n"\n');
+    writeFileSync(smudgeFilter, '#!/bin/sh\ncat >/dev/null\nprintf "smudged worktree forgery\\n"\n');
+    chmodSync(cleanFilter, 0o700);
+    chmodSync(smudgeFilter, 0o700);
+    runGit(['config', 'filter.clean009.clean', cleanFilter]);
+    runGit(['config', 'filter.clean009.smudge', smudgeFilter]);
+    runGit(['switch', '-q', '-c', 'filtered-candidate', candidateSha]);
+    writeFileSync(path.join(root, '.gitattributes'), 'README.md filter=clean009\n');
+    runGit(['add', '.gitattributes']);
+    runGit(['commit', '-q', '-m', 'candidate with clean-smudge transform']);
+    const filteredSha = runGit(['rev-parse', 'HEAD']);
+    rmSync(path.join(root, 'README.md'));
+    runGit(['checkout', '--', 'README.md']);
+    assert.equal(readFileSync(path.join(root, 'README.md'), 'utf8'), 'smudged worktree forgery\n');
+    runGit(['checkout', '-q', '--detach', filteredSha]);
+    assert.equal(readFileSync(path.join(root, 'README.md'), 'utf8'), 'smudged worktree forgery\n');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: filteredSha }),
+      /CLEAN_DETACHED_GIT_ATTRIBUTES_FORBIDDEN/,
+    );
+    runGit(['reset', '--hard', '-q', candidateSha]);
+    runGit(['config', '--unset', 'filter.clean009.clean']);
+    runGit(['config', '--unset', 'filter.clean009.smudge']);
+
+    runGit(['config', 'filter.clean009.clean', cleanFilter]);
+    runGit(['config', 'filter.clean009.smudge', smudgeFilter]);
+    const infoExclude = path.join(root, '.git', 'info', 'exclude');
+    const originalInfoExclude = readFileSync(infoExclude);
+    writeFileSync(infoExclude, `${originalInfoExclude.toString('utf8')}\n/.gitattributes\n`);
+    writeFileSync(path.join(root, '.gitattributes'), 'README.md filter=clean009\n');
+    writeFileSync(path.join(root, 'README.md'), 'smudged worktree forgery\n');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_WORKTREE_GIT_ATTRIBUTES_FORBIDDEN/,
+    );
+    rmSync(path.join(root, '.gitattributes'));
+    writeFileSync(infoExclude, originalInfoExclude);
+    writeFileSync(path.join(root, 'README.md'), 'clean detached verifier fixture\n');
+    runGit(['config', '--unset', 'filter.clean009.clean']);
+    runGit(['config', '--unset', 'filter.clean009.smudge']);
+
+    runGit(['config', 'filter.clean009.clean', cleanFilter]);
+    runGit(['config', 'filter.clean009.smudge', smudgeFilter]);
+    const infoAttributes = path.join(root, '.git', 'info', 'attributes');
+    writeFileSync(infoAttributes, 'README.md filter=clean009\n');
+    rmSync(path.join(root, 'README.md'));
+    runGit(['checkout', '--', 'README.md']);
+    assert.equal(readFileSync(path.join(root, 'README.md'), 'utf8'), 'smudged worktree forgery\n');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_INFO_ATTRIBUTES_FORBIDDEN/,
+    );
+    rmSync(infoAttributes);
+    runGit(['config', '--unset', 'filter.clean009.clean']);
+    runGit(['config', '--unset', 'filter.clean009.smudge']);
+    runGit(['reset', '--hard', '-q', candidateSha]);
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.equal(resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }).mode, 'CLEAN_DETACHED_PACKAGED');
+
+    writeFileSync(path.join(root, 'dirty.txt'), 'dirty\n');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_SOURCE_DIRTY_PATHS/,
+    );
+    rmSync(path.join(root, 'dirty.txt'));
+
+    writeFileSync(path.join(root, PROTECTED_OWNER_DIRECTIVES[0].path), bundleDocument.members[0].contentBase64, 'base64');
+    assert.equal(runGit(['status', '--porcelain=v1', '--untracked-files=all']), '');
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /CLEAN_DETACHED_AMBIENT_OWNER_DIRECTIVE_FORBIDDEN/,
+    );
+    rmSync(path.join(root, PROTECTED_OWNER_DIRECTIVES[0].path));
+
+    runGit(['switch', '-q', '-c', 'wrong-verifier-branch', candidateSha]);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /INTEGRATION_BRANCH_REQUIRED:wrong-verifier-branch/,
+    );
+    runGit(['switch', '-q', '-c', 'i00-product-assembly-20260713', candidateSha]);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: candidateSha }),
+      /PROTECTED_OWNER_DIRECTIVE_MISSING_OR_UNSAFE/,
+    );
+
+    runGit(['switch', '-q', '-c', 'tampered-package', candidateSha]);
+    writeFileSync(path.join(root, PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH), `${bundleBytes.toString('utf8').trimEnd()} \n`);
+    runGit(['add', PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH]);
+    runGit(['commit', '-q', '-m', 'tampered package']);
+    const tamperedSha = runGit(['rev-parse', 'HEAD']);
+    runGit(['checkout', '-q', '--detach', tamperedSha]);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: tamperedSha }),
+      /PROTECTED_OWNER_DIRECTIVE_BUNDLE_HASH_MISMATCH/,
+    );
+
+    runGit(['switch', '-q', '-c', 'missing-package', candidateSha]);
+    runGit(['rm', '-q', PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH]);
+    runGit(['commit', '-q', '-m', 'missing package']);
+    const missingSha = runGit(['rev-parse', 'HEAD']);
+    runGit(['checkout', '-q', '--detach', missingSha]);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: missingSha }),
+      /PROTECTED_OWNER_DIRECTIVE_BUNDLE_GIT_ENTRY_INVALID/,
+    );
+    runGit(['replace', missingSha, candidateSha]);
+    assert.match(runGit(['ls-tree', missingSha, '--', PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH]), /protected-owner-directives\.bundle\.v1\.json/);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: missingSha }),
+      /PROTECTED_OWNER_DIRECTIVE_BUNDLE_GIT_ENTRY_INVALID/,
+    );
+    runGit(['replace', '-d', missingSha]);
+
+    runGit(['switch', '-q', '-c', 'linked-package', candidateSha]);
+    rmSync(path.join(root, PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH));
+    symlinkSync('../../../README.md', path.join(root, PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH));
+    runGit(['add', PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH]);
+    runGit(['commit', '-q', '-m', 'linked package']);
+    const linkedSha = runGit(['rev-parse', 'HEAD']);
+    runGit(['checkout', '-q', '--detach', linkedSha]);
+    assert.throws(
+      () => resolveProtectedOwnerDirectivesForPerformance({ root, testedSha: linkedSha }),
+      /PROTECTED_OWNER_DIRECTIVE_BUNDLE_GIT_ENTRY_INVALID/,
+    );
+
+    const packagedReceipt = performanceDocument();
+    packagedReceipt.source.branch = 'DETACHED';
+    packagedReceipt.source.worktreeState = PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE;
+    packagedReceipt.source.protectedOwnerDirectives = PROTECTED_OWNER_DIRECTIVES.map((entry) => ({
+      ...entry,
+      gitStatus: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS,
+    }));
+    const packagedValidation = validatePerformanceDocument(packagedReceipt, {
+      mode: 'CLEAN_DETACHED_PACKAGED',
+      branch: 'DETACHED',
+      headSha: HEAD,
+      treeSha: TREE,
+      worktreeState: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
+    });
+    assert.equal(packagedValidation.passed, true, packagedValidation.semanticFailures.join(','));
+    const mixedProvenance = structuredClone(packagedReceipt);
+    mixedProvenance.source.protectedOwnerDirectives[0].gitStatus = 'UNTRACKED_PROTECTED_OWNER_INPUT';
+    assert.ok(validatePerformanceDocument(mixedProvenance).semanticFailures.includes('PERFORMANCE_SOURCE_NOT_FROZEN'));
+    const attachedPackage = structuredClone(packagedReceipt);
+    attachedPackage.source.branch = 'i00-product-assembly-20260713';
+    assert.ok(validatePerformanceDocument(attachedPackage).semanticFailures.includes('PERFORMANCE_SOURCE_NOT_FROZEN'));
+
+    mutateDocument((value) => value.members.pop(), /INVENTORY_COUNT_INVALID/);
+    mutateDocument((value) => value.members.push(structuredClone(value.members[0])), /INVENTORY_COUNT_INVALID/);
+    mutateDocument((value) => { value.members[1] = structuredClone(value.members[0]); }, /MEMBER_PATH_INVALID/);
+    mutateDocument((value) => { value.members[0].path = '../IP_RUNTIME.md'; }, /MEMBER_PATH_INVALID/);
+    mutateDocument((value) => { value.members[0].kind = 'SYMLINK'; }, /MEMBER_KIND_INVALID/);
+    mutateDocument((value) => { value.members[0].byteLength += 1; }, /MEMBER_SIZE_INVALID/);
+    mutateDocument((value) => { value.members[0].sha256 = '0'.repeat(64); }, /MEMBER_DECLARED_HASH_INVALID/);
+    mutateDocument((value) => { value.members[0].contentBase64 = `${value.members[0].contentBase64.slice(0, -1)}A`; }, /MEMBER_(?:BASE64_NONCANONICAL|CONTENT_HASH_INVALID)/);
+    mutateDocument((value) => { value.inventorySha256 = '0'.repeat(64); }, /INVENTORY_HASH_INVALID/);
+    mutateDocument((value) => { value.payloadSha256 = '0'.repeat(64); }, /PAYLOAD_HASH_INVALID/);
+    mutateDocument((value) => { value.members[0].unexpected = true; }, /MEMBER_0_KEYS_INVALID/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 const TREE = 'b'.repeat(40);
 const SHA = 'c'.repeat(64);
 const ROUTE_PATHS = Object.freeze({

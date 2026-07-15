@@ -37,7 +37,7 @@ import {
   verifyProtectedOwnerDirectives,
   writeImmutableJson,
 } from './contract.mjs';
-import { validatePerformanceDocument } from './local-proxy-soak.mjs';
+import { LIVE_PERFORMANCE_SOURCE_EXPECTATION, validatePerformanceDocument } from './local-proxy-soak.mjs';
 import {
   EXPECTED_DONOR_ROWS,
   EXPECTED_EXCLUSIONS,
@@ -2770,7 +2770,11 @@ function validatePerformanceReceipt(requested, expectedHead, expectedTree) {
   if (resolved !== ROOT && !resolved.startsWith(`${ROOT}${path.sep}`)) throw new Error('PERFORMANCE_RECEIPT_OUTSIDE_REPOSITORY');
   const text = readFileSync(resolved, 'utf8');
   const document = JSON.parse(text);
-  const validation = validatePerformanceDocument(document, { headSha: expectedHead, treeSha: expectedTree });
+  const validation = validatePerformanceDocument(document, {
+    ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+    headSha: expectedHead,
+    treeSha: expectedTree,
+  });
   const secretFindings = scanSecretText(text);
   const snapshots = Array.isArray(document.phases)
     ? document.phases.flatMap((phase) => Array.isArray(phase?.snapshots) ? phase.snapshots : [])
@@ -2852,7 +2856,11 @@ async function validatePerformanceReceiptAtRevision(environment, revision, reque
   const receipt = await gitPathBytes(environment, revision, requested, 'PERFORMANCE_RECEIPT', 64 * 1024 * 1024);
   const text = receipt.bytes.toString('utf8');
   const document = JSON.parse(text);
-  const validation = validatePerformanceDocument(document, { headSha: expectedHead, treeSha: expectedTree });
+  const validation = validatePerformanceDocument(document, {
+    ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+    headSha: expectedHead,
+    treeSha: expectedTree,
+  });
   const secretFindings = scanSecretText(text);
   const snapshots = Array.isArray(document.phases)
     ? document.phases.flatMap((phase) => Array.isArray(phase?.snapshots) ? phase.snapshots : [])
@@ -3749,7 +3757,11 @@ async function runCompleteAcceptance(options) {
           const performancePath = path.join(EVIDENCE_ROOT, performanceName);
           const performanceText = readFileSync(performancePath, 'utf8');
           const performanceDocument = JSON.parse(performanceText);
-          const validation = validatePerformanceDocument(performanceDocument, { headSha: sourceHead, treeSha: sourceTree });
+          const validation = validatePerformanceDocument(performanceDocument, {
+            ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+            headSha: sourceHead,
+            treeSha: sourceTree,
+          });
           const secretFindings = scanSecretText(performanceText);
           performanceReceipt = {
             relativePath: path.relative(ROOT, performancePath),

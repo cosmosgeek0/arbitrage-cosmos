@@ -6,9 +6,11 @@ SHA=0123456789abcdef0123456789abcdef01234567
 REAL_TMP="$(node -e 'const fs=require("fs"),os=require("os");process.stdout.write(fs.realpathSync(os.tmpdir()))')"
 SIMULATION_ROOT="$(node "$I00_ROOT/bin/create-simulation-root.mjs" --root "$REAL_TMP/ip-ops-i00-sim-install-$$")"
 cleanup_release_test() {
+  local rc=$?
   chmod -R u+w "$SIMULATION_ROOT" 2>/dev/null || true
   rm -rf "$SIMULATION_ROOT"
-  cleanup_test_tmp
+  cleanup_test_tmp "$rc"
+  return "$rc"
 }
 trap cleanup_release_test EXIT
 note "assemble SHA-keyed immutable release from tested inputs"
@@ -129,7 +131,8 @@ assert_failure "$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" --dest
 
 note "release assembly refuses an incomplete effective-root verifier dependency closure"
 assert_missing_release_dependency_refused() {
-  local relative="$1" label="$2" source="$TEST_TMP/release/source" saved="$TEST_TMP/$label.saved"
+  local relative="$1" label="$2" source="$TEST_TMP/release/source" saved
+  saved="$TEST_TMP/$label.saved"
   mv "$source/$relative" "$saved"
   assert_failure node "$I00_ROOT/bin/assemble-release.mjs" \
     --source-root "$source" --runtime-deps "$TEST_TMP/release/deps" \
@@ -141,6 +144,35 @@ assert_missing_release_dependency_refused() {
 }
 assert_missing_release_dependency_refused ops/i00/bin/verify-donor.mjs missing-donor-verifier
 assert_missing_release_dependency_refused ops/i00/lib.mjs missing-i00-library
+assert_missing_release_dependency_refused test/i00/performance/protected-owner-directives.bundle.v1.json missing-owner-directive-bundle
+
+note "packaged verifier inputs reject unsafe fixture destinations and release drift"
+FIXTURE_SYMLINK_ROOT="$TEST_TMP/fixture-owner-symlink"
+mkdir -p "$FIXTURE_SYMLINK_ROOT"
+printf 'outside-sentinel\n' > "$TEST_TMP/fixture-owner-outside"
+ln -s "$TEST_TMP/fixture-owner-outside" "$FIXTURE_SYMLINK_ROOT/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+assert_failure_contains 'protected directive destination unsafe' \
+  node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" \
+  "$FIXTURE_SYMLINK_ROOT" "$TEST_TMP/fixture-owner-symlink.json" "$SHA" "$SHA"
+assert_eq "$(cat "$TEST_TMP/fixture-owner-outside")" 'outside-sentinel'
+FIXTURE_DRIFT_ROOT="$TEST_TMP/fixture-owner-drift"
+mkdir -p "$FIXTURE_DRIFT_ROOT"
+printf 'drift-sentinel\n' > "$FIXTURE_DRIFT_ROOT/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+assert_failure_contains 'protected directive drift' \
+  node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" \
+  "$FIXTURE_DRIFT_ROOT" "$TEST_TMP/fixture-owner-drift.json" "$SHA" "$SHA"
+assert_eq "$(cat "$FIXTURE_DRIFT_ROOT/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md")" 'drift-sentinel'
+OWNER_BUNDLE="$TEST_TMP/release/source/test/i00/performance/protected-owner-directives.bundle.v1.json"
+cp "$OWNER_BUNDLE" "$TEST_TMP/owner-directive-bundle.saved"
+printf ' ' >> "$OWNER_BUNDLE"
+assert_failure_contains 'PROTECTED_OWNER_DIRECTIVE_BUNDLE_HASH_MISMATCH' \
+  node "$I00_ROOT/bin/assemble-release.mjs" \
+  --source-root "$TEST_TMP/release/source" --runtime-deps "$TEST_TMP/release/deps" \
+  --output-root "$TEST_TMP/tampered-owner-bundle-output" --tested-sha "$SHA" \
+  --tested-receipt "$TEST_TMP/release/tested.json" \
+  --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m \
+  --simulation-source
+mv "$TEST_TMP/owner-directive-bundle.saved" "$OWNER_BUNDLE"
 
 note "production assembly requires and reverifies exact owner/CI Ed25519 provenance"
 PROD_ROOT="$TEST_TMP/production-release"
@@ -337,7 +369,11 @@ const evidence = release.acceptanceEvidence;
 const evidenceRelative = kind === 'browser' ? evidence.browserReceipt : evidence.performanceReceipt;
 const document = read(evidenceRelative);
 if (kind === 'browser') document.truthChecks.noFalseGreen = false;
-else document.continuity.uncleanRecoveryProven = false;
+else if (kind === 'performance-provenance') {
+  document.source.branch = 'DETACHED';
+  document.source.worktreeState = 'CLEAN_DETACHED_CANDIDATE_WITH_PACKAGED_OWNER_DIRECTIVES';
+  for (const row of document.source.protectedOwnerDirectives) row.gitStatus = 'CANDIDATE_COMMITTED_VERIFIER_INPUT';
+} else document.continuity.uncleanRecoveryProven = false;
 const reboundEvidence = write(evidenceRelative, document);
 const descriptor = kind === 'browser' ? complete.browserReceipt : complete.performanceReceipt;
 descriptor.sha256 = reboundEvidence.sha256;
@@ -375,6 +411,7 @@ NODE
 }
 assert_semantic_release_forgery browser 'canonical browser acceptance validation failed'
 assert_semantic_release_forgery performance 'canonical performance acceptance validation failed'
+assert_semantic_release_forgery performance-provenance 'PERFORMANCE_SOURCE_MODE_MISMATCH'
 
 cat > "$TEST_TMP/label-exit-forgery.json" <<JSON
 {"schemaVersion":1,"status":"PASS","testedSha":"$SHA","gitDirty":false,"commands":[{"command":"npm test","exitCode":0},{"command":"npm run test:all","exitCode":0},{"command":"bash ops/tests/i00/run-all.sh","exitCode":0},{"command":"npm run test:i00:complete","exitCode":0}]}

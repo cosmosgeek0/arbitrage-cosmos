@@ -8,8 +8,10 @@ DONOR_SHA=2cec412927fa2f64f05a0b2774b18e45f8ce4fa5
 ASSERTIONS=0
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/ip-ops-i00.XXXXXX")"
 cleanup_test_tmp() {
+  local rc="${1:-$?}"
   chmod -R u+w "$TEST_TMP" 2>/dev/null || true
   rm -rf "$TEST_TMP"
+  return "$rc"
 }
 trap cleanup_test_tmp EXIT
 
@@ -72,7 +74,7 @@ make_release_inputs() {
   for file in donor-equality.mjs verify-scope.mjs scope-security.mjs; do
     cp "$REPO_ROOT/test/i00/$file" "$source/test/i00/$file"
   done
-  for file in contract.mjs local-acceptance.mjs local-proxy-soak.mjs app-probe.mjs schema.v1.json browser-receipt.schema.v2.json browser-measurement.schema.v1.json browser-capture.schema.v3.json browser-restart-measurement.schema.v1.json; do
+  for file in contract.mjs local-acceptance.mjs local-proxy-soak.mjs app-probe.mjs schema.v1.json protected-owner-directives.bundle.v1.json browser-receipt.schema.v2.json browser-measurement.schema.v1.json browser-capture.schema.v3.json browser-restart-measurement.schema.v1.json; do
     cp "$REPO_ROOT/test/i00/performance/$file" "$source/test/i00/performance/$file"
   done
   node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" "$source" "$receipt" "$sha" "$tree" >/dev/null

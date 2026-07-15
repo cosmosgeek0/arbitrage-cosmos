@@ -67,6 +67,7 @@ export async function validateCanonicalAcceptanceEvidence({
     }
   }
   const performanceValidation = performanceModule.validatePerformanceDocument(performance, {
+    ...performanceModule.LIVE_PERFORMANCE_SOURCE_EXPECTATION,
     headSha: expectedSha,
     treeSha: expectedTree,
   });

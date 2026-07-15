@@ -123,6 +123,22 @@ export const PROTECTED_OWNER_DIRECTIVES = Object.freeze([
   Object.freeze({ path: 'IP_RUNTIME.md', sha256: '6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810' }),
 ]);
 
+export const PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH = 'test/i00/performance/protected-owner-directives.bundle.v1.json';
+export const PROTECTED_OWNER_DIRECTIVE_BUNDLE_SHA256 = 'cd85e2aed5709650b3b39513a453f7a0e8374242fae452e02e75a1765e656f0a';
+export const PROTECTED_OWNER_DIRECTIVE_BUNDLE_SCHEMA = 'i00.protected-owner-directive-verifier-bundle.v1';
+export const PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH = 'i00-product-assembly-20260713';
+export const PROTECTED_OWNER_DIRECTIVE_LIVE_STATE = 'FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE';
+export const PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE = 'CLEAN_DETACHED_CANDIDATE_WITH_PACKAGED_OWNER_DIRECTIVES';
+export const PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS = 'CANDIDATE_COMMITTED_VERIFIER_INPUT';
+
+const PROTECTED_OWNER_DIRECTIVE_BYTE_LENGTHS = Object.freeze([76_656, 4_923, 4_280, 5_122, 5_490]);
+const PROTECTED_OWNER_DIRECTIVE_BUNDLE_LIMITATIONS = Object.freeze([
+  'NOT_LIVE_OWNER_INPUT',
+  'VERIFIER_ONLY',
+  'DOES_NOT_SATISFY_INTEGRATION_UNTRACKED_INPUT_LAW',
+]);
+const MAX_PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES = 256 * 1024;
+
 export const LOCAL_PROXY_SLOS = Object.freeze({
   cpuHostPercent: Object.freeze({ soft: 70, hard: 90, unit: 'percent' }),
   eventLoopLagMs: Object.freeze({ soft: 50, hard: 200, unit: 'ms' }),
@@ -189,6 +205,123 @@ export function canonicalJson(value) {
 
 export function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function requireExactObjectKeys(value, expected, label) {
+  if (!isPlainObject(value) || canonicalJson(Object.keys(value).toSorted()) !== canonicalJson([...expected].toSorted())) {
+    throw new Error(`${label}_KEYS_INVALID`);
+  }
+}
+
+function protectedOwnerDirectivePayloadSha256(members) {
+  const digest = createHash('sha256');
+  for (const member of members) {
+    digest.update(member.path);
+    digest.update('\0');
+    digest.update(String(member.byteLength));
+    digest.update('\0');
+    digest.update(member.content);
+    digest.update('\0');
+  }
+  return digest.digest('hex');
+}
+
+export function validateProtectedOwnerDirectiveBundleDocument(document) {
+  requireExactObjectKeys(document, [
+    'schemaVersion', 'truthClass', 'members', 'inventorySha256', 'payloadSha256', 'limitations',
+  ], 'PROTECTED_OWNER_DIRECTIVE_BUNDLE');
+  if (document.schemaVersion !== PROTECTED_OWNER_DIRECTIVE_BUNDLE_SCHEMA) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_SCHEMA_INVALID');
+  }
+  if (document.truthClass !== 'PACKAGED_VERIFIER_INPUT_SNAPSHOT') {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_TRUTH_CLASS_INVALID');
+  }
+  if (canonicalJson(document.limitations) !== canonicalJson(PROTECTED_OWNER_DIRECTIVE_BUNDLE_LIMITATIONS)) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_LIMITATIONS_INVALID');
+  }
+  if (!Array.isArray(document.members) || document.members.length !== PROTECTED_OWNER_DIRECTIVES.length) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_INVENTORY_COUNT_INVALID');
+  }
+  const decoded = [];
+  let totalBytes = 0;
+  for (const [index, member] of document.members.entries()) {
+    requireExactObjectKeys(member, ['path', 'kind', 'byteLength', 'sha256', 'contentBase64'], `PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_${index}`);
+    const expected = PROTECTED_OWNER_DIRECTIVES[index];
+    if (member.path !== expected.path || path.posix.basename(member.path) !== member.path || path.posix.isAbsolute(member.path)) {
+      throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_PATH_INVALID:${index}`);
+    }
+    if (member.kind !== 'REGULAR_FILE') throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_KIND_INVALID:${member.path}`);
+    if (!Number.isSafeInteger(member.byteLength) || member.byteLength !== PROTECTED_OWNER_DIRECTIVE_BYTE_LENGTHS[index]) {
+      throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_SIZE_INVALID:${member.path}`);
+    }
+    if (member.sha256 !== expected.sha256) throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_DECLARED_HASH_INVALID:${member.path}`);
+    if (typeof member.contentBase64 !== 'string' || member.contentBase64.length === 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(member.contentBase64)) {
+      throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_BASE64_INVALID:${member.path}`);
+    }
+    const content = Buffer.from(member.contentBase64, 'base64');
+    if (content.toString('base64') !== member.contentBase64) {
+      throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_BASE64_NONCANONICAL:${member.path}`);
+    }
+    if (content.length !== member.byteLength) throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_CONTENT_SIZE_INVALID:${member.path}`);
+    if (sha256(content) !== member.sha256) throw new Error(`PROTECTED_OWNER_DIRECTIVE_BUNDLE_MEMBER_CONTENT_HASH_INVALID:${member.path}`);
+    totalBytes += content.length;
+    if (totalBytes > MAX_PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES) throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_PAYLOAD_TOO_LARGE');
+    decoded.push(Object.freeze({
+      path: member.path,
+      kind: member.kind,
+      byteLength: member.byteLength,
+      sha256: member.sha256,
+      content,
+    }));
+  }
+  const inventory = decoded.map(({ path: memberPath, kind, byteLength, sha256: memberSha256 }) => ({
+    path: memberPath,
+    kind,
+    byteLength,
+    sha256: memberSha256,
+  }));
+  if (document.inventorySha256 !== sha256(canonicalJson(inventory))) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_INVENTORY_HASH_INVALID');
+  }
+  if (document.payloadSha256 !== protectedOwnerDirectivePayloadSha256(decoded)) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_PAYLOAD_HASH_INVALID');
+  }
+  return Object.freeze({
+    schemaVersion: document.schemaVersion,
+    truthClass: document.truthClass,
+    inventorySha256: document.inventorySha256,
+    payloadSha256: document.payloadSha256,
+    members: Object.freeze(decoded),
+  });
+}
+
+export function parseProtectedOwnerDirectiveBundle(bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0 || bytes.length > MAX_PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES_INVALID');
+  }
+  if (sha256(bytes) !== PROTECTED_OWNER_DIRECTIVE_BUNDLE_SHA256) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_HASH_MISMATCH');
+  }
+  let document;
+  try {
+    document = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_JSON_INVALID');
+  }
+  if (`${JSON.stringify(document, null, 2)}\n` !== bytes.toString('utf8')) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_JSON_NONCANONICAL');
+  }
+  return validateProtectedOwnerDirectiveBundleDocument(document);
+}
+
+export function loadProtectedOwnerDirectiveBundle(root) {
+  const absolute = path.join(root, PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH);
+  const info = lstatSync(absolute, { throwIfNoEntry: false });
+  if (!info?.isFile() || info.isSymbolicLink()) throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_MISSING_OR_UNSAFE');
+  if (info.size <= 0 || info.size > MAX_PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_SIZE_INVALID');
+  }
+  return parseProtectedOwnerDirectiveBundle(readFileSync(absolute));
 }
 
 export function verifyProtectedOwnerDirectives(root, statusByPath) {

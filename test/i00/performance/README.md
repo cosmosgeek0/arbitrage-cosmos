@@ -27,13 +27,15 @@ Event-loop p99 is a direct cumulative histogram for each measured load window, n
 
 ## Frozen-source law
 
-Run mode requires the integration branch, an exact HEAD/tree binding, and no dirty source. The sole exceptions are immutable evidence outputs plus these five untracked owner directives, each verified against its pinned SHA-256 and recorded in source-freeze evidence:
+Run mode admits exactly two source classes. Integration/pre-seal mode requires the integration branch, an exact HEAD/tree binding, and no dirty source. Its sole exceptions are immutable evidence outputs plus these five untracked owner directives, each verified against its pinned SHA-256 and recorded as live owner-input provenance:
 
 - `I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md`
 - `IP_CONTROL.md`
 - `IP_OPS.md`
 - `IP_PROOF.md`
 - `IP_RUNTIME.md`
+
+Clean-detached verifier mode requires an explicit full `--tested-sha` equal to detached `HEAD`, the exact candidate tree, zero Git-status entries, and absence of all five ambient root files. It reads only the candidate-committed `protected-owner-directives.bundle.v1.json` Git blob. That bounded canonical JSON package has an exact five-member regular-file inventory, byte lengths, SHA-256 hashes, base64 payloads, inventory/payload digests, and a hard-pinned whole-file hash. Its receipt rows are labeled `CANDIDATE_COMMITTED_VERIFIER_INPUT`; packaged bytes are verifier-only and never satisfy or impersonate the integration branch's untracked owner-input law. An attached non-integration branch, malformed package, non-`100644` Git entry, wrong HEAD/tree, mixed provenance, or ambient-file fallback fails closed.
 
 Candidate-receipt rendering is the pre-S step: HEAD must equal exact candidate C on the integration branch, the five owner directives must still be exact untracked inputs, and every other working change must belong to the bounded seal/document/evidence allowlist. The receipt path must not already exist. The command validates the working proof catalog, closure limitations, browser artifacts, performance receipt, complete receipt, source/evidence manifests, and the Git-backed donor proof. The v2 receipt must encode regenerated exact `16/16/16/16` expected/discovered/accepted/integrated equality; every donor tip/tree and receipt; the receipted dashboard equivalence cut; the exact merge window; explicit A-FORMAL and A-ACTION-EVIDENCE-S2 post-landing exclusions; Q C17 `4cc83f43edd9a50ff2d3e20970a57e2d0a57e92a` as the direct parent of A17 `02b4eccc8d2ef53b830cafae06e5175715fa6ebb`; explicit no-send-authority dispositions for the Ledger CAS and Foundation quantity bridge requests; and the required-last L merge with no later donor merge. The command then creates the one canonical receipt with exclusive create-only semantics. Commit the bounded seal set exactly once as sole-child S.
 

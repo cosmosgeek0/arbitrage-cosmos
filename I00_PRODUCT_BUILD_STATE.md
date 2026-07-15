@@ -176,7 +176,7 @@ ledger-persistence, engine-supervisor
 | I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
 | Focused security / I00 scope-security | 148 assertions; `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
-| Root Product Assurance | 517 files scanned; 205 discovered; 205 covered; 0 uncovered; 802 behavior plus 4 provenance |
+| Root Product Assurance | 518 files scanned; 205 discovered; 205 covered; 0 uncovered; 802 behavior plus 4 provenance |
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
 | `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; 386 assertions, including 35 durable lane-scope cases |
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |

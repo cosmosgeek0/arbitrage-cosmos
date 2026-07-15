@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { createSyntheticToolExecutionPort } from '../../../fixtures/aiOps/providerAdapters/syntheticPorts.mjs';
 import { loadA3 } from './networkDeny.mjs';
 
 const a3 = await loadA3();
 const digest = 'b'.repeat(64);
 const nowMs = 1_700_000_000_000;
+const repositoryRevision = '098f7b9449ab3b1c26bda19f51537bfea01d4c48';
+const repositoryRoot = 'server/src/aiOps/providerAdapters';
 
 function standardInput() {
   return {
@@ -14,6 +17,47 @@ function standardInput() {
     evidenceDigest: digest,
     scope: 'AI_OPS',
   };
+}
+
+function webResearchInput(overrides = {}) {
+  return {
+    caseId: 'case-test-only',
+    domainPolicyId: 'official-docs-test-only',
+    evidenceDigest: digest,
+    query: 'provider capability boundary',
+    requestId: 'tool-request-test-only',
+    ...overrides,
+  };
+}
+
+function repositorySearchInput(overrides = {}) {
+  return {
+    caseId: 'case-test-only',
+    evidenceDigest: digest,
+    maximumRows: 20,
+    query: 'PROVIDER_ACCESS_CLASSES',
+    repositoryRevision,
+    requestId: 'tool-request-test-only',
+    scopeRoots: [repositoryRoot],
+    ...overrides,
+  };
+}
+
+function repositoryInspectionInput(overrides = {}) {
+  return {
+    caseId: 'case-test-only',
+    evidenceDigest: digest,
+    maximumBytes: 16_384,
+    relativePath: `${repositoryRoot}/contracts.ts`,
+    repositoryRevision,
+    requestId: 'tool-request-test-only',
+    scopeRoots: [repositoryRoot],
+    ...overrides,
+  };
+}
+
+function enabledRegistry(toolId) {
+  return a3.A3_TOOL_REGISTRY.map((row) => row.toolId === toolId ? { ...row, enabled: true } : row);
 }
 
 function admissionRequest(overrides = {}) {
@@ -134,7 +178,7 @@ function policyFor(request, registry, overrides = {}) {
 
 describe('A3 strict typed tool gateway', () => {
   it('owns no capability and ships a closed disabled registry', () => {
-    assert.equal(a3.A3_TOOL_REGISTRY.length, 13);
+    assert.equal(a3.A3_TOOL_REGISTRY.length, 15);
     assert.equal(a3.A3_TOOL_REGISTRY.every((row) => row.enabled === false), true);
     assert.deepEqual(a3.validateToolRegistry(), []);
     assert.doesNotThrow(() => a3.validateToolRegistry([null]));
@@ -772,5 +816,336 @@ describe('A3 Claude pre-tool hook adapter', () => {
       assert.equal(result.exitCode, 0);
       assert.equal(result.stdout.hookSpecificOutput.permissionDecision, 'deny');
     }
+  });
+});
+
+describe('A3X deterministic search and repository-inspection adapters', () => {
+  it('registers disabled exact-revision repository search and inspection under the existing gateway', () => {
+    assert.deepEqual(a3.A3_REPOSITORY_INSPECTION_TOOL_IDS, [
+      'searchRepositorySnapshot',
+      'inspectRepositoryPath',
+    ]);
+    assert.deepEqual(a3.validateToolRegistry(), []);
+    for (const toolId of a3.A3_REPOSITORY_INSPECTION_TOOL_IDS) {
+      const row = a3.A3_TOOL_REGISTRY.find((candidate) => candidate.toolId === toolId);
+      assert.equal(row.enabled, false);
+      assert.equal(row.effectClass, 'READ_ONLY');
+      assert.equal(row.requiredCapability, 'QUERY_BOUNDED_EVIDENCE');
+      assert.deepEqual(row.pathAllowlist, a3.A3_EXCLUSIVE_PATCH_ROOTS);
+      assert.deepEqual(row.networkAllowlist, []);
+      assert.equal(row.maximumCostMicrounits, 0);
+    }
+  });
+
+  it('admits only exact Git revisions, signed A3 roots, and traversal-free repository paths', () => {
+    const searchInput = repositorySearchInput();
+    const searchRequest = admissionRequest({
+      toolId: 'searchRepositorySnapshot',
+      input: searchInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const searchRegistry = enabledRegistry('searchRepositorySnapshot');
+    assert.equal(a3.evaluateToolCallAdmission(
+      searchRequest,
+      policyFor(searchRequest, searchRegistry),
+      nowMs,
+      searchRegistry,
+    ).allowed, true);
+
+    const inspectionInput = repositoryInspectionInput();
+    const inspectionRequest = admissionRequest({
+      toolId: 'inspectRepositoryPath',
+      input: inspectionInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const inspectionRegistry = enabledRegistry('inspectRepositoryPath');
+    assert.equal(a3.evaluateToolCallAdmission(
+      inspectionRequest,
+      policyFor(inspectionRequest, inspectionRegistry),
+      nowMs,
+      inspectionRegistry,
+    ).allowed, true);
+
+    const symbolicRevision = {
+      ...inspectionRequest,
+      repositoryRevision: 'HEAD',
+      input: repositoryInspectionInput({ repositoryRevision: 'HEAD' }),
+    };
+    const symbolicDecision = a3.evaluateToolCallAdmission(
+      symbolicRevision,
+      policyFor(symbolicRevision, inspectionRegistry),
+      nowMs,
+      inspectionRegistry,
+    );
+    assert.equal(symbolicDecision.allowed, false);
+    assert.match(symbolicDecision.reasonCodes.join(','), /READ_ONLY_REPOSITORY_SCOPE_REQUIRED|TOOL_INPUT_SCHEMA_REJECTED/);
+
+    const traversal = {
+      ...inspectionRequest,
+      input: repositoryInspectionInput({ relativePath: `${repositoryRoot}/../contracts.ts` }),
+    };
+    const traversalDecision = a3.evaluateToolCallAdmission(
+      traversal,
+      policyFor(traversal, inspectionRegistry),
+      nowMs,
+      inspectionRegistry,
+    );
+    assert.equal(traversalDecision.allowed, false);
+    assert.match(traversalDecision.reasonCodes.join(','), /TOOL_INPUT_SCHEMA_REJECTED/);
+
+    const crossRoot = {
+      ...inspectionRequest,
+      input: repositoryInspectionInput({ relativePath: 'fixtures/aiOps/providerAdapters/a3x-entry-gate.v1.json' }),
+    };
+    const crossRootDecision = a3.evaluateToolCallAdmission(
+      crossRoot,
+      policyFor(crossRoot, inspectionRegistry),
+      nowMs,
+      inspectionRegistry,
+    );
+    assert.equal(crossRootDecision.allowed, false);
+    assert.match(crossRootDecision.reasonCodes.join(','), /TOOL_SPECIFIC_SUBJECT_BINDING_MISMATCH/);
+
+    const packageRoot = {
+      ...inspectionRequest,
+      pathScope: ['server'],
+      input: repositoryInspectionInput({ scopeRoots: ['server'], relativePath: 'server/package.json' }),
+    };
+    const packageDecision = a3.evaluateToolCallAdmission(
+      packageRoot,
+      policyFor(packageRoot, inspectionRegistry),
+      nowMs,
+      inspectionRegistry,
+    );
+    assert.equal(packageDecision.allowed, false);
+    assert.match(packageDecision.reasonCodes.join(','), /TOOL_PATH_SCOPE_INVALID|TOOL_INPUT_SCHEMA_REJECTED/);
+  });
+
+  it('returns canned search and repository evidence with zero network, filesystem, mutation, patch, or fallback effects', async () => {
+    const port = createSyntheticToolExecutionPort();
+
+    const webInput = webResearchInput();
+    const webRequest = admissionRequest({
+      toolId: 'runApprovedWebResearch',
+      input: webInput,
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const webRegistry = enabledRegistry('runApprovedWebResearch');
+    const webAdmission = a3.evaluateToolCallAdmission(webRequest, policyFor(webRequest, webRegistry), nowMs, webRegistry);
+    assert.equal(webAdmission.allowed, true);
+    const webResult = await a3.executeSyntheticWebResearch(webAdmission, webInput, port);
+    assert.equal(webResult.executed, true);
+    assert.equal(webResult.payload.kind, 'SYNTHETIC_SEARCH_RESULTS');
+    assert.equal(webResult.networkAttempted, false);
+    assert.equal(webResult.filesystemReadAttempted, false);
+    assert.equal(webResult.filesystemMutationAttempted, false);
+    assert.equal(webResult.patchApplied, false);
+    assert.equal(webResult.fallbackUsed, false);
+    assert.equal(webResult.authorityGranted, false);
+
+    const searchInput = repositorySearchInput();
+    const searchRequest = admissionRequest({
+      toolId: 'searchRepositorySnapshot',
+      input: searchInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const searchRegistry = enabledRegistry('searchRepositorySnapshot');
+    const searchAdmission = a3.evaluateToolCallAdmission(searchRequest, policyFor(searchRequest, searchRegistry), nowMs, searchRegistry);
+    const searchResult = await a3.executeSyntheticRepositorySearch(searchAdmission, searchInput, port);
+    assert.equal(searchResult.executed, true);
+    assert.equal(searchResult.payload.kind, 'SYNTHETIC_REPOSITORY_SEARCH_RESULTS');
+    assert.equal(searchResult.payload.repositoryRevision, repositoryRevision);
+
+    const inspectInput = repositoryInspectionInput();
+    const inspectRequest = admissionRequest({
+      toolId: 'inspectRepositoryPath',
+      input: inspectInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const inspectRegistry = enabledRegistry('inspectRepositoryPath');
+    const inspectAdmission = a3.evaluateToolCallAdmission(inspectRequest, policyFor(inspectRequest, inspectRegistry), nowMs, inspectRegistry);
+    const inspectResult = await a3.executeSyntheticRepositoryInspection(inspectAdmission, inspectInput, port);
+    assert.equal(inspectResult.executed, true);
+    assert.equal(inspectResult.payload.kind, 'SYNTHETIC_REPOSITORY_FILE');
+    assert.equal(inspectResult.payload.path, `${repositoryRoot}/contracts.ts`);
+    assert.equal(inspectResult.filesystemReadAttempted, false);
+    assert.equal(inspectResult.filesystemMutationAttempted, false);
+
+    assert.deepEqual(port.snapshot(), {
+      totalInvocations: 3,
+      byTool: {
+        inspectRepositoryPath: 1,
+        runApprovedWebResearch: 1,
+        searchRepositorySnapshot: 1,
+      },
+    });
+
+    const substitutedInput = { ...webInput, query: 'different-query-test-only' };
+    const rejected = await a3.executeSyntheticWebResearch(webAdmission, substitutedInput, port);
+    assert.equal(rejected.executed, false);
+    assert.equal(rejected.fallbackUsed, false);
+    assert.match(rejected.reasonCodes.join(','), /SYNTHETIC_TOOL_ADMISSION_INVALID/);
+    assert.equal(port.snapshot().totalInvocations, 3);
+  });
+
+  it('rejects stale revision, path, traversal, and input-digest output bindings', async () => {
+    const inspectInput = repositoryInspectionInput();
+    const inspectRequest = admissionRequest({
+      toolId: 'inspectRepositoryPath',
+      input: inspectInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const inspectRegistry = enabledRegistry('inspectRepositoryPath');
+    const inspectAdmission = a3.evaluateToolCallAdmission(
+      inspectRequest,
+      policyFor(inspectRequest, inspectRegistry),
+      nowMs,
+      inspectRegistry,
+    );
+    const stalePort = createSyntheticToolExecutionPort({
+      payloads: {
+        inspectRepositoryPath: {
+          kind: 'SYNTHETIC_REPOSITORY_FILE',
+          repositoryRevision: 'c345fbb42e25ea2139ea447e99b2c5036822770d',
+          path: `${repositoryRoot}/providerGateway.ts`,
+          contentDigest: '5'.repeat(64),
+          excerpt: 'stale synthetic fixture',
+        },
+      },
+    });
+    const stale = await a3.executeSyntheticRepositoryInspection(inspectAdmission, inspectInput, stalePort);
+    assert.equal(stale.executed, false);
+    assert.equal(stale.fallbackUsed, false);
+    assert.match(stale.reasonCodes.join(','), /SYNTHETIC_TOOL_PAYLOAD_BINDING_MISMATCH/);
+
+    const searchInput = repositorySearchInput();
+    const searchRequest = admissionRequest({
+      toolId: 'searchRepositorySnapshot',
+      input: searchInput,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const searchRegistry = enabledRegistry('searchRepositorySnapshot');
+    const searchAdmission = a3.evaluateToolCallAdmission(
+      searchRequest,
+      policyFor(searchRequest, searchRegistry),
+      nowMs,
+      searchRegistry,
+    );
+    const traversalPort = createSyntheticToolExecutionPort({
+      payloads: {
+        searchRepositorySnapshot: {
+          kind: 'SYNTHETIC_REPOSITORY_SEARCH_RESULTS',
+          repositoryRevision,
+          query: searchInput.query,
+          matches: [{
+            line: 1,
+            path: `${repositoryRoot}/../../startup.ts`,
+            text: 'must not escape scope',
+          }],
+        },
+      },
+    });
+    const traversal = await a3.executeSyntheticRepositorySearch(searchAdmission, searchInput, traversalPort);
+    assert.equal(traversal.executed, false);
+    assert.match(traversal.reasonCodes.join(','), /SYNTHETIC_TOOL_PAYLOAD_BINDING_MISMATCH/);
+
+    const digestPort = createSyntheticToolExecutionPort({
+      bindingOverridesByTool: { searchRepositorySnapshot: { inputDigest: 'f'.repeat(64) } },
+    });
+    const digestDrift = await a3.executeSyntheticRepositorySearch(searchAdmission, searchInput, digestPort);
+    assert.equal(digestDrift.executed, false);
+    assert.match(digestDrift.reasonCodes.join(','), /SYNTHETIC_TOOL_PORT_OUTPUT_INVALID/);
+    assert.equal(stalePort.snapshot().totalInvocations, 1);
+    assert.equal(traversalPort.snapshot().totalInvocations, 1);
+    assert.equal(digestPort.snapshot().totalInvocations, 1);
+  });
+
+  it('never executes nested payload accessors and returns a frozen canonical snapshot', async () => {
+    const input = repositoryInspectionInput();
+    const request = admissionRequest({
+      toolId: 'inspectRepositoryPath',
+      input,
+      repositoryRevision,
+      pathScope: [repositoryRoot],
+      requestedPermission: 'BOUNDED_QUERY_REPLAY',
+      requestedCapabilities: ['QUERY_BOUNDED_EVIDENCE'],
+    });
+    const registry = enabledRegistry('inspectRepositoryPath');
+    const admission = a3.evaluateToolCallAdmission(request, policyFor(request, registry), nowMs, registry);
+    let getterCalls = 0;
+    const hostilePayload = {
+      kind: 'SYNTHETIC_REPOSITORY_FILE',
+      repositoryRevision,
+      contentDigest: '5'.repeat(64),
+      excerpt: 'hostile synthetic fixture',
+    };
+    Object.defineProperty(hostilePayload, 'path', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error('nested getter must not execute');
+      },
+    });
+    const output = (portInput, payload) => ({
+      schema: 'AI_OPS_SYNTHETIC_TOOL_PORT_OUTPUT_V1',
+      inputDigest: portInput.inputDigest,
+      status: 'COMPLETED',
+      payload,
+      evidenceRefs: ['fixture-inspectRepositoryPath'],
+      syntheticOnly: true,
+      networkAttempted: false,
+      filesystemReadAttempted: false,
+      filesystemMutationAttempted: false,
+      patchApplied: false,
+      fallbackUsed: false,
+      reasonCodes: [],
+    });
+    const hostilePort = Object.freeze({
+      schema: 'AI_OPS_SYNTHETIC_TOOL_PORT_V1',
+      execute(portInput) {
+        return Promise.resolve(output(portInput, hostilePayload));
+      },
+    });
+    const hostile = await a3.executeSyntheticRepositoryInspection(admission, input, hostilePort);
+    assert.equal(hostile.executed, false);
+    assert.equal(getterCalls, 0);
+
+    const mutablePayload = {
+      kind: 'SYNTHETIC_REPOSITORY_FILE',
+      repositoryRevision,
+      path: input.relativePath,
+      contentDigest: '5'.repeat(64),
+      excerpt: 'original synthetic fixture',
+    };
+    const mutablePort = Object.freeze({
+      schema: 'AI_OPS_SYNTHETIC_TOOL_PORT_V1',
+      execute(portInput) {
+        return Promise.resolve(output(portInput, mutablePayload));
+      },
+    });
+    const canonical = await a3.executeSyntheticRepositoryInspection(admission, input, mutablePort);
+    assert.equal(canonical.executed, true);
+    mutablePayload.excerpt = 'mutated after return';
+    assert.equal(canonical.payload.excerpt, 'original synthetic fixture');
+    assert.equal(Object.isFrozen(canonical.payload), true);
   });
 });

@@ -1,0 +1,65 @@
+{
+  "schema": "AI_OPS_A3X_ENTRY_GATE_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "authorityGranted": false,
+  "orderedBaseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "sealedArtifactInputSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+  "actualLineageBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "orderedBaseIsAncestor": false,
+  "rows": [
+    {
+      "itemId": "fake-openai-api-adapter",
+      "classification": "MISSING_BUILD",
+      "existingOwner": "server/src/aiOps/providerAdapters/providerGateway.ts",
+      "disposition": "BUILD_SYNTHETIC_PORT_ADAPTER_ONLY"
+    },
+    {
+      "itemId": "fake-anthropic-api-adapter",
+      "classification": "MISSING_BUILD",
+      "existingOwner": "server/src/aiOps/providerAdapters/providerGateway.ts",
+      "disposition": "BUILD_SYNTHETIC_PORT_ADAPTER_ONLY"
+    },
+    {
+      "itemId": "owner-operated-subscription-cli-workers",
+      "classification": "ADAPT_EXISTING",
+      "existingOwner": "server/src/aiOps/providerAdapters/cliTemplates.ts",
+      "disposition": "ADAPT_DECLARATIVE_TEMPLATES_TO_SYNTHETIC_PORTS_WITHOUT_PROCESS_OR_LOGIN"
+    },
+    {
+      "itemId": "approved-web-search-tool",
+      "classification": "ADAPT_EXISTING",
+      "existingOwner": "server/src/aiOps/providerAdapters/toolGateway.ts#runApprovedWebResearch",
+      "disposition": "ADD_DETERMINISTIC_FIXTURE_PORT_WITH_ZERO_NETWORK"
+    },
+    {
+      "itemId": "repository-inspection-tools",
+      "classification": "MISSING_BUILD",
+      "existingOwner": "server/src/aiOps/providerAdapters/toolGateway.ts",
+      "disposition": "ADD_EXACT_REVISION_READ_ONLY_SEARCH_AND_INSPECTION_DESCRIPTORS_PLUS_FIXTURE_PORT"
+    },
+    {
+      "itemId": "sandboxed-patch-proposals",
+      "classification": "ADAPT_EXISTING",
+      "existingOwner": "server/src/aiOps/providerAdapters/patchWorker.ts#planIsolatedPatchWorker",
+      "disposition": "ADAPT_EXISTING_PLANNER_THROUGH_THIN_NON_EXECUTING_PROJECTION"
+    },
+    {
+      "itemId": "api-vs-subscription-capability-separation",
+      "classification": "ADAPT_EXISTING",
+      "existingOwner": "server/src/aiOps/providerAdapters/contracts.ts",
+      "disposition": "ADD_ORTHOGONAL_ACCESS_AND_CREDENTIAL_CLASSES_WITH_EXACT_NO_FALLBACK_PROOFS"
+    },
+    {
+      "itemId": "real-provider-protocols-credentials-and-endpoints",
+      "classification": "REFERENCE_ONLY",
+      "existingOwner": "EXTERNAL_PROVIDER_AND_CREDENTIAL_BROKER_OWNERS",
+      "disposition": "NO_IMPLEMENTATION_OR_ACTIVATION_IN_SHADOW"
+    },
+    {
+      "itemId": "duplicate-provider-tool-patch-or-persistence-authority",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwner": "SEALED_A3_AND_CANONICAL_PROJECT_OWNERS",
+      "disposition": "FORBIDDEN"
+    }
+  ]
+}

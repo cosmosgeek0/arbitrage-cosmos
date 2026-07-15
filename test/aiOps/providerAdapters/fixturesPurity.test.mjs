@@ -65,6 +65,28 @@ describe('A3 fixtures and insertion requests', () => {
       assert.equal(ids.includes(required), true, required);
     }
   });
+
+  it('persists the A3X entry-gate classification without pretending ordered-base ancestry', async () => {
+    const fixture = await json('a3x-entry-gate.v1.json');
+    assert.equal(fixture.shadowStatus, 'SHADOW_SPECULATIVE');
+    assert.equal(fixture.authorityGranted, false);
+    assert.equal(fixture.orderedBaseSha, '098f7b9449ab3b1c26bda19f51537bfea01d4c48');
+    assert.equal(fixture.sealedArtifactInputSha, 'c345fbb42e25ea2139ea447e99b2c5036822770d');
+    assert.equal(fixture.actualLineageBaseSha, '03857dcdaff8d8b12627d27ddcc97505da1f2f86');
+    assert.equal(fixture.orderedBaseIsAncestor, false);
+    assert.deepEqual(fixture.rows.map((row) => [row.itemId, row.classification]), [
+      ['fake-openai-api-adapter', 'MISSING_BUILD'],
+      ['fake-anthropic-api-adapter', 'MISSING_BUILD'],
+      ['owner-operated-subscription-cli-workers', 'ADAPT_EXISTING'],
+      ['approved-web-search-tool', 'ADAPT_EXISTING'],
+      ['repository-inspection-tools', 'MISSING_BUILD'],
+      ['sandboxed-patch-proposals', 'ADAPT_EXISTING'],
+      ['api-vs-subscription-capability-separation', 'ADAPT_EXISTING'],
+      ['real-provider-protocols-credentials-and-endpoints', 'REFERENCE_ONLY'],
+      ['duplicate-provider-tool-patch-or-persistence-authority', 'REJECT_DUPLICATE'],
+    ]);
+    assert.equal(fixture.rows.every((row) => typeof row.existingOwner === 'string' && typeof row.disposition === 'string'), true);
+  });
 });
 
 describe('A3 production source purity', () => {

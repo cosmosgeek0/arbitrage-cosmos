@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { createSyntheticProviderExecutionPort } from '../../../fixtures/aiOps/providerAdapters/syntheticPorts.mjs';
 import { loadA3 } from './networkDeny.mjs';
 
 const a3 = await loadA3();
 const digest = 'a'.repeat(64);
 
-function operationRequest(operation) {
+function operationRequest(operation, overrides = {}) {
   return Object.freeze({
     schema: 'AI_OPS_PROVIDER_OPERATION_REQUEST_V1',
     requestId: `request-${operation}`,
@@ -34,7 +35,20 @@ function operationRequest(operation) {
     createdAtMs: 1_700_000_000_000,
     expiresAtMs: 1_700_000_060_000,
     deadlineAtMs: 1_700_000_030_000,
+    ...overrides,
   });
+}
+
+function syntheticInvocation(route, overrides = {}) {
+  return {
+    schema: 'AI_OPS_SYNTHETIC_PROVIDER_INVOCATION_V1',
+    routeId: route.routeId,
+    accessClass: route.accessClass,
+    credentialClass: route.credentialClass,
+    configurationState: route.requiredConfigurationState,
+    request: operationRequest('diagnose', { providerId: route.providerId }),
+    ...overrides,
+  };
 }
 
 function negotiationRequest(overrides = {}) {
@@ -299,5 +313,209 @@ describe('A3 declarative CLI templates', () => {
     }, TypeError);
     assert.equal(a3.PROVIDER_CAPABILITY_RETENTION_MATRIX.every((row) => row.unattendedRuntimeEligible === false), true);
     assert.equal(a3.PROVIDER_CAPABILITY_RETENTION_MATRIX.every((row) => row.retentionZdrPosture === 'UNKNOWN_BLOCKED'), true);
+  });
+});
+
+describe('A3X synthetic provider capability classes', () => {
+  it('defines four frozen fake routes on an orthogonal two-class access axis', () => {
+    assert.deepEqual(a3.PROVIDER_ACCESS_CLASSES, ['PAID_API', 'OWNER_SUBSCRIPTION_CLI']);
+    assert.deepEqual(a3.PROVIDER_CREDENTIAL_CLASSES, [
+      'API_WORKLOAD_IDENTITY_REFERENCE',
+      'OWNER_SUBSCRIPTION_SESSION_REFERENCE',
+    ]);
+    assert.deepEqual(a3.validateSyntheticProviderRoutes(), []);
+    assert.deepEqual(a3.A3X_SYNTHETIC_PROVIDER_ROUTES.map((row) => [
+      row.routeId,
+      row.providerFamily,
+      row.accessClass,
+      row.credentialClass,
+      row.requiredConfigurationState,
+      row.cliTemplateProvider,
+    ]), [
+      ['OPENAI_API_FAKE', 'OPENAI', 'PAID_API', 'API_WORKLOAD_IDENTITY_REFERENCE', 'API_CONFIGURED', null],
+      ['ANTHROPIC_API_FAKE', 'ANTHROPIC', 'PAID_API', 'API_WORKLOAD_IDENTITY_REFERENCE', 'API_CONFIGURED', null],
+      ['CODEX_SUBSCRIPTION_CLI_FAKE', 'OPENAI', 'OWNER_SUBSCRIPTION_CLI', 'OWNER_SUBSCRIPTION_SESSION_REFERENCE', 'SUBSCRIPTION_CODEX_WORKER', 'CODEX_CLI'],
+      ['CLAUDE_CODE_SUBSCRIPTION_CLI_FAKE', 'ANTHROPIC', 'OWNER_SUBSCRIPTION_CLI', 'OWNER_SUBSCRIPTION_SESSION_REFERENCE', 'SUBSCRIPTION_CLAUDE_CODE_WORKER', 'CLAUDE_CODE_CLI'],
+    ]);
+    assert.equal(a3.A3X_SYNTHETIC_PROVIDER_ROUTES.every((row) => row.syntheticOnly === true), true);
+    assert.equal(a3.A3X_SYNTHETIC_PROVIDER_ROUTES.every((row) => row.activationAllowed === false), true);
+    assert.equal(a3.A3X_SYNTHETIC_PROVIDER_ROUTES.every((row) => row.fallbackPolicy === 'NO_SILENT_FALLBACK'), true);
+    assert.equal(a3.A3X_SYNTHETIC_PROVIDER_ROUTES.every(Object.isFrozen), true);
+  });
+
+  it('simulates OpenAI API, Anthropic API, Codex CLI and Claude Code CLI through injected zero-egress ports', async () => {
+    const port = createSyntheticProviderExecutionPort();
+    for (const route of a3.A3X_SYNTHETIC_PROVIDER_ROUTES) {
+      const adapter = a3.createSyntheticProviderAdapter(route.routeId, port);
+      const result = await adapter.invoke(syntheticInvocation(route));
+      assert.equal(result.simulated, true, route.routeId);
+      assert.equal(result.authorityGranted, false);
+      assert.equal(result.syntheticOnly, true);
+      assert.equal(result.providerActivationAllowed, false);
+      assert.equal(result.requestedAccessClass, route.accessClass);
+      assert.equal(result.actualAccessClass, route.accessClass);
+      assert.equal(result.credentialClass, route.credentialClass);
+      assert.equal(result.configurationState, route.requiredConfigurationState);
+      assert.equal(result.fallbackUsed, false);
+      assert.equal(result.networkAttempted, false);
+      assert.equal(result.processSpawned, false);
+      assert.equal(result.credentialMaterialObserved, false);
+      assert.equal(result.usage.costMicrounits, 0);
+      assert.equal(result.reasonCodes.includes('SYNTHETIC_FIXTURE_ONLY'), true);
+      if (route.accessClass === 'OWNER_SUBSCRIPTION_CLI') {
+        assert.equal(typeof result.cliTemplateId, 'string');
+        assert.equal(result.cliTemplateProvider, route.cliTemplateProvider);
+        assert.equal(result.cliTemplateConfigurationState, 'NOT_CONFIGURED');
+        assert.equal(result.cliTemplateActivationAllowed, false);
+      } else {
+        assert.equal(result.cliTemplateId, null);
+        assert.equal(result.cliTemplateProvider, null);
+        assert.equal(result.cliTemplateConfigurationState, null);
+        assert.equal(result.cliTemplateActivationAllowed, null);
+      }
+    }
+    const snapshot = port.snapshot();
+    assert.equal(snapshot.totalInvocations, 4);
+    assert.deepEqual(snapshot.byRoute, {
+      ANTHROPIC_API_FAKE: 1,
+      CLAUDE_CODE_SUBSCRIPTION_CLI_FAKE: 1,
+      CODEX_SUBSCRIPTION_CLI_FAKE: 1,
+      OPENAI_API_FAKE: 1,
+    });
+  });
+
+  it('resolves each supported subscription role through the canonical frozen NOT_CONFIGURED CLI templates', async () => {
+    const port = createSyntheticProviderExecutionPort();
+    const subscriptionRoutes = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.filter((row) => row.accessClass === 'OWNER_SUBSCRIPTION_CLI');
+    const roles = ['RUNTIME_DIAGNOSTICIAN', 'ENGINEERING_REPAIR_WORKER', 'INDEPENDENT_VERIFIER'];
+    for (const route of subscriptionRoutes) {
+      const adapter = a3.createSyntheticProviderAdapter(route.routeId, port);
+      for (const identityRole of roles) {
+        const result = await adapter.invoke(syntheticInvocation(route, {
+          request: operationRequest('diagnose', { providerId: route.providerId, identityRole }),
+        }));
+        const template = a3.SUBSCRIPTION_CLI_TEMPLATES.find((candidate) => (
+          candidate.provider === route.cliTemplateProvider && candidate.identityRole === identityRole
+        ));
+        assert.equal(result.simulated, true);
+        assert.equal(result.cliTemplateId, template.templateId);
+        assert.equal(result.cliTemplateProvider, template.provider);
+        assert.equal(result.cliTemplateConfigurationState, 'NOT_CONFIGURED');
+        assert.equal(result.cliTemplateActivationAllowed, false);
+        assert.equal(Object.isFrozen(template), true);
+      }
+    }
+    assert.equal(port.snapshot().totalInvocations, 6);
+  });
+
+  it('proves paid API and owner subscription CLI are never interchangeable and never fall back', async () => {
+    const port = createSyntheticProviderExecutionPort();
+    const openAiApiRoute = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'OPENAI_API_FAKE');
+    const codexRoute = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'CODEX_SUBSCRIPTION_CLI_FAKE');
+    const claudeRoute = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'CLAUDE_CODE_SUBSCRIPTION_CLI_FAKE');
+    const apiAdapter = a3.createOpenAiApiFakeAdapter(port);
+    const codexAdapter = a3.createCodexSubscriptionWorkerFakeAdapter(port);
+    const claudeAdapter = a3.createClaudeSubscriptionWorkerFakeAdapter(port);
+
+    const subscriptionAsApi = await codexAdapter.invoke(syntheticInvocation(codexRoute, {
+      accessClass: 'PAID_API',
+      credentialClass: 'API_WORKLOAD_IDENTITY_REFERENCE',
+      configurationState: 'API_CONFIGURED',
+    }));
+    assert.equal(subscriptionAsApi.simulated, false);
+    assert.equal(subscriptionAsApi.fallbackUsed, false);
+    assert.match(subscriptionAsApi.reasonCodes.join(','), /PROVIDER_ACCESS_CLASS_MISMATCH/);
+    assert.match(subscriptionAsApi.reasonCodes.join(','), /PROVIDER_CONFIGURATION_STATE_MISMATCH/);
+    assert.match(subscriptionAsApi.reasonCodes.join(','), /PROVIDER_FALLBACK_FORBIDDEN/);
+
+    const apiAsSubscription = await apiAdapter.invoke(syntheticInvocation(openAiApiRoute, {
+      accessClass: 'OWNER_SUBSCRIPTION_CLI',
+      credentialClass: 'OWNER_SUBSCRIPTION_SESSION_REFERENCE',
+      configurationState: 'SUBSCRIPTION_CODEX_WORKER',
+    }));
+    assert.equal(apiAsSubscription.simulated, false);
+    assert.equal(apiAsSubscription.fallbackUsed, false);
+    assert.match(apiAsSubscription.reasonCodes.join(','), /PROVIDER_ACCESS_CLASS_MISMATCH/);
+
+    const ambientApiWouldOverrideClaudeSubscription = await claudeAdapter.invoke(syntheticInvocation(claudeRoute, {
+      credentialClass: 'API_WORKLOAD_IDENTITY_REFERENCE',
+    }));
+    assert.equal(ambientApiWouldOverrideClaudeSubscription.simulated, false);
+    assert.equal(ambientApiWouldOverrideClaudeSubscription.fallbackUsed, false);
+    assert.match(ambientApiWouldOverrideClaudeSubscription.reasonCodes.join(','), /PROVIDER_CREDENTIAL_CLASS_MISMATCH/);
+
+    assert.deepEqual(port.snapshot(), { totalInvocations: 0, byRoute: {} });
+  });
+
+  it('rejects route/provider substitution and hostile invocation envelopes before touching a port', async () => {
+    const port = createSyntheticProviderExecutionPort();
+    const route = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'ANTHROPIC_API_FAKE');
+    const adapter = a3.createAnthropicApiFakeAdapter(port);
+
+    const wrongProvider = await adapter.invoke(syntheticInvocation(route, {
+      request: operationRequest('diagnose', { providerId: 'openai-api-fake' }),
+    }));
+    assert.equal(wrongProvider.simulated, false);
+    assert.match(wrongProvider.reasonCodes.join(','), /PROVIDER_ROUTE_SUBJECT_MISMATCH/);
+
+    let getterCalls = 0;
+    const accessor = syntheticInvocation(route);
+    Object.defineProperty(accessor, 'accessClass', {
+      enumerable: true,
+      get() {
+        getterCalls += 1;
+        throw new Error('must not execute');
+      },
+    });
+    const hostile = await adapter.invoke(accessor);
+    assert.equal(hostile.simulated, false);
+    assert.match(hostile.reasonCodes.join(','), /SYNTHETIC_PROVIDER_INVOCATION_INVALID/);
+    assert.equal(getterCalls, 0);
+    assert.deepEqual(port.snapshot(), { totalInvocations: 0, byRoute: {} });
+  });
+
+  it('rejects forbidden identities and positive cost budgets before invocation', async () => {
+    const port = createSyntheticProviderExecutionPort();
+    const apiRoute = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'OPENAI_API_FAKE');
+    const cliRoute = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'CODEX_SUBSCRIPTION_CLI_FAKE');
+    const apiAdapter = a3.createOpenAiApiFakeAdapter(port);
+    const cliAdapter = a3.createCodexSubscriptionWorkerFakeAdapter(port);
+
+    const positiveCost = await apiAdapter.invoke(syntheticInvocation(apiRoute, {
+      request: operationRequest('diagnose', { providerId: apiRoute.providerId, maximumCostMicrounits: 1 }),
+    }));
+    assert.equal(positiveCost.simulated, false);
+    assert.match(positiveCost.reasonCodes.join(','), /SYNTHETIC_PROVIDER_COST_BUDGET_FORBIDDEN/);
+
+    for (const [adapter, route] of [[apiAdapter, apiRoute], [cliAdapter, cliRoute]]) {
+      const advisor = await adapter.invoke(syntheticInvocation(route, {
+        request: operationRequest('diagnose', {
+          providerId: route.providerId,
+          identityRole: 'RESEARCH_TRADE_CONTEXT_ADVISOR',
+        }),
+      }));
+      assert.equal(advisor.simulated, false);
+      assert.match(advisor.reasonCodes.join(','), /SYNTHETIC_PROVIDER_IDENTITY_ROUTE_FORBIDDEN/);
+      assert.equal(advisor.fallbackUsed, false);
+    }
+    assert.deepEqual(port.snapshot(), { totalInvocations: 0, byRoute: {} });
+  });
+
+  it('rejects stale cross-route provider output instead of re-stamping it onto another capability class', async () => {
+    const route = a3.A3X_SYNTHETIC_PROVIDER_ROUTES.find((row) => row.routeId === 'OPENAI_API_FAKE');
+    const port = createSyntheticProviderExecutionPort({
+      bindingOverridesByRoute: {
+        OPENAI_API_FAKE: {
+          routeId: 'CLAUDE_CODE_SUBSCRIPTION_CLI_FAKE',
+          accessClass: 'OWNER_SUBSCRIPTION_CLI',
+          credentialClass: 'OWNER_SUBSCRIPTION_SESSION_REFERENCE',
+        },
+      },
+    });
+    const result = await a3.createOpenAiApiFakeAdapter(port).invoke(syntheticInvocation(route));
+    assert.equal(result.simulated, false);
+    assert.equal(result.fallbackUsed, false);
+    assert.match(result.reasonCodes.join(','), /SYNTHETIC_PROVIDER_PORT_OUTPUT_INVALID/);
+    assert.equal(port.snapshot().totalInvocations, 1);
   });
 });

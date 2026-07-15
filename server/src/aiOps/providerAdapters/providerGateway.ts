@@ -100,7 +100,7 @@ export function providerOperationRequestDigest(request: Readonly<ProviderOperati
   return createHash('sha256').update(canonicalJson(snapshot)).digest('hex');
 }
 
-function snapshotOperationRequest(request: unknown): Readonly<ProviderOperationRequest> | null {
+export function snapshotProviderOperationRequest(request: unknown): Readonly<ProviderOperationRequest> | null {
   const snapshot = snapshotClosedDataRecord(request, OPERATION_REQUEST_KEYS);
   if (snapshot === null || snapshot.schema !== 'AI_OPS_PROVIDER_OPERATION_REQUEST_V1') return null;
   if (typeof snapshot.operation !== 'string' || !(PROVIDER_OPERATION_IDS as readonly string[]).includes(snapshot.operation)) return null;
@@ -144,7 +144,7 @@ function snapshotOperationRequest(request: unknown): Readonly<ProviderOperationR
 }
 
 function assertOperationRequest(request: unknown): Readonly<ProviderOperationRequest> {
-  const snapshot = snapshotOperationRequest(request);
+  const snapshot = snapshotProviderOperationRequest(request);
   if (snapshot === null) throw new TypeError('provider operation request invalid');
   return snapshot;
 }
@@ -193,7 +193,7 @@ export function createShadowProviderAdapter(input: Readonly<{
   const configurationState = adapterConfiguration.configurationState;
 
   const dispatch = (operation: ProviderOperationId, request: unknown): Promise<Readonly<ProviderOperationResult>> => {
-    const snapshot = snapshotOperationRequest(request);
+    const snapshot = snapshotProviderOperationRequest(request);
     if (snapshot === null) {
       return Promise.resolve(unavailableResult(
         operation,

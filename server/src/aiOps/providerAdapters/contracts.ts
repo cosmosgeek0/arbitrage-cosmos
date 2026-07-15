@@ -10,6 +10,34 @@ export const PROVIDER_CONFIGURATION_STATES = Object.freeze([
 
 export type ProviderConfigurationState = (typeof PROVIDER_CONFIGURATION_STATES)[number];
 
+export const PROVIDER_ACCESS_CLASSES = Object.freeze([
+  'PAID_API',
+  'OWNER_SUBSCRIPTION_CLI',
+] as const);
+
+export type ProviderAccessClass = (typeof PROVIDER_ACCESS_CLASSES)[number];
+
+export const PROVIDER_FAMILIES = Object.freeze([
+  'OPENAI',
+  'ANTHROPIC',
+] as const);
+
+export type ProviderFamily = (typeof PROVIDER_FAMILIES)[number];
+
+export const PROVIDER_CREDENTIAL_CLASSES = Object.freeze([
+  'API_WORKLOAD_IDENTITY_REFERENCE',
+  'OWNER_SUBSCRIPTION_SESSION_REFERENCE',
+] as const);
+
+export type ProviderCredentialClass = (typeof PROVIDER_CREDENTIAL_CLASSES)[number];
+
+export const PROVIDER_EXECUTION_LOCI = Object.freeze([
+  'EXTERNAL_PROVIDER_API_FAKE',
+  'OWNER_OPERATED_CLI_FAKE',
+] as const);
+
+export type ProviderExecutionLocus = (typeof PROVIDER_EXECUTION_LOCI)[number];
+
 export const AI_OPS_IDENTITY_ROLES = Object.freeze([
   'RUNTIME_DIAGNOSTICIAN',
   'ENGINEERING_REPAIR_WORKER',
@@ -144,6 +172,18 @@ export function isPlainRecord(value: unknown): value is Record<string, unknown> 
 
 export function isExactProviderConfigurationState(value: unknown): value is ProviderConfigurationState {
   return typeof value === 'string' && (PROVIDER_CONFIGURATION_STATES as readonly string[]).includes(value);
+}
+
+export function isExactProviderAccessClass(value: unknown): value is ProviderAccessClass {
+  return typeof value === 'string' && (PROVIDER_ACCESS_CLASSES as readonly string[]).includes(value);
+}
+
+export function isExactProviderFamily(value: unknown): value is ProviderFamily {
+  return typeof value === 'string' && (PROVIDER_FAMILIES as readonly string[]).includes(value);
+}
+
+export function isExactProviderCredentialClass(value: unknown): value is ProviderCredentialClass {
+  return typeof value === 'string' && (PROVIDER_CREDENTIAL_CLASSES as readonly string[]).includes(value);
 }
 
 export function isExactIdentityRole(value: unknown): value is AiOpsIdentityRole {

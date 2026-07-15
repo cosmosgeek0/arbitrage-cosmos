@@ -6,5 +6,7 @@ export * from './patchWorker.js';
 export * from './providerGateway.js';
 export * from './providerMatrix.js';
 export * from './strictSchema.js';
+export * from './syntheticProviderAdapters.js';
+export * from './syntheticToolAdapters.js';
 export * from './toolGateway.js';
 export * from './toolHooks.js';

@@ -92,6 +92,22 @@ describe('A3 Class-C isolated patch planner', () => {
     assert.equal(plan.filesystemContainment, 'REQUIRES_EXTERNAL_SANDBOX_PORT');
   });
 
+  it('projects the existing sandboxed plan as a proposal without creating a worktree, running tests, applying, or committing', () => {
+    const projection = a3.projectSandboxedPatchProposal(task(), context());
+    assert.equal(projection.schema, 'AI_OPS_SANDBOXED_PATCH_PROPOSAL_PROJECTION_V1');
+    assert.equal(projection.proposed, true);
+    assert.equal(projection.authorityGranted, false);
+    assert.equal(projection.applied, false);
+    assert.equal(projection.worktreeCreated, false);
+    assert.equal(projection.testsExecuted, false);
+    assert.equal(projection.commitCreated, false);
+    assert.equal(projection.fallbackToUnsandboxed, false);
+    assert.equal(projection.plan.planned, true);
+    assert.equal(projection.plan.runnerState, 'NOT_CONFIGURED');
+    assert.equal(projection.plan.mainWriteAccess, 'DENIED');
+    assert.equal(projection.plan.networkAccess, 'DENIED');
+  });
+
   it('rejects protected worktrees, base drift, shared paths and unregistered commands', () => {
     const protectedPlan = a3.planIsolatedPatchWorker(task({
       isolatedWorktreePath: '/Users/cosmosgeek/Desktop/Main/a3-worker',

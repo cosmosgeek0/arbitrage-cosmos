@@ -39,6 +39,8 @@ export const A3_TOOL_IDS = Object.freeze([
   'getRunbook',
   'runReadOnlyReplay',
   'runApprovedWebResearch',
+  'searchRepositorySnapshot',
+  'inspectRepositoryPath',
   'createTypedProposal',
   'createIsolatedPatchTask',
   'runSandboxGate',
@@ -47,6 +49,17 @@ export const A3_TOOL_IDS = Object.freeze([
 
 export type A3ToolId = (typeof A3_TOOL_IDS)[number];
 export type ToolEffectClass = 'READ_ONLY' | 'PROPOSAL_ONLY' | 'CLASS_C_ISOLATED_ONLY';
+
+export const A3_REPOSITORY_INSPECTION_TOOL_IDS = Object.freeze([
+  'searchRepositorySnapshot',
+  'inspectRepositoryPath',
+] as const);
+
+export type A3RepositoryInspectionToolId = (typeof A3_REPOSITORY_INSPECTION_TOOL_IDS)[number];
+
+export function isRepositoryInspectionToolId(value: unknown): value is A3RepositoryInspectionToolId {
+  return typeof value === 'string' && (A3_REPOSITORY_INSPECTION_TOOL_IDS as readonly string[]).includes(value);
+}
 
 export interface A3ToolDescriptor {
   readonly schema: 'AI_OPS_TOOL_DESCRIPTOR_V1';
@@ -209,6 +222,19 @@ const PATCH_ROOT_LIST_SCHEMA = Object.freeze({
   maxItems: A3_EXCLUSIVE_PATCH_ROOTS.length,
   uniqueItems: true,
 } as const);
+export const A3_REPOSITORY_RELATIVE_PATH_PATTERN = '^(?:server/src/aiOps/providerAdapters|fixtures/aiOps/providerAdapters|test/aiOps/providerAdapters)/(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*$';
+const A3_REPOSITORY_RELATIVE_PATH_REGEX = new RegExp(A3_REPOSITORY_RELATIVE_PATH_PATTERN);
+
+export function isA3RepositoryRelativePath(value: unknown): value is string {
+  return typeof value === 'string' && A3_REPOSITORY_RELATIVE_PATH_REGEX.test(value);
+}
+
+const REPOSITORY_PATH_SCHEMA = Object.freeze({
+  type: 'string',
+  minLength: 1,
+  maxLength: 1_024,
+  pattern: A3_REPOSITORY_RELATIVE_PATH_PATTERN,
+} as const);
 
 const STANDARD_INPUT_SCHEMA = strictObject({
   caseId: IDENTIFIER_SCHEMA,
@@ -277,6 +303,26 @@ const WEB_RESEARCH_INPUT_SCHEMA = strictObject({
   evidenceDigest: DIGEST_SCHEMA,
   query: BOUNDED_TEXT_SCHEMA,
   requestId: IDENTIFIER_SCHEMA,
+});
+
+const REPOSITORY_SEARCH_INPUT_SCHEMA = strictObject({
+  caseId: IDENTIFIER_SCHEMA,
+  evidenceDigest: DIGEST_SCHEMA,
+  maximumRows: Object.freeze({ type: 'integer', minimum: 1, maximum: 1_000 } as const),
+  query: BOUNDED_TEXT_SCHEMA,
+  repositoryRevision: GIT_SHA_SCHEMA,
+  requestId: IDENTIFIER_SCHEMA,
+  scopeRoots: PATCH_ROOT_LIST_SCHEMA,
+});
+
+const REPOSITORY_INSPECTION_INPUT_SCHEMA = strictObject({
+  caseId: IDENTIFIER_SCHEMA,
+  evidenceDigest: DIGEST_SCHEMA,
+  maximumBytes: Object.freeze({ type: 'integer', minimum: 1, maximum: 1_048_576 } as const),
+  relativePath: REPOSITORY_PATH_SCHEMA,
+  repositoryRevision: GIT_SHA_SCHEMA,
+  requestId: IDENTIFIER_SCHEMA,
+  scopeRoots: PATCH_ROOT_LIST_SCHEMA,
 });
 
 const PROPOSAL_INPUT_SCHEMA = strictObject({
@@ -366,6 +412,7 @@ function descriptor(
   requiredCapability: string,
   effectClass: ToolEffectClass,
   inputSchema: Readonly<ObjectSchema> = STANDARD_INPUT_SCHEMA,
+  pathAllowlist: readonly string[] = Object.freeze([]),
 ): Readonly<A3ToolDescriptor> {
   const mutatingProposal = effectClass !== 'READ_ONLY';
   return Object.freeze({
@@ -387,7 +434,7 @@ function descriptor(
       'server/src/aiOps/providerAdapters',
       'fixtures/aiOps/providerAdapters',
       'test/aiOps/providerAdapters',
-    ] : []),
+    ] : [...pathAllowlist]),
     networkAllowlist: Object.freeze([]) as readonly [],
     timeoutMs: effectClass === 'CLASS_C_ISOLATED_ONLY' ? 300_000 : 30_000,
     maximumCallsPerRun: effectClass === 'READ_ONLY' ? 8 : 1,
@@ -416,6 +463,8 @@ export const A3_TOOL_REGISTRY: readonly Readonly<A3ToolDescriptor>[] = Object.fr
   descriptor('getRunbook', 'managed-inventory-owner-pending', DIAGNOSTIC_ROLES, 'OBSERVE_EXPLAIN', 'READ_REDACTED_EVIDENCE', 'READ_ONLY', RUNBOOK_INPUT_SCHEMA),
   descriptor('runReadOnlyReplay', 'foundation-replay-owner', DIAGNOSTIC_ROLES, 'BOUNDED_QUERY_REPLAY', 'RUN_ISOLATED_REPLAY', 'READ_ONLY', REPLAY_INPUT_SCHEMA),
   descriptor('runApprovedWebResearch', 'egress-policy-owner-pending', Object.freeze(['RUNTIME_DIAGNOSTICIAN']), 'BOUNDED_QUERY_REPLAY', 'QUERY_BOUNDED_EVIDENCE', 'READ_ONLY', WEB_RESEARCH_INPUT_SCHEMA),
+  descriptor('searchRepositorySnapshot', 'repository-inspection-owner-pending', DIAGNOSTIC_ROLES, 'BOUNDED_QUERY_REPLAY', 'QUERY_BOUNDED_EVIDENCE', 'READ_ONLY', REPOSITORY_SEARCH_INPUT_SCHEMA, A3_EXCLUSIVE_PATCH_ROOTS),
+  descriptor('inspectRepositoryPath', 'repository-inspection-owner-pending', DIAGNOSTIC_ROLES, 'BOUNDED_QUERY_REPLAY', 'QUERY_BOUNDED_EVIDENCE', 'READ_ONLY', REPOSITORY_INSPECTION_INPUT_SCHEMA, A3_EXCLUSIVE_PATCH_ROOTS),
   descriptor('createTypedProposal', 'productAssurance-diagnostic-boundary-owner', RUNTIME_AND_REPAIR, 'PROPOSE_TYPED_ACTION', 'PROPOSE_REGISTERED_REMEDIATION', 'PROPOSAL_ONLY', PROPOSAL_INPUT_SCHEMA),
   descriptor('createIsolatedPatchTask', 'isolated-worktree-owner-pending', Object.freeze(['ENGINEERING_REPAIR_WORKER']), 'PATCH_ISOLATED_AND_TEST', 'PROPOSE_ISOLATED_PATCH', 'CLASS_C_ISOLATED_ONLY', PATCH_INPUT_SCHEMA),
   descriptor('runSandboxGate', 'foundation-replay-owner', Object.freeze(['ENGINEERING_REPAIR_WORKER']), 'PATCH_ISOLATED_AND_TEST', 'RUN_ISOLATED_TESTS', 'CLASS_C_ISOLATED_ONLY', SANDBOX_GATE_INPUT_SCHEMA),
@@ -535,7 +584,9 @@ export function validateToolRegistry(registry: readonly Readonly<A3ToolDescripto
       || row.resourceScope !== 'EXACT_CASE_BOUND_RESOURCE_IDS') issues.push(`TOOL_DATA_POLICY_INVALID:${row.toolId}`);
     const expectedEnvironment = row.effectClass === 'CLASS_C_ISOLATED_ONLY' ? ['ISOLATED_PATCH_WORKTREE'] : ['ISOLATED_DIAGNOSTIC_PLANE'];
     if (!sameStringSet(row.environmentAllowlist, expectedEnvironment)) issues.push(`TOOL_ENVIRONMENT_ALLOWLIST_INVALID:${row.toolId}`);
-    const expectedPaths = row.effectClass === 'CLASS_C_ISOLATED_ONLY' ? A3_EXCLUSIVE_PATCH_ROOTS : [];
+    const expectedPaths = row.effectClass === 'CLASS_C_ISOLATED_ONLY' || isRepositoryInspectionToolId(row.toolId)
+      ? A3_EXCLUSIVE_PATCH_ROOTS
+      : [];
     if (!sameStringSet(row.pathAllowlist, expectedPaths)) issues.push(`TOOL_PATH_ALLOWLIST_INVALID:${row.toolId}`);
     if (!Number.isSafeInteger(row.timeoutMs) || row.timeoutMs <= 0 || row.timeoutMs > 300_000) issues.push(`TIMEOUT_BOUND_INVALID:${row.toolId}`);
     if (!Number.isSafeInteger(row.maximumCallsPerRun) || row.maximumCallsPerRun < 1 || row.maximumCallsPerRun > 8) issues.push(`RATE_BOUND_INVALID:${row.toolId}`);
@@ -812,6 +863,8 @@ function evaluateToolCallAdmissionUnsafe(
     || new Set(pathScope).size !== pathScope.length) reasons.push('TOOL_PATH_SCOPE_INVALID');
   if (row.effectClass === 'CLASS_C_ISOLATED_ONLY') {
     if (!isGitCommitSha(request.repositoryRevision) || pathScope.length === 0) reasons.push('CLASS_C_REPOSITORY_SCOPE_REQUIRED');
+  } else if (isRepositoryInspectionToolId(row.toolId)) {
+    if (!isGitCommitSha(request.repositoryRevision) || pathScope.length === 0) reasons.push('READ_ONLY_REPOSITORY_SCOPE_REQUIRED');
   } else if (request.repositoryRevision !== null || pathScope.length !== 0) reasons.push('NON_PATCH_REPOSITORY_SCOPE_FORBIDDEN');
   const resourceIds = snapshotStringList(request.resourceIds, 64);
   const policyResourceIdsSnapshot = snapshotStringList(policy.resourceIds, 64);
@@ -967,6 +1020,14 @@ function evaluateToolCallAdmissionUnsafe(
         && (inputSnapshot.createdAtMs as number) >= policy.validFromMs
         && (inputSnapshot.expiresAtMs as number) <= policy.expiresAtMs
         && (inputSnapshot.expiresAtMs as number) > (inputSnapshot.createdAtMs as number);
+    } else if (row.toolId === 'searchRepositorySnapshot' || row.toolId === 'inspectRepositoryPath') {
+      toolSpecificBindingValid = inputSnapshot.repositoryRevision === request.repositoryRevision
+        && sameStringSet(inputSnapshot.scopeRoots, pathScope);
+      if (toolSpecificBindingValid && row.toolId === 'inspectRepositoryPath') {
+        const relativePath = inputSnapshot.relativePath;
+        toolSpecificBindingValid = typeof relativePath === 'string'
+          && pathScope.some((root) => relativePath.startsWith(`${root}/`));
+      }
     } else if (row.toolId === 'createIsolatedPatchTask') {
       toolSpecificBindingValid = inputSnapshot.artifactDigest === request.actionArtifactDigest
         && inputSnapshot.repositoryRevision === request.repositoryRevision

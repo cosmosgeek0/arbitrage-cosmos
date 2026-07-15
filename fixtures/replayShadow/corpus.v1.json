@@ -1,0 +1,2042 @@
+{
+  "schema": "COSMOS_REPLAY_SHADOW_CORPUS_V1",
+  "schemaVersion": 1,
+  "packetId": "RUN-17",
+  "disposition": "SHADOW_SPECULATIVE",
+  "executionAuthority": "NONE",
+  "candidateBinding": null,
+  "heavyExecution": "DEFERRED_POST_C2_OTHER_MACHINE",
+  "requiredCoverage": [
+    "REPLAY_DATASET",
+    "LATENCY_DEFINITION",
+    "LOAD_DEFINITION",
+    "SOAK_DEFINITION",
+    "RESTART_STORM",
+    "PARTIAL_FILL_AMBIGUITY",
+    "STALE_DATA",
+    "CONNECTION_LOSS",
+    "RATE_LIMIT",
+    "CLOCK_SKEW",
+    "RECOVERY_CAMPAIGN"
+  ],
+  "datasets": [
+    {
+      "datasetId": "RS-DATA-BASELINE-001",
+      "title": "Neutral pre-fault source readback baseline",
+      "ownerReference": {
+        "owner": "SYSTEM_INTEGRATION_COMPOSITION",
+        "ownerPath": "server/src/systemIntegration/**",
+        "ownerId": "RECOVERY_EVIDENCE_COMPOSITION"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "BASELINE_OBSERVATION",
+          "type": "BASELINE_OBSERVATION_WINDOW_OPENED",
+          "facts": {
+            "observerRef": "synthetic-observer-baseline",
+            "processSession": "session-baseline"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 5,
+          "channel": "BASELINE_OBSERVATION",
+          "type": "BASELINE_SOURCE_READBACK_OBSERVED",
+          "facts": {
+            "observerRef": "synthetic-observer-baseline",
+            "processSession": "session-baseline",
+            "sourceRef": "synthetic.source.baseline",
+            "observationRef": "synthetic-observation-baseline-1",
+            "sourceTimeMs": 1900000000000,
+            "receivedAtMs": 1900000000005
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 10,
+          "channel": "BASELINE_OBSERVATION",
+          "type": "BASELINE_OBSERVATION_WINDOW_CLOSED",
+          "facts": {
+            "observerRef": "synthetic-observer-baseline",
+            "processSession": "session-baseline",
+            "observationCount": 1
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "PRE_FAULT_OBSERVER_IDENTITY",
+        "PRE_FAULT_PROCESS_SESSION",
+        "PRE_FAULT_SOURCE_READBACK",
+        "PRE_FAULT_OBSERVATION_COUNT"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-STALE-001",
+      "title": "Divergent source ages with explicit missing time",
+      "ownerReference": {
+        "owner": "FOUNDATION_SCENARIO_V1",
+        "ownerPath": "server/src/foundation/scenarios/**",
+        "ownerId": "STALE_SPOT_FRESH_FUTURES"
+      },
+      "sourceKind": "ADAPTED_OWNER_FIXTURE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "STALE_DATA"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "SOURCE_SAMPLE",
+          "facts": {
+            "sourceRef": "synthetic.source.alpha",
+            "sourceTimeMs": 1900000000000,
+            "receivedAtMs": 1900000000010,
+            "evaluatedAtMs": 1900000000010,
+            "maxAgeMs": 5000,
+            "completeness": "COMPLETE"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 6000,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "SOURCE_SAMPLE",
+          "facts": {
+            "sourceRef": "synthetic.source.alpha",
+            "sourceTimeMs": 1900000000000,
+            "receivedAtMs": 1900000006010,
+            "evaluatedAtMs": 1900000006010,
+            "maxAgeMs": 5000,
+            "completeness": "COMPLETE"
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 6010,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "SOURCE_SAMPLE",
+          "facts": {
+            "sourceRef": "synthetic.source.beta",
+            "sourceTimeMs": 1900000006005,
+            "receivedAtMs": 1900000006010,
+            "evaluatedAtMs": 1900000006010,
+            "maxAgeMs": 5000,
+            "completeness": "COMPLETE"
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 6020,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "SOURCE_SAMPLE",
+          "facts": {
+            "sourceRef": "synthetic.source.gamma",
+            "sourceTimeMs": null,
+            "receivedAtMs": 1900000006020,
+            "evaluatedAtMs": 1900000006020,
+            "maxAgeMs": 5000,
+            "completeness": "UNKNOWN"
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "SOURCE_TIME_AND_UNIT",
+        "RECEIPT_TIME",
+        "EVALUATION_TIME",
+        "MAXIMUM_AGE_POLICY",
+        "COMPLETENESS",
+        "OWNER_FRESHNESS_PROJECTION"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-CONNECTION-001",
+      "title": "Planned rotation followed by abnormal transport loss",
+      "ownerReference": {
+        "owner": "INTELLIGENCE_RUNTIME_LIFECYCLE",
+        "ownerPath": "server/src/intelligenceRuntime/lifecycle/**",
+        "ownerId": "WEBSOCKET_SOURCE_RUNNER"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "CONNECTION_LOSS"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "CONNECTION_OPENED",
+          "facts": {
+            "generation": 1,
+            "processSession": "session-a"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 20000,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "PING_FRAME_OBSERVED",
+          "facts": {
+            "generation": 1,
+            "payloadRef": "ping-001"
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 20010,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "PONG_FRAME_OBSERVED",
+          "facts": {
+            "generation": 1,
+            "payloadRef": "ping-001"
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 86390000,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "SERVER_SHUTDOWN_NOTICE",
+          "facts": {
+            "generation": 1
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 86400000,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "CLOSE_FRAME_OBSERVED",
+          "facts": {
+            "generation": 1,
+            "closeFrameReceived": true,
+            "localCloseCode": 1012,
+            "remoteCloseCode": 1012
+          }
+        },
+        {
+          "sequence": 6,
+          "atOffsetMs": 86400250,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "CONNECTION_OPENED",
+          "facts": {
+            "generation": 2,
+            "processSession": "session-a"
+          }
+        },
+        {
+          "sequence": 7,
+          "atOffsetMs": 86400300,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "FIRST_DATA_OBSERVED",
+          "facts": {
+            "generation": 2,
+            "sourceSequence": 9001
+          }
+        },
+        {
+          "sequence": 8,
+          "atOffsetMs": 86460000,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "UNDERLYING_TRANSPORT_LOST",
+          "facts": {
+            "generation": 2,
+            "closeFrameReceived": false,
+            "localCloseCode": 1006,
+            "remoteCloseCode": null
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "CONNECTION_GENERATION",
+        "FIRST_DATA_TIME",
+        "PING_AND_PONG_PAYLOAD_RELATION",
+        "CLOSE_FRAME_PRESENCE",
+        "LOCAL_CLOSE_OBSERVATION",
+        "REMOTE_CLOSE_OBSERVATION"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-RESTART-STORM-001",
+      "title": "Explicit bounded restart-attempt storm",
+      "ownerReference": {
+        "owner": "INTELLIGENCE_RUNTIME_LIFECYCLE",
+        "ownerPath": "server/src/intelligenceRuntime/lifecycle/**",
+        "ownerId": "DETERMINISTIC_BACKOFF"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "RESTART_STORM"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 1,
+            "generation": 1,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 0,
+            "jitterMs": 0,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 125,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 2,
+            "generation": 2,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 125,
+            "jitterMs": 25,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 390,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 3,
+            "generation": 3,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 265,
+            "jitterMs": 65,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 915,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 4,
+            "generation": 4,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 525,
+            "jitterMs": 125,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 1940,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 5,
+            "generation": 5,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 1025,
+            "jitterMs": 225,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 6,
+          "atOffsetMs": 3965,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 6,
+            "generation": 6,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 2025,
+            "jitterMs": 425,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 7,
+          "atOffsetMs": 7990,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 7,
+            "generation": 7,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 4025,
+            "jitterMs": 825,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 8,
+          "atOffsetMs": 12015,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 8,
+            "generation": 8,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 4025,
+            "jitterMs": 825,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 9,
+          "atOffsetMs": 16040,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 9,
+            "generation": 9,
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "delayBeforeAttemptMs": 4025,
+            "jitterMs": 825,
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 10,
+          "atOffsetMs": 16041,
+          "channel": "RESTART_OBSERVATION",
+          "type": "DEPENDENT_RESTART_REQUEST_RECORDED",
+          "facts": {
+            "attempt": 1,
+            "generation": 1,
+            "subjectRef": "synthetic.component.dependent",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "dependencyRef": "synthetic.component.primary",
+            "trigger": "SYNTHETIC_FAILURE_OBSERVED"
+          }
+        },
+        {
+          "sequence": 11,
+          "atOffsetMs": 16042,
+          "channel": "RESTART_OBSERVATION",
+          "type": "RESTART_STORM_TERMINAL_OBSERVATION",
+          "facts": {
+            "subjectRef": "synthetic.component.primary",
+            "stormCorrelationRef": "synthetic-restart-storm-a",
+            "attemptsObserved": 9,
+            "terminalObservation": "UNKNOWN"
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "ATTEMPT_IDENTITY",
+        "GENERATION",
+        "EXPLICIT_DELAY",
+        "RETRY_BUDGET_READBACK",
+        "DEPENDENCY_AMPLIFICATION",
+        "TERMINAL_OBSERVATION_OR_UNKNOWN"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-PARTIAL-AMBIGUITY-001",
+      "title": "Partial-fill evidence interrupted before authoritative readback",
+      "ownerReference": {
+        "owner": "FOUNDATION_RECONCILIATION",
+        "ownerPath": "server/src/foundation/reconciliation/**",
+        "ownerId": "OBSERVED_FILL_EVIDENCE"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "PARTIAL_FILL_AMBIGUITY"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "EXECUTION_EVIDENCE",
+          "type": "EVIDENCE_WINDOW_OPENED",
+          "facts": {
+            "operationRef": "synthetic-operation-a",
+            "planRef": "synthetic-plan-a",
+            "phase": "OPEN",
+            "legRef": "synthetic-leg-spot",
+            "venue": "BINANCE_SPOT",
+            "symbol": "SYNTHUSDT",
+            "clientOrderId": "synthetic-client-order-a",
+            "venueOrderId": "synthetic-venue-order-a",
+            "side": "BUY",
+            "intendedQuantity": "1.00000000",
+            "processSession": "session-a"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 8,
+          "channel": "EXECUTION_EVIDENCE",
+          "type": "EXECUTION_REPORT_OBSERVED",
+          "facts": {
+            "operationRef": "synthetic-operation-a",
+            "planRef": "synthetic-plan-a",
+            "phase": "OPEN",
+            "legRef": "synthetic-leg-spot",
+            "venue": "BINANCE_SPOT",
+            "symbol": "SYNTHUSDT",
+            "clientOrderId": "synthetic-client-order-a",
+            "venueOrderId": "synthetic-venue-order-a",
+            "side": "BUY",
+            "intendedQuantity": "1.00000000",
+            "executionId": "synthetic-execution-1",
+            "tradeId": "synthetic-trade-1",
+            "reportSequence": 1,
+            "connectionGeneration": 4,
+            "reportSession": "session-a",
+            "executionType": "TRADE",
+            "orderStatus": "PARTIALLY_FILLED",
+            "lastQuantity": "0.40000000",
+            "cumulativeQuantity": "0.40000000",
+            "lastPrice": "10.00000000",
+            "transactionTimeMs": 1900000100008,
+            "sourceId": "synthetic.user-data.stream",
+            "sourceAuthority": "SYNTHETIC_TEST",
+            "sourceCompleteness": "PARTIAL",
+            "sourceTimeMs": 1900000100008,
+            "receivedAtMs": 1900000100010,
+            "maxAgeMs": 5000,
+            "coverageStartMs": 1900000000000,
+            "coverageEndMs": 1900000100008
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 10,
+          "channel": "TRANSPORT_OBSERVATION",
+          "type": "UNDERLYING_TRANSPORT_LOST",
+          "facts": {
+            "generation": 4,
+            "closeFrameReceived": false,
+            "localCloseCode": 1006,
+            "remoteCloseCode": null
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 20,
+          "channel": "PROCESS_OBSERVATION",
+          "type": "PROCESS_SESSION_CHANGED",
+          "facts": {
+            "priorSession": "session-a",
+            "currentSession": "session-b",
+            "priorTimeOriginMs": null,
+            "currentTimeOriginMs": null
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 30,
+          "channel": "EXECUTION_EVIDENCE",
+          "type": "LOOKUP_EVIDENCE_UNAVAILABLE",
+          "facts": {
+            "operationRef": "synthetic-operation-a",
+            "planRef": "synthetic-plan-a",
+            "phase": "OPEN",
+            "legRef": "synthetic-leg-spot",
+            "venue": "BINANCE_SPOT",
+            "symbol": "SYNTHUSDT",
+            "clientOrderId": "synthetic-client-order-a",
+            "venueOrderId": "synthetic-venue-order-a",
+            "side": "BUY",
+            "intendedQuantity": "1.00000000",
+            "sourceId": "synthetic.private-readback",
+            "sourceAuthority": "UNAVAILABLE",
+            "sourceCompleteness": "UNAVAILABLE",
+            "sourceTimeMs": null,
+            "receivedAtMs": 1900000100030,
+            "maxAgeMs": 5000,
+            "coverageStartMs": null,
+            "coverageEndMs": null,
+            "orders": null,
+            "fills": null,
+            "positions": null
+          }
+        },
+        {
+          "sequence": 6,
+          "atOffsetMs": 50,
+          "channel": "EXECUTION_EVIDENCE",
+          "type": "EXECUTION_REPORT_DUPLICATE",
+          "facts": {
+            "operationRef": "synthetic-operation-a",
+            "planRef": "synthetic-plan-a",
+            "phase": "OPEN",
+            "legRef": "synthetic-leg-spot",
+            "venue": "BINANCE_SPOT",
+            "symbol": "SYNTHUSDT",
+            "clientOrderId": "synthetic-client-order-a",
+            "venueOrderId": "synthetic-venue-order-a",
+            "side": "BUY",
+            "intendedQuantity": "1.00000000",
+            "executionId": "synthetic-execution-1",
+            "tradeId": "synthetic-trade-1",
+            "reportSequence": 1,
+            "connectionGeneration": null,
+            "reportSession": "session-b",
+            "cumulativeQuantity": "0.40000000"
+          }
+        },
+        {
+          "sequence": 7,
+          "atOffsetMs": 70,
+          "channel": "EXECUTION_EVIDENCE",
+          "type": "EXECUTION_REPORT_OBSERVED",
+          "facts": {
+            "operationRef": "synthetic-operation-a",
+            "planRef": "synthetic-plan-a",
+            "phase": "OPEN",
+            "legRef": "synthetic-leg-spot",
+            "venue": "BINANCE_SPOT",
+            "symbol": "SYNTHUSDT",
+            "clientOrderId": "synthetic-client-order-a",
+            "venueOrderId": "synthetic-venue-order-a",
+            "side": "BUY",
+            "intendedQuantity": "1.00000000",
+            "executionId": "synthetic-execution-2",
+            "tradeId": null,
+            "reportSequence": 2,
+            "connectionGeneration": null,
+            "reportSession": "session-b",
+            "executionType": "TRADE",
+            "orderStatus": "PARTIALLY_FILLED",
+            "lastQuantity": "0.30000000",
+            "cumulativeQuantity": "0.70000000",
+            "lastPrice": null,
+            "transactionTimeMs": 1900000100068,
+            "sourceId": "synthetic.user-data.stream",
+            "sourceAuthority": "SYNTHETIC_TEST",
+            "sourceCompleteness": "PARTIAL",
+            "sourceTimeMs": 1900000100068,
+            "receivedAtMs": 1900000100070,
+            "maxAgeMs": 5000,
+            "coverageStartMs": 1900000000000,
+            "coverageEndMs": 1900000100068
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "OPERATION_IDENTITY",
+        "EXECUTION_IDENTITY",
+        "LAST_AND_CUMULATIVE_QUANTITY",
+        "SOURCE_TRANSACTION_TIME",
+        "HISTORY_COVERAGE",
+        "AUTHORITATIVE_READBACK_OR_UNKNOWN",
+        "OWNER_RECONCILIATION_PROJECTION"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-RATE-LIMIT-001",
+      "title": "Control burst, throttle, cooldown, and ban observations",
+      "ownerReference": {
+        "owner": "INTELLIGENCE_RUNTIME_LIFECYCLE",
+        "ownerPath": "server/src/intelligenceRuntime/lifecycle/**",
+        "ownerId": "RATE_BUDGET_AND_CONTROL_THROTTLE"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "RATE_LIMIT"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "RATE_OBSERVATION",
+          "type": "WEIGHT_HEADER_OBSERVED",
+          "facts": {
+            "protocol": "REST_HTTP",
+            "providerRef": "FAKE_BINANCE_SPOT",
+            "budgetRef": "REST_REQUEST_WEIGHT_1M",
+            "policyRevision": "OFFICIAL_DOCS_2026_07_15_SNAPSHOT",
+            "interval": "MINUTE",
+            "usedWeight": 1180,
+            "declaredLimit": 1200
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 100,
+          "channel": "RATE_OBSERVATION",
+          "type": "STATUS_OBSERVED",
+          "facts": {
+            "protocol": "REST_HTTP",
+            "providerRef": "FAKE_BINANCE_SPOT",
+            "budgetRef": "REST_REQUEST_WEIGHT_1M",
+            "policyRevision": "OFFICIAL_DOCS_2026_07_15_SNAPSHOT",
+            "statusCode": 429,
+            "retryAfterMs": 2500,
+            "serverTimeMs": 1900000200100
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 200,
+          "channel": "RATE_OBSERVATION",
+          "type": "STREAM_CONTROL_BURST_OBSERVED",
+          "facts": {
+            "protocol": "WEBSOCKET_STREAM",
+            "providerRef": "FAKE_BINANCE_SPOT",
+            "budgetRef": "STREAM_CONTROL_MESSAGES_1S",
+            "policyRevision": "OFFICIAL_DOCS_2026_07_15_SNAPSHOT",
+            "windowMs": 1000,
+            "controlMessages": 6,
+            "documentedLimit": 5
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 2600,
+          "channel": "RATE_OBSERVATION",
+          "type": "COOLDOWN_WINDOW_ELAPSED",
+          "facts": {
+            "protocol": "REST_HTTP",
+            "providerRef": "FAKE_BINANCE_SPOT",
+            "budgetRef": "REST_REQUEST_WEIGHT_1M",
+            "policyRevision": "OFFICIAL_DOCS_2026_07_15_SNAPSHOT",
+            "declaredRetryAfterMs": 2500,
+            "observedElapsedMs": 2500
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 3000,
+          "channel": "RATE_OBSERVATION",
+          "type": "STATUS_OBSERVED",
+          "facts": {
+            "protocol": "REST_HTTP",
+            "providerRef": "FAKE_BINANCE_SPOT",
+            "budgetRef": "REST_REQUEST_WEIGHT_1M",
+            "policyRevision": "OFFICIAL_DOCS_2026_07_15_SNAPSHOT",
+            "statusCode": 418,
+            "retryAfterMs": 60000,
+            "serverTimeMs": 1900000203000
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "RATE_INTERVAL",
+        "USED_WEIGHT",
+        "DECLARED_LIMIT",
+        "STATUS_CODE",
+        "RETRY_AFTER",
+        "COOLDOWN_READBACK",
+        "OWNER_RATE_STATE"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-CLOCK-SKEW-001",
+      "title": "Forward skew, process restart, regression, and unit mismatch",
+      "ownerReference": {
+        "owner": "FOUNDATION_SCENARIO_V1",
+        "ownerPath": "server/src/foundation/scenarios/**",
+        "ownerId": "CLOCK_DRIFT"
+      },
+      "sourceKind": "ADAPTED_OWNER_FIXTURE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "CLOCK_SKEW"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "CLOCK_OBSERVATION",
+          "type": "CLOCK_SAMPLE",
+          "facts": {
+            "processSession": "session-a",
+            "sourceTime": 1900000300000,
+            "sourceTimeUnit": "MILLISECOND",
+            "receiptWallTimeMs": 1900000300010,
+            "receiptMonotonicNs": "1000000000"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 1000,
+          "channel": "CLOCK_OBSERVATION",
+          "type": "CLOCK_SAMPLE",
+          "facts": {
+            "processSession": "session-a",
+            "sourceTime": 1900000311000,
+            "sourceTimeUnit": "MILLISECOND",
+            "receiptWallTimeMs": 1900000301000,
+            "receiptMonotonicNs": "2000000000"
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 2000,
+          "channel": "PROCESS_OBSERVATION",
+          "type": "PROCESS_SESSION_CHANGED",
+          "facts": {
+            "priorSession": "session-a",
+            "currentSession": "session-b",
+            "priorTimeOriginMs": 1900000299000,
+            "currentTimeOriginMs": 1900000301900
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 2010,
+          "channel": "CLOCK_OBSERVATION",
+          "type": "CLOCK_SAMPLE",
+          "facts": {
+            "processSession": "session-b",
+            "sourceTime": 1900000301500,
+            "sourceTimeUnit": "MILLISECOND",
+            "receiptWallTimeMs": 1900000302010,
+            "receiptMonotonicNs": "100000000"
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 2020,
+          "channel": "CLOCK_OBSERVATION",
+          "type": "CLOCK_SAMPLE",
+          "facts": {
+            "processSession": "session-b",
+            "sourceTime": 1900000302020000,
+            "sourceTimeUnit": "MICROSECOND",
+            "receiptWallTimeMs": 1900000302020,
+            "receiptMonotonicNs": "110000000"
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "PROCESS_SESSION_IDENTITY",
+        "TIME_ORIGIN",
+        "SOURCE_TIME_AND_UNIT",
+        "RECEIPT_WALL_TIME",
+        "RECEIPT_MONOTONIC_TIME",
+        "OWNER_CLOCK_COHERENCE_PROJECTION"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-RECOVERY-001",
+      "title": "Fault-frame recovery observation template with unavailable readback",
+      "ownerReference": {
+        "owner": "SYSTEM_INTEGRATION_COMPOSITION",
+        "ownerPath": "server/src/systemIntegration/**",
+        "ownerId": "RECOVERY_EVIDENCE_COMPOSITION"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "RECOVERY_CAMPAIGN"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "FAULT_DETECTED",
+          "facts": {
+            "faultRefParameter": "FRAME_FAULT_REF_ID",
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "PRODUCT_ASSURANCE_FAULT_OWNER",
+            "processSession": "session-a"
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 10,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "CONTAINMENT_REQUEST_RECORDED",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "FOUNDATION_CONTROL_OWNER",
+            "authorityReceiptRef": null
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 20,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "CHECKPOINT_REFERENCE_OBSERVED",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "SYSTEM_INTEGRATION_PERSISTENCE_OWNER",
+            "checkpointRef": "synthetic-checkpoint-a",
+            "checkpointRevision": 7,
+            "checkpointBytes": null
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 30,
+          "channel": "PROCESS_OBSERVATION",
+          "type": "RECOVERY_PROCESS_SESSION_CHANGED",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "INTELLIGENCE_RUNTIME_LIFECYCLE_OWNER",
+            "priorSession": "session-a",
+            "currentSession": "session-b",
+            "priorTimeOriginMs": null,
+            "currentTimeOriginMs": null
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 40,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "READBACK_UNAVAILABLE",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "SYSTEM_INTEGRATION_PERSISTENCE_OWNER",
+            "externalState": null,
+            "durableState": null
+          }
+        },
+        {
+          "sequence": 6,
+          "atOffsetMs": 100,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "POSTCONDITION_SAMPLE",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER",
+            "sampleOrdinal": 1,
+            "independentObserverRef": "synthetic-observer-a",
+            "observedState": "UNKNOWN"
+          }
+        },
+        {
+          "sequence": 7,
+          "atOffsetMs": 200,
+          "channel": "RECOVERY_OBSERVATION",
+          "type": "QUIET_PERIOD_SAMPLE",
+          "facts": {
+            "campaignRefParameter": "FRAME_CAMPAIGN_ID",
+            "correlationRefParameter": "FRAME_CORRELATION_REF",
+            "evidenceOwner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER",
+            "sampleOrdinal": 2,
+            "independentObserverRef": "synthetic-observer-a",
+            "observedState": "UNKNOWN"
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "FAULT_IDENTITY",
+        "CAMPAIGN_IDENTITY",
+        "FRAME_CORRELATION_ID",
+        "FAULT_FRAME_ONLY_TAPE_BINDING",
+        "AUTHORITY_RECEIPT_OR_UNKNOWN",
+        "CHECKPOINT_REVISION",
+        "PROCESS_SESSION_IDENTITY",
+        "DURABLE_READBACK_OR_UNKNOWN",
+        "INDEPENDENT_POSTCONDITION_SAMPLES",
+        "QUIET_PERIOD_SAMPLES"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-LATENCY-001",
+      "title": "Monotonic latency observations across process sessions",
+      "ownerReference": {
+        "owner": "FOUNDATION_REPLAY_V1",
+        "ownerPath": "server/src/foundation/replay/**",
+        "ownerId": "DETERMINISTIC_VIRTUAL_CLOCK"
+      },
+      "sourceKind": "SYNTHETIC_STIMULUS_TAPE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "LATENCY_DEFINITION"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "LATENCY_OBSERVATION",
+          "type": "MONOTONIC_INTERVAL",
+          "facts": {
+            "processSession": "session-a",
+            "timeOriginMs": 1900000399000,
+            "startMonotonicNs": "1000000000",
+            "endMonotonicNs": "1001500000",
+            "sourceWallTimeMs": 1900000400000
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 5,
+          "channel": "LATENCY_OBSERVATION",
+          "type": "MONOTONIC_INTERVAL",
+          "facts": {
+            "processSession": "session-a",
+            "timeOriginMs": 1900000399000,
+            "startMonotonicNs": "1005000000",
+            "endMonotonicNs": "1009000000",
+            "sourceWallTimeMs": 1900000400005
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 10,
+          "channel": "PROCESS_OBSERVATION",
+          "type": "PROCESS_SESSION_CHANGED",
+          "facts": {
+            "priorSession": "session-a",
+            "currentSession": "session-b",
+            "priorTimeOriginMs": null,
+            "currentTimeOriginMs": null
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 11,
+          "channel": "LATENCY_OBSERVATION",
+          "type": "MONOTONIC_INTERVAL",
+          "facts": {
+            "processSession": "session-b",
+            "timeOriginMs": 1900000400010,
+            "startMonotonicNs": "1000000",
+            "endMonotonicNs": "2500000",
+            "sourceWallTimeMs": 1900000400011
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "PROCESS_SESSION_IDENTITY",
+        "TIME_ORIGIN",
+        "MONOTONIC_INTERVAL",
+        "SOURCE_WALL_TIME",
+        "EXTERNAL_HISTOGRAM_POST_C2"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-OUT-OF-ORDER-001",
+      "title": "Arrival order differs from source sequence and source time",
+      "ownerReference": {
+        "owner": "FOUNDATION_SCENARIO_V1",
+        "ownerPath": "server/src/foundation/scenarios/**",
+        "ownerId": "OUT_OF_ORDER_FRAME"
+      },
+      "sourceKind": "ADAPTED_OWNER_FIXTURE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "LOAD_DEFINITION"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "FRAME_OBSERVED",
+          "facts": {
+            "streamRef": "synthetic-stream-a",
+            "sourceSequence": 100,
+            "sourceTimeMs": 1900000500100,
+            "receivedAtMs": 1900000500400
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 1,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "FRAME_OBSERVED",
+          "facts": {
+            "streamRef": "synthetic-stream-a",
+            "sourceSequence": 102,
+            "sourceTimeMs": 1900000500300,
+            "receivedAtMs": 1900000500401
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 2,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "FRAME_OBSERVED",
+          "facts": {
+            "streamRef": "synthetic-stream-a",
+            "sourceSequence": 101,
+            "sourceTimeMs": 1900000500200,
+            "receivedAtMs": 1900000500402
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 3,
+          "channel": "SOURCE_OBSERVATION",
+          "type": "FRAME_DUPLICATE_OBSERVED",
+          "facts": {
+            "streamRef": "synthetic-stream-a",
+            "sourceSequence": 101,
+            "sourceTimeMs": 1900000500200,
+            "receivedAtMs": 1900000500403
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "STREAM_IDENTITY",
+        "SOURCE_SEQUENCE",
+        "SOURCE_TIME",
+        "RECEIPT_TIME",
+        "GAP_COUNT",
+        "DUPLICATE_COUNT"
+      ]
+    },
+    {
+      "datasetId": "RS-DATA-TRUNCATION-001",
+      "title": "Bounded capture with explicit retained-window loss",
+      "ownerReference": {
+        "owner": "FOUNDATION_SCENARIO_V1",
+        "ownerPath": "server/src/foundation/scenarios/**",
+        "ownerId": "CAPTURE_TRUNCATION"
+      },
+      "sourceKind": "ADAPTED_OWNER_FIXTURE",
+      "coverage": [
+        "REPLAY_DATASET",
+        "SOAK_DEFINITION"
+      ],
+      "eventTimeUnit": "VIRTUAL_MILLISECOND",
+      "eventTape": [
+        {
+          "sequence": 1,
+          "atOffsetMs": 0,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_WINDOW_DECLARED",
+          "facts": {
+            "retainedCapacity": 3,
+            "observedCount": 0,
+            "droppedCount": 0
+          }
+        },
+        {
+          "sequence": 2,
+          "atOffsetMs": 1,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_ITEM_OBSERVED",
+          "facts": {
+            "itemSequence": 1
+          }
+        },
+        {
+          "sequence": 3,
+          "atOffsetMs": 2,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_ITEM_OBSERVED",
+          "facts": {
+            "itemSequence": 2
+          }
+        },
+        {
+          "sequence": 4,
+          "atOffsetMs": 3,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_ITEM_OBSERVED",
+          "facts": {
+            "itemSequence": 3
+          }
+        },
+        {
+          "sequence": 5,
+          "atOffsetMs": 4,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_ITEM_OBSERVED",
+          "facts": {
+            "itemSequence": 4
+          }
+        },
+        {
+          "sequence": 6,
+          "atOffsetMs": 5,
+          "channel": "CAPTURE_OBSERVATION",
+          "type": "CAPTURE_WINDOW_OBSERVED",
+          "facts": {
+            "retainedCapacity": 3,
+            "observedCount": 4,
+            "retainedCount": 3,
+            "droppedCount": 1
+          }
+        }
+      ],
+      "evidenceRequests": [
+        "CAPTURE_CAPACITY",
+        "OBSERVED_COUNT",
+        "RETAINED_COUNT",
+        "DROPPED_COUNT",
+        "FIRST_RETAINED_SEQUENCE"
+      ]
+    }
+  ],
+  "faultRefs": [
+    {
+      "faultRefId": "RS-F-STREAM-RECONNECT",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_STREAM_RECONNECT_STORM",
+      "coverage": [
+        "RESTART_STORM",
+        "CONNECTION_LOSS"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RESTART-STORM",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_RESTART_STORM",
+      "coverage": [
+        "RESTART_STORM",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-STREAM-SHUTDOWN",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_STREAM_SERVER_SHUTDOWN",
+      "coverage": [
+        "CONNECTION_LOSS"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-PING-PONG",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_STREAM_PING_PONG_FAILURE",
+      "coverage": [
+        "CONNECTION_LOSS"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-THROTTLE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_EXCHANGE_THROTTLE",
+      "coverage": [
+        "RATE_LIMIT"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-BAN",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_EXCHANGE_BAN",
+      "coverage": [
+        "RATE_LIMIT"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-OVERLOAD",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_EXCHANGE_OVERLOAD",
+      "coverage": [
+        "RATE_LIMIT",
+        "LOAD_DEFINITION"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-COOLDOWN",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_EXCHANGE_COOLDOWN",
+      "coverage": [
+        "RATE_LIMIT"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-PARTIAL-A",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PARTIAL_FILL_SPOT_LEG",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-PARTIAL-B",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PARTIAL_FILL_USDM_LEG",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-ACCEPTED-RESPONSE-LOST",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REQUEST_ACCEPTED_RESPONSE_LOST",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CANCEL-ACK-LOST",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_CANCEL_ACKNOWLEDGEMENT_LOST",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CLOCK-STALE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_CLOCK_STALE",
+      "coverage": [
+        "STALE_DATA",
+        "CLOCK_SKEW"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CLOCK-OFFSET",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_CLOCK_SERVER_OFFSET_EXCESSIVE",
+      "coverage": [
+        "CLOCK_SKEW"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-TEMPORAL-SKEW",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_SPOT_USDM_TEMPORAL_SKEW",
+      "coverage": [
+        "CLOCK_SKEW",
+        "STALE_DATA"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-BEFORE-INTENT",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_BEFORE_MUTATION_INTENT",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-AFTER-INTENT",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_AFTER_INTENT_BEFORE_SUBMISSION",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-AFTER-SUBMISSION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_AFTER_SUBMISSION_BEFORE_ACCEPTANCE",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-AFTER-ACCEPTANCE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_AFTER_ACCEPTANCE_BEFORE_CHECKPOINT",
+      "coverage": [
+        "PARTIAL_FILL_AMBIGUITY",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-DURING-RECONCILIATION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_DURING_RECONCILIATION",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-CRASH-AFTER-RECONCILIATION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_PROCESS_DEATH_AFTER_RECONCILIATION_BEFORE_TERMINAL",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-DB-AFTER-MUTATION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_DB_FAILURE_AFTER_EXTERNAL_MUTATION",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RESTORE-INCOMPLETE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_RESTORE_INCOMPLETE_RECOVERY",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-ROLLBACK-INCOMPLETE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_ROLLBACK_INCOMPLETE_RECOVERY",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-RETRY-AMPLIFICATION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_RETRY_AMPLIFICATION",
+      "coverage": [
+        "RESTART_STORM",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-RECORD-LOST",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_CAMPAIGN_RECORD_LOST",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-HANDOFF-STALE",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_HANDOFF_STALE_COMPLETION",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-ROLLBACK",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_ROLLBACK_FAILURE",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-POSTCONDITION",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_FAILED_POSTCONDITION",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "faultRefId": "RS-F-RECOVERY-QUIET-PERIOD",
+      "owner": "PRODUCT_ASSURANCE_FAULT_SCENARIO_V1",
+      "ownerPath": "server/src/productAssurance/faults/harness.ts",
+      "scenarioId": "FAULT_REMEDIATION_QUIET_PERIOD",
+      "coverage": [
+        "RECOVERY_CAMPAIGN"
+      ]
+    }
+  ],
+  "campaigns": [
+    {
+      "campaignId": "RS-CAMPAIGN-LATENCY-001",
+      "kind": "LATENCY",
+      "datasetIds": [
+        "RS-DATA-LATENCY-001",
+        "RS-DATA-CONNECTION-001"
+      ],
+      "faultRefIds": [
+        "RS-F-PING-PONG"
+      ],
+      "executionState": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "schedule": {
+        "clock": "VIRTUAL_MILLISECOND",
+        "measurementClock": "EXTERNAL_MONOTONIC_NANOSECOND_POST_C2",
+        "iterationUnit": "COMPLETE_DATASET_TAPE",
+        "measurementDurationMs": 60000,
+        "phases": [
+          {
+            "phaseId": "latency-closed-loop",
+            "startOffsetMs": 0,
+            "virtualDurationMs": 60000,
+            "iterations": 4096,
+            "subjectCount": 1,
+            "maxInFlight": 1,
+            "pace": "CLOSED_LOOP",
+            "datasetMix": [
+              "RS-DATA-LATENCY-001",
+              "RS-DATA-CONNECTION-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 2048,
+                "faultRefId": "RS-F-PING-PONG"
+              }
+            ]
+          }
+        ]
+      },
+      "measurementRequests": [
+        "LATENCY_HISTOGRAM_NS",
+        "TIME_TO_FIRST_DATA_NS",
+        "THROUGHPUT_COUNT",
+        "ERROR_COUNT",
+        "PROCESS_SESSION_IDENTITY"
+      ],
+      "coverage": [
+        "LATENCY_DEFINITION",
+        "CONNECTION_LOSS"
+      ]
+    },
+    {
+      "campaignId": "RS-CAMPAIGN-LOAD-001",
+      "kind": "LOAD",
+      "datasetIds": [
+        "RS-DATA-STALE-001",
+        "RS-DATA-OUT-OF-ORDER-001",
+        "RS-DATA-TRUNCATION-001",
+        "RS-DATA-RATE-LIMIT-001"
+      ],
+      "faultRefIds": [
+        "RS-F-OVERLOAD",
+        "RS-F-THROTTLE"
+      ],
+      "executionState": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "schedule": {
+        "clock": "VIRTUAL_MILLISECOND",
+        "measurementClock": "EXTERNAL_MONOTONIC_NANOSECOND_POST_C2",
+        "iterationUnit": "COMPLETE_DATASET_TAPE",
+        "measurementDurationMs": 300000,
+        "phases": [
+          {
+            "phaseId": "load-baseline",
+            "startOffsetMs": 0,
+            "virtualDurationMs": 60000,
+            "iterations": 1000,
+            "subjectCount": 1,
+            "maxInFlight": 1,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-OUT-OF-ORDER-001"
+            ],
+            "faultSchedule": []
+          },
+          {
+            "phaseId": "load-step-32",
+            "startOffsetMs": 60000,
+            "virtualDurationMs": 120000,
+            "iterations": 6400,
+            "subjectCount": 32,
+            "maxInFlight": 8,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-OUT-OF-ORDER-001",
+              "RS-DATA-TRUNCATION-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 3200,
+                "faultRefId": "RS-F-THROTTLE"
+              }
+            ]
+          },
+          {
+            "phaseId": "load-step-256",
+            "startOffsetMs": 180000,
+            "virtualDurationMs": 120000,
+            "iterations": 64000,
+            "subjectCount": 256,
+            "maxInFlight": 32,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-OUT-OF-ORDER-001",
+              "RS-DATA-TRUNCATION-001",
+              "RS-DATA-RATE-LIMIT-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 32000,
+                "faultRefId": "RS-F-OVERLOAD"
+              }
+            ]
+          }
+        ]
+      },
+      "measurementRequests": [
+        "THROUGHPUT_COUNT",
+        "LATENCY_HISTOGRAM_NS",
+        "QUEUE_DEPTH",
+        "QUEUE_HIGH_WATERMARK",
+        "DROPPED_EVENT_COUNT",
+        "SEQUENCE_GAP_COUNT",
+        "DUPLICATE_EVENT_COUNT",
+        "EVENT_LOOP_DELAY_NS",
+        "EVENT_LOOP_UTILIZATION",
+        "RSS_BYTES",
+        "HEAP_USED_BYTES"
+      ],
+      "coverage": [
+        "LOAD_DEFINITION",
+        "STALE_DATA",
+        "RATE_LIMIT"
+      ]
+    },
+    {
+      "campaignId": "RS-CAMPAIGN-SOAK-001",
+      "kind": "SOAK",
+      "datasetIds": [
+        "RS-DATA-STALE-001",
+        "RS-DATA-CONNECTION-001",
+        "RS-DATA-RESTART-STORM-001",
+        "RS-DATA-PARTIAL-AMBIGUITY-001",
+        "RS-DATA-RATE-LIMIT-001",
+        "RS-DATA-CLOCK-SKEW-001",
+        "RS-DATA-RECOVERY-001",
+        "RS-DATA-LATENCY-001",
+        "RS-DATA-OUT-OF-ORDER-001",
+        "RS-DATA-TRUNCATION-001"
+      ],
+      "faultRefIds": [
+        "RS-F-STREAM-RECONNECT",
+        "RS-F-THROTTLE",
+        "RS-F-CLOCK-STALE",
+        "RS-F-PARTIAL-A",
+        "RS-F-RECOVERY-QUIET-PERIOD"
+      ],
+      "executionState": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "schedule": {
+        "clock": "VIRTUAL_MILLISECOND",
+        "measurementClock": "EXTERNAL_MONOTONIC_NANOSECOND_POST_C2",
+        "iterationUnit": "COMPLETE_DATASET_TAPE",
+        "measurementDurationMs": 21600000,
+        "phases": [
+          {
+            "phaseId": "soak-ramp-up",
+            "startOffsetMs": 0,
+            "virtualDurationMs": 300000,
+            "iterations": 12000,
+            "subjectCount": 32,
+            "maxInFlight": 8,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-OUT-OF-ORDER-001",
+              "RS-DATA-TRUNCATION-001"
+            ],
+            "faultSchedule": []
+          },
+          {
+            "phaseId": "soak-plateau-mixed",
+            "startOffsetMs": 300000,
+            "virtualDurationMs": 21000000,
+            "iterations": 840000,
+            "subjectCount": 256,
+            "maxInFlight": 32,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-CONNECTION-001",
+              "RS-DATA-RESTART-STORM-001",
+              "RS-DATA-PARTIAL-AMBIGUITY-001",
+              "RS-DATA-RATE-LIMIT-001",
+              "RS-DATA-CLOCK-SKEW-001",
+              "RS-DATA-RECOVERY-001",
+              "RS-DATA-LATENCY-001",
+              "RS-DATA-OUT-OF-ORDER-001",
+              "RS-DATA-TRUNCATION-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 168000,
+                "faultRefId": "RS-F-STREAM-RECONNECT"
+              },
+              {
+                "atIteration": 336000,
+                "faultRefId": "RS-F-THROTTLE"
+              },
+              {
+                "atIteration": 504000,
+                "faultRefId": "RS-F-CLOCK-STALE"
+              },
+              {
+                "atIteration": 672000,
+                "faultRefId": "RS-F-PARTIAL-A"
+              },
+              {
+                "atIteration": 756000,
+                "faultRefId": "RS-F-RECOVERY-QUIET-PERIOD"
+              }
+            ]
+          },
+          {
+            "phaseId": "soak-ramp-down",
+            "startOffsetMs": 21300000,
+            "virtualDurationMs": 300000,
+            "iterations": 12000,
+            "subjectCount": 32,
+            "maxInFlight": 8,
+            "pace": "OPEN_ARRIVAL_RATE",
+            "datasetMix": [
+              "RS-DATA-STALE-001",
+              "RS-DATA-RESTART-STORM-001",
+              "RS-DATA-RECOVERY-001"
+            ],
+            "faultSchedule": []
+          }
+        ]
+      },
+      "measurementRequests": [
+        "THROUGHPUT_COUNT",
+        "LATENCY_HISTOGRAM_NS",
+        "QUEUE_DEPTH",
+        "DROPPED_EVENT_COUNT",
+        "SEQUENCE_GAP_COUNT",
+        "DUPLICATE_EVENT_COUNT",
+        "RECONNECT_ATTEMPT_COUNT",
+        "TIME_TO_FIRST_DATA_NS",
+        "RECOVERY_ELAPSED_NS",
+        "EVENT_LOOP_DELAY_NS",
+        "EVENT_LOOP_UTILIZATION",
+        "RSS_BYTES",
+        "HEAP_USED_BYTES"
+      ],
+      "coverage": [
+        "SOAK_DEFINITION",
+        "RESTART_STORM",
+        "PARTIAL_FILL_AMBIGUITY",
+        "STALE_DATA",
+        "CONNECTION_LOSS",
+        "RATE_LIMIT",
+        "CLOCK_SKEW",
+        "RECOVERY_CAMPAIGN"
+      ]
+    },
+    {
+      "campaignId": "RS-CAMPAIGN-FAILURE-001",
+      "kind": "FAILURE",
+      "datasetIds": [
+        "RS-DATA-BASELINE-001",
+        "RS-DATA-CONNECTION-001",
+        "RS-DATA-RESTART-STORM-001",
+        "RS-DATA-PARTIAL-AMBIGUITY-001",
+        "RS-DATA-RATE-LIMIT-001",
+        "RS-DATA-CLOCK-SKEW-001"
+      ],
+      "faultRefIds": [
+        "RS-F-STREAM-RECONNECT",
+        "RS-F-RESTART-STORM",
+        "RS-F-STREAM-SHUTDOWN",
+        "RS-F-PING-PONG",
+        "RS-F-THROTTLE",
+        "RS-F-BAN",
+        "RS-F-OVERLOAD",
+        "RS-F-COOLDOWN",
+        "RS-F-PARTIAL-A",
+        "RS-F-PARTIAL-B",
+        "RS-F-ACCEPTED-RESPONSE-LOST",
+        "RS-F-CANCEL-ACK-LOST",
+        "RS-F-CLOCK-STALE",
+        "RS-F-CLOCK-OFFSET",
+        "RS-F-TEMPORAL-SKEW"
+      ],
+      "executionState": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "schedule": {
+        "clock": "VIRTUAL_MILLISECOND",
+        "measurementClock": "EXTERNAL_MONOTONIC_NANOSECOND_POST_C2",
+        "iterationUnit": "COMPLETE_DATASET_TAPE",
+        "measurementDurationMs": 300000,
+        "phases": [
+          {
+            "phaseId": "failure-matrix",
+            "startOffsetMs": 0,
+            "virtualDurationMs": 300000,
+            "iterations": 4096,
+            "subjectCount": 64,
+            "maxInFlight": 16,
+            "pace": "CLOSED_LOOP",
+            "datasetMix": [
+              "RS-DATA-BASELINE-001",
+              "RS-DATA-CONNECTION-001",
+              "RS-DATA-RESTART-STORM-001",
+              "RS-DATA-PARTIAL-AMBIGUITY-001",
+              "RS-DATA-RATE-LIMIT-001",
+              "RS-DATA-CLOCK-SKEW-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 128,
+                "faultRefId": "RS-F-STREAM-SHUTDOWN"
+              },
+              {
+                "atIteration": 256,
+                "faultRefId": "RS-F-PING-PONG"
+              },
+              {
+                "atIteration": 512,
+                "faultRefId": "RS-F-STREAM-RECONNECT"
+              },
+              {
+                "atIteration": 768,
+                "faultRefId": "RS-F-RESTART-STORM"
+              },
+              {
+                "atIteration": 1024,
+                "faultRefId": "RS-F-THROTTLE"
+              },
+              {
+                "atIteration": 1280,
+                "faultRefId": "RS-F-BAN"
+              },
+              {
+                "atIteration": 1536,
+                "faultRefId": "RS-F-OVERLOAD"
+              },
+              {
+                "atIteration": 1792,
+                "faultRefId": "RS-F-COOLDOWN"
+              },
+              {
+                "atIteration": 2048,
+                "faultRefId": "RS-F-PARTIAL-A"
+              },
+              {
+                "atIteration": 2304,
+                "faultRefId": "RS-F-PARTIAL-B"
+              },
+              {
+                "atIteration": 2560,
+                "faultRefId": "RS-F-ACCEPTED-RESPONSE-LOST"
+              },
+              {
+                "atIteration": 2816,
+                "faultRefId": "RS-F-CANCEL-ACK-LOST"
+              },
+              {
+                "atIteration": 3072,
+                "faultRefId": "RS-F-CLOCK-STALE"
+              },
+              {
+                "atIteration": 3328,
+                "faultRefId": "RS-F-CLOCK-OFFSET"
+              },
+              {
+                "atIteration": 3584,
+                "faultRefId": "RS-F-TEMPORAL-SKEW"
+              }
+            ]
+          }
+        ]
+      },
+      "measurementRequests": [
+        "FAULT_INJECTION_RECEIPT",
+        "OWNER_STATE_BEFORE_AND_AFTER",
+        "UNKNOWN_STATE_COUNT",
+        "RECONNECT_ATTEMPT_COUNT",
+        "DUPLICATE_EVENT_COUNT",
+        "SEQUENCE_GAP_COUNT",
+        "RECOVERY_ELAPSED_NS"
+      ],
+      "coverage": [
+        "RESTART_STORM",
+        "PARTIAL_FILL_AMBIGUITY",
+        "CONNECTION_LOSS",
+        "RATE_LIMIT",
+        "CLOCK_SKEW"
+      ]
+    },
+    {
+      "campaignId": "RS-CAMPAIGN-RECOVERY-001",
+      "kind": "RECOVERY",
+      "datasetIds": [
+        "RS-DATA-BASELINE-001",
+        "RS-DATA-RECOVERY-001",
+        "RS-DATA-PARTIAL-AMBIGUITY-001",
+        "RS-DATA-RESTART-STORM-001"
+      ],
+      "faultRefIds": [
+        "RS-F-CRASH-BEFORE-INTENT",
+        "RS-F-CRASH-AFTER-INTENT",
+        "RS-F-CRASH-AFTER-SUBMISSION",
+        "RS-F-CRASH-AFTER-ACCEPTANCE",
+        "RS-F-CRASH-DURING-RECONCILIATION",
+        "RS-F-CRASH-AFTER-RECONCILIATION",
+        "RS-F-DB-AFTER-MUTATION",
+        "RS-F-RESTORE-INCOMPLETE",
+        "RS-F-ROLLBACK-INCOMPLETE",
+        "RS-F-RECOVERY-RETRY-AMPLIFICATION",
+        "RS-F-RECOVERY-RECORD-LOST",
+        "RS-F-RECOVERY-HANDOFF-STALE",
+        "RS-F-RECOVERY-ROLLBACK",
+        "RS-F-RECOVERY-POSTCONDITION",
+        "RS-F-RECOVERY-QUIET-PERIOD"
+      ],
+      "executionState": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "schedule": {
+        "clock": "VIRTUAL_MILLISECOND",
+        "measurementClock": "EXTERNAL_MONOTONIC_NANOSECOND_POST_C2",
+        "iterationUnit": "COMPLETE_DATASET_TAPE",
+        "measurementDurationMs": 600000,
+        "phases": [
+          {
+            "phaseId": "recovery-crash-cuts",
+            "startOffsetMs": 0,
+            "virtualDurationMs": 300000,
+            "iterations": 1024,
+            "subjectCount": 16,
+            "maxInFlight": 8,
+            "pace": "CLOSED_LOOP",
+            "datasetMix": [
+              "RS-DATA-BASELINE-001",
+              "RS-DATA-RECOVERY-001",
+              "RS-DATA-PARTIAL-AMBIGUITY-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 64,
+                "faultRefId": "RS-F-CRASH-BEFORE-INTENT"
+              },
+              {
+                "atIteration": 128,
+                "faultRefId": "RS-F-CRASH-AFTER-INTENT"
+              },
+              {
+                "atIteration": 256,
+                "faultRefId": "RS-F-CRASH-AFTER-SUBMISSION"
+              },
+              {
+                "atIteration": 384,
+                "faultRefId": "RS-F-CRASH-AFTER-ACCEPTANCE"
+              },
+              {
+                "atIteration": 512,
+                "faultRefId": "RS-F-CRASH-DURING-RECONCILIATION"
+              },
+              {
+                "atIteration": 640,
+                "faultRefId": "RS-F-CRASH-AFTER-RECONCILIATION"
+              },
+              {
+                "atIteration": 768,
+                "faultRefId": "RS-F-DB-AFTER-MUTATION"
+              }
+            ]
+          },
+          {
+            "phaseId": "recovery-readback-and-quiet-period",
+            "startOffsetMs": 300000,
+            "virtualDurationMs": 300000,
+            "iterations": 2048,
+            "subjectCount": 16,
+            "maxInFlight": 8,
+            "pace": "CLOSED_LOOP",
+            "datasetMix": [
+              "RS-DATA-BASELINE-001",
+              "RS-DATA-RECOVERY-001",
+              "RS-DATA-RESTART-STORM-001"
+            ],
+            "faultSchedule": [
+              {
+                "atIteration": 128,
+                "faultRefId": "RS-F-RESTORE-INCOMPLETE"
+              },
+              {
+                "atIteration": 256,
+                "faultRefId": "RS-F-ROLLBACK-INCOMPLETE"
+              },
+              {
+                "atIteration": 384,
+                "faultRefId": "RS-F-RECOVERY-RETRY-AMPLIFICATION"
+              },
+              {
+                "atIteration": 512,
+                "faultRefId": "RS-F-RECOVERY-RECORD-LOST"
+              },
+              {
+                "atIteration": 640,
+                "faultRefId": "RS-F-RECOVERY-HANDOFF-STALE"
+              },
+              {
+                "atIteration": 768,
+                "faultRefId": "RS-F-RECOVERY-ROLLBACK"
+              },
+              {
+                "atIteration": 896,
+                "faultRefId": "RS-F-RECOVERY-POSTCONDITION"
+              },
+              {
+                "atIteration": 1024,
+                "faultRefId": "RS-F-RECOVERY-QUIET-PERIOD"
+              }
+            ]
+          }
+        ]
+      },
+      "measurementRequests": [
+        "PROCESS_SESSION_IDENTITY",
+        "CHECKPOINT_REVISION",
+        "DURABLE_READBACK_OR_UNKNOWN",
+        "OWNER_STATE_BEFORE_AND_AFTER",
+        "INDEPENDENT_POSTCONDITION_SAMPLES",
+        "QUIET_PERIOD_SAMPLES",
+        "RECOVERY_ELAPSED_NS",
+        "RETRY_ATTEMPT_COUNT"
+      ],
+      "coverage": [
+        "RECOVERY_CAMPAIGN",
+        "RESTART_STORM",
+        "PARTIAL_FILL_AMBIGUITY"
+      ]
+    }
+  ],
+  "limitations": [
+    "NO_CANDIDATE_BINDING",
+    "NO_THRESHOLDS_OR_VERDICTS",
+    "NO_NETWORK_OR_PROCESS_MUTATION",
+    "NO_REAL_CREDENTIALS_OR_ENDPOINTS",
+    "NO_HOST_TIMING_MEASURED",
+    "HEAVY_EXECUTION_DEFERRED_POST_C2_OTHER_MACHINE",
+    "OWNER_ADAPTERS_UNMOUNTED",
+    "SYNTHETIC_CORPUS_IS_NOT_PRODUCTION_EVIDENCE"
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "schema": "COSMOS_REPLAY_SHADOW_INSERTION_REQUESTS_V1",
+  "schemaVersion": 1,
+  "packetId": "RUN-17",
+  "disposition": "SHADOW_SPECULATIVE",
+  "candidateBinding": null,
+  "authorityGranted": false,
+  "requests": [
+    {
+      "id": "RS-IR-PORT-001",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "AFTER_C2_AND_DIRECTOR_ADJUDICATION",
+      "targetOwner": "DIRECTOR_PORT_OWNER",
+      "request": "Port only non-duplicative RUN-17 bytes into a fresh worktree created from the exact adjudicated base; rebuild conflicts instead of merging this shadow branch.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-REPLAY-002",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "FOUNDATION_REPLAY_OWNER",
+      "request": "Provide a narrow adapter from validated stimulus tapes to the existing replay envelope and virtual-clock contracts; do not replace the replay owner.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-SCENARIO-003",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "FOUNDATION_SCENARIO_OWNER",
+      "request": "Bind declared Foundation scenario identifiers to their accepted generator inputs and preserve owner-computed truth outside this packet.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-CAPACITY-004",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "INTELLIGENCE_RUNTIME_CAPACITY_OWNER",
+      "request": "Translate portable load phases into the accepted bounded capacity model without adding a second queue, overload, or lag authority.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-FAULT-005",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "PRODUCT_ASSURANCE_FAULT_OWNER",
+      "request": "Resolve fault-reference identifiers through the accepted Product Assurance injection owner; RUN-17 supplies schedules, not verdicts.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-HEAVY-006",
+      "state": "DEFERRED_POST_C2_OTHER_MACHINE",
+      "trigger": "EXACT_C2_OR_LATER_ADJUDICATED_SHA",
+      "targetOwner": "V5_PERFORMANCE_OPERATIONS_SHARD",
+      "request": "Run latency, load, soak, restart, rollback, restore, and recovery campaigns on another machine with exact tested-SHA readback; bind thresholds externally and publish measured evidence separately.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-TEST-MOUNT-007",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_PACKAGE_OWNER_REVIEW",
+      "targetOwner": "PACKAGE_TEST_OWNER",
+      "request": "Mount the focused replay-shadow suite into canonical test discovery only after scope and denominator owners approve it.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-DOCS-008",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "ONLY_AFTER_REAL_ACCEPTANCE_OR_LANDING",
+      "targetOwner": "DIRECTOR_DOCUMENTATION_OWNER",
+      "request": "Update canonical state and architecture documentation only if a later accepted port changes project truth; this shadow packet changes neither.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-LIFECYCLE-009",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "INTELLIGENCE_RUNTIME_LIFECYCLE_OWNER",
+      "request": "Translate restart, reconnect, connection-loss, and rate-limit observations through the accepted lifecycle, backoff, rate-budget, and throttle owners; RUN-17 supplies tapes, never policy.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-AMBIGUITY-010",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "FOUNDATION_EXECUTION_RECONCILIATION_OWNER",
+      "request": "Port owner-compatible identified reports into the accepted execution/reconciliation adapter, but retain a report with missing trade ID or price as raw ambiguity rather than fabricating an ObservedFillEvidence record; RUN-17 never resolves ambiguity or recommends an action.",
+      "directEditAllowed": false
+    },
+    {
+      "id": "RS-IR-RECOVERY-011",
+      "state": "DRAFT_UNMOUNTED",
+      "trigger": "POST_PORT_INTERFACE_RECONCILIATION",
+      "targetOwner": "SYSTEM_INTEGRATION_COMPOSITION_OWNER",
+      "request": "Compose fault-frame recovery observations without changing truth ownership: Product Assurance supplies fault/remediation facts, Foundation supplies containment facts, Intelligence Runtime supplies process lifecycle, and the existing Ledger-backed persistence owner supplies checkpoint/readback facts.",
+      "directEditAllowed": false
+    }
+  ]
+}

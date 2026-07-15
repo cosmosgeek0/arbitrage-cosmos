@@ -157,8 +157,25 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
   const opsReadback = {
     read() { calls.ops++; return OPS_READBACK; },
   };
+  let validateOnlyCalls = 0;
+  let validateOnlyInput = null;
+  const validateOnly = {
+    async executeValidateOnly(input) {
+      validateOnlyCalls++;
+      validateOnlyInput = input;
+      return {
+        ok: true,
+        snapshot: {
+          disposition: 'READY',
+          rootCorrelationId: input.correlationId,
+          executionAuthority: 'NONE',
+          liveExecutionPermitted: false,
+        },
+      };
+    },
+  };
   let now = T0 + 1_000;
-  const router = createSystemIntegrationRouter({ read, controls, clock: { nowMs: () => now++ }, opsReadback });
+  const router = createSystemIntegrationRouter({ read, controls, validateOnly, clock: { nowMs: () => now++ }, opsReadback });
   const access = new OperatorAccess();
   const app = express();
   app.disable('x-powered-by');
@@ -267,6 +284,36 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     const presentTrace = await fetchLocal('/api/system-integration/traces/cor_present');
     assert.equal(presentTrace.status, 200);
 
+    const validateOnlyResponse = await fetchLocal('/api/system-integration/validate-only', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        requestedMode: 'VALIDATE_ONLY',
+        correlationId: 'cor_route_validate_only',
+        nowMs: 1,
+      }),
+    });
+    assert.equal(validateOnlyResponse.status, 200);
+    assert.deepEqual(await json(validateOnlyResponse), {
+      ok: true,
+      snapshot: {
+        disposition: 'READY',
+        rootCorrelationId: 'cor_route_validate_only',
+        executionAuthority: 'NONE',
+        liveExecutionPermitted: false,
+      },
+    });
+    assert.equal(validateOnlyCalls, 1);
+    assert.equal(validateOnlyInput.nowMs, T0 + 1_001, 'route must replace untrusted client time with its injected clock');
+
+    const validateOnlyNoContentType = await fetchLocal('/api/system-integration/validate-only', {
+      method: 'POST',
+      body: JSON.stringify({ requestedMode: 'VALIDATE_ONLY' }),
+    });
+    assert.equal(validateOnlyNoContentType.status, 415);
+    assert.equal((await json(validateOnlyNoContentType)).code, 'UNSUPPORTED_MEDIA_TYPE');
+    assert.equal(validateOnlyCalls, 1);
+
     const noContentType = await fetchLocal('/api/system-integration/controls', {
       method: 'POST', body: JSON.stringify({ command: 'SET_SAFE_MODE' }),
     });
@@ -361,6 +408,7 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
   missingOperatorApp.use('/api/system-integration', createSystemIntegrationRouter({
     read,
     controls,
+    validateOnly,
     clock: { nowMs: () => now++ },
     opsReadback,
   }));

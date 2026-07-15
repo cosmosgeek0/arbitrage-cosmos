@@ -94,6 +94,7 @@
     { "method": "GET", "route": "/api/system-integration/events", "sourceNeedle": "router.get('/events'" },
     { "method": "GET", "route": "/api/system-integration/controls", "sourceNeedle": "router.get('/controls'" },
     { "method": "GET", "route": "/api/system-integration/traces/:correlationId", "sourceNeedle": "router.get('/traces/:correlationId'" },
+    { "method": "POST", "route": "/api/system-integration/validate-only", "sourceNeedle": "router.post('/validate-only'" },
     { "method": "POST", "route": "/api/system-integration/controls", "sourceNeedle": "router.post('/controls'" },
     { "method": "GET", "route": "/api/product-integration/v1/supervisor", "sourceNeedle": "router.get('/v1/supervisor'" },
     { "method": "GET", "route": "/api/product-integration/v1/material-events", "sourceNeedle": "router.get('/v1/material-events'" },

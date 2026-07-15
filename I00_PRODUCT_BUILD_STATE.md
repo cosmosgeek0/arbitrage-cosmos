@@ -152,7 +152,7 @@ ledger-persistence, engine-supervisor
 
 ### Control and route inventory
 
-- Canonical System/Product route inventory: 14 exact routes.
+- Canonical System/Product route inventory: 15 exact routes, including the authenticated server-clocked validate-only owner seam.
 - Product control catalog: 14 exact entries.
 - Source-wired runtime controls: exactly four — `global.safe-mode.read-only`, `global.kill-switch.engage`, `global.intake.pause`, `component.engine-supervisor.restart`.
 - All broader or reverse mutations stay disabled with exact `NOT_CONFIGURED`, `OWNER_GATED`, or unavailable reasons.

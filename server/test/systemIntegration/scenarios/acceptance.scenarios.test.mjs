@@ -328,62 +328,47 @@ scenario(21, 'reconciliation divergence blocks new exposure', async () => {
     barrier.value.reasonCodes.includes('RECONCILIATION_BLOCKS_NEW_EXPOSURE')
       && barrier.value.reconciliationRequiredPlanIds.includes(run.result.snapshot.executionPlan.planId),
   );
+  const trace = run.adapter.queryTrace({ correlationId: run.result.snapshot.rootCorrelationId, limit: 20 });
+  assertScenario('SC-21', 'BLOCKED_TRACE_READABLE', trace.ok === true);
+  const reconciliationEvent = trace.value.events.find(({ event }) => event.kind === 'RECONCILIATION').event;
+  const recoveryEvent = trace.value.events.find(({ event }) => event.domainLifecycle?.startsWith('RECOVERY:')).event;
+  assertScenarioEqual(
+    'SC-21',
+    'RECONCILIATION_FAILURE_ATTRIBUTED_TO_OWNER',
+    reconciliationEvent.failure?.code,
+    'RECONCILIATION_TRUTH_BLOCKS_NEW_EXPOSURE',
+  );
+  assertScenarioEqual('SC-21', 'RECOVERY_OWNER_SUCCEEDED', recoveryEvent.failure, null);
 });
 
-scenario(22, 'ledger trace contains every material transition exactly once', () => {
-  const persistence = world.createPersistenceWorld(world.NOW, { correlationId: 'sc22.load' });
-  assertScenario('SC-22', 'PERSISTENCE_LOADED', persistence.loaded.ok === true);
-  const startup = persistence.adapter.persistStartup({ startedAtMs: world.NOW, correlationId: 'sc22.startup' });
-  assertScenario('SC-22', 'STARTUP_PERSISTED', startup.ok === true);
-  const correlationId = 'sc22.material.trace';
+scenario(22, 'production validate-only trace contains every reached owner transition exactly once', async () => {
+  const run = await world.runValidateOnly();
+  assertScenario('SC-22', 'VALIDATE_ONLY_READY', run.result.ok === true);
+  assertScenarioEqual('SC-22', 'NO_VENUE_SUBMISSION', run.result.snapshot.venueAudit.submissionCalls, 0);
+  const correlationId = run.result.snapshot.rootCorrelationId;
   const material = [
-    ['SOURCE', 'public-spot-source', 'SYNTHETIC_ONLY'],
-    ['INTELLIGENCE', 'market-intelligence', 'SYNTHETIC_ONLY'],
-    ['STRATEGY', 'basis-engine', 'SYNTHETIC_ONLY'],
-    ['CAPITAL', 'capital-supervision', 'SYNTHETIC_ONLY'],
-    ['RISK', 'multileg-risk', 'DRY_RUN'],
-    ['EXECUTION', 'execution-coordinator-validate-only', 'DRY_RUN'],
-    ['RECONCILIATION', 'reconciliation', 'DRY_RUN'],
-    ['SUPERVISOR', 'engine-supervisor', 'DRY_RUN'],
+    ['CAPITAL', 'capital-supervision', 'READY'],
+    ['RISK', 'multileg-risk', 'READY'],
+    ['EXECUTION', 'execution-coordinator-validate-only', 'READY'],
+    ['RECONCILIATION', 'reconciliation', 'READY'],
+    ['EXECUTION', 'execution-coordinator-validate-only', 'RECOVERY:NO_ACTION'],
+    ['PERSISTENCE', 'ledger-persistence', 'READY'],
   ];
-  const traceIds = material.map(([kind]) => `sc22.${kind.toLowerCase()}.1`);
-  const traces = material.map(([kind, componentId, truthLabel], index) => {
-    persistence.clock.advance(1);
-    return world.persistenceTrace({
-      id: traceIds[index],
-      sequence: index + 2,
-      correlationId,
-      occurredAtMs: persistence.clock.nowMs(),
-      kind,
-      componentId,
-      truthLabel,
-      referenceIds: index === 0 ? [] : [traceIds[index - 1]],
-    });
-  });
-  for (const trace of traces) {
-    const appended = persistence.adapter.appendTraceEvent(trace);
-    assertScenario('SC-22', `${trace.kind}_APPENDED`, appended.ok === true && appended.value.appended === true);
-  }
-  const countBeforeReplay = persistence.ledger.countEvents(world.SYSTEM_PERSISTENCE_EVENT_KIND);
-  const replay = persistence.adapter.appendTraceEvent(traces[4]);
-  assertScenario('SC-22', 'EXACT_REPLAY_ACCEPTED', replay.ok === true);
-  assertScenarioEqual('SC-22', 'EXACT_REPLAY_NOT_APPENDED', replay.value.appended, false);
-  assertScenarioEqual(
-    'SC-22',
-    'EXACT_REPLAY_WRITES_NOTHING',
-    persistence.ledger.countEvents(world.SYSTEM_PERSISTENCE_EVENT_KIND),
-    countBeforeReplay,
-  );
-  const query = persistence.adapter.queryTrace({ correlationId, limit: 20 });
+  const query = run.adapter.queryTrace({ correlationId, limit: 20 });
   assertScenario('SC-22', 'TRACE_QUERY_SUCCEEDED', query.ok === true);
   assertScenarioEqual('SC-22', 'ALL_MATERIAL_TRANSITIONS_PRESENT', query.value.events.length, material.length);
   assertNoDuplicateKeys('SC-22', 'EACH_TRANSITION_EXACTLY_ONCE', query.value.events, (entry) => entry.event.id);
+  assertScenarioDeepEqual(
+    'SC-22',
+    'ACTUAL_OWNER_CHAIN_ORDER',
+    query.value.events.map(({ event }) => [event.kind, event.componentId, event.domainLifecycle]),
+    material,
+  );
   for (let index = 1; index < query.value.events.length; index += 1) {
-    assertScenarioDeepEqual(
+    assertScenario(
       'SC-22',
       `PROVENANCE_LINK_${index}`,
-      query.value.events[index].event.referenceIds,
-      [query.value.events[index - 1].event.id],
+      query.value.events[index].event.referenceIds.includes(query.value.events[index - 1].event.id),
     );
   }
 });

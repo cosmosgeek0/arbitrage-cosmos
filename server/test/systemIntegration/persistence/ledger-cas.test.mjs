@@ -350,16 +350,16 @@ test('Ledger CAS rejects unbounded batches, payloads, values, and symbols before
   try {
     assert.throws(
       () => ledger.compareAndSetConfigValueAndLogEvents(CONFIG_KEY, null, '{}', []),
-      /between 1 and 2/,
+      /between 1 and 8/,
     );
     assert.throws(
       () => ledger.compareAndSetConfigValueAndLogEvents(
         CONFIG_KEY,
         null,
         '{}',
-        [...records(), records()[0]],
+        Array.from({ length: 9 }, () => records()[0]),
       ),
-      /between 1 and 2/,
+      /between 1 and 8/,
     );
     assert.throws(
       () => ledger.compareAndSetConfigValueAndLogEvents(

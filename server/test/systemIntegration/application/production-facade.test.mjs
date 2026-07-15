@@ -1081,6 +1081,7 @@ test('corrupt persistence leaves a router-mountable fail-closed read/control she
   const router = createSystemIntegrationRouter({
     read: f.app.read,
     controls: f.app.controls,
+    validateOnly: f.app,
     clock: f.clock,
     opsReadback: {
       read: () => Object.freeze({

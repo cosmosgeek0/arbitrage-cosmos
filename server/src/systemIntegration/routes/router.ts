@@ -4,6 +4,7 @@ import type { OperatorIdentity } from '../../security/access.js';
 import type { SystemControlActor } from '../controls/types.js';
 import type { SystemControlMutationRequest } from '../contracts/types.js';
 import { evaluateCanonicalOpsIntakeGate } from '../ops/intakeGate.js';
+import type { ValidateOnlyOrchestratorInput, ValidateOnlyRunResult } from '../verticalSlice/types.js';
 import { parseControlBody, parseEventQuery, TRACE_ID_PATTERN } from './validation.js';
 import type { SystemIntegrationRouterOptions } from './types.js';
 
@@ -52,6 +53,18 @@ function asyncRoute(
   return (req, res, next) => { void handler(req, res).catch(next); };
 }
 
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function validateOnlyStatus(result: Readonly<ValidateOnlyRunResult>): number {
+  if (result.ok && result.snapshot.disposition === 'READY') return 200;
+  if (result.snapshot.disposition === 'PERSISTENCE_FAILED') return 503;
+  return 409;
+}
+
 function rejectReadQuery(req: Request, res: Response): boolean {
   const keys = Object.keys(req.query);
   if (keys.length === 0) return false;
@@ -79,9 +92,10 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     || typeof options.controls?.mutate !== 'function'
     || typeof options.controls?.auditRejectedRequest !== 'function'
     || typeof options.controls?.snapshot !== 'function'
+    || typeof options.validateOnly?.executeValidateOnly !== 'function'
     || typeof options.clock?.nowMs !== 'function'
     || typeof options.opsReadback?.read !== 'function'
-  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, clock, and ops readback ports.');
+  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, validate-only, clock, and ops readback ports.');
 
   const router = express.Router();
   router.use((_req, res, next) => {
@@ -152,6 +166,56 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
       }
       res.json(trace);
     } catch { readError(res); }
+  }));
+
+  router.post('/validate-only', asyncRoute(async (req, res) => {
+    if (!req.is('application/json')) {
+      res.status(415).json({
+        ok: false,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Content-Type must be application/json.',
+      });
+      return;
+    }
+    if (!plainRecord(req.body)) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_VALIDATE_ONLY_REQUEST',
+        error: 'Validate-only input must be a JSON object.',
+      });
+      return;
+    }
+    const input = Object.freeze({
+      ...req.body,
+      nowMs: options.clock.nowMs(),
+    }) as unknown as Readonly<ValidateOnlyOrchestratorInput>;
+    try {
+      const result = await options.validateOnly.executeValidateOnly(input);
+      res.status(validateOnlyStatus(result)).json(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message === 'VALIDATE_ONLY_BLOCKED_BY_EFFECTIVE_POSTURE') {
+        res.status(409).json({
+          ok: false,
+          code: 'VALIDATE_ONLY_BLOCKED_BY_EFFECTIVE_POSTURE',
+          error: 'Effective control posture blocks validate-only orchestration.',
+        });
+        return;
+      }
+      if (error instanceof TypeError) {
+        res.status(400).json({
+          ok: false,
+          code: 'INVALID_VALIDATE_ONLY_REQUEST',
+          error: 'Validate-only input failed its bounded contract.',
+        });
+        return;
+      }
+      res.status(503).json({
+        ok: false,
+        code: 'VALIDATE_ONLY_UNAVAILABLE',
+        error: 'Validate-only orchestration is unavailable.',
+      });
+    }
   }));
 
   router.post('/controls', asyncRoute(async (req, res) => {

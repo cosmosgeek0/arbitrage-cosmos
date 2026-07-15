@@ -26,6 +26,7 @@ import {
 import {
   createExecutionCoordinator,
   createExecutionPlanDefinition,
+  recommendExecutionRecovery,
   type CreateExecutionPlanInput,
   type ExecutionPlanDefinition,
 } from '../../foundation/execution/index.js';
@@ -74,6 +75,7 @@ interface MutableOwnerInvocations {
   coordinatorsCreated: number;
   coordinatorPreflights: number;
   reconciliationEvaluations: number;
+  recoveryEvaluations: number;
   persistenceReads: number;
   persistenceWrites: number;
 }
@@ -88,6 +90,7 @@ interface SnapshotParts {
   executionPlan?: ValidateOnlyRunSnapshot['executionPlan'];
   executionState?: ValidateOnlyRunSnapshot['executionState'];
   reconciliation?: ValidateOnlyRunSnapshot['reconciliation'];
+  recoveryRecommendations?: ValidateOnlyRunSnapshot['recoveryRecommendations'];
   supervision?: ValidateOnlyRunSnapshot['supervision'];
   failure?: ValidateOnlyRunSnapshot['failure'];
   venueAudit?: Readonly<ValidateOnlyVenueAudit>;
@@ -156,7 +159,7 @@ function baseSnapshot(
   const capitalDialectAvailable = !modeBlocked && hasOwnerSuppliedCapitalDialect(input);
   const blocked = parts.disposition !== 'READY';
   return Object.freeze({
-    schema: 'cosmos.system-integration.validate-only.v1' as const,
+    schema: 'cosmos.system-integration.validate-only.v2' as const,
     recordId: recordId(input, parts.disposition),
     disposition: parts.disposition,
     rootCorrelationId: input.correlationId,
@@ -188,6 +191,7 @@ function baseSnapshot(
     executionPlan: parts.executionPlan ?? null,
     executionState: parts.executionState ?? null,
     reconciliation: parts.reconciliation ?? null,
+    recoveryRecommendations: Object.freeze([...(parts.recoveryRecommendations ?? [])]),
     supervision: parts.supervision ?? null,
     failure: parts.failure ?? null,
     ownerInvocations: freezeInvocations(calls),
@@ -667,6 +671,7 @@ export class ValidateOnlyOrchestrator {
       coordinatorsCreated: 0,
       coordinatorPreflights: 0,
       reconciliationEvaluations: 0,
+      recoveryEvaluations: 0,
       persistenceReads: 0,
       persistenceWrites: 0,
     };
@@ -814,6 +819,8 @@ export class ValidateOnlyOrchestrator {
             input.nowMs,
             input.reconciliationPolicy,
           );
+          calls.recoveryEvaluations += 1;
+          const recoveryRecommendations = recommendExecutionRecovery(input.supervision.state, input.nowMs);
           return this.persist(input, calls, baseSnapshot(input, calls, {
             disposition: 'RISK_REJECTED',
             approvalDecision: approvalDecision.value,
@@ -828,6 +835,7 @@ export class ValidateOnlyOrchestrator {
               state: input.supervision.state,
               reconciliation,
             }),
+            recoveryRecommendations,
           }));
         } catch {
           const rejected = failure(input, 'reconciliation', 'SUPERVISION_RECONCILIATION_INVALID', 'Existing execution supervision could not reconcile the supplied synthetic evidence.', 'Keep new exposure blocked and restore the prior Foundation checkpoint with complete reconciliation evidence.');
@@ -1011,6 +1019,8 @@ export class ValidateOnlyOrchestrator {
     const disposition: ValidateOnlyDisposition = reconciliation.status === 'EXACT' && reconciliation.executionAuthority === 'NONE'
       ? 'READY'
       : 'RECONCILIATION_BLOCKED';
+    calls.recoveryEvaluations += 1;
+    const recoveryRecommendations = recommendExecutionRecovery(coordinator.snapshot(), input.nowMs);
     const reconciliationFailure = disposition === 'READY'
       ? null
       : failure(input, 'reconciliation', 'RECONCILIATION_TRUTH_BLOCKS_NEW_EXPOSURE', `Reconciliation returned ${reconciliation.status}; no new exposure is permitted.`, 'Inspect the data-only risk-reducing recommendation and restore exact truth.');
@@ -1024,6 +1034,7 @@ export class ValidateOnlyOrchestrator {
       executionPlan: definition,
       executionState: coordinator.snapshot(),
       reconciliation,
+      recoveryRecommendations,
       failure: reconciliationFailure,
       venueAudit,
     }));

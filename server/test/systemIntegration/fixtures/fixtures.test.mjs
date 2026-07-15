@@ -154,7 +154,7 @@ test('validate-only persistence is bounded and idempotent by recordId', async ()
   const ledger = new BoundedInMemoryLedger(clock);
   const persistence = new InMemoryValidateOnlyPersistence(ledger);
   const record = {
-    schema: 'cosmos.system-integration.validate-only.v1',
+    schema: 'cosmos.system-integration.validate-only.v2',
     recordId: 'validate-record-1',
     rootCorrelationId: 'cor_validate_record_1',
     operatorMode: 'VALIDATE_ONLY',

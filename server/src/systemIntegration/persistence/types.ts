@@ -28,6 +28,7 @@ export const SYSTEM_PERSISTENCE_LIMITS = Object.freeze({
   maximumLiveEdgeControlEvents: 256,
   maximumControlRejections: 512,
   maximumTraceIndexEntries: 1_024,
+  maximumTraceEventsPerCommit: 8,
   maximumReasonCodes: 32,
   maximumTraceQueryLimit: 200,
   maximumLedgerScan: 2_000,
@@ -612,6 +613,7 @@ export interface PersistenceAuditInput {
   readonly correlationId: string;
   readonly occurredAtMs: number;
   readonly traceEvent?: Readonly<SystemTraceEvent>;
+  readonly traceEvents?: readonly Readonly<SystemTraceEvent>[];
 }
 
 export interface PersistedCommitReceipt {
@@ -620,12 +622,11 @@ export interface PersistedCommitReceipt {
   readonly checksum: string;
 }
 
-export interface IdempotentTransitionInput<T extends SystemJsonValue> {
+interface IdempotentTransitionBase<T extends SystemJsonValue> {
   readonly idempotencyKey: string;
   readonly requestDigest: string;
   readonly correlationId: string;
   readonly occurredAtMs: number;
-  readonly traceEvent: Readonly<SystemTraceEvent>;
   readonly transition: (
     current: Readonly<SystemIntegrationCheckpointState>,
   ) => {
@@ -633,6 +634,18 @@ export interface IdempotentTransitionInput<T extends SystemJsonValue> {
     readonly receipt: T;
   };
 }
+
+export type IdempotentTransitionInput<T extends SystemJsonValue> =
+  Readonly<IdempotentTransitionBase<T> & (
+    | {
+        readonly traceEvent: Readonly<SystemTraceEvent>;
+        readonly traceEvents?: never;
+      }
+    | {
+        readonly traceEvent?: never;
+        readonly traceEvents: readonly [Readonly<SystemTraceEvent>, ...Readonly<SystemTraceEvent>[]];
+      }
+  )>;
 
 export interface IdempotentTransitionReceipt<T extends SystemJsonValue> {
   readonly replayed: boolean;

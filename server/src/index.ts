@@ -747,6 +747,9 @@ app.use('/api', operatorAccess.middleware());
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,
+  validateOnly: {
+    executeValidateOnly: (input) => systemIntegration.executeValidateOnly(input),
+  },
   clock: systemIntegrationClock,
   opsReadback: canonicalOpsReadPort,
 }));

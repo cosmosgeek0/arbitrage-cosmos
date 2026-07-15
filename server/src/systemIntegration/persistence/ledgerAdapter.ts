@@ -12,6 +12,12 @@ import type {
 } from '../contracts/types.js';
 import type { OperatorApprovalState } from '../../capitalFoundation/approvals/index.js';
 import {
+  RECOVERY_ACTIONS,
+  recommendExecutionRecovery,
+  type ExecutionPlanState,
+} from '../../foundation/execution/index.js';
+import { isStructuredFailure } from '../../foundation/contracts/index.js';
+import {
   canonicalPersistenceJson,
   cloneCheckpointState,
   decodeSystemCheckpoint,
@@ -126,18 +132,41 @@ function checkpointChecksum(serialized: string): string {
   return decoded.checksum;
 }
 
+function auditTraceEvents(audit: Readonly<PersistenceAuditInput>): readonly Readonly<SystemTraceEvent>[] {
+  if (Array.isArray(audit.traceEvents)) return audit.traceEvents;
+  return audit.traceEvent === undefined ? Object.freeze([]) : Object.freeze([audit.traceEvent]);
+}
+
 function validAuditInput(audit: Readonly<PersistenceAuditInput>): PersistenceResult<true> {
   if (!audit || !CORRELATION_ID.test(audit.correlationId) || !validUtcMillis(audit.occurredAtMs)) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit metadata is invalid');
   }
-  if (audit.traceEvent !== undefined) {
-    const issues = validateSystemTraceEvent(audit.traceEvent);
+  if (audit.traceEvent !== undefined && audit.traceEvents !== undefined) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit must use one trace field');
+  }
+  if (audit.traceEvents !== undefined && !Array.isArray(audit.traceEvents)) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit trace batch must be an array');
+  }
+  const traces = auditTraceEvents(audit);
+  if (audit.traceEvents !== undefined && (
+    traces.length === 0
+    || traces.length > SYSTEM_PERSISTENCE_LIMITS.maximumTraceEventsPerCommit
+  )) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit trace batch is empty or exceeds its bound');
+  }
+  const traceIds: string[] = [];
+  for (const trace of traces) {
+    const issues = validateSystemTraceEvent(trace);
     if (issues.length > 0) return failed('INVALID_PERSISTENCE_REQUEST', `trace event is invalid: ${issues.slice(0, 6).join(', ')}`);
-    if (audit.traceEvent.correlationId !== audit.correlationId
-      || audit.traceEvent.occurredAtMs !== audit.occurredAtMs
-      || audit.traceEvent.persistedAtMs !== null) {
+    if (trace.correlationId !== audit.correlationId
+      || trace.occurredAtMs !== audit.occurredAtMs
+      || trace.persistedAtMs !== null) {
       return failed('INVALID_PERSISTENCE_REQUEST', 'trace event does not match its audit envelope');
     }
+    traceIds.push(trace.id);
+  }
+  if (new Set(traceIds).size !== traceIds.length) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit trace IDs must be unique');
   }
   return { ok: true, value: true };
 }
@@ -155,6 +184,7 @@ function traceForCheckpoint(input: {
   readonly truthLabel?: SystemTraceEvent['truthLabel'];
   readonly domainLifecycle?: string | null;
   readonly releaseStatuses?: SystemTraceEvent['releaseStatuses'];
+  readonly failure?: SystemTraceEvent['failure'];
 }): Readonly<SystemTraceEvent> {
   const id = `${input.idPrefix}:${input.sequence}:${input.correlationId}`.slice(0, 256);
   return Object.freeze({
@@ -172,10 +202,174 @@ function traceForCheckpoint(input: {
     revisionDigest: null,
     domainLifecycle: input.domainLifecycle ?? null,
     machinePhase: input.machinePhase,
-    failure: null,
+    failure: input.failure ?? null,
     referenceIds: Object.freeze([...(input.referenceIds ?? [])]),
     lossCodes: Object.freeze([]),
   });
+}
+
+function validateOnlyTraceEvents(
+  value: Readonly<Record<string, SystemJsonValue>>,
+): readonly [Readonly<SystemTraceEvent>, ...Readonly<SystemTraceEvent>[]] {
+  const recordId = String(value.recordId);
+  const correlationId = String(value.rootCorrelationId);
+  const occurredAtMs = Number(value.evaluatedAtMs);
+  const disposition = String(value.disposition);
+  const calls = isRecord(value.ownerInvocations) ? value.ownerInvocations : {};
+  const riskPlanBinding = isRecord(value.riskPlanBinding) ? value.riskPlanBinding : null;
+  const executionPlan = isRecord(value.executionPlan) ? value.executionPlan : null;
+  const executionState = isRecord(value.executionState) ? value.executionState : null;
+  const reconciliation = isRecord(value.reconciliation) ? value.reconciliation : null;
+  const supervision = isRecord(value.supervision) ? value.supervision : null;
+  const supervisedReconciliation = supervision !== null && isRecord(supervision.reconciliation)
+    ? supervision.reconciliation
+    : null;
+  const recoveryRecommendations = Array.isArray(value.recoveryRecommendations)
+    ? value.recoveryRecommendations.filter(isRecord)
+    : [];
+  const terminalFailure = isRecord(value.failure)
+    ? value.failure as unknown as SystemTraceEvent['failure']
+    : null;
+  const releaseStatuses = value.releaseStatuses as SystemTraceEvent['releaseStatuses'];
+  const dryRunTruth = Array.isArray(value.truthLabels) && value.truthLabels.includes('DRY_RUN')
+    ? 'DRY_RUN' as const
+    : 'UNAVAILABLE' as const;
+  const stages: Array<Readonly<{
+    kind: SystemTraceEvent['kind'];
+    componentId: SystemComponentId;
+    truthLabel: SystemTraceEvent['truthLabel'];
+    references: readonly unknown[];
+    domainLifecycle: string;
+    failure: SystemTraceEvent['failure'];
+    releaseStatuses: SystemTraceEvent['releaseStatuses'];
+    ownerStage: 'capital' | 'risk' | 'execution' | 'reconciliation' | 'recovery' | 'persistence';
+  }>> = [];
+  if (calls.approvalEvaluations === 1) {
+    stages.push(Object.freeze({
+      kind: 'CAPITAL',
+      componentId: 'capital-supervision',
+      truthLabel: value.capitalReservationDialect === 'OWNER_SUPPLIED_MANUAL_ARMED_ENVELOPE'
+        ? 'SYNTHETIC_ONLY'
+        : 'UNAVAILABLE',
+      references: Object.freeze([recordId, value.reservationId, value.approvalId]),
+      domainLifecycle: disposition,
+      failure: null,
+      releaseStatuses,
+      ownerStage: 'capital',
+    }));
+  }
+  if (calls.riskEvaluations === 1) {
+    stages.push(Object.freeze({
+      kind: 'RISK',
+      componentId: 'multileg-risk',
+      truthLabel: dryRunTruth,
+      references: Object.freeze([riskPlanBinding?.riskDecisionId, value.mandateId]),
+      domainLifecycle: disposition,
+      failure: null,
+      releaseStatuses,
+      ownerStage: 'risk',
+    }));
+  }
+  if (calls.executionDefinitionsCreated === 1
+      || calls.coordinatorsCreated === 1
+      || calls.coordinatorPreflights === 1) {
+    stages.push(Object.freeze({
+      kind: 'EXECUTION',
+      componentId: 'execution-coordinator-validate-only',
+      truthLabel: dryRunTruth,
+      references: Object.freeze([executionPlan?.planId, executionState?.planId, value.canonicalProposalId]),
+      domainLifecycle: disposition,
+      failure: null,
+      releaseStatuses,
+      ownerStage: 'execution',
+    }));
+  }
+  if (calls.reconciliationEvaluations === 1) {
+    const reachedReconciliation = reconciliation ?? supervisedReconciliation;
+    stages.push(Object.freeze({
+      kind: 'RECONCILIATION',
+      componentId: 'reconciliation',
+      truthLabel: dryRunTruth,
+      references: Object.freeze([reachedReconciliation?.planId, executionPlan?.planId]),
+      domainLifecycle: disposition,
+      failure: null,
+      releaseStatuses,
+      ownerStage: 'reconciliation',
+    }));
+  }
+  if (calls.recoveryEvaluations === 1) {
+    const actions = recoveryRecommendations
+      .flatMap((entry) => typeof entry.action === 'string' ? [entry.action] : []);
+    stages.push(Object.freeze({
+      kind: 'EXECUTION',
+      componentId: 'execution-coordinator-validate-only',
+      truthLabel: dryRunTruth,
+      references: Object.freeze([
+        executionPlan?.planId,
+        supervision?.planId,
+        ...actions.map((action) => `recovery:${action}`),
+      ]),
+      domainLifecycle: `RECOVERY:${actions.join('-').slice(0, 96) || 'UNAVAILABLE'}`,
+      failure: null,
+      releaseStatuses,
+      ownerStage: 'recovery',
+    }));
+  }
+  if (terminalFailure !== null && stages.length > 0) {
+    const rawStage = typeof terminalFailure.stage === 'string' ? terminalFailure.stage : '';
+    const failureOwner = rawStage === 'approval'
+      ? 'capital'
+      : rawStage === 'risk' || rawStage === 'risk-adapter'
+        ? 'risk'
+        : rawStage === 'reconciliation'
+          ? 'reconciliation'
+          : ['execution-plan', 'coordinator', 'execution', 'preflight'].includes(rawStage)
+            ? 'execution'
+            : null;
+    const index = failureOwner === null ? -1 : stages.findIndex((stage) => stage.ownerStage === failureOwner);
+    if (index >= 0) stages[index] = Object.freeze({ ...stages[index], failure: terminalFailure });
+  }
+  stages.push(Object.freeze({
+    kind: 'PERSISTENCE',
+    componentId: 'ledger-persistence',
+    truthLabel: 'RECORDED_REPLAY',
+    references: Object.freeze([recordId]),
+    domainLifecycle: disposition,
+    failure: null,
+    releaseStatuses: Object.freeze(['WIRED'] as const),
+    ownerStage: 'persistence',
+  }));
+
+  const digestPrefix = persistenceDigest(recordId).slice(0, 8);
+  const traces: SystemTraceEvent[] = [];
+  for (const [index, stage] of stages.entries()) {
+    const predecessor = traces.at(-1)?.id;
+    const references = [...new Set([
+      ...(predecessor === undefined ? [] : [predecessor]),
+      ...stage.references.flatMap((reference) => (
+        typeof reference === 'string' && BOUNDED_ID.test(reference) ? [reference] : []
+      )),
+    ])];
+    traces.push(traceForCheckpoint({
+      idPrefix: `v${index}.${digestPrefix}`,
+      sequence: occurredAtMs * SYSTEM_PERSISTENCE_LIMITS.maximumTraceEventsPerCommit + index + 1,
+      componentId: stage.componentId,
+      correlationId,
+      occurredAtMs,
+      kind: stage.kind,
+      machinePhase: stage.ownerStage === 'persistence'
+        ? 'RUNNING'
+        : disposition === 'READY'
+          ? 'RUNNING'
+          : 'BLOCKED',
+      truthLabel: stage.truthLabel,
+      releaseStatuses: stage.releaseStatuses,
+      domainLifecycle: stage.domainLifecycle,
+      failure: stage.failure,
+      referenceIds: references,
+    }));
+  }
+  return Object.freeze(traces) as [SystemTraceEvent, ...SystemTraceEvent[]];
 }
 
 function appendTraceIndex(
@@ -320,7 +514,7 @@ const VALIDATE_ONLY_RECORD_FIELDS = Object.freeze([
   'liveExecutionPermitted', 'truthLabels', 'releaseStatuses', 'canonicalProposalId',
   'sourceProposalId', 'reservationId', 'stagedPlanId', 'mandateId', 'approvalId',
   'approvalDecision', 'approvalState', 'riskVerdict', 'boundRiskDecision',
-  'riskPlanBinding', 'executionPlan', 'executionState', 'reconciliation', 'supervision',
+  'riskPlanBinding', 'executionPlan', 'executionState', 'reconciliation', 'recoveryRecommendations', 'supervision',
   'failure', 'ownerInvocations',
   'venueAudit',
 ] as const);
@@ -335,6 +529,23 @@ const PLAN_LIFECYCLES = new Set([
   'HEDGED_OPEN', 'CLOSE_REQUESTED', 'CLOSING', 'RECONCILING', 'CLOSED',
   'RECOVERY_REQUIRED', 'FAILED', 'CANCELLED', 'EXPIRED',
 ]);
+
+function validRecoveryRecommendations(value: unknown): boolean {
+  return Array.isArray(value)
+    && value.length <= 16
+    && value.every((entry) => isRecord(entry)
+      && hasExactKeys(entry, ['action', 'riskEffect', 'reason', 'phase', 'legKey', 'clientOrderId', 'automatic'])
+      && (RECOVERY_ACTIONS as readonly unknown[]).includes(entry.action)
+      && ['NEUTRAL', 'RISK_REDUCING', 'RISK_INCREASING'].includes(String(entry.riskEffect))
+      && typeof entry.reason === 'string'
+      && entry.reason.length >= 1
+      && entry.reason.length <= 512
+      && !SENSITIVE_TEXT.test(entry.reason)
+      && (entry.phase === null || entry.phase === 'OPEN' || entry.phase === 'CLOSE')
+      && (entry.legKey === null || entry.legKey === 'SPOT' || entry.legKey === 'PERP')
+      && (entry.clientOrderId === null || BOUNDED_ID.test(String(entry.clientOrderId)))
+      && entry.automatic === false);
+}
 
 function hasExactKeys(value: Readonly<Record<string, unknown>>, expected: readonly string[]): boolean {
   const keys = Object.keys(value).sort();
@@ -512,7 +723,7 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only persistence record contains missing or unknown fields');
   }
-  if (record.schema !== 'cosmos.system-integration.validate-only.v1'
+  if (record.schema !== 'cosmos.system-integration.validate-only.v2'
     || record.operatorMode !== 'VALIDATE_ONLY'
     || !['OWNER_SUPPLIED_MANUAL_ARMED_ENVELOPE', 'UNAVAILABLE_OR_UNVALIDATED'].includes(String(record.capitalReservationDialect))
     || record.executionAuthority !== 'NONE'
@@ -525,6 +736,9 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   }
   if (record.executionCorrelationId !== null && !CORRELATION_ID.test(String(record.executionCorrelationId))) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only execution correlation is invalid');
+  }
+  if (record.failure !== null && !isStructuredFailure(record.failure)) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only structured failure is invalid');
   }
   const riskVerdictHasUnknown = isRecord(record.riskVerdict)
     && Array.isArray(record.riskVerdict.checks)
@@ -579,14 +793,22 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   if (!isRecord(record.ownerInvocations)
     || Object.keys(record.ownerInvocations).sort().join('|') !== [
       'approvalEvaluations', 'approvalUseReductions', 'riskEvaluations', 'executionDefinitionsCreated',
-      'coordinatorsCreated', 'coordinatorPreflights', 'reconciliationEvaluations',
+      'coordinatorsCreated', 'coordinatorPreflights', 'reconciliationEvaluations', 'recoveryEvaluations',
       'persistenceReads', 'persistenceWrites',
     ].sort().join('|')
-    || Object.values(record.ownerInvocations).some((value) => !Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 1_000)
-    || ![0, 1].includes(record.ownerInvocations.persistenceReads as number)
-    || ![0, 1].includes(record.ownerInvocations.approvalUseReductions as number)
+    || Object.values(record.ownerInvocations).some((value) => ![0, 1].includes(value as number))
     || record.ownerInvocations.persistenceWrites !== 1) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only owner invocation evidence is malformed or unbounded');
+  }
+  const recoveryRecommendations = Array.isArray(record.recoveryRecommendations)
+    ? record.recoveryRecommendations
+    : [];
+  if (!validRecoveryRecommendations(record.recoveryRecommendations)
+    || ((record.ownerInvocations.recoveryEvaluations === 1) !== (recoveryRecommendations.length > 0))
+    || (record.ownerInvocations.recoveryEvaluations === 1
+      && !isRecord(record.executionState)
+      && !isRecord(record.supervision))) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only recovery evidence is malformed or not owner-bound');
   }
   if (record.approvalState !== null
     && !validApprovalStateProjection(record.approvalState, String(record.approvalId))) {
@@ -660,10 +882,32 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
       return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only reconciliation has no execution plan owner');
     }
   }
+  if (record.ownerInvocations.recoveryEvaluations === 1) {
+    const recoveryState = isRecord(record.executionState)
+      ? record.executionState
+      : isRecord(record.supervision) && isRecord(record.supervision.state)
+        ? record.supervision.state
+        : null;
+    if (recoveryState === null) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only recovery evidence has no execution-state owner');
+    }
+    try {
+      const canonicalRecovery = recommendExecutionRecovery(
+        recoveryState as unknown as ExecutionPlanState,
+        Number(record.evaluatedAtMs),
+      );
+      if (!sameJson(record.recoveryRecommendations, canonicalRecovery)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only recovery evidence differs from the canonical owner projection');
+      }
+    } catch {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only recovery owner projection is invalid');
+    }
+  }
   if (record.disposition === 'READY' && (
     !isRecord(record.executionPlan)
     || !isRecord(record.reconciliation)
     || record.reconciliation.status !== 'EXACT'
+    || record.ownerInvocations.recoveryEvaluations !== 1
   )) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'READY validate-only record lacks exact reconciled owner truth');
   }
@@ -948,13 +1192,14 @@ export class SystemLedgerPersistenceAdapter {
         SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan,
         SYSTEM_PERSISTENCE_EVENT_KIND,
       );
-      return events.find((event) => {
+      const matching = events.filter((event) => {
         if (!isRecord(event.data)) return false;
         return event.data.schema === AUDIT_SCHEMA
           && event.data.version === AUDIT_VERSION
           && event.data.checkpointRevision === checkpointRevision
           && (checkpointDigest === undefined || event.data.checkpointChecksum === checkpointDigest);
-      }) ?? null;
+      });
+      return matching.sort((left, right) => left.id - right.id)[0] ?? null;
     } catch {
       return null;
     }
@@ -996,7 +1241,8 @@ export class SystemLedgerPersistenceAdapter {
     } catch (error) {
       return failed('CHECKPOINT_INVALID', errorMessage(error, 'checkpoint encoding failed'));
     }
-    const data: DurableAuditEvent = {
+    const traces = auditTraceEvents(audit);
+    const data: readonly DurableAuditEvent[] = (traces.length === 0 ? [null] : traces).map((trace) => ({
       schema: AUDIT_SCHEMA,
       version: AUDIT_VERSION,
       auditKind: audit.auditKind,
@@ -1004,12 +1250,14 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs: audit.occurredAtMs,
       checkpointRevision: nextState.revision,
       checkpointChecksum: checksum,
-      trace: audit.traceEvent ?? null,
-    };
+      trace,
+    }));
     try {
-      const encodedAudit = canonicalPersistenceJson(data);
-      if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
-        return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit event exceeds its byte bound');
+      for (const auditEvent of data) {
+        const encodedAudit = canonicalPersistenceJson(auditEvent);
+        if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
+          return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit event exceeds its byte bound');
+        }
       }
       if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
         return failed('PERSISTENCE_WRITE_FAILED', 'existing Ledger is not writable');
@@ -1021,11 +1269,11 @@ export class SystemLedgerPersistenceAdapter {
         SYSTEM_PERSISTENCE_CONFIG_KEY,
         this.loadedSerializedValue,
         serialized,
-        [{
+        data.map((auditEvent) => ({
           kind: SYSTEM_PERSISTENCE_EVENT_KIND,
           symbol: null,
-          data,
-        }],
+          data: auditEvent,
+        })),
       );
       if (!result.committed) {
         this.refreshAfterCompareAndSetConflict(result.currentValue);
@@ -1100,8 +1348,8 @@ export class SystemLedgerPersistenceAdapter {
       return failed('CHECKPOINT_REVISION_CONFLICT', 'checkpoint revision or generation is not the next durable transition');
     }
     let prepared = cloneCheckpointState(nextState);
-    if (audit.traceEvent) {
-      const indexed = appendTraceIndex(prepared, audit.traceEvent);
+    for (const trace of auditTraceEvents(audit)) {
+      const indexed = appendTraceIndex(prepared, trace);
       if (!indexed.ok) return indexed;
       prepared = indexed.value;
     }
@@ -1113,6 +1361,19 @@ export class SystemLedgerPersistenceAdapter {
   ): PersistenceResult<Readonly<IdempotentTransitionReceipt<T>>> {
     const current = this.currentState();
     if (!current.ok) return current;
+    const hasTraceEvent = input.traceEvent !== undefined;
+    const hasTraceEvents = input.traceEvents !== undefined;
+    if (hasTraceEvent === hasTraceEvents) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'idempotent transition requires exactly one trace field');
+    }
+    const auditValidation = validAuditInput({
+      auditKind: 'TRANSITION',
+      correlationId: input.correlationId,
+      occurredAtMs: input.occurredAtMs,
+      traceEvent: input.traceEvent,
+      traceEvents: input.traceEvents,
+    });
+    if (!auditValidation.ok) return auditValidation;
     if (!IDEMPOTENCY_KEY.test(input.idempotencyKey)
       || !DIGEST.test(input.requestDigest)
       || !CORRELATION_ID.test(input.correlationId)
@@ -1168,6 +1429,7 @@ export class SystemLedgerPersistenceAdapter {
       correlationId: input.correlationId,
       occurredAtMs: input.occurredAtMs,
       traceEvent: input.traceEvent,
+      traceEvents: input.traceEvents,
     });
     if (!committed.ok) return committed;
     return {
@@ -1238,7 +1500,8 @@ export class SystemLedgerPersistenceAdapter {
     }
     const matching: PersistedTraceEventRecord[] = [];
     for (const row of raw) {
-      if (!isRecord(row.data) || !isRecord(row.data.trace)) continue;
+      if (!isRecord(row.data)) continue;
+      if (!isRecord(row.data.trace)) continue;
       const sourceTrace = row.data.trace;
       if (sourceTrace.correlationId !== query.correlationId) continue;
       if (typeof sourceTrace.occurredAtMs !== 'number') continue;
@@ -1288,36 +1551,16 @@ export class SystemLedgerPersistenceAdapter {
     const occurredAtMs = Number(value.evaluatedAtMs);
     const disposition = String(value.disposition);
     const requestDigest = persistenceDigest(value);
-    const idempotencyKey = `validate-only:${persistenceDigest(recordId).slice(0, 64)}`;
+    const idempotencyKey = `validate-only:v2:${persistenceDigest(recordId).slice(0, 64)}`;
     const current = this.currentState();
     if (!current.ok) throw new Error(`${current.code}: ${current.message}`);
-    const trace = traceForCheckpoint({
-      idPrefix: `validate-only.${recordId}`,
-      sequence: current.value.revision + 1,
-      componentId: 'execution-coordinator-validate-only',
-      correlationId,
-      occurredAtMs,
-      kind: 'EXECUTION',
-      machinePhase: disposition === 'READY' ? 'RUNNING' : 'BLOCKED',
-      truthLabel: (value.truthLabels as readonly SystemJsonValue[])[0] as SystemTraceEvent['truthLabel'],
-      releaseStatuses: value.releaseStatuses as SystemTraceEvent['releaseStatuses'],
-      domainLifecycle: disposition,
-      referenceIds: [
-        value.recordId,
-        value.canonicalProposalId,
-        value.reservationId,
-        value.approvalId,
-        isRecord(value.executionPlan) ? value.executionPlan.planId : null,
-        isRecord(value.supervision) ? value.supervision.planId : null,
-        isRecord(value.riskPlanBinding) ? value.riskPlanBinding.riskDecisionId : null,
-      ].flatMap((entry) => typeof entry === 'string' && BOUNDED_ID.test(entry) ? [entry] : []),
-    });
+    const traces = validateOnlyTraceEvents(value);
     const persisted = this.applyIdempotentTransition({
       idempotencyKey,
       requestDigest,
       correlationId,
       occurredAtMs,
-      traceEvent: trace,
+      traceEvents: traces,
       transition: (state) => {
         assertApprovalStateCompareAndSet(state, value);
         let dryRunExecutions = state.dryRunExecutions;

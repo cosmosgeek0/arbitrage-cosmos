@@ -115,6 +115,90 @@ test('missing checkpoint CAS fails closed without invoking the unconditional leg
   }
 });
 
+test('trace batches and idempotent transitions reject hostile or missing trace fields before any write', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0, 'trace.batch.hostile.load').ok, true);
+    const before = adapter.currentState().value;
+    const validTrace = trace('trace.batch.valid', 1, 'trace.batch.hostile', T0 + 1);
+    for (const traceEvents of [{}, [null], [validTrace, null]]) {
+      const result = adapter.commitCheckpoint({ ...before, revision: before.revision + 1 }, {
+        auditKind: 'TRANSITION',
+        correlationId: 'trace.batch.hostile',
+        occurredAtMs: T0 + 1,
+        traceEvents,
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'INVALID_PERSISTENCE_REQUEST');
+      assert.deepEqual(adapter.currentState().value, before);
+      assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    }
+
+    let transitionCalls = 0;
+    const transition = (state) => {
+      transitionCalls++;
+      return { nextState: { ...state, revision: state.revision + 1 }, receipt: { accepted: true } };
+    };
+    for (const fields of [{}, { traceEvent: validTrace, traceEvents: [validTrace] }]) {
+      const result = adapter.applyIdempotentTransition({
+        idempotencyKey: `trace.hostile.${transitionCalls}.0001`,
+        requestDigest: 'a'.repeat(64),
+        correlationId: 'trace.batch.hostile',
+        occurredAtMs: T0 + 1,
+        transition,
+        ...fields,
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'INVALID_PERSISTENCE_REQUEST');
+    }
+    assert.equal(transitionCalls, 0);
+    assert.deepEqual(adapter.currentState().value, before);
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('batched transition replay retains the first atomic Ledger event anchor across adapter restart', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0, 'trace.batch.anchor.load').ok, true);
+    const traces = [0, 1, 2].map((index) => (
+      trace(`trace.batch.anchor.${index}`, index + 1, 'trace.batch.anchor', T0 + 1)
+    ));
+    let transitionCalls = 0;
+    const input = {
+      idempotencyKey: 'trace.batch.anchor.0001',
+      requestDigest: 'b'.repeat(64),
+      correlationId: 'trace.batch.anchor',
+      occurredAtMs: T0 + 1,
+      traceEvents: traces,
+      transition: (state) => {
+        transitionCalls++;
+        return { nextState: { ...state, revision: state.revision + 1 }, receipt: { accepted: true } };
+      },
+    };
+    const first = adapter.applyIdempotentTransition(input);
+    assert.equal(first.ok, true);
+    assert.equal(first.value.replayed, false);
+    const restarted = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(restarted.load(T0 + 2, 'trace.batch.anchor.restart').ok, true);
+    const replay = restarted.applyIdempotentTransition(input);
+    assert.equal(replay.ok, true);
+    assert.equal(replay.value.replayed, true);
+    assert.equal(replay.value.ledgerEventId, first.value.ledgerEventId);
+    assert.equal(transitionCalls, 1);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('corrupt durable checkpoints fail closed and post-commit listener failure is reconciled from Ledger truth', () => {
   const corruptDir = tempDataDir();
   const corruptLedger = new Ledger(corruptDir);

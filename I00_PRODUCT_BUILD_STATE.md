@@ -4,11 +4,11 @@ Schema version: `I00_PRODUCT_BUILD_STATE_V2`
 
 Updated: `2026-07-15`
 
-Phase: `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
+Phase: `FINAL_INTEGRATION / PHASE_2_CANDIDATE_SEAL`
 
-Status: `REPLACEMENT_CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
+Status: `INTEGRATION_CANDIDATE_READY / PARKED_READ_ONLY / INDEPENDENT_VERIFICATION_REQUIRED`
 
-Candidate state: `NOT_CANDIDATE_READY`
+Candidate state: `INTEGRATION_CANDIDATE_READY`
 
 ## Identity and authority
 
@@ -18,9 +18,9 @@ Candidate state: `NOT_CANDIDATE_READY`
 | Integration branch | `i00-product-assembly-20260713` |
 | Initial clean restart baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
 | Rejected pre-evidence source-freeze checkpoint | Commit `9bde37bc716194c241fb20bda4fdca4e451b1915`; tree `b7747152c926b688545e6e123ce34b49c1b1198e`; parent `6b50cca34a5615e828e9606cd7201daf81272ec7`. Incomplete PF-001 coverage was found before evidence capture, so this attempted freeze was never sealed and produced no browser, performance, or complete-acceptance receipt. It remains immutable history and is not a Phase 3 `REJECTED_CANDIDATE` verdict. |
-| Replacement source-freeze identity | This file and `docs/archive/i00-phase2/REPLACEMENT_CANDIDATE_SOURCE_FREEZE_RECEIPT.md` are committed atomically in replacement source-freeze commit **C**. C cannot self-name; only sole-child seal **S** records C and C's tree after complete local acceptance. |
-| Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in S and the immutable candidate receipt after all C-bound measurements pass. |
-| Active writer | Fresh Role 2 integrator, limited to shared write/merge authority on this integration branch only |
+| Replacement source-freeze identity | **C** is commit `098f7b9449ab3b1c26bda19f51537bfea01d4c48`, tree `e665f37197ffff97a5973e60777c99e60b6e7ea2`. Source is frozen at C; no source mutation occurred after C. |
+| Candidate readiness | Exact-C complete local acceptance passed. Sole-child evidence seal **S** contains only allowed evidence/seal paths and the immutable candidate receipt. S cannot self-name its own commit SHA; Git topology establishes it. This is Role 2 candidate readiness, not Phase 3 certification. |
+| Active writer | None. Role 2 is parked read-only after creating sole-child S; a different Role 3 session owns independent verification. |
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
 | Final integration order | The requested `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` path was absent at restart. Role 2 consumed the byte-identical sealed copy at `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`. |
 | Frozen local Main authority cutoff | `d78be24f4da14632c857ee250b62e3fec33c2743`; tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`; parent/prior pin `ac01b5e43830bc681ee7e251749c4d1fab210029` |
@@ -183,7 +183,7 @@ ledger-persistence, engine-supervisor
 | `npm run test:all` | Exit 0; all configured family suites pass, including the 1,618-test live-edge campaign |
 | `git diff --check` | Exit 0 at latest source audit |
 
-These focused results do not replace the complete C-bound gate. Final `npm test`, `npm run test:all`, generated-report parity, Q donor runs, deterministic scenarios, runtime startup, restart/reconciliation, performance, browser acceptance, evidence manifests, and complete-receipt validation must all be measured from exact C. S records the exact command, exit/signal, duration, stdout/stderr bytes and hashes, inventory/control observations, and evidence paths.
+The canonical serial command `npm run test:i00:complete -- --run --q-venv /Users/cosmosgeek/Desktop/quant-edge-research-20260712/quant/.venv --browser-receipt test/i00/performance/evidence/browser/local-browser-acceptance-098f7b9.json` ran from exact C and exited 0. All 11 required layers passed with zero missing steps in 1,104,333 ms, including final `npm test`, `npm run test:all`, Q donor runs, generated-report parity, deterministic scenarios, startup, restart/reconciliation, performance, browser acceptance, source-freeze validation, and diff hygiene. The five Markdown closure reports and `fixtures/i00/closure-evidence.json` remain byte-identical C-bound `PHASE2_SOURCE_CLOSURE` evidence; only the machine proof is regenerated to bind the candidate commit in `fixtures/i00/proof-catalog.json`.
 
 The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
 
@@ -193,14 +193,16 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 
 | Evidence class | Current value |
 | --- | --- |
-| Complete local acceptance | `PENDING_MEASUREMENT` |
-| Runtime startup and deterministic scenario receipt | `PENDING_MEASUREMENT` |
-| Restart/reconciliation receipt | `PENDING_MEASUREMENT` |
-| Six-run browser/no-false-green receipt | `PENDING_MEASUREMENT` |
-| Local-proxy performance receipt | `PENDING_MEASUREMENT` |
+| Complete local acceptance | PASS; `test/i00/performance/evidence/local-complete-acceptance-20260715035012040-66611.json`; SHA-256 `8a62f378268c4cf6c15ea57e0442698539097b6578aaadc87f97b2f35e171446`; 218,897 bytes; 11/11 required layers passed, zero missing, 1,104,333 ms |
+| Runtime startup and deterministic scenario receipt | PASS inside the immutable local-proxy performance receipt; exact C/tree; three measured boot generations; canonical continuity and unclean recovery passed; ready/trade-ready remained honest 503 |
+| Restart/reconciliation receipt | PASS inside the same performance receipt; managed restart request remained `REJECTED_STATE / OWNER_GATED / NOT_PROVEN` with durable rejection audit and no durable receipt/effect; graceful shutdown emitted 1012 and SIGKILL application-first recovery passed SQLite quick/integrity checks |
+| Six-run browser/no-false-green receipt | PASS; `test/i00/performance/evidence/browser/local-browser-acceptance-098f7b9.json`; SHA-256 `21e115fb220181a0627b5fdc5b5fa91eea68b64cb4712e2b0720ff9c1f90ca03`; 102,969 bytes; 6 runs, 126 route captures, 194 artifacts, bottom-up/topbar PASS, fake controls 0, semantic failures 0, observed 1012 and post-restart render |
+| Local-proxy performance receipt | PASS; `test/i00/performance/evidence/local-proxy-performance-20260715035012040-66611.json`; SHA-256 `b1905dfd2adac84680ca79e8807829a23a9ac37a1b0630181fa71df9e58205c7`; 186,462 bytes; 60.09 measured seconds across three boots at 24 RPS, concurrency 8, four WebSockets; overall local SLO PASS; short-window RSS slope remains `NOT_CONFIGURED` |
 | Deployed runtime | `UNKNOWN / NOT_CONFIGURED`; no target or readback |
 | External actions performed | `NONE` |
 | External authorizations present | `NONE` |
+
+The receipts record `OWNER_GATED_NOT_RUN` for private reads, signed calls, and AWS/Cloudflare; `NOT_RUN` for deploy/push; `FORBIDDEN_NOT_RUN` for money paths; and zero secret findings. These local, keyless measurements do not upgrade production capacity, live-public truth, managed-restart authority, private truth, deployment, or money posture.
 
 ## Exact known limitations
 
@@ -221,13 +223,9 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 | PRODUCTION_CAPACITY | `UNKNOWN` | Local bounded acceptance only; production load/capacity not measured |
 | Q_PRODUCTION_TRANSPORT | `NOT_CONFIGURED` | No accepted production Q transport is mounted |
 
-## C to S transition and resume
+## Read-only park and independent verification
 
-Next exact task:
-
-1. Treat the commit containing this state and its source-freeze receipt as replacement C; do not rewrite rejected checkpoint `9bde37bc716194c241fb20bda4fdca4e451b1915` and permit no later source mutation.
-2. Run `npm run test:i00:complete -- --run ...` from exact C with immutable performance and browser receipts.
-3. If every measurement passes, update only allowed evidence/seal paths, create sole-child S, run validate-only against exact C, and park read-only.
+The integration branch is parked at sole-child S. Role 2's post-commit detached validate-only run checks the C/S topology, immutable receipts, generated parity, and allowed seal path set; it is not independent certification. The only next task is a different Role 3 session independently returning `VERIFIED_CANDIDATE` or `REJECTED_CANDIDATE` against exact C and S.
 
 Files a replacement integrator must read, in order:
 
@@ -241,4 +239,4 @@ Files a replacement integrator must read, in order:
 
 Work that must not be repeated: no donor rebuild or re-merge; no post-L donor; no duplicate scanner/ledger/control/socket; no hand edit of generated closure reports; no weakening of scope, receipt, inventory, browser, or no-false-green gates; no claim of current dashboard donor byte equality; no private/signed/deployed/live/canary claim from fixtures or local artifacts.
 
-Role 2 may create C and S but may not verify its own candidate. A different Role 3 session must independently return `VERIFIED_CANDIDATE` or `REJECTED_CANDIDATE`.
+Role 2 may not verify its own candidate. No `current-main` write, push, deployment, private/signed call, cloud mutation, or money action is authorized or performed.

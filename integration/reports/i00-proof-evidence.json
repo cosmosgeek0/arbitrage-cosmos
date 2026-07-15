@@ -5537,13 +5537,13 @@
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 29
+        "line": 32
       },
       {
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 521
+        "line": 764
       },
       {
         "concept": "control-authority",
@@ -5663,7 +5663,7 @@
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 438
+        "line": 482
       },
       {
         "concept": "control-authority",
@@ -13940,5 +13940,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "773964b74a0855151b6ac3a770dcc5bc5cb357db30c7b6b568aceff14ffd5d38"
+  "evidenceSha256": "4327c10c04029c1e912cbc404e0a1939658ffc65e0f006e2019e7a1013c61a8e"
 }

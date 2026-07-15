@@ -180,7 +180,7 @@ ledger-persistence, engine-supervisor
 | `bash ops/tests/i00/run-all.sh` | Exit 0; 12/12 files; 725 additive assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
 | `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; exact footer sum 384 assertions, including 35 durable lane-scope cases |
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
-| `npm run test:all` | Initial correction-tip run exited 1 only at stale generated machine-evidence source anchors (`29→32`, `521→764`, `438→482`); report raw SHA-256 after regeneration is `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5`; full rerun pending, no pass claimed |
+| `npm run test:all` | Initial correction-tip run exited 1 only at stale generated machine-evidence source anchors (`29→32`, `521→764`, `438→482`); regenerated report raw SHA-256 is `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5`; exact clean committed-shape closure-evidence passes `10/10`; full rerun pending, no pass claimed |
 | `git diff --check` | Exit 0 at latest source audit |
 
 These focused results do not replace the complete C-bound gate. Final `npm test`, `npm run test:all`, generated-report parity, Q donor runs, deterministic scenarios, runtime startup, restart/reconciliation, performance, browser acceptance, evidence manifests, and complete-receipt validation must all be measured from exact C. S records the exact command, exit/signal, duration, stdout/stderr bytes and hashes, inventory/control observations, and evidence paths.

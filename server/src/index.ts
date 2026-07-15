@@ -49,6 +49,7 @@ import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
   createSystemIntegrationApplication,
   OrdinaryShutdownAdmission,
+  type SystemIntegrationApplicationFacade,
 } from './systemIntegration/application/index.js';
 import { createCanonicalOwnerEvidenceReadPort } from './systemIntegration/adapters/index.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
@@ -73,6 +74,7 @@ import { createProductionSystemIntegrationPorts } from './systemIntegration/prod
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import {
   createCanonicalSupervisorOpsReadback,
+  createCanonicalRestartTruthCoordinator,
   createDeploymentFreezeReader,
   type CanonicalSupervisorOpsReadPort,
 } from './systemIntegration/ops/index.js';
@@ -231,7 +233,13 @@ const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
   read: readCanonicalOps,
 });
 let readManagedRuntimeForControlEffect: (() => Readonly<ManagedCompositionReadSnapshot>) | null = null;
-const systemIntegration = createSystemIntegrationApplication({
+let systemIntegration: SystemIntegrationApplicationFacade;
+const canonicalRestartTruth = createCanonicalRestartTruthCoordinator({
+  clock: systemIntegrationClock,
+  readSupervisor: () => systemIntegration.supervisor(),
+  readOps: (supervisorCut) => readCanonicalOps(supervisorCut),
+});
+systemIntegration = createSystemIntegrationApplication({
   ledger,
   clock: systemIntegrationClock,
   scheduler: systemIntegrationScheduler,
@@ -240,6 +248,7 @@ const systemIntegration = createSystemIntegrationApplication({
   summaries: systemIntegrationProduction.summaries,
   traces: canonicalOwnerEvidence,
   lifecycleTruth: Object.freeze({
+    readRestartTruth: (nowMs: number) => canonicalRestartTruth.readRestartTruth(nowMs),
     readLocalMutationAuthority,
     readOrdinaryDrainTruth: readCanonicalOps,
     readControlRuntimeEffect: (effectId: string, mutation: Readonly<SystemControlMutation>) => {
@@ -251,6 +260,9 @@ const systemIntegration = createSystemIntegrationApplication({
         return 'UNKNOWN';
       }
     },
+  }),
+  restartTruthRefresh: Object.freeze({
+    refreshRestartTruth: (nowMs: number) => canonicalRestartTruth.refreshRestartTruth(nowMs),
   }),
   // Convergence never treats ambient credentials as an execution capability.
   // The audited application kill remains an independent, stricter outer gate.

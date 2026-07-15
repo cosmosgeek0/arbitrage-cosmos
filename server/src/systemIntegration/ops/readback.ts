@@ -1,6 +1,7 @@
 import type { ProductIdentityReferenceRecord } from '../persistence/types.js';
 import type { SystemComponentSnapshot } from '../contracts/types.js';
 import type { SystemSupervisorReadModel } from '../supervisor/types.js';
+import { OPS_STRONG_ACCOUNT_TRUTH_STATES } from './types.js';
 import type {
   CanonicalSupervisorOpsReadPort,
   CanonicalSupervisorOpsReadback,
@@ -41,12 +42,7 @@ const FREEZE_PROJECTION_KEYS = Object.freeze([
 ] as const);
 const UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const REASON_CODE = /^[A-Z][A-Z0-9_]{0,99}$/;
-const STRONG_ACCOUNT_TRUTH_STATES = new Set([
-  'AVAILABLE',
-  'CANONICAL_AVAILABLE',
-  'COMPLETE',
-  'LIVE_PRIVATE_AVAILABLE',
-]);
+const STRONG_ACCOUNT_TRUTH_STATES = new Set<string>(OPS_STRONG_ACCOUNT_TRUTH_STATES);
 
 interface IdentityTruth {
   readonly available: boolean;

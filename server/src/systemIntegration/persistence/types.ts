@@ -461,6 +461,16 @@ export interface SystemLifecycleTruthReadPort {
   );
 }
 
+/**
+ * Explicit effectful restart-truth owner. It is deliberately separate from
+ * passive lifecycle read ports; only the lifecycle driver invokes it.
+ */
+export interface SystemRestartTruthRefreshEffectPort {
+  refreshRestartTruth(
+    nowMs: number,
+  ): Readonly<PersistedRestartTruth> | Promise<Readonly<PersistedRestartTruth>>;
+}
+
 export interface PersistedIdempotencyReceipt {
   readonly idempotencyKey: string;
   readonly requestDigest: string;

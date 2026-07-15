@@ -77,6 +77,8 @@ export interface SystemIntegrationApplicationOptions {
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
   readonly drainTimeoutMs?: number;
+  /** Must remain below the durable restart-truth freshness lease. */
+  readonly restartTruthRefreshIntervalMs?: number;
 }
 
 export type SystemApplicationPhase =
@@ -140,6 +142,7 @@ export interface SystemIntegrationApplicationFacade {
     input: Readonly<ValidateOnlyOrchestratorInput>,
   ): Promise<Readonly<ValidateOnlyRunResult>>;
   restartManagedRuntime(): Readonly<ManagedRuntimeRestartResult>;
+  refreshRestartTruth(): Promise<Readonly<RestartBarrierProjection>>;
   managedRuntime(): Readonly<ManagedCompositionReadSnapshot>;
   supervisor(): Readonly<SystemSupervisorReadModel>;
   controlState(): Readonly<SystemControlState>;

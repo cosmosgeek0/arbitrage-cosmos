@@ -24,6 +24,7 @@ import {
   type ManagedCompositionReadSnapshot,
   type ManagedRestartCommandIdentity,
   type RuntimeHealthEvidence,
+  type ScheduledTask,
 } from '../composition/index.js';
 import {
   SYSTEM_PERSISTENCE_LIMITS,
@@ -37,6 +38,7 @@ import {
   type RestartBarrierProjection,
   type LedgerSchemaCompatibilityReadback,
   type SystemLifecycleTruthReadPort,
+  type SystemRestartTruthRefreshEffectPort,
   type SystemIntegrationCheckpointState,
 } from '../persistence/index.js';
 import {
@@ -86,9 +88,13 @@ const MAX_DRAIN_TRUTH_LEASE_MS = 60 * 60_000;
 const MIN_DRAIN_TRUTH_LEASE_MS = 5 * 60_000;
 const UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const RESTART_TRUTH_STATES = new Set(['FRESH', 'STALE', 'UNKNOWN', 'UNAVAILABLE']);
+const DEFAULT_RESTART_TRUTH_REFRESH_INTERVAL_MS = Math.floor(
+  SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs / 2,
+);
 
 export type SystemIntegrationApplicationLifecycleOptions = SystemIntegrationApplicationOptions & Readonly<{
   lifecycleTruth?: SystemLifecycleTruthReadPort;
+  restartTruthRefresh?: SystemRestartTruthRefreshEffectPort;
 }>;
 
 function plainRecord(value: unknown): value is Record<string, unknown> {
@@ -292,6 +298,11 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   private latestValidateOnly: Readonly<ValidateOnlyRunSnapshot> | null = null;
   private applicationFailureCode: string | null = null;
   private controlPublicationFailureCode: string | null = null;
+  private restartTruthRefreshFailureCode: string | null = null;
+  private restartTruthRefreshPromise: Promise<Readonly<RestartBarrierProjection>> | null = null;
+  private restartTruthRefreshTask: ScheduledTask | null = null;
+  private restartTruthRefreshEpoch = 0;
+  private drainAdmissionInProgress = false;
   private readonly runtimePublicationEffects = new Map<string, SystemControlRuntimeEffectReadback>();
   private readonly pendingRestartPublications = new Map<string, Readonly<ManagedRestartCommandIdentity>>();
   private startupSucceeded = false;
@@ -307,6 +318,13 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
     if (typeof options.readEnvironment !== 'function') {
       throw new TypeError('SystemIntegrationApplication requires an environment read port.');
+    }
+    if (options.restartTruthRefreshIntervalMs !== undefined && (
+      !Number.isSafeInteger(options.restartTruthRefreshIntervalMs)
+      || options.restartTruthRefreshIntervalMs < 1
+      || options.restartTruthRefreshIntervalMs >= SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs
+    )) {
+      throw new TypeError('restartTruthRefreshIntervalMs must be a positive safe integer below the restart-truth freshness lease.');
     }
     this.persistence = new SystemIntegrationLedgerAdapter(options.ledger);
     this.validateOnly = new ValidateOnlyOrchestrator(this.persistence);
@@ -594,6 +612,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     } else {
       this.phaseValue = 'RUNNING';
       this.startupSucceeded = true;
+      this.startRestartTruthRefresh();
     }
     return this.cacheStartResult({
       ok: command?.ok ?? true,
@@ -614,6 +633,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   }
 
   private readRestartBarrier(nowMs: number): Readonly<RestartBarrierProjection> {
+    if (this.restartTruthRefreshFailureCode !== null) {
+      return failClosedRestartBarrier(nowMs, this.restartTruthRefreshFailureCode);
+    }
     const barrier = this.persistence.restartBarrier(nowMs);
     if (barrier.ok) return barrier.value;
     return failClosedRestartBarrier(nowMs, barrier.code);
@@ -621,6 +643,84 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   restartBarrier(): Readonly<RestartBarrierProjection> {
     if (this.phaseValue === 'CREATED') return this.barrierValue;
+    this.barrierValue = this.readRestartBarrier(this.options.clock.nowMs());
+    return this.barrierValue;
+  }
+
+  private startRestartTruthRefresh(): void {
+    if (typeof this.options.restartTruthRefresh?.refreshRestartTruth !== 'function') return;
+    if (this.restartTruthRefreshTask === null) {
+      const intervalMs = this.options.restartTruthRefreshIntervalMs
+        ?? DEFAULT_RESTART_TRUTH_REFRESH_INTERVAL_MS;
+      this.restartTruthRefreshTask = this.options.scheduler.scheduleEvery(intervalMs, () => {
+        void this.refreshRestartTruth();
+      });
+    }
+    void this.refreshRestartTruth();
+  }
+
+  private stopRestartTruthRefresh(): void {
+    this.restartTruthRefreshEpoch += 1;
+    this.restartTruthRefreshTask?.cancel();
+    this.restartTruthRefreshTask = null;
+    // Detach the fenced read so a refused drain can immediately re-arm a new
+    // epoch without waiting for an uncooperative old owner promise to settle.
+    this.restartTruthRefreshPromise = null;
+  }
+
+  refreshRestartTruth(): Promise<Readonly<RestartBarrierProjection>> {
+    const read = this.options.restartTruthRefresh?.refreshRestartTruth;
+    if (typeof read !== 'function'
+      || this.phaseValue !== 'RUNNING'
+      || !this.startupSucceeded
+      || this.drainAdmissionInProgress) {
+      return Promise.resolve(this.restartBarrier());
+    }
+    if (this.restartTruthRefreshPromise !== null) return this.restartTruthRefreshPromise;
+    const epoch = this.restartTruthRefreshEpoch;
+    const pending = this.performRestartTruthRefresh(read, epoch);
+    this.restartTruthRefreshPromise = pending;
+    void pending.then(
+      () => {
+        if (this.restartTruthRefreshPromise === pending) this.restartTruthRefreshPromise = null;
+      },
+      () => {
+        if (this.restartTruthRefreshPromise === pending) this.restartTruthRefreshPromise = null;
+      },
+    );
+    return pending;
+  }
+
+  private async performRestartTruthRefresh(
+    read: SystemRestartTruthRefreshEffectPort['refreshRestartTruth'],
+    epoch: number,
+  ): Promise<Readonly<RestartBarrierProjection>> {
+    const readAtMs = this.options.clock.nowMs();
+    let candidate: unknown;
+    try {
+      candidate = await read(readAtMs);
+    } catch {
+      candidate = null;
+    }
+    const commitAtMs = this.options.clock.nowMs();
+    if (
+      epoch !== this.restartTruthRefreshEpoch
+      || this.phaseValue !== 'RUNNING'
+      || !this.startupSucceeded
+    ) return failClosedRestartBarrier(commitAtMs, 'RESTART_TRUTH_REFRESH_CANCELLED');
+
+    const truth = normalizedRestartTruth(candidate, commitAtMs)
+      ?? failClosedObservedRestartTruth(commitAtMs);
+    const committed = this.persistence.persistRestartTruth(
+      truth,
+      correlationId('restart-truth-refresh', truth.observedAtMs ?? commitAtMs),
+    );
+    if (!committed.ok) {
+      this.restartTruthRefreshFailureCode = `RESTART_TRUTH_REFRESH_${committed.code}`;
+      this.barrierValue = failClosedRestartBarrier(commitAtMs, this.restartTruthRefreshFailureCode);
+      return this.barrierValue;
+    }
+    this.restartTruthRefreshFailureCode = null;
     this.barrierValue = this.readRestartBarrier(this.options.clock.nowMs());
     return this.barrierValue;
   }
@@ -964,7 +1064,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       ...(this.options.components ? { ports: this.options.components } : {}),
       checkpoint,
       persistenceFailureCode,
-      applicationFailureCode: this.applicationFailureCode ?? this.controlPublicationFailureCode,
+      applicationFailureCode: this.applicationFailureCode
+        ?? this.controlPublicationFailureCode
+        ?? this.restartTruthRefreshFailureCode,
       postureBlockerCodes: this.postureBlockerCodes(control),
       control,
       validateOnlyRun: this.latestValidateOnly,
@@ -978,7 +1080,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       this.ownerSummaries(),
       this.latestValidateOnly,
     );
-    const applicationProjectionFailure = this.applicationFailureCode ?? this.controlPublicationFailureCode;
+    const applicationProjectionFailure = this.applicationFailureCode
+      ?? this.controlPublicationFailureCode
+      ?? this.restartTruthRefreshFailureCode;
     const runtime: Readonly<RuntimeStatusSnapshot> = applicationProjectionFailure === null
       ? managed.supervisor
       : Object.freeze({
@@ -1045,7 +1149,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     blockingIdentityReferences: readonly Readonly<SystemApplicationDrainBlockingReference>[],
     persistenceFailureCode: SystemApplicationDrainResult['persistenceFailureCode'],
   ): Readonly<SystemApplicationDrainResult> {
-    return Object.freeze({
+    const result = Object.freeze({
       ok: false,
       clean: false,
       disposition: 'REFUSED_RECOVERY_SUPERVISION_REQUIRED' as const,
@@ -1058,6 +1162,11 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       persistenceFailureCode,
       ledgerCloseMayProceed: false,
     });
+    this.drainAdmissionInProgress = false;
+    if (this.phaseValue === 'RUNNING' && this.startupSucceeded) {
+      this.startRestartTruthRefresh();
+    }
+    return result;
   }
 
   drain(): Promise<Readonly<SystemApplicationDrainResult>> {
@@ -1071,6 +1180,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           && this.drainPromise === attempt) this.drainPromise = null;
       },
       () => {
+        this.drainAdmissionInProgress = false;
+        if (this.phaseValue === 'RUNNING' && this.startupSucceeded) {
+          this.startRestartTruthRefresh();
+        }
         if (this.drainPromise === attempt) this.drainPromise = null;
       },
     );
@@ -1078,6 +1191,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   }
 
   private async prepareDrain(): Promise<Readonly<SystemApplicationDrainResult>> {
+    // Fence effectful owner reads at drain-attempt admission, before any
+    // asynchronous identity or canonical-truth check can yield control.
+    this.drainAdmissionInProgress = true;
+    this.stopRestartTruthRefresh();
     const nowMs = this.options.clock.nowMs();
     const drainCorrelationId = correlationId('system-drain', nowMs);
     const blockingRead = this.persistence.readProductBlockingIdentityReferences();
@@ -1133,6 +1250,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         null,
       );
     }
+    this.drainAdmissionInProgress = false;
     this.phaseValue = 'DRAINING';
     return this.drainApplication();
   }
@@ -1159,7 +1277,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           ...(this.options.components ? { ports: this.options.components } : {}),
           checkpoint,
           persistenceFailureCode: checkpoint === null ? 'PERSISTENCE_NOT_LOADED' : null,
-          applicationFailureCode: this.applicationFailureCode ?? this.controlPublicationFailureCode,
+          applicationFailureCode: this.applicationFailureCode
+            ?? this.controlPublicationFailureCode
+            ?? this.restartTruthRefreshFailureCode,
           postureBlockerCodes: this.postureBlockerCodes(control),
           control,
           validateOnlyRun: this.latestValidateOnly,

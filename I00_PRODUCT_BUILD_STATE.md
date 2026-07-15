@@ -134,7 +134,7 @@ The current living-input authority protocol passes `14/14` against immutable cut
 | Public-source browser boundary | TokenDetail candle reads use the same-origin server route and own no exchange WebSocket; TokenIcon has no jsDelivr/CoinCap fallback transport. Deterministic offline mode fails browser-reachable GET and forced-refresh owners closed before transport creation and isolates profile, icon, and liquidation caches under `DATA_DIR`. Validated server-resolved CoinGecko image URLs may exist outside deterministic offline mode, so the exact-C browser network campaign remains mandatory. |
 | Command result | `GET /api/product-integration/v1/commands/:commandId/result` requires exact command/idempotency/control identity and server-derived authentication; durable result is 200 terminal, 202 pending, 404 absent/substituted, or 503 unavailable/fail-closed. |
 | WebSocket | Canonical `/ws` emits supervisor deltas and bounded seven-field material pages; retention/gap requires backfill; raw log/metric floods are excluded. Browser close truth is generation-bound: unopened retry failures retain the last established-socket close, and a later established close replaces or fail-closed clears it. Focused in-app-browser proof observed clean `1012 / service restart` surviving a failed retry, followed by a real established crash surfacing unclean `1006`; complete C-bound browser evidence remains pending. |
-| Restart terminalization | Success requires exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED`; active/failure/boot-lost evidence stays pending or attention-required; exact replay does not reissue. |
+| Restart terminalization | Production durably refreshes one conservative restart projection from an exact canonical supervisor cut plus exact canonical ops readback; passive reads do not refresh, malformed/stale/ambiguous/recovery truth remains blocking, and success still requires exact supervisor correlation, accepted revision, target generation, and correlated `RUNNING`/`DEGRADED`. |
 | Assurance insertion requests | Applied only through canonical source/runtime/control/ledger owners. Fixture evidence remains non-authoritative and cannot mint live green. |
 
 ### Managed inventory
@@ -165,7 +165,7 @@ ledger-persistence, engine-supervisor
 | `npm run build` | Exit 0; server and web pass; Vite 1,880 modules; advisory large-chunk warning only |
 | Product Integration | `108/108` |
 | Product Control | `76/76`, including restart truth surviving unopened retry failure, a later established failure replacing prior clean truth, and automatic token-rendering transport ownership |
-| System Integration | `373/373` after restart-terminalization and independently advancing Ledger-inventory race hardening |
+| System Integration | `400/400` after traced validate-only production binding, durable canonical restart-truth refresh, restart-terminalization, and independently advancing Ledger-inventory race hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |

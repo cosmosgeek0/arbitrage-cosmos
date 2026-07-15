@@ -9,6 +9,13 @@ export const OPS_EXPOSURE_STATES = Object.freeze([
   'UNKNOWN',
 ] as const);
 
+export const OPS_STRONG_ACCOUNT_TRUTH_STATES = Object.freeze([
+  'AVAILABLE',
+  'CANONICAL_AVAILABLE',
+  'COMPLETE',
+  'LIVE_PRIVATE_AVAILABLE',
+] as const);
+
 export type OpsExposureState = (typeof OPS_EXPOSURE_STATES)[number];
 export type OpsAmbiguityState = 'NONE' | 'AMBIGUOUS' | 'UNKNOWN';
 export type OpsRecoveryState = 'NONE' | 'RECOVERY_REQUIRED' | 'UNKNOWN';

@@ -162,25 +162,25 @@ ledger-persistence, engine-supervisor
 | Command or suite | Measured result |
 | --- | --- |
 | `npm run typecheck` | Exit 0; server and web pass |
-| `npm run build` | Exit 0; server and web pass; Vite 1,880 modules; advisory large-chunk warning only |
-| Product Integration | `108/108` |
-| Product Control | `80/80`, including the exact ordered 14-component browser inventory, explicit missing-Q and non-green unavailable-Q projection, restart truth surviving unopened retry failure, a later established failure replacing prior clean truth, and automatic token-rendering transport ownership |
-| System Integration | `400/400` after traced validate-only production binding, durable canonical restart-truth refresh, restart-terminalization, and independently advancing Ledger-inventory race hardening |
+| `npm run build` | Exit 0; server and web pass; Vite 1,883 modules; advisory large-chunk warning only |
+| Product Integration | `111/111`, including real-process crash-pending Product readback and explicit hostile/unavailable history projection |
+| Product Control | `102/102`, including durable status-bound command-result readback across reload, commit-then-timeout and competing-tab identity preservation, exact ordered 14-component browser inventory, exact server-owned 33-role managed-inventory decoding, bounded browser crash-history validation, explicit missing-Q and non-green unavailable-Q projection, canonical read-only attention facts without controls or browser re-ranking, established-socket restart retention, later established-failure replacement, and automatic token-rendering transport ownership |
+| System Integration | `401/401` after traced validate-only production binding, durable canonical restart-truth refresh, retry-exhaustion projection, restart-terminalization, and independently advancing Ledger-inventory race hardening |
 | L06 / L12 / L13 / L14 | `79/79`; `21/21`; `37/37`; `38/38` |
 | Foundation quantity bridge / Ledger CAS | `12/12`; `9/9` |
 | Authority protocol | `14/14` against D-LAUNCH-27 cutoff |
-| I00 proof / command / acceptance contracts | `47/47`; `28/28`; `34/34` |
+| I00 proof / command contracts | Initial correction-tip proof reached `46/47` and stopped only at stale generated machine-evidence anchors; the command suite was not reached in that run; regenerated-report rerun pending |
 | Hostile repository/application gate | `82/82`; browser-reachable GET and forced-refresh owners attempted zero external public calls, and profile/icon/liquidation default caches were behaviorally read only beneath `DATA_DIR` |
 | Production runtime temporal/restart focus | `16/16`; each Product supervisor envelope reuses one validated canonical System snapshot for ops and exact last-200 embedded traces, while freeze-marker and identity truth remain freshly read; one exact market row/timestamp cut is reused by both source freshness and due projection, with one exact-step sibling refresh handoff; hostile advancing-clock, projection-cadence, stale-source, USD-M disconnect, and concurrent clock-regression proofs; same-data dirty-cache replay restored all seven required public/engine owners to `READY / LIVE_PUBLIC` with Q `ABSTAIN_UNKNOWN` and honest safety degradation |
 | Intelligence Runtime bridge focus | `23/23`; oversized failure batches retain the exact comparator-defined survivors with one bounded eviction pass |
-| I00 performance contract | `41/41`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
-| Focused security / I00 scope-security | 148 assertions; `7/7` |
+| I00 performance / acceptance contract | `43/43`; exact 14-component `OWNER:ownerPath` projections, `blockerCode` capture, owner-forgery rejection, bounded hydrated-baseline timeout refusal, short-window RSS-slope nonclaim, and direct 10 ms reset/acknowledge/snapshot phase event-loop measurement with interval-substitution rejection |
+| Focused security / I00 scope-security | 155 assertions (`59 + 29 + 51 + 14 + 2`); `7/7` |
 | Product Assurance hostile / provenance | `2/2`; `4/4` |
 | Root Product Assurance | 518 files scanned; 205 discovered; 205 covered; 0 uncovered; 802 behavior plus 4 provenance |
-| `bash ops/tests/i00/run-all.sh` | Exit 0; 10/10 files; 394 assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
-| `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; 386 assertions, including 35 durable lane-scope cases |
+| `bash ops/tests/i00/run-all.sh` | Exit 0; 12/12 files; 725 additive assertions; complete fixture binds 33 managed identities, 14 canonical components, four Product controls, browser receipt v2, capture transcript v3, and 194 browser artifacts |
+| `bash ops/tests/run-all.sh` | Exit 0; 12/12 files; exact footer sum 384 assertions, including 35 durable lane-scope cases |
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
-| `npm run test:all` | Exit 0; all configured family suites pass, including the 1,618-test live-edge campaign |
+| `npm run test:all` | Initial correction-tip run exited 1 only at stale generated machine-evidence source anchors (`29→32`, `521→764`, `438→482`); report raw SHA-256 after regeneration is `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5`; full rerun pending, no pass claimed |
 | `git diff --check` | Exit 0 at latest source audit |
 
 These focused results do not replace the complete C-bound gate. Final `npm test`, `npm run test:all`, generated-report parity, Q donor runs, deterministic scenarios, runtime startup, restart/reconciliation, performance, browser acceptance, evidence manifests, and complete-receipt validation must all be measured from exact C. S records the exact command, exit/signal, duration, stdout/stderr bytes and hashes, inventory/control observations, and evidence paths.

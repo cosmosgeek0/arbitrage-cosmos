@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "OBS_SHADOW_ENTRY_INVENTORY_V1",
+  "packetId": "RUN-18",
+  "packetName": "OBS-SHADOW",
+  "packetPosture": "SHADOW_SPECULATIVE",
+  "acceptanceStatus": null,
+  "authorityEffect": "NONE",
+  "baseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "branch": "obs-shadow-20260715",
+  "shadowLaw": {
+    "directive": "D-LAUNCH-37",
+    "orderId": "90dcac299155",
+    "sourceCommit": "d090d006019e21b150fa7b74831240695d8791e3",
+    "portingGate": "C2_PLUS_DIRECTOR_ADJUDICATION"
+  },
+  "items": [
+    {
+      "itemId": "HISTORICAL_TRENDS",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION",
+      "ruling": "The existing render-neutral historical-series and SLO trend evaluators already own bounded points, windows, percentiles, trend direction, freshness, gaps, and synthetic/live eligibility.",
+      "ownerIds": [
+        "PRODUCT_ASSURANCE_OBSERVABILITY"
+      ],
+      "evidence": [
+        {
+          "path": "fixtures/productAssurance/systemic/observability/historical-series-evaluator.mjs",
+          "symbols": [
+            "evaluateHistoricalSeries"
+          ]
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/observability/slo-trend-evaluator.mjs",
+          "symbols": []
+        },
+        {
+          "path": "test/productAssurance/systemic/observability/historical-series.test.mjs",
+          "symbols": []
+        }
+      ],
+      "existingSurfaceState": "CURRENT_SNAPSHOT_MOUNTED_HISTORY_RENDER_NEUTRAL_UNMOUNTED",
+      "duplicateBoundary": "REJECT_NEW_HISTORY_STORE_PERCENTILE_OR_TREND_EVALUATOR"
+    },
+    {
+      "itemId": "PAGING_RECEIPTS",
+      "classification": "ADAPT_EXISTING",
+      "buildDecision": "BUILD_RENDER_NEUTRAL_DETAIL_ADAPTER",
+      "ruling": "I08 already owns paging-delivery and paging-acknowledgement evidence kinds and the cockpit owns pagingReceiptState; only a bounded detail view that keeps delivery and acknowledgement orthogonal is absent.",
+      "ownerIds": [
+        "I08_SUPERVISOR"
+      ],
+      "evidence": [
+        {
+          "path": "fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs",
+          "symbols": [
+            "PAGING_DELIVERY_RECEIPT",
+            "PAGING_ACKNOWLEDGEMENT_RECEIPT"
+          ]
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json",
+          "symbols": [
+            "pagingReceiptState"
+          ]
+        }
+      ],
+      "existingSurfaceState": "SUMMARY_ONLY",
+      "duplicateBoundary": "REJECT_PAGER_PROVIDER_ROUTER_SENDER_ACK_COMMAND_OR_STORE"
+    },
+    {
+      "itemId": "INCIDENT_DRILL_FIXTURES",
+      "classification": "ADAPT_EXISTING",
+      "buildDecision": "BUILD_RECORDED_RUN_COMPARISON_ADAPTER",
+      "ruling": "The deterministic fault harness, incident identity, cursor projection, and hazard drill-down already exist; the missing seam is a bounded expected-versus-observed view over recorded synthetic runs.",
+      "ownerIds": [
+        "PRODUCT_ASSURANCE_FAULT_HARNESS",
+        "PRODUCT_INCIDENT_OWNER"
+      ],
+      "evidence": [
+        {
+          "path": "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+          "symbols": []
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/hazard/reference/view-model.mjs",
+          "symbols": [
+            "buildHazardAssuranceViewModel"
+          ]
+        },
+        {
+          "path": "web/src/features/productControlRoom/components/IncidentCursorPanel.tsx",
+          "symbols": [
+            "IncidentCursorPanel"
+          ]
+        }
+      ],
+      "existingSurfaceState": "INCIDENT_CURSOR_MOUNTED_DRILL_RESULT_VIEW_ABSENT",
+      "duplicateBoundary": "REJECT_NEW_FAULT_SIMULATOR_INCIDENT_LIFECYCLE_STORE_OR_CURSOR"
+    },
+    {
+      "itemId": "EXPECTED_VS_OBSERVED_INVENTORY",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION",
+      "ruling": "The release-bound manifest evaluator already owns the exact expected denominator, observed identities, missing and unexpected sets, and the cockpit already renders desired-versus-observed component truth.",
+      "ownerIds": [
+        "PRODUCT_ASSURANCE_RELEASE_MANIFEST",
+        "PRODUCT_INTEGRATION_MANAGED_INVENTORY"
+      ],
+      "evidence": [
+        {
+          "path": "fixtures/productAssurance/systemic/observability/release-manifest-evaluator.mjs",
+          "symbols": [
+            "evaluateReleaseBoundExpectedManifest"
+          ]
+        },
+        {
+          "path": "server/src/productIntegration/runtime/managedInventory.ts",
+          "symbols": []
+        },
+        {
+          "path": "web/src/features/productControlRoom/components/ComponentAuthorityPanel.tsx",
+          "symbols": [
+            "ComponentAuthorityPanel"
+          ]
+        }
+      ],
+      "existingSurfaceState": "MOUNTED_EXISTING",
+      "duplicateBoundary": "REJECT_NEW_EXPECTED_DENOMINATOR_INVENTORY_OWNER_OR_MANIFEST_EVALUATOR"
+    },
+    {
+      "itemId": "TELEMETRY_LOSS_DETECTION",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION",
+      "ruling": "Canonical projections already fail on queue saturation, dropped records, stale export, absent persistent buffering, failed retention, and continuity gaps; production export remains honestly NOT_CONFIGURED.",
+      "ownerIds": [
+        "PRODUCT_ASSURANCE_OPERATIONAL_TRUTH",
+        "PRODUCT_ASSURANCE_OBSERVABILITY"
+      ],
+      "evidence": [
+        {
+          "path": "server/src/productAssurance/projections/operationalTruth.ts",
+          "symbols": [
+            "projectTelemetryPipeline"
+          ]
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/observability/conservation-evaluator.mjs",
+          "symbols": []
+        },
+        {
+          "path": "server/test/productAssurance/operational-remediation.test.mjs",
+          "symbols": []
+        }
+      ],
+      "existingSurfaceState": "OWNER_PROJECTION_EXISTS_LIVE_EXPORT_NOT_CONFIGURED",
+      "duplicateBoundary": "REJECT_NEW_TELEMETRY_DETECTOR_COLLECTOR_BUFFER_OR_GAP_OWNER"
+    },
+    {
+      "itemId": "COST_BUDGET_PROJECTIONS",
+      "classification": "ADOPT_EXISTING",
+      "buildDecision": "NO_NEW_IMPLEMENTATION",
+      "ruling": "The stability owner already evaluates the exact eight resource families and exposes burn, limit, remaining budget, forecast, horizon, projected exhaustion, unknown reasons, and non-action authority.",
+      "ownerIds": [
+        "PRODUCT_ASSURANCE_STABILITY"
+      ],
+      "evidence": [
+        {
+          "path": "fixtures/productAssurance/systemic/stability/contracts.mjs",
+          "symbols": [
+            "RESOURCE_FAMILIES"
+          ]
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/stability/reference-evaluator.mjs",
+          "symbols": [
+            "evaluateResourceEvidence"
+          ]
+        },
+        {
+          "path": "fixtures/productAssurance/systemic/stability/view-model.mjs",
+          "symbols": [
+            "projectStabilityViewModel"
+          ]
+        }
+      ],
+      "existingSurfaceState": "RENDER_NEUTRAL_EXISTING_SYNTHETIC_REFERENCE",
+      "duplicateBoundary": "REJECT_NEW_COST_CALCULATOR_FORECAST_ENGINE_BUDGET_OWNER_OR_THROTTLE"
+    }
+  ],
+  "referenceOnly": [
+    "MOUNTED_PAGE_INTEGRATION",
+    "PACKAGE_SCRIPT_INTEGRATION",
+    "LIVE_EXTERNAL_PAGING_OR_WATCHDOG_OPERATION",
+    "WATCHDOG_DELIVERY_RECEIPT_AS_PAGING_OWNER_SCHEMA"
+  ],
+  "rejectDuplicate": [
+    "HISTORY_STORE_OR_EVALUATOR",
+    "PAGING_PROVIDER_ROUTER_SENDER_OR_STORE",
+    "INCIDENT_LIFECYCLE_OR_FAULT_SIMULATOR",
+    "INVENTORY_OR_MANIFEST_OWNER",
+    "TELEMETRY_DETECTOR_COLLECTOR_OR_BUFFER",
+    "COST_FORECAST_BUDGET_OR_THROTTLE_ENGINE",
+    "MOUNTED_PAGE_ROUTE_OR_SHARED_SCHEMA"
+  ]
+}

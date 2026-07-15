@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "OBS_SHADOW_CASES_V1",
+  "truthLabel": "SYNTHETIC_ONLY",
+  "pagingCases": [
+    {
+      "caseId": "PAGING_ROUTE_NOT_CONFIGURED",
+      "expectedPagingReceiptState": "NOT_CONFIGURED",
+      "expectedActionRequired": "CONFIGURE_ROUTE",
+      "input": {
+        "receiptId": "obs-paging-001",
+        "incidentId": "incident-obs-001",
+        "correlationId": "correlation-obs-001",
+        "routingState": "NOT_CONFIGURED",
+        "deliveryEvidence": {
+          "receiptId": "obs-paging-001",
+          "incidentId": "incident-obs-001",
+          "correlationId": "correlation-obs-001",
+          "attemptId": null,
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_DELIVERY_RECEIPT",
+          "evidenceRef": null,
+          "evidenceDigest": null,
+          "ownerVerdict": "NOT_CONFIGURED",
+          "observedAtMs": null,
+          "reasonCodes": [
+            "PAGING_ROUTE_NOT_CONFIGURED"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        },
+        "acknowledgementEvidence": {
+          "receiptId": "obs-paging-001",
+          "incidentId": "incident-obs-001",
+          "correlationId": "correlation-obs-001",
+          "attemptId": null,
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_ACKNOWLEDGEMENT_RECEIPT",
+          "evidenceRef": null,
+          "evidenceDigest": null,
+          "ownerVerdict": "NOT_CONFIGURED",
+          "observedAtMs": null,
+          "reasonCodes": [
+            "PAGING_ROUTE_NOT_CONFIGURED"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        }
+      }
+    },
+    {
+      "caseId": "PAGING_DELIVERY_UNPROVEN",
+      "expectedPagingReceiptState": "DELIVERY_UNPROVEN",
+      "expectedActionRequired": "PROVE_DELIVERY",
+      "input": {
+        "receiptId": "obs-paging-002",
+        "incidentId": "incident-obs-002",
+        "correlationId": "correlation-obs-002",
+        "routingState": "CONFIGURED",
+        "deliveryEvidence": {
+          "receiptId": "obs-paging-002",
+          "incidentId": "incident-obs-002",
+          "correlationId": "correlation-obs-002",
+          "attemptId": "paging-attempt-obs-002",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_DELIVERY_RECEIPT",
+          "evidenceRef": null,
+          "evidenceDigest": null,
+          "ownerVerdict": "UNPROVEN",
+          "observedAtMs": null,
+          "reasonCodes": [
+            "PAGING_DELIVERY_RECEIPT_MISSING"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        },
+        "acknowledgementEvidence": {
+          "receiptId": "obs-paging-002",
+          "incidentId": "incident-obs-002",
+          "correlationId": "correlation-obs-002",
+          "attemptId": "paging-attempt-obs-002",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_ACKNOWLEDGEMENT_RECEIPT",
+          "evidenceRef": null,
+          "evidenceDigest": null,
+          "ownerVerdict": "UNPROVEN",
+          "observedAtMs": null,
+          "reasonCodes": [
+            "PAGING_ACKNOWLEDGEMENT_RECEIPT_MISSING"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        }
+      }
+    },
+    {
+      "caseId": "PAGING_DELIVERED_NOT_ACKNOWLEDGED",
+      "expectedPagingReceiptState": "AWAITING_ACKNOWLEDGEMENT",
+      "expectedActionRequired": "PROVE_ACKNOWLEDGEMENT",
+      "input": {
+        "receiptId": "obs-paging-003",
+        "incidentId": "incident-obs-003",
+        "correlationId": "correlation-obs-003",
+        "routingState": "CONFIGURED",
+        "deliveryEvidence": {
+          "receiptId": "obs-paging-003",
+          "incidentId": "incident-obs-003",
+          "correlationId": "correlation-obs-003",
+          "attemptId": "paging-attempt-obs-003",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_DELIVERY_RECEIPT",
+          "evidenceRef": "evidence:paging-delivery:obs-003",
+          "evidenceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "ownerVerdict": "PROVED",
+          "observedAtMs": 1783952980100,
+          "reasonCodes": [
+            "OWNER_REPORTED_RETRY_FAILED_AFTER_CONFIRMED_DELIVERY"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        },
+        "acknowledgementEvidence": {
+          "receiptId": "obs-paging-003",
+          "incidentId": "incident-obs-003",
+          "correlationId": "correlation-obs-003",
+          "attemptId": "paging-attempt-obs-003",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_ACKNOWLEDGEMENT_RECEIPT",
+          "evidenceRef": null,
+          "evidenceDigest": null,
+          "ownerVerdict": "UNPROVEN",
+          "observedAtMs": null,
+          "reasonCodes": [
+            "PAGING_ACKNOWLEDGEMENT_RECEIPT_MISSING"
+          ],
+          "truthLabel": "SYNTHETIC_ONLY"
+        }
+      }
+    },
+    {
+      "caseId": "PAGING_DELIVERED_AND_ACKNOWLEDGED",
+      "expectedPagingReceiptState": "ACKNOWLEDGED_REFERENCE_ONLY",
+      "expectedActionRequired": "OWNER_STATE_REQUIRED",
+      "input": {
+        "receiptId": "obs-paging-004",
+        "incidentId": "incident-obs-004",
+        "correlationId": "correlation-obs-004",
+        "routingState": "CONFIGURED",
+        "deliveryEvidence": {
+          "receiptId": "obs-paging-004",
+          "incidentId": "incident-obs-004",
+          "correlationId": "correlation-obs-004",
+          "attemptId": "paging-attempt-obs-004",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_DELIVERY_RECEIPT",
+          "evidenceRef": "evidence:paging-delivery:obs-004",
+          "evidenceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "ownerVerdict": "PROVED",
+          "observedAtMs": 1783952980100,
+          "reasonCodes": [],
+          "truthLabel": "SYNTHETIC_ONLY"
+        },
+        "acknowledgementEvidence": {
+          "receiptId": "obs-paging-004",
+          "incidentId": "incident-obs-004",
+          "correlationId": "correlation-obs-004",
+          "attemptId": "paging-attempt-obs-004",
+          "ownerId": "I08_SUPERVISOR",
+          "ownerRevision": "I08_PAGING_EVIDENCE_V1",
+          "evidenceKind": "PAGING_ACKNOWLEDGEMENT_RECEIPT",
+          "evidenceRef": "evidence:paging-acknowledgement:obs-004",
+          "evidenceDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "ownerVerdict": "PROVED",
+          "observedAtMs": 1783952980300,
+          "reasonCodes": [],
+          "truthLabel": "SYNTHETIC_ONLY"
+        }
+      }
+    }
+  ],
+  "incidentDrillCases": [
+    {
+      "caseId": "INCIDENT_DRILL_WATCHDOG_LOSS",
+      "sourceRunRef": {
+        "path": "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+        "runId": "RUN_FAULT_WATCHDOG_LOSS"
+      },
+      "expectedDrillOutcomeState": "MATCH",
+      "expectedActionRequired": "PROVE_RECOVERY",
+      "spec": {
+        "drillId": "obs-drill-watchdog-loss-001",
+        "sourceRunId": "RUN_FAULT_WATCHDOG_LOSS",
+        "expectedScenarioId": "FAULT_WATCHDOG_LOSS",
+        "expectedSimulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
+        "expectedRunDigest": "ef98a09e6bab0cee138a9634e997bf34d836542f30a89876f7fbccb3f1a5e1f2",
+        "sourceRunContentSha256": "16bcb2aa1fef5be83e35ffabf8cc71c1a4c078ffee5085ffe06222fc71df1db2",
+        "sourceTruthLabel": "SYNTHETIC_ONLY",
+        "shadowIncidentId": "incident-drill-watchdog-loss-001",
+        "shadowCorrelationId": "correlation-drill-watchdog-loss-001",
+        "expectedRootCauseCode": "WATCHDOG_DELIVERY_RECEIPT_MISSING",
+        "requiredTransitionCodes": [
+          "FAULT_INJECTED",
+          "ROOT_CAUSE_CAPTURED",
+          "READINESS_BLOCKED",
+          "COCKPIT_PROJECTION_RECORDED",
+          "KIND_WATCHDOG_DELIVERY_LOSS_EXERCISED"
+        ],
+        "requiredProofIds": [
+          "COCKPIT_TRUTH_VISIBLE",
+          "DELIVERY_RECEIPT_REQUIRED",
+          "LOST_DELIVERY_VISIBLE",
+          "READINESS_FAIL_CLOSED"
+        ],
+        "independentDetectorRequired": true,
+        "subjectFailureDomain": "APPLICATION_HOST_TUNNEL",
+        "detectorFailureDomain": "EXTERNAL_WATCHDOG",
+        "recoveryProofRef": null
+      }
+    },
+    {
+      "caseId": "INCIDENT_DRILL_SENTINEL_DISAGREEMENT",
+      "sourceRunRef": {
+        "path": "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+        "runId": "RUN_FAULT_SENTINEL_DISAGREEMENT"
+      },
+      "expectedDrillOutcomeState": "MATCH",
+      "expectedActionRequired": "PROVE_RECOVERY",
+      "spec": {
+        "drillId": "obs-drill-sentinel-disagreement-001",
+        "sourceRunId": "RUN_FAULT_SENTINEL_DISAGREEMENT",
+        "expectedScenarioId": "FAULT_SENTINEL_DISAGREEMENT",
+        "expectedSimulatorRevision": "PRODUCT_ASSURANCE_FAULT_MODEL_V1",
+        "expectedRunDigest": "2b43e8a25f3a6bbe29f168ff8014ebc33ad20cbc40f2070c00a7933e990dbb0f",
+        "sourceRunContentSha256": "32a9a0695c78092e24f6c6789216cae20d925a79872a9e0d6380d9f1ce60cac6",
+        "sourceTruthLabel": "SYNTHETIC_ONLY",
+        "shadowIncidentId": "incident-drill-sentinel-disagreement-001",
+        "shadowCorrelationId": "correlation-drill-sentinel-disagreement-001",
+        "expectedRootCauseCode": "INDEPENDENT_SENTINEL_DISAGREED",
+        "requiredTransitionCodes": [
+          "FAULT_INJECTED",
+          "ROOT_CAUSE_CAPTURED",
+          "READINESS_BLOCKED",
+          "COCKPIT_PROJECTION_RECORDED",
+          "KIND_SENTINEL_DISAGREEMENT_EXERCISED"
+        ],
+        "requiredProofIds": [
+          "COCKPIT_TRUTH_VISIBLE",
+          "READINESS_FAIL_CLOSED",
+          "SENTINEL_OVERRIDES_SELF_REPORT"
+        ],
+        "independentDetectorRequired": true,
+        "subjectFailureDomain": "APPLICATION_SELF_REPORTING",
+        "detectorFailureDomain": "INDEPENDENT_SENTINEL",
+        "recoveryProofRef": null
+      }
+    }
+  ]
+}

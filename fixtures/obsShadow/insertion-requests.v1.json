@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "OBS_SHADOW_INSERTION_REQUESTS_V1",
+  "packetPosture": "SHADOW_SPECULATIVE",
+  "authorityEffect": "NONE",
+  "requests": [
+    {
+      "requestId": "OBS-IR-001-PAGING-RECEIPT-DETAIL",
+      "status": "DRAFT",
+      "mountAuthority": "DIRECTOR_MOUNT_REQUIRED",
+      "targetSurface": "NOTIFICATIONS",
+      "canonicalOwnerId": "I08_SUPERVISOR",
+      "sourceViewId": "OBS_PAGING_RECEIPT_DETAIL_V1",
+      "requestedBehavior": "Render delivery and acknowledgement evidence as separate bounded facts without inferring incident resolution.",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION",
+      "currentRuntimeState": "NOT_CONFIGURED",
+      "requiredVerification": [
+        "OWNER_RECEIPT_BINDING",
+        "DELIVERY_ACK_CHRONOLOGY",
+        "NO_RECOVERY_INFERENCE",
+        "DESIGN_SHIP_GATE"
+      ]
+    },
+    {
+      "requestId": "OBS-IR-002-INCIDENT-DRILL-RESULT",
+      "status": "DRAFT",
+      "mountAuthority": "DIRECTOR_MOUNT_REQUIRED",
+      "targetSurface": "HEALTH_OR_NOTIFICATIONS",
+      "canonicalOwnerId": "PRODUCT_INCIDENT_OWNER",
+      "sourceViewId": "OBS_INCIDENT_DRILL_RESULT_V1",
+      "requestedBehavior": "Render recorded synthetic drill expectations, observations, missing proof, and independent failure-domain evidence without adding a simulator or incident owner.",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION",
+      "currentRuntimeState": "NOT_CONFIGURED",
+      "requiredVerification": [
+        "SOURCE_RUN_DIGEST_BINDING",
+        "INDEPENDENT_DETECTOR_DOMAIN",
+        "NO_ACCEPTANCE_OR_RECOVERY_ESCALATION",
+        "DESIGN_SHIP_GATE"
+      ]
+    },
+    {
+      "requestId": "OBS-IR-003-ADOPT-EXISTING-OBSERVABILITY-VIEWS",
+      "status": "DRAFT",
+      "mountAuthority": "DIRECTOR_MOUNT_REQUIRED",
+      "targetSurface": "HEALTH",
+      "canonicalOwnerId": "EXISTING_CANONICAL_OWNERS",
+      "sourceViewId": "OBS_HISTORY_TELEMETRY_COST_ADOPTION_SET",
+      "requestedBehavior": "Mount only canonical historical, telemetry-loss, and stability owner outputs; preserve null, gap, unit, forecast, and authority semantics exactly.",
+      "dependency": "C2_PLUS_DIRECTOR_ADJUDICATION",
+      "currentRuntimeState": "NOT_CONFIGURED",
+      "requiredVerification": [
+        "NO_OWNER_RECOMPUTATION",
+        "NULL_AND_GAP_SEMANTICS",
+        "NO_THROTTLE_OR_COMMAND_AUTHORITY",
+        "DESIGN_SHIP_GATE"
+      ]
+    }
+  ]
+}

@@ -1,23 +1,30 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
-# >>>>> RUN NOW — RUN-9 (running, do not touch) + RUN-20..23. Everything numbered lower is DONE. Below OLD line = history, DO NOT RUN. <<<<<
+# >>>>> RUN NOW — exactly these 5, all in the Codex app on the fresh account. RUN-A is the main one. Everything below OLD line = history, DO NOT RUN. <<<<<
 
-## RUN-20 — folder /Users/cosmosgeek/Desktop/replay-shadow (RESUME — paste into that chat or a new one)
+## RUN-A — folder /Users/cosmosgeek/Desktop/role4-fix (THE MAIN ONE)
+```text
+Resume as ROLE-4 FIX OWNER from git truth (fresh session; git is the only memory): branch role4-fix-20260715, HEAD 773ad80 or later — run git log/status yourself; tracked files may sit uncommitted mid-finding — inspect the diff, finish that finding, commit. 8/15 findings already committed (VAL-001, EGRESS-012, SHA-014, CPT-010, CLIENT-004, ROUTE-005, RETRY-006, WATCHDOG-007) — never redo them. Continue the remaining findings per /Users/cosmosgeek/Desktop/role3-verify/ROLE3_VERIFICATION_RECEIPT.md (read-only) in severity order: reproduce → fix inside the stated correction boundary → focused regression test (fails pre-fix, passes post-fix) → commit with finding ID. Read-only helper analyses exist in /Users/cosmosgeek/Desktop/r9-a..d (R9_*_ANALYSIS.md) with per-finding minimal-correction recipes — consume freely. Evidence-based refusals go to FINDINGS_DISPOSITIONS.md instead of fixes. When all 15 fixed-or-refused: full acceptance (root npm test, npm run test:all, npm run test:i00:complete), regenerate closure/evidence, freeze NEW candidate C2, sole-child seal, PARK read-only, print INTEGRATION_CANDIDATE_READY with exact C2 SHA. Laws: no push/merge; never touch current-main or any other worktree; five protected untracked owner directives untouched; honest labels. Usage limit → commit+receipt+stop clean; same message resumes. Stop only at INTEGRATION_CANDIDATE_READY or precise BLOCKED.
+```
+
+
+
+## RUN-B — folder /Users/cosmosgeek/Desktop/replay-shadow
 ```text
 Resume shadow packet RUN-17/REPLAY (branch replay-shadow-20260715, base 098f7b9, zero commits; your in-progress work sits uncommitted — inventory it, keep what is sound, continue). SHADOW LAW: SHADOW_SPECULATIVE only; sole writer here; never touch Main/role4-fix/other worktrees/shared seams; entry-gate classify first (never rebuild existing); fake providers, no credentials/network; focused tests only (an active fix owner owns heavy suites); commit + receipt (base SHA, changed paths, tests, limitations, insertion requests). Usage limit → commit+receipt+stop; same message resumes. TASK unchanged: candidate-independent replay datasets + latency/load/soak harness DEFINITIONS, restart storms, partial-fill ambiguity, stale-data, connection-loss, rate-limit, clock-skew, recovery campaigns; no candidate-specific assertions; heavy EXECUTION stays deferred. Exclusive: fixtures/replayShadow/** + test/replayShadow/**. Stop at REPLAY_SHADOW_READY or BLOCKED.
 ```
 
-## RUN-21 — folder /Users/cosmosgeek/Desktop/aiops-shadow-a1 (NEW chat)
+## RUN-C — folder /Users/cosmosgeek/Desktop/aiops-shadow-a1
 ```text
 You are A1X, extending the SEALED A1 shadow (83c1624 — verify, gap-fill ONLY). SHADOW LAW: SHADOW_SPECULATIVE only; sole writer here; never touch Main/role4-fix/other worktrees/shared seams; entry-gate classify first (never rebuild existing); fake providers, no credentials/network; focused tests only (an active fix owner owns heavy suites); commit + receipt (base SHA, changed paths, tests, limitations, insertion requests). Usage limit → commit+receipt+stop; same message resumes. TASK: per POST_I00 directive §6.16+§7 and the reliability-targets/identity drafts on branch aiops-prestage-20260714 (read-only): concrete per-runbook manifest INSTANCES (owner-signature placeholders), per-capability numerical graduation-target instances, mechanical authority manifests with transitive dependency closure, Class A–D action-class fixture instances. Exclusive: server/src/aiOps/contracts/** + fixtures/aiOps/contracts/** + test/aiOps/contracts/**. Stop at A1X_SHADOW_READY or BLOCKED.
 ```
 
-## RUN-22 — folder /Users/cosmosgeek/Desktop/aiops-shadow-a4 (NEW chat)
+## RUN-D — folder /Users/cosmosgeek/Desktop/aiops-shadow-a4
 ```text
 You are A4X, extending the SEALED A4 shadow (b5f4c47 — verify, gap-fill ONLY). SHADOW LAW: SHADOW_SPECULATIVE only; sole writer here; never touch Main/role4-fix/other worktrees/shared seams; entry-gate classify first (never rebuild existing); fake providers, no credentials/network; focused tests only (an active fix owner owns heavy suites); commit + receipt (base SHA, changed paths, tests, limitations, insertion requests). Usage limit → commit+receipt+stop; same message resumes. TASK: remaining directive §10 views not yet covered (classify first): incident suppression/inhibition/actionability, diagnostic validation, context/session lineage, provider qualification + capability graduation, historical trends + forensic drill-down, emergency kill + effective/readback authority — all fixture-driven contracts, no mounting, house design primitives. Exclusive: web/src/aiOps/** + fixtures/aiOps/ui/** + test/aiOps/ui/**. Stop at A4X_SHADOW_READY or BLOCKED.
 ```
 
-## RUN-23 — folder /Users/cosmosgeek/Desktop/aiops-shadow-a5 (NEW chat)
+## RUN-E — folder /Users/cosmosgeek/Desktop/aiops-shadow-a5
 ```text
 You are A5X, extending the SEALED A5 shadow (e0411ea — verify, gap-fill ONLY). SHADOW LAW: SHADOW_SPECULATIVE only; sole writer here; never touch Main/role4-fix/other worktrees/shared seams; entry-gate classify first (never rebuild existing); fake providers, no credentials/network; focused tests only (an active fix owner owns heavy suites); commit + receipt (base SHA, changed paths, tests, limitations, insertion requests). Usage limit → commit+receipt+stop; same message resumes. TASK: build the directive §16 MANDATORY acceptance/fault scenario fixtures not yet in your sealed corpus (classify each §16 row: covered vs missing; build missing only) — deterministic, network-free campaign fixtures with pass/fail receipts. Exclusive: fixtures/aiOps/harness/** + test/aiOps/harness/**. Stop at A5X_SHADOW_READY or BLOCKED.
 ```

@@ -1,0 +1,1939 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://frontier.invalid/portfolio-lab/contracts/v1/portfolio-lab-v1.schema.json",
+  "title": "PortfolioLab fixture contracts V1",
+  "description": "Closed, bounded, non-authoritative fixture contracts for immutable portfolio counterfactual orchestration and read-only projection.",
+  "oneOf": [
+    { "$ref": "#/$defs/PortfolioSnapshotV1" },
+    { "$ref": "#/$defs/PortfolioScenarioEvaluationInputV1" },
+    { "$ref": "#/$defs/ScenarioCampaignV1" },
+    { "$ref": "#/$defs/PortfolioScenarioReportV1" },
+    { "$ref": "#/$defs/PortfolioCampaignReportV1" },
+    { "$ref": "#/$defs/PortfolioLabCockpitProjectionV1" },
+    { "$ref": "#/$defs/ScenarioRelationshipGraphV1" },
+    { "$ref": "#/$defs/PortfolioConcentrationMapV1" },
+    { "$ref": "#/$defs/PortfolioLabAdvisoryFacetRequestV1" },
+    { "$ref": "#/$defs/PortfolioLabScenarioFacetRequestV1" },
+    { "$ref": "#/$defs/PortfolioLabCockpitFacetRequestV1" }
+  ],
+  "$defs": {
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "Atoms": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,95}|-[1-9][0-9]{0,95})$",
+      "maxLength": 97
+    },
+    "SafeInteger": {
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
+    },
+    "NonNegativeSafeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "Id256": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "DockText1024": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "OwnerRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8192
+    },
+    "Text2048": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "ScenarioKind": {
+      "enum": [
+        "BROAD_MARKET_GAP",
+        "SINGLE_SYMBOL_DISCONTINUITY",
+        "CORRELATION_TO_ONE_CRISIS",
+        "CORRELATION_SIGN_FLIP",
+        "SPREAD_WIDENING_DEPTH_EVAPORATION",
+        "FUNDING_INVERSION",
+        "BORROW_RECALL_UNAVAILABLE",
+        "FEE_TIER_DEGRADATION",
+        "LATENCY_SPIKE",
+        "VENUE_OUTAGE",
+        "STABLECOIN_DEPEG",
+        "COLLATERAL_HAIRCUT",
+        "PARTIAL_FILL_REJECTED_HEDGE",
+        "SIMULTANEOUS_STRATEGY_CROWDING",
+        "SHARED_COLLATERAL_CONTENTION",
+        "STALE_ACCOUNT_TRUTH",
+        "AMBIGUOUS_OPEN_ORDER",
+        "LIQUIDATION_DISTANCE_COMPRESSION",
+        "RECOVERY_EXCEEDS_HOLDING_HORIZON",
+        "SCENARIO_INPUT_MISSING"
+      ]
+    },
+    "ScenarioDefinitionStatus": {
+      "const": "UNACCEPTED_SYNTHETIC_F12_REFERENCE_STUB"
+    },
+    "OwnerEvidenceStatus": {
+      "const": "UNACCEPTED_SYNTHETIC_OWNER_OUTPUT_STUBS"
+    },
+    "OwnerEvidenceHash": {
+      "const": "cdad6dd37b19304e0c6876cd8f5813bac7feac1b79d2a622aa5738d69fa89984"
+    },
+    "SnapshotOwnerClaimHash": {
+      "enum": [
+        "2078716849b74e930fe48824b22414aad5a34be2528c46af038427ffe1db28bd",
+        "79fe52b4ec0cea63d19f6bd79b97279b967916bfb8a4d98b209f3c2f376b298c",
+        "86e23b2d2d1a47466fde56d0b5f0d67bafaaa9d44f049c4d2d805bdeae5619e3",
+        "d6d889a192d70cd248cd8bd5f5657dec7f5412593eff4ee299984f6cf8c80d6d",
+        "f396c96f6cc96bad7eddff3f3c09c73787a9abc9573b47420fa9d379f5825f1f"
+      ]
+    },
+    "ScenarioOwnerClaimHash": {
+      "enum": [
+        "026e7c2ff1181a54e1eae3740945a2457274a745c594815992b4a0027c4a8c44",
+        "046bded82df964a6b6f8c70840a35dc88e5dc31be1c6986d4516cb69b912697b",
+        "06fdce61b6d265732a55b7219e5c2c92ba6a8fcf7a03bb535bb2b3e93921d904",
+        "09d6cac5a294cd7f5f46ca6c7e7ac431881a62cb0afa3d86fb691ba76d1f49a3",
+        "11d537b3a05f90e20c5fe7e31ad30c005fa406199c5997e984f094c610acae91",
+        "18dbcae4c50131405f44532dc939864d90a52e723a548fbf64fd3d2b7170cece",
+        "20b67b4d4b950f45afe4173bff45c4235a4539385e6d214cab26af75bab28c25",
+        "247bd7a8ccf3ed00a35bfcd324d11b47555ba9e0b150e107d58ae4a89720c992",
+        "25750da5b77836c89cabf999de5adda06e0cde264e19ef63d1ca9afb2ff57d71",
+        "2cb9ea07ddf3994e197526a97a06e14ee3ab826f51a5d225559e492c2294fb35",
+        "3599150aca410725eba5bd0988704584b966b4800c3ecca19afee40b098777a3",
+        "386583d4d1f2bf84c53941a7c1a6492b5be4a66623bdae4642354a29105b5629",
+        "38e6fb4e39157f12678e2b5ee7304b7ecf2b0f9f2b7bda2d9ed536e309f9d6b2",
+        "3a966d70b3b7e52ec252466dd20c2c3ec046895dc6ee13d6b10944e76b4bcf21",
+        "3e470d0c180a173cf7abf4f61b54937bc0fe3fad551332eb51c3ced6189cda1a",
+        "787be6adf1730b55dfc0888b666757d1d9c523a5cb7ecdd714254113e6d9c4ac",
+        "8687918ccd45060bab16409b2b9cbd8b182f66e9d659c923784a17f836e396e0",
+        "8b994bfb4c530df8023b5d9011848d4d4e330b56b99ed2f944615d197c224d7f",
+        "8eb251013bdc8b8e09f5e104c325bd84162651d746ecd7a5330203d02bc85f8b",
+        "8f78458b2cfc5c12c24a2eac7c5628d2f9e722ddbccd5802a04cf46b9f453853",
+        "9a8b806ef90f30a67266a0a2fa97440657b6a0b44306d8bd88944f6de5637f10",
+        "a1ed032f643f3710f525e4a45490cd7a35d179c91b828d3b55d1f5f3b704a50b",
+        "a4f7596ba6da6c5bea16273fa93e70450dd3bceb56abd104e0d079f4d00ffb1b",
+        "b3cbd5cffaf9191a8dbbcfa1d7ce8b9b9c5722e093789b7e7ece856a02a4d922",
+        "d9077b8478772a25a6a5f41781ac60e9847a20dd183746414fb3b4a7341b703f",
+        "e775a43dc28bfd9d8dba4be72b72ee2f5db0424adb0fe5306e2e058632feab99",
+        "f70297675e42ced1549f47f46ff0a438325b72bc28a636c7317cc24844561886"
+      ]
+    },
+    "CapitalOwnerOutputRef": { "const": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3" },
+    "RiskOwnerOutputRef": { "const": "fixture://portfolio-lab/owner-output/risk-verdict-r1?sha256=c99e707b9c6206d5bd4b53c473cbf9f31961ffd8c8f2ae85fbddb2a975c2f6d9" },
+    "QOwnerOutputRef": { "const": "fixture://portfolio-lab/owner-output/q-cost-stress-r1?sha256=bd5577db50408d41f811d87f8167cc3ba7ebb58c167c4128d08cf490cbfd4887" },
+    "LTwinOwnerOutputRef": { "const": "fixture://portfolio-lab/owner-output/l-twin-state-r1?sha256=2bab3d8b6fe3f358e7e2763ad1577c4417f9029ea0b551cb4d7309195a39c79a" },
+    "LRecoveryOwnerOutputRef": { "const": "fixture://portfolio-lab/owner-output/l-recovery-r1?sha256=c9890b01df076fd346aa1fb2039b0dbe63baca7cb9492c0c5fdabb997b779580" },
+    "CapitalOwnerContractRef": { "const": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot" },
+    "RiskOwnerContractRef": { "const": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/contracts/risk.ts#RiskVerdict" },
+    "QOwnerContractRef": { "const": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/validation/stress.py#CostStressReportV1" },
+    "LTwinOwnerContractRef": { "const": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts#TwinScenarioState" },
+    "LRecoveryOwnerContractRef": { "const": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts#L12SupervisorSnapshot" },
+    "FixedOwnerOutputRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/CapitalOwnerOutputRef" },
+        { "$ref": "#/$defs/RiskOwnerOutputRef" },
+        { "$ref": "#/$defs/QOwnerOutputRef" },
+        { "$ref": "#/$defs/LTwinOwnerOutputRef" },
+        { "$ref": "#/$defs/LRecoveryOwnerOutputRef" }
+      ]
+    },
+    "FixedOwnerContractRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/CapitalOwnerContractRef" },
+        { "$ref": "#/$defs/RiskOwnerContractRef" },
+        { "$ref": "#/$defs/QOwnerContractRef" },
+        { "$ref": "#/$defs/LTwinOwnerContractRef" },
+        { "$ref": "#/$defs/LRecoveryOwnerContractRef" }
+      ]
+    },
+    "FixedOwnerSnapshotRefs": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "$ref": "#/$defs/CapitalOwnerOutputRef" },
+        { "$ref": "#/$defs/RiskOwnerOutputRef" },
+        { "$ref": "#/$defs/QOwnerOutputRef" },
+        { "$ref": "#/$defs/LTwinOwnerOutputRef" },
+        { "$ref": "#/$defs/LRecoveryOwnerOutputRef" }
+      ],
+      "items": false
+    },
+    "FixedOwnerContractRefs": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "prefixItems": [
+        { "$ref": "#/$defs/CapitalOwnerContractRef" },
+        { "$ref": "#/$defs/RiskOwnerContractRef" },
+        { "$ref": "#/$defs/QOwnerContractRef" },
+        { "$ref": "#/$defs/LTwinOwnerContractRef" },
+        { "$ref": "#/$defs/LRecoveryOwnerContractRef" }
+      ],
+      "items": false
+    },
+    "Origin": {
+      "enum": ["HYPOTHETICAL", "SYNTHETIC"]
+    },
+    "ScenarioStatus": {
+      "enum": ["EVALUATED_COMPARATIVE", "ABSTAIN_UNKNOWN"]
+    },
+    "CampaignMode": {
+      "enum": ["DECLARED_GRID", "ARCHIVED_FIXTURE_BOOTSTRAP", "SEEDED_SIMULATION_TABLE"]
+    },
+    "ImpactCategory": {
+      "enum": [
+        "MARKET_MOVE",
+        "LIQUIDITY",
+        "CAPACITY",
+        "FUNDING",
+        "BORROW",
+        "FEE",
+        "SLIPPAGE",
+        "LATENCY",
+        "COLLATERAL",
+        "LIABILITY",
+        "EXECUTION",
+        "RECOVERY",
+        "OTHER"
+      ]
+    },
+    "KnownExactMetricV1": {
+      "type": "object",
+      "required": ["state", "unit", "atoms", "reason"],
+      "properties": {
+        "state": { "const": "KNOWN" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "atoms": { "$ref": "#/$defs/Atoms" },
+        "reason": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    "UnknownExactMetricV1": {
+      "type": "object",
+      "required": ["state", "unit", "atoms", "reason"],
+      "properties": {
+        "state": { "enum": ["UNKNOWN", "UNAVAILABLE"] },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "atoms": { "type": "null" },
+        "reason": { "$ref": "#/$defs/Text2048" }
+      },
+      "additionalProperties": false
+    },
+    "ExactMetricV1": {
+      "oneOf": [
+        { "$ref": "#/$defs/KnownExactMetricV1" },
+        { "$ref": "#/$defs/UnknownExactMetricV1" }
+      ]
+    },
+    "KnownNonNegativeExactMetricV1": {
+      "allOf": [
+        { "$ref": "#/$defs/KnownExactMetricV1" },
+        { "properties": { "atoms": { "pattern": "^(?:0|[1-9][0-9]{0,95})$" } } }
+      ]
+    },
+    "PortfolioSubjectV1": {
+      "type": "object",
+      "required": [
+        "id",
+        "assetId",
+        "sectorId",
+        "venueId",
+        "collateralId",
+        "strategyId",
+        "exposure",
+        "canonicalOwnerRef",
+        "ownerSnapshotRef",
+        "sourceRevision"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id256" },
+        "assetId": { "$ref": "#/$defs/Id256" },
+        "sectorId": { "$ref": "#/$defs/Id256" },
+        "venueId": { "$ref": "#/$defs/Id256" },
+        "collateralId": { "$ref": "#/$defs/Id256" },
+        "strategyId": { "$ref": "#/$defs/Id256" },
+        "exposure": { "$ref": "#/$defs/ExactMetricV1" },
+        "canonicalOwnerRef": { "$ref": "#/$defs/FixedOwnerContractRef" },
+        "ownerSnapshotRef": { "$ref": "#/$defs/FixedOwnerOutputRef" },
+        "sourceRevision": { "$ref": "#/$defs/Id256" }
+      },
+      "allOf": [
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/CapitalOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/CapitalOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/RiskOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/RiskOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/QOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/QOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/LTwinOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/LTwinOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/LRecoveryOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/LRecoveryOwnerContractRef" } } } }
+      ],
+      "additionalProperties": false
+    },
+    "VenueExposureV1": {
+      "type": "object",
+      "required": ["id", "venueId", "exposure", "canonicalOwnerRef", "ownerSnapshotRef", "sourceRevision"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id256" },
+        "venueId": { "$ref": "#/$defs/Id256" },
+        "exposure": { "$ref": "#/$defs/ExactMetricV1" },
+        "canonicalOwnerRef": { "$ref": "#/$defs/FixedOwnerContractRef" },
+        "ownerSnapshotRef": { "$ref": "#/$defs/FixedOwnerOutputRef" },
+        "sourceRevision": { "$ref": "#/$defs/Id256" }
+      },
+      "allOf": [
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/CapitalOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/CapitalOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/RiskOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/RiskOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/QOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/QOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/LTwinOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/LTwinOwnerContractRef" } } } },
+        { "if": { "properties": { "ownerSnapshotRef": { "$ref": "#/$defs/LRecoveryOwnerOutputRef" } } }, "then": { "properties": { "canonicalOwnerRef": { "$ref": "#/$defs/LRecoveryOwnerContractRef" } } } }
+      ],
+      "additionalProperties": false
+    },
+    "StrategyClusterV1": {
+      "type": "object",
+      "required": ["clusterId", "strategyIds", "factorIds", "sourceRef"],
+      "properties": {
+        "clusterId": { "$ref": "#/$defs/Id256" },
+        "strategyIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Id256" }
+        },
+        "factorIds": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Id256" }
+        },
+        "sourceRef": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+      },
+      "additionalProperties": false
+    },
+    "FactorLinkV1": {
+      "type": "object",
+      "required": ["leftId", "rightId", "factorId", "dependencePpm", "sourceRef"],
+      "properties": {
+        "leftId": { "$ref": "#/$defs/Id256" },
+        "rightId": { "$ref": "#/$defs/Id256" },
+        "factorId": { "$ref": "#/$defs/Id256" },
+        "dependencePpm": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "sourceRef": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioSnapshotV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "snapshotId",
+        "revision",
+        "asOfMs",
+        "receivedAtMs",
+        "reportingUnit",
+        "truthState",
+        "ownerEvidenceStatus",
+        "ownerEvidenceHash",
+        "ownerClaimHash",
+        "ownerSnapshotRefs",
+        "canonicalOwnerContractRefs",
+        "positions",
+        "proposals",
+        "liabilities",
+        "collateral",
+        "venueExposures",
+        "strategyClusters",
+        "factorLinks",
+        "missingDependencies",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "snapshotHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioSnapshotV1" },
+        "version": { "const": 1 },
+        "snapshotId": { "$ref": "#/$defs/Id256" },
+        "revision": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "asOfMs": { "$ref": "#/$defs/NonNegativeSafeInteger", "description": "Runtime cross-field law: receivedAtMs must be greater than or equal to asOfMs." },
+        "receivedAtMs": { "$ref": "#/$defs/NonNegativeSafeInteger", "description": "Runtime cross-field law: receivedAtMs must be greater than or equal to asOfMs." },
+        "reportingUnit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "truthState": { "enum": ["COMPLETE", "PARTIAL", "STALE", "UNKNOWN", "UNAVAILABLE"] },
+        "ownerEvidenceStatus": { "$ref": "#/$defs/OwnerEvidenceStatus" },
+        "ownerEvidenceHash": { "$ref": "#/$defs/OwnerEvidenceHash" },
+        "ownerClaimHash": { "$ref": "#/$defs/SnapshotOwnerClaimHash" },
+        "ownerSnapshotRefs": { "$ref": "#/$defs/FixedOwnerSnapshotRefs" },
+        "canonicalOwnerContractRefs": { "$ref": "#/$defs/FixedOwnerContractRefs" },
+        "positions": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/PortfolioSubjectV1" } },
+        "proposals": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/PortfolioSubjectV1" } },
+        "liabilities": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/PortfolioSubjectV1" } },
+        "collateral": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/PortfolioSubjectV1" } },
+        "venueExposures": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/VenueExposureV1" } },
+        "strategyClusters": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/StrategyClusterV1" } },
+        "factorLinks": { "type": "array", "maxItems": 2048, "items": { "$ref": "#/$defs/FactorLinkV1" } },
+        "missingDependencies": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "truthState": { "const": "COMPLETE" } }, "required": ["truthState"] },
+          "then": {
+            "properties": {
+              "missingDependencies": { "maxItems": 0 },
+              "positions": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/PortfolioSubjectV1" },
+                    { "properties": { "exposure": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                  ]
+                }
+              },
+              "proposals": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/PortfolioSubjectV1" },
+                    { "properties": { "exposure": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                  ]
+                }
+              },
+              "liabilities": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/PortfolioSubjectV1" },
+                    { "properties": { "exposure": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                  ]
+                }
+              },
+              "collateral": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/PortfolioSubjectV1" },
+                    { "properties": { "exposure": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                  ]
+                }
+              },
+              "venueExposures": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/VenueExposureV1" },
+                    { "properties": { "exposure": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                  ]
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "missingDependencies": { "minItems": 1 }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "SweepInputV1": {
+      "type": "object",
+      "required": ["dimension", "state", "value", "unit", "ownerRef"],
+      "properties": {
+        "dimension": { "enum": ["LIQUIDITY", "CAPACITY", "FUNDING", "BORROW", "FEE", "SLIPPAGE", "LATENCY"] },
+        "state": { "enum": ["KNOWN", "UNKNOWN", "UNAVAILABLE"] },
+        "value": {
+          "oneOf": [
+            { "$ref": "#/$defs/Atoms" },
+            { "type": "null" }
+          ]
+        },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "ownerRef": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "KNOWN" } }, "required": ["state"] },
+          "then": { "properties": { "value": { "$ref": "#/$defs/Atoms" } } },
+          "else": { "properties": { "value": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "dimension": { "enum": ["LIQUIDITY", "CAPACITY", "BORROW"] } }, "required": ["dimension"] },
+          "then": { "properties": { "unit": { "const": "PPM" } } }
+        },
+        {
+          "if": { "properties": { "dimension": { "const": "LATENCY" } }, "required": ["dimension"] },
+          "then": { "properties": { "unit": { "const": "MILLISECONDS" } } }
+        },
+        {
+          "if": { "properties": { "dimension": { "enum": ["LIQUIDITY", "FUNDING", "FEE", "SLIPPAGE", "LATENCY"] } }, "required": ["dimension"] },
+          "then": { "properties": { "ownerRef": { "$ref": "#/$defs/LTwinOwnerOutputRef" } } }
+        },
+        {
+          "if": { "properties": { "dimension": { "const": "CAPACITY" } }, "required": ["dimension"] },
+          "then": { "properties": { "ownerRef": { "$ref": "#/$defs/CapitalOwnerOutputRef" } } }
+        },
+        {
+          "if": { "properties": { "dimension": { "const": "BORROW" } }, "required": ["dimension"] },
+          "then": { "properties": { "ownerRef": { "$ref": "#/$defs/LRecoveryOwnerOutputRef" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioImpactV1": {
+      "type": "object",
+      "required": ["impactId", "subjectId", "category", "delta", "lowerBound", "upperBound", "ownerOutputRef"],
+      "properties": {
+        "impactId": { "$ref": "#/$defs/Id256" },
+        "subjectId": { "$ref": "#/$defs/Id256" },
+        "category": { "$ref": "#/$defs/ImpactCategory" },
+        "delta": { "$ref": "#/$defs/ExactMetricV1" },
+        "lowerBound": { "$ref": "#/$defs/ExactMetricV1" },
+        "upperBound": { "$ref": "#/$defs/ExactMetricV1" },
+        "ownerOutputRef": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+      },
+      "allOf": [
+        { "if": { "properties": { "category": { "const": "MARKET_MOVE" } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/QOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["LIQUIDITY", "FUNDING", "FEE", "SLIPPAGE", "LATENCY", "EXECUTION"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/LTwinOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["CAPACITY", "COLLATERAL"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/CapitalOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["BORROW", "LIABILITY", "RECOVERY"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/LRecoveryOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "const": "OTHER" } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/RiskOwnerOutputRef" } } } }
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioReferenceV1": {
+      "type": "object",
+      "required": [
+        "scenarioId",
+        "scenarioVersion",
+        "scenarioHash",
+        "extensionProviderRef",
+        "fixtureSchemaRef",
+        "seed",
+        "clockRef",
+        "lineageRefs",
+        "expectedCanonicalPostureRefs"
+      ],
+      "properties": {
+        "scenarioId": { "$ref": "#/$defs/DockText1024" },
+        "scenarioVersion": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$",
+          "maxLength": 1024
+        },
+        "scenarioHash": { "$ref": "#/$defs/Sha256" },
+        "extensionProviderRef": { "const": "F12" },
+        "fixtureSchemaRef": { "const": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ScenarioReferenceV1" },
+        "seed": { "$ref": "#/$defs/SafeInteger" },
+        "clockRef": { "$ref": "#/$defs/DockText1024" },
+        "lineageRefs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "string",
+              "pattern": "^fixture://portfolio-lab/unaccepted-f12-consumer-stub/[a-z0-9][a-z0-9._-]{0,255}/[a-z0-9][a-z0-9._-]{0,255}$",
+              "maxLength": 1024
+            },
+            { "const": "status:UNACCEPTED_SYNTHETIC_F12_REFERENCE_STUB" }
+          ],
+          "items": false
+        },
+        "expectedCanonicalPostureRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "prefixItems": [
+            { "$ref": "#/$defs/RiskOwnerContractRef" }
+          ],
+          "items": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "HorizonV1": {
+      "type": "object",
+      "description": "Both timestamps are non-negative; runtime cross-field law requires endMs to be strictly greater than startMs.",
+      "required": ["startMs", "endMs"],
+      "properties": {
+        "startMs": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "endMs": { "$ref": "#/$defs/NonNegativeSafeInteger" }
+      },
+      "additionalProperties": false
+    },
+    "ScenarioAssumptionsV1": {
+      "type": "object",
+      "required": ["narrative", "severity", "liquidity", "fills", "exclusions"],
+      "properties": {
+        "narrative": { "$ref": "#/$defs/Text2048" },
+        "severity": { "$ref": "#/$defs/Text2048" },
+        "liquidity": { "$ref": "#/$defs/Text2048" },
+        "fills": { "$ref": "#/$defs/Text2048" },
+        "exclusions": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "StateChangeV1": {
+      "type": "object",
+      "required": ["subjectId", "category", "before", "after", "ownerOutputRef"],
+      "properties": {
+        "subjectId": { "$ref": "#/$defs/Id256" },
+        "category": {
+          "enum": [
+            "ACCOUNT_TRUTH_FRESHNESS",
+            "BORROW_AVAILABILITY",
+            "CONVERGENCE_STATE",
+            "DATA_VISIBILITY",
+            "DECLARED_DEPENDENCE_PPM",
+            "HAIRCUT_STATE",
+            "LIQUIDATION_DISTANCE",
+            "MARGIN_HEADROOM",
+            "ONE_LEG_EXPOSURE",
+            "OPEN_ORDER_STATE",
+            "PEG_STATE",
+            "POSITION_MOBILITY",
+            "RECOVERY_HORIZON",
+            "RISK_POSTURE",
+            "SHARED_CONTENTION",
+            "VENUE_AVAILABILITY"
+          ]
+        },
+        "before": { "$ref": "#/$defs/Id256" },
+        "after": { "$ref": "#/$defs/Id256" },
+        "ownerOutputRef": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+      },
+      "allOf": [
+        { "if": { "properties": { "category": { "enum": ["ACCOUNT_TRUTH_FRESHNESS", "DATA_VISIBILITY", "LIQUIDATION_DISTANCE", "MARGIN_HEADROOM", "RISK_POSTURE"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/RiskOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["BORROW_AVAILABILITY", "RECOVERY_HORIZON"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/LRecoveryOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["CONVERGENCE_STATE", "ONE_LEG_EXPOSURE", "OPEN_ORDER_STATE", "POSITION_MOBILITY", "VENUE_AVAILABILITY"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/LTwinOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "const": "DECLARED_DEPENDENCE_PPM" } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/QOwnerOutputRef" } } } },
+        { "if": { "properties": { "category": { "enum": ["HAIRCUT_STATE", "PEG_STATE", "SHARED_CONTENTION"] } }, "required": ["category"] }, "then": { "properties": { "ownerOutputRef": { "$ref": "#/$defs/CapitalOwnerOutputRef" } } } }
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioCallerFactV1": {
+      "type": "object",
+      "required": ["factId", "subjectId", "category", "before", "after", "ownerOutputRef"],
+      "properties": {
+        "factId": { "$ref": "#/$defs/Id256" },
+        "subjectId": { "$ref": "#/$defs/Id256" },
+        "category": { "enum": ["LIQUIDATION_DISTANCE", "MARGIN_HEADROOM"] },
+        "before": { "$ref": "#/$defs/ExactMetricV1" },
+        "after": { "$ref": "#/$defs/ExactMetricV1" },
+        "ownerOutputRef": { "$ref": "#/$defs/RiskOwnerOutputRef" }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            { "properties": { "before": { "properties": { "state": { "const": "KNOWN" } } }, "after": { "properties": { "state": { "const": "KNOWN" } } } } },
+            { "properties": { "before": { "properties": { "state": { "const": "UNKNOWN" } } }, "after": { "properties": { "state": { "const": "UNKNOWN" } } } } },
+            { "properties": { "before": { "properties": { "state": { "const": "UNAVAILABLE" } } }, "after": { "properties": { "state": { "const": "UNAVAILABLE" } } } } }
+          ]
+        },
+        {
+          "if": { "properties": { "category": { "const": "LIQUIDATION_DISTANCE" } }, "required": ["category"] },
+          "then": {
+            "properties": {
+              "before": {
+                "oneOf": [
+                  { "allOf": [{ "$ref": "#/$defs/KnownExactMetricV1" }, { "properties": { "unit": { "const": "PPM" }, "atoms": { "pattern": "^(?:0|[1-9][0-9]{0,5}|1000000)$" } } }] },
+                  { "allOf": [{ "$ref": "#/$defs/UnknownExactMetricV1" }, { "properties": { "unit": { "const": "PPM" } } }] }
+                ]
+              },
+              "after": {
+                "oneOf": [
+                  { "allOf": [{ "$ref": "#/$defs/KnownExactMetricV1" }, { "properties": { "unit": { "const": "PPM" }, "atoms": { "pattern": "^(?:0|[1-9][0-9]{0,5}|1000000)$" } } }] },
+                  { "allOf": [{ "$ref": "#/$defs/UnknownExactMetricV1" }, { "properties": { "unit": { "const": "PPM" } } }] }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "before": {
+                "oneOf": [
+                  { "allOf": [{ "$ref": "#/$defs/KnownExactMetricV1" }, { "properties": { "unit": { "const": "USDT_MICRO" }, "atoms": { "pattern": "^(?:0|[1-9][0-9]{0,95})$" } } }] },
+                  { "allOf": [{ "$ref": "#/$defs/UnknownExactMetricV1" }, { "properties": { "unit": { "const": "USDT_MICRO" } } }] }
+                ]
+              },
+              "after": {
+                "oneOf": [
+                  { "allOf": [{ "$ref": "#/$defs/KnownExactMetricV1" }, { "properties": { "unit": { "const": "USDT_MICRO" }, "atoms": { "pattern": "^(?:0|[1-9][0-9]{0,95})$" } } }] },
+                  { "allOf": [{ "$ref": "#/$defs/UnknownExactMetricV1" }, { "properties": { "unit": { "const": "USDT_MICRO" } } }] }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "UncertaintyV1": {
+      "type": "object",
+      "required": ["state", "unit", "lowerAtoms", "upperAtoms", "method", "sourceRefs"],
+      "properties": {
+        "state": { "enum": ["KNOWN", "UNKNOWN", "UNAVAILABLE"] },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "lowerAtoms": {
+          "oneOf": [
+            { "$ref": "#/$defs/Atoms" },
+            { "type": "null" }
+          ]
+        },
+        "upperAtoms": {
+          "oneOf": [
+            { "$ref": "#/$defs/Atoms" },
+            { "type": "null" }
+          ]
+        },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sourceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/FixedOwnerOutputRef" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "KNOWN" } }, "required": ["state"] },
+          "then": {
+            "properties": {
+              "lowerAtoms": { "$ref": "#/$defs/Atoms" },
+              "upperAtoms": { "$ref": "#/$defs/Atoms" }
+            }
+          },
+          "else": {
+            "properties": {
+              "lowerAtoms": { "type": "null" },
+              "upperAtoms": { "type": "null" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "FrozenSweepInputsV1": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "LIQUIDITY" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "CAPACITY" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "FUNDING" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "BORROW" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "FEE" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "SLIPPAGE" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/SweepInputV1" }, { "properties": { "dimension": { "const": "LATENCY" } } }] }
+      ],
+      "items": false
+    },
+    "PortfolioScenarioEvaluationInputV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "evaluationId",
+        "scenarioKind",
+        "snapshotHash",
+        "snapshotOwnerClaimHash",
+        "scenarioReference",
+        "scenarioDefinitionStatus",
+        "ownerEvidenceStatus",
+        "ownerEvidenceHash",
+        "ownerClaimHash",
+        "origin",
+        "seed",
+        "horizon",
+        "reproducibilityInputs",
+        "assumptions",
+        "sweepInputs",
+        "impacts",
+        "callerFacts",
+        "stateChanges",
+        "missingDependencies",
+        "uncertainty",
+        "outputMode",
+        "whyNotLiveSizing",
+        "authorityClass",
+        "networkMode",
+        "evaluationHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioScenarioEvaluationInputV1" },
+        "version": { "const": 1 },
+        "evaluationId": { "$ref": "#/$defs/Id256" },
+        "scenarioKind": { "$ref": "#/$defs/ScenarioKind" },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "snapshotOwnerClaimHash": { "$ref": "#/$defs/SnapshotOwnerClaimHash" },
+        "scenarioReference": { "$ref": "#/$defs/ScenarioReferenceV1" },
+        "scenarioDefinitionStatus": { "$ref": "#/$defs/ScenarioDefinitionStatus" },
+        "ownerEvidenceStatus": { "$ref": "#/$defs/OwnerEvidenceStatus" },
+        "ownerEvidenceHash": { "$ref": "#/$defs/OwnerEvidenceHash" },
+        "ownerClaimHash": { "$ref": "#/$defs/ScenarioOwnerClaimHash" },
+        "origin": { "$ref": "#/$defs/Origin" },
+        "seed": { "$ref": "#/$defs/SafeInteger" },
+        "horizon": { "$ref": "#/$defs/HorizonV1" },
+        "reproducibilityInputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/OwnerRef" }
+        },
+        "assumptions": { "$ref": "#/$defs/ScenarioAssumptionsV1" },
+        "sweepInputs": { "$ref": "#/$defs/FrozenSweepInputsV1" },
+        "impacts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/ScenarioImpactV1" }
+        },
+        "callerFacts": {
+          "type": "array",
+          "maxItems": 128,
+          "items": { "$ref": "#/$defs/ScenarioCallerFactV1" }
+        },
+        "stateChanges": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/StateChangeV1" }
+        },
+        "missingDependencies": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "uncertainty": { "$ref": "#/$defs/UncertaintyV1" },
+        "outputMode": { "const": "COMPARATIVE" },
+        "whyNotLiveSizing": { "$ref": "#/$defs/Text2048" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "evaluationHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scenarioKind": { "const": "LIQUIDATION_DISTANCE_COMPRESSION" } }, "required": ["scenarioKind"] },
+          "then": {
+            "properties": {
+              "callerFacts": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "prefixItems": [
+                  {
+                    "allOf": [
+                      { "$ref": "#/$defs/ScenarioCallerFactV1" },
+                      { "properties": { "category": { "const": "LIQUIDATION_DISTANCE" }, "before": { "$ref": "#/$defs/KnownExactMetricV1" }, "after": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                    ]
+                  },
+                  {
+                    "allOf": [
+                      { "$ref": "#/$defs/ScenarioCallerFactV1" },
+                      { "properties": { "category": { "const": "MARGIN_HEADROOM" }, "before": { "$ref": "#/$defs/KnownExactMetricV1" }, "after": { "$ref": "#/$defs/KnownExactMetricV1" } } }
+                    ]
+                  }
+                ],
+                "items": false
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioCampaignV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "campaignId",
+        "mode",
+        "seed",
+        "generatedAtMs",
+        "snapshotHash",
+        "evaluationInputs",
+        "drawCount",
+        "objective",
+        "limitations",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "campaignHash"
+      ],
+      "properties": {
+        "schema": { "const": "ScenarioCampaignV1" },
+        "version": { "const": 1 },
+        "campaignId": { "$ref": "#/$defs/Id256" },
+        "mode": { "$ref": "#/$defs/CampaignMode" },
+        "seed": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+        "generatedAtMs": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "evaluationInputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/PortfolioScenarioEvaluationInputV1" }
+        },
+        "drawCount": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "objective": { "$ref": "#/$defs/Text2048" },
+        "limitations": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "campaignHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "ImpactIntervalV1": {
+      "type": "object",
+      "required": ["state", "unit", "lowerAtoms", "upperAtoms", "method"],
+      "properties": {
+        "state": { "const": "KNOWN" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "lowerAtoms": { "$ref": "#/$defs/Atoms" },
+        "upperAtoms": { "$ref": "#/$defs/Atoms" },
+        "method": { "const": "SUM_OF_CALLER_SUPPLIED_IMPACT_INTERVALS" }
+      },
+      "additionalProperties": false
+    },
+    "AttributionV1": {
+      "type": "object",
+      "required": [
+        "category",
+        "comparativeDelta",
+        "knownDeltaSubtotal",
+        "lowerBound",
+        "upperBound",
+        "unknownCount",
+        "impactIds",
+        "ownerOutputRefs",
+        "causalAttribution"
+      ],
+      "properties": {
+        "category": { "$ref": "#/$defs/ImpactCategory" },
+        "comparativeDelta": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "knownDeltaSubtotal": { "$ref": "#/$defs/KnownExactMetricV1" },
+        "lowerBound": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "upperBound": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "unknownCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "impactIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Id256" }
+        },
+        "ownerOutputRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/OwnerRef" }
+        },
+        "causalAttribution": { "const": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "unknownCount": { "const": 0 } }, "required": ["unknownCount"] },
+          "then": {
+            "properties": {
+              "comparativeDelta": { "$ref": "#/$defs/KnownExactMetricV1" },
+              "lowerBound": { "$ref": "#/$defs/KnownExactMetricV1" },
+              "upperBound": { "$ref": "#/$defs/KnownExactMetricV1" }
+            }
+          },
+          "else": {
+            "properties": {
+              "comparativeDelta": { "type": "null" },
+              "lowerBound": { "type": "null" },
+              "upperBound": { "type": "null" }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ScenarioFindingV1": {
+      "type": "object",
+      "required": ["findingCode", "advisoryOnly", "sizingSupported", "whyNotLiveSizing", "ownerAction"],
+      "properties": {
+        "findingCode": { "enum": ["ABSTAIN_UNKNOWN", "SCENARIO_COMPARISON_AVAILABLE"] },
+        "advisoryOnly": { "const": true },
+        "sizingSupported": { "const": false },
+        "whyNotLiveSizing": { "$ref": "#/$defs/Text2048" },
+        "ownerAction": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    "ScenarioEvidenceQualityV1": {
+      "type": "object",
+      "required": ["determinedBy", "simulationCountImprovesEvidenceQuality", "snapshotTruthState"],
+      "properties": {
+        "determinedBy": { "const": "CALLER_SUPPLIED_ORIGIN_INPUT_QUALITY_AND_UNCERTAINTY" },
+        "simulationCountImprovesEvidenceQuality": { "const": false },
+        "snapshotTruthState": { "enum": ["COMPLETE", "PARTIAL", "STALE", "UNKNOWN", "UNAVAILABLE"] }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioScenarioReportV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "sourceSnapshot",
+        "sourceEvaluation",
+        "reportId",
+        "evaluationId",
+        "evaluationHash",
+        "snapshotId",
+        "snapshotHash",
+        "scenarioKind",
+        "scenarioReference",
+        "scenarioDefinitionStatus",
+        "origin",
+        "seed",
+        "horizon",
+        "reproducibilityInputs",
+        "assumptions",
+        "sweepInputs",
+        "outputMode",
+        "status",
+        "reasonCodes",
+        "comparativeImpact",
+        "knownImpactSubtotal",
+        "impactInterval",
+        "callerSuppliedUncertainty",
+        "attribution",
+        "callerFacts",
+        "stateChanges",
+        "snapshotMissingDependencies",
+        "scenarioMissingDependencies",
+        "finding",
+        "evidenceQuality",
+        "truthClass",
+        "shadowOnly",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "reportHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioScenarioReportV1" },
+        "version": { "const": 1 },
+        "sourceSnapshot": { "$ref": "#/$defs/PortfolioSnapshotV1" },
+        "sourceEvaluation": { "$ref": "#/$defs/PortfolioScenarioEvaluationInputV1" },
+        "reportId": { "$ref": "#/$defs/Id256" },
+        "evaluationId": { "$ref": "#/$defs/Id256" },
+        "evaluationHash": { "$ref": "#/$defs/Sha256" },
+        "snapshotId": { "$ref": "#/$defs/Id256" },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "scenarioKind": { "$ref": "#/$defs/ScenarioKind" },
+        "scenarioReference": { "$ref": "#/$defs/ScenarioReferenceV1" },
+        "scenarioDefinitionStatus": { "$ref": "#/$defs/ScenarioDefinitionStatus" },
+        "origin": { "$ref": "#/$defs/Origin" },
+        "seed": { "$ref": "#/$defs/SafeInteger" },
+        "horizon": { "$ref": "#/$defs/HorizonV1" },
+        "reproducibilityInputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/OwnerRef" }
+        },
+        "assumptions": { "$ref": "#/$defs/ScenarioAssumptionsV1" },
+        "sweepInputs": { "$ref": "#/$defs/FrozenSweepInputsV1" },
+        "outputMode": { "const": "COMPARATIVE" },
+        "status": { "$ref": "#/$defs/ScenarioStatus" },
+        "reasonCodes": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "comparativeImpact": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "knownImpactSubtotal": { "$ref": "#/$defs/KnownExactMetricV1" },
+        "impactInterval": {
+          "oneOf": [
+            { "$ref": "#/$defs/ImpactIntervalV1" },
+            { "type": "null" }
+          ]
+        },
+        "callerSuppliedUncertainty": { "$ref": "#/$defs/UncertaintyV1" },
+        "attribution": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 13,
+          "items": { "$ref": "#/$defs/AttributionV1" }
+        },
+        "callerFacts": {
+          "type": "array",
+          "maxItems": 128,
+          "items": { "$ref": "#/$defs/ScenarioCallerFactV1" }
+        },
+        "stateChanges": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/StateChangeV1" }
+        },
+        "snapshotMissingDependencies": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "scenarioMissingDependencies": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "finding": { "$ref": "#/$defs/ScenarioFindingV1" },
+        "evidenceQuality": { "$ref": "#/$defs/ScenarioEvidenceQualityV1" },
+        "truthClass": { "const": "ADVISORY" },
+        "shadowOnly": { "const": true },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "reportHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "EVALUATED_COMPARATIVE" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "reasonCodes": { "maxItems": 0 },
+              "comparativeImpact": { "$ref": "#/$defs/KnownExactMetricV1" },
+              "impactInterval": { "$ref": "#/$defs/ImpactIntervalV1" },
+              "finding": {
+                "allOf": [
+                  { "$ref": "#/$defs/ScenarioFindingV1" },
+                  { "properties": { "findingCode": { "const": "SCENARIO_COMPARISON_AVAILABLE" } } }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": { "minItems": 1 },
+              "comparativeImpact": { "type": "null" },
+              "impactInterval": { "type": "null" },
+              "finding": {
+                "allOf": [
+                  { "$ref": "#/$defs/ScenarioFindingV1" },
+                  { "properties": { "findingCode": { "const": "ABSTAIN_UNKNOWN" } } }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "GraphNodeV1": {
+      "type": "object",
+      "required": ["id", "kind", "label", "sourceId", "exposure", "sourceRefs"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id256" },
+        "kind": {
+          "enum": [
+            "POSITION",
+            "PROPOSAL",
+            "LIABILITY",
+            "COLLATERAL_POOL",
+            "VENUE_EXPOSURE",
+            "ASSET",
+            "SECTOR",
+            "VENUE",
+            "COLLATERAL",
+            "STRATEGY",
+            "STRATEGY_CLUSTER",
+            "FACTOR"
+          ]
+        },
+        "label": { "$ref": "#/$defs/Id256" },
+        "sourceId": { "$ref": "#/$defs/Id256" },
+        "exposure": {
+          "oneOf": [
+            { "$ref": "#/$defs/ExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "sourceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/OwnerRef" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "GraphEdgeV1": {
+      "type": "object",
+      "required": ["id", "from", "to", "kind", "factorId", "dependencePpm", "sourceRef", "inferred"],
+      "properties": {
+        "id": { "$ref": "#/$defs/Id256" },
+        "from": { "$ref": "#/$defs/Id256" },
+        "to": { "$ref": "#/$defs/Id256" },
+        "kind": { "enum": ["DECLARES_EXPOSURE_TO", "MEMBER_OF_CLUSTER", "SHARES_FACTOR", "DECLARES_DEPENDENCE"] },
+        "factorId": { "$ref": "#/$defs/Id256" },
+        "dependencePpm": {
+          "oneOf": [
+            { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+            { "type": "null" }
+          ]
+        },
+        "sourceRef": { "$ref": "#/$defs/OwnerRef" },
+        "inferred": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "ScenarioRelationshipGraphV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "snapshotHash",
+        "graphClass",
+        "nodes",
+        "edges",
+        "causal",
+        "probabilityModel",
+        "unknownRelationshipMeaning",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "graphHash"
+      ],
+      "properties": {
+        "schema": { "const": "ScenarioRelationshipGraphV1" },
+        "version": { "const": 1 },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "graphClass": { "const": "SCENARIO_RELATIONSHIP_GRAPH" },
+        "nodes": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/GraphNodeV1" }
+        },
+        "edges": {
+          "type": "array",
+          "maxItems": 8192,
+          "items": { "$ref": "#/$defs/GraphEdgeV1" }
+        },
+        "causal": { "const": false },
+        "probabilityModel": { "type": "null" },
+        "unknownRelationshipMeaning": { "const": "ABSENT_EDGE_IS_UNKNOWN_NOT_INDEPENDENT" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "graphHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "ConcentrationGroupV1": {
+      "type": "object",
+      "required": ["key", "knownAbsoluteExposure", "sharePpm", "shareRounding"],
+      "properties": {
+        "key": { "$ref": "#/$defs/Id256" },
+        "knownAbsoluteExposure": { "$ref": "#/$defs/KnownNonNegativeExactMetricV1" },
+        "sharePpm": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            { "type": "null" }
+          ]
+        },
+        "shareRounding": {
+          "oneOf": [
+            { "const": "FLOOR_TO_PPM" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "sharePpm": { "type": "integer" } }, "required": ["sharePpm"] },
+          "then": { "properties": { "shareRounding": { "const": "FLOOR_TO_PPM" } } },
+          "else": { "properties": { "shareRounding": { "type": "null" } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ConcentrationDimensionV1": {
+      "type": "object",
+      "required": [
+        "dimension",
+        "knownLowerBound",
+        "total",
+        "unknownCount",
+        "unknownSubjectIds",
+        "hhiPpm",
+        "hhiRounding",
+        "groups"
+      ],
+      "properties": {
+        "dimension": { "enum": ["ASSET", "SECTOR", "VENUE", "COLLATERAL", "STRATEGY"] },
+        "knownLowerBound": { "$ref": "#/$defs/KnownNonNegativeExactMetricV1" },
+        "total": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownNonNegativeExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "unknownCount": { "type": "integer", "minimum": 0, "maximum": 1536 },
+        "unknownSubjectIds": {
+          "type": "array",
+          "maxItems": 1536,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Id256" }
+        },
+        "hhiPpm": {
+          "oneOf": [
+            { "type": "integer", "minimum": 0, "maximum": 1000000 },
+            { "type": "null" }
+          ]
+        },
+        "hhiRounding": {
+          "oneOf": [
+            { "const": "FLOOR_TO_PPM" },
+            { "type": "null" }
+          ]
+        },
+        "groups": {
+          "type": "array",
+          "maxItems": 1536,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/ConcentrationGroupV1" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "unknownCount": { "const": 0 } }, "required": ["unknownCount"] },
+          "then": { "properties": { "total": { "$ref": "#/$defs/KnownNonNegativeExactMetricV1" } } },
+          "else": {
+            "properties": {
+              "total": { "type": "null" },
+              "hhiPpm": { "type": "null" },
+              "hhiRounding": { "type": "null" },
+              "groups": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/ConcentrationGroupV1" },
+                    {
+                      "properties": {
+                        "sharePpm": { "type": "null" },
+                        "shareRounding": { "type": "null" }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "hhiPpm": { "type": "integer" } }, "required": ["hhiPpm"] },
+          "then": { "properties": { "hhiRounding": { "const": "FLOOR_TO_PPM" } } },
+          "else": { "properties": { "hhiRounding": { "type": "null" } } }
+        },
+        {
+          "if": {
+            "allOf": [
+              { "properties": { "unknownCount": { "const": 0 } }, "required": ["unknownCount"] },
+              { "properties": { "total": { "properties": { "atoms": { "const": "0" } }, "required": ["atoms"] } }, "required": ["total"] }
+            ]
+          },
+          "then": {
+            "properties": {
+              "hhiPpm": { "type": "null" },
+              "hhiRounding": { "type": "null" },
+              "groups": {
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/ConcentrationGroupV1" },
+                    { "properties": { "sharePpm": { "type": "null" }, "shareRounding": { "type": "null" } } }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "allOf": [
+              { "properties": { "unknownCount": { "const": 0 } }, "required": ["unknownCount"] },
+              { "properties": { "total": { "properties": { "atoms": { "pattern": "^[1-9][0-9]{0,95}$" } }, "required": ["atoms"] } }, "required": ["total"] }
+            ]
+          },
+          "then": {
+            "properties": {
+              "hhiPpm": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+              "hhiRounding": { "const": "FLOOR_TO_PPM" },
+              "groups": {
+                "minItems": 1,
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/ConcentrationGroupV1" },
+                    { "properties": { "sharePpm": { "type": "integer", "minimum": 0, "maximum": 1000000 }, "shareRounding": { "const": "FLOOR_TO_PPM" } } }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "PortfolioConcentrationMapV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "snapshotHash",
+        "reportingUnit",
+        "includedSubjectKinds",
+        "excludedFromAggregate",
+        "dimensions",
+        "unknownRule",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "concentrationHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioConcentrationMapV1" },
+        "version": { "const": 1 },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "reportingUnit": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "includedSubjectKinds": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "const": "POSITION" },
+            { "const": "PROPOSAL" },
+            { "const": "LIABILITY" }
+          ],
+          "items": false
+        },
+        "excludedFromAggregate": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            { "const": "COLLATERAL_POOL" },
+            { "const": "VENUE_EXPOSURE_AGGREGATE" }
+          ],
+          "items": false
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "prefixItems": [
+            { "allOf": [{ "$ref": "#/$defs/ConcentrationDimensionV1" }, { "properties": { "dimension": { "const": "ASSET" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/ConcentrationDimensionV1" }, { "properties": { "dimension": { "const": "SECTOR" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/ConcentrationDimensionV1" }, { "properties": { "dimension": { "const": "VENUE" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/ConcentrationDimensionV1" }, { "properties": { "dimension": { "const": "COLLATERAL" } } }] },
+            { "allOf": [{ "$ref": "#/$defs/ConcentrationDimensionV1" }, { "properties": { "dimension": { "const": "STRATEGY" } } }] }
+          ],
+          "items": false
+        },
+        "unknownRule": { "const": "UNKNOWN_MEMBERS_PREVENT_TOTAL_AND_HHI" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "concentrationHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "ScenarioMatrixRowV1": {
+      "type": "object",
+      "required": [
+        "evaluationId",
+        "scenarioKind",
+        "scenarioId",
+        "status",
+        "comparativeImpact",
+        "knownImpactSubtotal",
+        "uncertainty",
+        "reasonCodes",
+        "reportHash"
+      ],
+      "properties": {
+        "evaluationId": { "$ref": "#/$defs/Id256" },
+        "scenarioKind": { "$ref": "#/$defs/ScenarioKind" },
+        "scenarioId": { "$ref": "#/$defs/Id256" },
+        "status": { "$ref": "#/$defs/ScenarioStatus" },
+        "comparativeImpact": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "knownImpactSubtotal": { "$ref": "#/$defs/KnownExactMetricV1" },
+        "uncertainty": { "$ref": "#/$defs/UncertaintyV1" },
+        "reasonCodes": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "reportHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "CampaignDrawV1": {
+      "type": "object",
+      "required": ["drawIndex", "sourceIndex", "evaluationId", "reportHash", "status", "origin", "callerSuppliedUncertainty"],
+      "properties": {
+        "drawIndex": { "type": "integer", "minimum": 0, "maximum": 2047 },
+        "sourceIndex": { "type": "integer", "minimum": 0, "maximum": 63 },
+        "evaluationId": { "$ref": "#/$defs/Id256" },
+        "reportHash": { "$ref": "#/$defs/Sha256" },
+        "status": { "$ref": "#/$defs/ScenarioStatus" },
+        "origin": { "$ref": "#/$defs/Origin" },
+        "callerSuppliedUncertainty": { "$ref": "#/$defs/UncertaintyV1" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioViewRowV1": {
+      "type": "object",
+      "required": [
+        "evaluationId",
+        "scenarioKind",
+        "status",
+        "comparativeImpact",
+        "knownImpactSubtotal",
+        "uncertainty",
+        "horizon",
+        "stateChanges",
+        "reasonCodes",
+        "reportHash"
+      ],
+      "properties": {
+        "evaluationId": { "$ref": "#/$defs/Id256" },
+        "scenarioKind": { "$ref": "#/$defs/ScenarioKind" },
+        "status": { "$ref": "#/$defs/ScenarioStatus" },
+        "comparativeImpact": {
+          "oneOf": [
+            { "$ref": "#/$defs/KnownExactMetricV1" },
+            { "type": "null" }
+          ]
+        },
+        "knownImpactSubtotal": { "$ref": "#/$defs/KnownExactMetricV1" },
+        "uncertainty": { "$ref": "#/$defs/UncertaintyV1" },
+        "horizon": { "$ref": "#/$defs/HorizonV1" },
+        "stateChanges": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/StateChangeV1" }
+        },
+        "reasonCodes": {
+          "type": "array",
+          "maxItems": 512,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "reportHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "DrawdownPortfolioViewV1": {
+      "type": "object",
+      "required": ["viewId", "viewClass", "rows", "advisoryOnly", "sizingSupported", "causal", "limitations"],
+      "properties": {
+        "viewId": { "const": "portfolio-lab.drawdown-burden" },
+        "viewClass": { "const": "CALLER_SUPPLIED_COMPARATIVE_SCENARIO_VIEW" },
+        "rows": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/PortfolioViewRowV1" } },
+        "advisoryOnly": { "const": true },
+        "sizingSupported": { "const": false },
+        "causal": { "const": false },
+        "limitations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "const": "NO_OWNER_RECOMPUTATION" },
+            { "const": "NO_CAUSAL_OR_PROBABILITY_CLAIM" },
+            { "const": "NO_LIVE_SIZING" }
+          ],
+          "items": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "ContagionPortfolioViewV1": {
+      "type": "object",
+      "required": ["viewId", "viewClass", "rows", "advisoryOnly", "sizingSupported", "causal", "limitations", "relationshipGraphHash"],
+      "properties": {
+        "viewId": { "const": "portfolio-lab.contagion" },
+        "viewClass": { "const": "CALLER_SUPPLIED_COMPARATIVE_SCENARIO_VIEW" },
+        "rows": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/PortfolioViewRowV1" } },
+        "advisoryOnly": { "const": true },
+        "sizingSupported": { "const": false },
+        "causal": { "const": false },
+        "limitations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "const": "NO_OWNER_RECOMPUTATION" },
+            { "const": "NO_CAUSAL_OR_PROBABILITY_CLAIM" },
+            { "const": "NO_LIVE_SIZING" }
+          ],
+          "items": false
+        },
+        "relationshipGraphHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "RecoveryBurdenPortfolioViewV1": {
+      "type": "object",
+      "required": ["viewId", "viewClass", "rows", "advisoryOnly", "sizingSupported", "causal", "limitations"],
+      "properties": {
+        "viewId": { "const": "portfolio-lab.recovery-burden" },
+        "viewClass": { "const": "CALLER_SUPPLIED_COMPARATIVE_SCENARIO_VIEW" },
+        "rows": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/PortfolioViewRowV1" } },
+        "advisoryOnly": { "const": true },
+        "sizingSupported": { "const": false },
+        "causal": { "const": false },
+        "limitations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            { "const": "NO_OWNER_RECOMPUTATION" },
+            { "const": "NO_CAUSAL_OR_PROBABILITY_CLAIM" },
+            { "const": "NO_LIVE_SIZING" }
+          ],
+          "items": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioViewsV1": {
+      "type": "object",
+      "required": ["drawdown", "contagion", "recoveryBurden"],
+      "properties": {
+        "drawdown": { "$ref": "#/$defs/DrawdownPortfolioViewV1" },
+        "contagion": { "$ref": "#/$defs/ContagionPortfolioViewV1" },
+        "recoveryBurden": { "$ref": "#/$defs/RecoveryBurdenPortfolioViewV1" }
+      },
+      "additionalProperties": false
+    },
+    "CampaignEvidenceQualityV1": {
+      "type": "object",
+      "required": [
+        "simulationCountImprovesEvidenceQuality",
+        "uncertaintyNarrowedByDrawCount",
+        "originPreservedPerDraw",
+        "inputTableHash"
+      ],
+      "properties": {
+        "simulationCountImprovesEvidenceQuality": { "const": false },
+        "uncertaintyNarrowedByDrawCount": { "const": false },
+        "originPreservedPerDraw": { "const": true },
+        "inputTableHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "CampaignFindingV1": {
+      "type": "object",
+      "required": ["advisoryOnly", "sizingSupported", "noSizingReason", "ownerAction"],
+      "properties": {
+        "advisoryOnly": { "const": true },
+        "sizingSupported": { "const": false },
+        "noSizingReason": { "$ref": "#/$defs/Text2048" },
+        "ownerAction": { "type": "null" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioCampaignReportV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "sourceSnapshot",
+        "sourceCampaign",
+        "reportId",
+        "campaignId",
+        "campaignHash",
+        "snapshotId",
+        "snapshotHash",
+        "generatedAtMs",
+        "mode",
+        "seed",
+        "objective",
+        "limitations",
+        "evaluationCount",
+        "drawCount",
+        "uniqueDrawnCaseCount",
+        "abstainCount",
+        "evaluatedCount",
+        "reports",
+        "scenarioMatrix",
+        "draws",
+        "concentration",
+        "relationshipGraph",
+        "portfolioViews",
+        "evidenceQuality",
+        "finding",
+        "truthClass",
+        "shadowOnly",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "reportHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioCampaignReportV1" },
+        "version": { "const": 1 },
+        "sourceSnapshot": { "$ref": "#/$defs/PortfolioSnapshotV1" },
+        "sourceCampaign": { "$ref": "#/$defs/ScenarioCampaignV1" },
+        "reportId": { "$ref": "#/$defs/Id256" },
+        "campaignId": { "$ref": "#/$defs/Id256" },
+        "campaignHash": { "$ref": "#/$defs/Sha256" },
+        "snapshotId": { "$ref": "#/$defs/Id256" },
+        "snapshotHash": { "$ref": "#/$defs/Sha256" },
+        "generatedAtMs": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "mode": { "$ref": "#/$defs/CampaignMode" },
+        "seed": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+        "objective": { "$ref": "#/$defs/Text2048" },
+        "limitations": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "evaluationCount": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "drawCount": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "uniqueDrawnCaseCount": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "abstainCount": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "evaluatedCount": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "reports": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/PortfolioScenarioReportV1" }
+        },
+        "scenarioMatrix": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/ScenarioMatrixRowV1" }
+        },
+        "draws": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2048,
+          "items": { "$ref": "#/$defs/CampaignDrawV1" }
+        },
+        "concentration": { "$ref": "#/$defs/PortfolioConcentrationMapV1" },
+        "relationshipGraph": { "$ref": "#/$defs/ScenarioRelationshipGraphV1" },
+        "portfolioViews": { "$ref": "#/$defs/PortfolioViewsV1" },
+        "evidenceQuality": { "$ref": "#/$defs/CampaignEvidenceQualityV1" },
+        "finding": { "$ref": "#/$defs/CampaignFindingV1" },
+        "truthClass": { "const": "ADVISORY" },
+        "shadowOnly": { "const": true },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "reportHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "ProjectionSummaryV1": {
+      "type": "object",
+      "required": ["evaluationCount", "evaluatedCount", "abstainCount", "drawCount", "uniqueDrawnCaseCount"],
+      "properties": {
+        "evaluationCount": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "evaluatedCount": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "abstainCount": { "type": "integer", "minimum": 0, "maximum": 64 },
+        "drawCount": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "uniqueDrawnCaseCount": { "type": "integer", "minimum": 1, "maximum": 64 }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioLabCockpitProjectionV1": {
+      "type": "object",
+      "required": [
+        "schema",
+        "version",
+        "sourceCampaignReport",
+        "projectionId",
+        "generatedAtMs",
+        "sourceCampaignId",
+        "sourceCampaignHash",
+        "sourceReportHash",
+        "truthLabel",
+        "mountStatus",
+        "mounted",
+        "controls",
+        "summary",
+        "scenarioMatrix",
+        "drillDownEvidence",
+        "concentration",
+        "relationshipGraph",
+        "portfolioViews",
+        "advisoryFinding",
+        "limitations",
+        "truthClass",
+        "authorityClass",
+        "networkMode",
+        "canonical",
+        "projectionHash"
+      ],
+      "properties": {
+        "schema": { "const": "PortfolioLabCockpitProjectionV1" },
+        "version": { "const": 1 },
+        "sourceCampaignReport": { "$ref": "#/$defs/PortfolioCampaignReportV1" },
+        "projectionId": { "$ref": "#/$defs/Id256" },
+        "generatedAtMs": { "$ref": "#/$defs/NonNegativeSafeInteger" },
+        "sourceCampaignId": { "$ref": "#/$defs/Id256" },
+        "sourceCampaignHash": { "$ref": "#/$defs/Sha256" },
+        "sourceReportHash": { "$ref": "#/$defs/Sha256" },
+        "truthLabel": { "const": "SYNTHETIC_ONLY" },
+        "mountStatus": { "const": "DIRECTOR_MOUNT_REQUIRED" },
+        "mounted": { "const": false },
+        "controls": { "type": "array", "maxItems": 0, "items": false },
+        "summary": { "$ref": "#/$defs/ProjectionSummaryV1" },
+        "scenarioMatrix": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/ScenarioMatrixRowV1" }
+        },
+        "drillDownEvidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/PortfolioScenarioReportV1" }
+        },
+        "concentration": { "$ref": "#/$defs/PortfolioConcentrationMapV1" },
+        "relationshipGraph": { "$ref": "#/$defs/ScenarioRelationshipGraphV1" },
+        "portfolioViews": { "$ref": "#/$defs/PortfolioViewsV1" },
+        "advisoryFinding": { "$ref": "#/$defs/CampaignFindingV1" },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/Text2048" }
+        },
+        "truthClass": { "const": "FIXTURE_PROJECTION" },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" },
+        "canonical": { "const": false },
+        "projectionHash": { "$ref": "#/$defs/Sha256" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioLabAdvisoryFacetRequestV1": {
+      "type": "object",
+      "required": ["facetClass", "operation", "fixture", "authorityClass", "networkMode"],
+      "properties": {
+        "facetClass": { "const": "ADVISORY_ASSESSOR" },
+        "operation": { "const": "EVALUATE_FIXTURE" },
+        "fixture": {
+          "type": "object",
+          "required": ["snapshot", "campaign"],
+          "properties": {
+            "snapshot": { "$ref": "#/$defs/PortfolioSnapshotV1" },
+            "campaign": { "$ref": "#/$defs/ScenarioCampaignV1" }
+          },
+          "additionalProperties": false
+        },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioLabScenarioFacetRequestV1": {
+      "type": "object",
+      "required": ["facetClass", "operation", "fixture", "authorityClass", "networkMode"],
+      "properties": {
+        "facetClass": { "const": "SCENARIO_REFERENCE" },
+        "operation": { "const": "VALIDATE_FIXTURE" },
+        "fixture": {
+          "type": "object",
+          "required": ["scenarioReference", "scenarioDefinitionStatus"],
+          "properties": {
+            "scenarioReference": { "$ref": "#/$defs/ScenarioReferenceV1" },
+            "scenarioDefinitionStatus": { "$ref": "#/$defs/ScenarioDefinitionStatus" }
+          },
+          "additionalProperties": false
+        },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" }
+      },
+      "additionalProperties": false
+    },
+    "PortfolioLabCockpitFacetRequestV1": {
+      "type": "object",
+      "required": ["facetClass", "operation", "fixture", "authorityClass", "networkMode"],
+      "properties": {
+        "facetClass": { "const": "COCKPIT_PROJECTION" },
+        "operation": { "const": "PROJECT_FIXTURE" },
+        "fixture": {
+          "type": "object",
+          "required": ["campaignReport", "generatedAtMs"],
+          "properties": {
+            "campaignReport": { "$ref": "#/$defs/PortfolioCampaignReportV1" },
+            "generatedAtMs": { "$ref": "#/$defs/NonNegativeSafeInteger" }
+          },
+          "additionalProperties": false
+        },
+        "authorityClass": { "const": "NO_AUTHORITY" },
+        "networkMode": { "const": "FIXTURE_ONLY" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

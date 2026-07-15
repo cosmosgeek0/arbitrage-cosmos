@@ -1,0 +1,48 @@
+{
+  "requestId": "portfolio-lab.future-read-only-mount.v1",
+  "extensionId": "frontier.portfolio-lab",
+  "requestVersion": "1.0.0",
+  "intendedSharedSeams": [
+    "capitalFoundation:immutable-portfolio-snapshot-adapter",
+    "foundation/risk:immutable-risk-output-reference",
+    "quant:immutable-model-and-stress-output-reference",
+    "liveEdge:immutable-cost-liability-recovery-output-reference",
+    "foundation/replay:accepted-recorded-replay-owner-evidence-adapter",
+    "frontier/scenario-bank:accepted-Dock-SCENARIO_REFERENCE-provider-artifact",
+    "canonical-advisory-owner:portfolio-level-output-contract-decision",
+    "systemIntegration/supervisor:read-only-portfolio-lab-cockpit-projection",
+    "foundation/control:canonical-capability-resource-retention-policy-decision",
+    "canonical-deployment-owner:extension-mount-disable-rollback-uninstall-decision",
+    "product-assurance:post-mount-isolation-removal-proof"
+  ],
+  "canonicalOwnerDecisions": [
+    "Capital, Risk, Q, and L owners must approve exact immutable snapshot adapters; PortfolioLab cannot redefine their calculators or actions.",
+    "The replay and source owners must provide an accepted recorded historical owner-output table before any scenario may claim HISTORICAL origin.",
+    "The F12 owner must provide accepted immutable scenario definitions; PortfolioLab cannot provide or execute them.",
+    "The product supervisor owner must decide whether an existing read-only surface can represent PortfolioLab or whether a new surface identity is warranted.",
+    "The advisory owner must decide an exact portfolio-level canonical output seam; no EdgeAssessmentEnvelope mapping is claimed by prestage.",
+    "Capability, retention, resource, mount, disable, rollback, and uninstall decisions remain with canonical control and deployment owners."
+  ],
+  "requestedCapabilities": ["EVALUATE_FIXTURE", "VALIDATE_FIXTURE", "PROJECT_FIXTURE"],
+  "egressDeclaration": "NONE",
+  "retentionRequest": "FIXTURE_ONLY_NO_CANONICAL_RETENTION",
+  "resourceBudgetClaimRef": "frontier/portfolio-lab/fixtures/resource-budget-claim.v1.json",
+  "blockedFacetRequests": [
+    "SCENARIO_REFERENCE:ACCEPTED_F12_SCENARIO_ARTIFACT_NOT_AVAILABLE",
+    "ADVISORY_ASSESSOR:ACCEPTED_OWNER_FIELD_ADAPTERS_NOT_AVAILABLE",
+    "ADVISORY_ASSESSOR:PORTFOLIO_LEVEL_CANONICAL_OUTPUT_ADAPTER_DECISION_REQUIRED",
+    "ADVISORY_ASSESSOR:ACCEPTED_HISTORICAL_OWNER_OUTPUT_TABLE_NOT_AVAILABLE",
+    "COCKPIT_PROJECTION:PORTFOLIO_LAB_SURFACE_ID_AND_MOUNT_DECISION_REQUIRED"
+  ],
+  "futureTests": [
+    "canonical-owner snapshot adapter round-trip and unknown propagation",
+    "canonical portfolio advisory output adapter decision and conformance",
+    "accepted recorded-replay table provenance, value binding, origin preservation, and bootstrap replay",
+    "read-only supervisor mount without health, Risk, Capital, or execution recomputation",
+    "combined restart, disable, rollback, uninstall, and removal proof",
+    "post-mount isolation, resource enforcement, and crash-containment proof"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "mutationImplemented": false
+}

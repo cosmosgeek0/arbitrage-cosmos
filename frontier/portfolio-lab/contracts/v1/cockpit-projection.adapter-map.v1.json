@@ -1,0 +1,22 @@
+{
+  "adapterId": "frontier.portfolio-lab.cockpit-request.v1",
+  "extensionId": "frontier.portfolio-lab",
+  "localFixtureSchema": "frontier/portfolio-lab/contracts/v1/portfolio-lab-v1.schema.json#/$defs/PortfolioLabCockpitFacetRequestV1",
+  "canonicalOwner": "frontier.dock",
+  "canonicalContractId": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/FacetFixtureRequestV1",
+  "canonicalContractVersion": "FacetFixtureRequestV1@1",
+  "fieldMap": [
+    { "localPath": "facetClass", "canonicalPath": "facetClass", "transform": "IDENTITY" },
+    { "localPath": "operation", "canonicalPath": "operation", "transform": "IDENTITY" },
+    { "localPath": "networkMode", "canonicalPath": "networkMode", "transform": "IDENTITY" },
+    { "localPath": "authorityClass", "canonicalPath": "authorityClass", "transform": "IDENTITY" },
+    { "localPath": "fixture", "canonicalPath": "fixture", "transform": "IDENTITY" }
+  ],
+  "unitMap": [],
+  "timeSemantics": { "eventTime": "PRESERVE_EXACT", "receiveTime": "PRESERVE_EXACT", "clock": "INJECTED_FIXTURE" },
+  "unknownPropagation": "PRESERVE_EXACT_OR_FAIL_CLOSED",
+  "lossy": false,
+  "unsupportedFields": [],
+  "testVectors": ["frontier/portfolio-lab/tests/dock-boundaries.test.mjs#cockpit-request-roundtrip"],
+  "adapterHash": "3ad92e3f1a97b6f9636b1882f6fb5ccaf61ec3c9e38cbd390922ad1ff4e13084"
+}

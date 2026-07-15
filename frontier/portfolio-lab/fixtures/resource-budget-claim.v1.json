@@ -1,0 +1,36 @@
+{
+  "claimId": "portfolio-lab.fixture-budget.v1",
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "cpu": {
+    "state": "UNAVAILABLE",
+    "unit": "host-cpu-percent",
+    "reason": "Prestage fixture steps do not prove mounted host CPU consumption."
+  },
+  "memory": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes",
+    "reason": "No mounted PortfolioLab process exists for a production memory measurement."
+  },
+  "disk": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-second",
+    "reason": "PortfolioLab opens no storage transport and makes no mounted disk-throughput claim."
+  },
+  "network": { "state": "MEASURED", "unit": "bytes", "limit": 0, "observed": 0 },
+  "eventRate": { "state": "MEASURED", "unit": "events-per-1000ms-fixture-window", "limit": 20, "observed": 20 },
+  "latency": {
+    "state": "MEASURED",
+    "unit": "deterministic-fixture-steps",
+    "limit": { "p50": 1, "p95": 1, "p99": 1 },
+    "observed": { "p50": 1, "p95": 1, "p99": 1 }
+  },
+  "queue": {
+    "state": "MEASURED",
+    "unit": "events",
+    "limit": 0,
+    "observed": 0,
+    "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST"
+  },
+  "storageGrowth": { "state": "MEASURED", "unit": "fixture-bytes-per-window", "limit": 0, "observed": 0 },
+  "modelUse": { "state": "MEASURED", "unit": "calls", "limit": 0, "observed": 0 }
+}

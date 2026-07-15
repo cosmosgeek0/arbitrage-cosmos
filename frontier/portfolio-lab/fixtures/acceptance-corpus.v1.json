@@ -1,0 +1,380 @@
+{
+  "schema": "PortfolioLabAcceptanceCorpusV1",
+  "version": 1,
+  "corpusId": "frontier.f2.section5.acceptance.v1",
+  "fixtureClockRef": "fixture.clock.2026-07-16T00:00:00.000Z",
+  "horizonStartMs": 1784160000000,
+  "horizonDurationMs": 60000,
+  "scenarioDefinitionStatus": "UNACCEPTED_SYNTHETIC_F12_REFERENCE_STUB",
+  "ownerRefs": {
+    "CAPITAL": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+    "RISK": "fixture://portfolio-lab/owner-output/risk-verdict-r1?sha256=c99e707b9c6206d5bd4b53c473cbf9f31961ffd8c8f2ae85fbddb2a975c2f6d9",
+    "Q": "fixture://portfolio-lab/owner-output/q-cost-stress-r1?sha256=bd5577db50408d41f811d87f8167cc3ba7ebb58c167c4128d08cf490cbfd4887",
+    "L_TWIN": "fixture://portfolio-lab/owner-output/l-twin-state-r1?sha256=2bab3d8b6fe3f358e7e2763ad1577c4417f9029ea0b551cb4d7309195a39c79a",
+    "L_RECOVERY": "fixture://portfolio-lab/owner-output/l-recovery-r1?sha256=c9890b01df076fd346aa1fb2039b0dbe63baca7cb9492c0c5fdabb997b779580"
+  },
+  "ownerContractRefs": {
+    "CAPITAL": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+    "RISK": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/contracts/risk.ts#RiskVerdict",
+    "Q": "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/validation/stress.py#CostStressReportV1",
+    "L_TWIN": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts#TwinScenarioState",
+    "L_RECOVERY": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts#L12SupervisorSnapshot"
+  },
+  "defaultAssumptions": {
+    "liquidity": "CALLER_SUPPLIED_FIXTURE_VALUE",
+    "fills": "CALLER_SUPPLIED_FIXTURE_VALUE",
+    "exclusions": ["NO_DYNAMIC_HEDGING", "NO_CANONICAL_STATE_CHANGE", "NO_LIVE_EXECUTION"]
+  },
+  "defaultSweepInputs": [
+    { "dimension": "LIQUIDITY", "state": "KNOWN", "value": "-100000", "unit": "PPM", "ownerKey": "L_TWIN" },
+    { "dimension": "CAPACITY", "state": "KNOWN", "value": "-100000", "unit": "PPM", "ownerKey": "CAPITAL" },
+    { "dimension": "FUNDING", "state": "KNOWN", "value": "2500", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" },
+    { "dimension": "BORROW", "state": "KNOWN", "value": "-100000", "unit": "PPM", "ownerKey": "L_RECOVERY" },
+    { "dimension": "FEE", "state": "KNOWN", "value": "800", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" },
+    { "dimension": "SLIPPAGE", "state": "KNOWN", "value": "2500", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" },
+    { "dimension": "LATENCY", "state": "KNOWN", "value": "100", "unit": "MILLISECONDS", "ownerKey": "L_TWIN" }
+  ],
+  "whyNotLiveSizing": "These are caller-supplied fixture counterfactuals without canonical account truth, calibrated production distributions, or Capital and Risk authority.",
+  "limitations": [
+    "CALLER_SUPPLIED_FIXTURE_IMPACTS_ONLY",
+    "DECLARED_RELATIONSHIPS_ARE_NOT_CAUSAL_PROOF",
+    "SIMULATION_COUNT_DOES_NOT_IMPROVE_EVIDENCE_QUALITY",
+    "NO_LIVE_SIZING_OR_OWNER_ACTION"
+  ],
+  "cases": [
+    {
+      "ordinal": 1,
+      "caseId": "f2.case.01.broad-market-gap",
+      "scenarioKind": "BROAD_MARKET_GAP",
+      "scenarioId": "f12.broad-market-gap.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 501,
+      "narrative": "Caller-supplied broad gap affects major and alt exposures while liquidity deteriorates.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "LIQUIDITY", "state": "KNOWN", "value": "-400000", "unit": "PPM", "ownerKey": "L_TWIN" }],
+      "impacts": [
+        { "impactId": "impact.01.btc", "subjectId": "position.basis.btc", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "-120000000", "lowerAtoms": "-150000000", "upperAtoms": "-90000000", "ownerKey": "Q" },
+        { "impactId": "impact.01.alt", "subjectId": "position.volume.alt", "category": "LIQUIDITY", "state": "KNOWN", "deltaAtoms": "-30000000", "lowerAtoms": "-45000000", "upperAtoms": "-20000000", "ownerKey": "L_TWIN" }
+      ],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-195000000", "upperAtoms": "-110000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["Q", "L_TWIN"] }
+    },
+    {
+      "ordinal": 2,
+      "caseId": "f2.case.02.single-symbol-discontinuity",
+      "scenarioKind": "SINGLE_SYMBOL_DISCONTINUITY",
+      "scenarioId": "f12.single-symbol-discontinuity.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 502,
+      "narrative": "A caller-supplied BTC discontinuity is isolated from the other fixture subjects.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.02.btc", "subjectId": "position.basis.btc", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "-220000000", "lowerAtoms": "-300000000", "upperAtoms": "-160000000", "ownerKey": "Q" }],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-300000000", "upperAtoms": "-160000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["Q"] }
+    },
+    {
+      "ordinal": 3,
+      "caseId": "f2.case.03.correlation-to-one",
+      "scenarioKind": "CORRELATION_TO_ONE_CRISIS",
+      "scenarioId": "f12.correlation-to-one-crisis.v1",
+      "origin": "SYNTHETIC",
+      "seed": 503,
+      "narrative": "The declared BTC and ETH dependence is counterfactually moved to one without claiming a causal model.",
+      "severity": "SYNTHETIC_BOUNDARY",
+      "sweepOverrides": [],
+      "impacts": [
+        { "impactId": "impact.03.btc", "subjectId": "position.basis.btc", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "-100000000", "lowerAtoms": "-130000000", "upperAtoms": "-80000000", "ownerKey": "Q" },
+        { "impactId": "impact.03.eth", "subjectId": "proposal.basis.eth", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "-40000000", "lowerAtoms": "-55000000", "upperAtoms": "-30000000", "ownerKey": "Q" }
+      ],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "DECLARED_DEPENDENCE_PPM", "before": "650000", "after": "1000000", "ownerKey": "Q" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-185000000", "upperAtoms": "-110000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["Q"] }
+    },
+    {
+      "ordinal": 4,
+      "caseId": "f2.case.04.correlation-sign-flip",
+      "scenarioKind": "CORRELATION_SIGN_FLIP",
+      "scenarioId": "f12.correlation-sign-flip.v1",
+      "origin": "SYNTHETIC",
+      "seed": 504,
+      "narrative": "The declared BTC and ETH dependence sign flips in a finite caller table.",
+      "severity": "SYNTHETIC_BOUNDARY",
+      "sweepOverrides": [],
+      "impacts": [
+        { "impactId": "impact.04.btc", "subjectId": "position.basis.btc", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "-80000000", "lowerAtoms": "-110000000", "upperAtoms": "-55000000", "ownerKey": "Q" },
+        { "impactId": "impact.04.eth", "subjectId": "proposal.basis.eth", "category": "MARKET_MOVE", "state": "KNOWN", "deltaAtoms": "20000000", "lowerAtoms": "10000000", "upperAtoms": "30000000", "ownerKey": "Q" }
+      ],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "DECLARED_DEPENDENCE_PPM", "before": "650000", "after": "-650000", "ownerKey": "Q" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-100000000", "upperAtoms": "-25000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["Q"] }
+    },
+    {
+      "ordinal": 5,
+      "caseId": "f2.case.05.spread-depth",
+      "scenarioKind": "SPREAD_WIDENING_DEPTH_EVAPORATION",
+      "scenarioId": "f12.spread-depth-evaporation.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 505,
+      "narrative": "Caller-supplied spread widening and depth loss combine without recalculating L execution truth.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [
+        { "dimension": "LIQUIDITY", "state": "KNOWN", "value": "-800000", "unit": "PPM", "ownerKey": "L_TWIN" },
+        { "dimension": "SLIPPAGE", "state": "KNOWN", "value": "25000", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" }
+      ],
+      "impacts": [
+        { "impactId": "impact.05.liquidity", "subjectId": "position.basis.btc", "category": "LIQUIDITY", "state": "KNOWN", "deltaAtoms": "-70000000", "lowerAtoms": "-100000000", "upperAtoms": "-50000000", "ownerKey": "L_TWIN" },
+        { "impactId": "impact.05.slippage", "subjectId": "position.volume.alt", "category": "SLIPPAGE", "state": "KNOWN", "deltaAtoms": "-20000000", "lowerAtoms": "-30000000", "upperAtoms": "-12000000", "ownerKey": "L_TWIN" }
+      ],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "CONVERGENCE_STATE", "before": "BASELINE_FIXTURE", "after": "FAILED_CONVERGENCE_HYPOTHETICAL", "ownerKey": "L_TWIN" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-130000000", "upperAtoms": "-62000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 6,
+      "caseId": "f2.case.06.funding-inversion",
+      "scenarioKind": "FUNDING_INVERSION",
+      "scenarioId": "f12.funding-inversion.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 506,
+      "narrative": "A caller-supplied funding inversion is applied as a comparative cost input.",
+      "severity": "ADVERSE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "FUNDING", "state": "KNOWN", "value": "-18000", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" }],
+      "impacts": [{ "impactId": "impact.06.funding", "subjectId": "position.basis.btc", "category": "FUNDING", "state": "KNOWN", "deltaAtoms": "-15000000", "lowerAtoms": "-22000000", "upperAtoms": "-9000000", "ownerKey": "L_TWIN" }],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-22000000", "upperAtoms": "-9000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 7,
+      "caseId": "f2.case.07.borrow-recall",
+      "scenarioKind": "BORROW_RECALL_UNAVAILABLE",
+      "scenarioId": "f12.borrow-recall.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 507,
+      "narrative": "A known hypothetical recall shock uses a caller-supplied L output and does not assert current borrow truth.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "BORROW", "state": "KNOWN", "value": "-1000000", "unit": "PPM", "ownerKey": "L_RECOVERY" }],
+      "impacts": [{ "impactId": "impact.07.borrow", "subjectId": "liability.alt.borrow", "category": "BORROW", "state": "KNOWN", "deltaAtoms": "-25000000", "lowerAtoms": "-40000000", "upperAtoms": "-15000000", "ownerKey": "L_RECOVERY" }],
+      "stateChanges": [{ "subjectId": "liability.alt.borrow", "category": "BORROW_AVAILABILITY", "before": "AVAILABLE_FIXTURE", "after": "RECALLED_HYPOTHETICAL", "ownerKey": "L_RECOVERY" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-40000000", "upperAtoms": "-15000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_RECOVERY"] }
+    },
+    {
+      "ordinal": 8,
+      "caseId": "f2.case.08.fee-tier",
+      "scenarioKind": "FEE_TIER_DEGRADATION",
+      "scenarioId": "f12.fee-tier-degradation.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 508,
+      "narrative": "A caller-supplied fee-tier degradation is compared without editing fee ownership.",
+      "severity": "ADVERSE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "FEE", "state": "KNOWN", "value": "8000", "unit": "USDT_MICRO", "ownerKey": "L_TWIN" }],
+      "impacts": [{ "impactId": "impact.08.fee", "subjectId": "proposal.basis.eth", "category": "FEE", "state": "KNOWN", "deltaAtoms": "-5000000", "lowerAtoms": "-7000000", "upperAtoms": "-3000000", "ownerKey": "L_TWIN" }],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-7000000", "upperAtoms": "-3000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 9,
+      "caseId": "f2.case.09.latency-spike",
+      "scenarioKind": "LATENCY_SPIKE",
+      "scenarioId": "f12.latency-spike.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 509,
+      "narrative": "A caller-supplied latency spike is applied to the finite fixture table.",
+      "severity": "ADVERSE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "LATENCY", "state": "KNOWN", "value": "5000", "unit": "MILLISECONDS", "ownerKey": "L_TWIN" }],
+      "impacts": [{ "impactId": "impact.09.latency", "subjectId": "position.basis.btc", "category": "LATENCY", "state": "KNOWN", "deltaAtoms": "-10000000", "lowerAtoms": "-16000000", "upperAtoms": "-6000000", "ownerKey": "L_TWIN" }],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-16000000", "upperAtoms": "-6000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 10,
+      "caseId": "f2.case.10.venue-outage",
+      "scenarioKind": "VENUE_OUTAGE",
+      "scenarioId": "f12.venue-outage.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 510,
+      "narrative": "The fixture venue becomes unavailable while PortfolioLab preserves L as execution owner.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [{ "dimension": "LIQUIDITY", "state": "KNOWN", "value": "-1000000", "unit": "PPM", "ownerKey": "L_TWIN" }],
+      "impacts": [{ "impactId": "impact.10.venue", "subjectId": "venue.binance.aggregate", "category": "EXECUTION", "state": "KNOWN", "deltaAtoms": "-200000000", "lowerAtoms": "-280000000", "upperAtoms": "-140000000", "ownerKey": "L_TWIN" }],
+      "stateChanges": [
+        { "subjectId": "venue.binance.aggregate", "category": "VENUE_AVAILABILITY", "before": "AVAILABLE_FIXTURE", "after": "OUTAGE_HYPOTHETICAL", "ownerKey": "L_TWIN" },
+        { "subjectId": "position.basis.btc", "category": "POSITION_MOBILITY", "before": "MOBILE_FIXTURE", "after": "TRAPPED_HYPOTHETICAL", "ownerKey": "L_TWIN" }
+      ],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-280000000", "upperAtoms": "-140000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 11,
+      "caseId": "f2.case.11.stablecoin-depeg",
+      "scenarioKind": "STABLECOIN_DEPEG",
+      "scenarioId": "f12.stablecoin-depeg.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 511,
+      "narrative": "A caller-supplied stablecoin depeg affects shared collateral without changing canonical collateral state.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.11.depeg", "subjectId": "collateral.usdt", "category": "COLLATERAL", "state": "KNOWN", "deltaAtoms": "-300000000", "lowerAtoms": "-400000000", "upperAtoms": "-200000000", "ownerKey": "CAPITAL" }],
+      "stateChanges": [{ "subjectId": "collateral.usdt", "category": "PEG_STATE", "before": "REFERENCE_FIXTURE", "after": "DEPEG_HYPOTHETICAL", "ownerKey": "CAPITAL" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-400000000", "upperAtoms": "-200000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["CAPITAL"] }
+    },
+    {
+      "ordinal": 12,
+      "caseId": "f2.case.12.collateral-haircut",
+      "scenarioKind": "COLLATERAL_HAIRCUT",
+      "scenarioId": "f12.collateral-haircut.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 512,
+      "narrative": "A caller-supplied collateral haircut is compared without producing an allocation or risk command.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.12.haircut", "subjectId": "collateral.usdt", "category": "COLLATERAL", "state": "KNOWN", "deltaAtoms": "-250000000", "lowerAtoms": "-325000000", "upperAtoms": "-175000000", "ownerKey": "CAPITAL" }],
+      "stateChanges": [{ "subjectId": "collateral.usdt", "category": "HAIRCUT_STATE", "before": "BASELINE_FIXTURE", "after": "HAIRCUT_HYPOTHETICAL", "ownerKey": "CAPITAL" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-325000000", "upperAtoms": "-175000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["CAPITAL"] }
+    },
+    {
+      "ordinal": 13,
+      "caseId": "f2.case.13.partial-fill-rejected-hedge",
+      "scenarioKind": "PARTIAL_FILL_REJECTED_HEDGE",
+      "scenarioId": "f12.partial-fill-rejected-hedge.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 513,
+      "narrative": "Two caller-supplied execution outputs represent a partial fill and a rejected hedge with one-leg persistence.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [
+        { "impactId": "impact.13.filled-leg", "subjectId": "position.basis.btc", "category": "EXECUTION", "state": "KNOWN", "deltaAtoms": "-60000000", "lowerAtoms": "-85000000", "upperAtoms": "-40000000", "ownerKey": "L_TWIN" },
+        { "impactId": "impact.13.hedge-leg", "subjectId": "proposal.basis.eth", "category": "EXECUTION", "state": "KNOWN", "deltaAtoms": "-35000000", "lowerAtoms": "-50000000", "upperAtoms": "-22000000", "ownerKey": "L_TWIN" }
+      ],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "ONE_LEG_EXPOSURE", "before": "BALANCED_FIXTURE", "after": "PERSISTENT_HYPOTHETICAL", "ownerKey": "L_TWIN" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-135000000", "upperAtoms": "-62000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 14,
+      "caseId": "f2.case.14.strategy-crowding",
+      "scenarioKind": "SIMULTANEOUS_STRATEGY_CROWDING",
+      "scenarioId": "f12.strategy-crowding.v1",
+      "origin": "SYNTHETIC",
+      "seed": 514,
+      "narrative": "BASIS and VOLUME fixture subjects encounter simultaneous caller-supplied capacity pressure.",
+      "severity": "SYNTHETIC_BOUNDARY",
+      "sweepOverrides": [{ "dimension": "CAPACITY", "state": "KNOWN", "value": "-700000", "unit": "PPM", "ownerKey": "CAPITAL" }],
+      "impacts": [
+        { "impactId": "impact.14.basis", "subjectId": "position.basis.btc", "category": "CAPACITY", "state": "KNOWN", "deltaAtoms": "-70000000", "lowerAtoms": "-95000000", "upperAtoms": "-50000000", "ownerKey": "CAPITAL" },
+        { "impactId": "impact.14.volume", "subjectId": "position.volume.alt", "category": "CAPACITY", "state": "KNOWN", "deltaAtoms": "-50000000", "lowerAtoms": "-75000000", "upperAtoms": "-35000000", "ownerKey": "CAPITAL" }
+      ],
+      "stateChanges": [],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-170000000", "upperAtoms": "-85000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["CAPITAL"] }
+    },
+    {
+      "ordinal": 15,
+      "caseId": "f2.case.15.shared-collateral-contention",
+      "scenarioKind": "SHARED_COLLATERAL_CONTENTION",
+      "scenarioId": "f12.shared-collateral-contention.v1",
+      "origin": "SYNTHETIC",
+      "seed": 515,
+      "narrative": "The shared collateral fixture pool is stressed by caller-supplied simultaneous strategy demand.",
+      "severity": "SYNTHETIC_BOUNDARY",
+      "sweepOverrides": [{ "dimension": "CAPACITY", "state": "KNOWN", "value": "-600000", "unit": "PPM", "ownerKey": "CAPITAL" }],
+      "impacts": [{ "impactId": "impact.15.collateral", "subjectId": "collateral.usdt", "category": "COLLATERAL", "state": "KNOWN", "deltaAtoms": "-150000000", "lowerAtoms": "-220000000", "upperAtoms": "-100000000", "ownerKey": "CAPITAL" }],
+      "stateChanges": [{ "subjectId": "collateral.usdt", "category": "SHARED_CONTENTION", "before": "BASELINE_FIXTURE", "after": "CONTENDED_HYPOTHETICAL", "ownerKey": "CAPITAL" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-220000000", "upperAtoms": "-100000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["CAPITAL"] }
+    },
+    {
+      "ordinal": 16,
+      "caseId": "f2.case.16.stale-account-truth",
+      "scenarioKind": "STALE_ACCOUNT_TRUTH",
+      "scenarioId": "f12.stale-account-truth.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 516,
+      "narrative": "A caller-supplied current-to-stale transition is scenario input, not a claim about actual account freshness.",
+      "severity": "ADVERSE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.16.stale", "subjectId": "position.basis.btc", "category": "OTHER", "state": "KNOWN", "deltaAtoms": "-45000000", "lowerAtoms": "-70000000", "upperAtoms": "-25000000", "ownerKey": "RISK" }],
+      "stateChanges": [
+        { "subjectId": "position.basis.btc", "category": "ACCOUNT_TRUTH_FRESHNESS", "before": "CURRENT_HYPOTHETICAL", "after": "STALE_HYPOTHETICAL", "ownerKey": "RISK" },
+        { "subjectId": "position.basis.btc", "category": "DATA_VISIBILITY", "before": "VISIBLE_FIXTURE", "after": "DATA_BLINDNESS_HYPOTHETICAL", "ownerKey": "RISK" }
+      ],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-70000000", "upperAtoms": "-25000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["RISK"] }
+    },
+    {
+      "ordinal": 17,
+      "caseId": "f2.case.17.ambiguous-open-order",
+      "scenarioKind": "AMBIGUOUS_OPEN_ORDER",
+      "scenarioId": "f12.ambiguous-open-order.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 517,
+      "narrative": "An open-order state becomes ambiguous in the caller fixture while L remains the sole owner of order truth.",
+      "severity": "ADVERSE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.17.order", "subjectId": "position.basis.btc", "category": "EXECUTION", "state": "KNOWN", "deltaAtoms": "-30000000", "lowerAtoms": "-50000000", "upperAtoms": "-18000000", "ownerKey": "L_TWIN" }],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "OPEN_ORDER_STATE", "before": "CLEAR_FIXTURE", "after": "AMBIGUOUS_HYPOTHETICAL", "ownerKey": "L_TWIN" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-50000000", "upperAtoms": "-18000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_TWIN"] }
+    },
+    {
+      "ordinal": 18,
+      "caseId": "f2.case.18.liquidation-distance",
+      "scenarioKind": "LIQUIDATION_DISTANCE_COMPRESSION",
+      "scenarioId": "f12.liquidation-distance-compression.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 518,
+      "narrative": "Caller-supplied liability and headroom facts compress liquidation distance without a Risk verdict.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.18.liability", "subjectId": "liability.alt.borrow", "category": "LIABILITY", "state": "KNOWN", "deltaAtoms": "-40000000", "lowerAtoms": "-65000000", "upperAtoms": "-25000000", "ownerKey": "L_RECOVERY" }],
+      "callerFacts": [
+        { "factId": "fact.18.liquidation-distance", "subjectId": "liability.alt.borrow", "category": "LIQUIDATION_DISTANCE", "state": "KNOWN", "beforeAtoms": "180000", "afterAtoms": "70000", "unit": "PPM", "ownerKey": "RISK" },
+        { "factId": "fact.18.margin-headroom", "subjectId": "liability.alt.borrow", "category": "MARGIN_HEADROOM", "state": "KNOWN", "beforeAtoms": "250000000", "afterAtoms": "90000000", "unit": "USDT_MICRO", "ownerKey": "RISK" }
+      ],
+      "stateChanges": [
+        { "subjectId": "liability.alt.borrow", "category": "LIQUIDATION_DISTANCE", "before": "BASELINE_CALLER_VALUE", "after": "COMPRESSED_CALLER_VALUE", "ownerKey": "RISK" },
+        { "subjectId": "liability.alt.borrow", "category": "MARGIN_HEADROOM", "before": "BASELINE_CALLER_VALUE", "after": "COMPRESSED_CALLER_VALUE", "ownerKey": "RISK" }
+      ],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-65000000", "upperAtoms": "-25000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_RECOVERY", "RISK"] }
+    },
+    {
+      "ordinal": 19,
+      "caseId": "f2.case.19.recovery-beyond-horizon",
+      "scenarioKind": "RECOVERY_EXCEEDS_HOLDING_HORIZON",
+      "scenarioId": "f12.recovery-beyond-holding-horizon.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 519,
+      "narrative": "A caller-supplied L recovery projection exceeds the assumed holding horizon.",
+      "severity": "SEVERE_HYPOTHETICAL",
+      "sweepOverrides": [],
+      "impacts": [{ "impactId": "impact.19.recovery", "subjectId": "position.basis.btc", "category": "RECOVERY", "state": "KNOWN", "deltaAtoms": "-80000000", "lowerAtoms": "-120000000", "upperAtoms": "-50000000", "ownerKey": "L_RECOVERY" }],
+      "stateChanges": [{ "subjectId": "position.basis.btc", "category": "RECOVERY_HORIZON", "before": "WITHIN_HOLDING_HORIZON", "after": "EXCEEDS_HOLDING_HORIZON", "ownerKey": "L_RECOVERY" }],
+      "missingDependencies": [],
+      "uncertainty": { "state": "KNOWN", "lowerAtoms": "-120000000", "upperAtoms": "-50000000", "method": "CALLER_SUPPLIED_INTERVAL", "sourceOwnerKeys": ["L_RECOVERY"] }
+    },
+    {
+      "ordinal": 20,
+      "caseId": "f2.case.20.input-missing",
+      "scenarioKind": "SCENARIO_INPUT_MISSING",
+      "scenarioId": "f12.scenario-input-missing.v1",
+      "origin": "HYPOTHETICAL",
+      "seed": 520,
+      "narrative": "Borrow capacity and its comparative impact are absent, so the case must abstain without substituting zero.",
+      "severity": "UNKNOWN_INPUT",
+      "sweepOverrides": [{ "dimension": "BORROW", "state": "UNKNOWN", "value": null, "unit": "PPM", "ownerKey": "L_RECOVERY" }],
+      "impacts": [{ "impactId": "impact.20.missing", "subjectId": "liability.alt.borrow", "category": "BORROW", "state": "UNKNOWN", "deltaAtoms": null, "lowerAtoms": null, "upperAtoms": null, "ownerKey": "L_RECOVERY" }],
+      "stateChanges": [],
+      "missingDependencies": ["BORROW_CAPACITY_UNAVAILABLE"],
+      "uncertainty": { "state": "UNKNOWN", "lowerAtoms": null, "upperAtoms": null, "method": "CALLER_INPUT_UNAVAILABLE", "sourceOwnerKeys": ["L_RECOVERY"] }
+    }
+  ]
+}

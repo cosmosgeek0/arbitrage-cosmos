@@ -1,0 +1,140 @@
+{
+  "schema": "PortfolioSnapshotV1",
+  "version": 1,
+  "snapshotId": "fixture.portfolio-lab.baseline",
+  "revision": 1,
+  "asOfMs": 1784160000000,
+  "receivedAtMs": 1784160000025,
+  "reportingUnit": "USDT_MICRO",
+  "truthState": "COMPLETE",
+  "ownerEvidenceStatus": "UNACCEPTED_SYNTHETIC_OWNER_OUTPUT_STUBS",
+  "ownerEvidenceHash": "cdad6dd37b19304e0c6876cd8f5813bac7feac1b79d2a622aa5738d69fa89984",
+  "ownerClaimHash": "86e23b2d2d1a47466fde56d0b5f0d67bafaaa9d44f049c4d2d805bdeae5619e3",
+  "ownerSnapshotRefs": [
+    "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+    "fixture://portfolio-lab/owner-output/risk-verdict-r1?sha256=c99e707b9c6206d5bd4b53c473cbf9f31961ffd8c8f2ae85fbddb2a975c2f6d9",
+    "fixture://portfolio-lab/owner-output/q-cost-stress-r1?sha256=bd5577db50408d41f811d87f8167cc3ba7ebb58c167c4128d08cf490cbfd4887",
+    "fixture://portfolio-lab/owner-output/l-twin-state-r1?sha256=2bab3d8b6fe3f358e7e2763ad1577c4417f9029ea0b551cb4d7309195a39c79a",
+    "fixture://portfolio-lab/owner-output/l-recovery-r1?sha256=c9890b01df076fd346aa1fb2039b0dbe63baca7cb9492c0c5fdabb997b779580"
+  ],
+  "canonicalOwnerContractRefs": [
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/foundation/contracts/risk.ts#RiskVerdict",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/src/quant_edge/validation/stress.py#CostStressReportV1",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/types.ts#TwinScenarioState",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts#L12SupervisorSnapshot"
+  ],
+  "positions": [
+    {
+      "id": "position.basis.btc",
+      "assetId": "BTC",
+      "sectorId": "MAJOR",
+      "venueId": "BINANCE",
+      "collateralId": "USDT",
+      "strategyId": "BASIS",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "800000000", "reason": null },
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+      "sourceRevision": "fixture-position-r1"
+    },
+    {
+      "id": "position.volume.alt",
+      "assetId": "ALT",
+      "sectorId": "ALT_L1",
+      "venueId": "BINANCE",
+      "collateralId": "USDT",
+      "strategyId": "VOLUME",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "-200000000", "reason": null },
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+      "sourceRevision": "fixture-position-r2"
+    }
+  ],
+  "proposals": [
+    {
+      "id": "proposal.basis.eth",
+      "assetId": "ETH",
+      "sectorId": "MAJOR",
+      "venueId": "BINANCE",
+      "collateralId": "USDT",
+      "strategyId": "BASIS",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "150000000", "reason": null },
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+      "sourceRevision": "fixture-proposal-r1"
+    }
+  ],
+  "liabilities": [
+    {
+      "id": "liability.alt.borrow",
+      "assetId": "ALT",
+      "sectorId": "ALT_L1",
+      "venueId": "BINANCE",
+      "collateralId": "USDT",
+      "strategyId": "BASIS",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "-50000000", "reason": null },
+      "canonicalOwnerRef": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exposureRecoveryProjection/types.ts#L12SupervisorSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/l-recovery-r1?sha256=c9890b01df076fd346aa1fb2039b0dbe63baca7cb9492c0c5fdabb997b779580",
+      "sourceRevision": "fixture-liability-r1"
+    }
+  ],
+  "collateral": [
+    {
+      "id": "collateral.usdt",
+      "assetId": "USDT",
+      "sectorId": "STABLECOIN",
+      "venueId": "BINANCE",
+      "collateralId": "USDT",
+      "strategyId": "SHARED",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "1000000000", "reason": null },
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+      "sourceRevision": "fixture-collateral-r1"
+    }
+  ],
+  "venueExposures": [
+    {
+      "id": "venue.binance.aggregate",
+      "venueId": "BINANCE",
+      "exposure": { "state": "KNOWN", "unit": "USDT_MICRO", "atoms": "1000000000", "reason": null },
+      "canonicalOwnerRef": "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/budgets/types.ts#PortfolioBudgetSnapshot",
+      "ownerSnapshotRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3",
+      "sourceRevision": "fixture-venue-r1"
+    }
+  ],
+  "strategyClusters": [
+    {
+      "clusterId": "cluster.convergence",
+      "strategyIds": ["BASIS"],
+      "factorIds": ["SPOT_PERP", "USDT_COLLATERAL"],
+      "sourceRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3"
+    },
+    {
+      "clusterId": "cluster.attention",
+      "strategyIds": ["VOLUME"],
+      "factorIds": ["ALT_LIQUIDITY", "USDT_COLLATERAL"],
+      "sourceRef": "fixture://portfolio-lab/owner-output/capital-budget-r1?sha256=b2b000b9dc204aed7615128b9669da3dfab884edf768ff41a03ed9a88c41e3e3"
+    }
+  ],
+  "factorLinks": [
+    {
+      "leftId": "BTC",
+      "rightId": "ETH",
+      "factorId": "MAJOR_BETA",
+      "dependencePpm": 650000,
+      "sourceRef": "fixture://portfolio-lab/owner-output/q-cost-stress-r1?sha256=bd5577db50408d41f811d87f8167cc3ba7ebb58c167c4128d08cf490cbfd4887"
+    },
+    {
+      "leftId": "BASIS",
+      "rightId": "VOLUME",
+      "factorId": "USDT_COLLATERAL",
+      "dependencePpm": 400000,
+      "sourceRef": "fixture://portfolio-lab/owner-output/q-cost-stress-r1?sha256=bd5577db50408d41f811d87f8167cc3ba7ebb58c167c4128d08cf490cbfd4887"
+    }
+  ],
+  "missingDependencies": [],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "canonical": false,
+  "snapshotHash": "df24c9b456a2061473daca71f0f152da618eeadddf8f73bf102593cd13ab78a1"
+}

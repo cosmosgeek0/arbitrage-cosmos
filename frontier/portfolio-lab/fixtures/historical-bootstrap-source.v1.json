@@ -1,0 +1,44 @@
+{
+  "schema": "PortfolioLabHistoricalBootstrapSourceV1",
+  "version": 1,
+  "evidenceStatus": "UNACCEPTED_SYNTHETIC_BOOTSTRAP_ARCHIVE_TABLE_STUB",
+  "sourceRef": "fixture://portfolio-lab/bootstrap-archive/section5-fixture-table-v1?sha256=5eaccc3618c2e3cc8883c1ebd80c5154f9dff7e0d706faa7e988126a58323f6e",
+  "payload": {
+    "sourceId": "portfolio-lab.section5.bootstrap-archive-fixture-table.v1",
+    "fixtureOnly": true,
+    "acceptedOwnerOutput": false,
+    "derivation": "ARCHIVED_SECTION5_FIXTURE_TABLE_FOR_BOOTSTRAP_MECHANISM_ONLY",
+    "limitations": [
+      "NOT_OBSERVED_HISTORY",
+      "NOT_ACCEPTED_OWNER_OUTPUT",
+      "ORIGIN_PRESERVED_FROM_SOURCE_ROWS",
+      "DRAW_COUNT_DOES_NOT_IMPROVE_EVIDENCE"
+    ],
+    "rowClaims": [
+      { "evaluationId": "f2.case.01.broad-market-gap", "claimHash": "3c2fffb645a26c4548c4b8b241aa29d2e94635c8cb862a764900bed2ede4f7df" },
+      { "evaluationId": "f2.case.02.single-symbol-discontinuity", "claimHash": "ce3e9886e236cd383c5805c7486d4c29bbd7c68aa1a83c4e2542df057ef44a26" },
+      { "evaluationId": "f2.case.03.correlation-to-one", "claimHash": "e69c09e2a8e56089b82aa93e15d99300a9d6531117717b0f02831ba7a0dfad3e" },
+      { "evaluationId": "f2.case.04.correlation-sign-flip", "claimHash": "608162d3b489063a7db8c932d823ebb95e70c4cb8296751dff5d196d40c71661" },
+      { "evaluationId": "f2.case.05.spread-depth", "claimHash": "78a3f6dfa52360953c803406a21a5bd5a27aafe7bf4eccf5b24b25200c8828da" },
+      { "evaluationId": "f2.case.06.funding-inversion", "claimHash": "9df8d6a50bbe25462be14ef1a64c6309e0f29a95b14ba828241f8926812b9232" },
+      { "evaluationId": "f2.case.07.borrow-recall", "claimHash": "efb9b5bd40c1f406b0b5567cc14c835397d70fc349c6d25c03a1690135ef9226" },
+      { "evaluationId": "f2.case.08.fee-tier", "claimHash": "5d7f9b1d947d11ed342523ecdd9c5fb24c91efaa027db1dd008c2146489beab3" },
+      { "evaluationId": "f2.case.09.latency-spike", "claimHash": "679da85930c46b096ee154342fd7d244907e55ece627344d26d7f47ad0424811" },
+      { "evaluationId": "f2.case.10.venue-outage", "claimHash": "eb5933781f7350e67d57d2f3d105ffff01e08811a4fedbdfd2e0ed20b815d053" },
+      { "evaluationId": "f2.case.11.stablecoin-depeg", "claimHash": "e915904b17edf033d6d51a1cc2a97d8ae5a12c190183e568fcf8824505f5102a" },
+      { "evaluationId": "f2.case.12.collateral-haircut", "claimHash": "9b9ea3f7bf40800871ba3b5df94a046f946073742d4cfd2746e354ca6393b338" },
+      { "evaluationId": "f2.case.13.partial-fill-rejected-hedge", "claimHash": "5c6595e0eb8b136d86b2fd79d31830fc87b40c62c7268d5405f065a9ba056fcd" },
+      { "evaluationId": "f2.case.14.strategy-crowding", "claimHash": "773e0ae1ff6d443c5f1bab9463561fe9eacbe8d367d7bdab732e1205d3d4d92f" },
+      { "evaluationId": "f2.case.15.shared-collateral-contention", "claimHash": "2d2786c266d03eaac7b618cfb949d179f4a50d093d5bd33a7c7b5a41c7ea6bee" },
+      { "evaluationId": "f2.case.16.stale-account-truth", "claimHash": "3f3f37b4627d28da3ab95ec52c05d55dc8a0195e06e7a5c448103cd6d21ab535" },
+      { "evaluationId": "f2.case.17.ambiguous-open-order", "claimHash": "930227cc2382d859268a14b5fe29ca05f152fe29abf49c3581fc88598b55aadb" },
+      { "evaluationId": "f2.case.18.liquidation-distance", "claimHash": "2bf73aa58b4f15f99a18042454fe955c80ecef77df4214fd5c07e4367ccf7f66" },
+      { "evaluationId": "f2.case.19.recovery-beyond-horizon", "claimHash": "69102480c76c932e30b4a7bee407a9333dc55fd88ac42373a8c94bfd045adeda" },
+      { "evaluationId": "f2.case.20.input-missing", "claimHash": "df5f1e86bbcfecbd0310df6e15b9459af9e7d3051938f60ad6298cc0df718f6f" }
+    ]
+  },
+  "payloadHash": "5eaccc3618c2e3cc8883c1ebd80c5154f9dff7e0d706faa7e988126a58323f6e",
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "canonical": false
+}

@@ -1,0 +1,67 @@
+{
+  "schema": "PortfolioLabDockPinV1",
+  "version": 1,
+  "moduleId": "F2",
+  "moduleName": "PortfolioLab",
+  "dockCommitSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "dockContractVersion": "1.0.0",
+  "dockFiles": [
+    {
+      "path": "frontier/dock/contracts/v1/canonical-owner-map.json",
+      "sha256": "8fccd53db5905bc7eb5508ae1653259fa3805723dbb530f36855b99ee46eb9ab"
+    },
+    {
+      "path": "frontier/dock/contracts/v1/module-facet-matrix.json",
+      "sha256": "deeabbe20ad9de5d7824b39d57f87ec6eaaa87280e30b688b5fa4216befc57e3"
+    },
+    {
+      "path": "frontier/dock/contracts/v1/adapter-rules.json",
+      "sha256": "bf6923dd1410696ba740e40d7e7b4171fa2a661ed729cdd04618724d03daa296"
+    },
+    {
+      "path": "frontier/dock/contracts/v1/dock-v1.schema.json",
+      "sha256": "694c4e3743cf8a63570cff3ddca6548e91a5620165269ef94a3e6fee7e1ba0e4"
+    }
+  ],
+  "requiredUsableFacets": [
+    {
+      "facetClass": "ADVISORY_ASSESSOR",
+      "operation": "EVALUATE_FIXTURE",
+      "providerId": "dock.facet.advisory-assessor.v1",
+      "canonicalOwnerRef": "git:b3d8cedece8cf3a9f546c60016beae442f85f160:quant/src/quant_edge/inference/**",
+      "canonicalContractRef": "git:73e1a1ff7daa48df8dac45713fc5f106842edafc:packages/edge-protocol/schema/edge-protocol-v1.schema.json#/$defs/EdgeAssessmentEnvelopeV1",
+      "canonicalContractVersion": "EdgeAssessmentEnvelopeV1@1",
+      "acceptedOwnerCommitSha": "b3d8cedece8cf3a9f546c60016beae442f85f160",
+      "bindingStatus": "USABLE",
+      "bindingHash": "bd4fe6b1d4354729b0caa856e05e661e3f956b5574b8be68401336b18be0eefa",
+      "dockJsonPointer": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/2"
+    },
+    {
+      "facetClass": "SCENARIO_REFERENCE",
+      "operation": "VALIDATE_FIXTURE",
+      "providerId": "dock.facet.scenario-reference.v1",
+      "canonicalOwnerRef": "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/liveEdge/adapters/exchangeTwin/**; git:08a0a09780727e2b4ba59017b5701998abe29b77:server/src/productAssurance/faults/harness.ts#evaluateCanonicalFaultHarness",
+      "canonicalContractRef": "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ScenarioReferenceV1",
+      "canonicalContractVersion": "ScenarioReferenceV1@1",
+      "acceptedOwnerCommitSha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
+      "extensionProviderRef": "F12",
+      "bindingStatus": "USABLE",
+      "bindingHash": "35f74a00293a869adcb3cbb7dfa884d40cbd33afdf82b2ed4590cda048d28d19",
+      "dockJsonPointer": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/6"
+    },
+    {
+      "facetClass": "COCKPIT_PROJECTION",
+      "operation": "PROJECT_FIXTURE",
+      "providerId": "dock.facet.cockpit-projection.v1",
+      "canonicalOwnerRef": "git:2c98ae653ba97e6383c29697283288346de28bdb:web/src/lib/productIntegration/model.ts",
+      "canonicalContractRef": "git:56c47dad398c485b6653036c8b90c53f11061b1e:web/src/lib/productIntegration/model.ts#ProductSupervisorEnvelope,ProductSurfaceProjection,ProductSurfaceDatum",
+      "canonicalContractVersion": "product-supervisor.v1",
+      "acceptedOwnerCommitSha": "2c98ae653ba97e6383c29697283288346de28bdb",
+      "bindingStatus": "USABLE",
+      "bindingHash": "588e54eb6cafc8ca0114e3f11eac55801fc4b4957d1f6a32bfb797f9754ffa00",
+      "dockJsonPointer": "frontier/dock/contracts/v1/canonical-owner-map.json#/facets/4"
+    }
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY"
+}

@@ -41,7 +41,7 @@ Updated: 2026-07-12 (D-LAUNCH-5). States: READY / WORKING / ACCEPTED / PARKED / 
 
 | AIOPS-PRESTAGE (non-donor) | ~/Desktop/aiops-prestage | aiops-prestage-20260714 | d78be24 | AIOPS_PRESTAGE_READY ACCEPTED (08e0bea, pushed; D-LAUNCH-30) — collision map ratified for port phase; reuse inventory + insertion registry = integrator reading; PARKED |
 | AIOPS SHADOW A1/A3/A4/A5 | ~/Desktop/aiops-shadow-* | aiops-shadow-*-20260715 | 03857dc | SHADOW_ARTIFACT_READY SEALED (83c1624/c345fbb/b5f4c47/e0411ea, pushed; D-LAUNCH-31) — PARKED; port + full rerun at INTEGRATED_ACCEPTED |
-| AIOPS SHADOW A2 | ~/Desktop/aiops-shadow-a2 | aiops-shadow-a2-20260715 | 03857dc | RESUMING (app-side stop; untracked scaffolding, 0 commits) — resume block issued D-LAUNCH-31 |
+| AIOPS SHADOW A2 | ~/Desktop/aiops-shadow-a2 | aiops-shadow-a2-20260715 | 03857dc | SHADOW_ARTIFACT_READY SEALED (ca1fb09, pushed; D-LAUNCH-32) — PARKED; port at INTEGRATED_ACCEPTED |
 | ROLE3-PREFLIGHT | ~/Desktop/role3-preflight | role3-preflight-20260715 | 03857dc | PREFLIGHT_FINDINGS_READY SEALED (06bb64a, pushed) — PF-001..008 delivered to I00 as evidence; PARKED |
 | C-SHARDS 1–6 | (cut at C freeze) | read-only at exact C | C | ARMED (wave 19) — acceptance battery sharded; receipts feed Role 3 |
 | EGRESS-PATCH | (cut after landing) | from landed main | INTEGRATED_ACCEPTED | ARMED — wave 17 block |

@@ -1,14 +1,23 @@
 # STATE.md — what is true right now
 
-**Phase:** `FINAL_INTEGRATION / PHASE_2_SOURCE_FREEZE`
+**Phase:** `FINAL_INTEGRATION / PHASE_4_CORRECTIONS`
 
-**Status:** `REPLACEMENT_CANDIDATE_SOURCE_FROZEN / LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
+**Status:** `REJECTED_CANDIDATE_C / CORRECTIONS_IN_PROGRESS / NOT_SELF_VERIFIED`
 
 **Candidate state:** `NOT_CANDIDATE_READY`
 
-This file is committed atomically with the Phase 2 source-freeze commit, called **C**. C cannot name its own commit SHA or tree hash. The sole-child evidence seal, called **S**, records C, C's tree, the complete local-acceptance evidence, and the immutable candidate receipt. Until S exists and validates, neither `INTEGRATION_CANDIDATE_READY` nor independent verification is claimed.
+Rejected candidate **C** is `098f7b9449ab3b1c26bda19f51537bfea01d4c48`. Its sole-child seal **S** is `517bd636d799c983ecddc9bda1985d0619b652d7`. Independent Role 3 rejected C with 15 accepted findings. Role 4 is applying only those findings on branch `role4-fix-20260715`; no descendant is a candidate until every finding is fixed or evidence-refused, complete acceptance is rerun, a new source-freeze **C2** is committed, and a new sole-child evidence seal validates against exact C2.
 
 **Law:** this file wins on current product state; `ARCHITECTURE.md` Part II wins on ownership; `MISSION.md` wins on purpose. State is evidence, not a chronological diary.
+
+## Phase 4 correction state
+
+- Governing verifier receipt: `/Users/cosmosgeek/Desktop/role3-verify/ROLE3_VERIFICATION_RECEIPT.md`; SHA-256 `90613c8273e5c866603dbaa74106f2ff436c06e320a95a0cbdbc4c55c0d5ae1d`.
+- Accepted findings: `15`; fixed: `1`; evidence-refused: `0`; pending: `14`.
+- Fixed finding set: `R3-VAL-001`.
+- The complete validator now consumes the bounded command result's `stdout` bytes when verifying exact clean-detached revision identity. Its focused contract is `42/42`, including a real two-clone detached-checkout regression that failed before the correction.
+- The post-fix root `npm test` reached the independently accepted pending `R3-D-CLEAN-009` boundary and exited `1` only when `A_CASE_S4_SAFE_PURITY` required an intentionally absent protected owner directive. All preceding build, engine, financial-safety, storage/AWS, Node-focused, stream-lifecycle, perimeter, and Product Assurance groups passed. No protected input is being copied or fabricated to force green.
+- No D-LAUNCH-19/20 donor, disposition, or Q-ancestry claim changes. No protected owner directive was created, copied, edited, staged, or committed.
 
 ## Product posture
 
@@ -97,8 +106,8 @@ The exact reason-coded list is in `I00_PRODUCT_BUILD_STATE.md` and `fixtures/i00
 
 ## Next exact transition
 
-1. Treat the commit containing this state and its source-freeze receipt as replacement C; do not rewrite the rejected `9bde37b` checkpoint and permit no later source mutation.
-2. From exact C, run the complete I00 local acceptance, including deterministic scenarios, dependency startup, actual restart/reconciliation, the immutable performance campaign, and the six-run browser/no-false-green sweep.
-3. If and only if every measurement passes, create sole-child S using only allowed evidence/seal paths, render the immutable `INTEGRATION_CANDIDATE_READY` receipt, validate against exact C, and park read-only for a different Role 3 session.
+1. Reproduce and disposition the remaining accepted Role 3 findings in severity order, with one smallest-boundary correction, one focused red/green regression, one receipt, and one finding-ID commit each.
+2. After all 15 findings are fixed or evidence-refused, rerun root `npm test`, `npm run test:all`, `npm run test:i00:complete`, deterministic scenarios, dependency startup, restart/reconciliation, performance, and the browser/no-false-green sweep that can be measured locally.
+3. If and only if every required measurement passes, commit new source-freeze C2, create its sole-child evidence seal using only allowed evidence/seal paths, render the immutable `INTEGRATION_CANDIDATE_READY` receipt, validate against exact C2, and park read-only for a fresh Role 3 session.
 
-Role 2 may not certify its own candidate. No current-main write, push, deployment, private/signed call, or money action is part of this transition.
+Role 4 may not certify its own candidate. No current-main write, push, deployment, private/signed call, or money action is part of this transition.

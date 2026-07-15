@@ -1637,7 +1637,7 @@ async function verifyReportParity() {
   });
 }
 
-async function verifyReportParityAtRevision(environment, revision, tempRoot) {
+export async function verifyReportParityAtRevision(environment, revision, tempRoot) {
   const sealedRoot = path.join(tempRoot, 'sealed-report-parity-untouched');
   const generatedRoot = path.join(tempRoot, 'sealed-report-parity-generated');
   for (const checkoutRoot of [sealedRoot, generatedRoot]) {
@@ -1649,8 +1649,24 @@ async function verifyReportParityAtRevision(environment, revision, tempRoot) {
       checkoutRoot,
       environment,
       1_024,
-    )).toString('utf8').trim();
+    )).stdout.toString('utf8').trim();
     if (observedHead !== revision) throw new Error('SEALED_REPORT_PARITY_CHECKOUT_MISMATCH');
+    const observedBranch = (await commandOutput(
+      'git',
+      ['branch', '--show-current'],
+      checkoutRoot,
+      environment,
+      1_024,
+    )).stdout.toString('utf8').trim();
+    if (observedBranch !== '') throw new Error('SEALED_REPORT_PARITY_CHECKOUT_NOT_DETACHED');
+    const observedStatus = (await commandOutput(
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all'],
+      checkoutRoot,
+      environment,
+      8 * 1024 * 1024,
+    )).stdout;
+    if (observedStatus.length !== 0) throw new Error('SEALED_REPORT_PARITY_CHECKOUT_DIRTY');
   }
 
   const regeneration = await runCommand({

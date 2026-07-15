@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -31,6 +34,7 @@ import {
   validateQArchiveInventory,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
+  verifyReportParityAtRevision,
 } from './local-acceptance.mjs';
 import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
 
@@ -507,6 +511,40 @@ test('independent validation requires a clean detached worktree pinned to exact 
 
   const dirty = { ...clean, statusByteLength: 1 };
   assert.ok(validateDetachedCandidateWorktreeDocument(dirty, CANDIDATE, CANDIDATE_TREE).failures.includes('DETACHED_CANDIDATE_DIRTY'));
+});
+
+test('sealed report parity reads the exact revision from clean detached checkouts', async (context) => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-sealed-report-parity-'));
+  context.after(() => rmSync(tempRoot, { recursive: true, force: true }));
+  const revision = execFileSync(
+    'git',
+    ['rev-parse', '--verify', 'HEAD^{commit}'],
+    { encoding: 'utf8' },
+  ).trim();
+  const environment = Object.freeze({
+    PATH: process.env.PATH,
+    HOME: tempRoot,
+    TMPDIR: os.tmpdir(),
+    TZ: 'UTC',
+    LC_ALL: 'C',
+    CI: '1',
+  });
+
+  const result = await verifyReportParityAtRevision(environment, revision, tempRoot);
+
+  assert.equal(result.revision, revision);
+  assert.equal(result.regeneration.passed, true);
+  assert.ok(result.artifacts.length > 0);
+  for (const checkout of ['sealed-report-parity-untouched', 'sealed-report-parity-generated']) {
+    const cwd = path.join(tempRoot, checkout);
+    assert.equal(execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { cwd, encoding: 'utf8' }).trim(), revision);
+    assert.equal(execFileSync('git', ['branch', '--show-current'], { cwd, encoding: 'utf8' }).trim(), '');
+  }
+  assert.equal(execFileSync(
+    'git',
+    ['status', '--porcelain=v1', '--untracked-files=all'],
+    { cwd: path.join(tempRoot, 'sealed-report-parity-untouched'), encoding: 'utf8' },
+  ).trim(), '');
 });
 
 test('pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S', () => {

@@ -36,6 +36,7 @@
   ],
   "futureTests": [
     "canonical-owner snapshot adapter round-trip and unknown propagation",
+    "accepted F12 scenario provider artifact provenance and Dock SCENARIO_REFERENCE round-trip",
     "canonical portfolio advisory output adapter decision and conformance",
     "accepted recorded-replay table provenance, value binding, origin preservation, and bootstrap replay",
     "read-only supervisor mount without health, Risk, Capital, or execution recomputation",

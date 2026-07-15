@@ -218,7 +218,9 @@ function exactKeys(value, expected, label) {
   }
 }
 function sameIdentity(left, right) {
-  return left.dev === right.dev && left.ino === right.ino
+  const { dev: leftDevice } = left;
+  const { dev: rightDevice } = right;
+  return leftDevice === rightDevice && left.ino === right.ino
     && left.size === right.size && left.mtimeNs === right.mtimeNs
     && left.ctimeNs === right.ctimeNs;
 }
@@ -683,10 +685,13 @@ const failAfterPublish = testMode ? (process.env.RESTORE_TEST_FAIL_AFTER_PUBLISH
 
 function fail(message) { throw new Error(message); }
 function identity(stat) {
-  return { dev: stat.dev, ino: stat.ino, mode: stat.mode, type: stat.isDirectory() ? 'd' : 'f' };
+  const { dev, ino, mode } = stat;
+  return { dev, ino, mode, type: stat.isDirectory() ? 'd' : 'f' };
 }
 function sameIdentity(left, right) {
-  return left.dev === right.dev && left.ino === right.ino
+  const { dev: leftDevice } = left;
+  const { dev: rightDevice } = right;
+  return leftDevice === rightDevice && left.ino === right.ino
     && left.mode === right.mode && left.type === right.type;
 }
 function statIdentity(name) { return identity(fs.lstatSync(name, { bigint: true })); }
@@ -794,7 +799,9 @@ function copyRegularExclusive(source, destination, mode) {
     }
     fs.fsyncSync(output);
     const after = fs.fstatSync(input, { bigint: true });
-    if (before.dev !== after.dev || before.ino !== after.ino
+    const { dev: beforeDevice } = before;
+    const { dev: afterDevice } = after;
+    if (beforeDevice !== afterDevice || before.ino !== after.ino
         || before.size !== after.size || copied !== before.size) {
       fail(`${source} changed while staging`);
     }

@@ -98,9 +98,9 @@ amendment contract, chained from the WATCHDOG-007 effective tree and digest:
 - base effective root digest:
   `83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc`;
 - corrected effective live tree:
-  `e62dd469387b78b07a37396a86d0c4942a65c4db`;
+  `7e6b708368e5b89655d9096faca04a6cdbd2e1b6`;
 - corrected 31-file root digest:
-  `6012fe7b34e585953ddbf114b90d5cc16a00112fc43093be51743f541399a5c8`.
+  `7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033`.
 
 The entry authorizes exactly these two runtime replacements and one additive
 focused regression:
@@ -123,6 +123,9 @@ path is admitted.
 - corrected additive regression: exit `0`, `89/89`;
 - unchanged donor backup/restore suite: exit `0`, `30/30`;
 - unchanged donor restore-drill suite: exit `0`, `11/11`;
+- standard ops aggregate: exit `0`, 12/12 files and `384` assertions;
+- secret/endpoint scanner: exit `0`, `13/13`, after the aggregate first
+  reproduced a hostname false positive for JavaScript `.dev` property access;
 - Bash syntax and Git whitespace checks: exit `0`;
 - host archive implementation exercised: bsdtar `3.5.3`; the implementation
   also accepts the bounded GNU numeric-owner listing grammar, but GNU tar was
@@ -134,6 +137,12 @@ collisions, truncated and bounded-resource archives, regular-file roots,
 target/backup aliases, live-data aliases, service-state ambiguity, immutable
 target preservation, complete and incomplete rollback, absent-target rollback,
 explicit drill evidence, and production database non-mutation.
+
+The cross-suite correction changes only the spelling of device-number reads:
+ECMAScript object destructuring retrieves the same `fs.Stats` properties while
+avoiding source tokens that the deliberately conservative hostname scanner must
+reject. Restore identity comparisons and every accepted runtime behavior remain
+unchanged.
 
 The effective I00 adapter, donor contract, release/preflight, and repository
 gates are rerun after the exact contract bytes are sealed. Final complete

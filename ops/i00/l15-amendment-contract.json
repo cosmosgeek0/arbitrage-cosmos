@@ -58,9 +58,9 @@
     {
       "findingId": "R3-D-BACKUP-008",
       "baseLiveTree": "a7ef13b0b81444f7c4021b168669c25fd8180cb6",
-      "effectiveLiveTree": "e62dd469387b78b07a37396a86d0c4942a65c4db",
+      "effectiveLiveTree": "7e6b708368e5b89655d9096faca04a6cdbd2e1b6",
       "baseRootDigestSha256": "83454fb2ee20e529108f84c7f51b4270a25270d62d869f382efdab88322575dc",
-      "effectiveRootDigestSha256": "6012fe7b34e585953ddbf114b90d5cc16a00112fc43093be51743f541399a5c8",
+      "effectiveRootDigestSha256": "7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033",
       "changedFiles": [
         {
           "path": "ops/live/bin/restore-drill.sh",
@@ -75,14 +75,14 @@
           "mode": "100755",
           "beforeGitBlob": "f46b5487b3d0f8704a061fda40e62d705a6f8cf4",
           "beforeSha256": "348f5dae60be07cc162ac2ff35dacec219b58d87ccf947258cb6045c9d8bb2b2",
-          "afterGitBlob": "a88c7ba79c88f66f815303eed4a2e70db1145aea",
-          "afterSha256": "27f8f0a55fa292e19c6bd2cfa797ee9908b6a4773f43d5f63c83ae34b71fd4f6"
+          "afterGitBlob": "cd507aa75377e2dc671244a46c627249d934ddce",
+          "afterSha256": "d70cbe5300a4ead740dcb1c0da27b3c6e9480ee3baf8aa429fc3c208c73a0a28"
         }
       ],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md",
-        "gitBlob": "9033d6ac05d8f71081a86b9a718aa8d5d8cc5213",
-        "sha256": "fec746e5cca4e4719671b7fb0f6c37e2e77cebbfa9ad47c44e5d093d3c5fe6e5"
+        "gitBlob": "e20c44c17d0d005831beaa605a28249429e5ce1d",
+        "sha256": "ac90d966f5bad8dc061b05b3758561d4a7e305ae9e1294f4344017eccffc3b9e"
       },
       "regressionTests": [
         {
@@ -94,8 +94,8 @@
     }
   ],
   "effectiveLive": {
-    "tree": "e62dd469387b78b07a37396a86d0c4942a65c4db",
-    "rootDigestSha256": "6012fe7b34e585953ddbf114b90d5cc16a00112fc43093be51743f541399a5c8",
+    "tree": "7e6b708368e5b89655d9096faca04a6cdbd2e1b6",
+    "rootDigestSha256": "7b07cb57e7331b81e7ac66d54df9424b5c51cdb710329f43515d3a0ae269f033",
     "fileCount": 31,
     "files": [
       {
@@ -173,8 +173,8 @@
       {
         "path": "bin/restore.sh",
         "mode": "100755",
-        "gitBlob": "a88c7ba79c88f66f815303eed4a2e70db1145aea",
-        "sha256": "27f8f0a55fa292e19c6bd2cfa797ee9908b6a4773f43d5f63c83ae34b71fd4f6"
+        "gitBlob": "cd507aa75377e2dc671244a46c627249d934ddce",
+        "sha256": "d70cbe5300a4ead740dcb1c0da27b3c6e9480ee3baf8aa429fc3c208c73a0a28"
       },
       {
         "path": "bin/rollback.sh",

@@ -1,0 +1,16 @@
+{
+  "schema": "EdgeMeterSourceHashesV1",
+  "version": 1,
+  "algorithm": "SHA-256",
+  "aggregateAlgorithm": "SHA-256_OF_SORTED_SHA256_TWO_SPACES_RELATIVE_PATH_NEWLINE_ROWS",
+  "aggregateSourceSha": "110f185e34c2d5cabbde033de84a4d0464c399c9de2bca55f7079a9828cbcfc0",
+  "files": [
+    {"path": "src/constants.mjs", "sha256": "75f4ae1467382286ca8c1ef5bcf2219981229b260b74d918dd3f1fe878bdd0e4"},
+    {"path": "src/contracts.mjs", "sha256": "be150e4c887fb4a09504ff25b3b086391f7d1fe97a001c3708a161c856e120cb"},
+    {"path": "src/exact-decimal.mjs", "sha256": "977527629ab45cafa8d5f4b1d177d202aab32b9f040cb4e6cbcd4fa5d02a0482"},
+    {"path": "src/facets.mjs", "sha256": "5ec4f8f9b1c116ad7172f6206a3a2ac6366440807fa1400dca23b36d28c1634f"},
+    {"path": "src/index.mjs", "sha256": "83c8fc9b64f919034137e8f1a08e5d1f063dd4cb029d3899381e3e7e0b0dd6b4"},
+    {"path": "src/preview.mjs", "sha256": "8acfc27dcb6605f13f3077f6a4e2de771301798013bef4e48b4a6b45f8f1cfe6"},
+    {"path": "src/report.mjs", "sha256": "b689d47ca54620f1ec4a1761b030e758f4848945dd429a3262c5bd2a7506c17b"}
+  ]
+}

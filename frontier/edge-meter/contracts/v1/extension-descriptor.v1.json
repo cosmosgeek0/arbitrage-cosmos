@@ -1,0 +1,173 @@
+{
+  "adapterMapRefs": [
+    "frontier/edge-meter/contracts/v1/owner-reuse-map.v1.json",
+    "frontier/dock/contracts/v1/adapter-rules.json#/facetRules/ADVISORY_ASSESSOR",
+    "frontier/dock/contracts/v1/adapter-rules.json#/facetRules/COCKPIT_PROJECTION"
+  ],
+  "authorityClass": "NO_AUTHORITY",
+  "buildState": "PRESTAGE_READY",
+  "canonicalInputContractRefs": [
+    "frontier/edge-meter/contracts/v1/edge-meter-v1.schema.json#/$defs/EdgeMeterBatchInputV1",
+    "frontier/edge-meter/contracts/v1/owner-reuse-map.v1.json",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/economics/types.ts#EconomicReport",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/capitalFoundation/accountTruth/types.ts#AccountCapitalProjection",
+    "git:f0168cb37bd04d21bc90591ab2256770de3b75bc:server/src/ledger.ts#LedgerEvent",
+    "git:df6b472993ca9659ce09cf5f72004981c6835f0d:server/src/foundation/execution/types.ts#ExecutionEvent",
+    "git:02b4eccc8d2ef53b830cafae06e5175715fa6ebb:quant/RECEIPTS/Q17_ACCEPTANCE.md"
+  ],
+  "canonicalOutputContractRefs": [
+    "frontier/edge-meter/contracts/v1/edge-meter-v1.schema.json#/$defs/EdgeMeterReportV1",
+    "frontier/edge-meter/contracts/v1/edge-meter-v1.schema.json#/$defs/EdgeMeterCockpitProjectionV1",
+    "frontier/dock/contracts/v1/dock-v1.schema.json#/$defs/ProviderFacetBindingV1"
+  ],
+  "canonicalPolicyRefs": [
+    "frontier/directives/Frontier.md#sections-0-2-9B-10-12",
+    "frontier/edge-meter/contracts/v1/hard-denials.v1.json"
+  ],
+  "capabilityClass": "MEASUREMENT_ONLY_REFERENCE_REPORT",
+  "cockpitProjectionRef": "frontier/edge-meter/preview/attributable.v1.json",
+  "completenessRequirement": "PRESERVE_MISSING_UNKNOWN_NOT_APPLICABLE_DIVERGENT_AND_RESIDUAL",
+  "dataClassifications": [
+    "SYNTHETIC_FIXTURE_NO_SECRETS",
+    "IMMUTABLE_REFERENCE_METADATA"
+  ],
+  "dataSourceRefs": [
+    "fixture://edge-meter/complete-real.v1",
+    "fixture://edge-meter/scenario-patches.v1"
+  ],
+  "degradationBehavior": "NO_PARTIAL_ACCEPTANCE_NO_SILENT_LOSS_CANONICAL_OWNER_REVIEW_REQUIRED",
+  "determinismClass": "INJECTED_INPUT_NO_CLOCK_RANDOMNESS_ENVIRONMENT_FILESYSTEM_OR_TRANSPORT",
+  "disablePlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "idempotent": true
+  },
+  "displayName": "F8 EdgeMeter Frontier Prestage",
+  "disposition": "ACTIVE",
+  "dockContractVersion": "1.0.0",
+  "egressDeclaration": "NONE",
+  "extensionId": "frontier.edge-meter",
+  "extensionVersion": "0.1.0",
+  "failureModes": [
+    "FAIL_CLOSED_ON_SCHEMA_OWNER_HASH_TIME_OR_IDENTITY_MISMATCH",
+    "EXPLICIT_INSUFFICIENT_ABSTAIN_NON_COMPARABLE_OR_DIVERGENT_STATE",
+    "DEGRADATION_REQUEST_ON_RESOURCE_LIMIT"
+  ],
+  "freshnessRequirement": "EXACT_IMMUTABLE_OWNER_REFERENCE_OR_EXPLICIT_UNKNOWN",
+  "hardDenialRefs": [
+    "frontier/edge-meter/contracts/v1/hard-denials.v1.json"
+  ],
+  "healthContractRef": "frontier/edge-meter/STATE.md#health-boundary",
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "insertionRequestRef": "frontier/edge-meter/INSERTION.md",
+  "knownLimitations": [
+    "FIXTURE_ONLY_AND_UNWIRED",
+    "TRUSTS_OWNER_SUPPLIED_IMMUTABLE_REFERENCE_METADATA",
+    "NO_LOCAL_PNL_TOTAL_OR_STATISTICAL_RECOMPUTATION",
+    "NO_PRODUCTION_RESOURCE_RUNTIME_OR_ISOLATION_PROOF",
+    "NO_CANONICAL_STATE_HEALTH_CONTROL_OR_EFFECT"
+  ],
+  "latencyClass": "DETERMINISTIC_FIXTURE_STEPS",
+  "licenseAndTermsRefs": [
+    "frontier/edge-meter/research/RESEARCH_RECEIPT.md"
+  ],
+  "maxSafeRateClaim": {
+    "backpressurePolicy": "FAIL_CLOSED",
+    "eventsPerWindow": 32,
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "queueCapacity": 8,
+    "windowSizeMs": 1000
+  },
+  "networkMode": "FIXTURE_ONLY",
+  "optionalCapabilityRefs": [],
+  "owner": "F8 EdgeMeter frontier prestage worker",
+  "purpose": "Provide deterministic fixture-only cross-owner reference validation, measurement-state projection, a non-accounting signal/timing bridge, and an unmounted cockpit preview without recomputing Capital or Q truth.",
+  "replayClass": "FIXTURE_ONLY_REAL_HYPOTHETICAL_REPLAY_IDENTITIES_REMAIN_DISTINCT",
+  "requestedCapabilities": [
+    "EVALUATE_FIXTURE",
+    "PROJECT_FIXTURE"
+  ],
+  "requiredCapabilityRefs": [
+    "DockV1:ADVISORY_ASSESSOR",
+    "DockV1:COCKPIT_PROJECTION"
+  ],
+  "resourceBudgetClaim": {
+    "claimId": "edge-meter.fixture-budget.v1",
+    "cpu": {
+      "reason": "No mounted process or production runtime exists in prestage.",
+      "state": "UNAVAILABLE",
+      "unit": "host-cpu-percent"
+    },
+    "disk": {
+      "reason": "The fixture adapter performs no runtime filesystem transport.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes-per-second"
+    },
+    "eventRate": {
+      "limit": 32,
+      "observed": 32,
+      "state": "MEASURED",
+      "unit": "events-per-1000ms-fixture-window"
+    },
+    "latency": {
+      "limit": {
+        "p50": 4,
+        "p95": 8,
+        "p99": 12
+      },
+      "observed": {
+        "p50": 4,
+        "p95": 4,
+        "p99": 4
+      },
+      "state": "MEASURED",
+      "unit": "deterministic-fixture-steps"
+    },
+    "measurementMode": "DETERMINISTIC_FIXTURE",
+    "memory": {
+      "reason": "No mounted process or production runtime exists in prestage.",
+      "state": "UNAVAILABLE",
+      "unit": "host-bytes"
+    },
+    "modelUse": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "calls"
+    },
+    "network": {
+      "limit": 0,
+      "observed": 0,
+      "state": "MEASURED",
+      "unit": "bytes"
+    },
+    "queue": {
+      "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST",
+      "limit": 8,
+      "observed": 8,
+      "state": "MEASURED",
+      "unit": "events"
+    },
+    "storageGrowth": {
+      "limit": 16384,
+      "observed": 4096,
+      "state": "MEASURED",
+      "unit": "fixture-bytes-per-window"
+    }
+  },
+  "retentionRequest": "FIXTURE_ARTIFACTS_ONLY_NO_CANONICAL_OR_RUNTIME_RETENTION",
+  "rollbackPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "pinnedVersion": "0.1.0"
+  },
+  "secretMode": "NONE",
+  "sourceSha": "110f185e34c2d5cabbde033de84a4d0464c399c9de2bca55f7079a9828cbcfc0",
+  "testEntryPointRefs": [
+    "frontier/edge-meter/tests/edge-meter.test.mjs"
+  ],
+  "testReceiptRef": "frontier/edge-meter/RECEIPT.md",
+  "uninstallPlan": {
+    "authority": "CANONICAL_OWNER_REQUIRED",
+    "deleteCanonicalEvidence": false
+  },
+  "descriptorHash": "bdc6f1d0b448d5e63943a738a358861b042d4d9cf058d094334d737247a23f96"
+}

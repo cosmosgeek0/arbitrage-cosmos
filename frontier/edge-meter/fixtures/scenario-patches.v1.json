@@ -1,0 +1,148 @@
+{
+  "schema": "EdgeMeterFixturePatchMatrixV1",
+  "version": 1,
+  "baseFixture": "frontier/edge-meter/fixtures/complete-real.v1.json",
+  "projectionBindingMode": "REHASH_SYNTHETIC_OWNER_PROJECTIONS_AFTER_PATCH",
+  "scenarios": [
+    {
+      "scenarioId": "abstain-unknown",
+      "expectedState": "ABSTAIN_UNKNOWN",
+      "set": {
+        "items.0.qEvidence.abstentionAction": "ABSTAIN_UNKNOWN",
+        "items.0.qEvidence.abstentionReasonCodes": ["COVERAGE_COLLAPSED"]
+      }
+    },
+    {
+      "scenarioId": "bridge-identity-divergent",
+      "expectedState": "DIVERGENT",
+      "set": {
+        "items.0.grossBridge.actualGross": "12.4"
+      }
+    },
+    {
+      "scenarioId": "historical-fit-non-comparable",
+      "expectedState": "NON_COMPARABLE",
+      "set": {
+        "items.0.qEvidence.partitionClass": "HISTORICAL_FIT"
+      }
+    },
+    {
+      "scenarioId": "missing-required-cost-reference",
+      "expectedState": "INSUFFICIENT_EVIDENCE",
+      "set": {
+        "items.0.ownerRefs.costs.recordId": null,
+        "items.0.ownerRefs.costs.recordRevision": null,
+        "items.0.ownerRefs.costs.contentHash": null,
+        "items.0.ownerRefs.costs.projectionContentHash": null,
+        "items.0.ownerRefs.costs.eventTimeMs": null,
+        "items.0.ownerRefs.costs.availableAtMs": null,
+        "items.0.ownerRefs.costs.state": "MISSING",
+        "items.0.ownerRefs.costs.reasonCodes": ["COST_REFERENCE_MISSING"],
+        "items.0.dimensions.turnover.state": "UNKNOWN",
+        "items.0.dimensions.turnover.value": null,
+        "items.0.dimensions.turnover.reasonCodes": ["COST_REFERENCE_MISSING"],
+        "items.0.dimensions.capacity.state": "UNKNOWN",
+        "items.0.dimensions.capacity.value": null,
+        "items.0.dimensions.capacity.reasonCodes": ["COST_REFERENCE_MISSING"]
+      }
+    },
+    {
+      "scenarioId": "outcome-not-mature",
+      "expectedState": "DIVERGENT",
+      "set": {
+        "items.0.horizon.endMs": 180000
+      }
+    },
+    {
+      "scenarioId": "point-in-time-cutoff-violation",
+      "expectedState": "NON_COMPARABLE",
+      "set": {
+        "items.0.ownerRefs.assessment.availableAtMs": 100001
+      }
+    },
+    {
+      "scenarioId": "reference-only-reject",
+      "expectedState": "ATTRIBUTABLE",
+      "set": {
+        "items.0.cohort": "REJECTED",
+        "items.0.decisionDisposition.action": "REJECTED",
+        "items.0.decisionDisposition.reasonCodes": ["CAPITAL_POLICY_REJECTED"],
+        "items.0.ownerRefs.economicReport.recordId": null,
+        "items.0.ownerRefs.economicReport.recordRevision": null,
+        "items.0.ownerRefs.economicReport.contentHash": null,
+        "items.0.ownerRefs.economicReport.projectionContentHash": null,
+        "items.0.ownerRefs.economicReport.eventTimeMs": null,
+        "items.0.ownerRefs.economicReport.availableAtMs": null,
+        "items.0.ownerRefs.economicReport.state": "NOT_APPLICABLE",
+        "items.0.ownerRefs.economicReport.reasonCodes": ["NO_ECONOMIC_REPORT_FOR_REJECTED_DECISION"],
+        "items.0.ownerRefs.fills.recordId": null,
+        "items.0.ownerRefs.fills.recordRevision": null,
+        "items.0.ownerRefs.fills.contentHash": null,
+        "items.0.ownerRefs.fills.projectionContentHash": null,
+        "items.0.ownerRefs.fills.eventTimeMs": null,
+        "items.0.ownerRefs.fills.availableAtMs": null,
+        "items.0.ownerRefs.fills.state": "NOT_APPLICABLE",
+        "items.0.ownerRefs.fills.reasonCodes": ["NO_FILL_FOR_REJECTED_DECISION"],
+        "items.0.ownerRefs.costs.recordId": null,
+        "items.0.ownerRefs.costs.recordRevision": null,
+        "items.0.ownerRefs.costs.contentHash": null,
+        "items.0.ownerRefs.costs.projectionContentHash": null,
+        "items.0.ownerRefs.costs.eventTimeMs": null,
+        "items.0.ownerRefs.costs.availableAtMs": null,
+        "items.0.ownerRefs.costs.state": "NOT_APPLICABLE",
+        "items.0.ownerRefs.costs.reasonCodes": ["NO_COSTS_FOR_REJECTED_DECISION"],
+        "items.0.ownerRefs.liabilities.recordId": null,
+        "items.0.ownerRefs.liabilities.recordRevision": null,
+        "items.0.ownerRefs.liabilities.contentHash": null,
+        "items.0.ownerRefs.liabilities.projectionContentHash": null,
+        "items.0.ownerRefs.liabilities.eventTimeMs": null,
+        "items.0.ownerRefs.liabilities.availableAtMs": null,
+        "items.0.ownerRefs.liabilities.state": "NOT_APPLICABLE",
+        "items.0.ownerRefs.liabilities.reasonCodes": ["NO_LIABILITY_SCOPE_FOR_REJECTED_DECISION"],
+        "items.0.capitalProjection.state": "NOT_APPLICABLE",
+        "items.0.capitalProjection.scopeKind": null,
+        "items.0.capitalProjection.valuationAsset": null,
+        "items.0.capitalProjection.pricePnlBasis": null,
+        "items.0.capitalProjection.executionCostBasis": null,
+        "items.0.capitalProjection.accountingStatus": null,
+        "items.0.capitalProjection.accountingConfidence": null,
+        "items.0.capitalProjection.accountingTruthState": null,
+        "items.0.capitalProjection.accountingIdentityProven": null,
+        "items.0.capitalProjection.identityEquation": null,
+        "items.0.capitalProjection.netKnown": null,
+        "items.0.capitalProjection.netEstimatedRange": null,
+        "items.0.capitalProjection.measures": null,
+        "items.0.capitalProjection.includedComponentIds": [],
+        "items.0.capitalProjection.excludedComponentIds": [],
+        "items.0.capitalProjection.divergentReasons": [],
+        "items.0.capitalProjection.reasonCodes": ["NO_ACTED_OUTCOME"],
+        "items.0.grossBridge.state": "NOT_APPLICABLE",
+        "items.0.grossBridge.valuationAsset": null,
+        "items.0.grossBridge.decisionBenchmarkGross": null,
+        "items.0.grossBridge.timingEffect": null,
+        "items.0.grossBridge.executionDelta": null,
+        "items.0.grossBridge.bridgeResidual": null,
+        "items.0.grossBridge.actualGross": null,
+        "items.0.grossBridge.latencyMs": null,
+        "items.0.grossBridge.equation": null,
+        "items.0.grossBridge.reasonCodes": ["NO_ACTED_OUTCOME"],
+        "items.0.dimensions.venue.ownerRefKey": "evidence",
+        "items.0.dimensions.turnover.state": "NOT_APPLICABLE",
+        "items.0.dimensions.turnover.value": null,
+        "items.0.dimensions.turnover.reasonCodes": ["NO_TURNOVER_FOR_REJECTED_DECISION"],
+        "items.0.dimensions.capacity.state": "NOT_APPLICABLE",
+        "items.0.dimensions.capacity.value": null,
+        "items.0.dimensions.capacity.reasonCodes": ["NO_CAPACITY_FOR_REJECTED_DECISION"]
+      }
+    },
+    {
+      "scenarioId": "unknown-capacity-breakdown",
+      "expectedState": "INSUFFICIENT_EVIDENCE",
+      "set": {
+        "items.0.dimensions.capacity.state": "UNKNOWN",
+        "items.0.dimensions.capacity.value": null,
+        "items.0.dimensions.capacity.reasonCodes": ["CAPACITY_OWNER_UNAVAILABLE"]
+      }
+    }
+  ]
+}

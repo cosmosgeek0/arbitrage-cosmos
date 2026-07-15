@@ -1,0 +1,233 @@
+{
+  "schema": "EdgeMeterCockpitProjectionV1",
+  "version": 1,
+  "truthClass": "FIXTURE_PROJECTION",
+  "canonical": false,
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "surfaceId": "pnl",
+  "moduleId": "F8",
+  "extensionId": "frontier.edge-meter",
+  "bindingState": "DIRECTOR_MOUNT_REQUIRED",
+  "truthLabel": "SYNTHETIC_ONLY",
+  "reportRef": {
+    "reportId": "fixture-reference-only-reject",
+    "reportHash": "1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+    "evaluatedAtMs": 170000
+  },
+  "measurementState": "ATTRIBUTABLE",
+  "stateCounts": {
+    "ABSTAIN_UNKNOWN": 0,
+    "ATTRIBUTABLE": 1,
+    "DIVERGENT": 0,
+    "INSUFFICIENT_EVIDENCE": 0,
+    "NON_COMPARABLE": 0
+  },
+  "denominator": {
+    "inputRecordCount": 1,
+    "uniqueMeasurementCount": 1,
+    "duplicateIdenticalCount": 0,
+    "identityConflictCount": 0
+  },
+  "selectedMeasurement": {
+    "measurementId": "fixture-measurement-acted-001",
+    "status": "ATTRIBUTABLE",
+    "reasonCodes": [],
+    "labelKind": "REAL",
+    "cohort": "REJECTED",
+    "informationCutoffMs": 100000,
+    "horizon": {
+      "endMs": 160000,
+      "startMs": 100000
+    },
+    "valuationAsset": "USDT",
+    "comparabilitySignature": "6f6443070d7fce54bed66917fe01fda5861660c147c312806a2504ef85e60608"
+  },
+  "attributionWaterfall": null,
+  "signalTimingBridge": null,
+  "rejectDisposition": {
+    "action": "REJECTED",
+    "reasonCodes": [
+      "CAPITAL_POLICY_REJECTED"
+    ],
+    "monetaryRejectEffect": null
+  },
+  "uncertainty": {
+    "state": "AVAILABLE",
+    "interval": {
+      "high": "12",
+      "low": "8"
+    },
+    "unit": "USDT",
+    "coverageState": "AVAILABLE",
+    "sourceRef": {
+      "availableAtMs": 95000,
+      "canonicalOwner": "Q conformal uncertainty",
+      "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "contentHash": "5d4223aec1967f9e350996cd8a305d9fd917a8c053186341320ed72b1fbf0689",
+      "contractId": "BoundConformalAssessmentV1",
+      "contractVersion": "Q12@1",
+      "eventTimeMs": 95000,
+      "ownerClass": "Q",
+      "projectionContentHash": "55a46214bb622bb8f95e2fb9e5cc187217ee642aec119a721f6c3d404d4ea233",
+      "reasonCodes": [],
+      "recordId": "fixture-uncertainty-001",
+      "recordRevision": "fixture-v1",
+      "refId": "ref-uncertainty-001",
+      "repositoryPath": "quant/src/quant_edge/ensemble/conformal.py",
+      "schema": "OwnerReferenceV1",
+      "state": "AVAILABLE",
+      "version": 1
+    },
+    "recomputedByEdgeMeter": false
+  },
+  "calibration": {
+    "state": "AVAILABLE",
+    "sourceRef": {
+      "availableAtMs": 95000,
+      "canonicalOwner": "Q calibration",
+      "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "contentHash": "fa4629c3dfcd07e6736af32652f4a4d04e184127a040cb8493b819ef0f50f36f",
+      "contractId": "BoundCalibratedAssessmentV1",
+      "contractVersion": "Q12@1",
+      "eventTimeMs": 95000,
+      "ownerClass": "Q",
+      "projectionContentHash": "22b187d38b410ff1b10b6ddb51c67d65d48685998e2e8ed1f66858a03dfdaf41",
+      "reasonCodes": [],
+      "recordId": "fixture-calibration-001",
+      "recordRevision": "fixture-v1",
+      "refId": "ref-calibration-001",
+      "repositoryPath": "quant/src/quant_edge/ensemble/calibration.py",
+      "schema": "OwnerReferenceV1",
+      "state": "AVAILABLE",
+      "version": 1
+    },
+    "recalibratedByEdgeMeter": false
+  },
+  "selectionEvidence": {
+    "MULTIPLE_TESTING": {
+      "displayValue": "PBO=0.12",
+      "recomputedByEdgeMeter": false,
+      "sourceRefHash": "cd72956e09fdd8108591a5deccfbc287d08755b6f8369d85cd6f08e5a737f9a7",
+      "sourceRefKey": "multiplicity",
+      "state": "AVAILABLE",
+      "authority": "Q_REFERENCE_ONLY"
+    },
+    "DEFLATED_PERFORMANCE": {
+      "displayValue": "DSR=0.71",
+      "recomputedByEdgeMeter": false,
+      "sourceRefHash": "683a5744b2233af0e378e42175c41704eca16f43ca745363aa4d108e9ba46281",
+      "sourceRefKey": "deflatedPerformance",
+      "state": "AVAILABLE",
+      "authority": "Q_REFERENCE_ONLY"
+    },
+    "SELECTION_PRESSURE": {
+      "displayValue": "TRIAL_COUNT=24",
+      "recomputedByEdgeMeter": false,
+      "sourceRefHash": "b05f934d83e5792f094e42075acc8c7e74c0db8f0d0544b223ca3bfc226efda1",
+      "sourceRefKey": "selectionPressure",
+      "state": "AVAILABLE",
+      "authority": "Q_REFERENCE_ONLY"
+    }
+  },
+  "breakdowns": {
+    "strategy": {
+      "groupCount": 1,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "symbol": {
+      "groupCount": 1,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "venue": {
+      "groupCount": 1,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "regime": {
+      "groupCount": 1,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "turnover": {
+      "groupCount": 1,
+      "unknownGroupCount": 1,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "capacity": {
+      "groupCount": 1,
+      "unknownGroupCount": 1,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    }
+  },
+  "productSurfaceProjection": {
+    "surfaceId": "pnl",
+    "label": "Edge Meter",
+    "bindingState": "DIRECTOR_MOUNT_REQUIRED",
+    "truthLabel": "SYNTHETIC_ONLY",
+    "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+    "evaluatedAtMs": 170000,
+    "summary": "Fixture-only measurement posture: ATTRIBUTABLE",
+    "blocker": "DIRECTOR_MOUNT_REQUIRED",
+    "controlIds": [],
+    "correlationId": null,
+    "evidence": [
+      {
+        "fieldId": "measurement-state",
+        "label": "measurement state",
+        "value": "ATTRIBUTABLE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+        "unavailableReason": null
+      },
+      {
+        "fieldId": "canonical-net",
+        "label": "canonical net",
+        "value": null,
+        "truthLabel": "MISSING",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+        "unavailableReason": "CAPITAL_PROJECTION_UNAVAILABLE"
+      },
+      {
+        "fieldId": "timing-bridge",
+        "label": "timing bridge",
+        "value": "NOT_APPLICABLE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+        "unavailableReason": null
+      },
+      {
+        "fieldId": "uncertainty",
+        "label": "uncertainty",
+        "value": "AVAILABLE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1d05ac646bbffc69c9667a7d719293e32b4dba88c3e426d9648b67764e686f84",
+        "unavailableReason": null
+      }
+    ]
+  },
+  "controls": [],
+  "effectAllowed": false,
+  "measurementOnly": true,
+  "profitClaim": false,
+  "edgeProven": false,
+  "mounted": false,
+  "integrated": false,
+  "limitations": [
+    "FIXTURE_ONLY",
+    "SYNTHETIC_ONLY",
+    "MEASUREMENT_ONLY",
+    "NO_LOCAL_PNL_TOTAL",
+    "NO_PROFIT_CLAIM",
+    "UNWIRED"
+  ],
+  "projectionHash": "7d8412fac4fb806bd54328c4fca1c90f912dc93dd70118668b69379cc443dfc0"
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "EdgeMeterFacetBindingRefsV1",
+  "version": 1,
+  "dockCommitSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "canonicalOwnerMap": {
+    "path": "frontier/dock/contracts/v1/canonical-owner-map.json",
+    "sha256": "8fccd53db5905bc7eb5508ae1653259fa3805723dbb530f36855b99ee46eb9ab"
+  },
+  "adapterRules": {
+    "path": "frontier/dock/contracts/v1/adapter-rules.json",
+    "sha256": "bf6923dd1410696ba740e40d7e7b4171fa2a661ed729cdd04618724d03daa296"
+  },
+  "requiredFacets": [
+    {
+      "facetClass": "ADVISORY_ASSESSOR",
+      "operation": "EVALUATE_FIXTURE",
+      "bindingStatus": "USABLE",
+      "bindingHash": "bd4fe6b1d4354729b0caa856e05e661e3f956b5574b8be68401336b18be0eefa",
+      "acceptedOwnerCommitSha": "b3d8cedece8cf3a9f546c60016beae442f85f160",
+      "canonicalContractVersion": "EdgeAssessmentEnvelopeV1@1",
+      "providerMode": "SHADOW_FIXTURE_ONLY"
+    },
+    {
+      "facetClass": "COCKPIT_PROJECTION",
+      "operation": "PROJECT_FIXTURE",
+      "bindingStatus": "USABLE",
+      "bindingHash": "588e54eb6cafc8ca0114e3f11eac55801fc4b4957d1f6a32bfb797f9754ffa00",
+      "acceptedOwnerCommitSha": "2c98ae653ba97e6383c29697283288346de28bdb",
+      "canonicalContractVersion": "product-supervisor.v1",
+      "providerMode": "UNMOUNTED_FIXTURE_PROJECTION_ONLY"
+    }
+  ]
+}

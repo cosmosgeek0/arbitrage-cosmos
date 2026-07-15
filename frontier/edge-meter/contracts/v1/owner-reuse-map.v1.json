@@ -1,0 +1,110 @@
+{
+  "schema": "EdgeMeterOwnerReuseMapV1",
+  "version": 1,
+  "moduleId": "F8",
+  "extensionId": "frontier.edge-meter",
+  "frontierDirective": {
+    "path": "frontier/directives/Frontier.md",
+    "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+    "executedSections": ["0", "1", "2", "9B", "10", "11", "12"]
+  },
+  "immutableBaseSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+  "dockContractSha": "e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5",
+  "disposition": "APPROVED_REAL_DELTA",
+  "admissionReceipt": {
+    "releaseCommitSha": "887221418345ad54d7b98881b359fab85a6188e6",
+    "path": "frontier/coordinator/scouts/F8.json",
+    "byteSha256": "fca83dc3e3fe1b47ec3a10a5e27f5f8494e66f47da47b90301d0b3fd2ab18002",
+    "embeddedContentHash": "1adcc68de1a732217ec0de015c296f73910fc24c9e120840bcf28c5a3ef775e9",
+    "decision": "APPROVED_REAL_DELTA"
+  },
+  "owners": [
+    {
+      "concepts": ["economic accounting policy", "economic component taxonomy", "exact net", "unresolved residual"],
+      "canonicalOwner": "capitalFoundation economics",
+      "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "artifacts": [
+        {"path": "server/src/capitalFoundation/contracts/economics.ts", "sha256": "dfe7f196bdf6b93b414deeb2c5a862f0830571b57940d54bbd8fa041f8a022ba"},
+        {"path": "server/src/capitalFoundation/economics/types.ts", "sha256": "0234aa421140ddab58436756b72d254599944dd85d49a745013aac026f4f265a"},
+        {"path": "server/src/capitalFoundation/economics/compose.ts", "sha256": "2f213a6f393d3f4ef2fbab3bc3d34fcb6209e5ea93632d4d0eb9e61ff012e207"},
+        {"path": "server/src/capitalFoundation/accountTruth/types.ts", "sha256": "5e40ead87e13541edc3ba133a261fb2413a80f2f2e8c277837224e53955eef83"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_REFERENCE_AND_EXACT_PROJECTION_ONLY",
+      "forbiddenDuplication": ["new PnL taxonomy", "net calculation", "accounting policy", "residual calculation"]
+    },
+    {
+      "concepts": ["walk-forward partition", "embargo", "point-in-time proof", "calibration", "abstention", "uncertainty", "multiplicity", "deflated performance"],
+      "canonicalOwner": "frozen Q lane",
+      "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+      "artifacts": [
+        {"path": "quant/src/quant_edge/validation/splits.py", "sha256": "1d786ede24239bf94ffb4118ed6acba5dad5272bc93ded4f1ad28e944f356599"},
+        {"path": "quant/src/quant_edge/validation/multiplicity.py", "sha256": "f672c817373cdb2856f2ca6e773df1d92a5b3abd3e2797490b990ad97562b9b4"},
+        {"path": "quant/src/quant_edge/validation/dsr.py", "sha256": "c2a8811131adb74668ca8c6040d3a22e32c70c76d4c6723a64a02ae0322917bb"},
+        {"path": "quant/src/quant_edge/ensemble/calibration.py", "sha256": "82b206e4a6a2746d50c73a4299cd204a9d9041a759644717a0633ac786d0b550"},
+        {"path": "quant/src/quant_edge/ensemble/abstention.py", "sha256": "7d45cfd8b96df1d2b9affb80c19f0f7745315dd20aa0615727c3b6ff09257f5e"},
+        {"path": "quant/src/quant_edge/ensemble/conformal.py", "sha256": "fba5f86fd76c8b2b1a7cc5aea7d6e69051ac966e98cc9bc75c15a92809895e92"},
+        {"path": "quant/src/quant_edge/lake/governance.py", "sha256": "0330b306dc21a25137578bb7dee4ad723303b5386c6f4de50f4e8cbe2b432d24"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_REFERENCE_AND_DISPLAY_VALUE_PROJECTION_ONLY",
+      "forbiddenDuplication": ["data splitting", "calibration", "abstention", "trial selection", "PBO or DSR recomputation"]
+    },
+    {
+      "concepts": ["proposal outcome observational calibration"],
+      "canonicalOwner": "foundation calibration",
+      "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "artifacts": [
+        {"path": "server/src/foundation/calibration/types.ts", "sha256": "3605c6f858b840df7737695acef4f7dd5ce2a31d564caf80f2b31b5f4a280913"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_REFERENCE_ONLY",
+      "forbiddenDuplication": ["calibration store", "cohort calculator"]
+    },
+    {
+      "concepts": ["forward outcome attribution evidence"],
+      "canonicalOwner": "intelligenceFoundation outcomes",
+      "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "artifacts": [
+        {"path": "server/src/intelligenceFoundation/outcomes/attribution.ts", "sha256": "c6c97d464dcd052562ada1b27f6c8c958403332fd862c1d3a2ea0a6ee0f47762"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_REFERENCE_ONLY",
+      "forbiddenDuplication": ["outcome producer", "evidence store"]
+    },
+    {
+      "concepts": ["cross-family outcome representation"],
+      "canonicalOwner": "edge-protocol",
+      "commitSha": "73e1a1ff7daa48df8dac45713fc5f106842edafc",
+      "artifacts": [
+        {"path": "packages/edge-protocol/schema/edge-protocol-v1.schema.json", "sha256": "229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_REPRESENTATION_REFERENCE_ONLY_NOT_SEMANTIC_OUTCOME_AUTHORITY",
+      "forbiddenDuplication": ["protocol mutation", "canonical envelope producer", "outcome semantic ownership"]
+    },
+    {
+      "concepts": ["durable outcome event truth"],
+      "canonicalOwner": "existing Ledger",
+      "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+      "artifacts": [
+        {"path": "server/src/ledger.ts", "sha256": "39275f2df08f8a842062561d09015951542b3b286a0640a92c03dd0ee4ae86e0"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_OUTCOME_REFERENCE_ONLY",
+      "forbiddenDuplication": ["ledger", "outcome event producer", "durable history"]
+    },
+    {
+      "concepts": ["execution path and fill truth"],
+      "canonicalOwner": "L execution truth",
+      "commitSha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
+      "artifacts": [
+        {"path": "server/src/foundation/execution/types.ts", "sha256": "05cc86ce3251b9518c45e34ce8628975fefb809defec2e9a0d0f17fbdcfc8e37"}
+      ],
+      "edgeMeterUse": "IMMUTABLE_EXECUTION_REFERENCE_ONLY",
+      "forbiddenDuplication": ["execution truth", "fill store", "execution path producer"]
+    }
+  ],
+  "edgeMeterDelta": [
+    "cross-owner immutable reference validation",
+    "non-accounting signal timing bridge",
+    "reference-only reject disposition projection",
+    "owner-supplied breakdown grouping without local monetary totals",
+    "explicit attributable, insufficient, abstain, non-comparable, and divergent states",
+    "unmounted synthetic cockpit projection request"
+  ]
+}

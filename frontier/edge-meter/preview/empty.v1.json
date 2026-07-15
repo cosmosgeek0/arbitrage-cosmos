@@ -1,0 +1,139 @@
+{
+  "schema": "EdgeMeterCockpitProjectionV1",
+  "version": 1,
+  "truthClass": "FIXTURE_PROJECTION",
+  "canonical": false,
+  "authorityClass": "NO_AUTHORITY",
+  "networkMode": "FIXTURE_ONLY",
+  "surfaceId": "pnl",
+  "moduleId": "F8",
+  "extensionId": "frontier.edge-meter",
+  "bindingState": "DIRECTOR_MOUNT_REQUIRED",
+  "truthLabel": "SYNTHETIC_ONLY",
+  "reportRef": {
+    "reportId": "fixture-empty",
+    "reportHash": "1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+    "evaluatedAtMs": 170000
+  },
+  "measurementState": "INSUFFICIENT_EVIDENCE",
+  "stateCounts": {
+    "ABSTAIN_UNKNOWN": 0,
+    "ATTRIBUTABLE": 0,
+    "DIVERGENT": 0,
+    "INSUFFICIENT_EVIDENCE": 0,
+    "NON_COMPARABLE": 0
+  },
+  "denominator": {
+    "inputRecordCount": 0,
+    "uniqueMeasurementCount": 0,
+    "duplicateIdenticalCount": 0,
+    "identityConflictCount": 0
+  },
+  "selectedMeasurement": null,
+  "attributionWaterfall": null,
+  "signalTimingBridge": null,
+  "rejectDisposition": null,
+  "uncertainty": null,
+  "calibration": null,
+  "selectionEvidence": null,
+  "breakdowns": {
+    "strategy": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "symbol": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "venue": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "regime": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "turnover": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    },
+    "capacity": {
+      "groupCount": 0,
+      "unknownGroupCount": 0,
+      "aggregateAmount": null,
+      "aggregationState": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"
+    }
+  },
+  "productSurfaceProjection": {
+    "surfaceId": "pnl",
+    "label": "Edge Meter",
+    "bindingState": "DIRECTOR_MOUNT_REQUIRED",
+    "truthLabel": "SYNTHETIC_ONLY",
+    "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+    "evaluatedAtMs": 170000,
+    "summary": "Fixture-only measurement posture: INSUFFICIENT_EVIDENCE",
+    "blocker": "DIRECTOR_MOUNT_REQUIRED",
+    "controlIds": [],
+    "correlationId": null,
+    "evidence": [
+      {
+        "fieldId": "measurement-state",
+        "label": "measurement state",
+        "value": "INSUFFICIENT_EVIDENCE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+        "unavailableReason": null
+      },
+      {
+        "fieldId": "canonical-net",
+        "label": "canonical net",
+        "value": null,
+        "truthLabel": "MISSING",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+        "unavailableReason": "CAPITAL_PROJECTION_UNAVAILABLE"
+      },
+      {
+        "fieldId": "timing-bridge",
+        "label": "timing bridge",
+        "value": null,
+        "truthLabel": "MISSING",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+        "unavailableReason": "GROSS_BRIDGE_UNAVAILABLE"
+      },
+      {
+        "fieldId": "uncertainty",
+        "label": "uncertainty",
+        "value": null,
+        "truthLabel": "MISSING",
+        "canonicalSource": "frontier.edge-meter:EdgeMeterReportV1:1906706c4d040ffa81d4d87755839d9fd853889abb447fed9f88d7bccd073f61",
+        "unavailableReason": "Q_UNCERTAINTY_UNAVAILABLE"
+      }
+    ]
+  },
+  "controls": [],
+  "effectAllowed": false,
+  "measurementOnly": true,
+  "profitClaim": false,
+  "edgeProven": false,
+  "mounted": false,
+  "integrated": false,
+  "limitations": [
+    "FIXTURE_ONLY",
+    "SYNTHETIC_ONLY",
+    "MEASUREMENT_ONLY",
+    "NO_LOCAL_PNL_TOTAL",
+    "NO_PROFIT_CLAIM",
+    "UNWIRED"
+  ],
+  "projectionHash": "0a870670fccfca6fc3eb4cfa1d2c91703fd044426e5caaae3924cf839c01dc0c"
+}

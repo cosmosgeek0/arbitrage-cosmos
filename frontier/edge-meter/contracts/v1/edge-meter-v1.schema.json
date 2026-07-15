@@ -1,0 +1,1315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:frontier:edge-meter:v1",
+  "title": "EdgeMeter fixture contracts V1",
+  "$ref": "#/$defs/EdgeMeterBatchInputV1",
+  "$defs": {
+    "ExactDecimal": {
+      "type": "string",
+      "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]{1,18})?$",
+      "description": "Canonical bounded decimal; runtime validation also rejects negative zero, trailing fractional zeroes, and more than 60 integer digits."
+    },
+    "Hash64": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ReasonCodes": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_:-]{0,255}$"}
+    },
+    "QAbstentionReasonCodes": {
+      "type": "array",
+      "maxItems": 14,
+      "uniqueItems": true,
+      "description": "Accepted Q AbstentionReason values. Runtime validation additionally enforces the frozen Q _REASON_ORDER precedence.",
+      "items": {
+        "enum": [
+          "EVIDENCE_STALE", "EVIDENCE_INCOMPLETE", "OOD_SUSPECT", "OOD_UNKNOWN",
+          "SPECIALIST_MISSING", "SPECIALIST_CONFLICT", "COST_UNKNOWN", "COST_NEGATIVE",
+          "COST_STRESS_UNSTABLE", "TIMING_UNKNOWN", "CALIBRATION_UNAVAILABLE",
+          "INTERVAL_UNAVAILABLE", "COVERAGE_UNKNOWN", "COVERAGE_COLLAPSED"
+        ]
+      }
+    },
+    "TextArray": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 2048}
+    },
+    "EstimateRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["low", "high"],
+      "properties": {
+        "low": {"$ref": "#/$defs/ExactDecimal"},
+        "high": {"$ref": "#/$defs/ExactDecimal"}
+      }
+    },
+    "OwnerReferenceV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "refId", "ownerClass", "canonicalOwner", "repositoryPath",
+        "commitSha", "contractId", "contractVersion", "recordId", "recordRevision", "contentHash", "projectionContentHash",
+        "eventTimeMs", "availableAtMs", "state", "reasonCodes"
+      ],
+      "properties": {
+        "schema": {"const": "OwnerReferenceV1"},
+        "version": {"const": 1},
+        "refId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "ownerClass": {"enum": ["ENGINE", "EDGE_PROTOCOL", "INTELLIGENCE_FOUNDATION", "FOUNDATION", "CAPITAL", "LEDGER", "L", "Q"]},
+        "canonicalOwner": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "repositoryPath": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "commitSha": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "contractId": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "contractVersion": {"type": "string", "minLength": 1, "maxLength": 256},
+        "recordId": {"type": ["string", "null"], "minLength": 1, "maxLength": 2048},
+        "recordRevision": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "contentHash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "projectionContentHash": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "eventTimeMs": {"type": ["integer", "null"], "minimum": 0},
+        "availableAtMs": {"type": ["integer", "null"], "minimum": 0},
+        "state": {"enum": ["AVAILABLE", "MISSING", "UNKNOWN", "DIVERGENT", "NOT_APPLICABLE"]},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "recordId": {"type": "string", "minLength": 1},
+              "recordRevision": {"type": "string", "minLength": 1},
+              "contentHash": {"$ref": "#/$defs/Hash64"},
+              "projectionContentHash": {"$ref": "#/$defs/Hash64"},
+              "eventTimeMs": {"type": "integer", "minimum": 0},
+              "availableAtMs": {"type": "integer", "minimum": 0},
+              "reasonCodes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "recordId": {"type": "null"},
+              "recordRevision": {"type": "null"},
+              "contentHash": {"type": "null"},
+              "projectionContentHash": {"type": "null"},
+              "eventTimeMs": {"type": "null"},
+              "availableAtMs": {"type": "null"},
+              "reasonCodes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "OwnerReferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposal", "assessment", "outcome", "economicReport", "accountingPolicy", "fills", "costs",
+        "liabilities", "evidence", "calibration", "abstention", "partition", "embargo", "pointInTimeJoin",
+        "uncertainty", "multiplicity", "deflatedPerformance", "selectionPressure"
+      ],
+      "properties": {
+        "proposal": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "ENGINE"}}}]},
+        "assessment": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "outcome": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "LEDGER"}}}]},
+        "economicReport": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "CAPITAL"}}}]},
+        "accountingPolicy": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "CAPITAL"}}}]},
+        "fills": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "L"}}}]},
+        "costs": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "CAPITAL"}}}]},
+        "liabilities": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "CAPITAL"}}}]},
+        "evidence": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "INTELLIGENCE_FOUNDATION"}}}]},
+        "calibration": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "abstention": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "partition": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "embargo": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "pointInTimeJoin": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "uncertainty": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "multiplicity": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "deflatedPerformance": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "selectionPressure": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]}
+      }
+    },
+    "SelectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "state", "displayValue", "sourceRefKey"],
+      "properties": {
+        "kind": {"enum": ["MULTIPLE_TESTING", "DEFLATED_PERFORMANCE", "SELECTION_PRESSURE"]},
+        "state": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "displayValue": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "sourceRefKey": {"enum": ["multiplicity", "deflatedPerformance", "selectionPressure"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {"properties": {"displayValue": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"displayValue": {"type": "null"}}}
+        }
+      ]
+    },
+    "QEvidenceProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "partitionClass", "holdoutState", "embargoState", "pointInTimeJoinState",
+        "abstentionAction", "abstentionReasonCodes", "calibrationState", "uncertaintyState", "coverageState",
+        "uncertaintyInterval", "uncertaintyUnit", "selectionEvidence"
+      ],
+      "properties": {
+        "schema": {"const": "QEvidenceProjectionV1"},
+        "version": {"const": 1},
+        "partitionClass": {"enum": ["FORWARD_ONLY", "HISTORICAL_FIT"]},
+        "holdoutState": {"enum": ["GRANTED", "NOT_GRANTED", "UNKNOWN"]},
+        "embargoState": {"enum": ["PROVEN", "UNPROVEN", "UNKNOWN"]},
+        "pointInTimeJoinState": {"enum": ["PROVEN", "UNPROVEN", "UNKNOWN"]},
+        "abstentionAction": {"enum": ["WATCH", "ABSTAIN_UNKNOWN", "UNAVAILABLE"]},
+        "abstentionReasonCodes": {"$ref": "#/$defs/QAbstentionReasonCodes"},
+        "calibrationState": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "uncertaintyState": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "coverageState": {"enum": ["AVAILABLE", "COLLAPSED", "UNKNOWN"]},
+        "uncertaintyInterval": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+        "uncertaintyUnit": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "selectionEvidence": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "allOf": [
+                {"$ref": "#/$defs/SelectionEvidence"},
+                {"properties": {"kind": {"const": "MULTIPLE_TESTING"}, "sourceRefKey": {"const": "multiplicity"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/SelectionEvidence"},
+                {"properties": {"kind": {"const": "DEFLATED_PERFORMANCE"}, "sourceRefKey": {"const": "deflatedPerformance"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/SelectionEvidence"},
+                {"properties": {"kind": {"const": "SELECTION_PRESSURE"}, "sourceRefKey": {"const": "selectionPressure"}}}
+              ]
+            }
+          ],
+          "items": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"uncertaintyState": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "uncertaintyInterval": {"$ref": "#/$defs/EstimateRange"},
+              "uncertaintyUnit": {"type": "string", "minLength": 1}
+            }
+          },
+          "else": {"properties": {"uncertaintyInterval": {"type": "null"}, "uncertaintyUnit": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "WATCH"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"maxItems": 0}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "ABSTAIN_UNKNOWN"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "UNAVAILABLE"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"maxItems": 0}}}
+        }
+      ]
+    },
+    "CapitalMeasure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "knownAmount", "estimatedRange", "componentIds", "missingComponentKinds", "reasonCodes"],
+      "properties": {
+        "status": {"enum": ["KNOWN", "ESTIMATED", "MISSING", "NOT_APPLICABLE", "DIVERGENT"]},
+        "knownAmount": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "estimatedRange": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+        "componentIds": {"$ref": "#/$defs/TextArray"},
+        "missingComponentKinds": {"$ref": "#/$defs/ReasonCodes"},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "KNOWN"}}},
+          "then": {
+            "properties": {
+              "knownAmount": {"$ref": "#/$defs/ExactDecimal"},
+              "estimatedRange": {"type": "null"},
+              "missingComponentKinds": {"maxItems": 0},
+              "reasonCodes": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "ESTIMATED"}}},
+          "then": {
+            "properties": {
+              "estimatedRange": {"$ref": "#/$defs/EstimateRange"},
+              "missingComponentKinds": {"maxItems": 0},
+              "reasonCodes": {"maxItems": 0}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "MISSING"}}},
+          "then": {"properties": {"missingComponentKinds": {"minItems": 1}, "reasonCodes": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "DIVERGENT"}}},
+          "then": {"properties": {"reasonCodes": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "NOT_APPLICABLE"}}},
+          "then": {
+            "properties": {
+              "knownAmount": {"type": "null"},
+              "estimatedRange": {"type": "null"},
+              "missingComponentKinds": {"maxItems": 0},
+              "reasonCodes": {"maxItems": 0}
+            }
+          }
+        }
+      ]
+    },
+    "CapitalMeasures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grossPricePnl", "basisContribution", "directionalContribution", "realizedPnl", "unrealizedPnl",
+        "fees", "spread", "slippage", "funding", "borrow", "executionShortfall", "oneLegExposure",
+        "recovery", "fxValuation", "unexplainedResidual"
+      ],
+      "properties": {
+        "grossPricePnl": {"$ref": "#/$defs/CapitalMeasure"},
+        "basisContribution": {"$ref": "#/$defs/CapitalMeasure"},
+        "directionalContribution": {"$ref": "#/$defs/CapitalMeasure"},
+        "realizedPnl": {"$ref": "#/$defs/CapitalMeasure"},
+        "unrealizedPnl": {"$ref": "#/$defs/CapitalMeasure"},
+        "fees": {"$ref": "#/$defs/CapitalMeasure"},
+        "spread": {"$ref": "#/$defs/CapitalMeasure"},
+        "slippage": {"$ref": "#/$defs/CapitalMeasure"},
+        "funding": {"$ref": "#/$defs/CapitalMeasure"},
+        "borrow": {"$ref": "#/$defs/CapitalMeasure"},
+        "executionShortfall": {"$ref": "#/$defs/CapitalMeasure"},
+        "oneLegExposure": {"$ref": "#/$defs/CapitalMeasure"},
+        "recovery": {"$ref": "#/$defs/CapitalMeasure"},
+        "fxValuation": {"$ref": "#/$defs/CapitalMeasure"},
+        "unexplainedResidual": {"$ref": "#/$defs/CapitalMeasure"}
+      }
+    },
+    "CapitalEconomicProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "state", "scopeKind", "valuationAsset", "policyRefKey", "pricePnlBasis",
+        "executionCostBasis", "accountingStatus", "accountingConfidence", "accountingTruthState",
+        "accountingIdentityProven", "identityEquation", "netKnown", "netEstimatedRange", "measures",
+        "includedComponentIds", "excludedComponentIds", "divergentReasons", "reasonCodes"
+      ],
+      "properties": {
+        "schema": {"const": "CapitalEconomicProjectionV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "MISSING", "UNKNOWN", "DIVERGENT", "NOT_APPLICABLE"]},
+        "scopeKind": {"type": ["string", "null"], "enum": ["PROPOSAL", "MANDATE", "STAGE", "LEG", "POSITION", "CLOSED_OUTCOME", null]},
+        "valuationAsset": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "policyRefKey": {"const": "accountingPolicy"},
+        "pricePnlBasis": {"type": ["string", "null"], "enum": ["LEG_PRICE", "BASIS_AND_DIRECTIONAL", null]},
+        "executionCostBasis": {"type": ["string", "null"], "enum": ["DETAILED_SPREAD_SLIPPAGE", "EXECUTION_SHORTFALL", null]},
+        "accountingStatus": {"type": ["string", "null"], "enum": ["COMPLETE", "INCOMPLETE", "DIVERGENT", null]},
+        "accountingConfidence": {"type": ["string", "null"], "enum": ["HIGH", "MEDIUM", "LOW", "NONE", null]},
+        "accountingTruthState": {"type": ["string", "null"], "enum": ["COMPLETE", "PARTIAL", "UNKNOWN", "DIVERGENT", null]},
+        "accountingIdentityProven": {"type": ["boolean", "null"]},
+        "identityEquation": {"type": ["string", "null"], "enum": ["NET_KNOWN_EQUALS_SUM_KNOWN_INCLUDED_COMPONENTS", null]},
+        "netKnown": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "netEstimatedRange": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+        "measures": {"anyOf": [{"$ref": "#/$defs/CapitalMeasures"}, {"type": "null"}]},
+        "includedComponentIds": {"$ref": "#/$defs/TextArray"},
+        "excludedComponentIds": {"$ref": "#/$defs/TextArray"},
+        "divergentReasons": {"$ref": "#/$defs/TextArray"},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "scopeKind": {"enum": ["PROPOSAL", "MANDATE", "STAGE", "LEG", "POSITION", "CLOSED_OUTCOME"]},
+              "valuationAsset": {"type": "string", "minLength": 1},
+              "pricePnlBasis": {"enum": ["LEG_PRICE", "BASIS_AND_DIRECTIONAL"]},
+              "executionCostBasis": {"enum": ["DETAILED_SPREAD_SLIPPAGE", "EXECUTION_SHORTFALL"]},
+              "accountingStatus": {"enum": ["COMPLETE", "INCOMPLETE", "DIVERGENT"]},
+              "accountingConfidence": {"enum": ["HIGH", "MEDIUM", "LOW", "NONE"]},
+              "accountingTruthState": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN", "DIVERGENT"]},
+              "accountingIdentityProven": {"type": "boolean"},
+              "identityEquation": {"const": "NET_KNOWN_EQUALS_SUM_KNOWN_INCLUDED_COMPONENTS"},
+              "measures": {"$ref": "#/$defs/CapitalMeasures"},
+              "reasonCodes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "scopeKind": {"type": "null"},
+              "valuationAsset": {"type": "null"},
+              "pricePnlBasis": {"type": "null"},
+              "executionCostBasis": {"type": "null"},
+              "accountingStatus": {"type": "null"},
+              "accountingConfidence": {"type": "null"},
+              "accountingTruthState": {"type": "null"},
+              "accountingIdentityProven": {"type": "null"},
+              "identityEquation": {"type": "null"},
+              "netKnown": {"type": "null"},
+              "netEstimatedRange": {"type": "null"},
+              "measures": {"type": "null"},
+              "includedComponentIds": {"maxItems": 0},
+              "excludedComponentIds": {"maxItems": 0},
+              "divergentReasons": {"maxItems": 0},
+              "reasonCodes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "GrossTimingBridgeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "state", "valuationAsset", "decisionBenchmarkGross", "timingEffect",
+        "executionDelta", "bridgeResidual", "actualGross", "latencyMs", "methodRefKey", "pathRefKey",
+        "horizonRefKey", "equation", "reasonCodes"
+      ],
+      "properties": {
+        "schema": {"const": "GrossTimingBridgeV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "MISSING", "DIVERGENT", "NOT_APPLICABLE"]},
+        "valuationAsset": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "decisionBenchmarkGross": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "timingEffect": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "executionDelta": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "bridgeResidual": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "actualGross": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "latencyMs": {"type": ["integer", "null"], "minimum": 0},
+        "methodRefKey": {"const": "assessment"},
+        "pathRefKey": {"const": "fills"},
+        "horizonRefKey": {"const": "outcome"},
+        "equation": {"type": ["string", "null"], "enum": ["ACTUAL_GROSS_EQUALS_DECISION_BENCHMARK_PLUS_TIMING_PLUS_EXECUTION_DELTA_PLUS_BRIDGE_RESIDUAL", null]},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "valuationAsset": {"type": "string", "minLength": 1},
+              "decisionBenchmarkGross": {"$ref": "#/$defs/ExactDecimal"},
+              "timingEffect": {"$ref": "#/$defs/ExactDecimal"},
+              "executionDelta": {"$ref": "#/$defs/ExactDecimal"},
+              "bridgeResidual": {"$ref": "#/$defs/ExactDecimal"},
+              "actualGross": {"$ref": "#/$defs/ExactDecimal"},
+              "latencyMs": {"type": "integer", "minimum": 0},
+              "equation": {"const": "ACTUAL_GROSS_EQUALS_DECISION_BENCHMARK_PLUS_TIMING_PLUS_EXECUTION_DELTA_PLUS_BRIDGE_RESIDUAL"},
+              "reasonCodes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "valuationAsset": {"type": "null"},
+              "decisionBenchmarkGross": {"type": "null"},
+              "timingEffect": {"type": "null"},
+              "executionDelta": {"type": "null"},
+              "bridgeResidual": {"type": "null"},
+              "actualGross": {"type": "null"},
+              "latencyMs": {"type": "null"},
+              "equation": {"type": "null"},
+              "reasonCodes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "DecisionDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "reasonCodes", "monetaryRejectEffect"],
+      "properties": {
+        "action": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+        "reasonCodes": {"$ref": "#/$defs/TextArray"},
+        "monetaryRejectEffect": {"type": "null"}
+      }
+    },
+    "EdgeMeterDimensionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "state", "value", "ownerRefKey", "reasonCodes"],
+      "properties": {
+        "schema": {"const": "EdgeMeterDimensionV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "UNKNOWN", "NOT_APPLICABLE"]},
+        "value": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "ownerRefKey": {"type": "string", "minLength": 1, "maxLength": 64},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {"properties": {"value": {"type": "string", "minLength": 1}, "reasonCodes": {"maxItems": 0}}},
+          "else": {"properties": {"value": {"type": "null"}, "reasonCodes": {"minItems": 1}}}
+        }
+      ]
+    },
+    "Dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "symbol", "venue", "regime", "turnover", "capacity"],
+      "properties": {
+        "strategy": {"allOf": [{"$ref": "#/$defs/EdgeMeterDimensionV1"}, {"properties": {"ownerRefKey": {"const": "proposal"}}}]},
+        "symbol": {"allOf": [{"$ref": "#/$defs/EdgeMeterDimensionV1"}, {"properties": {"ownerRefKey": {"const": "proposal"}}}]},
+        "venue": {"$ref": "#/$defs/EdgeMeterDimensionV1"},
+        "regime": {"allOf": [{"$ref": "#/$defs/EdgeMeterDimensionV1"}, {"properties": {"ownerRefKey": {"const": "assessment"}}}]},
+        "turnover": {"allOf": [{"$ref": "#/$defs/EdgeMeterDimensionV1"}, {"properties": {"ownerRefKey": {"const": "costs"}}}]},
+        "capacity": {"allOf": [{"$ref": "#/$defs/EdgeMeterDimensionV1"}, {"properties": {"ownerRefKey": {"const": "costs"}}}]}
+      }
+    },
+    "EdgeMeterInputV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "measurementId", "labelKind", "cohort", "informationCutoffMs", "horizon",
+        "valuationAsset", "ownerRefs", "qEvidence", "capitalProjection", "grossBridge", "decisionDisposition", "dimensions"
+      ],
+      "properties": {
+        "schema": {"const": "EdgeMeterInputV1"},
+        "version": {"const": 1},
+        "measurementId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "labelKind": {"enum": ["REAL", "HYPOTHETICAL", "REPLAY"]},
+        "cohort": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+        "informationCutoffMs": {"type": "integer", "minimum": 0},
+        "horizon": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["startMs", "endMs"],
+          "properties": {
+            "startMs": {"type": "integer", "minimum": 0},
+            "endMs": {"type": "integer", "minimum": 0}
+          }
+        },
+        "valuationAsset": {"type": "string", "minLength": 1, "maxLength": 32},
+        "ownerRefs": {"$ref": "#/$defs/OwnerReferences"},
+        "qEvidence": {"$ref": "#/$defs/QEvidenceProjectionV1"},
+        "capitalProjection": {"$ref": "#/$defs/CapitalEconomicProjectionV1"},
+        "grossBridge": {"$ref": "#/$defs/GrossTimingBridgeV1"},
+        "decisionDisposition": {"$ref": "#/$defs/DecisionDisposition"},
+        "dimensions": {"$ref": "#/$defs/Dimensions"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"cohort": {"const": "ACTED"}}},
+          "then": {"properties": {"dimensions": {"properties": {"venue": {"properties": {"ownerRefKey": {"const": "fills"}}}}}}},
+          "else": {"properties": {"dimensions": {"properties": {"venue": {"properties": {"ownerRefKey": {"const": "evidence"}}}}}}}
+        },
+        {
+          "if": {"properties": {"cohort": {"const": "ACTED"}}},
+          "else": {
+            "properties": {
+              "ownerRefs": {
+                "properties": {
+                  "economicReport": {"properties": {"state": {"const": "NOT_APPLICABLE"}}},
+                  "fills": {"properties": {"state": {"const": "NOT_APPLICABLE"}}},
+                  "costs": {"properties": {"state": {"const": "NOT_APPLICABLE"}}},
+                  "liabilities": {"properties": {"state": {"const": "NOT_APPLICABLE"}}}
+                }
+              },
+              "capitalProjection": {"properties": {"state": {"const": "NOT_APPLICABLE"}}},
+              "grossBridge": {"properties": {"state": {"const": "NOT_APPLICABLE"}}}
+            }
+          }
+        }
+      ]
+    },
+    "EdgeMeterBatchInputV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "reportId", "evaluatedAtMs", "items"],
+      "properties": {
+        "schema": {"const": "EdgeMeterBatchInputV1"},
+        "version": {"const": 1},
+        "reportId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "evaluatedAtMs": {"type": "integer", "minimum": 0},
+        "items": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/EdgeMeterInputV1"}}
+      }
+    },
+    "StateCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ATTRIBUTABLE", "INSUFFICIENT_EVIDENCE", "ABSTAIN_UNKNOWN", "NON_COMPARABLE", "DIVERGENT"],
+      "properties": {
+        "ATTRIBUTABLE": {"type": "integer", "minimum": 0, "maximum": 32},
+        "INSUFFICIENT_EVIDENCE": {"type": "integer", "minimum": 0, "maximum": 32},
+        "ABSTAIN_UNKNOWN": {"type": "integer", "minimum": 0, "maximum": 32},
+        "NON_COMPARABLE": {"type": "integer", "minimum": 0, "maximum": 32},
+        "DIVERGENT": {"type": "integer", "minimum": 0, "maximum": 32}
+      }
+    },
+    "ResolvedSelectionEvidenceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "displayValue", "sourceRefKey", "sourceRefHash", "recomputedByEdgeMeter"],
+      "properties": {
+        "state": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "displayValue": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "sourceRefKey": {"enum": ["multiplicity", "deflatedPerformance", "selectionPressure"]},
+        "sourceRefHash": {"$ref": "#/$defs/Hash64"},
+        "recomputedByEdgeMeter": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {"properties": {"displayValue": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"displayValue": {"type": "null"}}}
+        }
+      ]
+    },
+    "ResolvedQEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "partitionClass", "holdoutState", "embargoState", "pointInTimeJoinState",
+        "abstentionAction", "abstentionReasonCodes", "calibrationState", "uncertaintyState", "coverageState",
+        "uncertaintyInterval", "uncertaintyUnit", "selectionEvidence", "selectionEvidenceProjection",
+        "valuesRecomputedByEdgeMeter"
+      ],
+      "properties": {
+        "schema": {"const": "QEvidenceProjectionV1"},
+        "version": {"const": 1},
+        "partitionClass": {"enum": ["FORWARD_ONLY", "HISTORICAL_FIT"]},
+        "holdoutState": {"enum": ["GRANTED", "NOT_GRANTED", "UNKNOWN"]},
+        "embargoState": {"enum": ["PROVEN", "UNPROVEN", "UNKNOWN"]},
+        "pointInTimeJoinState": {"enum": ["PROVEN", "UNPROVEN", "UNKNOWN"]},
+        "abstentionAction": {"enum": ["WATCH", "ABSTAIN_UNKNOWN", "UNAVAILABLE"]},
+        "abstentionReasonCodes": {"$ref": "#/$defs/QAbstentionReasonCodes"},
+        "calibrationState": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "uncertaintyState": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "coverageState": {"enum": ["AVAILABLE", "COLLAPSED", "UNKNOWN"]},
+        "uncertaintyInterval": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+        "uncertaintyUnit": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "selectionEvidence": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {"allOf": [{"$ref": "#/$defs/SelectionEvidence"}, {"properties": {"kind": {"const": "MULTIPLE_TESTING"}, "sourceRefKey": {"const": "multiplicity"}}}]},
+            {"allOf": [{"$ref": "#/$defs/SelectionEvidence"}, {"properties": {"kind": {"const": "DEFLATED_PERFORMANCE"}, "sourceRefKey": {"const": "deflatedPerformance"}}}]},
+            {"allOf": [{"$ref": "#/$defs/SelectionEvidence"}, {"properties": {"kind": {"const": "SELECTION_PRESSURE"}, "sourceRefKey": {"const": "selectionPressure"}}}]}
+          ],
+          "items": false
+        },
+        "selectionEvidenceProjection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["MULTIPLE_TESTING", "DEFLATED_PERFORMANCE", "SELECTION_PRESSURE"],
+          "properties": {
+            "MULTIPLE_TESTING": {"allOf": [{"$ref": "#/$defs/ResolvedSelectionEvidenceRow"}, {"properties": {"sourceRefKey": {"const": "multiplicity"}}}]},
+            "DEFLATED_PERFORMANCE": {"allOf": [{"$ref": "#/$defs/ResolvedSelectionEvidenceRow"}, {"properties": {"sourceRefKey": {"const": "deflatedPerformance"}}}]},
+            "SELECTION_PRESSURE": {"allOf": [{"$ref": "#/$defs/ResolvedSelectionEvidenceRow"}, {"properties": {"sourceRefKey": {"const": "selectionPressure"}}}]}
+          }
+        },
+        "valuesRecomputedByEdgeMeter": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"uncertaintyState": {"const": "AVAILABLE"}}},
+          "then": {"properties": {"uncertaintyInterval": {"$ref": "#/$defs/EstimateRange"}, "uncertaintyUnit": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"uncertaintyInterval": {"type": "null"}, "uncertaintyUnit": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "WATCH"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"maxItems": 0}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "ABSTAIN_UNKNOWN"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"abstentionAction": {"const": "UNAVAILABLE"}}},
+          "then": {"properties": {"abstentionReasonCodes": {"maxItems": 0}}}
+        }
+      ]
+    },
+    "ResolvedCapitalProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "state", "scopeKind", "valuationAsset", "policyRefKey", "pricePnlBasis",
+        "executionCostBasis", "accountingStatus", "accountingConfidence", "accountingTruthState",
+        "accountingIdentityProven", "identityEquation", "netKnown", "netEstimatedRange", "measures",
+        "includedComponentIds", "excludedComponentIds", "divergentReasons", "reasonCodes", "policyRef"
+      ],
+      "properties": {
+        "schema": {"const": "CapitalEconomicProjectionV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "MISSING", "UNKNOWN", "DIVERGENT", "NOT_APPLICABLE"]},
+        "scopeKind": {"type": ["string", "null"], "enum": ["PROPOSAL", "MANDATE", "STAGE", "LEG", "POSITION", "CLOSED_OUTCOME", null]},
+        "valuationAsset": {"type": ["string", "null"], "minLength": 1, "maxLength": 32},
+        "policyRefKey": {"const": "accountingPolicy"},
+        "pricePnlBasis": {"type": ["string", "null"], "enum": ["LEG_PRICE", "BASIS_AND_DIRECTIONAL", null]},
+        "executionCostBasis": {"type": ["string", "null"], "enum": ["DETAILED_SPREAD_SLIPPAGE", "EXECUTION_SHORTFALL", null]},
+        "accountingStatus": {"type": ["string", "null"], "enum": ["COMPLETE", "INCOMPLETE", "DIVERGENT", null]},
+        "accountingConfidence": {"type": ["string", "null"], "enum": ["HIGH", "MEDIUM", "LOW", "NONE", null]},
+        "accountingTruthState": {"type": ["string", "null"], "enum": ["COMPLETE", "PARTIAL", "UNKNOWN", "DIVERGENT", null]},
+        "accountingIdentityProven": {"type": ["boolean", "null"]},
+        "identityEquation": {"type": ["string", "null"], "enum": ["NET_KNOWN_EQUALS_SUM_KNOWN_INCLUDED_COMPONENTS", null]},
+        "netKnown": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "netEstimatedRange": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+        "measures": {"anyOf": [{"$ref": "#/$defs/CapitalMeasures"}, {"type": "null"}]},
+        "includedComponentIds": {"$ref": "#/$defs/TextArray"},
+        "excludedComponentIds": {"$ref": "#/$defs/TextArray"},
+        "divergentReasons": {"$ref": "#/$defs/TextArray"},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"},
+        "policyRef": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "CAPITAL"}}}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "scopeKind": {"enum": ["PROPOSAL", "MANDATE", "STAGE", "LEG", "POSITION", "CLOSED_OUTCOME"]},
+              "valuationAsset": {"type": "string", "minLength": 1},
+              "pricePnlBasis": {"enum": ["LEG_PRICE", "BASIS_AND_DIRECTIONAL"]},
+              "executionCostBasis": {"enum": ["DETAILED_SPREAD_SLIPPAGE", "EXECUTION_SHORTFALL"]},
+              "accountingStatus": {"enum": ["COMPLETE", "INCOMPLETE", "DIVERGENT"]},
+              "accountingConfidence": {"enum": ["HIGH", "MEDIUM", "LOW", "NONE"]},
+              "accountingTruthState": {"enum": ["COMPLETE", "PARTIAL", "UNKNOWN", "DIVERGENT"]},
+              "accountingIdentityProven": {"type": "boolean"},
+              "identityEquation": {"const": "NET_KNOWN_EQUALS_SUM_KNOWN_INCLUDED_COMPONENTS"},
+              "measures": {"$ref": "#/$defs/CapitalMeasures"},
+              "reasonCodes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "scopeKind": {"type": "null"},
+              "valuationAsset": {"type": "null"},
+              "pricePnlBasis": {"type": "null"},
+              "executionCostBasis": {"type": "null"},
+              "accountingStatus": {"type": "null"},
+              "accountingConfidence": {"type": "null"},
+              "accountingTruthState": {"type": "null"},
+              "accountingIdentityProven": {"type": "null"},
+              "identityEquation": {"type": "null"},
+              "netKnown": {"type": "null"},
+              "netEstimatedRange": {"type": "null"},
+              "measures": {"type": "null"},
+              "includedComponentIds": {"maxItems": 0},
+              "excludedComponentIds": {"maxItems": 0},
+              "divergentReasons": {"maxItems": 0},
+              "reasonCodes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "ResolvedGrossBridge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "state", "valuationAsset", "decisionBenchmarkGross", "timingEffect",
+        "executionDelta", "bridgeResidual", "actualGross", "latencyMs", "methodRefKey", "pathRefKey",
+        "horizonRefKey", "equation", "reasonCodes", "methodRef", "pathRef", "horizonRef", "identityProven",
+        "aggregationRole", "includedInCapitalNet", "latencyIsMonetary"
+      ],
+      "properties": {
+        "schema": {"const": "GrossTimingBridgeV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "MISSING", "DIVERGENT", "NOT_APPLICABLE"]},
+        "valuationAsset": {"type": ["string", "null"]},
+        "decisionBenchmarkGross": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "timingEffect": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "executionDelta": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "bridgeResidual": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "actualGross": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+        "latencyMs": {"type": ["integer", "null"], "minimum": 0},
+        "methodRefKey": {"const": "assessment"},
+        "pathRefKey": {"const": "fills"},
+        "horizonRefKey": {"const": "outcome"},
+        "equation": {"type": ["string", "null"], "enum": ["ACTUAL_GROSS_EQUALS_DECISION_BENCHMARK_PLUS_TIMING_PLUS_EXECUTION_DELTA_PLUS_BRIDGE_RESIDUAL", null]},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"},
+        "methodRef": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "Q"}}}]},
+        "pathRef": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "L"}}}]},
+        "horizonRef": {"allOf": [{"$ref": "#/$defs/OwnerReferenceV1"}, {"properties": {"ownerClass": {"const": "LEDGER"}}}]},
+        "identityProven": {"type": "boolean"},
+        "aggregationRole": {"const": "NON_ACCOUNTING_SIGNAL_TIMING_BRIDGE"},
+        "includedInCapitalNet": {"const": false},
+        "latencyIsMonetary": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {
+            "properties": {
+              "valuationAsset": {"type": "string", "minLength": 1},
+              "decisionBenchmarkGross": {"$ref": "#/$defs/ExactDecimal"},
+              "timingEffect": {"$ref": "#/$defs/ExactDecimal"},
+              "executionDelta": {"$ref": "#/$defs/ExactDecimal"},
+              "bridgeResidual": {"$ref": "#/$defs/ExactDecimal"},
+              "actualGross": {"$ref": "#/$defs/ExactDecimal"},
+              "latencyMs": {"type": "integer", "minimum": 0},
+              "equation": {"const": "ACTUAL_GROSS_EQUALS_DECISION_BENCHMARK_PLUS_TIMING_PLUS_EXECUTION_DELTA_PLUS_BRIDGE_RESIDUAL"},
+              "reasonCodes": {"maxItems": 0}
+            }
+          },
+          "else": {
+            "properties": {
+              "valuationAsset": {"type": "null"},
+              "decisionBenchmarkGross": {"type": "null"},
+              "timingEffect": {"type": "null"},
+              "executionDelta": {"type": "null"},
+              "bridgeResidual": {"type": "null"},
+              "actualGross": {"type": "null"},
+              "latencyMs": {"type": "null"},
+              "equation": {"type": "null"},
+              "reasonCodes": {"minItems": 1}
+            }
+          }
+        }
+      ]
+    },
+    "ResolvedDimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "version", "state", "value", "ownerRefKey", "reasonCodes", "ownerRef"],
+      "properties": {
+        "schema": {"const": "EdgeMeterDimensionV1"},
+        "version": {"const": 1},
+        "state": {"enum": ["AVAILABLE", "UNKNOWN", "NOT_APPLICABLE"]},
+        "value": {"type": ["string", "null"]},
+        "ownerRefKey": {"enum": ["proposal", "assessment", "fills", "costs", "evidence"]},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"},
+        "ownerRef": {"$ref": "#/$defs/OwnerReferenceV1"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "AVAILABLE"}}},
+          "then": {"properties": {"value": {"type": "string", "minLength": 1}, "reasonCodes": {"maxItems": 0}}},
+          "else": {"properties": {"value": {"type": "null"}, "reasonCodes": {"minItems": 1}}}
+        }
+      ]
+    },
+    "ResolvedDimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "symbol", "venue", "regime", "turnover", "capacity"],
+      "properties": {
+        "strategy": {"allOf": [{"$ref": "#/$defs/ResolvedDimension"}, {"properties": {"ownerRefKey": {"const": "proposal"}, "ownerRef": {"properties": {"ownerClass": {"const": "ENGINE"}}}}}]},
+        "symbol": {"allOf": [{"$ref": "#/$defs/ResolvedDimension"}, {"properties": {"ownerRefKey": {"const": "proposal"}, "ownerRef": {"properties": {"ownerClass": {"const": "ENGINE"}}}}}]},
+        "venue": {"$ref": "#/$defs/ResolvedDimension"},
+        "regime": {"allOf": [{"$ref": "#/$defs/ResolvedDimension"}, {"properties": {"ownerRefKey": {"const": "assessment"}, "ownerRef": {"properties": {"ownerClass": {"const": "Q"}}}}}]},
+        "turnover": {"allOf": [{"$ref": "#/$defs/ResolvedDimension"}, {"properties": {"ownerRefKey": {"const": "costs"}, "ownerRef": {"properties": {"ownerClass": {"const": "CAPITAL"}}}}}]},
+        "capacity": {"allOf": [{"$ref": "#/$defs/ResolvedDimension"}, {"properties": {"ownerRefKey": {"const": "costs"}, "ownerRef": {"properties": {"ownerClass": {"const": "CAPITAL"}}}}}]}
+      }
+    },
+    "ClaimBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurementOnly", "realizedProfitClaim", "profitableClaim", "edgeProven", "sizingAuthority",
+        "tradingAuthority", "modelSelectionAuthority", "calibrationAuthority", "effectAllowed"
+      ],
+      "properties": {
+        "measurementOnly": {"const": true},
+        "realizedProfitClaim": {"const": false},
+        "profitableClaim": {"const": false},
+        "edgeProven": {"const": false},
+        "sizingAuthority": {"const": false},
+        "tradingAuthority": {"const": false},
+        "modelSelectionAuthority": {"const": false},
+        "calibrationAuthority": {"const": false},
+        "effectAllowed": {"const": false}
+      }
+    },
+    "EdgeMeterRecordProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema", "version", "recordKind", "measurementId", "inputHash", "inputHashes", "status",
+        "reasonCodes", "labelKind", "cohort", "informationCutoffMs", "horizon", "evaluatedAtMs",
+        "valuationAsset", "comparabilitySignature", "ownerRefs", "qEvidence", "capitalProjection",
+        "grossBridge", "decisionDisposition", "dimensions", "claimBoundary", "recordHash"
+      ],
+      "properties": {
+        "schema": {"const": "EdgeMeterRecordProjectionV1"},
+        "version": {"const": 1},
+        "recordKind": {"enum": ["MEASUREMENT", "IDENTITY_CONFLICT"]},
+        "measurementId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "inputHash": {"anyOf": [{"$ref": "#/$defs/Hash64"}, {"type": "null"}]},
+        "inputHashes": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"$ref": "#/$defs/Hash64"}},
+        "status": {"enum": ["ATTRIBUTABLE", "INSUFFICIENT_EVIDENCE", "ABSTAIN_UNKNOWN", "NON_COMPARABLE", "DIVERGENT"]},
+        "reasonCodes": {"$ref": "#/$defs/ReasonCodes"},
+        "labelKind": {"type": ["string", "null"], "enum": ["REAL", "HYPOTHETICAL", "REPLAY", null]},
+        "cohort": {"type": ["string", "null"], "enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL", null]},
+        "informationCutoffMs": {"type": ["integer", "null"], "minimum": 0},
+        "horizon": {"anyOf": [{"$ref": "#/$defs/EdgeMeterInputV1/properties/horizon"}, {"type": "null"}]},
+        "evaluatedAtMs": {"type": "integer", "minimum": 0},
+        "valuationAsset": {"type": ["string", "null"]},
+        "comparabilitySignature": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "ownerRefs": {"anyOf": [{"$ref": "#/$defs/OwnerReferences"}, {"type": "null"}]},
+        "qEvidence": {"anyOf": [{"$ref": "#/$defs/ResolvedQEvidence"}, {"type": "null"}]},
+        "capitalProjection": {"anyOf": [{"$ref": "#/$defs/ResolvedCapitalProjection"}, {"type": "null"}]},
+        "grossBridge": {"anyOf": [{"$ref": "#/$defs/ResolvedGrossBridge"}, {"type": "null"}]},
+        "decisionDisposition": {"anyOf": [{"$ref": "#/$defs/DecisionDisposition"}, {"type": "null"}]},
+        "dimensions": {"anyOf": [{"$ref": "#/$defs/ResolvedDimensions"}, {"type": "null"}]},
+        "claimBoundary": {"$ref": "#/$defs/ClaimBoundary"},
+        "recordHash": {"$ref": "#/$defs/Hash64"}
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "recordKind": {"const": "MEASUREMENT"},
+            "inputHash": {"$ref": "#/$defs/Hash64"},
+            "inputHashes": {"minItems": 1, "maxItems": 1},
+            "labelKind": {"enum": ["REAL", "HYPOTHETICAL", "REPLAY"]},
+            "cohort": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+            "informationCutoffMs": {"type": "integer"},
+            "horizon": {"$ref": "#/$defs/EdgeMeterInputV1/properties/horizon"},
+            "valuationAsset": {"type": "string"},
+            "ownerRefs": {"$ref": "#/$defs/OwnerReferences"},
+            "qEvidence": {"$ref": "#/$defs/ResolvedQEvidence"},
+            "capitalProjection": {"$ref": "#/$defs/ResolvedCapitalProjection"},
+            "grossBridge": {"$ref": "#/$defs/ResolvedGrossBridge"},
+            "decisionDisposition": {"$ref": "#/$defs/DecisionDisposition"},
+            "dimensions": {"$ref": "#/$defs/ResolvedDimensions"}
+          }
+        },
+        {
+          "properties": {
+            "recordKind": {"const": "IDENTITY_CONFLICT"},
+            "inputHash": {"type": "null"},
+            "inputHashes": {"minItems": 2},
+            "status": {"const": "DIVERGENT"},
+            "labelKind": {"type": "null"},
+            "cohort": {"type": "null"},
+            "informationCutoffMs": {"type": "null"},
+            "horizon": {"type": "null"},
+            "valuationAsset": {"type": "null"},
+            "comparabilitySignature": {"type": "null"},
+            "ownerRefs": {"type": "null"},
+            "qEvidence": {"type": "null"},
+            "capitalProjection": {"type": "null"},
+            "grossBridge": {"type": "null"},
+            "decisionDisposition": {"type": "null"},
+            "dimensions": {"type": "null"}
+          }
+        }
+      ],
+      "allOf": [
+        {
+          "if": {"properties": {"cohort": {"const": "ACTED"}}},
+          "then": {
+            "properties": {
+              "dimensions": {
+                "properties": {
+                  "venue": {"properties": {"ownerRefKey": {"const": "fills"}, "ownerRef": {"properties": {"ownerClass": {"const": "L"}}}}}
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "dimensions": {
+                "properties": {
+                  "venue": {"properties": {"ownerRefKey": {"const": "evidence"}, "ownerRef": {"properties": {"ownerClass": {"const": "INTELLIGENCE_FOUNDATION"}}}}}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BreakdownRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "labelKind", "cohort", "valuationAsset", "dimensionState", "dimensionValue", "sourceRefHash",
+        "measurementIds", "statusCounts", "canonicalEconomicReportRefIds", "aggregationState",
+        "aggregateAmount", "rankingProduced", "noProfitClaim"
+      ],
+      "properties": {
+        "labelKind": {"enum": ["REAL", "HYPOTHETICAL", "REPLAY"]},
+        "cohort": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+        "valuationAsset": {"type": "string"},
+        "dimensionState": {"enum": ["AVAILABLE", "UNKNOWN", "NOT_APPLICABLE"]},
+        "dimensionValue": {"type": ["string", "null"]},
+        "sourceRefHash": {"$ref": "#/$defs/Hash64"},
+        "measurementIds": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string"}},
+        "statusCounts": {"$ref": "#/$defs/StateCounts"},
+        "canonicalEconomicReportRefIds": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": ["string", "null"]}},
+        "aggregationState": {"const": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"},
+        "aggregateAmount": {"type": "null"},
+        "rankingProduced": {"const": false},
+        "noProfitClaim": {"const": true}
+      }
+    },
+    "Breakdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dimension", "rows", "aggregationAuthority", "inferredByEdgeMeter"],
+      "properties": {
+        "dimension": {"enum": ["strategy", "symbol", "venue", "regime", "turnover", "capacity"]},
+        "rows": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/BreakdownRow"}},
+        "aggregationAuthority": {"const": "NONE"},
+        "inferredByEdgeMeter": {"const": false}
+      }
+    },
+    "Breakdowns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "symbol", "venue", "regime", "turnover", "capacity"],
+      "properties": {
+        "strategy": {"$ref": "#/$defs/Breakdown"},
+        "symbol": {"$ref": "#/$defs/Breakdown"},
+        "venue": {"$ref": "#/$defs/Breakdown"},
+        "regime": {"$ref": "#/$defs/Breakdown"},
+        "turnover": {"$ref": "#/$defs/Breakdown"},
+        "capacity": {"$ref": "#/$defs/Breakdown"}
+      }
+    },
+    "EdgeMeterReportV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Produced only by the deterministic runtime contract; every record is reprojected and every hash, count, state, breakdown, and denial is runtime-verified.",
+      "required": [
+        "schema", "version", "reportId", "evaluatedAtMs", "truthClass", "canonical", "authorityClass",
+        "networkMode", "reportState", "inputRecordCount", "uniqueMeasurementCount", "duplicateIdenticalCount",
+        "identityConflictCount", "stateCounts", "records", "breakdowns", "capitalNetRecomputed",
+        "qStatisticsRecomputed", "calibrationPerformed", "modelSelectionPerformed", "orderOrSizingEffect",
+        "profitClaim", "limitations", "reportHash"
+      ],
+      "properties": {
+        "schema": {"const": "EdgeMeterReportV1"},
+        "version": {"const": 1},
+        "reportId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "evaluatedAtMs": {"type": "integer", "minimum": 0},
+        "truthClass": {"const": "ADVISORY"},
+        "canonical": {"const": false},
+        "authorityClass": {"const": "NO_AUTHORITY"},
+        "networkMode": {"const": "FIXTURE_ONLY"},
+        "reportState": {"enum": ["ATTRIBUTABLE", "INSUFFICIENT_EVIDENCE", "ABSTAIN_UNKNOWN", "NON_COMPARABLE", "DIVERGENT"]},
+        "inputRecordCount": {"type": "integer", "minimum": 0, "maximum": 32},
+        "uniqueMeasurementCount": {"type": "integer", "minimum": 0, "maximum": 32},
+        "duplicateIdenticalCount": {"type": "integer", "minimum": 0, "maximum": 31},
+        "identityConflictCount": {"type": "integer", "minimum": 0, "maximum": 16},
+        "stateCounts": {"$ref": "#/$defs/StateCounts"},
+        "records": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/EdgeMeterRecordProjectionV1"}},
+        "breakdowns": {"$ref": "#/$defs/Breakdowns"},
+        "capitalNetRecomputed": {"const": false},
+        "qStatisticsRecomputed": {"const": false},
+        "calibrationPerformed": {"const": false},
+        "modelSelectionPerformed": {"const": false},
+        "orderOrSizingEffect": {"const": false},
+        "profitClaim": {"const": false},
+        "limitations": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {"const": "FIXTURE_ONLY"}, {"const": "MEASUREMENT_ONLY"}, {"const": "NO_LOCAL_PNL_TOTAL"},
+            {"const": "NO_PROFIT_CLAIM"}, {"const": "NO_CAPITAL_RISK_Q_OR_EXECUTION_AUTHORITY"}, {"const": "UNWIRED"}
+          ],
+          "items": false
+        },
+        "reportHash": {"$ref": "#/$defs/Hash64"}
+      }
+    },
+    "PreviewBreakdownSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["groupCount", "unknownGroupCount", "aggregateAmount", "aggregationState"],
+      "properties": {
+        "groupCount": {"type": "integer", "minimum": 0, "maximum": 32},
+        "unknownGroupCount": {"type": "integer", "minimum": 0, "maximum": 32},
+        "aggregateAmount": {"type": "null"},
+        "aggregationState": {"const": "REFERENCE_ONLY_NO_LOCAL_PNL_TOTAL"}
+      }
+    },
+    "ProductSurfaceDatum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fieldId", "label", "value", "truthLabel", "canonicalSource", "unavailableReason"],
+      "properties": {
+        "fieldId": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "value": {"type": ["string", "null"]},
+        "truthLabel": {"enum": ["SYNTHETIC_ONLY", "MISSING"]},
+        "canonicalSource": {"type": "string", "minLength": 1},
+        "unavailableReason": {"type": ["string", "null"], "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"value": {"type": "null"}}},
+          "then": {"properties": {"truthLabel": {"const": "MISSING"}, "unavailableReason": {"type": "string", "minLength": 1}}},
+          "else": {"properties": {"truthLabel": {"const": "SYNTHETIC_ONLY"}, "unavailableReason": {"type": "null"}}}
+        }
+      ]
+    },
+    "ProductSurfaceProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surfaceId", "label", "bindingState", "truthLabel", "canonicalSource", "evaluatedAtMs", "summary",
+        "blocker", "controlIds", "correlationId", "evidence"
+      ],
+      "properties": {
+        "surfaceId": {"const": "pnl"},
+        "label": {"const": "Edge Meter"},
+        "bindingState": {"const": "DIRECTOR_MOUNT_REQUIRED"},
+        "truthLabel": {"const": "SYNTHETIC_ONLY"},
+        "canonicalSource": {"type": "string", "minLength": 1},
+        "evaluatedAtMs": {"type": "integer", "minimum": 0},
+        "summary": {"type": "string", "minLength": 1},
+        "blocker": {"const": "DIRECTOR_MOUNT_REQUIRED"},
+        "controlIds": {"type": "array", "maxItems": 0},
+        "correlationId": {"type": "null"},
+        "evidence": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/ProductSurfaceDatum"}}
+      }
+    },
+    "PreviewSelectionEvidenceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "displayValue", "sourceRefKey", "sourceRefHash", "recomputedByEdgeMeter", "authority"],
+      "properties": {
+        "state": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+        "displayValue": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "sourceRefKey": {"enum": ["multiplicity", "deflatedPerformance", "selectionPressure"]},
+        "sourceRefHash": {"$ref": "#/$defs/Hash64"},
+        "recomputedByEdgeMeter": {"const": false},
+        "authority": {"const": "Q_REFERENCE_ONLY"}
+      }
+    },
+    "EdgeMeterCockpitProjectionV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Unmounted exact Product-surface preadapter; it cannot contain controls, effects, authority, or profit claims.",
+      "required": [
+        "schema", "version", "truthClass", "canonical", "authorityClass", "networkMode", "surfaceId", "moduleId",
+        "extensionId", "bindingState", "truthLabel", "reportRef", "measurementState", "stateCounts", "denominator",
+        "selectedMeasurement", "attributionWaterfall", "signalTimingBridge", "rejectDisposition", "uncertainty",
+        "calibration", "selectionEvidence", "breakdowns", "productSurfaceProjection", "controls", "effectAllowed",
+        "measurementOnly", "profitClaim", "edgeProven", "mounted", "integrated", "limitations", "projectionHash"
+      ],
+      "properties": {
+        "schema": {"const": "EdgeMeterCockpitProjectionV1"},
+        "version": {"const": 1},
+        "truthClass": {"const": "FIXTURE_PROJECTION"},
+        "canonical": {"const": false},
+        "authorityClass": {"const": "NO_AUTHORITY"},
+        "networkMode": {"const": "FIXTURE_ONLY"},
+        "surfaceId": {"const": "pnl"},
+        "moduleId": {"const": "F8"},
+        "extensionId": {"const": "frontier.edge-meter"},
+        "bindingState": {"const": "DIRECTOR_MOUNT_REQUIRED"},
+        "truthLabel": {"const": "SYNTHETIC_ONLY"},
+        "reportRef": {
+          "type": "object", "additionalProperties": false,
+          "required": ["reportId", "reportHash", "evaluatedAtMs"],
+          "properties": {"reportId": {"type": "string"}, "reportHash": {"$ref": "#/$defs/Hash64"}, "evaluatedAtMs": {"type": "integer", "minimum": 0}}
+        },
+        "measurementState": {"enum": ["ATTRIBUTABLE", "INSUFFICIENT_EVIDENCE", "ABSTAIN_UNKNOWN", "NON_COMPARABLE", "DIVERGENT"]},
+        "stateCounts": {"$ref": "#/$defs/StateCounts"},
+        "denominator": {
+          "type": "object", "additionalProperties": false,
+          "required": ["inputRecordCount", "uniqueMeasurementCount", "duplicateIdenticalCount", "identityConflictCount"],
+          "properties": {
+            "inputRecordCount": {"type": "integer", "minimum": 0, "maximum": 32},
+            "uniqueMeasurementCount": {"type": "integer", "minimum": 0, "maximum": 32},
+            "duplicateIdenticalCount": {"type": "integer", "minimum": 0, "maximum": 31},
+            "identityConflictCount": {"type": "integer", "minimum": 0, "maximum": 16}
+          }
+        },
+        "selectedMeasurement": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["measurementId", "status", "reasonCodes", "labelKind", "cohort", "informationCutoffMs", "horizon", "valuationAsset", "comparabilitySignature"],
+              "properties": {
+                "measurementId": {"type": "string"},
+                "status": {"enum": ["ATTRIBUTABLE", "INSUFFICIENT_EVIDENCE", "ABSTAIN_UNKNOWN", "NON_COMPARABLE", "DIVERGENT"]},
+                "reasonCodes": {"$ref": "#/$defs/ReasonCodes"},
+                "labelKind": {"enum": ["REAL", "HYPOTHETICAL", "REPLAY"]},
+                "cohort": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+                "informationCutoffMs": {"type": "integer", "minimum": 0},
+                "horizon": {"$ref": "#/$defs/EdgeMeterInputV1/properties/horizon"},
+                "valuationAsset": {"type": "string"},
+                "comparabilitySignature": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}
+              }
+            }
+          ]
+        },
+        "attributionWaterfall": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["canonicalNet", "signal", "executionAndCosts", "residual", "totalsRecomputed"],
+              "properties": {
+                "canonicalNet": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["amount", "estimatedRange", "sourceRef", "recomputedByEdgeMeter"],
+                  "properties": {
+                    "amount": {"anyOf": [{"$ref": "#/$defs/ExactDecimal"}, {"type": "null"}]},
+                    "estimatedRange": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+                    "sourceRef": {"$ref": "#/$defs/OwnerReferenceV1"},
+                    "recomputedByEdgeMeter": {"const": false}
+                  }
+                },
+                "signal": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["grossPricePnl", "basisContribution", "directionalContribution"],
+                  "properties": {
+                    "grossPricePnl": {"$ref": "#/$defs/CapitalMeasure"},
+                    "basisContribution": {"$ref": "#/$defs/CapitalMeasure"},
+                    "directionalContribution": {"$ref": "#/$defs/CapitalMeasure"}
+                  }
+                },
+                "executionAndCosts": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["executionCostBasis", "executionShortfall", "fees", "spread", "slippage", "funding", "borrow", "recovery", "oneLegExposure"],
+                  "properties": {
+                    "executionCostBasis": {"enum": ["DETAILED_SPREAD_SLIPPAGE", "EXECUTION_SHORTFALL"]},
+                    "executionShortfall": {"$ref": "#/$defs/CapitalMeasure"},
+                    "fees": {"$ref": "#/$defs/CapitalMeasure"},
+                    "spread": {"$ref": "#/$defs/CapitalMeasure"},
+                    "slippage": {"$ref": "#/$defs/CapitalMeasure"},
+                    "funding": {"$ref": "#/$defs/CapitalMeasure"},
+                    "borrow": {"$ref": "#/$defs/CapitalMeasure"},
+                    "recovery": {"$ref": "#/$defs/CapitalMeasure"},
+                    "oneLegExposure": {"$ref": "#/$defs/CapitalMeasure"}
+                  }
+                },
+                "residual": {"$ref": "#/$defs/CapitalMeasure"},
+                "totalsRecomputed": {"const": false}
+              }
+            }
+          ]
+        },
+        "signalTimingBridge": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["decisionBenchmarkGross", "timingEffect", "executionDelta", "bridgeResidual", "actualGross", "latencyMs", "pathRef", "horizonRef", "latencyIsMonetary", "identityProven", "includedInCapitalNet", "methodRef"],
+              "properties": {
+                "decisionBenchmarkGross": {"$ref": "#/$defs/ExactDecimal"},
+                "timingEffect": {"$ref": "#/$defs/ExactDecimal"},
+                "executionDelta": {"$ref": "#/$defs/ExactDecimal"},
+                "bridgeResidual": {"$ref": "#/$defs/ExactDecimal"},
+                "actualGross": {"$ref": "#/$defs/ExactDecimal"},
+                "latencyMs": {"type": "integer", "minimum": 0},
+                "pathRef": {"$ref": "#/$defs/OwnerReferenceV1"},
+                "horizonRef": {"$ref": "#/$defs/OwnerReferenceV1"},
+                "latencyIsMonetary": {"const": false},
+                "identityProven": {"type": "boolean"},
+                "includedInCapitalNet": {"const": false},
+                "methodRef": {"$ref": "#/$defs/OwnerReferenceV1"}
+              }
+            }
+          ]
+        },
+        "rejectDisposition": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["action", "reasonCodes", "monetaryRejectEffect"],
+              "properties": {
+                "action": {"enum": ["ACTED", "REJECTED", "EXPIRED", "MISSED", "CONTROL"]},
+                "reasonCodes": {"$ref": "#/$defs/TextArray"},
+                "monetaryRejectEffect": {"type": "null"}
+              }
+            }
+          ]
+        },
+        "uncertainty": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "interval", "unit", "coverageState", "sourceRef", "recomputedByEdgeMeter"],
+              "properties": {
+                "state": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+                "interval": {"anyOf": [{"$ref": "#/$defs/EstimateRange"}, {"type": "null"}]},
+                "unit": {"type": ["string", "null"]},
+                "coverageState": {"enum": ["AVAILABLE", "COLLAPSED", "UNKNOWN"]},
+                "sourceRef": {"$ref": "#/$defs/OwnerReferenceV1"},
+                "recomputedByEdgeMeter": {"const": false}
+              }
+            }
+          ]
+        },
+        "calibration": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["state", "sourceRef", "recalibratedByEdgeMeter"],
+              "properties": {
+                "state": {"enum": ["AVAILABLE", "UNAVAILABLE", "UNKNOWN"]},
+                "sourceRef": {"$ref": "#/$defs/OwnerReferenceV1"},
+                "recalibratedByEdgeMeter": {"const": false}
+              }
+            }
+          ]
+        },
+        "selectionEvidence": {
+          "anyOf": [
+            {"type": "null"},
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["MULTIPLE_TESTING", "DEFLATED_PERFORMANCE", "SELECTION_PRESSURE"],
+              "properties": {
+                "MULTIPLE_TESTING": {"$ref": "#/$defs/PreviewSelectionEvidenceRow"},
+                "DEFLATED_PERFORMANCE": {"$ref": "#/$defs/PreviewSelectionEvidenceRow"},
+                "SELECTION_PRESSURE": {"$ref": "#/$defs/PreviewSelectionEvidenceRow"}
+              }
+            }
+          ]
+        },
+        "breakdowns": {
+          "type": "object", "additionalProperties": false,
+          "required": ["strategy", "symbol", "venue", "regime", "turnover", "capacity"],
+          "properties": {
+            "strategy": {"$ref": "#/$defs/PreviewBreakdownSummary"},
+            "symbol": {"$ref": "#/$defs/PreviewBreakdownSummary"},
+            "venue": {"$ref": "#/$defs/PreviewBreakdownSummary"},
+            "regime": {"$ref": "#/$defs/PreviewBreakdownSummary"},
+            "turnover": {"$ref": "#/$defs/PreviewBreakdownSummary"},
+            "capacity": {"$ref": "#/$defs/PreviewBreakdownSummary"}
+          }
+        },
+        "productSurfaceProjection": {"$ref": "#/$defs/ProductSurfaceProjection"},
+        "controls": {"type": "array", "maxItems": 0},
+        "effectAllowed": {"const": false},
+        "measurementOnly": {"const": true},
+        "profitClaim": {"const": false},
+        "edgeProven": {"const": false},
+        "mounted": {"const": false},
+        "integrated": {"const": false},
+        "limitations": {
+          "type": "array", "minItems": 6, "maxItems": 6,
+          "prefixItems": [
+            {"const": "FIXTURE_ONLY"}, {"const": "SYNTHETIC_ONLY"}, {"const": "MEASUREMENT_ONLY"},
+            {"const": "NO_LOCAL_PNL_TOTAL"}, {"const": "NO_PROFIT_CLAIM"}, {"const": "UNWIRED"}
+          ],
+          "items": false
+        },
+        "projectionHash": {"$ref": "#/$defs/Hash64"}
+      }
+    }
+  }
+}

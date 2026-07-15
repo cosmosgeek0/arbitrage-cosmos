@@ -1,0 +1,56 @@
+{
+  "claimId": "edge-meter.fixture-budget.v1",
+  "measurementMode": "DETERMINISTIC_FIXTURE",
+  "cpu": {
+    "state": "UNAVAILABLE",
+    "unit": "host-cpu-percent",
+    "reason": "No mounted process or production runtime exists in prestage."
+  },
+  "memory": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes",
+    "reason": "No mounted process or production runtime exists in prestage."
+  },
+  "disk": {
+    "state": "UNAVAILABLE",
+    "unit": "host-bytes-per-second",
+    "reason": "The fixture adapter performs no runtime filesystem transport."
+  },
+  "network": {
+    "state": "MEASURED",
+    "unit": "bytes",
+    "limit": 0,
+    "observed": 0
+  },
+  "eventRate": {
+    "state": "MEASURED",
+    "unit": "events-per-1000ms-fixture-window",
+    "limit": 32,
+    "observed": 32
+  },
+  "latency": {
+    "state": "MEASURED",
+    "unit": "deterministic-fixture-steps",
+    "limit": {"p50": 4, "p95": 8, "p99": 12},
+    "observed": {"p50": 4, "p95": 4, "p99": 4}
+  },
+  "queue": {
+    "state": "MEASURED",
+    "unit": "events",
+    "limit": 8,
+    "observed": 8,
+    "backpressure": "FAIL_CLOSED_WITH_DEGRADATION_REQUEST"
+  },
+  "storageGrowth": {
+    "state": "MEASURED",
+    "unit": "fixture-bytes-per-window",
+    "limit": 16384,
+    "observed": 4096
+  },
+  "modelUse": {
+    "state": "MEASURED",
+    "unit": "calls",
+    "limit": 0,
+    "observed": 0
+  }
+}

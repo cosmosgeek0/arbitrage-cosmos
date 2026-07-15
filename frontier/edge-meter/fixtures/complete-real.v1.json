@@ -1,0 +1,659 @@
+{
+  "schema": "EdgeMeterBatchInputV1",
+  "version": 1,
+  "reportId": "fixture-report-complete-real",
+  "evaluatedAtMs": 170000,
+  "items": [
+    {
+      "schema": "EdgeMeterInputV1",
+      "version": 1,
+      "measurementId": "fixture-measurement-acted-001",
+      "labelKind": "REAL",
+      "cohort": "ACTED",
+      "informationCutoffMs": 100000,
+      "horizon": {
+        "startMs": 100000,
+        "endMs": 160000
+      },
+      "valuationAsset": "USDT",
+      "ownerRefs": {
+        "proposal": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-proposal-001",
+          "ownerClass": "ENGINE",
+          "canonicalOwner": "BasisEngine",
+          "repositoryPath": "server/src/foundation/readModel/canonicalize.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "CanonicalOpportunity",
+          "contractVersion": "basis.proposal.v1",
+          "recordId": "fixture-proposal-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "cbac7e8fd1d6f4d8eda464e2b6d601da60d080e1a289231459e4f938c29b15cd",
+          "eventTimeMs": 99000,
+          "availableAtMs": 99500,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "642b5aafeb01b2b263267b301a17d1a1033c569ca089fc3fecc3fb06764e4232"
+        },
+        "assessment": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-assessment-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q inference",
+          "repositoryPath": "quant/src/quant_edge/inference",
+          "commitSha": "b3d8cedece8cf3a9f546c60016beae442f85f160",
+          "contractId": "EdgeAssessmentEnvelopeV1",
+          "contractVersion": "EdgeAssessmentEnvelopeV1@1",
+          "recordId": "fixture-assessment-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "8840c91a991107326fe25f5d9b638d5aab486eed2bc5a24ee6ae02c0e1d5d0d7",
+          "eventTimeMs": 99600,
+          "availableAtMs": 99700,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "38c638fa56fc9f4471f956d1967bb14e563ec69f1053f79efeded68750a9a458"
+        },
+        "outcome": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-outcome-001",
+          "ownerClass": "LEDGER",
+          "canonicalOwner": "existing Ledger outcome truth",
+          "repositoryPath": "server/src/ledger.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "LedgerEvent",
+          "contractVersion": "ledger.event.v1",
+          "recordId": "fixture-outcome-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "2a82f4883114b9fc5da744208d2fc15a5bd8b0af73b871754980272e74944df8",
+          "eventTimeMs": 160000,
+          "availableAtMs": 161000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "14b19873ab9c621dba75aab50021ee0f014b7dbdd2bedca2c9f802256c6d2453"
+        },
+        "economicReport": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-economic-report-001",
+          "ownerClass": "CAPITAL",
+          "canonicalOwner": "capitalFoundation economics",
+          "repositoryPath": "server/src/capitalFoundation/economics/compose.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "EconomicReport",
+          "contractVersion": "capital.economic-report.v1",
+          "recordId": "fixture-economic-report-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "eaaeb4163dda737c0eb4b2a121e159a222e20434df0fcb0ac6b30f15a827ff60",
+          "eventTimeMs": 161000,
+          "availableAtMs": 162000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "514e748d117247fa58a946244fa1a24f406ae9980d3bb094dc714b535cbfa616"
+        },
+        "accountingPolicy": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-accounting-policy-001",
+          "ownerClass": "CAPITAL",
+          "canonicalOwner": "capitalFoundation economics",
+          "repositoryPath": "server/src/capitalFoundation/economics/types.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "EconomicAccountingPolicy",
+          "contractVersion": "capital.economic-accounting-policy.v1",
+          "recordId": "fixture-accounting-policy-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "57f40ee39d43c38a80590ca2e53f363914e26c9de7979a5b29c5f9c8a0230ba2",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "54199db78ffddde03734abcc08cdc196db1e26edcff576be498e74b131be6e3b"
+        },
+        "fills": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-fills-001",
+          "ownerClass": "L",
+          "canonicalOwner": "L execution truth",
+          "repositoryPath": "server/src/foundation/execution/types.ts",
+          "commitSha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
+          "contractId": "ExecutionEvent",
+          "contractVersion": "foundation.execution-event.v1",
+          "recordId": "fixture-fills-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "8ff8d5c92d434ecffda37da46788799ffb5c11ca8c905287a96de5cb8990618a",
+          "eventTimeMs": 120000,
+          "availableAtMs": 121000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "fd74e43f089e9e4d3e64e7e663511cf3dabbd99c49c338b9ebbff6cf709da798"
+        },
+        "costs": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-costs-001",
+          "ownerClass": "CAPITAL",
+          "canonicalOwner": "capitalFoundation economics",
+          "repositoryPath": "server/src/capitalFoundation/contracts/economics.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "EconomicAttribution",
+          "contractVersion": "capital.economic-attribution.v1",
+          "recordId": "fixture-costs-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "6e0ac8da653c392789a5067043e22b06e05eeaae7de9565ccab6b040dd510ca6",
+          "eventTimeMs": 160000,
+          "availableAtMs": 161000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "287f11558853a907ba527284b08d6ddac12a88f1dd7a2ce50799b1ff65b6e814"
+        },
+        "liabilities": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-liabilities-001",
+          "ownerClass": "CAPITAL",
+          "canonicalOwner": "capitalFoundation account truth",
+          "repositoryPath": "server/src/capitalFoundation/accountTruth/types.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "AccountCapitalProjection",
+          "contractVersion": "capital.account-capital-projection.v1",
+          "recordId": "fixture-account-capital-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "49d6fed84cbe941636be4e3a8e302d66c14f0f2db7c0dd8ff6c69287be79e888",
+          "eventTimeMs": 162000,
+          "availableAtMs": 163000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "5015bc974e90b25d4dcb9b48ce6b67630821f788f3440cd9e9a44f2c974907aa"
+        },
+        "evidence": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-evidence-001",
+          "ownerClass": "INTELLIGENCE_FOUNDATION",
+          "canonicalOwner": "intelligenceFoundation outcomes",
+          "repositoryPath": "server/src/intelligenceFoundation/outcomes/attribution.ts",
+          "commitSha": "f0168cb37bd04d21bc90591ab2256770de3b75bc",
+          "contractId": "AttributedOutcomeLabel",
+          "contractVersion": "outcomes-attribution-1",
+          "recordId": "fixture-evidence-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "9a96b83caec421e1512305602d032bc2030834f3b212dcd96e379ec16b254f36",
+          "eventTimeMs": 160000,
+          "availableAtMs": 161500,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "164c7e38716c9343c04729193948f12f38404cd13a2565697f0524cc351dafc6"
+        },
+        "calibration": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-calibration-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q calibration",
+          "repositoryPath": "quant/src/quant_edge/ensemble/calibration.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "BoundCalibratedAssessmentV1",
+          "contractVersion": "Q12@1",
+          "recordId": "fixture-calibration-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "fa4629c3dfcd07e6736af32652f4a4d04e184127a040cb8493b819ef0f50f36f",
+          "eventTimeMs": 95000,
+          "availableAtMs": 95000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "22b187d38b410ff1b10b6ddb51c67d65d48685998e2e8ed1f66858a03dfdaf41"
+        },
+        "abstention": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-abstention-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q abstention",
+          "repositoryPath": "quant/src/quant_edge/ensemble/abstention.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "BoundAssessmentDecisionV1",
+          "contractVersion": "Q12@1",
+          "recordId": "fixture-abstention-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "fb57f24aca94c4fe5dae6a2d2eefd4316bb79a308a83c04c80ac20f2d76b87f3",
+          "eventTimeMs": 99700,
+          "availableAtMs": 99800,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "b3584fdf9c27959f150c08e50d21af233ad71aa1669b28a497ec1401de2d6754"
+        },
+        "partition": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-partition-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q validation splits",
+          "repositoryPath": "quant/src/quant_edge/validation/splits.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "WalkForwardSpecV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-partition-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "19d68062a6b9d51943b43632ea6b2700e203b123b795b3001db5fb05778c1fd3",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "62014beddbf30a2a915ff77e5601c8525a379ebf31d6a3339525ad6b7afe673d"
+        },
+        "embargo": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-embargo-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q validation splits",
+          "repositoryPath": "quant/src/quant_edge/validation/splits.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "HoldoutGrantV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-embargo-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "ea0e0e32cede24aaaa300d5fd6b901fdd5dab3abb797a587c246fb0e0b862d71",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "ad9a81b26f23e5351bbc0035dd325c43bb7adb7ed5e9a000b2bbeccf783b1811"
+        },
+        "pointInTimeJoin": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-pit-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q visible evidence governance",
+          "repositoryPath": "quant/src/quant_edge/lake/governance.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "VisibleEvidenceRefV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-pit-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "1b65dd9960b2a2c0711653f7fd8d1b4420368a96ae3de125dda91ef57763ca98",
+          "eventTimeMs": 91000,
+          "availableAtMs": 91000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "dbc6f543a3cb1190070349ae83915f5e64d6a43a93e2c585a82b457598a3641d"
+        },
+        "uncertainty": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-uncertainty-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q conformal uncertainty",
+          "repositoryPath": "quant/src/quant_edge/ensemble/conformal.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "BoundConformalAssessmentV1",
+          "contractVersion": "Q12@1",
+          "recordId": "fixture-uncertainty-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "5d4223aec1967f9e350996cd8a305d9fd917a8c053186341320ed72b1fbf0689",
+          "eventTimeMs": 95000,
+          "availableAtMs": 95000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "55a46214bb622bb8f95e2fb9e5cc187217ee642aec119a721f6c3d404d4ea233"
+        },
+        "multiplicity": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-multiplicity-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q multiplicity",
+          "repositoryPath": "quant/src/quant_edge/validation/multiplicity.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "TrialLedgerV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-multiplicity-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "99742a6b8f30b4b7e1c699e20a72ce5ca0bd50575b9f540f8a60f7b00fafb1f2",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "c7be68f66d8783b6d723e9760e0ce89b15f70c810d9f2a84df7862f7b20d916a"
+        },
+        "deflatedPerformance": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-dsr-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q deflated performance",
+          "repositoryPath": "quant/src/quant_edge/validation/dsr.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "DsrReportV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-dsr-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "296ec8708fb66ad1b0fd3e424226a30498108081a868a62ffcecee90b7cf619b",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "0e2c9399c9ceb225a6c435515d156f152f6f01b6487e825b1aebe32636029b23"
+        },
+        "selectionPressure": {
+          "schema": "OwnerReferenceV1",
+          "version": 1,
+          "refId": "ref-selection-001",
+          "ownerClass": "Q",
+          "canonicalOwner": "Q trial ledger",
+          "repositoryPath": "quant/src/quant_edge/validation/multiplicity.py",
+          "commitSha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+          "contractId": "TrialLedgerV1",
+          "contractVersion": "Q17@1",
+          "recordId": "fixture-selection-001",
+          "recordRevision": "fixture-v1",
+          "contentHash": "af2a94a6218ce470654dd61c8b4f23c471d4b373944a2302e58b7be5d547d51c",
+          "eventTimeMs": 90000,
+          "availableAtMs": 90000,
+          "state": "AVAILABLE",
+          "reasonCodes": [],
+          "projectionContentHash": "874b02e7794a12be6e325b68ecbda7bd936c1e97ee2bf1227391642da179f061"
+        }
+      },
+      "qEvidence": {
+        "schema": "QEvidenceProjectionV1",
+        "version": 1,
+        "partitionClass": "FORWARD_ONLY",
+        "holdoutState": "GRANTED",
+        "embargoState": "PROVEN",
+        "pointInTimeJoinState": "PROVEN",
+        "abstentionAction": "WATCH",
+        "abstentionReasonCodes": [],
+        "calibrationState": "AVAILABLE",
+        "uncertaintyState": "AVAILABLE",
+        "coverageState": "AVAILABLE",
+        "uncertaintyInterval": {
+          "low": "8",
+          "high": "12"
+        },
+        "uncertaintyUnit": "USDT",
+        "selectionEvidence": [
+          {
+            "kind": "MULTIPLE_TESTING",
+            "state": "AVAILABLE",
+            "displayValue": "PBO=0.12",
+            "sourceRefKey": "multiplicity"
+          },
+          {
+            "kind": "DEFLATED_PERFORMANCE",
+            "state": "AVAILABLE",
+            "displayValue": "DSR=0.71",
+            "sourceRefKey": "deflatedPerformance"
+          },
+          {
+            "kind": "SELECTION_PRESSURE",
+            "state": "AVAILABLE",
+            "displayValue": "TRIAL_COUNT=24",
+            "sourceRefKey": "selectionPressure"
+          }
+        ]
+      },
+      "capitalProjection": {
+        "schema": "CapitalEconomicProjectionV1",
+        "version": 1,
+        "state": "AVAILABLE",
+        "scopeKind": "CLOSED_OUTCOME",
+        "valuationAsset": "USDT",
+        "policyRefKey": "accountingPolicy",
+        "pricePnlBasis": "BASIS_AND_DIRECTIONAL",
+        "executionCostBasis": "DETAILED_SPREAD_SLIPPAGE",
+        "accountingStatus": "COMPLETE",
+        "accountingConfidence": "HIGH",
+        "accountingTruthState": "COMPLETE",
+        "accountingIdentityProven": true,
+        "identityEquation": "NET_KNOWN_EQUALS_SUM_KNOWN_INCLUDED_COMPONENTS",
+        "netKnown": "10.2",
+        "netEstimatedRange": null,
+        "measures": {
+          "grossPricePnl": {
+            "status": "KNOWN",
+            "knownAmount": "12.5",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-basis",
+              "cmp-directional"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "basisContribution": {
+            "status": "KNOWN",
+            "knownAmount": "10",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-basis"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "directionalContribution": {
+            "status": "KNOWN",
+            "knownAmount": "2.5",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-directional"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "realizedPnl": {
+            "status": "KNOWN",
+            "knownAmount": "12.5",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-leg-realized"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "unrealizedPnl": {
+            "status": "NOT_APPLICABLE",
+            "knownAmount": null,
+            "estimatedRange": null,
+            "componentIds": [],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "fees": {
+            "status": "KNOWN",
+            "knownAmount": "-1",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-fees"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "spread": {
+            "status": "KNOWN",
+            "knownAmount": "-0.5",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-spread"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "slippage": {
+            "status": "KNOWN",
+            "knownAmount": "-0.4",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-slippage"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "funding": {
+            "status": "KNOWN",
+            "knownAmount": "-0.2",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-funding"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "borrow": {
+            "status": "KNOWN",
+            "knownAmount": "-0.1",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-borrow"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "executionShortfall": {
+            "status": "KNOWN",
+            "knownAmount": "-0.9",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-execution-shortfall"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "oneLegExposure": {
+            "status": "KNOWN",
+            "knownAmount": "0",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-one-leg"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "recovery": {
+            "status": "KNOWN",
+            "knownAmount": "-0.1",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-recovery"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "fxValuation": {
+            "status": "NOT_APPLICABLE",
+            "knownAmount": null,
+            "estimatedRange": null,
+            "componentIds": [],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          },
+          "unexplainedResidual": {
+            "status": "KNOWN",
+            "knownAmount": "0",
+            "estimatedRange": null,
+            "componentIds": [
+              "cmp-residual"
+            ],
+            "missingComponentKinds": [],
+            "reasonCodes": []
+          }
+        },
+        "includedComponentIds": [
+          "cmp-basis",
+          "cmp-borrow",
+          "cmp-directional",
+          "cmp-fees",
+          "cmp-funding",
+          "cmp-one-leg",
+          "cmp-recovery",
+          "cmp-residual",
+          "cmp-slippage",
+          "cmp-spread"
+        ],
+        "excludedComponentIds": [
+          "cmp-execution-shortfall",
+          "cmp-leg-realized"
+        ],
+        "divergentReasons": [],
+        "reasonCodes": []
+      },
+      "grossBridge": {
+        "schema": "GrossTimingBridgeV1",
+        "version": 1,
+        "state": "AVAILABLE",
+        "valuationAsset": "USDT",
+        "decisionBenchmarkGross": "15",
+        "timingEffect": "-2",
+        "executionDelta": "-0.5",
+        "bridgeResidual": "0",
+        "actualGross": "12.5",
+        "latencyMs": 125,
+        "methodRefKey": "assessment",
+        "pathRefKey": "fills",
+        "horizonRefKey": "outcome",
+        "equation": "ACTUAL_GROSS_EQUALS_DECISION_BENCHMARK_PLUS_TIMING_PLUS_EXECUTION_DELTA_PLUS_BRIDGE_RESIDUAL",
+        "reasonCodes": []
+      },
+      "decisionDisposition": {
+        "action": "ACTED",
+        "reasonCodes": [],
+        "monetaryRejectEffect": null
+      },
+      "dimensions": {
+        "strategy": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "BASIS",
+          "ownerRefKey": "proposal",
+          "reasonCodes": []
+        },
+        "symbol": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "ETHUSDT",
+          "ownerRefKey": "proposal",
+          "reasonCodes": []
+        },
+        "venue": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "BINANCE",
+          "ownerRefKey": "fills",
+          "reasonCodes": []
+        },
+        "regime": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "RANGE_BOUND",
+          "ownerRefKey": "assessment",
+          "reasonCodes": []
+        },
+        "turnover": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "TURNOVER_Q2",
+          "ownerRefKey": "costs",
+          "reasonCodes": []
+        },
+        "capacity": {
+          "schema": "EdgeMeterDimensionV1",
+          "version": 1,
+          "state": "AVAILABLE",
+          "value": "CAPACITY_Q1",
+          "ownerRefKey": "costs",
+          "reasonCodes": []
+        }
+      }
+    }
+  ]
+}

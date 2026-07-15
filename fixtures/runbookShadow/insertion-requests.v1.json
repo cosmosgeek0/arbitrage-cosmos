@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "packetId": "RUN-19",
+  "packetDisposition": "SHADOW_SPECULATIVE",
+  "requests": [
+    {
+      "id": "RUN19-IR-01-C2-REBIND",
+      "state": "DIRECTOR_ADJUDICATION_REQUIRED",
+      "request": "Rebind and rerun the eight owner drills against the exact director-selected C2 commit before any porting decision.",
+      "target": "exact director-selected C2 commit",
+      "prerequisites": ["EXACT_C2_COMMIT_SELECTED", "DIRECTOR_ADJUDICATION"],
+      "authorityCreated": false
+    },
+    {
+      "id": "RUN19-IR-02-OPS-EVIDENCE",
+      "state": "DIRECTOR_ADJUDICATION_REQUIRED",
+      "request": "After RUN-16 adjudication, bind watchdog, rollback, and restore drills to the accepted offline ops-template receipts without copying their harnesses.",
+      "target": "RUN-16 OPS-SHADOW receipts",
+      "prerequisites": ["RUN16_RECEIPT_ADJUDICATED", "DIRECTOR_ADJUDICATION"],
+      "authorityCreated": false
+    },
+    {
+      "id": "RUN19-IR-03-REPLAY-EVIDENCE",
+      "state": "DIRECTOR_ADJUDICATION_REQUIRED",
+      "request": "After RUN-17 adjudication, bind source-loss, stale-truth, restart, and reconciliation drills to accepted generic corpus identifiers without copying datasets.",
+      "target": "RUN-17 REPLAY-SHADOW corpus receipts",
+      "prerequisites": ["RUN17_RECEIPT_ADJUDICATED", "DIRECTOR_ADJUDICATION"],
+      "authorityCreated": false
+    },
+    {
+      "id": "RUN19-IR-04-COCKPIT-MOUNT",
+      "state": "DIRECTOR_ADJUDICATION_REQUIRED",
+      "request": "After RUN-18 adjudication, map packet receipts into existing canonical supervisor/cockpit fields; do not add a second health, incident, paging, or readiness owner.",
+      "target": "SystemSupervisorReadModel and Product Integration projection",
+      "prerequisites": ["RUN18_RECEIPT_ADJUDICATED", "DIRECTOR_ADJUDICATION"],
+      "authorityCreated": false
+    },
+    {
+      "id": "RUN19-IR-05-IMMUTABLE-DRILL-HISTORY",
+      "state": "DIRECTOR_ADJUDICATION_REQUIRED",
+      "request": "Choose an existing Ledger adapter seam for immutable drill-result references if the packet is ported; RUN-19 creates no store.",
+      "target": "existing Ledger through a narrow director-approved adapter",
+      "prerequisites": ["EXACT_C2_COMMIT_SELECTED", "DIRECTOR_ADJUDICATION"],
+      "authorityCreated": false
+    }
+  ]
+}

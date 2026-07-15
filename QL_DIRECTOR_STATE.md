@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-39 (2026-07-15): wave-20 — runbook sealed; replay resume + A1X/A4X/A5X gap-fill extensions (owner compute-window priority)
+
+Runbook-shadow SEALED (25a3762, pushed). Replay-shadow stopped uncommitted → RUN-20 resume. Owner directive: burn available limits NOW on isolated portable work. RULING: three more honest gap-fill extensions exist against the POST_I00 directive (entry-gate law binds each): A1X manifest/graduation instances (§6.16/§7), A4X remaining §10 views, A5X §16 mandatory scenario fixtures — in the sealed A1/A4/A5 worktrees (unparked, sole writers). Static/focused work only. On the "was parallel the cause" question, on record: the 15 findings are integration-seam + honesty defects only whole-product verification exposes; a serial build reaches the same gate with the same (or more) findings later — parallelism moved work earlier, it did not create the gate.
+
 ## D-LAUNCH-38 (2026-07-15): commander Queue.md adjudicated — consistent, no new authority, schedule adopted
 
 Queue.md (owner Desktop) accepted as scheduling note only: RUN-9 sole C2 writer (focused tests per finding, full battery once at freeze); shadows finish+park; V1-V5 only at frozen C2 SHA; one fresh Role-3 on the strongest model = sole verdict; one director lands; AI-Ops port only after INTEGRATED_ACCEPTED with reuse-not-regenerate. Matches D-LAUNCH-33..37 exactly — no changes needed. Owner-only items available NOW (no repo contact): sign AI_OPS_RELIABILITY_TARGETS_DRAFT + runbook manifests, set capital-ladder values, pick paging destination, weekly review commitment.

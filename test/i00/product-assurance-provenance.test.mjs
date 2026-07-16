@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
   mkdirSync,
@@ -20,6 +19,7 @@ import {
   verifyProductAssuranceOperationReport,
   verifyProductAssuranceSuiteInventory,
 } from './git-provenance.mjs';
+import { runGitEvidence } from './verify-scope.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const MANIFEST_PATH = path.join(ROOT, 'fixtures/i00/product-assurance-manifest.v1.json');
@@ -71,11 +71,7 @@ const S4_NON_CONTEXT_TRACKED_FILES = Object.freeze([
 ]);
 
 function git(cwd, ...args) {
-  return execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return runGitEvidence({ cwd, args }).stdout.trim();
 }
 
 function assertTrackedInventoryMatchesCleanClone() {
@@ -106,9 +102,9 @@ function assertTrackedInventoryMatchesCleanClone() {
     const dirtyStatus = git(source, 'status', '--porcelain=v1', '--untracked-files=all', '--ignored');
     assert(dirtyStatus.includes(`?? ${untrackedDecoy}`), dirtyStatus);
     assert(dirtyStatus.includes(`!! ${ignoredDecoy}`), dirtyStatus);
-    execFileSync('git', ['clone', '--no-hardlinks', '--quiet', source, cleanClone], {
+    runGitEvidence({
       cwd: temporaryRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      args: ['clone', '--no-hardlinks', '--quiet', source, cleanClone],
     });
     assert.equal(git(cleanClone, 'status', '--porcelain=v1', '--untracked-files=all'), '');
     assert.deepEqual(

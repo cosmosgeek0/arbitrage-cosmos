@@ -8,8 +8,8 @@ This file owns current product state. `ARCHITECTURE.md` Part II owns code author
 | --- | --- | --- | --- |
 | Historical corrected I00 source | `74eb452efab89ca92ec9ff5cb192b723b5f198f3` | `VERIFIED` | The independent C2 receipt reported 15 fixed, 0 refused, and 0 pending; the source was later landed. Historical evidence does not verify newer source. |
 | Landed validate-only core | landing ancestry through `51efaaa4` | `INTEGRATED` | Existing engine, capital, risk, ledger, control, reconciliation, cockpit, operations, and assurance owners remain canonical. |
-| Account A product-truth candidate | the commit containing this state rewrite; source parent `f11531e6637979d6e173f6eb25d04c10a76d20c8` | `INTEGRATED` | Account A may assemble and fix. Independent exact-SHA verification remains `BLOCKED` until Account B receives the frozen commit. |
-| Durable Main observed at freeze | `2ae812624f20b9bc93fc4ad66cb568929101110f` on local and `origin/current-main` | `INTEGRATED` | Main has 0 exact `aiOps` namespace paths. The Account A candidate has 161. No candidate merge or push to `current-main` is claimed. |
+| Account A product-truth candidate | D-LAUNCH-62 C2 repair wave; exact SHA is assigned only at final source freeze | `BUILDING` | Old C has critical provenance defects and is not eligible for final verification. Account A is the sole candidate writer. |
+| Candidate source base Main | `2ae812624f20b9bc93fc4ad66cb568929101110f` | `INTEGRATED` | Later director-only `current-main` records, including D-LAUNCH-62 at `2a832750…`, are controlling evidence inputs rather than candidate ancestry. No candidate merge or push to `current-main` is claimed. |
 
 The exact frozen candidate SHA cannot self-name inside its own commit. The campaign `INPUTS.lock` binds the containing commit after it is created. No later evidence-only commit changes candidate source C.
 
@@ -24,9 +24,9 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Capability dimension | State | Exact boundary |
 | --- | --- | --- |
 | Historical validate-only core | `VERIFIED` | Verification applies to historical C2R, not to the new candidate SHA. |
-| Account A candidate source | `INTEGRATED` | Exact-SHA Account B verification is pending. |
+| Account A candidate source | `BUILDING` | D-LAUNCH-62 Wave 1 is correcting provenance, proof determinism, gate coverage, and clean-clone defects before C2 freeze. |
 | AI-Ops source: egress, contracts, runtime, adapters, cockpit, proof, replay, operations, runbooks | `INTEGRATED` | Nine sealed lanes and the egress patch are exact second-parent candidate merges. |
-| AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | Inert source integration precedes signatures; provider or worker start is blocked until the owner-signed manifests and deployment gates exist. |
+| AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | AI-Ops root-test mount is also `NOT_CONFIGURED`; AI-Ops acceptance is explicitly excluded from the C2 baseline rather than inferred from `npm test`. |
 | AI-Ops composed production runtime | `UNWIRED` | AI code has no live capital, order, signing, self-approval, or silent production-patch authority. |
 | A-FORMAL `b491893416006cf529aef02e5dd4a25d6475e7b8` source | `INTEGRATED` | Merged through `48a89d9f`; pure formal artifacts are admitted. |
 | Formal runtime | `REFERENCE_ONLY` | TLA tooling is `NOT_CONFIGURED`; no runtime authority is granted. |
@@ -44,9 +44,17 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Forward economic edge | `ABSTAIN_UNKNOWN` | No forward runtime evidence establishes repeatable net value after costs. |
 | Frontier | `REFERENCE_ONLY` | It remains unauthorized and is not counted as accepted candidate source. |
 
-## Current source evidence
+## D-LAUNCH-62 Wave 1 status
 
-These are Account A builder measurements before the containing source-freeze commit. They are not independent acceptance:
+- The four durable prep inputs are preserved byte-identically under `verification/product-truth-20260716/wave1-inputs/`; the activation draft and canary precheck remain later-gate reference material only.
+- The clean-clone proof generator is being separated into deterministic tracked-byte evidence plus an ambient Git tri-state diagnostic. Moving refs and optional external objects will not be baked into sealed report bytes.
+- The accepted current director-owned QL bytes are `QL_DIRECTOR_STATE.md` SHA-256 `95d4c276…` and `QL_PARALLEL_DAG.md` SHA-256 `89a13c8a…`; D-LAUNCH-7 historical pins remain preserved separately.
+- The canonical Product Assurance gate now includes A-FORMAL and S2 action-evidence suites. AI-Ops port/shadow suites remain deliberately root-unmounted and excluded from C2 acceptance because their branch-specific assumptions are not candidate-compatible.
+- Exact C2 root, full, report-parity, and fresh single-branch clone results are pending the final source freeze. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
+
+## Previous source evidence
+
+These are Account A builder measurements from the superseded old-C cycle. They are not C2 evidence or independent acceptance:
 
 | Evidence | Measured result |
 | --- | --- |

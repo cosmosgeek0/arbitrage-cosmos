@@ -532,12 +532,10 @@ test('candidate report parity reads exact HEAD from clean detached checkouts', a
   assert.ok(result.artifacts.every((artifact) => artifact.matchesGenerator));
   assert.notEqual(result.liveGitDiagnostic.status, 'FAILED');
   assert.equal(result.restrictedSource, null);
-  assert.deepEqual(result.legacySourceAlias, {
-    ref: 'refs/heads/current-main', target: result.revision, scope: 'DISPOSABLE_CHECKOUT_ONLY',
-  });
+  assert.equal(result.legacySourceAlias, null);
   assert.equal(
     result.artifacts.find((artifact) => artifact.relativePath === 'integration/reports/i00-proof-evidence.json')?.comparisonMode,
-    'TRACKED_CONTENT_CANONICAL_V1',
+    'EXACT_BYTES',
   );
   assert.deepEqual(result.checkouts, [
     { checkout: 'candidate-report-parity-untouched', headSha: result.revision, branch: '', statusByteLength: 0 },
@@ -555,7 +553,7 @@ test('candidate report parity survives a sole branch not named current-main and 
   assert.equal(result.restrictedSource.branch, 'candidate-parity');
   assert.ok(result.restrictedSource.refNames.every((ref) => !ref.endsWith('/current-main')));
   assert.notEqual(result.liveGitDiagnostic.status, 'FAILED');
-  assert.ok(result.artifacts.filter((artifact) => artifact.relativePath !== 'integration/reports/i00-proof-evidence.json')
+  assert.ok(result.artifacts
     .every((artifact) => artifact.comparisonMode === 'EXACT_BYTES' && artifact.rawMatchesGenerator));
 
   const base = 'a'.repeat(40);
@@ -565,29 +563,31 @@ test('candidate report parity survives a sole branch not named current-main and 
       verificationBase: base,
       items: [{ sha, claimType: 'RECEIPTED_BYTE_EQUIVALENCE', ancestorRequired: false }],
     },
-    receiptProvenanceVerification: {
+    receiptProvenanceSeal: {
+      schemaVersion: 1,
+      mode: 'TRACKED_RECEIPT_BYTES_ONLY',
       verificationBase: base,
-      baseExists: true,
+      ambientGitObjectProof: 'NOT_SEALED; SEPARATE_TRI_STATE_DIAGNOSTIC',
       results: [{
         sha,
         claimType: 'RECEIPTED_BYTE_EQUIVALENCE',
-        commitExists: false,
-        ancestorVerified: true,
+        ancestorRequired: false,
         currentReceiptHashVerified: true,
-        receiptClaimVerified: true,
-        passed: false,
+        currentReceiptNeedleVerified: true,
+        ambientGitObjectProof: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
+        passed: true,
       }],
-      passed: false,
+      passed: true,
     },
   };
   const unavailable = { base: 'AVAILABLE', items: [{ sha, object: 'UNKNOWN', ancestry: 'NOT_REQUIRED' }] };
   assert.equal(classifyReceiptProvenanceDiagnostic(diagnosticDocument, unavailable).status, 'UNKNOWN');
   const corruptedReceipt = structuredClone(diagnosticDocument);
-  corruptedReceipt.receiptProvenanceVerification.results[0].currentReceiptHashVerified = false;
+  corruptedReceipt.receiptProvenanceSeal.results[0].currentReceiptHashVerified = false;
   assert.equal(classifyReceiptProvenanceDiagnostic(corruptedReceipt, unavailable).status, 'FAILED');
   const disprovedAncestry = structuredClone(diagnosticDocument);
   disprovedAncestry.receiptProvenance.items[0].ancestorRequired = true;
-  disprovedAncestry.receiptProvenanceVerification.results[0].commitExists = true;
+  disprovedAncestry.receiptProvenanceSeal.results[0].ancestorRequired = true;
   assert.equal(classifyReceiptProvenanceDiagnostic(disprovedAncestry, {
     base: 'AVAILABLE',
     items: [{ sha, object: 'AVAILABLE', ancestry: 'DISPROVED' }],

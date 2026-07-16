@@ -9,6 +9,8 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TRIPWIRE_URL = new URL('./private-egress-tripwire.mjs', import.meta.url).href;
 const INSTALL_KEY = Symbol.for('cosmos.test.network-egress-tripwire.v2');
 const REPORT_VERSION = 2;
+const AI_OPS_ACCEPTANCE_DISPOSITION =
+  'AI_OPS_ACCEPTANCE=EXCLUDED_FROM_C2_BASELINE; AI_OPS_ROOT_TEST_MOUNT=NOT_CONFIGURED';
 const ALLOWED_RECORD_KINDS = new Set(['INSTALL', 'ATTEMPT', 'ATTEMPT_OVERFLOW']);
 const DETERMINISTIC_SCRIPTS = Object.freeze([
   'test:engine:built',
@@ -20,6 +22,7 @@ const ROOT_SCRIPTS = Object.freeze([
   'typecheck',
   'build',
   ...DETERMINISTIC_SCRIPTS,
+  'test:i00:proof:built',
 ]);
 
 function selectedMode(args) {
@@ -101,6 +104,8 @@ try {
     I00_TEST_EGRESS_STRICT: '1',
     I00_TEST_EGRESS_REPORT_FILE: reportPath,
   };
+
+  process.stdout.write(`${AI_OPS_ACCEPTANCE_DISPOSITION}\n`);
 
   if (mode === 'HOSTILE_FETCH_CONTROL') {
     let caught = null;

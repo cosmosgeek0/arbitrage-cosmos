@@ -99,16 +99,16 @@ test('final D-LAUNCH-7 repin accepts exact current-main objects while historical
   assert.equal(effective.acceptance.rulingVerified, true, JSON.stringify(effective.acceptance));
   assert.equal(effective.acceptance.passed, true, JSON.stringify(effective.acceptance));
   assert(effective.acceptedInputs.every((result) => result.passed), JSON.stringify(effective.acceptedInputs.filter((result) => !result.passed)));
-  assert.equal(effective.acceptance.sourceTip, 'd78be24f4da14632c857ee250b62e3fec33c2743');
-  assert.equal(effective.acceptance.sourceCutoffCommit, 'd78be24f4da14632c857ee250b62e3fec33c2743');
-  assert.equal(effective.acceptance.cutoffExists, true);
-  assert.equal(effective.acceptance.cutoffReachable, true);
+  assert.equal(effective.acceptance.sourceTip, '2a832750f83137a8912c9f70e0b634b856f10aab');
+  assert.equal(effective.acceptance.sourceCutoffCommit, '2a832750f83137a8912c9f70e0b634b856f10aab');
+  assert.equal(effective.acceptance.sourceCutoffTree, '3d2b8889e2aaf4a590993467a5bb3ecdf13c119b');
+  assert.equal(effective.acceptance.ambientCutoffProof, 'SEPARATE_TRI_STATE_DIAGNOSTIC');
   assert.equal(effective.acceptance.rulingCommit, 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245');
   assert(effective.acceptance.directiveResults.every((entry) => entry.sealedSha256 === entry.expectedSha256));
   assert(effective.acceptance.directiveResults.every((entry) => ['LIVE_OWNER_FILE', 'SEALED_CANDIDATE_HASH'].includes(entry.evidenceMode)));
   assert.deepEqual(effective.acceptance.livingResults.map((entry) => [entry.path, entry.latestCommit, entry.observedGitBlob, entry.observedSha256]), [
-    ['QL_DIRECTOR_STATE.md', 'd78be24f4da14632c857ee250b62e3fec33c2743', '8116ec491fc7fc863dbcb4015be4cdb105a5a1bc', '77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc'],
-    ['QL_PARALLEL_DAG.md', 'ac01b5e43830bc681ee7e251749c4d1fab210029', '701b3f263e73bf659ba4319c5839e798c1ce7abb', 'cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec'],
+    ['QL_DIRECTOR_STATE.md', '2a832750f83137a8912c9f70e0b634b856f10aab', '20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5', '95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd'],
+    ['QL_PARALLEL_DAG.md', 'e7e5acdc2b52f86e000b1498b5a6c6452db3149b', '6ff4da20b0d0cf9fc375144977acfe94e449dcae', '89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0'],
   ]);
   assert(effective.acceptance.livingResults.every((entry) => entry.observationMatches && entry.passed));
   assert(effective.acceptedInputs.filter((entry) => entry.acceptanceMode === 'LATEST_CURRENT_MAIN_TOUCH')
@@ -120,13 +120,16 @@ test('D-LAUNCH-7 acceptance fails closed on policy path provenance observation o
     { ...livingInputAcceptance, ruling: 'D-LAUNCH-6' },
     { ...livingInputAcceptance, sourceRef: 'HEAD' },
     { ...livingInputAcceptance, sourceCutoffCommit: '0'.repeat(40) },
+    { ...livingInputAcceptance, sourceCutoffTree: '0'.repeat(40) },
+    { ...livingInputAcceptance, candidateFreezeAuthorization: 'D-LAUNCH-61' },
     { ...livingInputAcceptance, rulingCommit: '0'.repeat(40) },
     { ...livingInputAcceptance, finalRealAdapterRepinRequired: true },
     { ...livingInputAcceptance, finalRealAdapterRepinCompleted: false },
     { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, path: 'STATE.md' } : entry) },
-    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, observedLatestCommit: '0'.repeat(40) } : entry) },
-    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, observedGitBlob: '0'.repeat(40) } : entry) },
-    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, observedSha256: '0'.repeat(64) } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 0 ? { ...entry, authorizedLatestCommit: '0'.repeat(40) } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, authorizedGitBlob: '0'.repeat(40) } : entry) },
+    { ...livingInputAcceptance, livingDirectorInputs: livingInputAcceptance.livingDirectorInputs.map((entry, index) => index === 1 ? { ...entry, authorizedSha256: '0'.repeat(64) } : entry) },
+    { ...livingInputAcceptance, historicalDLaunch7Acceptance: { ...livingInputAcceptance.historicalDLaunch7Acceptance, sourceCutoffCommit: '0'.repeat(40) } },
     { ...livingInputAcceptance, ownerDirectives: livingInputAcceptance.ownerDirectives.map((entry, index) => index === 2 ? { ...entry, sha256: '0'.repeat(64) } : entry) },
   ];
   for (const document of cases) assert.equal(effectiveFrozenInputScan(catalog, document).acceptance.passed, false);

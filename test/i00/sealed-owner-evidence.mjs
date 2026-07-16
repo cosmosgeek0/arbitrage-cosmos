@@ -92,7 +92,8 @@ function committedAcceptanceRecord(root) {
     throw error;
   }
 
-  if (document?.schemaVersion !== 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1'
+  if (!['I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1', 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2']
+      .includes(document?.schemaVersion)
       || document?.ruling !== 'D-LAUNCH-7'
       || document?.historicalPacketPinsPreserved !== true
       || document?.acceptAssemblyWorkingTreeCopies !== false

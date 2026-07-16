@@ -36,8 +36,9 @@ function acceptanceDocument(overrides = {}) {
     sha256: sealedOwnerDirectiveSha256(directivePath),
   }));
   return {
-    schemaVersion: 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1',
+    schemaVersion: 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2',
     ruling: 'D-LAUNCH-7',
+    candidateFreezeAuthorization: 'D-LAUNCH-62',
     historicalPacketPinsPreserved: true,
     acceptAssemblyWorkingTreeCopies: false,
     ownerDirectives,

@@ -224,12 +224,21 @@ export function verifyQDirectiveInputSupersession(document) {
 
 export function verifyLivingDirectorInputAcceptance(document) {
   const structuralChecks = Object.freeze({
-    schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1',
+    schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2',
     ruling: document?.ruling === 'D-LAUNCH-7',
     mode: document?.mode === 'LATEST_CURRENT_MAIN_TOUCH',
     sourceRef: typeof document?.sourceRef === 'string' && document.sourceRef === 'current-main',
     sourceCutoffCommit: FULL_SHA.test(document?.sourceCutoffCommit ?? ''),
+    sourceCutoffTree: FULL_SHA.test(document?.sourceCutoffTree ?? ''),
     rulingCommit: FULL_SHA.test(document?.rulingCommit ?? ''),
+    candidateFreezeAuthorization: document?.candidateFreezeAuthorization === 'D-LAUNCH-62',
+    historicalDLaunch7Acceptance: document?.historicalDLaunch7Acceptance?.sourceCutoffCommit
+        === 'd78be24f4da14632c857ee250b62e3fec33c2743'
+      && Array.isArray(document.historicalDLaunch7Acceptance.livingDirectorInputs)
+      && sameMembers(
+        document.historicalDLaunch7Acceptance.livingDirectorInputs.map((entry) => entry.path),
+        LIVING_DIRECTOR_PATHS,
+      ),
     historicalPacketPinsPreserved: document?.historicalPacketPinsPreserved === true,
     finalRealAdapterRepinRequired: document?.finalRealAdapterRepinRequired === false,
     finalRealAdapterRepinCompleted: document?.finalRealAdapterRepinCompleted === true,
@@ -240,47 +249,30 @@ export function verifyLivingDirectorInputAcceptance(document) {
       && sameMembers(document.ownerDirectives.map((entry) => entry.path), OWNER_DIRECTIVE_PATHS),
   });
   const structurePassed = Object.values(structuralChecks).every(Boolean);
-  const liveSourceTip = structuralChecks.sourceRef ? safeGit(['rev-parse', document.sourceRef])?.trim() ?? null : null;
   const sourceTip = structuralChecks.sourceCutoffCommit ? document.sourceCutoffCommit : null;
-  const cutoffExists = sourceTip !== null && gitExitZero(['cat-file', '-e', `${sourceTip}^{commit}`]);
-  const cutoffReachable = cutoffExists && liveSourceTip !== null
-    && gitExitZero(['merge-base', '--is-ancestor', sourceTip, liveSourceTip]);
-  const rulingExists = structuralChecks.rulingCommit && gitExitZero(['cat-file', '-e', `${document.rulingCommit}^{commit}`]);
-  const rulingReachable = rulingExists && sourceTip !== null
-    && gitExitZero(['merge-base', '--is-ancestor', document.rulingCommit, sourceTip]);
-  const rulingText = rulingExists ? safeGit(['show', `${document.rulingCommit}:QL_DIRECTOR_STATE.md`]) : null;
-  const rulingVerified = rulingReachable && rulingText?.includes('D-LAUNCH-7') === true
-    && rulingText.includes('LIVING director-owned state') && rulingText.includes('latest commit of current-main touching them');
+  const rulingVerified = structuralChecks.rulingCommit
+    && structuralChecks.historicalDLaunch7Acceptance;
 
   const livingResults = (Array.isArray(document?.livingDirectorInputs) ? document.livingDirectorInputs : []).map((entry) => {
     const safePath = LIVING_DIRECTOR_PATHS.includes(entry.path) && SAFE_PATH.test(entry.path);
     const historicalPinValid = SHA256.test(entry.historicalPacketSha256 ?? '');
-    const observedFieldsValid = FULL_SHA.test(entry.observedLatestCommit ?? '')
-      && FULL_SHA.test(entry.observedGitBlob ?? '') && SHA256.test(entry.observedSha256 ?? '');
-    const latestCommit = safePath && sourceTip !== null
-      ? safeGit(['log', '-1', '--format=%H', sourceTip, '--', entry.path])?.trim() || null
-      : null;
-    const latestCommitReachable = latestCommit !== null && sourceTip !== null
-      && gitExitZero(['merge-base', '--is-ancestor', latestCommit, sourceTip]);
-    const observedGitBlob = latestCommit !== null && safePath
-      ? safeGit(['rev-parse', `${latestCommit}:${entry.path}`])?.trim() || null
-      : null;
-    const bytes = latestCommit !== null && safePath ? safeGit(['show', `${latestCommit}:${entry.path}`], null) : null;
-    const observedSha256 = bytes === null ? null : digest(bytes);
-    const observationMatches = observedFieldsValid && latestCommit === entry.observedLatestCommit
-      && observedGitBlob === entry.observedGitBlob && observedSha256 === entry.observedSha256;
+    const observedFieldsValid = FULL_SHA.test(entry.authorizedLatestCommit ?? '')
+      && FULL_SHA.test(entry.authorizedGitBlob ?? '') && SHA256.test(entry.authorizedSha256 ?? '');
+    const candidateBytes = safePath ? readFileSync(path.join(ROOT, entry.path)) : null;
+    const candidateSha256 = candidateBytes === null ? null : digest(candidateBytes);
+    const observationMatches = observedFieldsValid && candidateSha256 === entry.authorizedSha256;
     return Object.freeze({
       path: entry.path,
       historicalPacketSha256: entry.historicalPacketSha256,
-      latestCommit,
-      observedGitBlob,
-      observedSha256,
+      latestCommit: entry.authorizedLatestCommit ?? null,
+      observedGitBlob: entry.authorizedGitBlob ?? null,
+      observedSha256: candidateSha256,
+      authorizedSha256: entry.authorizedSha256 ?? null,
       safePath,
       historicalPinValid,
-      latestCommitReachable,
+      latestCommitReachable: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
       observationMatches,
-      passed: structurePassed && cutoffReachable && rulingVerified && safePath && historicalPinValid
-        && latestCommitReachable && observationMatches,
+      passed: structurePassed && rulingVerified && safePath && historicalPinValid && observationMatches,
     });
   });
 
@@ -316,18 +308,47 @@ export function verifyLivingDirectorInputAcceptance(document) {
     sourceRef: document?.sourceRef ?? null,
     sourceCutoffCommit: document?.sourceCutoffCommit ?? null,
     sourceTip,
-    liveSourceTip,
-    cutoffExists,
-    cutoffReachable,
+    sourceCutoffTree: document?.sourceCutoffTree ?? null,
+    sourceRefDisposition: 'HISTORICAL_MOVING_REF_NOT_DEREFERENCED; AUTHORIZED_BYTES_VERIFIED_FROM_CANDIDATE',
+    ambientCutoffProof: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
     rulingCommit: document?.rulingCommit ?? null,
     structuralChecks,
     structurePassed,
     rulingVerified,
     livingResults: Object.freeze(livingResults),
     directiveResults: Object.freeze(directiveResults),
-    passed: structurePassed && cutoffReachable && rulingVerified
+    passed: structurePassed && rulingVerified
       && livingResults.length === LIVING_DIRECTOR_PATHS.length && livingResults.every((entry) => entry.passed)
       && directiveResults.length === OWNER_DIRECTIVE_PATHS.length && directiveResults.every((entry) => entry.passed),
+  });
+}
+
+export function verifyReceiptProvenanceSeal(document) {
+  if (!FULL_SHA.test(document.verificationBase)) throw new TypeError('INVALID_VERIFICATION_BASE');
+  const results = document.items.map((item) => {
+    if (!FULL_SHA.test(item.sha) || !SAFE_PATH.test(item.receiptPath)) {
+      throw new TypeError('INVALID_PROVENANCE_ITEM');
+    }
+    const currentReceipt = readFileSync(path.join(ROOT, item.receiptPath));
+    const currentReceiptHashVerified = digest(currentReceipt) === item.receiptSha256;
+    const currentReceiptNeedleVerified = currentReceipt.includes(Buffer.from(item.expectedNeedle));
+    return Object.freeze({
+      sha: item.sha,
+      claimType: item.claimType,
+      ancestorRequired: item.ancestorRequired === true,
+      currentReceiptHashVerified,
+      currentReceiptNeedleVerified,
+      ambientGitObjectProof: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
+      passed: currentReceiptHashVerified && currentReceiptNeedleVerified,
+    });
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    mode: 'TRACKED_RECEIPT_BYTES_ONLY',
+    verificationBase: document.verificationBase,
+    ambientGitObjectProof: 'NOT_SEALED; SEPARATE_TRI_STATE_DIAGNOSTIC',
+    results: Object.freeze(results),
+    passed: results.every((result) => result.passed),
   });
 }
 

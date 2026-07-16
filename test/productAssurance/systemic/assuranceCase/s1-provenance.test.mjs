@@ -12,8 +12,10 @@ const REPO = resolve(import.meta.dirname, '../../../..');
 const gitText = (...args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' }).trim();
 const gitBytes = (...args) => execFileSync('git', args, { cwd: REPO });
 
-test('accepted S1 branch and all pinned contract blobs are recomputed from Git objects', () => {
-  assert.equal(gitText('rev-parse', ACCEPTED_S1_SOURCE.branch), ACCEPTED_S1_SOURCE.commit);
+test('accepted S1 commit and all pinned contract blobs are recomputed from Git objects', () => {
+  assert.equal(ACCEPTED_S1_SOURCE.branch, 'ip-assur-hazard-20260713');
+  assert.equal(gitText('rev-parse', `${ACCEPTED_S1_SOURCE.commit}^{commit}`), ACCEPTED_S1_SOURCE.commit);
+  execFileSync('git', ['merge-base', '--is-ancestor', ACCEPTED_S1_SOURCE.commit, 'HEAD'], { cwd: REPO });
   for (const [pathKey, blobKey, digestKey] of [
     ['schemaPath', 'schemaBlob', 'schemaSha256'],
     ['validationPath', 'validationBlob', 'validationSha256'],

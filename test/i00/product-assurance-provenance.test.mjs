@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  listProductAssuranceTrackedTestFiles,
   validateProductAssuranceManifest,
   verifyProductAssuranceDonor,
   verifyProductAssuranceDonors,
@@ -16,6 +25,104 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const MANIFEST_PATH = path.join(ROOT, 'fixtures/i00/product-assurance-manifest.v1.json');
 const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 const clone = (value) => structuredClone(value);
+const S4_TEST_ROOT = 'test/productAssurance/systemic/assuranceCase';
+const S4_COMPLETE_TRACKED_FILES = Object.freeze([
+  `${S4_TEST_ROOT}/artifacts.test.mjs`,
+  `${S4_TEST_ROOT}/basis-certified-separation-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/bounds.test.mjs`,
+  `${S4_TEST_ROOT}/closure-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/contract-boundary-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/contracts.test.mjs`,
+  `${S4_TEST_ROOT}/diagnostic-posture.test.mjs`,
+  `${S4_TEST_ROOT}/evaluator.test.mjs`,
+  `${S4_TEST_ROOT}/expiry-transitive.test.mjs`,
+  `${S4_TEST_ROOT}/expiry-unknown-origin-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/false-green.test.mjs`,
+  `${S4_TEST_ROOT}/final-law-closure.test.mjs`,
+  `${S4_TEST_ROOT}/hostile-input.test.mjs`,
+  `${S4_TEST_ROOT}/independence.test.mjs`,
+  `${S4_TEST_ROOT}/purity-scope.test.mjs`,
+  `${S4_TEST_ROOT}/reason-diagnostic-bridge-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/s1-provenance.test.mjs`,
+  `${S4_TEST_ROOT}/truncation-path-law-regression.test.mjs`,
+  `${S4_TEST_ROOT}/view-boundary-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/view-model.test.mjs`,
+]);
+const S4_NON_CONTEXT_TRACKED_FILES = Object.freeze([
+  `${S4_TEST_ROOT}/artifacts.test.mjs`,
+  `${S4_TEST_ROOT}/basis-certified-separation-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/bounds.test.mjs`,
+  `${S4_TEST_ROOT}/closure-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/contract-boundary-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/contracts.test.mjs`,
+  `${S4_TEST_ROOT}/diagnostic-posture.test.mjs`,
+  `${S4_TEST_ROOT}/evaluator.test.mjs`,
+  `${S4_TEST_ROOT}/expiry-transitive.test.mjs`,
+  `${S4_TEST_ROOT}/expiry-unknown-origin-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/false-green.test.mjs`,
+  `${S4_TEST_ROOT}/final-law-closure.test.mjs`,
+  `${S4_TEST_ROOT}/hostile-input.test.mjs`,
+  `${S4_TEST_ROOT}/independence.test.mjs`,
+  `${S4_TEST_ROOT}/reason-diagnostic-bridge-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/s1-provenance.test.mjs`,
+  `${S4_TEST_ROOT}/truncation-path-law-regression.test.mjs`,
+  `${S4_TEST_ROOT}/view-boundary-redteam.test.mjs`,
+  `${S4_TEST_ROOT}/view-model.test.mjs`,
+]);
+
+function git(cwd, ...args) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function assertTrackedInventoryMatchesCleanClone() {
+  const temporaryRoot = mkdtempSync(path.join(tmpdir(), 'product-assurance-s4-clean-clone-'));
+  const source = path.join(temporaryRoot, 'dirty-source');
+  const cleanClone = path.join(temporaryRoot, 'clean-clone');
+  const ignoredDecoy = `${S4_TEST_ROOT}/ignored-decoy.test.mjs`;
+  const untrackedDecoy = `${S4_TEST_ROOT}/untracked-decoy.test.mjs`;
+  try {
+    mkdirSync(source, { recursive: true });
+    git(source, 'init', '--initial-branch=main');
+    writeFileSync(path.join(source, '.gitignore'), `${ignoredDecoy}\n`, 'utf8');
+    for (const relativePath of S4_COMPLETE_TRACKED_FILES) {
+      const absolutePath = path.join(source, relativePath);
+      mkdirSync(path.dirname(absolutePath), { recursive: true });
+      writeFileSync(absolutePath, `// tracked clean-clone fixture: ${relativePath}\n`, 'utf8');
+    }
+    git(source, 'add', '--', '.gitignore', ...S4_COMPLETE_TRACKED_FILES);
+    git(
+      source,
+      '-c', 'user.name=Product Assurance Fixture',
+      '-c', 'user.email=product-assurance-fixture.invalid@example.invalid',
+      'commit', '--no-gpg-sign', '-m', 'fixture: tracked S4 inventory',
+    );
+    writeFileSync(path.join(source, ignoredDecoy), '// ignored decoy\n', 'utf8');
+    writeFileSync(path.join(source, untrackedDecoy), '// untracked decoy\n', 'utf8');
+
+    const dirtyStatus = git(source, 'status', '--porcelain=v1', '--untracked-files=all', '--ignored');
+    assert(dirtyStatus.includes(`?? ${untrackedDecoy}`), dirtyStatus);
+    assert(dirtyStatus.includes(`!! ${ignoredDecoy}`), dirtyStatus);
+    execFileSync('git', ['clone', '--no-hardlinks', '--quiet', source, cleanClone], {
+      cwd: temporaryRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    assert.equal(git(cleanClone, 'status', '--porcelain=v1', '--untracked-files=all'), '');
+    assert.deepEqual(
+      listProductAssuranceTrackedTestFiles(S4_TEST_ROOT, source),
+      S4_COMPLETE_TRACKED_FILES,
+    );
+    assert.deepEqual(
+      listProductAssuranceTrackedTestFiles(S4_TEST_ROOT, cleanClone),
+      S4_COMPLETE_TRACKED_FILES,
+    );
+  } finally {
+    rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
 
 test('Product Assurance manifest closes 801 donor callbacks plus one live replacement as effective 802 behavior', () => {
   const validation = validateProductAssuranceManifest(manifest);
@@ -29,7 +136,7 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   assert.equal(validation.gitObjectContextProofs, 6);
   assert.equal(validation.liveContextReplacements, 1);
   assert.equal(validation.contextReplacementRows, 7);
-  assert.equal(validation.postIntegrationReplacementRows, 3);
+  assert.equal(validation.postIntegrationReplacementRows, 4);
 
   const core = manifest.suites.find((suite) => suite.id === 'A_CORE_BEHAVIOR');
   assert.equal(core.expectedPasses, 31);
@@ -41,8 +148,12 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   }]);
 
   const s4 = manifest.suites.find((suite) => suite.id === 'A_CASE_S4_BEHAVIOR');
-  assert.equal(s4.completeTestInventory.length, 20);
-  assert.equal(s4.runs.find((run) => run.id === 'A_CASE_S4_NINETEEN_NON_CONTEXT_FILES').files.length, 19);
+  const s4Inventory = inventory.suites.find((suite) => suite.id === 'A_CASE_S4_BEHAVIOR');
+  const s4NonContextRun = s4.runs.find((run) => run.id === 'A_CASE_S4_NINETEEN_NON_CONTEXT_FILES');
+  assert.deepEqual(s4.completeTestInventory, S4_COMPLETE_TRACKED_FILES);
+  assert.deepEqual(s4Inventory.actualFiles, S4_COMPLETE_TRACKED_FILES);
+  assert.deepEqual(s4NonContextRun.files, S4_NON_CONTEXT_TRACKED_FILES);
+  assertTrackedInventoryMatchesCleanClone();
   assert.equal(s4.expectedPasses, 231);
 
   const agent = manifest.suites.find((suite) => suite.id === 'A_AGENT_BEHAVIOR');
@@ -63,8 +174,8 @@ test('all six accepted assurance donors are exact Git-object ancestors with immu
   const result = verifyProductAssuranceDonors(manifest);
   assert.equal(result.passed, true, JSON.stringify(result.donors.filter((entry) => !entry.passed)));
   assert.equal(result.mergeCutBlobCount, 193);
-  assert.equal(result.donorIdenticalHeadBlobCount, 190);
-  assert.equal(result.postIntegrationReplacementCount, 3);
+  assert.equal(result.donorIdenticalHeadBlobCount, 189);
+  assert.equal(result.postIntegrationReplacementCount, 4);
   assert(result.postIntegrationReplacements.every((entry) => entry.passed));
   assert.deepEqual(result.donors.map((entry) => [entry.id, entry.pathCount, entry.blobMismatches.length]), [
     ['A_CORE', 36, 0],
@@ -125,7 +236,7 @@ test('manifest selection and operation coverage mutations fail closed without ex
     (document) => { document.suites[4].excludedContextTests[0].replacementProofId = ''; },
     (document) => { document.suites[5].expectedPasses += 1; },
     (document) => { document.expectedSkippedCallbacks = 7; },
-    (document) => { document.expectedPostIntegrationReplacementRows = 4; },
+    (document) => { document.expectedPostIntegrationReplacementRows = 5; },
     (document) => { document.donors[0].postIntegrationReplacements.pop(); },
     (document) => { document.donors[1].postIntegrationReplacements.push(structuredClone(document.donors[0].postIntegrationReplacements[0])); },
     (document) => { document.donors[0].postIntegrationReplacements[0].replacementBlob = '0'.repeat(40); },

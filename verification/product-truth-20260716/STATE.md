@@ -1,6 +1,6 @@
 # Product Truth Campaign State
 
-Campaign status: `C3_LOCAL_GATES_PASS_CUSTODY_REQUIRED`
+Campaign status: `BASELINE_TRUTH_ACCEPTED_C3`
 
 Immutable rejected C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
@@ -8,13 +8,13 @@ Accepted source candidate C3: `78f708d6cdb9d1618c53d3f08f71097b4320a63b`
 
 C3 tree: `9e54ae92bd3cc4d30d3114590d7da6d81e019f16`
 
-Evidence HEAD: `CONTAINING_EVIDENCE_ONLY_CHILD` — a commit cannot contain its own SHA; the exact evidence HEAD is reported separately by `git rev-parse HEAD` in the custody handoff.
+Evidence HEAD: `E3_CONTAINING_EVIDENCE_ONLY_CHILD` — a commit cannot contain its own SHA; the exact E3 SHA is reported separately by `git rev-parse HEAD` after the evidence commit is created.
 
-Actor: `ACCOUNT_A_CANDIDATE_WRITER_AND_BUILDER_EVIDENCE_OWNER`
+Actor: `ACCOUNT_A_CANDIDATE_CUSTODIAN_AND_E3_EVIDENCE_OWNER`
 
-Gate: `C3_CUSTODY_REQUIRED:78f708d6cdb9d1618c53d3f08f71097b4320a63b`
+Gate: `BASELINE_TRUTH_ACCEPTED:78f708d6cdb9d1618c53d3f08f71097b4320a63b`
 
-This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains immutable and rejected. C3 is the accepted source candidate. The containing evidence-only child is not a replacement C3 and must never be called C3.
+This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains immutable and rejected. C3 is the immutable baseline source candidate accepted by Account A at Pass 0. E3 is evidence-only, is not a replacement C3, and must never be called C3. This gate does not grant Account B's later `VERIFIED_ACCEPTED`, deployment, private-read, signed-test, order, canary, or money-path authority.
 
 ## Local gate evidence
 
@@ -56,22 +56,30 @@ Result: `BUILDER_LOCAL_SOURCE_PASS_NOT_FINAL_LIVE_REMOTE`. This is builder evide
 - `npm run test:all`: `2026-07-16T21:06:32.689Z` to `2026-07-16T21:16:51.184Z`; exit `0`; test count `2675`; output SHA-256 `da789545c26861daa953eb0d1ad0dbcf385c8302678c775bf56e0cb08eb69572`.
 - Final clone state is clean.
 
-## C3 remote custody and bundle
+## C3 live-remote custody, bundle, and authoritative literal clean clone
 
-- Remote-custody result: `NOT_YET_VERIFIED_FOR_C3`.
-- Cached `origin/truth-campaign-20260716` still resolves to immutable C2, not C3. C2 custody does not transfer to C3.
-- C3 bundle digest: `NOT_AVAILABLE_PENDING_DIRECTOR_CUSTODY_AND_BUNDLE_RECEIPT`.
-- Final live-remote clean-clone battery: `NOT_RUN_AUTHORIZATION_BOUND`.
-- No remote fetch, push, merge, or live-remote clone was performed for C3 in this local pass.
+Result: `BASELINE_TRUTH_ACCEPTED_C3`. This is Account A Pass-0 baseline custody evidence only; it is not Account B final verification.
+
+- Evidence interval: first recorded command `2026-07-16T21:40:06.769Z`; last recorded command `2026-07-16T22:03:18.283Z`; temporary-clone cleanup completed `2026-07-16T22:03:19.898Z`.
+- Full report: `C3_LIVE_REMOTE_GATE_REPORT.json`; SHA-256 `89a22cbb8f7aaf4ecf8afba2385c912b52f16cf656bc59f700c52aaf241f8a0a`; `130534` bytes. Recorder: `run-c3-live-remote-gate.mjs`; SHA-256 `db80e429f5411977e7dfe2e1cca3ea594f0e039fc114fe4b7b5d8e664e8b497b`; `40729` bytes.
+- All `81` recorded command executions contain exact command and argv, cwd, start/end UTC, exit code and expected-exit adjudication, stdout/stderr/combined output SHA-256, byte counts, test count and basis, and skip evidence. Receipt audit found zero missing/invalid records, zero unexpected exits, zero remote-mutation commands, and failure `null`.
+- Toolchain: Git `2.50.1 (Apple Git-155)`, Node `v22.23.1`, npm `10.9.8`, macOS `26.5.2`, `arm64`; normalized environment SHA-256 `f378f48f08ba23d7f2b67e528a2921b3ede08f4d297563d5120c7080a9dcb1f0`.
+- Live `origin/truth-campaign-20260716` resolved to evidence child `ca07f5240b1a656cf3e76fcce9eae6064e3d6934` both before and after the gate. Its exact parent is C3, and C3 is reachable on the live remote.
+- Bundle `~/cosmos-arbitrage-C3-20260717.bundle`: observed SHA-256 `d98dc3af075f08bb07d382351ad32d8fa46b564cebf03ace347d625dbea396df`; `155047399` bytes; Git reported complete history. Its campaign head was `ca07f5240b1a656cf3e76fcce9eae6064e3d6934`; a fresh independent `--no-hardlinks --single-branch` clone proved exact C3 and tree, strict fsck exit `0`, one worktree, `current-main` absent, no alternates, maximum object link count `1`, and final clean state.
+- Authoritative live-remote clone used `git clone --no-hardlinks --single-branch --branch truth-campaign-20260716` against the SSH origin, then exact `git checkout --detach 78f708d6cdb9d1618c53d3f08f71097b4320a63b`. It proved exact detached C3 and tree, evidence-child parent C3, one local branch, one remote-tracking branch, one worktree, non-shallow history, no `current-main` ref, no alternates, three object files inspected with maximum link count `1`, zero hardlinked objects, and strict fsck exit `0`.
+- Dependency lock: `package-lock.json` SHA-256 `3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf`; Git blob `54efede0fbadd309ca38375349075affc347cb51`.
+- `npm ci`: `2026-07-16T21:51:28.142Z` to `2026-07-16T21:51:30.762Z`; exit `0`; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
+- `npm test`: `2026-07-16T21:51:30.762Z` to `2026-07-16T21:53:12.533Z`; exit `0`; test count `413`; output SHA-256 `741cdf7e03e6308ec67610c8a4760aaa8f8f6c2bfb170067b421447389eb6b83`; no unexpected skip/todo marker.
+- `npm run test:all`: `2026-07-16T21:53:12.535Z` to `2026-07-16T22:03:09.520Z`; exit `0`; test count `2675`; output SHA-256 `10b451bfc87c8262c6532dd35bc6b1185750b455ebc855dda4c0b2a9b0d29cca`; no unexpected skip/todo marker.
+- Donor equality independently passed in `TRACKED_RECEIPT_SINGLE_BRANCH` mode at `16/16/16/16`. The final live clone remained clean at exact C3. The report aggregate and baseline-token permission are both `true`.
 
 ## Current-main boundary
 
-Local and cached-origin `current-main` both remained `9c8c9f98c7fbd491fb97fce70d723b6c8bed2a4d` before and after the gate. They were not touched or pushed. No branch was merged or pushed.
+Local, cached-origin, and live-remote `current-main` all remained `9c8c9f98c7fbd491fb97fce70d723b6c8bed2a4d` before and after the gate. It was not checked out, fetched, merged, modified, or pushed. No remote-mutation command was executed; no branch was pushed.
 
 ## Remaining independent-verifier work
 
-- The director must push exact C3 on `truth-campaign-20260716` and return a custody receipt plus verified backup-bundle digest.
-- Only after that receipt is recorded may the final literal clean clone be made from the verified live remote, detached at exact C3, and the final live-remote battery run.
-- Independent Wave-1b `shard-sec` and `v-cockpit` work remains pending; this builder battery is not a substitute.
-- Independent final-verifier adjudication remains pending after Wave-1b and final live-remote evidence.
-- No `BASELINE_TRUTH_ACCEPTED`, `INTEGRATED_ACCEPTED`, final acceptance, deployment readiness, or money-path authority is claimed at this pause.
+- Exact next action: Account B starts from a fresh clean clone/detached worktree at exact C3 and executes the campaign Passes 2-5 read-only. Account B may reject but may not fix or write candidate evidence.
+- Independent Wave-1b `shard-sec` and `v-cockpit` work remains pending; Account A's local and live-remote batteries are not substitutes.
+- Only Account B may issue `VERIFIED_ACCEPTED:78f708d6cdb9d1618c53d3f08f71097b4320a63b`; later cockpit, composed-runtime, staging, private-read, signed-test, test-order, canary, and edge gates remain separate.
+- `INTEGRATED_ACCEPTED`, final verification, deployment readiness, and money-path authority are not claimed by E3.

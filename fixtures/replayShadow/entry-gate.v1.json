@@ -1,0 +1,244 @@
+{
+  "schema": "COSMOS_REPLAY_SHADOW_ENTRY_GATE_V1",
+  "schemaVersion": 1,
+  "packetId": "RUN-17",
+  "disposition": "SHADOW_SPECULATIVE",
+  "authorityGranted": false,
+  "rows": [
+    {
+      "id": "RS-EG-001",
+      "proposedItem": "Generic replay envelope, checksum, integrity inspection, virtual clock, and storage ports",
+      "classification": "ADOPT_EXISTING",
+      "existingOwners": [
+        "server/src/foundation/replay/**"
+      ],
+      "packetAction": "Reference the canonical owner; do not create replacement mechanics.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-002",
+      "proposedItem": "Candidate-independent packet-local replay stimulus tapes",
+      "classification": "MISSING_BUILD",
+      "existingOwners": [],
+      "packetAction": "Build bounded synthetic data-only tapes with explicit owner references and no outcome evaluator.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-003",
+      "proposedItem": "Stale, silent-socket, partial-fill, clock-drift, out-of-order, and capture-truncation scenario vocabulary",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/foundation/scenarios/**"
+      ],
+      "packetAction": "Adapt owner identifiers into neutral stimulus tapes; do not copy owner decisions or expected outcomes.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-004",
+      "proposedItem": "Candidate-independent latency campaign definition",
+      "classification": "MISSING_BUILD",
+      "existingOwners": [],
+      "packetAction": "Build a declarative closed-loop profile and requested-measurement list with no thresholds.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-005",
+      "proposedItem": "Candidate-independent load campaign definition",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/intelligenceRuntime/capacity/**"
+      ],
+      "packetAction": "Adapt the canonical bounded capacity vocabulary into a portable profile; do not create a second capacity simulator.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-006",
+      "proposedItem": "Candidate-independent soak campaign definition",
+      "classification": "MISSING_BUILD",
+      "existingOwners": [],
+      "packetAction": "Build a six-hour deferred profile definition only; no host execution or result claim.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-007",
+      "proposedItem": "Restart and reconnect storm stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/intelligenceRuntime/lifecycle/**",
+        "server/src/productAssurance/faults/harness.ts"
+      ],
+      "packetAction": "Build explicit, deterministic event tapes while preserving the existing backoff and fault owners.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-008",
+      "proposedItem": "Partial-fill ambiguity stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/foundation/execution/**",
+        "server/src/foundation/reconciliation/**"
+      ],
+      "packetAction": "Build evidence sequences only; never resolve ambiguity or compute reconciliation truth here.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-009",
+      "proposedItem": "Stale-data stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/foundation/contracts/time.ts",
+        "server/src/foundation/scenarios/**"
+      ],
+      "packetAction": "Preserve source, receipt, evaluation, maximum-age, and unknown timestamps as separate fixture facts.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-010",
+      "proposedItem": "Connection-loss and rotation stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/intelligenceRuntime/contracts/**",
+        "server/src/intelligenceRuntime/lifecycle/**"
+      ],
+      "packetAction": "Build raw open, ping, close-frame, abnormal-loss, generation, and first-data observations only.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-011",
+      "proposedItem": "Rate-limit stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/intelligenceRuntime/lifecycle/rateBudget.ts"
+      ],
+      "packetAction": "Build observed 429, 418, retry-after, weight, and control-burst facts only.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-012",
+      "proposedItem": "Clock-skew stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/foundation/contracts/time.ts",
+        "server/src/intelligenceRuntime/**"
+      ],
+      "packetAction": "Build unit-tagged wall, source, monotonic, process-session, and regression observations only.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-013",
+      "proposedItem": "Recovery campaign stimulus corpus",
+      "classification": "ADAPT_EXISTING",
+      "existingOwners": [
+        "server/src/productAssurance/remediation/**",
+        "server/src/foundation/control/**",
+        "server/src/intelligenceRuntime/lifecycle/**",
+        "server/src/systemIntegration/persistence/**",
+        "server/src/ledger.ts"
+      ],
+      "packetAction": "Build a fact-owner-labelled detection-to-readback composition template; do not create a recovery controller, state machine, or truth owner.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-014",
+      "proposedItem": "Bounded corpus validator and schedule-window compiler",
+      "classification": "MISSING_BUILD",
+      "existingOwners": [],
+      "packetAction": "Build a pure validator/compiler that emits immutable reference frames and cannot execute a workload.",
+      "builtHere": true
+    },
+    {
+      "id": "RS-EG-015",
+      "proposedItem": "Node built-in focused test runner and repository security scanners",
+      "classification": "ADOPT_EXISTING",
+      "existingOwners": [
+        "node:test",
+        "test/i00/scope-security.mjs",
+        "server/test/systemIntegration/fixtures/egress-tripwire.mjs"
+      ],
+      "packetAction": "Reuse directly from packet-local focused tests; do not add a dependency or package script.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-016",
+      "proposedItem": "I00 effectful local proxy soak, performance SLOs, and acceptance evidence",
+      "classification": "REFERENCE_ONLY",
+      "existingOwners": [
+        "test/i00/performance/**"
+      ],
+      "packetAction": "Use metric vocabulary as research context only; do not copy, invoke, or claim its evidence.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-017",
+      "proposedItem": "Product Assurance fault results, remediation verdicts, and generated reports",
+      "classification": "REFERENCE_ONLY",
+      "existingOwners": [
+        "server/src/productAssurance/faults/**",
+        "fixtures/productAssurance/**"
+      ],
+      "packetAction": "Reference scenario identifiers only; never import historical PASS output as packet evidence.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-018",
+      "proposedItem": "New replay engine, clock, envelope, checksum, replay store, or gap evaluator",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwners": [
+        "server/src/foundation/replay/**"
+      ],
+      "packetAction": "Reject.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-019",
+      "proposedItem": "New socket, retry/backoff policy, rate budget, queue, or capacity simulator",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwners": [
+        "server/src/intelligenceRuntime/**"
+      ],
+      "packetAction": "Reject.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-020",
+      "proposedItem": "New execution lifecycle, ambiguity resolver, reconciler, recovery controller, persistence store, or money-path simulator",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwners": [
+        "server/src/foundation/execution/**",
+        "server/src/foundation/reconciliation/**",
+        "server/src/productAssurance/remediation/**",
+        "server/src/ledger.ts"
+      ],
+      "packetAction": "Reject.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-021",
+      "proposedItem": "Candidate-specific assertion, SLO threshold, result evaluator, acceptance gate, or verdict",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwners": [
+        "Future exact-C2 verification shards and sole Role-3 verdict owner"
+      ],
+      "packetAction": "Reject; RUN-17 defines observations but no pass/fail meaning.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-022",
+      "proposedItem": "Root package script, shared schema, router, startup, or canonical documentation mount",
+      "classification": "REFERENCE_ONLY",
+      "existingOwners": [
+        "Director and future post-C2 porter"
+      ],
+      "packetAction": "File typed insertion requests only; direct edits are forbidden.",
+      "builtHere": false
+    },
+    {
+      "id": "RS-EG-023",
+      "proposedItem": "Immutable RUN-17 receipt",
+      "classification": "MISSING_BUILD",
+      "existingOwners": [],
+      "packetAction": "Seal in a receipt-only child commit after the implementation commit is known.",
+      "builtHere": true
+    }
+  ]
+}

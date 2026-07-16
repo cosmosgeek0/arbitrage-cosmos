@@ -67,6 +67,10 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-47 (2026-07-16): role4-fix COMPLETE (37eeb5b0, pushed) — C2 finalization integrator authorized
+
+Fix phase done: all 15 R3 findings + 4 FIX_AUDIT items fixed-or-refused, closure checkpoint sealed, clean tree. Its written handoff requires an authorized integrator to carry the correction source onto i00-product-assembly-20260713 (from parked 517bd63), commit source-freeze C2, run test:i00:complete from exact C2 with browser/perf receipts, create sole-child S2, validate-only, park, print INTEGRATION_CANDIDATE_READY. Block issued (fresh session, i00-assembly worktree — free, one-writer safe); may not self-verify; correction/rejected checkpoints preserved immutable. Then: V1-V5 + ROLE3-C2 burst (worktrees pre-cut, blocks armed).
+
 ## D-LAUNCH-46 (2026-07-16): Frontier build harvest — F1/F2/F3/F8 PRESTAGE_READY sealed; F13 honestly BLOCKED
 
 Verified clean seals: F1 VenueMesh e435c1f0, F2 PortfolioLab 56a08f4e, F3 StrategyArena 3c9c794e, F8 EdgeMeter 7a658b98 — all PRESTAGE_READY, clean trees, module-local only. F13 DecisionLab committed a sealed BLOCKED checkpoint 2c29de4e (BLOCKED_OWNER_POLICY_ARTIFACT_UNAVAILABLE — needs an owner policy artifact that does not exist pre-landing; per §2 no ready claim, worktree parked, re-adjudicate post-landing). All five branches pushed. Frontier program now fully PARKED per §17 action 8: waits for INTEGRATED_ACCEPTED + FRONTIER_PORT_AUTHORIZED. Outstanding rescouts post-landing: F4/F5/F6/F7/F9/F10 (owner-moving), F11 (dock facet), F12 (never scouted). Critical path: role4-fix at 37eeb5b0 "seal correction closure checkpoint" — approaching final battery/C2.

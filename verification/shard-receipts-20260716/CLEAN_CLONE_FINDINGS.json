@@ -1,0 +1,583 @@
+{
+  "schema": "product-truth-clean-clone-findings.v1",
+  "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+  "status": "BLOCKED",
+  "verification_gate": "BLOCKED",
+  "binding_status": "ADVISORY_NON_BINDING_PASS3_PREP",
+  "actor_role": "CLEAN_CLONE_ACCEPTANCE_SHARD_PASS3_PREP",
+  "finding_owner": "ACCOUNT_A",
+  "actor_had_candidate_source_write_permission": false,
+  "required_next_actor": "ACCOUNT_A",
+  "result_token": "CLEAN_CLONE_FINDINGS_READY",
+  "summary": {
+    "critical": 0,
+    "high": 2,
+    "medium": 1,
+    "low": 0,
+    "open_release_blockers": 2,
+    "npm_ci_exit_code": 0,
+    "npm_test_exit_code": 0,
+    "npm_run_test_all_exit_code": 1,
+    "npm_test_explicit_reported_checks": {
+      "total": 1236,
+      "passed": 1236,
+      "failed": 0
+    },
+    "npm_run_test_all_explicit_reported_checks": {
+      "total": 5894,
+      "passed": 5889,
+      "failed": 5
+    },
+    "failed_test_family": "test:i00:proof:built",
+    "failed_test_family_counts": {
+      "total": 47,
+      "passed": 42,
+      "failed": 5,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "downstream_command_families_not_run": 2,
+    "clean_clone_gate_accepted": false
+  },
+  "clone_topology": {
+    "source": "file:///Users/cosmosgeek/Desktop/Main/.git",
+    "target": "/tmp/vclean",
+    "requested_branch": "truth-campaign-20260716",
+    "branch_tip_at_clone": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
+    "detached_head": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "head_tree": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "single_branch": true,
+    "no_hardlinks": true,
+    "local_branch_refs": [
+      "refs/heads/truth-campaign-20260716"
+    ],
+    "remote_branch_refs": [
+      "refs/remotes/origin/truth-campaign-20260716"
+    ],
+    "current_main_ref": "ABSENT",
+    "tags_present": 9,
+    "reachable_commits_from_candidate": 544,
+    "shallow_repository": false,
+    "object_alternates": "ABSENT",
+    "tracked_and_untracked_status_after_run": "CLEAN"
+  },
+  "environment": {
+    "equivalence": "COMMAND_EQUIVALENT_NOT_HOSTED_CI_OS_EQUIVALENT",
+    "os": "macOS 26.5.2 (25F84)",
+    "architecture": "arm64",
+    "node": "v22.23.1",
+    "npm": "10.9.8",
+    "git": "git version 2.50.1 (Apple Git-155)",
+    "package_manager_declared": "npm@10.9.8",
+    "node_engine_declared": "22.x",
+    "ci_environment_variable": "UNSET",
+    "toolchain_digest_descriptor": "macOS 26.5.2 (25F84)|arm64|node v22.23.1|npm 10.9.8|git version 2.50.1 (Apple Git-155)",
+    "environment_toolchain_digest_sha256": "d117e9f1afc25c184b37e2eba48b52a032caa0b417f114e01bdadf4117caf68f"
+  },
+  "dependency_lock": {
+    "path": "package-lock.json",
+    "sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf"
+  },
+  "commands": [
+    {
+      "id": "requested_cleanup",
+      "command": "rm -rf /tmp/vclean",
+      "working_directory": "/Users/cosmosgeek/Desktop/v-clean",
+      "process_started": false,
+      "exit_code": null,
+      "result": "REJECTED_BEFORE_EXECUTION_BY_COMMAND_RUNNER_POLICY",
+      "precondition_observed_immediately_after_rejection": "/tmp/vclean ABSENT",
+      "semantic_effect": "No cleanup was required because the clone target did not exist. The subsequent clone therefore started from a nonexistent target path."
+    },
+    {
+      "id": "clone_and_checkout",
+      "command": "git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 file:///Users/cosmosgeek/Desktop/Main/.git /tmp/vclean && cd /tmp/vclean && git checkout 41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "working_directory": "/Users/cosmosgeek/Desktop/v-clean",
+      "start_time_utc": "2026-07-16T12:22:58Z",
+      "end_time_utc": "2026-07-16T12:22:59Z",
+      "time_capture": "target-directory birth time and detached .git/HEAD write time; one-second filesystem resolution",
+      "exit_code": 0,
+      "timed_out": false,
+      "result": "Fresh single-branch clone detached at exact candidate C"
+    },
+    {
+      "id": "npm_ci",
+      "command": "npm ci",
+      "working_directory": "/tmp/vclean",
+      "start_time_utc": "2026-07-16T12:23:10Z",
+      "end_time_utc": "2026-07-16T12:23:13Z",
+      "time_capture": "raw-log birth and modification times; one-second filesystem resolution",
+      "exit_code": 0,
+      "timed_out": false,
+      "counts": {
+        "packages_added": 229,
+        "packages_audited": 232,
+        "vulnerabilities": 0,
+        "deprecated_package_warnings": 1
+      },
+      "raw_log": {
+        "path": "/tmp/vclean-npm-ci.log",
+        "bytes": 293,
+        "lines": 8,
+        "sha256": "f81032adea438279f328ce54156c378714524261bdd3bb7655c933634af580ea"
+      }
+    },
+    {
+      "id": "npm_test",
+      "command": "npm test",
+      "working_directory": "/tmp/vclean",
+      "start_time_utc": "2026-07-16T12:23:30Z",
+      "end_time_utc": "2026-07-16T12:24:39Z",
+      "time_capture": "raw-log birth and modification times; one-second filesystem resolution",
+      "exit_code": 0,
+      "timed_out": false,
+      "typecheck": "PASS",
+      "build": "PASS",
+      "reported_counts": {
+        "basis": {
+          "total": 107,
+          "passed": 107,
+          "failed": 0
+        },
+        "volume": {
+          "total": 124,
+          "passed": 124,
+          "failed": 0
+        },
+        "financial_safety": {
+          "total": 59,
+          "passed": 59,
+          "failed": 0
+        },
+        "storage_config_aws": {
+          "total": 29,
+          "passed": 29,
+          "failed": 0
+        },
+        "focused_node": {
+          "total": 51,
+          "passed": 51,
+          "failed": 0,
+          "skipped": 0
+        },
+        "stream_lifecycle": {
+          "total": 14,
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        },
+        "perimeter": {
+          "total": 2,
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        "product_assurance": {
+          "behavior": 802,
+          "provenance": 4,
+          "failed": 0,
+          "files_scanned": 555,
+          "operation_sites_discovered": 205,
+          "operation_sites_covered": 205,
+          "operation_sites_uncovered": 0,
+          "internal_skipped_callbacks": 6,
+          "git_object_context_proofs": 6,
+          "live_context_replacements": 1
+        },
+        "i00_acceptance_contract": {
+          "total": 44,
+          "passed": 44,
+          "failed": 0,
+          "skipped": 0
+        },
+        "explicit_reported_denominator_sum": {
+          "total": 1236,
+          "passed": 1236,
+          "failed": 0
+        }
+      },
+      "egress_audit": {
+        "status": "PASS",
+        "mode": "ROOT",
+        "forbidden_attempts": 0,
+        "installs": 111,
+        "processes": 99,
+        "execution_contexts": 111
+      },
+      "raw_log": {
+        "path": "/tmp/vclean-npm-test.log",
+        "bytes": 45144,
+        "lines": 1005,
+        "sha256": "ea9bf169faea71b222c6c93b51f8df5a3f13e12e64353af11209d48cfe74dfb7"
+      }
+    },
+    {
+      "id": "npm_run_test_all",
+      "command": "npm run test:all",
+      "working_directory": "/tmp/vclean",
+      "start_time_utc": "2026-07-16T12:24:51Z",
+      "end_time_utc": "2026-07-16T12:26:52Z",
+      "time_capture": "raw-log birth and modification times; one-second filesystem resolution",
+      "exit_code": 1,
+      "timed_out": false,
+      "typecheck": "PASS",
+      "build": "PASS",
+      "reported_counts": {
+        "deterministic_built": {
+          "total": 1236,
+          "passed": 1236,
+          "failed": 0,
+          "product_assurance_internal_skipped_callbacks": 6,
+          "egress_forbidden_attempts": 0,
+          "egress_installs": 99,
+          "egress_processes": 87,
+          "egress_execution_contexts": 99
+        },
+        "app_gates": {
+          "total": 83,
+          "passed": 83,
+          "failed": 0
+        },
+        "intelligence_foundation": {
+          "total": 152,
+          "passed": 152,
+          "failed": 0,
+          "count_source": "dot reporter"
+        },
+        "intelligence_runtime": {
+          "total": 395,
+          "passed": 395,
+          "failed": 0,
+          "count_source": "dot reporter"
+        },
+        "capital_foundation": {
+          "total": 433,
+          "passed": 433,
+          "failed": 0,
+          "count_source": "dot reporter"
+        },
+        "foundation": {
+          "files_executed": 24,
+          "files_with_numeric_denominators": 23,
+          "silent_fixture_module_files": 1,
+          "total_reported_checks": 2911,
+          "passed": 2911,
+          "failed": 0,
+          "by_file": {
+            "borrow/borrow.mjs": 179,
+            "borrow/import-purity.mjs": 31,
+            "calibration/calibration.mjs": 105,
+            "calibration/import-purity.mjs": 25,
+            "contracts/contracts.mjs": 226,
+            "contracts/import-purity.mjs": 78,
+            "control/control.mjs": 97,
+            "exchange/binanceUsdM/binance-usdm.mjs": 251,
+            "exchange/binanceUsdM/import-purity.mjs": 59,
+            "execution/execution.mjs": 178,
+            "execution/import-purity.mjs": 30,
+            "integration/compatibility.mjs": 131,
+            "integration/import-purity.mjs": 29,
+            "observability/import-purity.mjs": 25,
+            "observability/observability.mjs": 130,
+            "readModel/read-model.mjs": 72,
+            "reconciliation/import-purity.mjs": 27,
+            "reconciliation/reconciliation.mjs": 75,
+            "replay/import-purity.mjs": 34,
+            "replay/replay.mjs": 132,
+            "risk/risk.mjs": 884,
+            "scenarios/import-purity.mjs": 33,
+            "scenarios/scenarios.mjs": 80
+          }
+        },
+        "system_integration": {
+          "total": 402,
+          "passed": 402,
+          "failed": 0,
+          "skipped": 0
+        },
+        "edge_protocol": {
+          "total": 22,
+          "passed": 22,
+          "failed": 0
+        },
+        "product_integration": {
+          "total": 111,
+          "passed": 111,
+          "failed": 0,
+          "skipped": 0
+        },
+        "product_control": {
+          "total": 102,
+          "passed": 102,
+          "failed": 0,
+          "skipped": 0
+        },
+        "i00_proof": {
+          "total": 47,
+          "passed": 42,
+          "failed": 5,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0,
+          "by_file": {
+            "authority-protocol.test.mjs": {
+              "total": 14,
+              "passed": 12,
+              "failed": 2
+            },
+            "baseline-route-migration.test.mjs": {
+              "total": 3,
+              "passed": 3,
+              "failed": 0
+            },
+            "closure-evidence.test.mjs": {
+              "total": 10,
+              "passed": 8,
+              "failed": 2
+            },
+            "combined-fixture-chain.test.mjs": {
+              "total": 6,
+              "passed": 6,
+              "failed": 0
+            },
+            "sealed-owner-evidence.test.mjs": {
+              "total": 7,
+              "passed": 7,
+              "failed": 0
+            },
+            "security-boundary.test.mjs": {
+              "total": 7,
+              "passed": 6,
+              "failed": 1
+            }
+          }
+        },
+        "explicit_reported_denominator_sum": {
+          "total": 5894,
+          "passed": 5889,
+          "failed": 5,
+          "note": "Sum of non-overlapping denominators emitted by the executed test:all families; typecheck/build and one silent foundation fixture module are not counted as tests."
+        }
+      },
+      "not_run_after_failure": [
+        {
+          "command_family": "test:i00:commands",
+          "status": "NOT_RUN_UPSTREAM_FAILURE",
+          "reason": "The test:all:built script uses && and test:i00:proof:built exited nonzero."
+        },
+        {
+          "command_family": "test:live-edge:built",
+          "status": "NOT_RUN_UPSTREAM_FAILURE",
+          "reason": "The test:all:built script uses && and test:i00:proof:built exited nonzero."
+        }
+      ],
+      "raw_log": {
+        "path": "/tmp/vclean-npm-test-all.log",
+        "bytes": 298276,
+        "lines": 5357,
+        "sha256": "e9eb992ec018bf454491639a9bed823449f195d81c21781faa5ceba3600e52d7"
+      }
+    },
+    {
+      "id": "read_only_render_report_parity_probe",
+      "command": "Build machine evidence in memory at exact C and byte-compare it with integration/reports/i00-proof-evidence.json; do not write repository files",
+      "working_directory": "/tmp/vclean",
+      "start_time_utc": "2026-07-16T12:33:02Z",
+      "end_time_utc": "2026-07-16T12:33:03Z",
+      "exit_code": 0,
+      "timed_out": false,
+      "comparison_passed": false,
+      "committed_bytes": 523775,
+      "generated_bytes": 523805,
+      "committed_sha256": "6dabfd10e517978f2c1d8e369b62314198cc99306816333d54cfcbb95e2b77aa",
+      "generated_sha256": "407027b1ab81e6ac39e423364e0903136693de1773fba79ddce667ae7b87a58a",
+      "differing_leaf_paths": 10,
+      "raw_log": {
+        "path": "/tmp/vclean-render-parity.json",
+        "bytes": 1705,
+        "lines": 59,
+        "sha256": "df10e29bac099a67ea822c4f5ab04b379b4db79ceb50d9bceffc380f16fd3b79"
+      }
+    }
+  ],
+  "findings": [
+    {
+      "id": "P3-CLEAN-001",
+      "severity": "HIGH",
+      "state": "CONFIRMED",
+      "finding_owner": "ACCOUNT_A",
+      "disposition": "OPEN_RELEASE_BLOCKER",
+      "title": "Sealed machine evidence is live-Git-dependent and the root parity contract masks clean-clone drift",
+      "invariant": "At exact candidate C, sealed reports and their parity proof must be byte-deterministic from tracked candidate content. Ambient branch names and unreachable Git objects must not alter sealed bytes; unavailable live provenance must remain UNKNOWN in a separate diagnostic rather than becoming sealed falsehood. A root green must not mask a red fresh single-branch checkout.",
+      "evidence": {
+        "canonical_run": "npm test exited 0 and its I00 acceptance contract reported 44/44, including candidate report parity; npm run test:all exited 1 in the same clean clone.",
+        "clean_clone_failures": [
+          "D-LAUNCH-1 authorizes exactly one external Q directive-lock supersession",
+          "accepted evidence references full SHAs and existing receipts",
+          "current machine evidence is input-driven for both legal candidate phases and historical IP-PROOF evidence stays historical"
+        ],
+        "ambient_git_absence": {
+          "current_main_ref": "ABSENT",
+          "git_cat_file_692501587617d4880303fbd747d93e63c376f088_exit_code": 128
+        },
+        "direct_parity_probe": {
+          "matches": false,
+          "committed_sha256": "6dabfd10e517978f2c1d8e369b62314198cc99306816333d54cfcbb95e2b77aa",
+          "generated_sha256": "407027b1ab81e6ac39e423364e0903136693de1773fba79ddce667ae7b87a58a",
+          "committed_bytes": 523775,
+          "generated_bytes": 523805,
+          "differing_leaf_paths": 10,
+          "material_diffs": [
+            "livingDirectorInputAcceptance.cutoffReachable true -> false",
+            "livingDirectorInputAcceptance.liveSourceTip omitted -> null",
+            "livingDirectorInputAcceptance.liveSourceTipDisposition MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED -> MOVING_REF_TIP_UNAVAILABLE_OR_INVALID",
+            "livingDirectorInputAcceptance.passed true -> false",
+            "receiptProvenanceVerification.passed true -> false",
+            "receiptProvenanceVerification.results[10].commitExists true -> false",
+            "receiptProvenanceVerification.results[10].passed true -> false"
+          ]
+        },
+        "source_locations": [
+          "test/i00/render-reports.mjs:161",
+          "test/i00/render-reports.mjs:171",
+          "test/i00/render-reports.mjs:236",
+          "test/i00/git-provenance.mjs:225",
+          "test/i00/git-provenance.mjs:243",
+          "test/i00/git-provenance.mjs:334",
+          "test/i00/git-provenance.mjs:339",
+          "test/i00/performance/local-acceptance.mjs:1642",
+          "test/i00/performance/local-acceptance.mjs:1702",
+          "test/i00/performance/local-acceptance.mjs:1708",
+          "test/i00/performance/local-acceptance.mjs:2017",
+          "QL_DIRECTOR_STATE.md:88"
+        ]
+      },
+      "repro": "From a fresh --no-hardlinks --single-branch truth-campaign clone detached at 41752d6a87dc1cb1b933bb4460c9cabfc15ff694, run npm ci, npm test, then npm run test:all. Independently call buildMachineEvidence() in memory and compare the resulting canonical JSON bytes with integration/reports/i00-proof-evidence.json.",
+      "expected": "npm test and npm run test:all agree, the regenerated sealed report is byte-identical at exact C, and missing non-candidate refs or objects are represented only as UNKNOWN runtime diagnostics outside sealed parity.",
+      "actual": "npm test is green while test:all is red; the clean clone regenerates a different 523805-byte report from the committed 523775-byte report because live ref/object availability changes evidence fields.",
+      "correction_boundary": "Account A should change only the I00 evidence generator/provenance/parity harness boundary: derive sealed bytes from HEAD plus tracked inputs, move live-Git checks into a separate non-sealed diagnostic, and ensure absent refs remain UNKNOWN. Do not weaken genuine provenance assertions, alter product logic, or merely rewrite the committed snapshot to one local Git environment. Freeze and rerun a new candidate SHA."
+    },
+    {
+      "id": "P3-CLEAN-002",
+      "severity": "HIGH",
+      "state": "CONFIRMED",
+      "finding_owner": "ACCOUNT_A",
+      "disposition": "OPEN_RELEASE_BLOCKER",
+      "title": "Exact C contains living director input bytes that do not match its accepted D-LAUNCH-7 pins",
+      "invariant": "Every accepted living director input referenced by the exact candidate must match its owner-authorized SHA-256 and source binding. A provenance report may not claim final repin success when the candidate's tracked bytes disagree.",
+      "evidence": {
+        "failed_tests": [
+          "final D-LAUNCH-7 repin accepts exact current-main objects while historical packet pins stay immutable",
+          "current machine evidence is input-driven for both legal candidate phases and historical IP-PROOF evidence stays historical"
+        ],
+        "mismatches": [
+          {
+            "path": "QL_DIRECTOR_STATE.md",
+            "pinned_sha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+            "candidate_sha256": "dabdd37a0f2b0e34568ae4e4874ac0f0ad5fcbad24dd290ba6772856c3e1d3dd"
+          },
+          {
+            "path": "QL_PARALLEL_DAG.md",
+            "pinned_sha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+            "candidate_sha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0"
+          }
+        ],
+        "source_locations": [
+          "fixtures/i00/proof-catalog.json:39",
+          "fixtures/i00/proof-catalog.json:40",
+          "fixtures/i00/living-director-input-acceptance.json:15",
+          "fixtures/i00/living-director-input-acceptance.json:22",
+          "server/test/i00Acceptance/authority-protocol.test.mjs:84",
+          "server/test/i00Acceptance/closure-evidence.test.mjs:333"
+        ]
+      },
+      "repro": "At exact C, run shasum -a 256 QL_DIRECTOR_STATE.md QL_PARALLEL_DAG.md, compare the results with fixtures/i00/proof-catalog.json and fixtures/i00/living-director-input-acceptance.json, then run npm run test:i00:proof.",
+      "expected": "Candidate bytes match the authenticated accepted input pins, or the candidate truth remains explicitly BLOCKED without a final-repin claim.",
+      "actual": "Both tracked files differ from the accepted SHA-256 values, finalRepinPassed is false, and two I00 proof assertions reject the candidate.",
+      "correction_boundary": "Account A must reconcile the two tracked living inputs against current owner authority and update the exact input acceptance/proof bindings only with an authorized source transition. Do not blindly rebaseline hashes. Regenerate dependent evidence and freeze a new candidate SHA for clean-clone verification."
+    },
+    {
+      "id": "P3-CLEAN-003",
+      "severity": "MEDIUM",
+      "state": "CONFIRMED",
+      "finding_owner": "ACCOUNT_A",
+      "disposition": "OPEN_TEST_ASSURANCE_DEFECT",
+      "title": "Product Assurance clean-clone regression test violates the I00 child-process scanner",
+      "invariant": "Every IP-owned executable file must satisfy the declared egress and process-creation policy, and the root deterministic gate must not report green while the complete I00 security boundary rejects the same tracked source.",
+      "evidence": {
+        "failed_test": "all IP-owned executable and machine evidence files are egress-free secret-free and fixture-safe",
+        "finding": {
+          "code": "CHILD_PROCESS",
+          "file": "test/i00/product-assurance-provenance.test.mjs"
+        },
+        "cause": "test/i00/product-assurance-provenance.test.mjs imports execFileSync from node:child_process and invokes local Git directly. test/i00/scope-security.mjs scans all test/i00 executable files and exempts CHILD_PROCESS only for git-provenance.mjs and verify-scope.mjs, not this file.",
+        "introduced_by": "39ec378d4a7584f3c69436ef5c9f105c56bffb16",
+        "impact_boundary": "The observed calls are local temporary-repository Git operations. No production runtime, money path, signed/private exchange call, secret exposure, or external egress was observed; the defect is a universal test-policy and gate-consistency failure.",
+        "source_locations": [
+          "test/i00/product-assurance-provenance.test.mjs:2",
+          "test/i00/product-assurance-provenance.test.mjs:73",
+          "test/i00/product-assurance-provenance.test.mjs:109",
+          "test/i00/scope-security.mjs:38",
+          "test/i00/scope-security.mjs:126",
+          "test/i00/scope-security.mjs:144",
+          "server/test/i00Acceptance/security-boundary.test.mjs:96"
+        ]
+      },
+      "repro": "At exact C in any checkout, run npm run build -w server followed by npm run test:i00:proof:built. The security-boundary assertion reports one CHILD_PROCESS finding.",
+      "expected": "The Product Assurance clean-clone regression uses the bounded shared Git-evidence boundary or has an exact constrained policy disposition, and both npm test and test:all enforce the same security policy.",
+      "actual": "The regression test directly spawns Git, the scanner forbids it, test:i00:proof fails 1/7 in security-boundary.test.mjs, and npm test does not surface that rejection.",
+      "correction_boundary": "Prefer routing the temporary Git operations through the existing bounded runGitEvidence/verify-scope boundary. If an allowlist is necessary, constrain it to this exact file and local Git-only arguments; do not broadly weaken CHILD_PROCESS detection. Add a root-gate regression so npm test cannot green while the full security scan is red."
+    }
+  ],
+  "deviations_skips_unavailable_evidence": [
+    "The command runner rejected the literal rm -rf cleanup before process creation. /tmp/vclean was immediately verified absent, so cloning into the nonexistent target preserved fresh-clone semantics without reusing any prior checkout.",
+    "The run used macOS 26.5.2 arm64 with the declared Node 22 and npm 10.9.8. It is command-equivalent to the repository workflow, not hosted ubuntu-latest OS-equivalent; CI was unset.",
+    "test:i00:commands and test:live-edge:built were not run inside npm run test:all because the canonical && chain stopped at test:i00:proof:built exit 1. They were not substituted or rerun separately.",
+    "Clone/checkout stdout was observed live but not retained as a raw file. Clone timestamps are filesystem-observed at one-second resolution; all npm command stdout/stderr was retained and hashed.",
+    "The file:// origin is mutable, but every measurement was detached at exact C and the candidate tree was verified before and after the run."
+  ],
+  "forbidden_path_non_touch_assertion": {
+    "candidate_clone_tracked_and_untracked_status_after_all_commands": "CLEAN",
+    "candidate_clone_tracked_diff_check": "PASS",
+    "candidate_source_or_main_modified": false,
+    "current_main_modified": false,
+    "v_clean_tracked_paths_modified": 0,
+    "v_clean_allowed_output": "CLEAN_CLONE_FINDINGS.json",
+    "other_v_clean_untracked_outputs_created": 0
+  },
+  "receipt": {
+    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "command_or_operator_action": "Fresh single-branch exact-C clone; npm ci; npm test; npm run test:all; read-only sealed-report regeneration comparison",
+    "environment_toolchain_digest_sha256": "d117e9f1afc25c184b37e2eba48b52a032caa0b417f114e01bdadf4117caf68f",
+    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+    "start_time_utc": "2026-07-16T12:22:58Z",
+    "end_time_utc": "2026-07-16T12:33:03Z",
+    "gate_exit_code": 1,
+    "test_counts": {
+      "npm_test": {
+        "total": 1236,
+        "passed": 1236,
+        "failed": 0
+      },
+      "npm_run_test_all": {
+        "total": 5894,
+        "passed": 5889,
+        "failed": 5
+      }
+    },
+    "artifact_hashes": {
+      "/tmp/vclean-npm-ci.log": "f81032adea438279f328ce54156c378714524261bdd3bb7655c933634af580ea",
+      "/tmp/vclean-npm-test.log": "ea9bf169faea71b222c6c93b51f8df5a3f13e12e64353af11209d48cfe74dfb7",
+      "/tmp/vclean-npm-test-all.log": "e9eb992ec018bf454491639a9bed823449f195d81c21781faa5ceba3600e52d7",
+      "/tmp/vclean-render-parity.json": "df10e29bac099a67ea822c4f5ab04b379b4db79ceb50d9bceffc380f16fd3b79",
+      "integration/reports/i00-proof-evidence.json": "6dabfd10e517978f2c1d8e369b62314198cc99306816333d54cfcbb95e2b77aa"
+    },
+    "actor_role": "CLEAN_CLONE_ACCEPTANCE_SHARD_PASS3_PREP",
+    "actor_had_candidate_source_write_permission": false,
+    "actor_write_scope": "/Users/cosmosgeek/Desktop/v-clean/CLEAN_CLONE_FINDINGS.json only",
+    "deviations_skips_unavailable_evidence": "See top-level deviations_skips_unavailable_evidence; no deviation was hidden or waived."
+  }
+}

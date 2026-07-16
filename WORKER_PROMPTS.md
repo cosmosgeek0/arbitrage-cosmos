@@ -1,17 +1,11 @@
-# FRONTIER — nothing is idle. Do these NOW (order matters for #0):
-#
-#   0. PASTE the CUSTODY block into your truth-a chat  <-- unblocks the whole critical path.
-#        (truth-a is BLOCKED waiting only for this. It is mid-run; the paste queues.)
-#   1. RUN-P1 -> folder shard-prov
-#   2. RUN-P2 -> folder shard-sec
-#   3. RUN-P3 -> folder v-cockpit
-#   4. RUN-P4 -> folder prep-act
-#   5. RUN-P5 -> folder v-clean
-#
-#   ARMED (do NOT run yet): RUN-VFINAL fires the moment truth-a prints
-#        BASELINE_TRUTH_ACCEPTED. Tell me then; I confirm and you paste it.
-#
-#   truth-b: closed. All port/hotfix chats: closed. Red GitHub emails: ignore.
+# NEXT: paste DEFECT WAVE 1 (below) into truth-a. It fixes the found defects and freezes C2.
+# Still running: shard-sec, v-cockpit (their findings append later). RUN-VFINAL stays ARMED (runs on C2, not C).
+# truth-b closed. Ignore red GitHub emails.
+
+## DEFECT WAVE 1 (paste into truth-a)
+```text
+DIRECTOR DEFECT WAVE 1 (D-LAUNCH-62). BASELINE_TRUTH_ACCEPTED:41752d6a is recorded — good. Read-only prep shards returned findings against exact C (durable copies in Main verification/shard-receipts-20260716/: PROV_FINDINGS.json = 2 CRITICAL + 6 HIGH; CLEAN_CLONE_FINDINGS.json = 2 HIGH + 1 MEDIUM; plus prep-act ACTIVATION_RUNBOOK_DRAFT + CANARY_PRECHECK for later). Adjudicate ALL as one wave, then freeze C2 (do NOT hand C to the final verifier — it has criticals): PROV-001 CRITICAL: INPUTS.lock has only 8 inputs; MISSING hashes for I00, IP_RUNTIME/CONTROL/OPS/PROOF, POST_I00, IP_ASSURANCE, Frontier, deployment, and superseded directives — add every controlling + superseded directive hash. PROV-002 CRITICAL: coverage matrix has zero Frontier rows — add explicit candidate-bound Frontier disposition rows (REFERENCE_ONLY/ABANDONED_SAFE with evidence), don't leave silent. PROV-003 HIGH: matrix rows MIS-002/004/007/008 + ARC-001/002/007/010 cite nonexistent test/owner paths — correct to the real proving paths the finding lists; add rows for the missing MISSION/ARCHITECTURE laws. PROV-004 HIGH: INCIDENT_ACK + SOURCE_ISOLATE commands are canonically ABSENT with no matrix row — add explicit implementation+test+evidence or honest NOT_CONFIGURED rows. PROV-005 HIGH: coverage/proof artifacts still bind historical candidate 74eb452, and browser/proof paths are pending/nonexistent — regenerate all proof evidence against exact C2. PROV-006 HIGH: test:all:built + the deterministic runner OMIT aiOps/obsShadow/opsShadow/replayShadow/runbookShadow suites and web/test/aiOps is NOT_MOUNTED — either wire these suites into the canonical gate or explicitly disposition AI-Ops as excluded/NOT_CONFIGURED in C2 (do not let npm test imply AI-Ops is accepted). PROV-007 HIGH: AI-Ops route UNWIRED, provider/paging/sentinel NOT_CONFIGURED — keep as honest owner-gated rows, confirmed excluded from acceptance claims. PROV-008 HIGH: Product Assurance mandatory closure set + IP_ASSURANCE_RECEIPT are generator-era, soak NOT_RUN, receipt does not attest root gates — regenerate the named artifact set against C2 or record precise deferred-owner-gate dispositions. CLEAN_CLONE P3-CLEAN-001/002 HIGH + 003 MEDIUM: the single-branch clean-checkout battery fails (the known sealed-report-parity / render-reports live-git bake-in determinism defect) — fix so exact C2 passes `git clone --single-branch --branch truth-campaign-20260716 ... && npm ci && npm test && npm run test:all` from a fresh clone (CLEAN_CLONE_ACCEPTED). RULES: you are the ONLY candidate writer; fix or evidence-refuse each, disjoint edits, regression proof; freeze new candidate C2 and record BASELINE_TRUTH_ACCEPTED:C2. shard-sec + v-cockpit findings are still pending — I will append them as wave 1b; you may start now on the above. Preserve all receipts before compaction. Stop at C2 frozen + gate report, or precise BLOCKED.
+```
 
 ## CUSTODY (paste into truth-a)
 ```text

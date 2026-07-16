@@ -1,12 +1,12 @@
 # Product Truth Campaign State
 
-Pass-0 status: `BUILDING_C2`
+Pass-0 status: `READY_FOR_C2_FREEZE`
 
-Next-gate status: `BLOCKED` — exact C2 freeze, root/full gates, fresh single-branch clone, and C2 custody
+Next-gate status: `BLOCKED` — containing-commit C2 assignment, exact root/full gates, fresh single-branch clone, and C2 custody
 
 Actor: `ACCOUNT_A_CANDIDATE_WRITER`
 
-Gate: `BLOCKED:D_LAUNCH_62_C2_NOT_YET_FROZEN`
+Gate: `BLOCKED:C2_EXACT_SHA_AND_GATES_PENDING`
 
 This file is the sole campaign-status authority. Root `STATE.md` owns product state.
 
@@ -38,4 +38,4 @@ This file is the sole campaign-status authority. Root `STATE.md` owns product st
 
 ## Exact next action
 
-Finish source corrections, run the canonical gates, freeze exact C2, reproduce `npm ci`, `npm test`, and `npm run test:all` from a fresh local single-branch clone, generate exact-C2 evidence and manifest, then reassess Pass 0. Issue no baseline token unless C2 itself has valid custody.
+Commit this source-complete state as provisional C2, run the canonical local and fresh single-branch gates against that exact SHA, generate exact-C2 evidence and manifest, then reassess Pass 0. Issue no baseline token unless C2 itself has valid custody.

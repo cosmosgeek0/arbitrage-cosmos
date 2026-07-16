@@ -8,7 +8,7 @@ This file owns current product state. `ARCHITECTURE.md` Part II owns code author
 | --- | --- | --- | --- |
 | Historical corrected I00 source | `74eb452efab89ca92ec9ff5cb192b723b5f198f3` | `VERIFIED` | The independent C2 receipt reported 15 fixed, 0 refused, and 0 pending; the source was later landed. Historical evidence does not verify newer source. |
 | Landed validate-only core | landing ancestry through `51efaaa4` | `INTEGRATED` | Existing engine, capital, risk, ledger, control, reconciliation, cockpit, operations, and assurance owners remain canonical. |
-| Account A product-truth candidate | D-LAUNCH-62 C2 repair wave; exact SHA is assigned only at final source freeze | `BUILDING` | Old C has critical provenance defects and is not eligible for final verification. Account A is the sole candidate writer. |
+| Account A product-truth candidate | The containing final source commit; exact SHA is assigned as C2 only after this state is committed | `FROZEN_SOURCE_PENDING_EXACT_GATES` | Old C has critical provenance defects and is not eligible for final verification. Account A is the sole candidate writer. |
 | Candidate source base Main | `2ae812624f20b9bc93fc4ad66cb568929101110f` | `INTEGRATED` | Later director-only `current-main` records, including D-LAUNCH-62 at `2a832750…`, are controlling evidence inputs rather than candidate ancestry. No candidate merge or push to `current-main` is claimed. |
 
 The exact frozen candidate SHA cannot self-name inside its own commit. The campaign `INPUTS.lock` binds the containing commit after it is created. No later evidence-only commit changes candidate source C.
@@ -24,7 +24,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Capability dimension | State | Exact boundary |
 | --- | --- | --- |
 | Historical validate-only core | `VERIFIED` | Verification applies to historical C2R, not to the new candidate SHA. |
-| Account A candidate source | `BUILDING` | D-LAUNCH-62 Wave 1 is correcting provenance, proof determinism, gate coverage, and clean-clone defects before C2 freeze. |
+| Account A candidate source | `FROZEN_SOURCE_PENDING_EXACT_GATES` | D-LAUNCH-62 Wave 1 source corrections and source-unbound evidence contracts are complete; the containing commit becomes provisional C2 for exact root/full/fresh-clone proof. |
 | AI-Ops source: egress, contracts, runtime, adapters, cockpit, proof, replay, operations, runbooks | `INTEGRATED` | Nine sealed lanes and the egress patch are exact second-parent candidate merges. |
 | AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | AI-Ops root-test mount is also `NOT_CONFIGURED`; AI-Ops acceptance is explicitly excluded from the C2 baseline rather than inferred from `npm test`. |
 | AI-Ops composed production runtime | `UNWIRED` | AI code has no live capital, order, signing, self-approval, or silent production-patch authority. |
@@ -54,7 +54,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - All 14 durable Wave-1 findings are adjudicated. The coverage matrix has 153 rows, including 17 explicit Frontier dispositions, the missing permanent-law rows, and honest absent-control/AI-Ops boundaries; the capability matrix has 23 rows.
 - Focused proof is green at `47/47`; the acceptance contract is green at `44/44`, including a sole branch with no `current-main` ref. The five human I00 reports and machine report are refreshed from a clean tracked-byte source checkpoint.
 - Exact-C2 evidence generation now reads candidate bytes rather than mutable evidence-child seeds, classifies historical active-name artifacts, confines the post-C2 diff to the campaign directory, and requires the exact candidate-bound gate report before generating the manifest.
-- Exact C2 root, full, exact report-parity, and fresh single-branch clone results remain pending the final source freeze. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
+- Exact C2 root, full, exact report-parity, and fresh single-branch clone results are the remaining source-freeze checks. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
 
 ## Previous source evidence
 
@@ -81,7 +81,7 @@ These are Account A builder measurements from the superseded old-C cycle. They a
 
 ## Known boundaries
 
-- `BLOCKED`: independent verification of exact candidate C, current-candidate cockpit proof, composed-runtime proof, and clean-clone Pass 3 beyond the P0 CI-equivalent check.
+- `BLOCKED`: independent verification of exact C2, current-candidate cockpit proof, composed-runtime proof, and independent clean-clone acceptance beyond Account-A builder evidence.
 - `NOT_CONFIGURED`: AI provider execution, production AI routing, external paging, staging deployment, private account truth, signed exchange calls, test orders, and production consumers for the deferred bridges.
 - `UNWIRED`: AI-Ops composed production runtime.
 - `ABSTAIN_UNKNOWN`: production capacity and economic edge.

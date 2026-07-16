@@ -10,6 +10,14 @@ const OUTPUT = resolve(
   process.cwd(),
   'verification/product-truth-20260716/WORKTREE_CENSUS.json',
 );
+const FROZEN_CANDIDATE = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
+const D_LAUNCH_61_READ_ONLY_SHARDS = new Set([
+  'prep-act',
+  'shard-prov',
+  'shard-sec',
+  'v-clean',
+  'v-cockpit',
+]);
 
 const MERGED_RETAINED = [
   'Main',
@@ -117,7 +125,12 @@ const SEALED_UNMERGED = [
 ];
 
 const ACTIVE_DIRTY = [];
-const BLOCKED = ['egress-patch', 'truth-a', 'truth-b'];
+const BLOCKED = [
+  'egress-patch',
+  'truth-a',
+  'truth-b',
+  ...D_LAUNCH_61_READ_ONLY_SHARDS,
+];
 
 const CANDIDATE_ADMISSION_LANES = new Set([
   'egress-patch',
@@ -387,9 +400,10 @@ function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
 }
 
 function ownerFor(name) {
-  if (name === 'Main') return 'RETIRED_DIRECTOR_READ_ONLY_FOR_CAMPAIGN';
+  if (name === 'Main') return 'DIRECTOR_COORDINATION_ONLY_NO_CANDIDATE_SOURCE_AUTHORITY';
   if (name === 'truth-a') return 'ACCOUNT_A_CANDIDATE_OWNER';
   if (name === 'truth-b') return 'ACCOUNT_B_READ_ONLY_VERIFIER';
+  if (D_LAUNCH_61_READ_ONLY_SHARDS.has(name)) return 'D_LAUNCH_61_READ_ONLY_SHARD';
   if (name === 'port-a4') return 'NO_ACTIVE_WRITER_SEALED_WITH_EXTERNAL_BLOCKERS';
   if (name.startsWith('port-')) return 'NO_ACTIVE_WRITER_SEALED_PORT_LANE';
   if (name === 'egress-patch') return 'NO_ACTIVE_WRITER_BLOCKED_PATCH_LANE';
@@ -402,6 +416,9 @@ function currentWriteGrantFor(name) {
     return ['verification/product-truth-20260716/**'];
   }
   if (name === 'truth-b') return ['ACCOUNT_B_OWN_VERIFICATION_ARTIFACTS_ONLY'];
+  if (D_LAUNCH_61_READ_ONLY_SHARDS.has(name)) {
+    return ['OWN_UNTRACKED_FINDING_ARTIFACTS_ONLY_NO_CANDIDATE_WRITES'];
+  }
   return [];
 }
 
@@ -415,11 +432,19 @@ function taskFor(name) {
     'port-a4': 'AI-Ops A4 operator-surface port',
     'ip-assur-formal': 'A-FORMAL post-landing admission candidate',
     'ip-assur-action': 'S2 action-evidence post-landing admission candidate',
+    'prep-act': 'D-LAUNCH-61 read-only activation and canary runbook preparation at exact C',
+    'shard-prov': 'D-LAUNCH-61 read-only provenance and directive-coverage audit at exact C',
+    'shard-sec': 'D-LAUNCH-61 read-only secrets and egress audit at exact C',
+    'v-clean': 'D-LAUNCH-61 read-only clean-clone battery at exact C',
+    'v-cockpit': 'D-LAUNCH-61 read-only cockpit no-false-green audit at exact C',
   };
   return explicit[name] ?? `retained lane ${name}`;
 }
 
 function dispositionFor(name, classification) {
+  if (D_LAUNCH_61_READ_ONLY_SHARDS.has(name)) {
+    return 'BLOCKED: D-LAUNCH-61 read-only shard is detached at exact C; outputs are non-binding advisory preparation pending independent adjudication and grant no candidate write or acceptance authority';
+  }
   if (name === 'port-a4') {
     return classification === 'MERGED_RETAINED'
       ? 'MERGED_RETAINED: D-LAUNCH-58 explicitly authorized the sealed-with-external-blockers lane for candidate integration'
@@ -480,6 +505,9 @@ function untrackedDisposition(name, path) {
   }
   if (name === 'truth-b') {
     return 'PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A';
+  }
+  if (D_LAUNCH_61_READ_ONLY_SHARDS.has(name)) {
+    return 'PRESERVED_D_LAUNCH_61_READ_ONLY_SHARD_OUTPUT_NOT_READ_BY_ACCOUNT_A';
   }
   if (name === 'role3-c2' && path === 'ROLE3_C2_RECEIPT.md') {
     return 'PRESERVED_HISTORICAL_C2_RECEIPT_REFERENCE_ONLY';
@@ -674,14 +702,16 @@ function diffIdentity(base, head) {
   };
 }
 
-const candidateArg = process.argv[2] ?? 'HEAD';
+const candidateArg = process.argv[2] ?? FROZEN_CANDIDATE;
 const censusStartedAt = new Date().toISOString();
 const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`);
 const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);
 const rawWorktrees = git(MAIN, 'worktree', 'list', '--porcelain', '-z').stdout;
 const records = parseWorktrees(rawWorktrees);
 
-if (records.length !== 96) throw new Error(`Expected 96 registered worktrees, observed ${records.length}`);
+if (records.length !== EXPECTED_NAMES.size) {
+  throw new Error(`Expected ${EXPECTED_NAMES.size} registered worktrees, observed ${records.length}`);
+}
 const observedNames = new Set(records.map((record) => basename(record.worktree)));
 for (const name of EXPECTED_NAMES) {
   if (!observedNames.has(name)) throw new Error(`Expected registered worktree missing: ${name}`);

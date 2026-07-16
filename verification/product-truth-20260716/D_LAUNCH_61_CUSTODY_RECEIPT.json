@@ -1,0 +1,111 @@
+{
+  "schema": "product-truth-off-machine-custody-receipt.v1",
+  "directive_id": "D-LAUNCH-61",
+  "status": "INTEGRATED",
+  "candidate": {
+    "commit": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "tree": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "parent": "f11531e6637979d6e173f6eb25d04c10a76d20c8",
+    "state": "INTEGRATED",
+    "source_frozen": true
+  },
+  "authorization": {
+    "director_receipt_commit": "b4d9f22d3732003f2cc5cec1f11a87833a933209",
+    "parent": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "subject": "director: D-LAUNCH-61 — custody granted; 5 read-only frontier shards at frozen C",
+    "path": "QL_DIRECTOR_STATE.md",
+    "lines": "70-72",
+    "git_blob": "bf7e7c09aa84af046dc8ff1750098da5e89e8076",
+    "sha256": "0d39a06b622f67a455d461bc033d6e7ef4bcc78f063c7cf6a6ad61e989db546e",
+    "ruling": "The pushed GitHub campaign ref resolves the Pass-0 off-machine custody blocker; the local full-repository bundle is supporting recovery evidence"
+  },
+  "off_machine_custody": {
+    "medium": "GITHUB_GIT_REF",
+    "remote": "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+    "ref": "refs/heads/truth-campaign-20260716",
+    "custody_head": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
+    "local_ref_equal_at_verification": true,
+    "candidate_ancestor": true,
+    "post_candidate_commit_count": 2,
+    "post_candidate_paths_evidence_only": true,
+    "ls_remote_exit_code": 0,
+    "fresh_remote_clone": {
+      "mode": "bare single-branch no-tags",
+      "observed_ref": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
+      "candidate_object_type": "commit",
+      "candidate_ancestor_exit_code": 0,
+      "fsck_full_strict_no_dangling_exit_code": 0
+    },
+    "verified_at_utc": "2026-07-16T12:17:05Z",
+    "state": "SEALED"
+  },
+  "local_full_repository_bundle": {
+    "path": "/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle",
+    "sha256": "775c55d26474578100b03d0cb45575b9cf95cc6ab012c709c963e4dd6b8ffe37",
+    "bytes": 154783860,
+    "bundle_verify_exit_code": 0,
+    "complete_history": true,
+    "git_object_hash_algorithm": "sha1",
+    "advertised_ref_count": 388,
+    "advertised_campaign_ref": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
+    "advertised_current_main_ref": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "off_machine_medium": false,
+    "role": "SUPPORTING_LOCAL_FULL_GIT_REFS_AND_REACHABLE_OBJECTS_RECOVERY_ARTIFACT"
+  },
+  "current_main_observations": {
+    "at_candidate_freeze": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "at_custody_push": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "director_custody_receipt_commit": "b4d9f22d3732003f2cc5cec1f11a87833a933209",
+    "director_custody_receipt_parent": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "later_director_coordination_head_observed_at_reassessment": "e9074e79c22da3951f2373e3b264a63608fd2bb2",
+    "later_observation_time_utc": "2026-07-16T12:16:57Z",
+    "candidate_c_merged_to_current_main": false,
+    "ruling": "The custody push did not mutate current-main; later director-only coordination commits advanced that ref without admitting candidate C"
+  },
+  "pass_0_reassessment": {
+    "contradiction_rulings": "9/9",
+    "registered_worktrees": 101,
+    "post_census_read_only_shards": 5,
+    "unknown_worktrees": 0,
+    "active_dirty_worktrees": 0,
+    "mandatory_sealed_unmerged_worktrees": 0,
+    "unexplained_dirty_source_paths": 0,
+    "exact_c_clean_clone_root_test_exit_code": 0,
+    "gate_token": "BASELINE_TRUTH_ACCEPTED:41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "later_gates_implied": false,
+    "next_actor": "ACCOUNT_B_FRESH_EXACT_C_VERIFIER"
+  },
+  "audit_deviation": {
+    "description": "An auxiliary read-only audit accidentally invoked git bundle unbundle, importing one pack into the shared common object database",
+    "pack_path": "/Users/cosmosgeek/Desktop/Main/.git/objects/pack/pack-6a35cfb5fd79b782530b21aa813e9994d83b6034.pack",
+    "pack_sha256": "bdd044a931c16e1caa006cea790ebeefe571906f47d7ffaa1ea531422b67c605",
+    "refs_changed": false,
+    "index_changed": false,
+    "worktree_files_changed": false,
+    "cleanup_attempted": false,
+    "custody_verdict_affected": false
+  },
+  "receipt": {
+    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "command_or_operator_action": "D-LAUNCH-61 Account-A custody verification and Pass-0 reassessment; no source mutation after C",
+    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
+    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+    "start_time_utc": "2026-07-16T12:16:57Z",
+    "end_time_utc": "2026-07-16T12:17:05Z",
+    "exit_code": 0,
+    "test_count": 0,
+    "verification_probe_count": 10,
+    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
+    "actor_role": "ACCOUNT_A",
+    "actor_had_candidate_source_write_permission": false,
+    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
+    "deviations_skips_unavailable_evidence": [
+      "Account B artifacts and reasoning were not read",
+      "The local full-repository bundle is supporting recovery evidence; GitHub origin is the off-machine custody medium",
+      "The custody push left current-main at the candidate-freeze value; later director-only coordination commits advanced current-main without merging candidate C",
+      "An auxiliary custody audit imported the full-repository bundle pack into the shared Git object database without changing refs, index, or any worktree; no cleanup was attempted",
+      "No PROVENANCE_ACCEPTED, CLEAN_CLONE_ACCEPTED, VERIFIED_ACCEPTED, or later token is issued"
+    ]
+  }
+}

@@ -134,7 +134,7 @@
     "deviations_skips_unavailable_evidence": [
       "Account B artifacts and reasoning were not read",
       "No independent verification token is issued",
-      "Off-machine custody for the candidate bundle is unavailable"
+      "At this original evidence timestamp off-machine custody was unavailable; D-LAUNCH-61 later superseded this historical condition for the current Pass-0 verdict"
     ]
   }
 }

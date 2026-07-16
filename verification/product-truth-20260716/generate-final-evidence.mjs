@@ -10,9 +10,16 @@ const OUT = resolve(ROOT, 'verification/product-truth-20260716');
 const C = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
 const TREE = 'a770f9f393e6229252731cd5247e9a1abfd2e509';
 const MAIN = '2ae812624f20b9bc93fc4ad66cb568929101110f';
+const EVIDENCE_CUSTODY_HEAD = 'd2c4f43caf9ad7a84cfde8da8760cc9895384538';
+const DIRECTOR_CUSTODY_RECEIPT = 'b4d9f22d3732003f2cc5cec1f11a87833a933209';
+const DIRECTOR_RECEIPT_BLOB = 'bf7e7c09aa84af046dc8ff1750098da5e89e8076';
+const DIRECTOR_RECEIPT_SHA256 = '0d39a06b622f67a455d461bc033d6e7ef4bcc78f063c7cf6a6ad61e989db546e';
+const FULL_REPO_BUNDLE_SHA256 = '775c55d26474578100b03d0cb45575b9cf95cc6ab012c709c963e4dd6b8ffe37';
 const LOCK_SHA256 = '3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf';
 const START = '2026-07-16T11:17:11Z';
-const END = new Date().toISOString();
+const END = '2026-07-16T11:47:52.009Z';
+const CUSTODY_START = '2026-07-16T12:16:57Z';
+const CUSTODY_END = '2026-07-16T12:17:05Z';
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -119,6 +126,18 @@ const environmentDigest = sha256(`${JSON.stringify(environment)}\n`);
 
 if (git('rev-parse', `${C}^{tree}`) !== TREE) throw new Error('candidate tree drift');
 if (!ancestor(MAIN, C)) throw new Error('durable Main is not in candidate ancestry');
+if (!ancestor(C, EVIDENCE_CUSTODY_HEAD)) throw new Error('candidate is not in custody-head ancestry');
+const postCandidatePaths = git('diff', '--name-only', `${C}..${EVIDENCE_CUSTODY_HEAD}`)
+  .split('\n').filter(Boolean);
+if (postCandidatePaths.some((path) => !path.startsWith('verification/product-truth-20260716/'))) {
+  throw new Error('custody head contains post-candidate source drift');
+}
+if (git('show', '-s', '--format=%P', DIRECTOR_CUSTODY_RECEIPT) !== MAIN) {
+  throw new Error('director custody receipt is not the direct child of candidate-freeze Main');
+}
+if (blobAt(DIRECTOR_CUSTODY_RECEIPT, 'QL_DIRECTOR_STATE.md') !== DIRECTOR_RECEIPT_BLOB) {
+  throw new Error('director custody receipt blob drift');
+}
 
 const receiptContext = Object.freeze({
   candidate_sha: C,
@@ -137,14 +156,38 @@ const receiptContext = Object.freeze({
   deviations_skips_unavailable_evidence: [
     'Account B artifacts and reasoning were not read',
     'No independent verification token is issued',
-    'Off-machine custody for the candidate bundle is unavailable',
+    'At this original evidence timestamp off-machine custody was unavailable; D-LAUNCH-61 later superseded this historical condition for the current Pass-0 verdict',
+  ],
+});
+
+const baselineReceiptContext = Object.freeze({
+  candidate_sha: C,
+  candidate_tree_sha: TREE,
+  command_or_operator_action: 'D-LAUNCH-61 Account-A custody verification and Pass-0 reassessment; no source mutation after C',
+  environment_toolchain_digest_sha256: environmentDigest,
+  dependency_lock_sha256: LOCK_SHA256,
+  start_time_utc: CUSTODY_START,
+  end_time_utc: CUSTODY_END,
+  exit_code: 0,
+  test_count: 0,
+  verification_probe_count: 10,
+  artifact_hashes: 'MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest',
+  actor_role: 'ACCOUNT_A',
+  actor_had_candidate_source_write_permission: false,
+  actor_write_scope: 'verification/product-truth-20260716/** only after C freeze',
+  deviations_skips_unavailable_evidence: [
+    'Account B artifacts and reasoning were not read',
+    'The local full-repository bundle is supporting recovery evidence; GitHub origin is the off-machine custody medium',
+    'The custody push left current-main at the candidate-freeze value; later director-only coordination commits advanced current-main without merging candidate C',
+    'An auxiliary custody audit imported the full-repository bundle pack into the shared Git object database without changing refs, index, or any worktree; no cleanup was attempted',
+    'No PROVENANCE_ACCEPTED, CLEAN_CLONE_ACCEPTED, VERIFIED_ACCEPTED, or later token is issued',
   ],
 });
 
 const inputLock = {
-  schema: 'product-truth-inputs-lock.v1',
-  status: 'BLOCKED',
-  reason: 'OFF_MACHINE_CANDIDATE_BUNDLE_CUSTODY_NOT_CONFIGURED',
+  schema: 'product-truth-inputs-lock.v2',
+  status: 'INTEGRATED',
+  reason: 'BASELINE_TRUTH_ACCEPTED',
   candidate: {
     commit: C,
     tree: TREE,
@@ -153,11 +196,25 @@ const inputLock = {
     source_frozen: true,
     evidence_descendants_may_change_source: false,
   },
-  durable_main: {
-    local: MAIN,
-    origin: MAIN,
+  durable_main_at_candidate_freeze: {
+    local_at_freeze: MAIN,
+    origin_at_freeze: MAIN,
     remote: 'git@github.com:cosmosgeek0/arbitrage-cosmos.git',
     state: 'INTEGRATED',
+    candidate_c_merged_to_current_main: false,
+  },
+  director_coordination_after_candidate_freeze: {
+    custody_receipt_commit: DIRECTOR_CUSTODY_RECEIPT,
+    custody_receipt_parent: MAIN,
+    custody_receipt_subject: 'director: D-LAUNCH-61 — custody granted; 5 read-only frontier shards at frozen C',
+    custody_receipt_path: 'QL_DIRECTOR_STATE.md',
+    custody_receipt_git_blob: DIRECTOR_RECEIPT_BLOB,
+    custody_receipt_sha256: DIRECTOR_RECEIPT_SHA256,
+    custody_receipt_lines: '70-72',
+    later_observed_director_head: 'e9074e79c22da3951f2373e3b264a63608fd2bb2',
+    later_observed_at_utc: CUSTODY_START,
+    candidate_c_merged_to_current_main: false,
+    state: 'REFERENCE_ONLY_FOR_CANDIDATE_SOURCE',
   },
   controlling_inputs: [
     ['campaign', '/Users/cosmosgeek/Desktop/INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md', 'ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b'],
@@ -192,7 +249,7 @@ const inputLock = {
     reachable_commits: 544,
     tracked_files: 2574,
   },
-  bundle: {
+  candidate_bundle_local: {
     path: '/Users/cosmosgeek/cosmos-arbitrage-truth-candidate-41752d6a.bundle',
     sha256: 'f0641dcbbe7816d55749dd1d2a0fcfbf246c914d9af55f6ad9982f740aa9feab',
     bytes: 62976347,
@@ -200,7 +257,40 @@ const inputLock = {
     candidate_ref: C,
     main_ref: MAIN,
     local_integrity_state: 'SEALED',
-    off_machine_custody_state: 'NOT_CONFIGURED',
+    custody_role: 'LOCAL_CANDIDATE_RECOVERY_ARTIFACT',
+  },
+  full_repository_bundle_local: {
+    path: '/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle',
+    sha256: FULL_REPO_BUNDLE_SHA256,
+    bytes: 154783860,
+    complete_history: true,
+    advertised_ref_count: 388,
+    campaign_ref: EVIDENCE_CUSTODY_HEAD,
+    main_ref_at_bundle_creation: MAIN,
+    bundle_verify_exit_code: 0,
+    local_integrity_state: 'SEALED',
+    custody_role: 'LOCAL_FULL_GIT_REFS_AND_REACHABLE_OBJECTS_RECOVERY_ARTIFACT',
+  },
+  off_machine_custody: {
+    directive_id: 'D-LAUNCH-61',
+    medium: 'GITHUB_GIT_REF',
+    remote: 'git@github.com:cosmosgeek0/arbitrage-cosmos.git',
+    ref: 'refs/heads/truth-campaign-20260716',
+    custody_head: EVIDENCE_CUSTODY_HEAD,
+    candidate_ancestor: true,
+    post_candidate_paths_evidence_only: true,
+    ls_remote_exit_code: 0,
+    fresh_single_branch_bare_clone_fsck_strict_exit_code: 0,
+    verified_at_utc: CUSTODY_END,
+    state: 'SEALED',
+  },
+  pass_0: {
+    candidate_state: 'INTEGRATED',
+    gate_token: `BASELINE_TRUTH_ACCEPTED:${C}`,
+    registered_worktrees: 101,
+    post_freeze_read_only_shards: 5,
+    unknown_worktrees: 0,
+    later_gates_implied: false,
   },
   first_pass_account_a_matrix: {
     commit: 'a1a67b2a9ab2b693b967fc5a0f047036f90cc593',
@@ -208,9 +298,104 @@ const inputLock = {
     sha256: '1d2d228b5e088846bf5962d79e6e5b0606937b6f69b24325de962f1cfdc58ff9',
     account_b_material_read: false,
   },
-  receipt: receiptContext,
+  source_evidence_receipt: receiptContext,
+  receipt: baselineReceiptContext,
 };
 writeFileSync(resolve(OUT, 'INPUTS.lock'), `${JSON.stringify(inputLock, null, 2)}\n`);
+
+const custodyReceipt = {
+  schema: 'product-truth-off-machine-custody-receipt.v1',
+  directive_id: 'D-LAUNCH-61',
+  status: 'INTEGRATED',
+  candidate: {
+    commit: C,
+    tree: TREE,
+    parent: 'f11531e6637979d6e173f6eb25d04c10a76d20c8',
+    state: 'INTEGRATED',
+    source_frozen: true,
+  },
+  authorization: {
+    director_receipt_commit: DIRECTOR_CUSTODY_RECEIPT,
+    parent: MAIN,
+    subject: 'director: D-LAUNCH-61 — custody granted; 5 read-only frontier shards at frozen C',
+    path: 'QL_DIRECTOR_STATE.md',
+    lines: '70-72',
+    git_blob: DIRECTOR_RECEIPT_BLOB,
+    sha256: DIRECTOR_RECEIPT_SHA256,
+    ruling: 'The pushed GitHub campaign ref resolves the Pass-0 off-machine custody blocker; the local full-repository bundle is supporting recovery evidence',
+  },
+  off_machine_custody: {
+    medium: 'GITHUB_GIT_REF',
+    remote: 'git@github.com:cosmosgeek0/arbitrage-cosmos.git',
+    ref: 'refs/heads/truth-campaign-20260716',
+    custody_head: EVIDENCE_CUSTODY_HEAD,
+    local_ref_equal_at_verification: true,
+    candidate_ancestor: true,
+    post_candidate_commit_count: 2,
+    post_candidate_paths_evidence_only: true,
+    ls_remote_exit_code: 0,
+    fresh_remote_clone: {
+      mode: 'bare single-branch no-tags',
+      observed_ref: EVIDENCE_CUSTODY_HEAD,
+      candidate_object_type: 'commit',
+      candidate_ancestor_exit_code: 0,
+      fsck_full_strict_no_dangling_exit_code: 0,
+    },
+    verified_at_utc: CUSTODY_END,
+    state: 'SEALED',
+  },
+  local_full_repository_bundle: {
+    path: '/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle',
+    sha256: FULL_REPO_BUNDLE_SHA256,
+    bytes: 154783860,
+    bundle_verify_exit_code: 0,
+    complete_history: true,
+    git_object_hash_algorithm: 'sha1',
+    advertised_ref_count: 388,
+    advertised_campaign_ref: EVIDENCE_CUSTODY_HEAD,
+    advertised_current_main_ref: MAIN,
+    off_machine_medium: false,
+    role: 'SUPPORTING_LOCAL_FULL_GIT_REFS_AND_REACHABLE_OBJECTS_RECOVERY_ARTIFACT',
+  },
+  current_main_observations: {
+    at_candidate_freeze: MAIN,
+    at_custody_push: MAIN,
+    director_custody_receipt_commit: DIRECTOR_CUSTODY_RECEIPT,
+    director_custody_receipt_parent: MAIN,
+    later_director_coordination_head_observed_at_reassessment: 'e9074e79c22da3951f2373e3b264a63608fd2bb2',
+    later_observation_time_utc: CUSTODY_START,
+    candidate_c_merged_to_current_main: false,
+    ruling: 'The custody push did not mutate current-main; later director-only coordination commits advanced that ref without admitting candidate C',
+  },
+  pass_0_reassessment: {
+    contradiction_rulings: '9/9',
+    registered_worktrees: 101,
+    post_census_read_only_shards: 5,
+    unknown_worktrees: 0,
+    active_dirty_worktrees: 0,
+    mandatory_sealed_unmerged_worktrees: 0,
+    unexplained_dirty_source_paths: 0,
+    exact_c_clean_clone_root_test_exit_code: 0,
+    gate_token: `BASELINE_TRUTH_ACCEPTED:${C}`,
+    later_gates_implied: false,
+    next_actor: 'ACCOUNT_B_FRESH_EXACT_C_VERIFIER',
+  },
+  audit_deviation: {
+    description: 'An auxiliary read-only audit accidentally invoked git bundle unbundle, importing one pack into the shared common object database',
+    pack_path: '/Users/cosmosgeek/Desktop/Main/.git/objects/pack/pack-6a35cfb5fd79b782530b21aa813e9994d83b6034.pack',
+    pack_sha256: 'bdd044a931c16e1caa006cea790ebeefe571906f47d7ffaa1ea531422b67c605',
+    refs_changed: false,
+    index_changed: false,
+    worktree_files_changed: false,
+    cleanup_attempted: false,
+    custody_verdict_affected: false,
+  },
+  receipt: baselineReceiptContext,
+};
+writeFileSync(
+  resolve(OUT, 'D_LAUNCH_61_CUSTODY_RECEIPT.json'),
+  `${JSON.stringify(custodyReceipt, null, 2)}\n`,
+);
 
 const laneRows = [
   ['EGRESS','8db67eee261ea4b8964b5b9c64b22fc3a0c7fbc6','c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6','492e3f69b054c85686bcfc4c09dbff4ababeda3f',8,'docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md',['docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md','package.json','server/test/gates.mjs','server/test/perimeter.mjs','server/test/private-egress-tripwire.mjs','server/test/productIntegration/runtime/crash-readback.process.test.mjs','server/test/run-deterministic-network-free.mjs','server/test/systemIntegration/production/restart-truth-process.test.mjs']],
@@ -381,7 +566,7 @@ emitCsv('COCKPIT_BINDING_MATRIX.csv', cockpitHeaders, cockpitRows);
 
 const capabilityHeaders = ['capability_id','scope','owner','implementation_path','runtime_evidence','candidate_sha','status','blocker','disposition'];
 const capabilityRows = [
-  ['candidate-source','frozen source','ACCOUNT_A','candidate tree','clean clone and Git tree',C,'INTEGRATED','off-machine custody BLOCKED','source frozen; evidence-only descendants cannot alter C'],
+  ['candidate-source','frozen source','ACCOUNT_A','candidate tree','clean clone, Git tree, and D-LAUNCH-61 custody receipt',C,'INTEGRATED','Account B exact-C verification BLOCKED','source frozen; off-machine custody SEALED at d2c4f43c; evidence-only descendants cannot alter C'],
   ['landed-core','C2R core','CANONICAL_OWNERS','server/src; web/src; quant','MERGE_PROVENANCE.json',C,'INTEGRATED','Account B verification BLOCKED','1666/1687 core blobs retained; 21 adaptations explicit'],
   ['ai-ops-source','subordinate AI diagnostic plane','AI_OPS','server/src/aiOps; web/src/aiOps','12 exact donor merges',C,'INTEGRATED','Account B verification BLOCKED','included; no implicit runtime activation'],
   ['ai-ops-product-route','AI workspace mount','DIRECTOR_ROUTE_OWNER','web/src/aiOps','no canonical product mount',C,'UNWIRED','product route UNWIRED','A4 remains isolated from 18 canonical mounts'],
@@ -412,7 +597,7 @@ const requiredHeaders = ['requirement_id','source_file','source_section','author
 if (JSON.stringify(parsed.headers) !== JSON.stringify(requiredHeaders)) throw new Error('directive matrix header drift');
 const aiTips = laneEvidence.filter((lane) => ['A1','A2','A3','A4','A5','OBS','OPS','REPLAY','RUNBOOK'].includes(lane.id)).map((lane) => lane.tip).join('; ');
 const statusOverride = {
-  'AUTH-001':'INTEGRATED','AUTH-002':'REFERENCE_ONLY','AUTH-003':'BLOCKED','ASR-003':'NOT_CONFIGURED','ASR-005':'INTEGRATED','ASR-006':'INTEGRATED','AIO-001':'INTEGRATED','AIO-002':'NOT_CONFIGURED','AIO-003':'INTEGRATED','AIO-004':'INTEGRATED','AIO-005':'INTEGRATED','AIO-006':'INTEGRATED','AIO-007':'INTEGRATED','AIO-008':'NOT_CONFIGURED','AIO-009':'INTEGRATED','AIO-010':'INTEGRATED','AIO-011':'UNWIRED','AIO-012':'INTEGRATED','AIO-013':'INTEGRATED','AIO-014':'BLOCKED','DEP-003':'NOT_CONFIGURED',
+  'AUTH-001':'INTEGRATED','AUTH-002':'REFERENCE_ONLY','AUTH-003':'INTEGRATED','ASR-003':'NOT_CONFIGURED','ASR-005':'INTEGRATED','ASR-006':'INTEGRATED','AIO-001':'INTEGRATED','AIO-002':'NOT_CONFIGURED','AIO-003':'INTEGRATED','AIO-004':'INTEGRATED','AIO-005':'INTEGRATED','AIO-006':'INTEGRATED','AIO-007':'INTEGRATED','AIO-008':'NOT_CONFIGURED','AIO-009':'INTEGRATED','AIO-010':'INTEGRATED','AIO-011':'UNWIRED','AIO-012':'INTEGRATED','AIO-013':'INTEGRATED','AIO-014':'BLOCKED','DEP-003':'NOT_CONFIGURED',
 };
 const updated = parsed.rows.map((row) => {
   const next = { ...row, candidate_sha: C };
@@ -450,9 +635,9 @@ const updated = parsed.rows.map((row) => {
     next.disposition = 'Packaged verifier input snapshots are REFERENCE_ONLY and never represented as live owner inputs';
   }
   if (next.requirement_id === 'AUTH-003') {
-    next.blocker = 'Off-machine candidate bundle custody is NOT_CONFIGURED';
-    next.runtime_evidence = 'C is immutable and local complete-history bundle is SEALED; off-machine custody is absent';
-    next.disposition = 'Stop BLOCKED until a director-authorized off-machine custody receipt exists';
+    next.blocker = 'NONE';
+    next.runtime_evidence = `D-LAUNCH-61 seals GitHub ref ${EVIDENCE_CUSTODY_HEAD}; exact C is its ancestor; local full-repository bundle ${FULL_REPO_BUNDLE_SHA256} verifies as complete history`;
+    next.disposition = `Pass 0 accepted at exact C; only ${C}, never evidence head ${EVIDENCE_CUSTODY_HEAD}, is handed to Account B`;
   }
   if (next.requirement_id === 'ASR-003') next.blocker = 'Production capacity and paging remain NOT_CONFIGURED';
   if (next.requirement_id === 'ASR-005') next.blocker = 'Operational AI runtime remains UNWIRED';
@@ -463,6 +648,11 @@ const updated = parsed.rows.map((row) => {
     next.disposition = 'Both are INTEGRATED; formal runtime is REFERENCE_ONLY and S2 production consumer is NOT_CONFIGURED';
   }
   if (next.requirement_id === 'DEP-003') next.blocker = 'External sentinel and paging are NOT_CONFIGURED';
+  if (next.requirement_id === 'DEP-004') {
+    next.blocker = 'Account B exact-C verification, later operational gates, and explicit deployment authority remain absent';
+    next.runtime_evidence = 'BASELINE_TRUTH_ACCEPTED is issued for exact C; no staging deployment or readback has occurred';
+    next.disposition = 'Only exact immutable C after the remaining ordered gates may progress to DEPLOYED_STAGING';
+  }
   if (next.blocker.includes('Candidate is not frozen')) next.blocker = 'Account B exact-C verification remains BLOCKED';
   if (next.blocker.includes('Exact candidate not frozen')) next.blocker = 'Full Pass 3 and Account B verification remain BLOCKED';
   if (next.blocker.includes('candidate rerun pending') || next.blocker.includes('Candidate-bound rerun pending')) next.blocker = 'Account B exact-C verification remains BLOCKED';
@@ -479,16 +669,16 @@ const p0 = [
   ['P0-07-LEDGER-CAS','§2.1 item 7','ledger CAS disposition','WIRED_LOCAL','receipt lines 1663-1677; local CAS/read inventory only; append producer NOT_CONFIGURED'],
   ['P0-08-QUANTITY-BRIDGE','§2.1 item 8','quantity disposition','INTEGRATED','receipt lines 1678-1690; closed comparison; production consumer NOT_CONFIGURED'],
   ['P0-09-CLEAN-CHECKOUT','§2.1 item 9','clean checkout','INTEGRATED','Account A full-history single-branch clone npm test exit 0; independent token reserved to B'],
-  ['CAMP-05-CENSUS','§5','worktree census','INTEGRATED','96/96 rows, exact fields/classification, UNKNOWN=0, unexplained source dirt=0'],
+  ['CAMP-05-CENSUS','§5','worktree census','INTEGRATED','101/101 rows including five detached D-LAUNCH-61 shards with zero tracked/source changes; authorized untracked advisory outputs preserved and censused; UNKNOWN=0; unexplained source dirt=0'],
   ['CAMP-06-ARTIFACTS','§6','campaign artifacts','INTEGRATED','all 15 required filenames present with honest later-gate receipts'],
-  ['CAMP-07-PASS0','§7','Pass 0 duties','BLOCKED','off-machine candidate bundle custody NOT_CONFIGURED'],
+  ['CAMP-07-PASS0','§7','Pass 0 duties','INTEGRATED',`D-LAUNCH-61 off-machine GitHub custody SEALED at ${EVIDENCE_CUSTODY_HEAD}; BASELINE_TRUTH_ACCEPTED issued for exact C`],
   ['CAMP-08-COVERAGE','§8','independent directive coverage','INTEGRATED','Account A first pass sealed before reconciliation; Account B matrix not read'],
   ['CAMP-09-PROVENANCE','§9','Git provenance','INTEGRATED','12 admitted donors exact; 326/326 blobs and grants; core adaptations explicit'],
   ['CAMP-10-CLEAN-CLONE','§10','full Pass 3','BLOCKED','Account A npm test passed; quant/browser/restore/rollback and B acceptance remain BLOCKED'],
   ['CAMP-17-TWO-ACCOUNT','§17','two-account separation','INTEGRATED','A assembled and froze C; B material not read; A issues no VERIFIED token'],
   ['CAMP-19-BLOCKERS','§19','release blocker law','BLOCKED','included AI-Ops and exact-C candidate await Account B verification'],
-  ['CAMP-20-LADDER','§20','acceptance ladder','BLOCKED','BASELINE gate is blocked by off-machine custody; later gates are not implied'],
-  ['CAMP-21-STOP','§21','precise stop law','BLOCKED','stop at exact missing off-machine custody evidence'],
+  ['CAMP-20-LADDER','§20','acceptance ladder','INTEGRATED','BASELINE_TRUTH_ACCEPTED is issued for exact C; no later gate is implied'],
+  ['CAMP-21-STOP','§21','precise stop law','INTEGRATED',`stop at exact token BASELINE_TRUTH_ACCEPTED:${C}; Account B is the next actor`],
 ].map(([requirement_id,source_section,authority,status,runtime_evidence]) => ({
   requirement_id, source_file: 'INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md', source_section,
   authority, owner: status === 'DEFERRED_OWNER_GATE' ? 'OWNER' : 'ACCOUNT_A', implementation_path: 'verification/product-truth-20260716/**',

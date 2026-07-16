@@ -1,3 +1,28 @@
+# FRONTIER — nothing is idle. Do these NOW (order matters for #0):
+#
+#   0. PASTE the CUSTODY block into your truth-a chat  <-- unblocks the whole critical path.
+#        (truth-a is BLOCKED waiting only for this. It is mid-run; the paste queues.)
+#   1. RUN-P1 -> folder shard-prov
+#   2. RUN-P2 -> folder shard-sec
+#   3. RUN-P3 -> folder v-cockpit
+#   4. RUN-P4 -> folder prep-act
+#   5. RUN-P5 -> folder v-clean
+#
+#   ARMED (do NOT run yet): RUN-VFINAL fires the moment truth-a prints
+#        BASELINE_TRUTH_ACCEPTED. Tell me then; I confirm and you paste it.
+#
+#   truth-b: closed. All port/hotfix chats: closed. Red GitHub emails: ignore.
+
+## CUSTODY (paste into truth-a)
+```text
+DIRECTOR CUSTODY RECEIPT (D-LAUNCH-61): off-machine custody granted and completed — branch truth-campaign-20260716 (contains exact candidate C 41752d6a87dc1cb1b933bb4460c9cabfc15ff694 and all evidence commits) is pushed to GitHub origin; remote ref digest d2c4f43caf9ad7a84cfde8da8760cc9895384538 verified equal to local. Full-repo bundle exists at ~/cosmos-arbitrage-backup-20260716.bundle (sha256 starts 775c55d264745781). Record this as your custody receipt, refresh your candidate-bound verdict files + manifest, and reassess the Pass-0 gate toward BASELINE_TRUTH_ACCEPTED:41752d6a87dc. current-main was not touched.
+```
+
+## RUN-VFINAL — ARMED — folder: none yet (block self-creates /tmp/vfinal). Run ONLY after BASELINE_TRUTH_ACCEPTED.
+```text
+You are the FRESH INDEPENDENT VERIFIER (post-baseline; only fires AFTER truth-a prints BASELINE_TRUTH_ACCEPTED:41752d6a87dc). Create a BRAND-NEW clean single-branch clone at exact C: rm -rf /tmp/vfinal && git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 file:///Users/cosmosgeek/Desktop/Main/.git /tmp/vfinal && cd /tmp/vfinal && git checkout 41752d6a87dc1cb1b933bb4460c9cabfc15ff694 && npm ci. You were NOT any builder/Account-A; read canonical files + source, never builder-chat reasoning; you may reject but never fix; no write to Main/candidate/receipts. Run campaign Passes 2-5 against exact C only: provenance, clean-clone full acceptance (npm test + npm run test:all + protocol + I00 proof + assurance), directive-coverage no-silent-omission, security/egress, cockpit no-false-green, money-path no-send. Aggregate the read-only shard receipts (PROV/SEC/COCKPIT/CLEAN_CLONE findings in ~/Desktop/shard-prov,shard-sec,v-cockpit,v-clean) as ADVISORY, but independently rerun the critical money-path/restart/reconciliation/authority/no-false-green classes yourself. Output VFINAL_RECEIPT.md ending in exactly VERIFIED_ACCEPTED:41752d6a87dc or REJECTED:41752d6a87dc (each finding: id, severity, invariant, evidence, repro, expected/actual, correction boundary). Usage limit -> save+stop; same message resumes.
+```
+
 # DO 5 THINGS (5 new chats). All read-only, all safe to run alongside truth-a. truth-b: closed.
 #
 #   RUN-P1 -> folder shard-prov   (provenance + directive-coverage findings)

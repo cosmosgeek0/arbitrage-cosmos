@@ -1,0 +1,62 @@
+{
+  "schema": "COSMOS_REPLAY_PORT_INSERTION_REQUESTS_V1",
+  "schemaVersion": 1,
+  "packetId": "RUN-17",
+  "disposition": "PORT_REPLAY_PROPOSALS_ONLY",
+  "authorityGranted": false,
+  "registryBinding": {
+    "sourceBranch": "aiops-prestage-20260714",
+    "sourceCommitSha1": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "sourcePath": "AI_OPS_COLLISION_MAP.md",
+    "sourceBlobSha1": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "sourceSha256": "92a3a2601d2894a3baacadbfb719b0e0b8ff9a950f71b6a27bc18965b7042c33",
+    "landedSchemaPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+    "landedSchemaBlobSha1": "042456c58b1cd5b6eb179c0c9c289f6e69d06034"
+  },
+  "requests": [
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-DOCS-017",
+      "status": "DRAFT",
+      "requestedOwner": "FRESH_POST_ACCEPTANCE_INTEGRATOR",
+      "targetSeam": "STATE.md; ARCHITECTURE.md Part II",
+      "reason": "Canonical state/ownership docs must describe only actually mounted accepted work.",
+      "contract": [
+        "Record mounted status, accepted counts and ratified owner/adapter changes in the same integration commit."
+      ],
+      "tests": [
+        "Compare accepted path/SHA manifests to docs",
+        "fail stale, premature or duplicate-owner claims."
+      ],
+      "expectedBehavior": [
+        "No prestage proposal is promoted without accepted-SHA regeneration",
+        "one root doc per purpose."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-DOCS-017",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-TEST-MOUNT-026",
+      "status": "DRAFT",
+      "requestedOwner": "ROOT_TEST_ACCEPTANCE_OWNER",
+      "targetSeam": "package.json::test:all:built; test/i00/complete-acceptance.mjs; server/test/i00Acceptance/**",
+      "reason": "Accepted lane gates need one canonical root acceptance mount.",
+      "contract": [
+        "Register sealed lane tests and AI-off/fault gates only after acceptance."
+      ],
+      "tests": [
+        "Run focused lane suites, network-free root suite, complete acceptance, hostile false-green and exact exit-code checks."
+      ],
+      "expectedBehavior": [
+        "Real failures return nonzero",
+        "no fake success",
+        "accepted counts and commands are recorded in canonical state/receipt."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TEST-MOUNT-026",
+      "authorityCreated": false
+    }
+  ]
+}

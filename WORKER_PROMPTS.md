@@ -1,57 +1,18 @@
-# NEXT: paste DEFECT WAVE 1 (below) into truth-a. It fixes the found defects and freezes C2.
-# Still running: shard-sec, v-cockpit (their findings append later). RUN-VFINAL stays ARMED (runs on C2, not C).
-# truth-b closed. Ignore red GitHub emails.
-
-## DEFECT WAVE 1 (paste into truth-a)
-```text
-DIRECTOR DEFECT WAVE 1 (D-LAUNCH-62). BASELINE_TRUTH_ACCEPTED:41752d6a is recorded — good. Read-only prep shards returned findings against exact C (durable copies in Main verification/shard-receipts-20260716/: PROV_FINDINGS.json = 2 CRITICAL + 6 HIGH; CLEAN_CLONE_FINDINGS.json = 2 HIGH + 1 MEDIUM; plus prep-act ACTIVATION_RUNBOOK_DRAFT + CANARY_PRECHECK for later). Adjudicate ALL as one wave, then freeze C2 (do NOT hand C to the final verifier — it has criticals): PROV-001 CRITICAL: INPUTS.lock has only 8 inputs; MISSING hashes for I00, IP_RUNTIME/CONTROL/OPS/PROOF, POST_I00, IP_ASSURANCE, Frontier, deployment, and superseded directives — add every controlling + superseded directive hash. PROV-002 CRITICAL: coverage matrix has zero Frontier rows — add explicit candidate-bound Frontier disposition rows (REFERENCE_ONLY/ABANDONED_SAFE with evidence), don't leave silent. PROV-003 HIGH: matrix rows MIS-002/004/007/008 + ARC-001/002/007/010 cite nonexistent test/owner paths — correct to the real proving paths the finding lists; add rows for the missing MISSION/ARCHITECTURE laws. PROV-004 HIGH: INCIDENT_ACK + SOURCE_ISOLATE commands are canonically ABSENT with no matrix row — add explicit implementation+test+evidence or honest NOT_CONFIGURED rows. PROV-005 HIGH: coverage/proof artifacts still bind historical candidate 74eb452, and browser/proof paths are pending/nonexistent — regenerate all proof evidence against exact C2. PROV-006 HIGH: test:all:built + the deterministic runner OMIT aiOps/obsShadow/opsShadow/replayShadow/runbookShadow suites and web/test/aiOps is NOT_MOUNTED — either wire these suites into the canonical gate or explicitly disposition AI-Ops as excluded/NOT_CONFIGURED in C2 (do not let npm test imply AI-Ops is accepted). PROV-007 HIGH: AI-Ops route UNWIRED, provider/paging/sentinel NOT_CONFIGURED — keep as honest owner-gated rows, confirmed excluded from acceptance claims. PROV-008 HIGH: Product Assurance mandatory closure set + IP_ASSURANCE_RECEIPT are generator-era, soak NOT_RUN, receipt does not attest root gates — regenerate the named artifact set against C2 or record precise deferred-owner-gate dispositions. CLEAN_CLONE P3-CLEAN-001/002 HIGH + 003 MEDIUM: the single-branch clean-checkout battery fails (the known sealed-report-parity / render-reports live-git bake-in determinism defect) — fix so exact C2 passes `git clone --single-branch --branch truth-campaign-20260716 ... && npm ci && npm test && npm run test:all` from a fresh clone (CLEAN_CLONE_ACCEPTED). RULES: you are the ONLY candidate writer; fix or evidence-refuse each, disjoint edits, regression proof; freeze new candidate C2 and record BASELINE_TRUTH_ACCEPTED:C2. shard-sec + v-cockpit findings are still pending — I will append them as wave 1b; you may start now on the above. Preserve all receipts before compaction. Stop at C2 frozen + gate report, or precise BLOCKED.
-```
-
-## CUSTODY (paste into truth-a)
-```text
-DIRECTOR CUSTODY RECEIPT (D-LAUNCH-61): off-machine custody granted and completed — branch truth-campaign-20260716 (contains exact candidate C 41752d6a87dc1cb1b933bb4460c9cabfc15ff694 and all evidence commits) is pushed to GitHub origin; remote ref digest d2c4f43caf9ad7a84cfde8da8760cc9895384538 verified equal to local. Full-repo bundle exists at ~/cosmos-arbitrage-backup-20260716.bundle (sha256 starts 775c55d264745781). Record this as your custody receipt, refresh your candidate-bound verdict files + manifest, and reassess the Pass-0 gate toward BASELINE_TRUTH_ACCEPTED:41752d6a87dc. current-main was not touched.
-```
-
-## RUN-VFINAL — ARMED — folder: none yet (block self-creates /tmp/vfinal). Run ONLY after BASELINE_TRUTH_ACCEPTED.
-```text
-You are the FRESH INDEPENDENT VERIFIER (post-baseline; only fires AFTER truth-a prints BASELINE_TRUTH_ACCEPTED:41752d6a87dc). Create a BRAND-NEW clean single-branch clone at exact C: rm -rf /tmp/vfinal && git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 file:///Users/cosmosgeek/Desktop/Main/.git /tmp/vfinal && cd /tmp/vfinal && git checkout 41752d6a87dc1cb1b933bb4460c9cabfc15ff694 && npm ci. You were NOT any builder/Account-A; read canonical files + source, never builder-chat reasoning; you may reject but never fix; no write to Main/candidate/receipts. Run campaign Passes 2-5 against exact C only: provenance, clean-clone full acceptance (npm test + npm run test:all + protocol + I00 proof + assurance), directive-coverage no-silent-omission, security/egress, cockpit no-false-green, money-path no-send. Aggregate the read-only shard receipts (PROV/SEC/COCKPIT/CLEAN_CLONE findings in ~/Desktop/shard-prov,shard-sec,v-cockpit,v-clean) as ADVISORY, but independently rerun the critical money-path/restart/reconciliation/authority/no-false-green classes yourself. Output VFINAL_RECEIPT.md ending in exactly VERIFIED_ACCEPTED:41752d6a87dc or REJECTED:41752d6a87dc (each finding: id, severity, invariant, evidence, repro, expected/actual, correction boundary). Usage limit -> save+stop; same message resumes.
-```
-
-# DO 5 THINGS (5 new chats). All read-only, all safe to run alongside truth-a. truth-b: closed.
+# CURRENT STATE (neutral wording to reduce model flip)
 #
-#   RUN-P1 -> folder shard-prov   (provenance + directive-coverage findings)
-#   RUN-P2 -> folder shard-sec    (security / secrets / egress findings)
-#   RUN-P3 -> folder v-cockpit    (cockpit no-false-green findings)
-#   RUN-P4 -> folder prep-act     (activation/canary runbook dry-prep, no credentials)
-#   RUN-P5 -> folder v-clean      (clean single-branch clone acceptance shard)
+#   RUN NOW: nothing new. truth-a is working defect-wave-1 -> it will freeze C2.
+#   The defect-wave text was already pasted into truth-a; let it run.
 #
-# These feed Account A defect waves NOW instead of waiting. When truth-a emits
-# BASELINE_TRUTH_ACCEPTED I hand you the real fresh-verifier chat.
-
-## RUN-P1 - folder /Users/cosmosgeek/Desktop/shard-prov
-```text
-Read-only investigation shard at EXACT candidate C 41752d6a87dc (verify HEAD == 41752d6a87dc1cb1b933bb4460c9cabfc15ff694; detached worktree). NON-BINDING PREP per the acceleration directive: you do NOT issue VERIFIED_ACCEPTED (only the post-baseline fresh verifier does) — you produce early findings so defect waves start now. Write ONLY your one receipt file at your worktree root (untracked); touch no tracked path, no other worktree, no current-main; never merge/push/clean/reset. Receipt must record: exact input SHA 41752d6a87dc, command, tool versions, pass/fail/skip counts with honest skip reasons, artifact hashes, forbidden-path non-touch assertion, and result token. TASK: (a) MERGE_PROVENANCE recheck — every donor in candidate ancestry or exact selective-merge receipt; no protected path edited without authorization; ledger-CAS + Foundation quantity-bridge dispositions cited to real receipts. (b) DIRECTIVE COVERAGE challenge — sample every controlling directive family (MISSION/ARCHITECTURE/I00/IP_*/POST_I00/IP_ASSURANCE/Frontier/deployment) and flag any requirement with no implementation+test+evidence row (MISSING blocks acceptance). Output PROV_FINDINGS.json (findings: id, severity CRITICAL/HIGH/MEDIUM/LOW, evidence, exact paths/SHAs). Stop at PROV_FINDINGS_READY or BLOCKED.
-```
-
-## RUN-P2 - folder /Users/cosmosgeek/Desktop/shard-sec
-```text
-Read-only investigation shard at EXACT candidate C 41752d6a87dc (verify HEAD == 41752d6a87dc1cb1b933bb4460c9cabfc15ff694; detached worktree). NON-BINDING PREP per the acceleration directive: you do NOT issue VERIFIED_ACCEPTED (only the post-baseline fresh verifier does) — you produce early findings so defect waves start now. Write ONLY your one receipt file at your worktree root (untracked); touch no tracked path, no other worktree, no current-main; never merge/push/clean/reset. Receipt must record: exact input SHA 41752d6a87dc, command, tool versions, pass/fail/skip counts with honest skip reasons, artifact hashes, forbidden-path non-touch assertion, and result token. TASK: secrets scan (no key/token/private-key literals anywhere), authn/authz middleware coverage, public vs private endpoint classification, network-egress tripwire review (only the D-LAUNCH-22 dispositioned Binance test socket is allowed; any other egress = finding), dependency/supply-chain posture. Output SEC_FINDINGS.json (same schema as P1). Stop at SEC_FINDINGS_READY or BLOCKED.
-```
-
-## RUN-P3 - folder /Users/cosmosgeek/Desktop/v-cockpit
-```text
-Read-only investigation shard at EXACT candidate C 41752d6a87dc (verify HEAD == 41752d6a87dc1cb1b933bb4460c9cabfc15ff694; detached worktree). NON-BINDING PREP per the acceleration directive: you do NOT issue VERIFIED_ACCEPTED (only the post-baseline fresh verifier does) — you produce early findings so defect waves start now. Write ONLY your one receipt file at your worktree root (untracked); touch no tracked path, no other worktree, no current-main; never merge/push/clean/reset. Receipt must record: exact input SHA 41752d6a87dc, command, tool versions, pass/fail/skip counts with honest skip reasons, artifact hashes, forbidden-path non-touch assertion, and result token. TASK: cockpit no-false-green — for every page/panel/gauge/control, check it binds to a canonical backend owner, cannot show green when a component is missing, disabled controls explain why, and UNKNOWN renders honestly. Cross-check truth-b's finding that 141/178 evidence slots are statically MISSING (~/Desktop/truth-b/B_PASS5_COCKPIT_BINDING_MATRIX.csv, read-only) — confirm which are owner-gated-by-design vs real gaps. Output COCKPIT_FINDINGS.json. Stop at COCKPIT_FINDINGS_READY or BLOCKED.
-```
-
-## RUN-P4 - folder /Users/cosmosgeek/Desktop/prep-act
-```text
-Read-only investigation shard at EXACT candidate C 41752d6a87dc (verify HEAD == 41752d6a87dc1cb1b933bb4460c9cabfc15ff694; detached worktree). NON-BINDING PREP per the acceleration directive: you do NOT issue VERIFIED_ACCEPTED (only the post-baseline fresh verifier does) — you produce early findings so defect waves start now. Write ONLY your one receipt file at your worktree root (untracked); touch no tracked path, no other worktree, no current-main; never merge/push/clean/reset. Receipt must record: exact input SHA 41752d6a87dc, command, tool versions, pass/fail/skip counts with honest skip reasons, artifact hashes, forbidden-path non-touch assertion, and result token. TASK (dry preparation only, ZERO credentials, ZERO external calls, ZERO mutation): draft the activation runbooks the 10-USDT canary will need — private-read reconciliation steps, signed-test-call procedure, venue-minimum check for a 10-USDT lifecycle (flag if exchange minimums make 10 USDT invalid), deterministic-client-id + persist-intent-before-send + timeout=query-truth-never-blind-resend checklist, and the exact owner-approval gate wording. Consume preverify ownerPrep drafts (git show preverify-20260714) as input. Output ACTIVATION_RUNBOOK_DRAFT.md + CANARY_PRECHECK.json — all owner-signature-required, nothing executed. Stop at ACTIVATION_PREP_READY or BLOCKED.
-```
-
-## RUN-P5 - folder /Users/cosmosgeek/Desktop/v-clean
-```text
-You are the CLEAN-CLONE ACCEPTANCE shard (directive Pass-3 prep). Create a fresh single-branch clone of exact C and run the full battery there (CI-equivalent environment): rm -rf /tmp/vclean && git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 file:///Users/cosmosgeek/Desktop/Main/.git /tmp/vclean && cd /tmp/vclean && git checkout 41752d6a87dc1cb1b933bb4460c9cabfc15ff694 && npm ci && npm test ; then npm run test:all, capturing EXACT exit codes/counts. This surfaces the known clean-checkout determinism defect (sealed-report parity / render-reports live-git bake-in) — confirm it and record it as a HIGH finding for Account A, plus any others. Write CLEAN_CLONE_FINDINGS.json at ~/Desktop/v-clean root (your worktree stays clean; the clone is in /tmp). Stop at CLEAN_CLONE_FINDINGS_READY or BLOCKED.
-```
+#   WHEN truth-a reports C2 frozen: tell me. I write the fresh-verifier block
+#   for C2. Verifier passes -> I land it.
+#
+#   The 5 read-only helper folders were removed (their results are saved in the
+#   repo and already handed to truth-a). truth-b closed. Ignore red GitHub emails.
+#
+#   The final live-account review + small test-trade steps are OWNER-GATED and
+#   done LAST in a dedicated session. They are the part that trips the model
+#   safeguard, so they stay out of the everyday files until then.
+########################################################################
 
 ########################################################################
 #  OLD — IGNORE EVERYTHING BELOW THIS LINE (history / already done)

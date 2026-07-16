@@ -1,0 +1,62 @@
+[
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "AIOPS-IR-PERSISTENCE-003",
+    "status": "DRAFT",
+    "requestedOwner": "LEDGER",
+    "targetSeam": "server/src/ledger.ts::Ledger; server/src/systemIntegration/persistence/ledgerAdapter.ts::SystemLedgerPersistenceAdapter; server/src/productIntegration/contracts/ports.ts::ProductLedgerPersistencePort",
+    "reason": "Durable AI records must use the sole canonical persistence owner.",
+    "contract": [
+      "Add Ledger migrations/adapters for cases, transitions, inbox, outbox, DLQ, attempts, effects, usage, approvals, evidence hashes and retention pointers."
+    ],
+    "tests": [
+      "Prove backup, restore, restart, replay, compare-and-set conflict and corrupt-record failure behavior."
+    ],
+    "expectedBehavior": [
+      "Zero acknowledged authoritative-record loss; one Ledger; no second store or file journal."
+    ],
+    "wiringState": "PENDING_BACKEND:AIOPS-IR-PERSISTENCE-003",
+    "authorityCreated": false
+  },
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "AIOPS-IR-COCKPIT-015",
+    "status": "DRAFT",
+    "requestedOwner": "PRODUCT_CONTROL_ROOM",
+    "targetSeam": "web/src/lib/productIntegration/**; web/src/features/productControlRoom/ProductControlRoom.tsx::ProductControlRoom; ProductControlRoomRoute.tsx::ProductControlRoomRoute; surfaceMounts.ts::SURFACE_MOUNT_CONTRACTS; web/src/App.tsx::PRODUCT_INTEGRATION_ENDPOINTS",
+    "reason": "Accepted A4 views must consume the existing Product client/cursor and server truth.",
+    "contract": [
+      "Bind fixture views to canonical authenticated APIs and durable cursor owner."
+    ],
+    "tests": [
+      "Exercise loading, stale, missing, gap, reconnect, forbidden and cursor-resume states in the rendered app."
+    ],
+    "expectedBehavior": [
+      "Unknown/unavailable remains visible; no browser recomputation, parallel store, polling client or socket."
+    ],
+    "wiringState": "PENDING_BACKEND:AIOPS-IR-COCKPIT-015",
+    "authorityCreated": false
+  },
+  {
+    "schema": "InsertionRequestRowV1",
+    "version": 1,
+    "rowId": "AIOPS-IR-TEST-MOUNT-026",
+    "status": "DRAFT",
+    "requestedOwner": "ROOT_TEST_ACCEPTANCE_OWNER",
+    "targetSeam": "package.json::test:all:built; test/i00/complete-acceptance.mjs; server/test/i00Acceptance/**",
+    "reason": "Accepted lane gates need one canonical root acceptance mount.",
+    "contract": [
+      "Register sealed lane tests and AI-off/fault gates only after acceptance."
+    ],
+    "tests": [
+      "Run focused lane suites, network-free root suite, complete acceptance, hostile false-green and exact exit-code checks."
+    ],
+    "expectedBehavior": [
+      "Real failures return nonzero; no fake success; accepted counts and commands are recorded in canonical state/receipt."
+    ],
+    "wiringState": "PENDING_BACKEND:AIOPS-IR-TEST-MOUNT-026",
+    "authorityCreated": false
+  }
+]

@@ -1,0 +1,104 @@
+{
+  "schema": "AI_OPS_A3_INTEGRATION_DEPENDENCIES_V1",
+  "releaseStatus": "BUILT_AND_TESTED",
+  "landedBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "authorityGranted": false,
+  "directionalConvergence": [
+    {
+      "parallelLane": "A1",
+      "state": "PENDING_PARALLEL_LANE",
+      "dedupDisposition": "A3 provider-state, identity-role, credential and retention projections must defer to the accepted A1 owner contract; INDEPENDENT_VERIFIER must not bypass an accepted INDEPENDENT_VERIFICATION_WORKER vocabulary."
+    },
+    {
+      "parallelLane": "A2",
+      "state": "PENDING_PARALLEL_LANE",
+      "dedupDisposition": "A3 must consume the exact accepted A2-selected provider route and budget lineage; it must not select a second route or create a second budget owner."
+    }
+  ],
+  "dependencies": [
+    {
+      "dependenceId": "A1-CANONICAL-CONTRACTS",
+      "state": "PENDING_PARALLEL_LANE",
+      "requiredInterface": "Accepted exact-five-state, provider, model, identity, permission, budget and tool contracts",
+      "prestageBehavior": "Local adapter projections only; the integrator must replace or prove exact compatibility"
+    },
+    {
+      "dependenceId": "A2-CASE-WORKFLOW-EVIDENCE",
+      "state": "PENDING_PARALLEL_LANE",
+      "requiredInterface": "Canonical case, evidence, workflow generation, inbox, outbox, DLQ, attempt and budget ports",
+      "prestageBehavior": "Typed identifiers are carried but no case or queue owner is created"
+    },
+    {
+      "dependenceId": "LEDGER-ATOMIC-DEDUP-AUDIT",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Atomic replay and semantic callback reservations, job audit, usage, effect and retention durability",
+      "prestageBehavior": "Injected port only; store unavailability denies acknowledgement"
+    },
+    {
+      "dependenceId": "RAW-WEBHOOK-ROUTE-AUTH",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Owner-authenticated raw-body route that preserves bytes and invokes admission before parsing",
+      "prestageBehavior": "Pure callback admission function only; no route or middleware"
+    },
+    {
+      "dependenceId": "WORKLOAD-IDENTITY-SANDBOX",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Accepted S6 workload identity and external sandbox bindings plus OS-enforced filesystem and network isolation",
+      "prestageBehavior": "Separate NOT_CONFIGURED identity rows and declarative plans only"
+    },
+    {
+      "dependenceId": "CREDENTIAL-BROKER-EGRESS-PROXY",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Owner-managed opaque credential injection and exact-route outbound proxy",
+      "prestageBehavior": "All routes disabled; only obviously synthetic invalid references accepted as fixture shape"
+    },
+    {
+      "dependenceId": "CONTROL-APPROVAL-AUTHORITY",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Canonical kill, provider activation, permission, budget, approval and revocation decisions",
+      "prestageBehavior": "No control is created and no admission result grants authority"
+    },
+    {
+      "dependenceId": "STATE-DIALECT-ADAPTER",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Explicit adapter from command section 2 configuration state to Product Assurance READY, NOT_CONFIGURED, UNAVAILABLE and BUDGET_EXHAUSTED posture",
+      "prestageBehavior": "Axes remain separate; no cast or READY projection"
+    },
+    {
+      "dependenceId": "INDEPENDENT-SENTINEL-AUDIT",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Independently administered sentinel and append-only audit delivery with readback",
+      "prestageBehavior": "No sentinel or audit sink is created"
+    },
+    {
+      "dependenceId": "CANONICAL-POLICY-VERIFIER",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Opaque canonical-owner verification result plus authenticated expiring one-shot hook-binding reservation binding principal, provider, model, run, session, canonical worktree, tool, input, resource, budgets, approval, policy revision and hard denials",
+      "prestageBehavior": "Typed verified-evidence projection only; every shipped tool remains disabled, the Claude hook unconditionally denies as HOOK_BINDING_VERIFIER_NOT_CONFIGURED, and no local policy becomes authority"
+    },
+    {
+      "dependenceId": "CALLBACK-VALIDATION-AUDIT",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Atomic durable receipt for every accepted, duplicate, delayed, conflicted, malformed or authentication-rejected delivery",
+      "prestageBehavior": "Authenticated accepted and duplicate fixture deliveries model audit receipts; pre-authentication rejection persistence awaits the canonical audit owner"
+    },
+    {
+      "dependenceId": "PROVIDER-ROUTE-QUALIFICATION",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Per-role pinned model and CLI version, prompt, policy, schema, tool parity, retention, region, eval, budget, circuit and emergency-reserve qualification",
+      "prestageBehavior": "All posture fields are UNKNOWN_BLOCKED or UNQUALIFIED and no route activates"
+    },
+    {
+      "dependenceId": "SIGNED-CONTEXT-PROMPT-MANIFEST",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Canonical signed context manifest binding static-system hash, dynamic-context hash, evidence-bundle hash, phase, stop condition, prompt revision, retrieval bound, tool-depth bound, iteration bound and output-byte bound",
+      "prestageBehavior": "Provider requests carry prompt, evidence and policy revisions plus token and deadline bounds; tool requests and signed policy evidence cross-bind evidence-bundle and revision identities; descriptors bind input and output bytes. No signed context-manifest owner is created and activation remains denied"
+    },
+    {
+      "dependenceId": "ISOLATED-WORKTREE-RUNNER",
+      "state": "PENDING_SHARED_OWNER_INSERTION",
+      "requiredInterface": "Owner-created dedicated disposable clone plus signed canonical source/common-dir/parent realpath evidence, locked detached worktree, process sandbox, resource ceiling and artifact retention",
+      "prestageBehavior": "Class-C command plan only; caller-asserted or unresolved paths are rejected, runner remains NOT_CONFIGURED and Main writes, merge, push and deployment stay denied"
+    }
+  ]
+}

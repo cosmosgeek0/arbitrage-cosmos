@@ -23,6 +23,7 @@ import {
   Q_ARCHIVE_REQUIRED_FILES,
   Q_DONOR_ARCHIVE_ARGS,
   buildIntegrationCandidateReceiptDocument,
+  classifyReceiptProvenanceDiagnostic,
   parseOptions,
   renderIntegrationCandidateReceiptMarkdown,
   validateCandidateSealTopologyDocument,
@@ -529,10 +530,82 @@ test('sealed report parity reads the exact revision from clean detached checkout
   assert.equal(result.regeneration.passed, true);
   assert.equal(result.artifacts.length, 6);
   assert.ok(result.artifacts.every((artifact) => artifact.matchesGenerator));
+  assert.notEqual(result.liveGitDiagnostic.status, 'FAILED');
+  assert.equal(result.restrictedSource, null);
+  assert.equal(
+    result.artifacts.find((artifact) => artifact.relativePath === 'integration/reports/i00-proof-evidence.json')?.comparisonMode,
+    'TRACKED_CONTENT_CANONICAL_V1',
+  );
   assert.deepEqual(result.checkouts, [
     { checkout: 'sealed-report-parity-untouched', headSha: result.revision, branch: '', statusByteLength: 0 },
     { checkout: 'sealed-report-parity-generated', headSha: result.revision, branch: '', statusByteLength: 0 },
   ]);
+});
+
+test('sealed report parity remains tracked-content exact when single-branch provenance refs are absent', async (context) => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-sealed-report-single-branch-'));
+  context.after(() => rmSync(tempRoot, { recursive: true, force: true }));
+  const result = await verifyRejectedSealReportParityRegression(tempRoot, { singleBranchSource: true });
+  const unavailableSha = '692501587617d4880303fbd747d93e63c376f088';
+
+  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.restrictedSource.mode, 'FILE_TRANSPORT_SINGLE_BRANCH_CURRENT_MAIN');
+  assert.deepEqual(result.restrictedSource.unavailableShas, [unavailableSha]);
+  assert.ok(result.restrictedSource.refNames.every((ref) => ref.endsWith('current-main') || ref === 'refs/remotes/origin/HEAD'));
+  assert.equal(result.regeneration.passed, true);
+  assert.equal(result.liveGitDiagnostic.status, 'UNKNOWN');
+  assert.equal(result.liveGitDiagnostic.passed, null);
+  assert.equal(result.liveGitDiagnostic.receiptProvenance.status, 'UNKNOWN');
+  assert.equal(result.liveGitDiagnostic.receiptProvenance.passed, null);
+  assert.deepEqual(result.liveGitDiagnostic.receiptProvenance.unavailableShas, [unavailableSha]);
+
+  const machine = result.artifacts.find((artifact) => artifact.relativePath === 'integration/reports/i00-proof-evidence.json');
+  const markdown = result.artifacts.filter((artifact) => artifact.relativePath !== 'integration/reports/i00-proof-evidence.json');
+  assert.equal(machine.comparisonMode, 'TRACKED_CONTENT_CANONICAL_V1');
+  assert.equal(machine.rawMatchesGenerator, false);
+  assert.equal(machine.matchesGenerator, true);
+  assert.equal(machine.canonicalSha256, machine.generatedCanonicalSha256);
+  assert.equal(markdown.length, 5);
+  assert.ok(markdown.every((artifact) => artifact.comparisonMode === 'EXACT_BYTES'
+    && artifact.rawMatchesGenerator && artifact.matchesGenerator));
+
+  const base = 'a'.repeat(40);
+  const sha = 'b'.repeat(40);
+  const diagnosticDocument = {
+    receiptProvenance: {
+      verificationBase: base,
+      items: [{ sha, claimType: 'RECEIPTED_BYTE_EQUIVALENCE', ancestorRequired: false }],
+    },
+    receiptProvenanceVerification: {
+      verificationBase: base,
+      baseExists: true,
+      results: [{
+        sha,
+        claimType: 'RECEIPTED_BYTE_EQUIVALENCE',
+        commitExists: false,
+        ancestorVerified: true,
+        currentReceiptHashVerified: true,
+        receiptClaimVerified: true,
+        passed: false,
+      }],
+      passed: false,
+    },
+  };
+  const unavailable = { base: 'AVAILABLE', items: [{ sha, object: 'UNKNOWN', ancestry: 'NOT_REQUIRED' }] };
+  assert.equal(classifyReceiptProvenanceDiagnostic(diagnosticDocument, unavailable).status, 'UNKNOWN');
+  const corruptedReceipt = structuredClone(diagnosticDocument);
+  corruptedReceipt.receiptProvenanceVerification.results[0].currentReceiptHashVerified = false;
+  assert.equal(classifyReceiptProvenanceDiagnostic(corruptedReceipt, unavailable).status, 'FAILED');
+  const malformedLiveObservation = structuredClone(diagnosticDocument);
+  malformedLiveObservation.receiptProvenanceVerification.results[0].commitExists = 'UNKNOWN';
+  assert.equal(classifyReceiptProvenanceDiagnostic(malformedLiveObservation, unavailable).status, 'FAILED');
+  const disprovedAncestry = structuredClone(diagnosticDocument);
+  disprovedAncestry.receiptProvenance.items[0].ancestorRequired = true;
+  disprovedAncestry.receiptProvenanceVerification.results[0].commitExists = true;
+  assert.equal(classifyReceiptProvenanceDiagnostic(disprovedAncestry, {
+    base: 'AVAILABLE',
+    items: [{ sha, object: 'AVAILABLE', ancestry: 'DISPROVED' }],
+  }).status, 'FAILED');
 });
 
 test('pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S', () => {

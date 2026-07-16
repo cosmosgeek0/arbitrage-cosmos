@@ -16,7 +16,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { inflateSync } from 'node:zlib';
 
 import {
@@ -149,13 +149,26 @@ const ALLOWED_MEASUREMENT_CLOSURE_PATHS = new Set([
 const PROOF_CATALOG_PATH = 'fixtures/i00/proof-catalog.json';
 const CLOSURE_EVIDENCE_PATH = 'fixtures/i00/closure-evidence.json';
 const CANDIDATE_RECEIPT_PATH = 'docs/archive/i00-phase2/INTEGRATION_CANDIDATE_READY_RECEIPT.md';
+const MACHINE_EVIDENCE_REPORT_PATH = 'integration/reports/i00-proof-evidence.json';
 const GENERATED_REPORT_PATHS = Object.freeze([
   'MISSION_COVERAGE_MATRIX.md',
   'AUTONOMY_CLOSURE_REPORT.md',
   'NO_TERMINAL_DEPENDENCY_REPORT.md',
   'RESOURCE_AND_BACKPRESSURE_REPORT.md',
   'OFFICIAL_INTERFACE_MATRIX.md',
-  'integration/reports/i00-proof-evidence.json',
+  MACHINE_EVIDENCE_REPORT_PATH,
+]);
+const LIVE_GIT_DIAGNOSTIC_STATUSES = Object.freeze({
+  VERIFIED: 'VERIFIED',
+  FAILED: 'FAILED',
+  UNKNOWN: 'UNKNOWN',
+});
+const RECEIPT_PROVENANCE_RESULT_BOOLEAN_FIELDS = Object.freeze([
+  'commitExists',
+  'ancestorVerified',
+  'currentReceiptHashVerified',
+  'receiptClaimVerified',
+  'passed',
 ]);
 const CANDIDATE_RECEIPT_SCHEMA_VERSION = 'i00.integration-candidate-receipt.v2';
 const CANDIDATE_RECEIPT_MAX_BYTES = 512 * 1024;
@@ -1355,6 +1368,21 @@ function commandOutput(executable, args, cwd, environment, maximumBytes = 4 * 10
   });
 }
 
+function commandStatus(executable, args, cwd, environment) {
+  return new Promise((resolve) => {
+    const child = spawn(executable, args, { cwd, env: environment, stdio: ['ignore', 'ignore', 'ignore'] });
+    let startFailed = false;
+    child.once('error', () => {
+      startFailed = true;
+    });
+    child.once('close', (code, signal) => resolve(Object.freeze({
+      exitCode: code,
+      exitSignal: signal,
+      startFailed,
+    })));
+  });
+}
+
 function parseQDonorTreeInventory(raw) {
   return raw.toString('utf8').split('\0').filter(Boolean).map((record) => {
     const tab = record.indexOf('\t');
@@ -1602,20 +1630,306 @@ async function runQArchiveGate(tempRoot, qVenv, environment) {
   };
 }
 
-async function verifyReportParity() {
+/**
+ * The rejected seal is immutable, so its historical generator cannot be
+ * rewritten. Validate the full raw document and its self-digest first, then
+ * remove only live-Git receipt observations from the parity projection. Those facts
+ * are evaluated separately by inspectSealedMachineLiveGitDiagnostic().
+ */
+export function canonicalizeSealedMachineEvidence(bytes, label = 'SEALED_MACHINE_EVIDENCE') {
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0) throw new Error(`${label}_BYTES_INVALID`);
+  let document;
+  try {
+    document = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error(`${label}_JSON_INVALID`);
+  }
+  if (`${JSON.stringify(document, null, 2)}\n` !== bytes.toString('utf8')) {
+    throw new Error(`${label}_JSON_NONCANONICAL`);
+  }
+  const { evidenceSha256, ...evidence } = document;
+  if (!/^[a-f0-9]{64}$/u.test(evidenceSha256 ?? '')
+      || sha256(canonicalJson(evidence)) !== evidenceSha256) {
+    throw new Error(`${label}_SELF_DIGEST_INVALID`);
+  }
+  if (evidence.receiptProvenanceVerification === null
+      || typeof evidence.receiptProvenanceVerification !== 'object'
+      || Array.isArray(evidence.receiptProvenanceVerification)
+      || typeof evidence.receiptProvenanceVerification.baseExists !== 'boolean'
+      || typeof evidence.receiptProvenanceVerification.passed !== 'boolean'
+      || !Array.isArray(evidence.receiptProvenanceVerification.results)
+      || evidence.receiptProvenanceVerification.results.some((result) => (
+        RECEIPT_PROVENANCE_RESULT_BOOLEAN_FIELDS.some((field) => typeof result?.[field] !== 'boolean')
+      ))) {
+    throw new Error(`${label}_RECEIPT_PROVENANCE_DIAGNOSTIC_MISSING`);
+  }
+  const projection = structuredClone(evidence);
+  const verification = projection.receiptProvenanceVerification;
+  delete verification.baseExists;
+  delete verification.passed;
+  const provenanceBySha = new Map((projection.receiptProvenance?.items ?? [])
+    .map((item) => [item.sha, item]));
+  for (const result of verification.results ?? []) {
+    const item = provenanceBySha.get(result.sha);
+    delete result.commitExists;
+    delete result.ancestorVerified;
+    delete result.passed;
+    if (item?.claimType === 'COMMIT_CONTAINING_RECEIPT') delete result.receiptClaimVerified;
+  }
+
+  const canonicalBytes = Buffer.from(`${JSON.stringify(projection, null, 2)}\n`);
+  return Object.freeze({
+    document,
+    evidenceSha256,
+    canonicalBytes,
+    canonicalSha256: sha256(canonicalBytes),
+  });
+}
+
+function diagnosticOutcome(status, failures, unknownReasons, extra = {}) {
+  return Object.freeze({
+    ...extra,
+    status,
+    passed: status === LIVE_GIT_DIAGNOSTIC_STATUSES.VERIFIED
+      ? true
+      : status === LIVE_GIT_DIAGNOSTIC_STATUSES.FAILED
+        ? false
+        : null,
+    failures: Object.freeze([...failures]),
+    unknownReasons: Object.freeze([...unknownReasons]),
+  });
+}
+
+export function classifyReceiptProvenanceDiagnostic(document, availability) {
+  const failures = [];
+  const unknownReasons = [];
+  const provenance = document?.receiptProvenance;
+  const verification = document?.receiptProvenanceVerification;
+  const items = Array.isArray(provenance?.items) ? provenance.items : [];
+  const results = Array.isArray(verification?.results) ? verification.results : [];
+  const availabilityRows = Array.isArray(availability?.items) ? availability.items : [];
+  if (!/^[a-f0-9]{40}$/u.test(provenance?.verificationBase ?? '')
+      || verification?.verificationBase !== provenance.verificationBase
+      || typeof verification?.baseExists !== 'boolean'
+      || typeof verification?.passed !== 'boolean'
+      || results.some((result) => (
+        RECEIPT_PROVENANCE_RESULT_BOOLEAN_FIELDS.some((field) => typeof result?.[field] !== 'boolean')
+      ))
+      || results.length !== items.length || availabilityRows.length !== items.length) {
+    failures.push('RECEIPT_PROVENANCE_DIAGNOSTIC_SHAPE_INVALID');
+  }
+  if (availability?.base === 'AVAILABLE') {
+    if (verification?.baseExists !== true) failures.push('VERIFICATION_BASE_AVAILABLE_BUT_REPORTED_MISSING');
+  } else {
+    unknownReasons.push(`VERIFICATION_BASE_${provenance?.verificationBase ?? 'INVALID'}_UNAVAILABLE`);
+  }
+
+  const unavailableShas = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const result = results[index];
+    const observed = availabilityRows[index];
+    if (result?.sha !== item?.sha || result?.claimType !== item?.claimType
+        || observed?.sha !== item?.sha) {
+      failures.push(`PROVENANCE_ROW_${index}_IDENTITY_INVALID`);
+      continue;
+    }
+    const objectAvailable = observed.object === 'AVAILABLE';
+    if (!objectAvailable) {
+      unavailableShas.push(item.sha);
+      unknownReasons.push(`COMMIT_${item.sha}_UNAVAILABLE`);
+    } else if (result.commitExists !== true) {
+      failures.push(`COMMIT_${item.sha}_AVAILABLE_BUT_REPORTED_MISSING`);
+    }
+
+    let ancestryConclusive = item.ancestorRequired !== true;
+    if (item.ancestorRequired === true) {
+      if (observed.ancestry === 'DISPROVED') {
+        failures.push(`ANCESTRY_${item.sha}_DISPROVED`);
+      } else if (observed.ancestry === 'VERIFIED') {
+        ancestryConclusive = true;
+        if (result.ancestorVerified !== true) failures.push(`ANCESTRY_${item.sha}_REPORT_MISMATCH`);
+      } else {
+        unknownReasons.push(`ANCESTRY_${item.sha}_UNKNOWN`);
+      }
+    } else if (result.ancestorVerified !== true) {
+      failures.push(`ANCESTRY_${item.sha}_NOT_REQUIRED_REPORT_INVALID`);
+    }
+
+    if (result.currentReceiptHashVerified !== true) {
+      failures.push(`RECEIPT_${item.sha}_TRACKED_HASH_FAILED`);
+    }
+    if (result.receiptClaimVerified !== true) {
+      if (item.claimType === 'COMMIT_CONTAINING_RECEIPT' && !objectAvailable) {
+        unknownReasons.push(`RECEIPT_${item.sha}_COMMITTED_CLAIM_UNKNOWN`);
+      } else {
+        failures.push(`RECEIPT_${item.sha}_CLAIM_FAILED`);
+      }
+    }
+
+    const prerequisitesVerified = availability?.base === 'AVAILABLE' && objectAvailable
+      && ancestryConclusive && result.currentReceiptHashVerified === true
+      && result.receiptClaimVerified === true;
+    if (prerequisitesVerified && result.passed !== true) {
+      failures.push(`PROVENANCE_${item.sha}_AVAILABLE_CHECK_REPORTED_FAILED`);
+    }
+  }
+
+  let status = LIVE_GIT_DIAGNOSTIC_STATUSES.VERIFIED;
+  if (failures.length > 0) status = LIVE_GIT_DIAGNOSTIC_STATUSES.FAILED;
+  else if (unknownReasons.length > 0) status = LIVE_GIT_DIAGNOSTIC_STATUSES.UNKNOWN;
+  else if (verification?.passed !== true) {
+    status = LIVE_GIT_DIAGNOSTIC_STATUSES.FAILED;
+    failures.push('RECEIPT_PROVENANCE_AGGREGATE_FAILED_WITH_AVAILABLE_INPUTS');
+  }
+  return diagnosticOutcome(status, failures, unknownReasons, {
+    verificationBase: provenance?.verificationBase ?? null,
+    unavailableShas: Object.freeze(unavailableShas),
+  });
+}
+
+async function gitObjectAvailability(repositoryRoot, sha, environment) {
+  const result = await commandStatus('git', ['cat-file', '-e', `${sha}^{commit}`], repositoryRoot, environment);
+  return result.exitCode === 0 && result.exitSignal === null && result.startFailed === false
+    ? 'AVAILABLE'
+    : 'UNKNOWN';
+}
+
+async function collectReceiptProvenanceAvailability(document, repositoryRoot, environment) {
+  const provenance = document.receiptProvenance;
+  const base = await gitObjectAvailability(repositoryRoot, provenance.verificationBase, environment);
+  const items = await Promise.all(provenance.items.map(async (item) => {
+    const object = await gitObjectAvailability(repositoryRoot, item.sha, environment);
+    let ancestry = 'NOT_REQUIRED';
+    if (item.ancestorRequired === true) {
+      if (base !== 'AVAILABLE' || object !== 'AVAILABLE') ancestry = 'UNKNOWN';
+      else {
+        const result = await commandStatus(
+          'git',
+          ['merge-base', '--is-ancestor', item.sha, provenance.verificationBase],
+          repositoryRoot,
+          environment,
+        );
+        ancestry = result.exitCode === 0 && result.exitSignal === null && result.startFailed === false
+          ? 'VERIFIED'
+          : result.exitCode === 1 && result.exitSignal === null && result.startFailed === false
+            ? 'DISPROVED'
+            : 'UNKNOWN';
+      }
+    }
+    return Object.freeze({ sha: item.sha, object, ancestry });
+  }));
+  return Object.freeze({ base, items: Object.freeze(items) });
+}
+
+async function inspectSealedMachineLiveGitDiagnostic(document, repositoryRoot, environment) {
+  const receiptAvailability = await collectReceiptProvenanceAvailability(document, repositoryRoot, environment);
+  const receiptProvenance = classifyReceiptProvenanceDiagnostic(document, receiptAvailability);
+  return Object.freeze({
+    status: receiptProvenance.status,
+    passed: receiptProvenance.passed,
+    receiptProvenance,
+  });
+}
+
+async function createSingleBranchParitySource(tempRoot, environment) {
+  const transportRoot = path.join(tempRoot, 'single-branch-source.git');
+  const repositoryRoot = path.join(tempRoot, 'single-branch-current-main');
+  await commandOutput('git', ['init', '--bare', '--quiet', transportRoot], ROOT, environment, 1_024);
+  await commandOutput(
+    'git',
+    ['fetch', '--no-tags', '--quiet', pathToFileURL(ROOT).href, 'HEAD:refs/heads/current-main'],
+    transportRoot,
+    environment,
+    8 * 1024 * 1024,
+  );
+  await commandOutput('git', ['symbolic-ref', 'HEAD', 'refs/heads/current-main'], transportRoot, environment, 1_024);
+  await commandOutput(
+    'git',
+    ['clone', '--no-hardlinks', '--single-branch', '--branch', 'current-main', '--no-tags', '--quiet', pathToFileURL(transportRoot).href, repositoryRoot],
+    ROOT,
+    environment,
+    8 * 1024 * 1024,
+  );
+  const headSha = (await commandOutput(
+    'git',
+    ['rev-parse', '--verify', 'HEAD^{commit}'],
+    repositoryRoot,
+    environment,
+    1_024,
+  )).stdout.toString('utf8').trim();
+  const refNames = (await commandOutput(
+    'git',
+    ['for-each-ref', '--format=%(refname)'],
+    repositoryRoot,
+    environment,
+    64 * 1024,
+  )).stdout.toString('utf8').trim().split('\n').filter(Boolean);
+  const provenance = JSON.parse(readFileSync(path.join(repositoryRoot, 'fixtures/i00/receipt-provenance.json'), 'utf8'));
+  const unavailableShas = [];
+  for (const item of provenance.items.filter((entry) => entry.ancestorRequired === false)) {
+    const availability = await gitObjectAvailability(repositoryRoot, item.sha, environment);
+    if (availability === 'AVAILABLE') throw new Error(`SINGLE_BRANCH_PROVENANCE_OBJECT_UNEXPECTEDLY_PRESENT:${item.sha}`);
+    unavailableShas.push(item.sha);
+  }
+  return Object.freeze({
+    repositoryRoot,
+    evidence: Object.freeze({
+      mode: 'FILE_TRANSPORT_SINGLE_BRANCH_CURRENT_MAIN',
+      headSha,
+      refNames: Object.freeze(refNames),
+      unavailableShas: Object.freeze(unavailableShas),
+    }),
+  });
+}
+
+async function verifyReportParity(environment) {
   const module = await import('../render-reports.mjs');
   const closure = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/i00/closure-evidence.json'), 'utf8'));
   const generated = module.renderReports({ ...closure, generatedAtUtc: '2026-07-13T00:00:00Z' });
   const artifacts = [];
   for (const [relativePath, content] of Object.entries(generated)) {
     const current = readFileSync(path.join(ROOT, relativePath), 'utf8');
-    artifacts.push({ relativePath, sha256: sha256(current), byteLength: Buffer.byteLength(current), matchesGenerator: current === content });
+    artifacts.push({
+      relativePath,
+      sha256: sha256(current),
+      byteLength: Buffer.byteLength(current),
+      comparisonMode: 'EXACT_BYTES',
+      rawMatchesGenerator: current === content,
+      matchesGenerator: current === content,
+    });
   }
   const evidence = module.buildMachineEvidence();
   const expectedMachine = `${JSON.stringify({ ...evidence, evidenceSha256: module.evidenceDigest(evidence) }, null, 2)}\n`;
   const machinePath = 'integration/reports/i00-proof-evidence.json';
   const currentMachine = readFileSync(path.join(ROOT, machinePath), 'utf8');
-  artifacts.push({ relativePath: machinePath, sha256: sha256(currentMachine), byteLength: Buffer.byteLength(currentMachine), matchesGenerator: currentMachine === expectedMachine });
+  const currentCanonical = canonicalizeSealedMachineEvidence(
+    Buffer.from(currentMachine),
+    'CURRENT_MACHINE_EVIDENCE',
+  );
+  const generatedCanonical = canonicalizeSealedMachineEvidence(
+    Buffer.from(expectedMachine),
+    'GENERATED_MACHINE_EVIDENCE',
+  );
+  artifacts.push({
+    relativePath: machinePath,
+    sha256: sha256(currentMachine),
+    byteLength: Buffer.byteLength(currentMachine),
+    generatedSha256: sha256(expectedMachine),
+    generatedByteLength: Buffer.byteLength(expectedMachine),
+    comparisonMode: 'TRACKED_CONTENT_CANONICAL_V1',
+    rawMatchesGenerator: currentMachine === expectedMachine,
+    canonicalSha256: currentCanonical.canonicalSha256,
+    generatedCanonicalSha256: generatedCanonical.canonicalSha256,
+    matchesGenerator: currentCanonical.canonicalBytes.equals(generatedCanonical.canonicalBytes),
+  });
+  const liveGitDiagnostic = await inspectSealedMachineLiveGitDiagnostic(
+    generatedCanonical.document,
+    ROOT,
+    environment,
+  );
+  const passed = artifacts.every((artifact) => artifact.matchesGenerator)
+    && liveGitDiagnostic.status !== LIVE_GIT_DIAGNOSTIC_STATUSES.FAILED;
   return Object.freeze({
     id: 'generated_report_parity',
     command: [],
@@ -1623,7 +1937,7 @@ async function verifyReportParity() {
     startedAtUtc: new Date().toISOString(),
     endedAtUtc: new Date().toISOString(),
     durationMs: 0,
-    exitCode: artifacts.every((artifact) => artifact.matchesGenerator) ? 0 : 1,
+    exitCode: passed ? 0 : 1,
     exitSignal: null,
     timedOut: false,
     stdoutBytes: 0,
@@ -1634,11 +1948,16 @@ async function verifyReportParity() {
     secretFindings: [],
     outputOverflow: false,
     artifacts,
-    passed: artifacts.every((artifact) => artifact.matchesGenerator),
+    passed,
   });
 }
 
-export async function verifyReportParityAtRevision(environment, revision, tempRoot) {
+export async function verifyReportParityAtRevision(
+  environment,
+  revision,
+  tempRoot,
+  { repositoryRoot = ROOT } = {},
+) {
   const sealedRoot = path.join(tempRoot, 'sealed-report-parity-untouched');
   const generatedRoot = path.join(tempRoot, 'sealed-report-parity-generated');
   let currentMainTip = null;
@@ -1647,7 +1966,7 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
       const observed = (await commandOutput(
         'git',
         ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
-        ROOT,
+        repositoryRoot,
         environment,
         1_024,
       )).stdout.toString('utf8').trim();
@@ -1662,7 +1981,13 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
   if (currentMainTip === null) throw new Error('SEALED_REPORT_PARITY_CURRENT_MAIN_UNAVAILABLE');
   const checkouts = [];
   for (const checkoutRoot of [sealedRoot, generatedRoot]) {
-    await commandOutput('git', ['clone', '--no-hardlinks', '--no-checkout', '--quiet', ROOT, checkoutRoot], ROOT, environment, 8 * 1024 * 1024);
+    await commandOutput(
+      'git',
+      ['clone', '--no-hardlinks', '--no-checkout', '--quiet', repositoryRoot, checkoutRoot],
+      repositoryRoot,
+      environment,
+      8 * 1024 * 1024,
+    );
     await commandOutput('git', ['checkout', '--detach', '--quiet', revision], checkoutRoot, environment, 8 * 1024 * 1024);
     await commandOutput('git', ['cat-file', '-e', `${currentMainTip}^{commit}`], checkoutRoot, environment, 1_024);
     await commandOutput('git', ['update-ref', 'refs/heads/current-main', currentMainTip], checkoutRoot, environment, 1_024);
@@ -1705,32 +2030,74 @@ export async function verifyReportParityAtRevision(environment, revision, tempRo
     environment,
   });
   const artifacts = [];
+  let generatedMachineDocument = null;
   for (const relativePath of GENERATED_REPORT_PATHS) {
     const sealedBytes = readFileSync(path.join(sealedRoot, relativePath));
     const generatedBytes = readFileSync(path.join(generatedRoot, relativePath));
+    const rawMatchesGenerator = sealedBytes.equals(generatedBytes);
+    if (relativePath === MACHINE_EVIDENCE_REPORT_PATH) {
+      const sealedCanonical = canonicalizeSealedMachineEvidence(sealedBytes, 'SEALED_MACHINE_EVIDENCE');
+      const generatedCanonical = canonicalizeSealedMachineEvidence(generatedBytes, 'GENERATED_MACHINE_EVIDENCE');
+      generatedMachineDocument = generatedCanonical.document;
+      artifacts.push({
+        relativePath,
+        sha256: sha256(sealedBytes),
+        byteLength: sealedBytes.length,
+        generatedSha256: sha256(generatedBytes),
+        generatedByteLength: generatedBytes.length,
+        comparisonMode: 'TRACKED_CONTENT_CANONICAL_V1',
+        rawMatchesGenerator,
+        canonicalSha256: sealedCanonical.canonicalSha256,
+        generatedCanonicalSha256: generatedCanonical.canonicalSha256,
+        matchesGenerator: sealedCanonical.canonicalBytes.equals(generatedCanonical.canonicalBytes),
+      });
+      continue;
+    }
     artifacts.push({
       relativePath,
       sha256: sha256(sealedBytes),
       byteLength: sealedBytes.length,
       generatedSha256: sha256(generatedBytes),
       generatedByteLength: generatedBytes.length,
-      matchesGenerator: sealedBytes.equals(generatedBytes),
+      comparisonMode: 'EXACT_BYTES',
+      rawMatchesGenerator,
+      matchesGenerator: rawMatchesGenerator,
     });
   }
+  if (generatedMachineDocument === null) throw new Error('SEALED_REPORT_PARITY_MACHINE_EVIDENCE_MISSING');
+  const liveGitDiagnostic = await inspectSealedMachineLiveGitDiagnostic(
+    generatedMachineDocument,
+    generatedRoot,
+    environment,
+  );
   return Object.freeze({
     id: 'sealed_generated_report_parity',
     revision,
     checkouts: Object.freeze(checkouts),
     regeneration,
     artifacts: Object.freeze(artifacts),
-    passed: regeneration.passed && artifacts.every((artifact) => artifact.matchesGenerator),
+    liveGitDiagnostic,
+    passed: regeneration.passed && artifacts.every((artifact) => artifact.matchesGenerator)
+      && liveGitDiagnostic.status !== LIVE_GIT_DIAGNOSTIC_STATUSES.FAILED,
   });
 }
 
-export async function verifyRejectedSealReportParityRegression(tempRoot) {
+export async function verifyRejectedSealReportParityRegression(tempRoot, { singleBranchSource = false } = {}) {
   const environment = safeEnvironment(tempRoot);
   const revision = '517bd636d799c983ecddc9bda1985d0619b652d7';
-  return verifyReportParityAtRevision(environment, revision, tempRoot);
+  const restricted = singleBranchSource
+    ? await createSingleBranchParitySource(tempRoot, environment)
+    : null;
+  const result = await verifyReportParityAtRevision(
+    environment,
+    revision,
+    tempRoot,
+    { repositoryRoot: restricted?.repositoryRoot ?? ROOT },
+  );
+  return Object.freeze({
+    ...result,
+    restrictedSource: restricted?.evidence ?? null,
+  });
 }
 
 export function validateBrowserDocument(document, expectedHead, expectedTree, schema = JSON.parse(readFileSync(BROWSER_SCHEMA_PATH, 'utf8'))) {
@@ -3735,7 +4102,7 @@ async function runCompleteAcceptance(options) {
     if (q.steps.some((step) => !step.passed)) throw new Error('Q_EXACT_DONOR_GATE_FAILED');
     for (const plan of ACCEPTANCE_PLAN.slice(2)) {
       let result;
-      if (plan.kind === 'REPORT_PARITY') result = await verifyReportParity();
+      if (plan.kind === 'REPORT_PARITY') result = await verifyReportParity(environment);
       else if (plan.kind === 'SOURCE_FREEZE') {
         const finalEvidencePaths = new Set(initialEvidencePaths);
         if (performanceReceipt?.relativePath) finalEvidencePaths.add(performanceReceipt.relativePath);

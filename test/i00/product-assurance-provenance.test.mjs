@@ -136,7 +136,7 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   assert.equal(validation.gitObjectContextProofs, 6);
   assert.equal(validation.liveContextReplacements, 1);
   assert.equal(validation.contextReplacementRows, 7);
-  assert.equal(validation.postIntegrationReplacementRows, 3);
+  assert.equal(validation.postIntegrationReplacementRows, 4);
 
   const core = manifest.suites.find((suite) => suite.id === 'A_CORE_BEHAVIOR');
   assert.equal(core.expectedPasses, 31);
@@ -174,8 +174,8 @@ test('all six accepted assurance donors are exact Git-object ancestors with immu
   const result = verifyProductAssuranceDonors(manifest);
   assert.equal(result.passed, true, JSON.stringify(result.donors.filter((entry) => !entry.passed)));
   assert.equal(result.mergeCutBlobCount, 193);
-  assert.equal(result.donorIdenticalHeadBlobCount, 190);
-  assert.equal(result.postIntegrationReplacementCount, 3);
+  assert.equal(result.donorIdenticalHeadBlobCount, 189);
+  assert.equal(result.postIntegrationReplacementCount, 4);
   assert(result.postIntegrationReplacements.every((entry) => entry.passed));
   assert.deepEqual(result.donors.map((entry) => [entry.id, entry.pathCount, entry.blobMismatches.length]), [
     ['A_CORE', 36, 0],
@@ -236,7 +236,7 @@ test('manifest selection and operation coverage mutations fail closed without ex
     (document) => { document.suites[4].excludedContextTests[0].replacementProofId = ''; },
     (document) => { document.suites[5].expectedPasses += 1; },
     (document) => { document.expectedSkippedCallbacks = 7; },
-    (document) => { document.expectedPostIntegrationReplacementRows = 4; },
+    (document) => { document.expectedPostIntegrationReplacementRows = 5; },
     (document) => { document.donors[0].postIntegrationReplacements.pop(); },
     (document) => { document.donors[1].postIntegrationReplacements.push(structuredClone(document.donors[0].postIntegrationReplacements[0])); },
     (document) => { document.donors[0].postIntegrationReplacements[0].replacementBlob = '0'.repeat(40); },

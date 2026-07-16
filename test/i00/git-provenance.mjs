@@ -459,6 +459,13 @@ const EXPECTED_PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENTS = Object.freeze([
     replacementCommit: '9a6ec938ef45716379d4f4f4972102ef85cb7271',
     replacementBlob: 'cdb8dc8bf0bb962991641e629204978768b99d87',
   }),
+  Object.freeze({
+    donorId: 'A_CASE_S4',
+    path: 'test/productAssurance/systemic/assuranceCase/s1-provenance.test.mjs',
+    donorBlob: 'cdea2f5a4c5a1517cdd7e16fbb5c1273ac99cdad',
+    replacementCommit: '39ec378d4a7584f3c69436ef5c9f105c56bffb16',
+    replacementBlob: '09d8bedb8b88f901f0ec345381205675be41aa9d',
+  }),
 ]);
 
 function compareAscii(left, right) {
@@ -551,7 +558,7 @@ export function validateProductAssuranceManifest(document) {
   addError(errors, document?.expectedGitObjectContextProofs === 6, 'GIT_OBJECT_CONTEXT_PROOF_TOTAL');
   addError(errors, document?.expectedLiveContextReplacements === 1, 'LIVE_CONTEXT_REPLACEMENT_TOTAL');
   addError(errors, document?.expectedContextReplacementRows === 7, 'CONTEXT_REPLACEMENT_ROW_TOTAL');
-  addError(errors, document?.expectedPostIntegrationReplacementRows === 3,
+  addError(errors, document?.expectedPostIntegrationReplacementRows === 4,
     'POST_INTEGRATION_REPLACEMENT_TOTAL');
   addError(errors, document?.contextProofPolicy
     === 'SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK',
@@ -1043,8 +1050,8 @@ export function verifyProductAssuranceDonors(document) {
     passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length
       && donors.every((donor) => donor.passed)
       && mergeCutBlobCount === 193
-      && donorIdenticalHeadBlobCount === 190
-      && postIntegrationReplacements.length === 3
+      && donorIdenticalHeadBlobCount === 189
+      && postIntegrationReplacements.length === 4
       && postIntegrationReplacements.every((entry) => entry.passed),
   });
 }

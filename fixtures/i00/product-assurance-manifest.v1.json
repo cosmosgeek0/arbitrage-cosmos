@@ -8,7 +8,7 @@
   "expectedGitObjectContextProofs": 6,
   "expectedLiveContextReplacements": 1,
   "expectedContextReplacementRows": 7,
-  "expectedPostIntegrationReplacementRows": 3,
+  "expectedPostIntegrationReplacementRows": 4,
   "contextProofPolicy": "SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK",
   "integrationReplacement": {
     "id": "LIVE_OPERATION_POLICY",
@@ -237,6 +237,12 @@
           "donorBlob": "6d278916093e54b0b2969a332fae1f5cc403ab5c",
           "replacementCommit": "9a6ec938ef45716379d4f4f4972102ef85cb7271",
           "replacementBlob": "cdb8dc8bf0bb962991641e629204978768b99d87"
+        },
+        {
+          "path": "test/productAssurance/systemic/assuranceCase/s1-provenance.test.mjs",
+          "donorBlob": "cdea2f5a4c5a1517cdd7e16fbb5c1273ac99cdad",
+          "replacementCommit": "39ec378d4a7584f3c69436ef5c9f105c56bffb16",
+          "replacementBlob": "09d8bedb8b88f901f0ec345381205675be41aa9d"
         }
       ]
     }

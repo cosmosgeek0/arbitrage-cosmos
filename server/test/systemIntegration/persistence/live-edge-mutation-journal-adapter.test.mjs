@@ -104,6 +104,104 @@ function appendAndRead(adapter, prepared) {
   return persisted;
 }
 
+function seedCanonicalRegistry(ledger, preparedInitials, extend = () => false) {
+  const persistedJournals = [];
+  const records = [];
+  for (let index = 0; index < preparedInitials.length; index += 1) {
+    const donorDir = tempDataDir('cosmos-live-edge-seed-donor-');
+    const donorLedger = new Ledger(donorDir);
+    try {
+      const donorAdapter = new LiveEdgeMutationJournalPersistenceAdapter(donorLedger);
+      let persisted = appendAndRead(donorAdapter, preparedInitials[index]);
+      if (extend(index, persisted)) {
+        persisted = appendAndRead(
+          donorAdapter,
+          preparePreflightMutationAppend(persisted, T + 1),
+        );
+      }
+      persistedJournals.push(persisted);
+      records.push(...donorLedger
+        .recentEvents(512, undefined, persisted.snapshot.mutationId)
+        .sort((left, right) => left.id - right.id)
+        .map(({ kind, symbol, data }) => ({ kind, symbol, data })));
+    } finally {
+      donorLedger.close();
+      rmSync(donorDir, { recursive: true, force: true });
+    }
+  }
+  for (let index = 0; index < records.length; index += 8) {
+    ledger.logEventsAtomically(records.slice(index, index + 8));
+  }
+  ledger.setConfigValue(
+    LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY,
+    canonicalPersistenceJson(registryFromSnapshots(
+      persistedJournals.map((persisted) => persisted.snapshot),
+    )),
+  );
+  return persistedJournals;
+}
+
+function waitForWorkerLifecycle(worker, { timeoutMs, signal }) {
+  return new Promise((resolve, reject) => {
+    let message = null;
+    let messageCount = 0;
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.off('message', onMessage);
+      worker.off('error', onError);
+      worker.off('exit', onExit);
+      signal?.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onMessage = (value) => {
+      messageCount += 1;
+      if (messageCount > 1) finish(new Error('CAS race Worker emitted more than one terminal message'));
+      else message = value;
+    };
+    const onError = (error) => finish(error);
+    const onExit = (code) => {
+      if (code !== 0) finish(new Error(`CAS race Worker exited ${code}`));
+      else if (messageCount !== 1) finish(new Error('CAS race Worker exited without exactly one terminal message'));
+      else finish(null, message);
+    };
+    const onAbort = () => finish(new Error('CAS race Worker lifecycle aborted'));
+    const timer = setTimeout(
+      () => finish(new Error(`CAS race Worker lifecycle timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+    worker.on('message', onMessage);
+    worker.once('error', onError);
+    worker.once('exit', onExit);
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function terminateWorkerBounded(worker, timeoutMs = 2_000) {
+  if (worker.threadId === -1) return;
+  let timer;
+  try {
+    await Promise.race([
+      worker.terminate(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`CAS race Worker termination timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } catch (error) {
+    worker.unref();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 test('fixed-key registry atomically persists donor-reduced state and reconstructs exact replay after restart', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
@@ -263,7 +361,7 @@ test('two independently opened adapters serialize the whole registry and a same-
   }
 });
 
-test('two Worker-loaded adapters race one SQLite revision and exactly one commits', { timeout: 15_000 }, async () => {
+test('two Worker-loaded adapters race one SQLite revision and exactly one commits', { timeout: 15_000 }, async (t) => {
   const dataDir = tempDataDir('cosmos-live-edge-worker-race-');
   const initialized = new Ledger(dataDir);
   initialized.close();
@@ -287,17 +385,20 @@ test('two Worker-loaded adapters race one SQLite revision and exactly one commit
       );
       Atomics.add(barrier, 0, 1);
       Atomics.notify(barrier, 0);
-      Atomics.wait(barrier, 1, 0);
+      const barrierResult = Atomics.wait(barrier, 1, 0, 10_000);
+      if (barrierResult === 'timed-out') throw new Error('CAS race Worker barrier timed out');
       const acknowledgement = adapter.append(workerData.request);
       ledger.close();
       ledger = null;
       parentPort.postMessage({ mutationId: workerData.request.mutationId, acknowledgement });
+      parentPort.close();
     } catch (error) {
       if (ledger?.db?.open) ledger.close();
       parentPort.postMessage({
         mutationId: workerData.request.mutationId,
         error: error instanceof Error ? error.message : String(error),
       });
+      parentPort.close();
     }
   `;
   const workerUrl = new URL(`data:text/javascript,${encodeURIComponent(workerSource)}`);
@@ -308,15 +409,9 @@ test('two Worker-loaded adapters race one SQLite revision and exactly one commit
   const workers = requests.map((request) => new Worker(workerUrl, {
     workerData: { dataDir, shared, request, nowMs: T },
   }));
-  const workerMessages = workers.map((worker) => new Promise((resolve, reject) => {
-    worker.once('message', resolve);
-    worker.once('error', reject);
-  }));
-  const workerExits = workers.map((worker) => new Promise((resolve, reject) => {
-    worker.once('error', reject);
-    worker.once('exit', (code) => code === 0
-      ? resolve()
-      : reject(new Error(`CAS race Worker exited ${code}`)));
+  const workerLifecycles = workers.map((worker) => waitForWorkerLifecycle(worker, {
+    timeoutMs: 12_000,
+    signal: t.signal,
   }));
   try {
     const readyDeadline = Date.now() + 10_000;
@@ -326,8 +421,7 @@ test('two Worker-loaded adapters race one SQLite revision and exactly one commit
     assert.equal(Atomics.load(barrier, 0), workers.length, 'both adapters must load before release');
     Atomics.store(barrier, 1, 1);
     Atomics.notify(barrier, 1, workers.length);
-    const results = await Promise.all(workerMessages);
-    await Promise.all(workerExits);
+    const results = await Promise.all(workerLifecycles);
     assert.deepEqual(results.map((result) => result.error ?? null), [null, null]);
     assert.deepEqual(
       results.map((result) => result.acknowledgement.disposition).sort(),
@@ -364,11 +458,31 @@ test('two Worker-loaded adapters race one SQLite revision and exactly one commit
       ledger.close();
     }
   } finally {
-    for (const worker of workers) {
-      if (worker.threadId !== -1) await worker.terminate();
-    }
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1, workers.length);
+    await Promise.all(workers.map((worker) => terminateWorkerBounded(worker)));
     rmSync(dataDir, { recursive: true, force: true });
   }
+});
+
+test('bounded Worker lifecycle rejects exit-without-message and terminates a stuck Worker', { timeout: 10_000 }, async (t) => {
+  const silentWorker = new Worker(new URL(
+    `data:text/javascript,${encodeURIComponent('void 0;')}`,
+  ));
+  await assert.rejects(
+    waitForWorkerLifecycle(silentWorker, { timeoutMs: 2_000, signal: t.signal }),
+    /exited without exactly one terminal message/u,
+  );
+
+  const stuckWorker = new Worker(new URL(`data:text/javascript,${encodeURIComponent(`
+    const barrier = new Int32Array(new SharedArrayBuffer(4));
+    Atomics.wait(barrier, 0, 0, 60_000);
+  `)}`));
+  await assert.rejects(
+    waitForWorkerLifecycle(stuckWorker, { timeoutMs: 100, signal: t.signal }),
+    /lifecycle timed out/u,
+  );
+  await terminateWorkerBounded(stuckWorker);
 });
 
 test('restart exact replay and different digest conflict cannot reopen the synthetic boundary', () => {
@@ -678,10 +792,14 @@ test('hard registry count capacity refuses the 65th journal without eviction or 
   const dataDir = tempDataDir('cosmos-live-edge-count-capacity-');
   const ledger = new Ledger(dataDir);
   try {
+    seedCanonicalRegistry(
+      ledger,
+      Array.from(
+        { length: LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumJournals },
+        (_, index) => prepareInitialMutationAppend(canonicalInput(100 + index)),
+      ),
+    );
     const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
-    for (let index = 0; index < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumJournals; index += 1) {
-      appendAndRead(adapter, prepareInitialMutationAppend(canonicalInput(100 + index)));
-    }
     const serialized = ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
     assert.ok(serialized);
     assert.ok(Buffer.byteLength(serialized, 'utf8') < LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS.maximumSerializedBytes);
@@ -711,17 +829,15 @@ test('aggregate 512 KiB registry capacity refuses growth without unsafe eviction
   const dataDir = tempDataDir('cosmos-live-edge-byte-capacity-');
   const ledger = new Ledger(dataDir);
   try {
-    const persistedJournals = [];
-    const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
-    for (let index = 0; index < 59; index += 1) {
-      const initial = appendAndRead(adapter, prepareInitialMutationAppend(canonicalInput(
+    const persistedJournals = seedCanonicalRegistry(
+      ledger,
+      Array.from({ length: 59 }, (_, index) => prepareInitialMutationAppend(canonicalInput(
         200 + index,
         `assessment:bxxx${index.toString(36)}`,
-      )));
-      persistedJournals.push(index < 58
-        ? appendAndRead(adapter, preparePreflightMutationAppend(initial, T + 1))
-        : initial);
-    }
+      ))),
+      (index) => index < 58,
+    );
+    const adapter = new LiveEdgeMutationJournalPersistenceAdapter(ledger);
     const serialized = ledger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY);
     assert.ok(serialized);
     const bytesBefore = Buffer.byteLength(serialized, 'utf8');

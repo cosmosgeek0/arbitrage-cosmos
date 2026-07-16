@@ -4,6 +4,7 @@ import {
   OPERATION_POLICY_REGISTRY,
   OWNER_CONTRACT_SURFACES,
   OWNER_CONTRACT_WAITING_SEAMS,
+  INVARIANT_FAMILIES,
   SAFETY_INVARIANT_CATALOG,
   bindEvidenceTuple,
   bindOwnerContract,
@@ -241,13 +242,55 @@ test('owner contract rejects hostile owner, release, subject, digest, algorithm,
 });
 
 test('critical invariants require exact release, owner, subject, and digest bindings', () => {
+  const expectedFamilies = [
+    'DURABLE_INTENT_AND_MUTATION_IDENTITY',
+    'EXECUTION_FENCING_EPOCH',
+    'RECONCILIATION_BEFORE_NEW_EXPOSURE',
+    'SOURCE_FRESHNESS_COMPLETENESS_CONTINUITY',
+    'LOCAL_EXCHANGE_TRUTH',
+    'CAPITAL_EXPOSURE_LIMITS',
+    'HALT_KILL_COVERAGE',
+    'RISK_REDUCING_AVAILABILITY',
+    'RATE_BUDGET_RECONCILIATION_RISK_REDUCTION_RESERVE',
+    'ONE_EXCHANGE_HAND_AND_LEASE',
+    'WITHDRAWAL_TRANSFER_IMPOSSIBILITY',
+    'TRUTH_REALM_SEPARATION',
+    'INSTRUMENT_ACCOUNT_COMPATIBILITY',
+    'DURABLE_ADVANCEMENT',
+    'REVISION_COMPATIBILITY',
+    'EXPECTED_CRITICAL_INVENTORY_AND_TELEMETRY_COMPLETENESS',
+    'BACKUP_WATCHDOG_PROBE_FRESHNESS',
+  ].sort();
+  assert.deepEqual([...INVARIANT_FAMILIES].sort(), expectedFamilies);
+  assert.deepEqual(SAFETY_INVARIANT_CATALOG.map((entry) => entry.family).sort(), expectedFamilies);
   const facts = invariantFacts(SAFETY_INVARIANT_CATALOG);
   const pass = evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, facts, NOW, EVIDENCE_CONTEXT);
   assert.equal(pass.tradeReadinessVerdict, 'PASS');
-  assert.equal(pass.results.length, 15);
+  assert.equal(pass.results.length, 17);
   const absent = facts.filter((fact) => fact.factId !== SAFETY_INVARIANT_CATALOG[0].factIds[0]);
   assert.equal(evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, absent, NOW, EVIDENCE_CONTEXT).tradeReadinessVerdict, 'UNKNOWN');
   assert.equal(evaluateInvariantCatalog([], [], NOW, EVIDENCE_CONTEXT).tradeReadinessVerdict, 'UNKNOWN');
+
+  for (const invariantId of [
+    'INV_RATE_BUDGET_RECONCILIATION_RISK_REDUCTION_RESERVE',
+    'INV_EXPECTED_CRITICAL_INVENTORY_AND_TELEMETRY_COMPLETENESS',
+  ]) {
+    const newDefinition = SAFETY_INVARIANT_CATALOG.find((entry) => entry.invariantId === invariantId);
+    assert.ok(newDefinition);
+    const missingFact = newDefinition.factIds[0];
+    const missing = evaluateInvariantCatalog(
+      SAFETY_INVARIANT_CATALOG,
+      facts.filter((fact) => fact.factId !== missingFact),
+      NOW,
+      EVIDENCE_CONTEXT,
+    );
+    assert.equal(missing.tradeReadinessVerdict, 'UNKNOWN');
+    assert.ok(missing.unknownCriticalInvariantIds.includes(invariantId));
+    const falseFacts = invariantFacts(SAFETY_INVARIANT_CATALOG, new Map([[missingFact, false]]));
+    const failed = evaluateInvariantCatalog(SAFETY_INVARIANT_CATALOG, falseFacts, NOW, EVIDENCE_CONTEXT);
+    assert.equal(failed.tradeReadinessVerdict, 'FAIL');
+    assert.equal(failed.results.find((entry) => entry.invariantId === invariantId)?.verdict, 'FAIL');
+  }
 
   const target = facts[0];
   const definition = SAFETY_INVARIANT_CATALOG.find((entry) => entry.factIds.includes(target.factId));

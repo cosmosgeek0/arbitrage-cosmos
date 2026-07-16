@@ -40,6 +40,8 @@ export const LIVE_EDGE_MUTATION_JOURNAL_REGISTRY_LIMITS = Object.freeze({
   maximumSerializedBytes: MUTATION_JOURNAL_LIMITS.maximumSerializedSnapshotBytes,
 } as const);
 
+const RESERVED_EVENT_READ_PAGE_SIZE = 2_000;
+
 const MUTATION_ID = /^l06mut_[0-9a-f]{64}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const AUDIT_FIELDS = Object.freeze([
@@ -498,6 +500,62 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     });
   }
 
+  #allReservedEvents(
+    registry: Readonly<MutationJournalRegistry>,
+  ): Readonly<{
+    journalEvents: readonly Readonly<LedgerEventRecord>[];
+    auditEvents: readonly Readonly<LedgerEventRecord>[];
+  }> {
+    const expectedCount = registry.journals.reduce(
+      (count, journal) => count + journal.snapshot.journalVersion,
+      0,
+    );
+    const readKind = (kind: string): readonly Readonly<LedgerEventRecord>[] => {
+      const events: LedgerEventRecord[] = [];
+      while (events.length <= expectedCount) {
+        const remainingWithOverflowSentinel = expectedCount + 1 - events.length;
+        const limit = Math.min(RESERVED_EVENT_READ_PAGE_SIZE, remainingWithOverflowSentinel);
+        let page: LedgerEventRecord[];
+        try {
+          page = this.#ledger.recentEvents(
+            limit,
+            kind,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            events.length,
+          );
+        } catch {
+          throw new LiveEdgeMutationJournalAdapterError(
+            'PERSISTENCE_UNAVAILABLE',
+            'canonical Ledger reserved-event readback is unavailable',
+          );
+        }
+        if (!Array.isArray(page) || page.length > limit) {
+          throw new LiveEdgeMutationJournalAdapterError(
+            'PERSISTENCE_CORRUPT',
+            'canonical Ledger reserved-event page is malformed',
+          );
+        }
+        events.push(...page);
+        if (page.length < limit || events.length > expectedCount) break;
+      }
+      if (events.length !== expectedCount) {
+        throw new LiveEdgeMutationJournalAdapterError(
+          'PERSISTENCE_CORRUPT',
+          'mutation-journal reserved Ledger rows do not equal the canonical registry',
+        );
+      }
+      return Object.freeze(events);
+    };
+    return Object.freeze({
+      journalEvents: readKind(LIVE_EDGE_MUTATION_JOURNAL_EVENT_KIND),
+      auditEvents: readKind(LIVE_EDGE_MUTATION_JOURNAL_AUDIT_EVENT_KIND),
+    });
+  }
+
   #assertNoOrphanEvents(mutationId: string): void {
     const events = this.#eventsForMutation(mutationId);
     if (events.journalEvents.length > 0 || events.auditEvents.length > 0) {
@@ -566,9 +624,13 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
   #reconstructSnapshotLineage(
     configuredSnapshot: Readonly<MutationJournalSnapshot>,
     requestedVersion: number,
+    preloadedEvents?: Readonly<{
+      journalEvents: readonly Readonly<LedgerEventRecord>[];
+      auditEvents: readonly Readonly<LedgerEventRecord>[];
+    }>,
   ): Readonly<PersistedMutationJournal> {
     const mutationId = configuredSnapshot.mutationId;
-    const events = this.#eventsForMutation(mutationId);
+    const events = preloadedEvents ?? this.#eventsForMutation(mutationId);
     if (events.journalEvents.length !== configuredSnapshot.journalVersion
       || events.auditEvents.length !== configuredSnapshot.journalVersion) {
       throw new LiveEdgeMutationJournalAdapterError(
@@ -691,6 +753,21 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
     targetVersion: number | null,
   ): Readonly<PersistedMutationJournal> | null {
     try {
+      const reservedEvents = this.#allReservedEvents(registry);
+      const journalEventsByMutation = new Map<string, LedgerEventRecord[]>();
+      const auditEventsByMutation = new Map<string, LedgerEventRecord[]>();
+      for (const event of reservedEvents.journalEvents) {
+        const mutationId = typeof event.symbol === 'string' ? event.symbol : '';
+        const entries = journalEventsByMutation.get(mutationId) ?? [];
+        entries.push(event);
+        journalEventsByMutation.set(mutationId, entries);
+      }
+      for (const event of reservedEvents.auditEvents) {
+        const mutationId = typeof event.symbol === 'string' ? event.symbol : '';
+        const entries = auditEventsByMutation.get(mutationId) ?? [];
+        entries.push(event);
+        auditEventsByMutation.set(mutationId, entries);
+      }
       let target: Readonly<PersistedMutationJournal> | null = null;
       let targetFound = false;
       for (const journal of registry.journals) {
@@ -698,6 +775,10 @@ export class LiveEdgeMutationJournalPersistenceAdapter {
         const persisted = this.#reconstructSnapshotLineage(
           journal.snapshot,
           isTarget && targetVersion !== null ? targetVersion : journal.snapshot.journalVersion,
+          Object.freeze({
+            journalEvents: Object.freeze(journalEventsByMutation.get(journal.mutationId) ?? []),
+            auditEvents: Object.freeze(auditEventsByMutation.get(journal.mutationId) ?? []),
+          }),
         );
         if (isTarget) {
           targetFound = true;

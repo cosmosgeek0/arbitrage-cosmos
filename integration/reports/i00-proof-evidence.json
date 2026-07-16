@@ -213,13 +213,13 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
       "anchoredSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
-      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+      "observedSha256": "dabdd37a0f2b0e34568ae4e4874ac0f0ad5fcbad24dd290ba6772856c3e1d3dd",
       "evidenceMode": "COMMITTED_FILE",
-      "passed": true,
+      "passed": false,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
-      "finalRepinPassed": true,
+      "finalRepinPassed": false,
       "acceptedSourceRef": "current-main",
       "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
       "acceptedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
@@ -230,13 +230,13 @@
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
       "anchoredSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
-      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+      "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "evidenceMode": "COMMITTED_FILE",
-      "passed": true,
+      "passed": false,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
-      "finalRepinPassed": true,
+      "finalRepinPassed": false,
       "acceptedSourceRef": "current-main",
       "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
       "acceptedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
@@ -353,7 +353,7 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+      "observedSha256": "dabdd37a0f2b0e34568ae4e4874ac0f0ad5fcbad24dd290ba6772856c3e1d3dd",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -361,7 +361,7 @@
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
       "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+      "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -1093,6 +1093,114 @@
     ],
     "unclassifiedTransportCandidates": [],
     "ownerCandidateDefinitions": [
+      {
+        "concept": "capital-authority",
+        "declaration": "interface AuthenticatedCallbackReservationInput",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 81
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface AuthenticatedJobReservationInput",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 95
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type DurableDeliveryReservationResult",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 109
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function normalizedReservationResult",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 378
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type AiOpsControlCategory",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 30
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type AiOpsControlValue",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 31
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlRegistryInsertionRequest",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 33
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeRequest",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 154
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeSet",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 159
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeSetDecision",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 166
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlValue",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 173
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function evaluateProvisionalControlChangeSet",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 184
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlInsertionRequests",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 213
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlValue",
+        "file": "server/src/aiOps/contracts/schemas.ts",
+        "line": 598
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlRegistryInsertionRequest",
+        "file": "server/src/aiOps/contracts/schemas.ts",
+        "line": 616
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function durableCompletionReservationSlots",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 94
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function caseEffectReadbackReservationSlots",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 112
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validateCaseLedgerReconciliation",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 400
+      },
       {
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
@@ -6737,61 +6845,61 @@
         "concept": "ledger-authority",
         "declaration": "type LiveEdgeMutationJournalAdapterErrorCode",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 65
+        "line": 67
       },
       {
         "concept": "ledger-authority",
         "declaration": "class LiveEdgeMutationJournalAdapterError",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 71
+        "line": 73
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalLedgerPort",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 81
+        "line": 83
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalClock",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 110
+        "line": 112
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalInventory",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 114
+        "line": 116
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface RegistryJournal",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 129
+        "line": 131
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface MutationJournalRegistry",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 135
+        "line": 137
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface MutationJournalAuditRecord",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 141
+        "line": 143
       },
       {
         "concept": "ledger-authority",
         "declaration": "function liveEdgeMutationJournalMutationKey",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 180
+        "line": 182
       },
       {
         "concept": "ledger-authority",
         "declaration": "class LiveEdgeMutationJournalPersistenceAdapter",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 439
+        "line": 441
       },
       {
         "concept": "capital-authority",
@@ -13940,5 +14048,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "4ae96f186fcda8c1d2b4482c871a9d22f5c3c0d6519ad29b0ff0b9ab72d46b22"
+  "evidenceSha256": "4dd378613bcd0909e207af5ab4bbd8290c96386c9bc82ded37424a7db707ee8f"
 }

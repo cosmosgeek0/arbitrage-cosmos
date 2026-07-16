@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cosmos:ip-assurance:s3:conformance-map:v1",
+  "title": "IP-ASSURANCE S3 model-to-implementation conformance mapping",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "mappingId", "modelId", "modelVersion", "modelContentSha256",
+    "implementationReleaseSha", "implementationSchemaVersions", "implementationCommandVersions",
+    "implementationStorageTransitionVersions", "normalizerVersion", "mappings", "replays",
+    "mismatches", "unreachableAbstractions", "omittedEnvironmentBehavior", "residualAssumptions",
+    "evaluatedAtMs"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "ip-assurance.s3.conformance-map.v1" },
+    "mappingId": { "$ref": "#/$defs/id" },
+    "modelId": { "$ref": "#/$defs/id" },
+    "modelVersion": { "$ref": "#/$defs/text240" },
+    "modelContentSha256": { "$ref": "#/$defs/sha256" },
+    "implementationReleaseSha": { "$ref": "#/$defs/gitSha" },
+    "implementationSchemaVersions": { "$ref": "#/$defs/versions" },
+    "implementationCommandVersions": { "$ref": "#/$defs/versions" },
+    "implementationStorageTransitionVersions": { "$ref": "#/$defs/versions" },
+    "normalizerVersion": { "$ref": "#/$defs/text240" },
+    "mappings": {
+      "type": "array", "minItems": 1, "maxItems": 256,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "mappingId", "category", "modelElementId", "implementationOwner", "implementationPath",
+          "implementationSymbol", "durableRecord", "postcondition", "atomicity", "status", "evidenceRefs"
+        ],
+        "properties": {
+          "mappingId": { "$ref": "#/$defs/id" },
+          "category": { "enum": ["STATE", "ACTION", "INVARIANT", "POSTCONDITION"] },
+          "modelElementId": { "$ref": "#/$defs/text240" },
+          "implementationOwner": { "$ref": "#/$defs/text240" },
+          "implementationPath": { "$ref": "#/$defs/text500" },
+          "implementationSymbol": { "oneOf": [{ "$ref": "#/$defs/text240" }, { "type": "null" }] },
+          "durableRecord": { "oneOf": [{ "$ref": "#/$defs/text500" }, { "type": "null" }] },
+          "postcondition": { "oneOf": [{ "$ref": "#/$defs/text1000" }, { "type": "null" }] },
+          "atomicity": { "enum": ["ZERO_STEP_STUTTER", "ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_ONE"] },
+          "status": { "enum": ["MAPPED", "PARTIAL", "ABSENT", "UNREACHABLE"] },
+          "evidenceRefs": { "$ref": "#/$defs/refs" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "MAPPED" } } },
+            "then": {
+              "properties": {
+                "implementationSymbol": { "$ref": "#/$defs/text240" },
+                "evidenceRefs": { "$ref": "#/$defs/nonEmptyRefs" }
+              }
+            }
+          },
+          {
+            "if": { "properties": { "status": { "enum": ["PARTIAL", "UNREACHABLE"] } } },
+            "then": { "properties": { "evidenceRefs": { "$ref": "#/$defs/nonEmptyRefs" } } }
+          },
+          {
+            "if": { "properties": { "category": { "enum": ["INVARIANT", "POSTCONDITION"] }, "status": { "const": "MAPPED" } } },
+            "then": { "properties": { "postcondition": { "$ref": "#/$defs/text1000" } } }
+          }
+        ]
+      }
+    },
+    "replays": {
+      "type": "object", "additionalProperties": false,
+      "required": ["representativeSuccess", "validatedCounterexamples"],
+      "properties": {
+        "representativeSuccess": { "$ref": "#/$defs/replay" },
+        "validatedCounterexamples": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/replay" } }
+      }
+    },
+    "mismatches": { "$ref": "#/$defs/notes" },
+    "unreachableAbstractions": { "$ref": "#/$defs/notes" },
+    "omittedEnvironmentBehavior": { "$ref": "#/$defs/notes" },
+    "residualAssumptions": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/text1000" } },
+    "evaluatedAtMs": { "type": "integer", "minimum": 0 }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 2, "maxLength": 160, "pattern": "^[A-Z0-9][A-Z0-9._:-]+$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "gitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "text240": { "type": "string", "minLength": 1, "maxLength": 240 },
+    "text500": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "text1000": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "versions": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/text240" } },
+    "refs": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/text500" } },
+    "nonEmptyRefs": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/text500" } },
+    "notes": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/text1000" } },
+    "replay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["traceId", "status", "traceSha256", "harness", "evidenceRefs"],
+      "properties": {
+        "traceId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["NOT_RUN", "REPRODUCED", "NOT_REPRODUCED", "NOT_APPLICABLE"] },
+        "traceSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "harness": { "oneOf": [{ "$ref": "#/$defs/text500" }, { "type": "null" }] },
+        "evidenceRefs": { "$ref": "#/$defs/refs" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "enum": ["REPRODUCED", "NOT_REPRODUCED"] } } },
+          "then": {
+            "properties": {
+              "traceSha256": { "$ref": "#/$defs/sha256" },
+              "harness": { "$ref": "#/$defs/text500" },
+              "evidenceRefs": { "$ref": "#/$defs/nonEmptyRefs" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["NOT_RUN", "NOT_APPLICABLE"] } } },
+          "then": {
+            "properties": {
+              "traceSha256": { "type": "null" },
+              "harness": { "type": "null" },
+              "evidenceRefs": { "type": "array", "maxItems": 0 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

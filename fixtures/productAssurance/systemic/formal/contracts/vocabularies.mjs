@@ -1,0 +1,32 @@
+export const CONTRACT_SCHEMA_VERSION = 'ip-assurance.s3.contracts.v1';
+
+export const TRIAGE_DISPOSITIONS = Object.freeze([
+  'IMPLEMENTATION_RELEVANT_VALIDATED',
+  'SPECIFICATION_MODEL_DEFECT',
+  'ASSUMPTION_VIOLATION',
+  'SPURIOUS_UNREACHABLE_UNDER_IMPLEMENTATION_CONSTRAINTS',
+  'UNRESOLVED',
+]);
+
+export const REPLAY_STATUSES = Object.freeze([
+  'NOT_RUN',
+  'REPRODUCED',
+  'NOT_REPRODUCED',
+  'NOT_APPLICABLE',
+]);
+
+export const MAPPING_STATUSES = Object.freeze(['MAPPED', 'PARTIAL', 'ABSENT', 'UNREACHABLE']);
+
+export const MAPPING_ATOMICITIES = Object.freeze([
+  'ZERO_STEP_STUTTER',
+  'ONE_TO_ONE',
+  'ONE_TO_MANY',
+  'MANY_TO_ONE',
+]);
+
+export const CONFORMANCE_VERDICTS = Object.freeze([
+  'SUPPORTING_EVIDENCE',
+  'REFERENCE_ONLY',
+  'UNKNOWN',
+  'MISMATCH',
+]);

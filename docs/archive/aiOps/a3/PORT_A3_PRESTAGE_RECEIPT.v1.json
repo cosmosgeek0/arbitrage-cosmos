@@ -1,0 +1,233 @@
+{
+  "schema": "AI_OPS_PORT_A3_PRESTAGE_RECEIPT_V1",
+  "receiptVersion": 1,
+  "recordedAt": "2026-07-16T13:04:13+05:30",
+  "branch": "port-a3-20260716",
+  "releaseStatus": "BUILT_AND_TESTED",
+  "terminalState": "PORT_A3_PRESTAGE_READY",
+  "authorityGranted": false,
+  "providerActivationAllowed": false,
+  "integrated": false,
+  "deployed": false,
+  "merged": false,
+  "pushed": false,
+  "baseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "headSha": "6a77e615bda1ff0e8a4146869b35afd64896303a",
+  "headSemantics": "TESTED_IMPLEMENTATION_HEAD_BEFORE_RECEIPT_SEAL",
+  "implementationTreeSha": "d3ee4bad07921eea36fb3262cc0b2c9d65e9d494",
+  "receiptSealCommit": "ENCLOSING_COMMIT_NOT_SELF_REFERENTIAL",
+  "receiptPath": "docs/archive/aiOps/a3/PORT_A3_PRESTAGE_RECEIPT.v1.json",
+  "baseVerification": {
+    "assignedLandedBaseMatchedAtStart": true,
+    "currentMainObservedAfterAssignmentSha": "e619ff18ef159c27061cfaf318036e18a4fac131",
+    "currentMainAdvancedAfterFrozenAssignment": true,
+    "rebasePerformed": false
+  },
+  "shadowProvenance": {
+    "lineageBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+    "a3ImplementationSha": "a1eedf81afb7e8fa61b60fd58870bb1cc0f9664f",
+    "a3SealSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+    "a3xImplementationSha": "46b0dd6c34010372232b918128fbbb899a0f2dab",
+    "a3xSealSha": "c6397f548b068450a8f666e191fc270295791867",
+    "shadowEvidenceSubstitutedForPortEvidence": false
+  },
+  "portPlanEvidence": {
+    "scriptPath": "/Users/cosmosgeek/Desktop/port-plan/portPlan/a3-port.sh",
+    "scriptSha256": "0ff6eac5af14980849978741102ebddbaa3f8edbc196505c4314dfb2a575c71b",
+    "explicitTargetSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+    "checkOutcome": "A3_PORT_CHECK_OK",
+    "applyBoundaryOutcome": "A3_REAL_PHASE_REBUILD_REQUIRED",
+    "liveGitReverificationPerformed": true
+  },
+  "insertionRequestEvidence": {
+    "registryCommitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "registryBlobSha": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "landedSchemaBlobSha": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+    "rowCount": 15,
+    "exactRegistryValueComparison": "PASS",
+    "authorityCreated": false
+  },
+  "authorizedNamespaces": [
+    "server/src/aiOps/adapters/**",
+    "server/test/aiOps/a3/**",
+    "fixtures/aiOps/a3/**",
+    "docs/archive/aiOps/a3/**"
+  ],
+  "implementationPathCount": 26,
+  "implementationPaths": [
+    "docs/archive/aiOps/a3/shadow/A3X_SHADOW_ARTIFACT_RECEIPT.v1.json",
+    "docs/archive/aiOps/a3/shadow/A3_SHADOW_ARTIFACT_RECEIPT.v1.json",
+    "fixtures/aiOps/a3/insertion-requests.v1.json",
+    "fixtures/aiOps/a3/integration-dependencies.v1.json",
+    "fixtures/aiOps/a3/port-entry-gate.v1.json",
+    "fixtures/aiOps/a3/prestage-configuration.v1.json",
+    "fixtures/aiOps/a3/syntheticPorts.mjs",
+    "server/src/aiOps/adapters/callbacks.ts",
+    "server/src/aiOps/adapters/cliTemplates.ts",
+    "server/src/aiOps/adapters/contracts.ts",
+    "server/src/aiOps/adapters/credentialEgress.ts",
+    "server/src/aiOps/adapters/index.ts",
+    "server/src/aiOps/adapters/patchWorker.ts",
+    "server/src/aiOps/adapters/providerGateway.ts",
+    "server/src/aiOps/adapters/providerMatrix.ts",
+    "server/src/aiOps/adapters/strictSchema.ts",
+    "server/src/aiOps/adapters/syntheticProviderAdapters.ts",
+    "server/src/aiOps/adapters/syntheticToolAdapters.ts",
+    "server/src/aiOps/adapters/toolGateway.ts",
+    "server/src/aiOps/adapters/toolHooks.ts",
+    "server/test/aiOps/a3/callbacks.test.mjs",
+    "server/test/aiOps/a3/fixturesPurity.test.mjs",
+    "server/test/aiOps/a3/networkDeny.mjs",
+    "server/test/aiOps/a3/patchWorker.test.mjs",
+    "server/test/aiOps/a3/providerCliMatrix.test.mjs",
+    "server/test/aiOps/a3/toolEgress.test.mjs"
+  ],
+  "verification": [
+    {
+      "command": "npm ci --offline --ignore-scripts --no-audit --no-fund",
+      "outcome": "PASS_LOCAL_CACHE_ONLY",
+      "networkUsed": false,
+      "packageFilesChanged": false
+    },
+    {
+      "command": "npm_config_offline=true npm rebuild better-sqlite3 --build-from-source --no-audit --no-fund",
+      "outcome": "PASS_LOCAL_BUILD",
+      "networkUsed": false,
+      "packageFilesChanged": false
+    },
+    {
+      "command": "npm run typecheck -w server",
+      "outcome": "PASS"
+    },
+    {
+      "command": "npm run build -w server",
+      "outcome": "PASS"
+    },
+    {
+      "command": "node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec server/test/aiOps/a3/*.test.mjs",
+      "outcome": "PASS",
+      "tests": 71,
+      "passed": 71,
+      "failed": 0,
+      "suites": 12,
+      "networkPolicy": "TOTAL_DENY_IN_TESTS"
+    },
+    {
+      "command": "npm test",
+      "outcome": "BLOCKED_SHARED_OWNER",
+      "exitCode": 1,
+      "blockingGate": "LIVE_OPERATION_POLICY",
+      "expectedFilesScanned": 518,
+      "observedFilesScanned": 531,
+      "discoveredOperationSites": 205,
+      "coveredOperationSites": 205,
+      "uncoveredOperationSites": 0,
+      "insertionRequest": "AIOPS-IR-TEST-MOUNT-026",
+      "broaderGreenClaimed": false
+    },
+    {
+      "command": "npm run test:all",
+      "outcome": "BLOCKED_SHARED_OWNER",
+      "exitCode": 1,
+      "blockingGate": "LIVE_OPERATION_POLICY",
+      "expectedFilesScanned": 518,
+      "observedFilesScanned": 531,
+      "discoveredOperationSites": 205,
+      "coveredOperationSites": 205,
+      "uncoveredOperationSites": 0,
+      "insertionRequest": "AIOPS-IR-TEST-MOUNT-026",
+      "broaderGreenClaimed": false
+    },
+    {
+      "command": "node --test --test-reporter=spec test/i00/product-assurance-live-operation.test.mjs",
+      "outcome": "EXPECTED_SHARED_OWNER_BLOCK_REPRODUCED",
+      "exitCode": 1
+    },
+    {
+      "command": "node --check on all active A3 MJS; jq -e on all A3 JSON; git diff --check; git diff --cached --check",
+      "outcome": "PASS"
+    },
+    {
+      "command": "parser comparison of fixtures/aiOps/a3/insertion-requests.v1.json to 08e0beaa:AI_OPS_COLLISION_MAP.md",
+      "outcome": "PASS",
+      "rows": 15
+    },
+    {
+      "command": "codex --version; codex --ask-for-approval never exec --help",
+      "outcome": "PASS_LOCAL_PARSE_ONLY",
+      "version": "codex-cli 0.144.4",
+      "providerActivated": false
+    },
+    {
+      "command": "command -v claude",
+      "outcome": "NOT_INSTALLED",
+      "loginAttempted": false,
+      "providerActivated": false
+    }
+  ],
+  "archivedShadowReceiptIntegrity": [
+    {
+      "path": "docs/archive/aiOps/a3/shadow/A3_SHADOW_ARTIFACT_RECEIPT.v1.json",
+      "sha256": "d8d2d03532ce313dd88680a76ad9d1618338f66b0c1e9760abda83236e9a65f3",
+      "byteIdenticalToSeal": true
+    },
+    {
+      "path": "docs/archive/aiOps/a3/shadow/A3X_SHADOW_ARTIFACT_RECEIPT.v1.json",
+      "sha256": "70c4e42fabc8a2bb587713c1e0befdaeea96b496bfc43cc2a8a25d77c0609d96",
+      "byteIdenticalToSeal": true
+    }
+  ],
+  "currentSourceResearch": [
+    {
+      "subject": "OpenAI API authentication and request identity",
+      "url": "https://developers.openai.com/api/reference/overview"
+    },
+    {
+      "subject": "OpenAI real webhook dialect",
+      "url": "https://developers.openai.com/api/docs/guides/webhooks"
+    },
+    {
+      "subject": "Codex CLI non-interactive flags",
+      "url": "https://learn.chatgpt.com/docs/developer-commands?surface=cli"
+    },
+    {
+      "subject": "Claude Code CLI flags",
+      "url": "https://code.claude.com/docs/en/cli-usage"
+    },
+    {
+      "subject": "Claude Code authentication precedence",
+      "url": "https://code.claude.com/docs/en/authentication"
+    },
+    {
+      "subject": "Anthropic Messages API",
+      "url": "https://platform.claude.com/docs/en/api/messages/create"
+    }
+  ],
+  "safetyAssertions": {
+    "liveExecutionConstantTouched": false,
+    "moneyPathCreated": false,
+    "privateExchangeCallCreated": false,
+    "realProviderEndpointPresent": false,
+    "providerSdkPresent": false,
+    "credentialMaterialPresent": false,
+    "providerLoginAttempted": false,
+    "providerNetworkCallAttempted": false,
+    "sharedSeamEdited": false,
+    "stateMdEdited": false,
+    "otherWorktreeTouched": false,
+    "pushPerformed": false,
+    "mergePerformed": false
+  },
+  "limitations": [
+    "AIOPS-IR-TEST-MOUNT-026 remains pending: the shared production-operation scan denominator must move from 518 to 531 before npm test and npm run test:all can pass this committed A3 source set.",
+    "The 15 serialized insertion requests create no authority. Composition, routes, persistence, authentication, package files, deployment, remediation, telemetry, egress, sentinel, audit, managed inventory, human approval, configuration and root test mounting remain unmodified shared-owner seams.",
+    "Real OpenAI and Anthropic protocols, credentials, endpoints and webhook verification are MISSING. The bounded HMAC callback envelope is explicitly synthetic/internal and cannot authenticate either provider's real webhook dialect.",
+    "All provider and CLI templates remain NOT_CONFIGURED. Codex ephemeral mode and Claude no-session-persistence mode do not provide continuation; route qualification, pinned models/versions and an allowlist-built external runner remain pending.",
+    "Synthetic provider and tool ports require external containment. Their zero-effect output fields do not independently prove that a future injected implementation made no side effects.",
+    "Caller-supplied signature and canonical-evidence booleans are non-authoritative. The canonical policy verifier is pending, the shipped registry is disabled and the Claude pre-tool hook always denies.",
+    "Callback authentication keys and bounded in-memory deduplication are synthetic fixtures, not production authentication or durability. Ledger-backed reservation, pre-authentication rejection audit and raw route ownership remain pending.",
+    "A1 and A2 contracts were not landed at the frozen base. A3 must later defer duplicate provider/identity ownership to accepted A1 contracts and consume the exact A2-selected provider route and budget lineage without reselection.",
+    "STATE.md remains unchanged because this isolated worker is forbidden from editing shared state documentation; the fresh integrator owns canonical state updates.",
+    "The assigned base remained frozen at 492e3f69 even though current-main advanced afterward; no rebase or merge was performed."
+  ]
+}

@@ -1,66 +1,77 @@
 # Product Truth Campaign State
 
-Campaign status: `DEFECT_WAVE_2_C3_SOURCE_PENDING_FREEZE_AND_LOCAL_GATES`
+Campaign status: `C3_LOCAL_GATES_PASS_CUSTODY_REQUIRED`
 
 Immutable rejected C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
-C3 source candidate: `ASSIGNED_BY_CONTAINING_SOURCE_COMMIT` — the exact SHA is recorded by the evidence child because a commit cannot contain its own SHA.
+Accepted source candidate C3: `78f708d6cdb9d1618c53d3f08f71097b4320a63b`
 
-Evidence HEAD: `PENDING_C3_LOCAL_GATE_EVIDENCE_CHILD`
+C3 tree: `9e54ae92bd3cc4d30d3114590d7da6d81e019f16`
 
-Actor: `ACCOUNT_A_CANDIDATE_WRITER`
+Evidence HEAD: `CONTAINING_EVIDENCE_ONLY_CHILD` — a commit cannot contain its own SHA; the exact evidence HEAD is reported separately by `git rev-parse HEAD` in the custody handoff.
 
-Gate: `NOT_RUN_FOR_C3`
+Actor: `ACCOUNT_A_CANDIDATE_WRITER_AND_BUILDER_EVIDENCE_OWNER`
 
-This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains immutable but is rejected by its clean-clone battery. The containing source commit becomes C3; no evidence child may be called a replacement C3.
+Gate: `C3_CUSTODY_REQUIRED:78f708d6cdb9d1618c53d3f08f71097b4320a63b`
 
-## Custody result
+This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains immutable and rejected. C3 is the accepted source candidate. The containing evidence-only child is not a replacement C3 and must never be called C3.
 
-- Live remote branch `refs/heads/truth-campaign-20260716` resolves to exact C2: `VERIFIED`.
-- Backup bundle `/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle` verifies and exposes the same branch at exact C2.
-- Bundle SHA-256: `4c36d73fcef5e065c8b416e9e3f64da3a93981abde0b4d40e0b4daa26b799d1b`.
-- Exact custody command records, timestamps, exits, and output digests are in `C2_CUSTODY_RECEIPT.json` and `C2_GATE_REPORT.json`.
+## Local gate evidence
 
-## Canonical exact-C2 gate
+- Evidence interval: `2026-07-16T20:51:27.335Z` through `2026-07-16T21:16:54.657Z`.
+- Full report: `C3_LOCAL_GATE_REPORT.json`; SHA-256 `c43dc3987777cf4fb716be8f285fc76698d78359d026dc70a32a883111f7d918`.
+- All `43` recorded command executions contain the exact command and argv, cwd, start/end UTC, exit code and expected-exit adjudication, stdout/stderr/combined output SHA-256, byte counts, test count and basis, and skip evidence.
+- No unexpected skip or todo marker was observed. No required evidence is missing. The report failure field is `null`.
 
-Result: `PASS`.
+## Live-Git worktree census
 
-- `npm ci`: exit `0`; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
-- `npm test`: exit `0`; emitted test-summary count `413`; output SHA-256 `f70904ab78795cadf4241b701b36f9d9ae6df086621f3e179f712251c895ec5a`.
-- `npm run test:all`: exit `0`; emitted test-summary count `2674`; output SHA-256 `24594935436ea8020824528d2981abc70ba761f969d64703351b5eed50db0063`.
-- No positive skip or todo marker was observed. The detached exact-C2 worktree was clean after the gate.
+Result: `PASS_LIVE_GIT_DERIVED_WITH_REMOVED_SAFE_TOMBSTONES`.
+
+- Exact command: `node verification/product-truth-20260716/generate-worktree-census.mjs 78f708d6cdb9d1618c53d3f08f71097b4320a63b`; exit `0`; count `96`; output SHA-256 `724ddb9e10d1e7dc8699b4c2309bdef9c79c38aaf27d544bbc07b03629a052b`.
+- `WORKTREE_CENSUS.json`: SHA-256 `2741f35eeb808e822b7b7c51d75d75048d60d44fdbdab340758427d7c535a5ab`; `279500` bytes.
+- Registered count, expected count, and live-policy-name count are all derived from live Git and all equal `96`; there is no numeric expected-count constant.
+- Five director-authorized removed helpers are recorded as `REMOVED_SAFE`: `shard-prov`, `shard-sec`, `v-cockpit`, `v-clean`, and `prep-act`.
+- Four accepted archive outputs are candidate-tracked byte-exact copies verified against source commit `0e4b364849075a454d7dd624ca068c238f4196c2`, exact source paths, Git blobs, SHA-256 digests, and byte counts.
+- `shard-sec` and `v-cockpit` are explicitly `NO_ACCEPTED_OUTPUT` with empty output lists.
+- Unknown count: `0`.
+
+## Canonical exact-C3 gate
+
+Result: `PASS` in an exact detached C3 worktree; donor equality mode `LIVE_FULL_WORKSPACE`; equality `16/16/16/16`; final worktree clean.
+
+- `npm ci`: `2026-07-16T20:52:15.777Z` to `2026-07-16T20:52:18.796Z`; exit `0`; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
+- `npm test`: `2026-07-16T20:52:18.796Z` to `2026-07-16T20:54:10.444Z`; exit `0`; test count `413`; output SHA-256 `4ad9c24f3e8e5cc8e8dcc6f944544ff5be7a039e77dd95a1c9122c7cb657c722`.
+- `npm run test:all`: `2026-07-16T20:54:10.446Z` to `2026-07-16T21:04:30.016Z`; exit `0`; test count `2675`; output SHA-256 `709f4986c3106d516ef333a10a5f424770887b848e13dfb4b0910b691e2051ac`.
 
 ## Literal builder clean-clone battery
 
-Result: `BLOCKED` — builder evidence only; no independent Wave-1b token.
+Result: `BUILDER_LOCAL_SOURCE_PASS_NOT_FINAL_LIVE_REMOTE`. This is builder evidence only, not independent Wave-1b verification.
 
-- Clone transport: live remote, `--no-hardlinks`, `--single-branch`, branch `truth-campaign-20260716`.
-- Checkout command: `git checkout --detach dea2d2a5c2b5e83d3aea75b0e368f0a478596561`.
-- Topology: one local branch, one remote-tracking branch, `current-main` absent, detached HEAD exact C2, zero hardlinked object files, no alternates.
-- `npm ci`: exit `0`; output SHA-256 `25bb96b9420d86c25ca0550e62dcd3bf1c4357412875370b5870495c9212aef8`.
-- `npm test`: exit `0`; emitted test-summary count `413`; output SHA-256 `301c769da1f06e700c1f21f1ee56e327a5ca198cd504bbcc1d33a288a9a1ff1c`.
-- `npm run test:all`: exit `1`; emitted test-summary count before failure `1048`; output SHA-256 `08ea52f3afd000d8ca7baa6bcff14f4397a4fa56e829cbf112746cbd30832d4f`.
-- First causal error: `DONOR_EQUALITY_BLOCKED:COLLECTION_FAILED:GIT_COMMAND_FAILED:cat-file:128`.
-- The diagnostic command `node test/i00/donor-equality.mjs --candidate-ref HEAD` exited `1` with output SHA-256 `36ec0a8d2f2ae9859d87aa24ef96e5705227b5cbd76ef3608000ada9aa4f0fca`.
-- The first absent donor object is dashboard donor tip `692501587617d4880303fbd747d93e63c376f088`; direct `git cat-file -t` exits `128` with `fatal: git cat-file: could not get object info` in the single-branch clone.
+- Clone is single-branch and uses `--no-local --no-hardlinks`; checkout is exact `git checkout --detach 78f708d6cdb9d1618c53d3f08f71097b4320a63b`.
+- Clone state: exact detached C3, one local branch, one remote-tracking branch, `current-main` absent, non-shallow, no alternates, three object files inspected, maximum link count `1`, and zero hardlinked object files.
+- Donor equality mode: `TRACKED_RECEIPT_SINGLE_BRANCH`; tracked receipt authority is bound to exact commit, path, blob, SHA-256, and sealed proof digest; equality `16/16/16/16`.
+- Dashboard donor object `692501587617d4880303fbd747d93e63c376f088` and excluded PREVERIFY object are absent as expected at this exact clone boundary. The reachable merge-donor object remains present. No equality result was fabricated.
+- `npm ci`: `2026-07-16T21:04:35.657Z` to `2026-07-16T21:04:38.540Z`; exit `0`; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
+- `npm test`: `2026-07-16T21:04:38.540Z` to `2026-07-16T21:06:32.688Z`; exit `0`; test count `413`; output SHA-256 `255818e6c9c4aacbe3f7bbfe6ae16afc098a080e5f1bc7f13a94195feb2657c6`.
+- `npm run test:all`: `2026-07-16T21:06:32.689Z` to `2026-07-16T21:16:51.184Z`; exit `0`; test count `2675`; output SHA-256 `da789545c26861daa953eb0d1ad0dbcf385c8302678c775bf56e0cb08eb69572`.
+- Final clone state is clean.
 
-## Worktree census
+## C3 remote custody and bundle
 
-Exact-C2 regeneration is `BLOCKED`. Command:
-
-`node verification/product-truth-20260716/generate-worktree-census.mjs dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
-
-Start/end UTC: `2026-07-16T19:06:52.430Z` / `2026-07-16T19:06:52.487Z`; exit `1`; test count `0`; output SHA-256 `4f6a30d0d31a75692f43a4ddb1430dcc9e63622a0c570751dadd2cbc1a848e21`; first causal error: `Expected 101 registered worktrees, observed 96`. The older `WORKTREE_CENSUS.json` is not relabeled as C2 evidence.
+- Remote-custody result: `NOT_YET_VERIFIED_FOR_C3`.
+- Cached `origin/truth-campaign-20260716` still resolves to immutable C2, not C3. C2 custody does not transfer to C3.
+- C3 bundle digest: `NOT_AVAILABLE_PENDING_DIRECTOR_CUSTODY_AND_BUNDLE_RECEIPT`.
+- Final live-remote clean-clone battery: `NOT_RUN_AUTHORIZATION_BOUND`.
+- No remote fetch, push, merge, or live-remote clone was performed for C3 in this local pass.
 
 ## Current-main boundary
 
-Local, cached origin, and live origin `current-main` remained `f0c030d37b762198b1e34d6b689112a433efa4c8` before and after this pass. Account A did not touch or push it. No branch was merged or pushed.
+Local and cached-origin `current-main` both remained `9c8c9f98c7fbd491fb97fce70d723b6c8bed2a4d` before and after the gate. They were not touched or pushed. No branch was merged or pushed.
 
-## Remaining work
+## Remaining independent-verifier work
 
-- Freeze the containing minimal source commit as exact C3 and record immutable C2 and C3 separately.
-- Regenerate the census from live Git with the five D-LAUNCH-65 `REMOVED_SAFE` tombstones and exact archive provenance; no numeric expected-count constant is allowed.
-- Run the complete canonical gate and literal local-source no-hardlink single-branch clean-clone battery against exact detached C3, recording every command, exit, count, timestamp, digest, and clone state.
-- If and only if local gates are green, stop at `C3_CUSTODY_REQUIRED:<sha>`. C2 custody does not cover C3; final live-remote clone work is forbidden until the director returns a C3 custody and bundle receipt.
-- Wave 1b `shard-sec` and `v-cockpit` remain pending, followed by independent final verification.
-- No `BASELINE_TRUTH_ACCEPTED`, `INTEGRATED_ACCEPTED`, final acceptance, deployment readiness, or money-path authority is claimed.
+- The director must push exact C3 on `truth-campaign-20260716` and return a custody receipt plus verified backup-bundle digest.
+- Only after that receipt is recorded may the final literal clean clone be made from the verified live remote, detached at exact C3, and the final live-remote battery run.
+- Independent Wave-1b `shard-sec` and `v-cockpit` work remains pending; this builder battery is not a substitute.
+- Independent final-verifier adjudication remains pending after Wave-1b and final live-remote evidence.
+- No `BASELINE_TRUTH_ACCEPTED`, `INTEGRATED_ACCEPTED`, final acceptance, deployment readiness, or money-path authority is claimed at this pause.

@@ -1,0 +1,327 @@
+{
+  "schemaVersion": "PORT_OBS_RECEIPT_V1",
+  "packetId": "PORT-OBS",
+  "packetName": "PORT OBS visibility contracts",
+  "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+  "terminalState": "PORT_OBS_READY",
+  "authorityCreated": false,
+  "branch": "port-obs-20260716",
+  "baseCommit": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "baseTree": "3adef4d97ab595a8c81a307bac8dce22d037abdb",
+  "implementationParentSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "implementationCommit": "930d61c8c95dba93359caf242fa8d68885276a80",
+  "implementationTree": "35f53a2e2674f5a8c5e1946545308c5d2b8cfc2f",
+  "implementationSubject": "test(obs): port visibility contracts to landed base",
+  "sealCommitIdentity": "ENCLOSING_GIT_COMMIT_SHA_IS_AUTHORITATIVE_AND_IS_NOT_SELF_RECORDED",
+  "directiveEvidence": {
+    "launch": {
+      "directive": "D-LAUNCH-51",
+      "commit": "e619ff18ef159c27061cfaf318036e18a4fac131",
+      "tree": "b54be2c72896973ae76ad8a84d19bcbe79a26f3d",
+      "directorStatePath": "QL_DIRECTOR_STATE.md",
+      "directorStateBlob": "2a637746e24d378f955a7afd425728ece1250b87",
+      "workerPromptsPath": "WORKER_PROMPTS.md",
+      "workerPromptsBlob": "bb77b141bab0b153b1277dd164bd3e62ea218325",
+      "originalTerminal": "PORT_OBS_PRESTAGE_READY"
+    },
+    "resume": {
+      "commit": "6f29210227137715970911a60a7dde100bfb0382",
+      "tree": "11c6f22f2653c8f876fc8c06281def0ee50de2e2",
+      "workerPromptsPath": "WORKER_PROMPTS.md",
+      "workerPromptsBlob": "9fa3755cc4c52f5a0d64b42c9af6a182c97edc45",
+      "effectiveTerminal": "PORT_OBS_READY"
+    }
+  },
+  "sourceEvidence": {
+    "packetBaseCommit": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+    "packetBaseTree": "e665f37197ffff97a5973e60777c99e60b6e7ea2",
+    "shadowImplementationCommit": "61d877f3c7bb8e2d9067fd49add12f49c5c28fae",
+    "shadowImplementationTree": "2f10c200b33cfe2a305edc93bbbf06ad07222f1f",
+    "shadowSealCommit": "20608c4b041b552b67c43c1f328038b0c492942f",
+    "shadowSealTree": "3a18678d517bb7dc7e7790242da55e22dd918720",
+    "sourceRefObserved": "refs/heads/obs-shadow-20260715",
+    "historicalReceiptPath": "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+    "historicalReceiptBlob": "5028b1e9965fad014a9f18cbf3d1be9975680dc3",
+    "historicalReceiptSha256": "a30b07cd9cba862597f14c0f37b401df6b639146a1c3123c6a8266eb7a2c51a3",
+    "historicalReceiptDisposition": "LINEAGE_ONLY_NOT_PORT_ACCEPTANCE",
+    "historicalReceiptTestBlob": "c29016e9d78ae54841c39c09ce0296f5cd6a0879",
+    "implementationPathCount": 7,
+    "sealPathCount": 2,
+    "allPathCount": 9,
+    "allPaths": [
+      "fixtures/obsShadow/cases.v1.json",
+      "fixtures/obsShadow/entry-inventory.v1.json",
+      "fixtures/obsShadow/insertion-requests.v1.json",
+      "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+      "fixtures/obsShadow/view-adapter.mjs",
+      "fixtures/obsShadow/view-contracts.v1.json",
+      "test/obsShadow/receipt.test.mjs",
+      "test/obsShadow/scope-security.test.mjs",
+      "test/obsShadow/view-contracts.test.mjs"
+    ]
+  },
+  "researchEvidence": {
+    "verifiedOn": "2026-07-16",
+    "runtime": {
+      "node": "v22.23.1",
+      "npm": "10.9.8",
+      "undici": "6.27.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "macOS": "26.5.2 (25F84)"
+    },
+    "primarySources": [
+      "https://nodejs.org/download/release/latest-jod/docs/api/test.html",
+      "https://nodejs.org/download/release/latest-jod/docs/api/globals.html",
+      "https://developer.apple.com/documentation/security/app-sandbox",
+      "https://developer.apple.com/documentation/security/discovering-and-diagnosing-app-sandbox-violations"
+    ],
+    "appliedFindings": [
+      "Node test files are process-isolated by default and --test-concurrency=1 serializes file processes.",
+      "Node 22 exposes built-in fetch and WebSocket network clients, so adapter static scans cover both names.",
+      "The host sandbox denies network operations at the operating-system boundary; the suite includes an EACCES_or_EPERM loopback canary."
+    ]
+  },
+  "registryEvidence": {
+    "branch": "aiops-prestage-20260714",
+    "commit": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "tree": "b2e0b07a145861d984b0048725f030b84127e92d",
+    "collisionMapPath": "AI_OPS_COLLISION_MAP.md",
+    "collisionMapBlob": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "collisionMapSha256": "92a3a2601d2894a3baacadbfb719b0e0b8ff9a950f71b6a27bc18965b7042c33",
+    "schemaPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+    "schemaBlobAtBase": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+    "schemaDefinition": "InsertionRequestRowV1",
+    "manifestPath": "fixtures/obsShadow/insertion-requests.v1.json",
+    "manifestBlobAtImplementation": "5264dc1ff4b275e563a19cb7af00b32ae21f5da3",
+    "rowIds": [
+      "AIOPS-IR-TELEMETRY-012",
+      "AIOPS-IR-NOTIFY-014",
+      "AIOPS-IR-COCKPIT-015",
+      "AIOPS-IR-INCIDENT-019",
+      "AIOPS-IR-TEST-MOUNT-026"
+    ],
+    "allStatusDraft": true,
+    "allAuthorityCreatedFalse": true
+  },
+  "landedInterfaceAudit": {
+    "sourceComparisonSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+    "targetSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+    "citedOwnerPathCount": 17,
+    "adapterDependencyPathCount": 1,
+    "identicalBlobCount": 18,
+    "citedOwnerBlobsIdentical": true,
+    "pagingReceiptRecordSchemaState": "MISSING",
+    "incidentOwnerState": "NOT_CONFIGURED",
+    "externalNotificationDeliveryState": "NOT_CONFIGURED"
+  },
+  "changedPaths": {
+    "implementation": [
+      "fixtures/obsShadow/cases.v1.json",
+      "fixtures/obsShadow/entry-inventory.v1.json",
+      "fixtures/obsShadow/insertion-requests.v1.json",
+      "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+      "fixtures/obsShadow/view-adapter.mjs",
+      "fixtures/obsShadow/view-contracts.v1.json",
+      "test/obsShadow/network-deny.test.mjs",
+      "test/obsShadow/scope-security.test.mjs",
+      "test/obsShadow/view-contracts.test.mjs"
+    ],
+    "seal": [
+      "fixtures/obsShadow/receipts/PORT_OBS_RECEIPT.v1.json",
+      "test/obsShadow/receipt.test.mjs"
+    ],
+    "all": [
+      "fixtures/obsShadow/cases.v1.json",
+      "fixtures/obsShadow/entry-inventory.v1.json",
+      "fixtures/obsShadow/insertion-requests.v1.json",
+      "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+      "fixtures/obsShadow/receipts/PORT_OBS_RECEIPT.v1.json",
+      "fixtures/obsShadow/view-adapter.mjs",
+      "fixtures/obsShadow/view-contracts.v1.json",
+      "test/obsShadow/network-deny.test.mjs",
+      "test/obsShadow/receipt.test.mjs",
+      "test/obsShadow/scope-security.test.mjs",
+      "test/obsShadow/view-contracts.test.mjs"
+    ]
+  },
+  "implementationArtifactSha256": {
+    "fixtures/obsShadow/cases.v1.json": "bf7802223fcd1bf067f36362c933eec019fb345c119c1ad87ee0d9d6e99a5be7",
+    "fixtures/obsShadow/entry-inventory.v1.json": "dae2c8d15b4615a22b934dbc40edec8e2e1e3f6b6082e6a41b3c6843fbecb69f",
+    "fixtures/obsShadow/insertion-requests.v1.json": "fc73d99fa75ab98adca2ff45ce55cbf3145ad2547412343dc01ad98ab826ebe8",
+    "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json": "a30b07cd9cba862597f14c0f37b401df6b639146a1c3123c6a8266eb7a2c51a3",
+    "fixtures/obsShadow/view-adapter.mjs": "6cd4d4c26bcfac3872d8488e1558b0a1d902a0137c188bbbb6be38f9544c8dc5",
+    "fixtures/obsShadow/view-contracts.v1.json": "3b2dbe3728c2d76dafa66e927b8edeb0f028fe776f3d4b60bc04e73a3a797c17",
+    "test/obsShadow/network-deny.test.mjs": "8eb201455c60e95707d3b4e53043a21dd83ee088ae917b469fc09e1c4d8f584a",
+    "test/obsShadow/scope-security.test.mjs": "a79594940c7156d09e7ab84286911f156dd3acf0fe339b290aa7034caad89a2c",
+    "test/obsShadow/view-contracts.test.mjs": "c8899156a967caa4191c9b1a831e10bfe8c39d3053517645294f1e3d51a64bb5"
+  },
+  "sealArtifactSha256": {
+    "test/obsShadow/receipt.test.mjs": "80b153c66198a6a2ebf3f54939b86b813f5f9c6b059689dce690f353b77d566f"
+  },
+  "receiptSelfHashPolicy": "PORT_OBS_RECEIPT_EXCLUDES_ITS_OWN_DIGEST; THE ENCLOSING_GIT_BLOB_AND_COMMIT_ARE_AUTHORITATIVE",
+  "implementationManifest": {
+    "pathCount": 9,
+    "pathListSha256": "eb7ee77c6f54263942fdb6e3ceeb6cda942851252ef83136dae226fc5c57eef8",
+    "scopedLsTreeSha256": "475c0930b75b3bc762f34a88e5eae5580c08b20f636ea0e081b7e39987a6cc30",
+    "stablePatchId": "8dc107ab104db5748098170f2be704b03c0be0e6"
+  },
+  "viewAcceptance": {
+    "inventoryItemCount": 6,
+    "implementedAdapterCount": 2,
+    "adoptedOwnerCount": 4,
+    "classifications": {
+      "HISTORICAL_TRENDS": "ADOPT_EXISTING",
+      "PAGING_RECEIPTS": "MISSING_BUILD",
+      "INCIDENT_DRILL_FIXTURES": "ADAPT_EXISTING",
+      "EXPECTED_VS_OBSERVED_INVENTORY": "ADOPT_EXISTING",
+      "TELEMETRY_LOSS_DETECTION": "ADOPT_EXISTING",
+      "COST_BUDGET_PROJECTIONS": "ADOPT_EXISTING"
+    },
+    "mountState": "NOT_MOUNTED",
+    "truthLabel": "SYNTHETIC_ONLY",
+    "authorityEffect": "NONE",
+    "greenEligible": false
+  },
+  "verification": [
+    {
+      "id": "dependency-hydration",
+      "command": "npm ci --offline --ignore-scripts && npm rebuild better-sqlite3 --offline",
+      "exitCode": 0,
+      "lockfileChanged": false
+    },
+    {
+      "id": "focused-os-network-denied-at-implementation",
+      "command": "PORT_OBS_TOTAL_NETWORK_DENY=darwin-sandbox-deny-network /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' /Users/cosmosgeek/.local/node22/bin/node --test --test-concurrency=1 --test-reporter=spec test/obsShadow/*.test.mjs",
+      "atCommit": "930d61c8c95dba93359caf242fa8d68885276a80",
+      "exitCode": 0,
+      "tests": 21,
+      "passed": 21,
+      "failed": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "networkCanary": "LOOPBACK_CONNECT_DENIED_EACCES_OR_EPERM"
+    },
+    {
+      "id": "javascript-syntax",
+      "command": "find fixtures/obsShadow test/obsShadow -type f -name '*.mjs' -print0 | LC_ALL=C sort -z | xargs -0 -n1 node --check",
+      "atCommit": "930d61c8c95dba93359caf242fa8d68885276a80",
+      "exitCode": 0,
+      "checked": 4
+    },
+    {
+      "id": "json-parse",
+      "command": "find fixtures/obsShadow -type f -name '*.json' -print0 | LC_ALL=C sort -z | xargs -0 -n1 jq -e .",
+      "atCommit": "930d61c8c95dba93359caf242fa8d68885276a80",
+      "exitCode": 0,
+      "checked": 5
+    },
+    {
+      "id": "npm-test-first-precommit-observation",
+      "command": "npm test",
+      "contentBasis": "BYTES_LATER_COMMITTED_AS_930d61c8c95dba93359caf242fa8d68885276a80",
+      "exitCode": 1,
+      "typecheck": "PASS",
+      "build": "PASS",
+      "failure": "PRODUCT_ASSURANCE_RUN_FAILED:A_CASE_S4_SAFE_PURITY",
+      "failedTest": "protected untracked I00 input remains byte-identical",
+      "failedPath": "test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs"
+    },
+    {
+      "id": "npm-test-implementation-rerun",
+      "command": "npm test",
+      "atCommit": "930d61c8c95dba93359caf242fa8d68885276a80",
+      "exitCode": 0,
+      "typecheck": "PASS",
+      "build": "PASS",
+      "engineBasis": "107/107",
+      "engineVolume": "124/124",
+      "financialSafety": "59/59",
+      "storageConfigAws": "29/29",
+      "streamLifecycle": "14/14",
+      "perimeter": "2/2",
+      "productAssurance": "802_BEHAVIOR_PLUS_4_PROVENANCE",
+      "acceptanceContract": "43/43"
+    },
+    {
+      "id": "npm-run-test-all",
+      "command": "npm run test:all",
+      "status": "NOT_RUN_NOT_REQUIRED_FOR_EXCLUSIVE_FIXTURE_TEST_FAMILY",
+      "crossFamilyChange": false
+    },
+    {
+      "id": "adversarial-self-review",
+      "status": "PASS",
+      "reviewed": [
+        "source-context substitution",
+        "paging evidence binding and false clear",
+        "drill content hash and transition ordering",
+        "canonical owner deduplication",
+        "typed insertion rows",
+        "secret and authority escalation",
+        "exclusive path scope",
+        "historical receipt immutability"
+      ],
+      "blockingFindings": 0
+    }
+  ],
+  "sealVerification": {
+    "command": "PORT_OBS_TOTAL_NETWORK_DENY=darwin-sandbox-deny-network /usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network*)' /Users/cosmosgeek/.local/node22/bin/node --test --test-concurrency=1 --test-reporter=spec test/obsShadow/*.test.mjs",
+    "expectedTests": 26,
+    "expectedPassed": 26,
+    "expectedFailed": 0,
+    "resultAuthority": "POST_COMMIT_RUN_ON_ENCLOSING_SEAL_COMMIT"
+  },
+  "rootGateDisposition": {
+    "laneAcceptanceGreen": true,
+    "npmTestAtImplementationGreen": true,
+    "precommitNondeterminismObserved": true,
+    "portableCleanCloneRootGreenClaim": false,
+    "externalDefectFamily": "D_LAUNCH_51_S4_WORKTREE_STATE_DEPENDENCE",
+    "separateCorrectionBranch": "ci-hotfix-20260716",
+    "workerAction": "NO_OUT_OF_SCOPE_FIX_OR_PROTECTED_OWNER_INPUT_CREATION"
+  },
+  "zeroEffects": {
+    "capitalEffect": "0",
+    "notionalEffect": "0",
+    "credentialReads": 0,
+    "networkConnectAttemptsByViewCode": 0,
+    "networkDenyCanaryAttempts": 1,
+    "networkConnectionsSucceeded": 0,
+    "orderCalls": 0,
+    "externalMutations": 0,
+    "deploymentCalls": 0,
+    "mountedPageEdits": 0,
+    "sharedSeamEdits": 0
+  },
+  "effectEvidence": {
+    "networkConnectAttemptsByViewCode": "ADAPTER_CAPABILITY_SCAN_FINDS_NO_TRANSPORT_CAPABILITY",
+    "networkDenyCanaryAttempts": "ONE_LOOPBACK_CONNECT_WAS_INTENTIONALLY_ATTEMPTED_AND_DENIED_EACCES_OR_EPERM",
+    "networkConnectionsSucceeded": "OS_NETWORK_DENIAL_CANARY_PROVED_ZERO_SUCCESSFUL_CONNECTIONS",
+    "credentialReads": "ENFORCED_NO_ENV_OR_CREDENTIAL_PATH_IN_PACKET",
+    "orderCalls": "ENFORCED_NO_MONEY_PATH_CAPABILITY_IN_PACKET",
+    "mountedPageEdits": "EXACT_CHANGED_PATH_ALLOWLIST",
+    "sharedSeamEdits": "EXACT_CHANGED_PATH_ALLOWLIST_PLUS_DRAFT_INSERTION_ROWS_ONLY"
+  },
+  "limitations": [
+    "PORT_OBS_READY is a bounded lane handoff state for director review; it is not integrated, mounted, deployed, candidate, capital, or production readiness.",
+    "All new view evidence is deterministic SYNTHETIC_ONLY and NOT_MOUNTED; no canonical incident, paging delivery, recovery, notification, telemetry, inventory, stability, or health authority is created.",
+    "The four ADOPT_EXISTING views remain reference-only canonical owner outputs; only paging receipt detail and recorded incident-drill comparison have local fixture adapters.",
+    "The historical OBS_SHADOW receipt is preserved byte-identically as source lineage and never substitutes for this port receipt.",
+    "The paging fixture revision is explicitly synthetic because the landed I08 vocabulary does not define a concrete paging-receipt record schema or owner revision.",
+    "Declared different failure-domain labels are fixture evidence and do not prove an operationally independent external detector.",
+    "All five AIOPS insertion rows remain immutable-registry DRAFT requests; no composition, route, persistence, auth, navigation, package, test-mount, or cockpit seam is changed.",
+    "The total-network-deny proof uses macOS sandbox-exec and is host-specific; the in-suite loopback canary proves denial for this exact run.",
+    "The first npm test observation failed the known D-LAUNCH-51 S4 worktree-state-dependent purity check while an exact-implementation rerun passed; no portable clean-clone root-green claim is made from this lane.",
+    "npm run test:all is reserved by repository law for cross-family changes and was not run because this packet changes only its exclusive fixture/test family.",
+    "Current upstream runtime and sandbox behavior can change and must be reverified before later mounting or cross-platform acceptance."
+  ],
+  "nonClaims": [
+    "No mounted page, shared schema, server source, web source, package file, root document, current-main branch, other worktree, or external system was modified.",
+    "No shadow acceptance status or historical shadow receipt was promoted.",
+    "No production source, physical socket, canonical incident owner, paging provider, notification destination, recovery owner, command, or action authority is configured.",
+    "No credential, private or signed exchange call, live or test order, borrow, repay, transfer, withdrawal, leverage, margin mutation, deployment, push, merge, or money action occurred.",
+    "LIVE_EXECUTION_NOT_IMPLEMENTED remains untouched and enforced."
+  ]
+}

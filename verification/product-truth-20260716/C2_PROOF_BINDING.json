@@ -57,8 +57,8 @@
     {
       "relative_path": "integration/reports/i00-proof-evidence.json",
       "candidate_git_blob": null,
-      "sha256": "393d765e047bc3c4ff9d2f049d074672747b65e5560e0442692fa323521ddb61",
-      "byte_length": 525321
+      "sha256": "8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7",
+      "byte_length": 529097
     }
   ],
   "browser_proof": "DEFERRED_OWNER_GATE; EXACT_C2_RENDERED_BROWSER_RECEIPT_NOT_PRODUCED",

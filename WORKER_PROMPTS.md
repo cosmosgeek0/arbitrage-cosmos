@@ -1,6 +1,38 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
-# >>>>> PASTE THESE 11 NOW, one per NEW chat. Folder = heading. Everything below OLD line = history. <<<<<
+# >>>>> RESUME THESE 6 (paste into the stopped chat or a new one, same folder). DONE+VERIFIED: ci-hotfix, port-a2, port-a3, port-replay, port-runbook — close those. <<<<<
+
+## RESUME — folder /Users/cosmosgeek/Desktop/egress-patch
+```text
+Resume as the EGRESS PATCH worker from git truth (app-side capacity stop; nothing lost): branch egress-patch-20260716, base 492e3f69, zero commits yet; 6 tracked-modified + 1 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (offline test mode + egress tripwire per a0c7b6e patch draft; root npm test exit 0 under total network deny without sandbox reliance; test:all green; production behavior unchanged). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at EGRESS_PATCH_READY or precise BLOCKED.
+```
+
+## RESUME — folder /Users/cosmosgeek/Desktop/port-a1
+```text
+Resume as the PORT A1 worker from git truth (app-side capacity stop; nothing lost): branch port-a1-20260716, base 492e3f69, zero commits yet; 4 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (port sealed A1 83c1624 + A1X e65cdca into server/src/aiOps/{contracts,policy,manifests,identity,reliability}/** + server/test/aiOps/a1/** + fixtures/aiOps/a1/** + docs/archive/aiOps/a1/**; full lane re-acceptance). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at PORT_A1_READY or precise BLOCKED.
+```
+
+## RESUME — folder /Users/cosmosgeek/Desktop/port-a4
+```text
+Resume as the PORT A4 worker from git truth (app-side capacity stop; nothing lost): branch port-a4-20260716, base 492e3f69, zero commits yet; ~25 tracked-modified + 1 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (port sealed A4 b5f4c47 + A4X 6204667 into web/src/aiOps/** + web/test/aiOps/** + fixtures/aiOps/a4/** + docs/archive/aiOps/a4/**; fixture-driven, no App/store/route edits; full lane re-acceptance). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at PORT_A4_READY or precise BLOCKED.
+```
+
+## RESUME — folder /Users/cosmosgeek/Desktop/port-a5
+```text
+Resume as the PORT A5 worker from git truth (app-side capacity stop; nothing lost): branch port-a5-20260716, base 492e3f69, zero commits yet; 4 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (port sealed A5 e0411ea + A5X e8e005e into server/test/aiOps/a5/** + test/aiOps/** + fixtures/aiOps/a5/** + docs/archive/aiOps/a5/**; full lane re-acceptance). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at PORT_A5_READY or precise BLOCKED.
+```
+
+## RESUME — folder /Users/cosmosgeek/Desktop/port-ops
+```text
+Resume as the PORT OPS worker from git truth (app-side capacity stop; nothing lost): branch port-ops-20260716, base 492e3f69, zero commits yet; 2 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (port sealed ops-shadow cdf64b6 into fixtures/opsShadow/** + test/opsShadow/**; local/fake validation only; full lane re-acceptance). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at PORT_OPS_READY or precise BLOCKED.
+```
+
+## RESUME — folder /Users/cosmosgeek/Desktop/port-obs
+```text
+Resume as the PORT OBS worker from git truth (app-side capacity stop; nothing lost): branch port-obs-20260716, base 492e3f69, zero commits yet; 2 untracked in-flight files — inspect what exists, keep what is sound, and finish your ORIGINAL task exactly as first assigned (port sealed obs-shadow 20608c4 into fixtures/obsShadow/** + test/obsShadow/**; view contracts only, no mounted-page edits; full lane re-acceptance). All original laws unchanged: sole writer here; exclusive namespaces only; shared seams = INSERTION-REQUEST rows; never touch other worktrees/current-main; no push/merge; NEVER run git clean, git reset --hard, worktree prune, or delete anything outside your own namespaces; fake providers, no credentials; focused suite green under total network deny; commit + immutable receipt. Usage limit → commit+stop; same message resumes. Stop at PORT_OBS_READY or precise BLOCKED.
+```
+
+# >>>>> ORIGINAL 11 BLOCKS BELOW (for reference; use RESUME blocks above for the stopped six) <<<<<
 
 ## CHAT 1 — folder /Users/cosmosgeek/Desktop/ci-hotfix (MOST URGENT — fixes red CI on GitHub)
 ```text

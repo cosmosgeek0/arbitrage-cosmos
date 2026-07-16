@@ -1,10 +1,11 @@
-# DO EXACTLY 2 THINGS. NOTHING ELSE.
+# DO EXACTLY 1 THING.
 #
-# 1. Paste BLOCK 1 (below) into your truth-a chat.
-# 2. Paste BLOCK 1 (same text) into your truth-b chat.
+# 1. Paste BLOCK 1 (below) into your truth-a chat. It is MID-RUN — that is
+#    fine, the message queues and it reads it at its next step. Do NOT restart it.
 #
-# Then wait. All other chats/folders: DONE — close them.
-# Red GitHub emails: expected, ignore.
+# truth-b: FINISHED its prep (verified). Close that chat. Its next job comes
+# only after truth-a freezes the candidate — I will tell you when.
+# All other chats/folders: DONE — closed. Red GitHub emails: ignore.
 
 ## BLOCK 1
 ```text

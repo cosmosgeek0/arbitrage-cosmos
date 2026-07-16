@@ -5,6 +5,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+throw new Error('SUPERSEDED_D_LAUNCH_62_DO_NOT_RUN: use generate-wave1-evidence.mjs with an explicit exact C2 after source freeze');
+
 const ROOT = process.cwd();
 const OUT = resolve(ROOT, 'verification/product-truth-20260716');
 const C = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';

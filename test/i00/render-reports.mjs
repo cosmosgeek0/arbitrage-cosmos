@@ -90,7 +90,7 @@ function resourceReport(evidence) {
   );
   const limitations = table(
     ['Limitation', 'Status', 'Exact reason'],
-    evidence.knownLimitations.map((row) => [row.id, row.status, row.reason]),
+    (evidence.currentLimitations ?? evidence.knownLimitations).map((row) => [row.id, row.status, row.reason]),
   );
   return `${preamble('Resource and Backpressure Report', evidence)}\n`
     + `${evidence.report.resourceNote} The executable synthetic plan uses an injected clock, ${evidence.resourceHarness.sampleWindowMs} ms windows, at least ${evidence.resourceHarness.minimumSamples} samples, and p50/p95/p99/max. Capacity breach must become \`DEGRADED\` or \`BLOCKED\` before silent loss. Lower-tier shedding is counted in P4→P3→P2 order; P0 material loss remains exactly zero and P0/P1 remain available.\n\n`
@@ -173,7 +173,9 @@ export function buildMachineEvidence() {
     report: closure.report,
     donorEquality: closure.donorEquality,
     measurements: closure.measurements,
-    knownLimitations: closure.knownLimitations,
+    knownLimitations: closure.currentLimitations ?? closure.knownLimitations,
+    historicalCandidateLimitations: closure.knownLimitations,
+    historicalCandidateLimitationsRole: closure.knownLimitationsRole ?? null,
     counts: {
       requirements: closure.requirements.length,
       autonomyLayers: closure.autonomy.length,

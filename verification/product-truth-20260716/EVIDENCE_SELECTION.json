@@ -1,0 +1,11 @@
+{
+  "schema": "product-truth-c2-evidence-selection.v1",
+  "source_candidate": null,
+  "source_candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "candidate_embedded_package": "SOURCE_UNBOUND",
+  "selection_rule": "The candidate source commit cannot self-name. Select only an evidence descendant whose manifest names exact C2, whose ancestry contains C2, and whose post-C2 diff is limited to declared I00 proof outputs and verification/product-truth-20260716/**. Reject old-C identifiers and ambiguous descendants.",
+  "valid_chain": "C2 -> optional bounded I00 proof child -> campaign evidence child",
+  "final_verifier_handoff": "BLOCKED_PENDING_WAVE1B",
+  "old_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "old_candidate_disposition": "REJECTED_FOR_FINAL_HANDOFF_CRITICAL_FINDINGS"
+}

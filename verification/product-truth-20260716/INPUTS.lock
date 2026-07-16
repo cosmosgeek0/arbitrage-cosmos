@@ -1,230 +1,675 @@
 {
-  "schema": "product-truth-inputs-lock.v2",
-  "status": "INTEGRATED",
-  "reason": "BASELINE_TRUTH_ACCEPTED",
-  "candidate": {
-    "commit": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-    "tree": "a770f9f393e6229252731cd5247e9a1abfd2e509",
-    "parent": "f11531e6637979d6e173f6eb25d04c10a76d20c8",
-    "branch": "truth-campaign-20260716",
-    "source_frozen": true,
-    "evidence_descendants_may_change_source": false
+  "schema": "product-truth-inputs-lock.v3",
+  "binding": "SOURCE_COMMIT_CANNOT_SELF_NAME",
+  "candidate": null,
+  "candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "candidate_tree": null,
+  "candidate_branch": "truth-campaign-20260716",
+  "source_base_main": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+  "d_launch_62": {
+    "commit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+    "path": "QL_DIRECTOR_STATE.md",
+    "git_blob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+    "sha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+    "authority": "CONTROLLING_DEFECT_WAVE_RECEIPT"
   },
-  "durable_main_at_candidate_freeze": {
-    "local_at_freeze": "2ae812624f20b9bc93fc4ad66cb568929101110f",
-    "origin_at_freeze": "2ae812624f20b9bc93fc4ad66cb568929101110f",
-    "remote": "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
-    "state": "INTEGRATED",
-    "candidate_c_merged_to_current_main": false
+  "historical_d_launch_61_custody": {
+    "applies_to_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "receipt_path": "verification/product-truth-20260716/D_LAUNCH_61_CUSTODY_RECEIPT.json",
+    "director_receipt_commit": "b4d9f22d3732003f2cc5cec1f11a87833a933209",
+    "director_state_blob": "bf7e7c09aa84af046dc8ff1750098da5e89e8076",
+    "director_state_sha256": "0d39a06b622f67a455d461bc033d6e7ef4bcc78f063c7cf6a6ad61e989db546e",
+    "remote_head": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
+    "bundle_sha256": "775c55d26474578100b03d0cb45575b9cf95cc6ab012c709c963e4dd6b8ffe37",
+    "c2_custody_effect": "NONE; OLD_C_CUSTODY_DOES_NOT_TRANSFER_TO_C2"
   },
-  "director_coordination_after_candidate_freeze": {
-    "custody_receipt_commit": "b4d9f22d3732003f2cc5cec1f11a87833a933209",
-    "custody_receipt_parent": "2ae812624f20b9bc93fc4ad66cb568929101110f",
-    "custody_receipt_subject": "director: D-LAUNCH-61 — custody granted; 5 read-only frontier shards at frozen C",
-    "custody_receipt_path": "QL_DIRECTOR_STATE.md",
-    "custody_receipt_git_blob": "bf7e7c09aa84af046dc8ff1750098da5e89e8076",
-    "custody_receipt_sha256": "0d39a06b622f67a455d461bc033d6e7ef4bcc78f063c7cf6a6ad61e989db546e",
-    "custody_receipt_lines": "70-72",
-    "later_observed_director_head": "e9074e79c22da3951f2373e3b264a63608fd2bb2",
-    "later_observed_at_utc": "2026-07-16T12:16:57Z",
-    "candidate_c_merged_to_current_main": false,
-    "state": "REFERENCE_ONLY_FOR_CANDIDATE_SOURCE"
-  },
-  "controlling_inputs": [
+  "controlling_external_inputs": [
     {
-      "id": "campaign",
-      "path": "/Users/cosmosgeek/Desktop/INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md",
-      "sha256": "ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b"
+      "id": "CAMPAIGN",
+      "authority": "CONTROLLING",
+      "absolute_path": "/Users/cosmosgeek/Desktop/INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md",
+      "sha256": "ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b",
+      "content_oid": "af3643bcff14dd216ebddb4728ebe528f813b5d3",
+      "byte_length": 33800,
+      "candidate_presence": false
     },
     {
-      "id": "handoff",
-      "path": "DIRECTOR_HANDOFF_TRUTH_CAMPAIGN.md",
-      "sha256": "49211c1f34a84610e356aa4119d156ca1e30892866e335cd3b407ef5da05c37d"
+      "id": "SAFETY_AMENDMENT",
+      "authority": "CONTROLLING_WITH_ROLE_CLAUSE_SUPERSEDED",
+      "absolute_path": "/Users/cosmosgeek/Desktop/newCMD.txt",
+      "sha256": "45c83f3c7cd6b29ad86fcd33500d530da01ed2484610fed52f23b734d2e1fb61",
+      "content_oid": "4499892e65143625dae622568528f59a64edd05d",
+      "byte_length": 9936,
+      "candidate_presence": false
     },
     {
-      "id": "product-state",
-      "path": "STATE.md",
-      "sha256": "9d1e348c65ed95fc3f43c22d469e41071bec473683ed3b68215bfc7bb661584a"
+      "id": "ROLE_CORRECTION",
+      "authority": "CONTROLLING",
+      "absolute_path": "/Users/cosmosgeek/Desktop/RESPONSE.TXT",
+      "sha256": "17eb023994a64b917afe6023886226d419dc070e093f5d49e234266c65b1eea5",
+      "content_oid": "a24433aeb11581fd2c3ee1eac85d9aa7de2e6e5f",
+      "byte_length": 2090,
+      "candidate_presence": false
     },
     {
-      "id": "mission",
-      "path": "MISSION.md",
-      "sha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362"
+      "id": "FRONTIER_ACCELERATION",
+      "authority": "ORCHESTRATION_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/OWNER_CONTINUOUS_FRONTIER_ACCELERATION_DIRECTIVE.md",
+      "sha256": "6abdfe61f3b6aea71cd9fc2cbe02e5d0d7be2deb38cf9e63d1910c9184d93ed4",
+      "content_oid": "7c74bb2890fda78a39b058a5d9ffe94f57960032",
+      "byte_length": 12484,
+      "candidate_presence": false
     },
     {
-      "id": "architecture",
-      "path": "ARCHITECTURE.md",
-      "sha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db"
+      "id": "Q_L_LAUNCH",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+      "sha256": "26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06",
+      "content_oid": "587c1b83e8f9d32b9097d88df7fea40d9829b68e",
+      "byte_length": 20763,
+      "candidate_presence": false
     },
     {
-      "id": "design",
-      "path": "DESIGN.md",
-      "sha256": "60a1bc8da092cb737826d6a859b1f0eaa7c7c8df8a416e07654cbb1adf80480e"
+      "id": "Q_DIRECTIVE",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+      "sha256": "198f131d4b04c1edab728b85ea6a5e5c5f7f80875866e407a3c93a24aafa5ab4",
+      "content_oid": "eebe7b0c751c065e06d0bf817b86c144541adff3",
+      "byte_length": 71415,
+      "candidate_presence": false
     },
     {
-      "id": "director",
-      "path": "DIRECTOR.md",
-      "sha256": "6c54e7037d108c0e6a198520740deca13a6d82d677b9aea0137e284ce5752a95"
+      "id": "L_DIRECTIVE",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+      "sha256": "40de1feb6678d8741bd38f7538b2c6f25304c0f64195a596961fdb2539a3b037",
+      "content_oid": "53fea2b71b06702b30527e807755a54683b2dbd2",
+      "byte_length": 73919,
+      "candidate_presence": false
     },
     {
-      "id": "agents",
-      "path": "AGENTS.md",
-      "sha256": "db97a7a59e0d5cb4b1b6fe23b9902c6f5756733678085027412e37062b7d82ec"
+      "id": "I00",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "content_oid": "58e6fbfb1369b4721e0fcd2f94495221ec67f30d",
+      "byte_length": 76656,
+      "candidate_presence": false
+    },
+    {
+      "id": "IP_RUNTIME",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/IP_RUNTIME.md",
+      "sha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810",
+      "content_oid": "430a2727e0e74712f6b67c2148961075e2fe86b8",
+      "byte_length": 5490,
+      "candidate_presence": false
+    },
+    {
+      "id": "IP_CONTROL",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/IP_CONTROL.md",
+      "sha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278",
+      "content_oid": "63df166f8d61fa3b84faf061e4c78dd9a31736c7",
+      "byte_length": 4923,
+      "candidate_presence": false
+    },
+    {
+      "id": "IP_OPS",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/IP_OPS.md",
+      "sha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779",
+      "content_oid": "a25cbd1d1a695296c635560c962840d579a16a04",
+      "byte_length": 4280,
+      "candidate_presence": false
+    },
+    {
+      "id": "IP_PROOF",
+      "authority": "CONTROLLING_PROTECTED_OWNER_INPUT",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/IP_PROOF.md",
+      "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "content_oid": "a72e951378584735655c7a1a2a625527dbfee1f8",
+      "byte_length": 5122,
+      "candidate_presence": false
+    },
+    {
+      "id": "POST_I00",
+      "authority": "CONTROLLING_SUBORDINATE",
+      "absolute_path": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+      "sha256": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+      "content_oid": "38389c6de313dc26c50b6412be265114fa26f5ee",
+      "byte_length": 132787,
+      "candidate_presence": false
+    },
+    {
+      "id": "POST_I00_CORRECTION",
+      "authority": "CONTROLLING",
+      "absolute_path": "/Users/cosmosgeek/Desktop/command.txt",
+      "sha256": "4d938de306fb7577d8ff143677e30fb21fc3192da16d554c3a578b59566fb590",
+      "content_oid": "7e88a64f01ffea31faf8e79e01acc22d674bacbb",
+      "byte_length": 4979,
+      "candidate_presence": false
+    },
+    {
+      "id": "FRONTIER",
+      "authority": "REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Frontier.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "content_oid": "089a57473f26b1731e55b583c3e9152edc546c79",
+      "byte_length": 83408,
+      "candidate_presence": false
+    },
+    {
+      "id": "FRONTIER_WRAPPER",
+      "authority": "REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/frontierCommand.txt",
+      "sha256": "7adf1cd6f841c417ea71da5a29f438640622df2bad2b89c11461348484e2bec0",
+      "content_oid": "c62dee720a57297138b5816463c9a8bf85120b5e",
+      "byte_length": 2316,
+      "candidate_presence": false
+    },
+    {
+      "id": "CAMPAIGN_BRIEFING",
+      "authority": "REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/FULL_LOCAL_STATE_BRIEFING_FOR_WEB_COMMANDER_20260716.md",
+      "sha256": "d0741f52a87d6b422e5d2a9b6da041ee884829ab060bd4224c84493e7478005a",
+      "content_oid": "df68546cb3f9f85e10df091555bb6c76081180e3",
+      "byte_length": 29518,
+      "candidate_presence": false
     }
   ],
-  "dependency_inputs": [
+  "candidate_tracked_law_and_locks": [
     {
-      "path": "package.json",
-      "sha256": "3868ab98c8d7c78db4ebf7790c26ffbca02e26255e617ed59d16709a23727da9",
-      "git_blob": "d05433de2f863d8bacb2349fa8f01bcb444818d2"
+      "id": "STATE",
+      "authority": "CONTROLLING_PRODUCT_STATE",
+      "relative_path": "STATE.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "15732278a13d7ffb19c88a2bfb0541eaf12b8ac7c968106a2ca6ae14b3b5a139",
+      "byte_length": 10681,
+      "candidate_presence": true
     },
     {
-      "path": "package-lock.json",
-      "sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
-      "git_blob": "54efede0fbadd309ca38375349075affc347cb51"
+      "id": "MISSION",
+      "authority": "PERMANENT_LAW",
+      "relative_path": "MISSION.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362",
+      "byte_length": 54334,
+      "candidate_presence": true
     },
     {
-      "path": ".github/workflows/ci.yml",
-      "sha256": "138aa764f0efdd7c5c94b35fd7dabf0048fcbdbc0cce133f2dbfc3a01bf28142",
-      "git_blob": "b92504abbd2a4fe84930344733e06dc142ba9411"
+      "id": "ARCHITECTURE",
+      "authority": "PERMANENT_LAW",
+      "relative_path": "ARCHITECTURE.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
+      "byte_length": 23049,
+      "candidate_presence": true
     },
     {
-      "path": ".nvmrc",
-      "sha256": "f14b4987904bcb5814e4459a057ed4d20f58a633152288a761214dcd28780b56",
-      "git_blob": "2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a"
+      "id": "DESIGN",
+      "authority": "PERMANENT_UI_LAW",
+      "relative_path": "DESIGN.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "60a1bc8da092cb737826d6a859b1f0eaa7c7c8df8a416e07654cbb1adf80480e",
+      "byte_length": 80376,
+      "candidate_presence": true
     },
     {
-      "path": "quant/uv.lock",
-      "sha256": "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29",
-      "git_blob": "00266d99e77f6eb505053b7c2b9358715ad8a76d"
+      "id": "DIRECTOR",
+      "authority": "CONTROLLING_PROCESS_LAW",
+      "relative_path": "DIRECTOR.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "6c54e7037d108c0e6a198520740deca13a6d82d677b9aea0137e284ce5752a95",
+      "byte_length": 4617,
+      "candidate_presence": true
     },
     {
-      "path": "quant/.python-version",
-      "sha256": "f8faecf2505680716c6279bf2cdec3d5a5ba2ba852f0d7df45d51ac1ce8d9ade",
-      "git_blob": "0cf960df58f3c12fadffb149e0ee06bb63111f41"
+      "id": "AGENTS",
+      "authority": "CONTROLLING_REPOSITORY_LAW",
+      "relative_path": "AGENTS.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "db97a7a59e0d5cb4b1b6fe23b9902c6f5756733678085027412e37062b7d82ec",
+      "byte_length": 3836,
+      "candidate_presence": true
     },
     {
-      "path": "quant/pyproject.toml",
-      "sha256": "a4d68e05b607e60a99fa3856ed8f8cd3addc80998c65ca6d458118745970ca81",
-      "git_blob": "80dc701ec2f28c0ad4ce3b5928b25cb42fc130b7"
+      "id": "HANDOFF",
+      "authority": "REFERENCE_ONLY",
+      "relative_path": "DIRECTOR_HANDOFF_TRUTH_CAMPAIGN.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "49211c1f34a84610e356aa4119d156ca1e30892866e335cd3b407ef5da05c37d",
+      "byte_length": 2308,
+      "candidate_presence": true
+    },
+    {
+      "id": "EDGE_PROTOCOL",
+      "authority": "PERMANENT_PROTOCOL_LAW",
+      "relative_path": "EDGE_PROTOCOL_V1.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1",
+      "byte_length": 6551,
+      "candidate_presence": true
+    },
+    {
+      "id": "IP_ASSURANCE",
+      "authority": "CONTROLLING_ASSURANCE_LAW",
+      "relative_path": "IP_ASSURANCE.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "49dcd690275ff35cb32566af307ad572d2a527e06d7388885f98826560968e84",
+      "byte_length": 26741,
+      "candidate_presence": true
+    },
+    {
+      "id": "QL_DIRECTOR_STATE",
+      "authority": "CONTROLLING_CANDIDATE_DIRECTOR_STATE",
+      "relative_path": "QL_DIRECTOR_STATE.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+      "byte_length": 79740,
+      "candidate_presence": true
+    },
+    {
+      "id": "QL_PARALLEL_DAG",
+      "authority": "CONTROLLING_CANDIDATE_DIRECTOR_DAG",
+      "relative_path": "QL_PARALLEL_DAG.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+      "byte_length": 8207,
+      "candidate_presence": true
+    },
+    {
+      "id": "Q_LOCK",
+      "authority": "SUPPORTING_LOCK",
+      "relative_path": "quant/DIRECTIVE_INPUTS.lock",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
+      "byte_length": 1757,
+      "candidate_presence": true
+    },
+    {
+      "id": "L_LOCK",
+      "authority": "SUPPORTING_LOCK",
+      "relative_path": "live-edge-receipts/DIRECTIVE_INPUTS.lock",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "74e295c197b17b4c09c4970d668fe2c8a420b262b8276fcc128d07dcfc203857",
+      "byte_length": 5187,
+      "candidate_presence": true
+    },
+    {
+      "id": "PROTECTED_BUNDLE",
+      "authority": "PACKAGED_VERIFIER_INPUT_SNAPSHOT_ONLY",
+      "relative_path": "test/i00/performance/protected-owner-directives.bundle.v1.json",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "cd85e2aed5709650b3b39513a453f7a0e8374242fae452e02e75a1765e656f0a",
+      "byte_length": 130166,
+      "candidate_presence": true
     }
   ],
-  "environment": {
-    "os": "macOS 26.5.2 build 25F84",
-    "kernel": "Darwin 25.5.0 arm64",
-    "node": "v22.23.1",
-    "npm": "10.9.8",
-    "git": "2.50.1 Apple Git-155",
-    "typescript": "5.9.3",
-    "vite": "6.4.3",
-    "shell": "zsh 5.9",
-    "default_python": "3.9.6 NOT_AUTHORIZED_FOR_QUANT_ACCEPTANCE",
-    "managed_python": "3.13.14",
-    "uv": "0.11.28"
-  },
-  "environment_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
-  "clean_clone": {
-    "path": "/Users/cosmosgeek/Desktop/product-truth-clean-clones-20260716/account-a/41752d6a87dc1cb1b933bb4460c9cabfc15ff694/repo",
-    "source": "file:///Users/cosmosgeek/Desktop/truth-a",
-    "source_state": "REFERENCE_ONLY",
-    "full_history": true,
-    "shallow": false,
-    "detached_at_candidate": true,
-    "current_main_ref_present": false,
-    "object_alternates_present": false,
-    "reachable_commits": 544,
-    "tracked_files": 2574
-  },
-  "candidate_bundle_local": {
-    "path": "/Users/cosmosgeek/cosmos-arbitrage-truth-candidate-41752d6a.bundle",
-    "sha256": "f0641dcbbe7816d55749dd1d2a0fcfbf246c914d9af55f6ad9982f740aa9feab",
-    "bytes": 62976347,
-    "complete_history": true,
-    "candidate_ref": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-    "main_ref": "2ae812624f20b9bc93fc4ad66cb568929101110f",
-    "local_integrity_state": "SEALED",
-    "custody_role": "LOCAL_CANDIDATE_RECOVERY_ARTIFACT"
-  },
-  "full_repository_bundle_local": {
-    "path": "/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle",
-    "sha256": "775c55d26474578100b03d0cb45575b9cf95cc6ab012c709c963e4dd6b8ffe37",
-    "bytes": 154783860,
-    "complete_history": true,
-    "advertised_ref_count": 388,
-    "campaign_ref": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
-    "main_ref_at_bundle_creation": "2ae812624f20b9bc93fc4ad66cb568929101110f",
-    "bundle_verify_exit_code": 0,
-    "local_integrity_state": "SEALED",
-    "custody_role": "LOCAL_FULL_GIT_REFS_AND_REACHABLE_OBJECTS_RECOVERY_ARTIFACT"
-  },
-  "off_machine_custody": {
-    "directive_id": "D-LAUNCH-61",
-    "medium": "GITHUB_GIT_REF",
-    "remote": "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
-    "ref": "refs/heads/truth-campaign-20260716",
-    "custody_head": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
-    "candidate_ancestor": true,
-    "post_candidate_paths_evidence_only": true,
-    "ls_remote_exit_code": 0,
-    "fresh_single_branch_bare_clone_fsck_strict_exit_code": 0,
-    "verified_at_utc": "2026-07-16T12:17:05Z",
-    "state": "SEALED"
-  },
-  "pass_0": {
-    "candidate_state": "INTEGRATED",
-    "gate_token": "BASELINE_TRUTH_ACCEPTED:41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-    "registered_worktrees": 101,
-    "post_freeze_read_only_shards": 5,
-    "unknown_worktrees": 0,
-    "later_gates_implied": false
-  },
-  "first_pass_account_a_matrix": {
-    "commit": "a1a67b2a9ab2b693b967fc5a0f047036f90cc593",
-    "git_blob": "ac5d274187b590a3a8ea856ba09ab665423c834b",
-    "sha256": "1d2d228b5e088846bf5962d79e6e5b0606937b6f69b24325de962f1cfdc58ff9",
-    "account_b_material_read": false
-  },
-  "source_evidence_receipt": {
-    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
-    "command_or_operator_action": "Account A evidence generation from immutable candidate C; no source mutation",
-    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
-    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
-    "start_time_utc": "2026-07-16T11:17:11Z",
-    "end_time_utc": "2026-07-16T11:47:52.009Z",
-    "exit_code": 0,
-    "test_count": 0,
-    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
-    "actor_role": "ACCOUNT_A",
-    "actor_had_candidate_source_write_permission": false,
-    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
-    "deviations_skips_unavailable_evidence": [
-      "Account B artifacts and reasoning were not read",
-      "No independent verification token is issued",
-      "At this original evidence timestamp off-machine custody was unavailable; D-LAUNCH-61 later superseded this historical condition for the current Pass-0 verdict"
+  "defect_wave_inputs": [
+    {
+      "id": "PROV_FINDINGS",
+      "authority": "DEFECT_INPUT",
+      "relative_path": "verification/product-truth-20260716/wave1-inputs/PROV_FINDINGS.json",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "b0e06ead6b8280545c36ab7b8d5f58de75819dfa653c51dde7c09f720efe71fc",
+      "byte_length": 39646,
+      "candidate_presence": true
+    },
+    {
+      "id": "CLEAN_CLONE_FINDINGS",
+      "authority": "DEFECT_INPUT",
+      "relative_path": "verification/product-truth-20260716/wave1-inputs/CLEAN_CLONE_FINDINGS.json",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "0c8c59354486db404334107470865d4255ce0049dfcd38701fe0eb163c23250c",
+      "byte_length": 26371,
+      "candidate_presence": true
+    },
+    {
+      "id": "ACTIVATION_RUNBOOK_DRAFT",
+      "authority": "REFERENCE_LATER_OWNER_GATE",
+      "relative_path": "verification/product-truth-20260716/wave1-inputs/ACTIVATION_RUNBOOK_DRAFT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "81b516dc6b69fe482bdaded03f6ce424de9a89b080bd03c2287d87a9176d1b00",
+      "byte_length": 32859,
+      "candidate_presence": true
+    },
+    {
+      "id": "CANARY_PRECHECK",
+      "authority": "REFERENCE_LATER_OWNER_GATE",
+      "relative_path": "verification/product-truth-20260716/wave1-inputs/CANARY_PRECHECK.json",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "02c4181f49385a2f8d9620babeead4a4a94506e7586dae1e6613ae944d623f92",
+      "byte_length": 10577,
+      "candidate_presence": true
+    }
+  ],
+  "deployment_authority": {
+    "kind": "COMPOSITE_NO_STANDALONE_DIRECTIVE",
+    "member_ids": [
+      "CAMPAIGN",
+      "I00",
+      "IP_OPS",
+      "L_DIRECTIVE",
+      "POST_I00"
+    ],
+    "state": "NOT_CONFIGURED; DEFERRED_OWNER_GATE",
+    "implementation_evidence": [
+      {
+        "id": "ops/i00/l15-amendment-contract.json",
+        "authority": "IMPLEMENTATION_EVIDENCE_NOT_AUTHORITY",
+        "relative_path": "ops/i00/l15-amendment-contract.json",
+        "candidate_commit": null,
+        "git_blob": null,
+        "sha256": "05e5c817ab638c78b726a18708620dfb850e315779c73a5964db2ecb2f03a4d7",
+        "byte_length": 11971,
+        "candidate_presence": true
+      },
+      {
+        "id": "docs/archive/i00-phase2/L15_INFRA_INTEGRATION_RECEIPT.md",
+        "authority": "IMPLEMENTATION_EVIDENCE_NOT_AUTHORITY",
+        "relative_path": "docs/archive/i00-phase2/L15_INFRA_INTEGRATION_RECEIPT.md",
+        "candidate_commit": null,
+        "git_blob": null,
+        "sha256": "92affcb7dd520a0d7f9cf1b9a1ca8c2a4c77e4b98451c98293bf7b54edfde656",
+        "byte_length": 4625,
+        "candidate_presence": true
+      },
+      {
+        "id": "ops/docs/i00/ACTIVATION_AND_BOUNDARY_RUNBOOK.md",
+        "authority": "IMPLEMENTATION_EVIDENCE_NOT_AUTHORITY",
+        "relative_path": "ops/docs/i00/ACTIVATION_AND_BOUNDARY_RUNBOOK.md",
+        "candidate_commit": null,
+        "git_blob": null,
+        "sha256": "d189c69027f7e0b920f83abb3f288f359e8153635f1eb192406eabc7e1700071",
+        "byte_length": 4114,
+        "candidate_presence": true
+      },
+      {
+        "id": "ops/docs/i00/RELEASE_AND_RECOVERY_RUNBOOK.md",
+        "authority": "IMPLEMENTATION_EVIDENCE_NOT_AUTHORITY",
+        "relative_path": "ops/docs/i00/RELEASE_AND_RECOVERY_RUNBOOK.md",
+        "candidate_commit": null,
+        "git_blob": null,
+        "sha256": "9c13af7b3c46b0eaab50ef88878cd1340c1a96f423365cad15c9ed7f47ef66ee",
+        "byte_length": 8097,
+        "candidate_presence": true
+      }
     ]
   },
-  "receipt": {
-    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
-    "command_or_operator_action": "D-LAUNCH-61 Account-A custody verification and Pass-0 reassessment; no source mutation after C",
-    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
-    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
-    "start_time_utc": "2026-07-16T12:16:57Z",
-    "end_time_utc": "2026-07-16T12:17:05Z",
-    "exit_code": 0,
-    "test_count": 0,
-    "verification_probe_count": 10,
-    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
-    "actor_role": "ACCOUNT_A",
-    "actor_had_candidate_source_write_permission": false,
-    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
-    "deviations_skips_unavailable_evidence": [
-      "Account B artifacts and reasoning were not read",
-      "The local full-repository bundle is supporting recovery evidence; GitHub origin is the off-machine custody medium",
-      "The custody push left current-main at the candidate-freeze value; later director-only coordination commits advanced current-main without merging candidate C",
-      "An auxiliary custody audit imported the full-repository bundle pack into the shared Git object database without changing refs, index, or any worktree; no cleanup was attempted",
-      "No PROVENANCE_ACCEPTED, CLEAN_CLONE_ACCEPTED, VERIFIED_ACCEPTED, or later token is issued"
-    ]
+  "superseded_reference_inputs": [
+    {
+      "id": "docs/archive/SUPERSEDED_BY_IP_ASSURANCE_AT_5f6d4b3b70e3.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/SUPERSEDED_BY_IP_ASSURANCE_AT_5f6d4b3b70e3.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "0f42ded02e9f751b9f6c077579378d83131faa8ef23fc4f3286616008259f86e",
+      "byte_length": 67378,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/BLUEPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/BLUEPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "7f2958e36267f78b38e982318c0a78cf99ced3e3c007df06fd259e3ec973b90a",
+      "byte_length": 30938,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/DIRECTOR_RULEBOOK.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/DIRECTOR_RULEBOOK.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "cdd603f387a611bb8974cd4ca959262dbc52d6a8278714262ce77ec3531e5ca5",
+      "byte_length": 28724,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/SYSTEM_AUTHORITY_MAP.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/SYSTEM_AUTHORITY_MAP.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "6ec9c4baea19f67d50330ff0c7378c5799f072fbed044c3d3344aeef47d45cec",
+      "byte_length": 18973,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/DESIGN_PLAYBOOK.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/DESIGN_PLAYBOOK.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "91fb5f4e4ca65c1cfebcdaaa41995a7f16ca29c0d7c91319b98c7872caaf4313",
+      "byte_length": 44091,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/UI_SURFACE_BASELINE.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/UI_SURFACE_BASELINE.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "3b96fd92de849b703827d4deaf2e58e536727dc66b7922bc23a2d0f48000aa07",
+      "byte_length": 35297,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/ENGINE_SPRINT_5H.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/ENGINE_SPRINT_5H.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "5749b585b5f0f19fff964bc191df802c1461a6ae9614fc1547c8c8a668a403a0",
+      "byte_length": 15744,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/PARALLEL_BACKEND_MAX_POWER_SPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/PARALLEL_BACKEND_MAX_POWER_SPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "7c302981955dc883ee55848147ec9515a3005a02c63eacf6acdc95106ea1bac6",
+      "byte_length": 26674,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/MARKET_INTELLIGENCE_MAX_POWER_SPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/MARKET_INTELLIGENCE_MAX_POWER_SPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "8b57083ae0ad5646ba47f89c043a0aa822478b68c4599c637527f35ea236c653",
+      "byte_length": 18341,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/LIVE_INTELLIGENCE_RUNTIME_MAX_POWER_SPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/LIVE_INTELLIGENCE_RUNTIME_MAX_POWER_SPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "4ae6fcab355a4ac6e75c1fe04275ad59ca27498e68c642519a293265ab76d0bb",
+      "byte_length": 39334,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/CAPITAL_SUPERVISION_MAX_POWER_SPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/CAPITAL_SUPERVISION_MAX_POWER_SPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "1074e7a3bcb519a4e29729e315e46d96f227c63d74a32f0d0e199faeeb92879c",
+      "byte_length": 39662,
+      "candidate_presence": true
+    },
+    {
+      "id": "docs/archive/SYSTEM_CONVERGENCE_VERTICAL_SLICE_MAX_POWER_SPRINT.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "relative_path": "docs/archive/SYSTEM_CONVERGENCE_VERTICAL_SLICE_MAX_POWER_SPRINT.md",
+      "candidate_commit": null,
+      "git_blob": null,
+      "sha256": "a68927b3ac3b5b39e8032a6002eac14b85aa0afcb32a4e6c4ea4e494894b7b84",
+      "byte_length": 40885,
+      "candidate_presence": true
+    },
+    {
+      "id": "ORGAN_PORTFOLIO_PARALLEL_BUILD.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/ORGAN_PORTFOLIO_PARALLEL_BUILD.md",
+      "sha256": "b2a9116e49e3d2e89c291a2907e51af217993e638b02d33af469d84dad51aa41",
+      "content_oid": "ae5afb488dbddecda96c0025aea1ac2f2f801dc3",
+      "byte_length": 24774,
+      "candidate_presence": false,
+      "superseded_by": "Frontier.md"
+    },
+    {
+      "id": "PARALLEL_CAPABILITY_FOUNDRY_AND_SENSE_PACKS.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/PARALLEL_CAPABILITY_FOUNDRY_AND_SENSE_PACKS.md",
+      "sha256": "47ece80df0e4f5f5d25bc02bfd5f2fbf30a8eff0ae1be78e97df3238d9b506f8",
+      "content_oid": "163a53bff22488745d4269e8138abd55443d00da",
+      "byte_length": 32048,
+      "candidate_presence": false,
+      "superseded_by": "Frontier.md"
+    },
+    {
+      "id": "new.txt",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/new.txt",
+      "sha256": "71a2df2e14835148f93310c70fc61c0829ad4ea6e54f7b56c26d405a2418b998",
+      "content_oid": "c82d7012a4a2f5666337375f008d0e95688f152d",
+      "byte_length": 2628,
+      "candidate_presence": false,
+      "superseded_by": "current campaign plus amendments"
+    },
+    {
+      "id": "cmd.txt",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/cmd.txt",
+      "sha256": "90dcac299155695f02c232646b23fc78cf4f3febce5ee2e781113896ae5d0da9",
+      "content_oid": "50130feab8f66af081ab5bc6e665281299b525f8",
+      "byte_length": 4109,
+      "candidate_presence": false,
+      "superseded_by": "current campaign plus amendments"
+    },
+    {
+      "id": "OWNER TIME-OPTIMIZATION AMENDMENT.txt",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/OWNER TIME-OPTIMIZATION AMENDMENT.txt",
+      "sha256": "46549feced327d805c6057ecedffc8b65469c6537e5ce64b8c0a4f559eb1da30",
+      "content_oid": "f58992990984fbcc6f6d0b187579b2625435441c",
+      "byte_length": 4118,
+      "candidate_presence": false,
+      "superseded_by": "OWNER_CONTINUOUS_FRONTIER_ACCELERATION_DIRECTIVE.md"
+    },
+    {
+      "id": "DIRECTOR_FINAL_ASSURANCE_HANDOFF.md",
+      "authority": "SUPERSEDED_REFERENCE_ONLY",
+      "absolute_path": "/Users/cosmosgeek/Desktop/Main/DIRECTOR_FINAL_ASSURANCE_HANDOFF.md",
+      "sha256": "da38896c8e7bb42c29afba2094ce48856792da17348cd4cc78904469e199728d",
+      "content_oid": "d6ffe63f7ece61c6ef061e4ad1dc1d0275950aeb",
+      "byte_length": 13809,
+      "candidate_presence": false,
+      "superseded_by": "IP_ASSURANCE.md"
+    }
+  ],
+  "absent_named_superseded_inputs": [
+    {
+      "name": "FINAL_GAP_EXECUTION_ORDER.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "I00"
+    },
+    {
+      "name": "FINAL_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP_DAG.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "I00"
+    },
+    {
+      "name": "FINAL_MASTER_PRODUCT_CLOSURE_AUTONOMY_AND_BRINGUP_ORDER.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "I00"
+    },
+    {
+      "name": "I00_LLM_DIAGNOSTIC_RUNTIME_ACTIVATION_AND_CODE_REPAIR_BINDING.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "POST_I00"
+    },
+    {
+      "name": "SENTINEL_RESIDENT_AI_OPERATIONS_PROGRAM.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "POST_I00"
+    },
+    {
+      "name": "AI_OPS_ACTIVATION_ADDENDUM_FOR_DIRECTOR.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "POST_I00_CORRECTION"
+    },
+    {
+      "name": "Frontier(1).md and unnamed earlier Frontier drafts",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "FRONTIER"
+    },
+    {
+      "name": "DIRECTOR_VERDICT_GAP_AUDIT.md",
+      "content_available": false,
+      "sha256": null,
+      "git_blob": null,
+      "disposition": "ABSENT_SUPERSEDED_REFERENCE_ONLY",
+      "superseded_by": "CAMPAIGN"
+    }
+  ],
+  "protected_input_law": "Physical protected owner inputs remain outside C2; exact external bytes are locked directly. The packaged verifier snapshot is supporting evidence only.",
+  "inventory_counts": {
+    "controlling_external": 17,
+    "candidate_tracked_law_and_locks": 14,
+    "defect_wave_inputs": 4,
+    "superseded_available": 18,
+    "superseded_named_absent": 8,
+    "total_directive_law_lock_and_wave_rows": 61
   }
 }

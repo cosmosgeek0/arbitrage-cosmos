@@ -1,0 +1,155 @@
+{
+  "schema": "product-truth-wave1-findings.v2",
+  "actor_role": "ACCOUNT_A_CANDIDATE_WRITER",
+  "candidate_sha": null,
+  "candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "old_candidate_prohibited_from_final_verifier": true,
+  "source_receipts": {
+    "prov_sha256": "b0e06ead6b8280545c36ab7b8d5f58de75819dfa653c51dde7c09f720efe71fc",
+    "clean_clone_sha256": "0c8c59354486db404334107470865d4255ce0049dfcd38701fe0eb163c23250c"
+  },
+  "declared_summary_mismatch": "Durable PROV receipt contains 2 CRITICAL + 8 HIGH + 1 MEDIUM; all 11 were adjudicated despite the abbreviated directive prose.",
+  "findings": [
+    {
+      "id": "PROV-001",
+      "severity": "CRITICAL",
+      "title": "Exact-C controlling-input lock omits named directive families",
+      "adjudication": "FIXED",
+      "disposition": "INPUTS.lock v3 inventories controlling, protected, composite deployment, superseded, absent-superseded, and Wave-1 inputs",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-002",
+      "severity": "CRITICAL",
+      "title": "Frontier has no candidate-bound directive coverage row",
+      "adjudication": "FIXED",
+      "disposition": "17 Frontier family/module/superseded rows; candidate exclusion asserted",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-003",
+      "severity": "HIGH",
+      "title": "MISSION and ARCHITECTURE rows contain false paths and omit permanent requirements",
+      "adjudication": "FIXED",
+      "disposition": "False paths corrected and nine permanent MISSION/ARCHITECTURE rows added",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-004",
+      "severity": "HIGH",
+      "title": "Required I00 incident-acknowledgment and source-isolation controls have no triads",
+      "adjudication": "HONEST_NOT_CONFIGURED",
+      "disposition": "INCIDENT_ACK and SOURCE_ISOLATE rows explicitly record absent command owners and tests of the boundary",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-005",
+      "severity": "HIGH",
+      "title": "IP_PROOF named closure artifacts and IP_CONTROL browser proof are not exact-C evidence",
+      "adjudication": "FIXED_WITH_DEFERRED_BROWSER_GATE",
+      "disposition": "Proof catalog unbound in source, tracked-byte reports regenerated; exact-C2 browser receipt remains deferred",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-006",
+      "severity": "HIGH",
+      "title": "Admitted POST_I00 AI-Ops tests are absent from canonical root gates",
+      "adjudication": "EXCLUDED_NOT_CONFIGURED",
+      "disposition": "AI-Ops source integrated but root mount/acceptance explicitly excluded; canonical runners print the scope",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-007",
+      "severity": "HIGH",
+      "title": "POST_I00 composition and deployment sentinel/paging closure are missing",
+      "adjudication": "HONEST_NOT_CONFIGURED",
+      "disposition": "Route UNWIRED; provider, worker, sentinel, and paging NOT_CONFIGURED",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-008",
+      "severity": "HIGH",
+      "title": "IP_ASSURANCE mandatory closure artifacts remain obsolete after current implementation changes",
+      "adjudication": "DEFERRED_OWNER_GATE",
+      "disposition": "Generator-era Product Assurance closure set is not C2 evidence; precise per-artifact deferrals recorded",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-009",
+      "severity": "HIGH",
+      "title": "Integrated A-FORMAL and S2 tests are absent from the canonical Product Assurance gate",
+      "adjudication": "FIXED",
+      "disposition": "Canonical Product Assurance gate mounts 131 A-FORMAL/S2 action-evidence checks",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-010",
+      "severity": "HIGH",
+      "title": "Bridge dispositions are real, but directive coverage does not map their current implementation and tests",
+      "adjudication": "FIXED",
+      "disposition": "Ledger CAS/journal and Foundation quantity bridge rows cite exact implementation and tests",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "PROV-011",
+      "severity": "MEDIUM",
+      "title": "Candidate-embedded campaign artifacts are stale and require explicit evidence-descendant selection",
+      "adjudication": "FIXED",
+      "disposition": "Evidence-selection contract distinguishes source C2 from exact-bound evidence descendants",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "P3-CLEAN-001",
+      "severity": "HIGH",
+      "title": "Sealed machine evidence is live-Git-dependent and the root parity contract masks clean-clone drift",
+      "adjudication": "FIXED",
+      "disposition": "Sealed proof uses tracked bytes; ambient Git is a separate tri-state diagnostic; exact-byte single-branch parity is tested",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "P3-CLEAN-002",
+      "severity": "HIGH",
+      "title": "Exact C contains living director input bytes that do not match its accepted D-LAUNCH-7 pins",
+      "adjudication": "FIXED",
+      "disposition": "V2 living-input seal binds D-LAUNCH-62 bytes and preserves D-LAUNCH-7 historical pins",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    },
+    {
+      "id": "P3-CLEAN-003",
+      "severity": "MEDIUM",
+      "title": "Product Assurance clean-clone regression test violates the I00 child-process scanner",
+      "adjudication": "FIXED",
+      "disposition": "Product Assurance Git runs through bounded runner and root npm test mounts the I00 proof scanner",
+      "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "repaired_candidate": null,
+      "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"
+    }
+  ],
+  "wave1b": "PENDING_SHARD_SEC_AND_V_COCKPIT; FINAL_VERIFIER_HANDOFF_BLOCKED"
+}

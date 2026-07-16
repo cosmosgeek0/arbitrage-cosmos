@@ -10,7 +10,6 @@ const OUTPUT = resolve(
   process.cwd(),
   'verification/product-truth-20260716/WORKTREE_CENSUS.json',
 );
-const FROZEN_CANDIDATE = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
 const D_LAUNCH_61_READ_ONLY_SHARDS = new Set([
   'prep-act',
   'shard-prov',
@@ -702,7 +701,10 @@ function diffIdentity(base, head) {
   };
 }
 
-const candidateArg = process.argv[2] ?? FROZEN_CANDIDATE;
+const candidateArg = process.argv[2];
+if (!/^[a-f0-9]{40}$/u.test(candidateArg ?? '')) {
+  throw new Error('EXACT_FULL_CANDIDATE_SHA_REQUIRED');
+}
 const censusStartedAt = new Date().toISOString();
 const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`);
 const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);

@@ -47,10 +47,13 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 ## D-LAUNCH-62 Wave 1 status
 
 - The four durable prep inputs are preserved byte-identically under `verification/product-truth-20260716/wave1-inputs/`; the activation draft and canary precheck remain later-gate reference material only.
-- The clean-clone proof generator is being separated into deterministic tracked-byte evidence plus an ambient Git tri-state diagnostic. Moving refs and optional external objects will not be baked into sealed report bytes.
+- The complete input lock now carries 61 controlling, candidate-law/lock, Wave-1, superseded-available, and superseded-absent rows, including the candidate-tracked QL director state and DAG. The D-LAUNCH-62 Main object is rehashed and blob-verified; the prior D-LAUNCH-61 receipt is preserved as historical old-C custody and explicitly has no C2 custody effect.
+- The clean-clone proof generator is separated into deterministic tracked-byte evidence plus an ambient Git tri-state diagnostic. Moving refs and optional external objects are not baked into sealed report bytes.
 - The accepted current director-owned QL bytes are `QL_DIRECTOR_STATE.md` SHA-256 `95d4c276…` and `QL_PARALLEL_DAG.md` SHA-256 `89a13c8a…`; D-LAUNCH-7 historical pins remain preserved separately.
 - The canonical Product Assurance gate now includes A-FORMAL and S2 action-evidence suites. AI-Ops port/shadow suites remain deliberately root-unmounted and excluded from C2 acceptance because their branch-specific assumptions are not candidate-compatible.
-- Exact C2 root, full, report-parity, and fresh single-branch clone results are pending the final source freeze. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
+- All 14 durable Wave-1 findings are adjudicated. The coverage matrix has 153 rows, including 17 explicit Frontier dispositions, the missing permanent-law rows, and honest absent-control/AI-Ops boundaries; the capability matrix has 23 rows.
+- Focused proof is green at `47/47`; the acceptance contract is green at `44/44`, including a sole branch with no `current-main` ref. The five human I00 reports are refreshed; the machine report refresh requires a clean source checkpoint because the protected-owner fallback intentionally rejects a dirty candidate.
+- Exact C2 root, full, exact report-parity, and fresh single-branch clone results remain pending the final source freeze. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
 
 ## Previous source evidence
 

@@ -119,14 +119,16 @@ test('autonomy no-terminal resource interface and no-surprises inventories are e
   assert.equal(closure.noSurprises.length, 9);
   assert(closure.noSurprises.every((row) => row.evidenceRowCompleteness === 'COMPLETE' && row.productVerdict !== 'PROVED'));
   const allowedLimitationStatuses = new Set(['NOT_CONFIGURED', 'OWNER_GATED', 'UNKNOWN']);
+  assert.equal(closure.knownLimitationsRole, 'HISTORICAL_74EB_INTEGRATION_CANDIDATE_RECEIPT_COMPATIBILITY_ONLY');
+  const currentLimitations = closure.currentLimitations ?? closure.knownLimitations;
   assert.equal(
-    new Set(closure.knownLimitations.map((row) => row.id)).size,
-    closure.knownLimitations.length,
+    new Set(currentLimitations.map((row) => row.id)).size,
+    currentLimitations.length,
     'known limitation IDs must be unique',
   );
-  assert(closure.knownLimitations.every((row) => allowedLimitationStatuses.has(row.status)));
-  assert(closure.knownLimitations.every((row) => typeof row.reason === 'string' && row.reason.length > 0));
-  const limitations = new Map(closure.knownLimitations.map((row) => [row.id, row]));
+  assert(currentLimitations.every((row) => allowedLimitationStatuses.has(row.status)));
+  assert(currentLimitations.every((row) => typeof row.reason === 'string' && row.reason.length > 0));
+  const limitations = new Map(currentLimitations.map((row) => [row.id, row]));
   for (const id of [
     'PRIVATE_SIGNED_EXCHANGE',
     'Q_PRODUCTION_TRANSPORT',
@@ -143,8 +145,11 @@ test('autonomy no-terminal resource interface and no-surprises inventories are e
     assert(limitations.has(id), `missing non-green boundary ${id}`);
     assert.notEqual(limitations.get(id).status, 'LOCAL_PROVED');
   }
-  assert.match(limitations.get('A_FORMAL').reason, /POST_LANDING_EXCLUDED_BY_L_LAST_ORDERING/);
-  assert.match(limitations.get('A_ACTION_EVIDENCE_S2').reason, /POST_LANDING_ONLY_EXCLUDED/);
+  assert.match(limitations.get('A_FORMAL').reason, /SOURCE_INTEGRATED.*TLA_RUNTIME_TOOLING_NOT_CONFIGURED/);
+  assert.match(limitations.get('A_ACTION_EVIDENCE_S2').reason, /SOURCE_INTEGRATED.*PRODUCTION_CONSUMER_AND_ACTION_AUTHORITY_NOT_CONFIGURED/);
+  for (const id of ['AI_OPS_C2_ACCEPTANCE', 'PRODUCT_ASSURANCE_C2_CLOSURE', 'INCIDENT_ACK_COMMAND', 'SOURCE_ISOLATE_COMMAND']) {
+    assert(limitations.has(id), `missing C2 boundary ${id}`);
+  }
 });
 
 test('dated official-interface facts pin the selected Spot SBE user-data and margin contracts', () => {

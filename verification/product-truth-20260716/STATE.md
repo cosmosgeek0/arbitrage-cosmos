@@ -1,18 +1,18 @@
 # Product Truth Campaign State
 
-Pass-0 status: `PRECISE_BLOCKED`
+Campaign status: `DEFECT_WAVE_2_C3_SOURCE_PENDING_FREEZE_AND_LOCAL_GATES`
 
-Immutable C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+Immutable rejected C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
-Candidate tree: `5a5486a3b1d50fd22017e22de2378ae9cfd607a0`
+C3 source candidate: `ASSIGNED_BY_CONTAINING_SOURCE_COMMIT` — the exact SHA is recorded by the evidence child because a commit cannot contain its own SHA.
 
-Evidence HEAD: `ASSIGNED_BY_CONTAINING_EVIDENCE_ONLY_COMMIT` — the exact child SHA is recorded separately in the handoff because a commit cannot contain its own SHA.
+Evidence HEAD: `PENDING_C3_LOCAL_GATE_EVIDENCE_CHILD`
 
 Actor: `ACCOUNT_A_CANDIDATE_WRITER`
 
-Gate: `PRECISE_BLOCKED:CLEAN_CLONE_TEST_ALL_DONOR_OBJECT_MISSING`
+Gate: `NOT_RUN_FOR_C3`
 
-This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains the immutable source candidate; the evidence child is not a replacement C2.
+This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains immutable but is rejected by its clean-clone battery. The containing source commit becomes C3; no evidence child may be called a replacement C3.
 
 ## Custody result
 
@@ -58,8 +58,9 @@ Local, cached origin, and live origin `current-main` remained `f0c030d37b762198b
 
 ## Remaining work
 
-- Restore clone-stable donor proof inputs without weakening `npm run test:all`; then rerun the entire literal clean-clone battery from a new clone.
-- Reconcile the current 96 registered worktrees against the explicit 101-worktree census contract; do not silently drop missing rows.
-- Regenerate the exact-C2 census, exact evidence package, binding, and manifest only after both blockers are resolved.
+- Freeze the containing minimal source commit as exact C3 and record immutable C2 and C3 separately.
+- Regenerate the census from live Git with the five D-LAUNCH-65 `REMOVED_SAFE` tombstones and exact archive provenance; no numeric expected-count constant is allowed.
+- Run the complete canonical gate and literal local-source no-hardlink single-branch clean-clone battery against exact detached C3, recording every command, exit, count, timestamp, digest, and clone state.
+- If and only if local gates are green, stop at `C3_CUSTODY_REQUIRED:<sha>`. C2 custody does not cover C3; final live-remote clone work is forbidden until the director returns a C3 custody and bundle receipt.
 - Wave 1b `shard-sec` and `v-cockpit` remain pending, followed by independent final verification.
 - No `BASELINE_TRUTH_ACCEPTED`, `INTEGRATED_ACCEPTED`, final acceptance, deployment readiness, or money-path authority is claimed.

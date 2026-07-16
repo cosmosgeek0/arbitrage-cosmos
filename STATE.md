@@ -8,10 +8,11 @@ This file owns current product state. `ARCHITECTURE.md` Part II owns code author
 | --- | --- | --- | --- |
 | Historical corrected I00 source | `74eb452efab89ca92ec9ff5cb192b723b5f198f3` | `VERIFIED` | The independent C2 receipt reported 15 fixed, 0 refused, and 0 pending; the source was later landed. Historical evidence does not verify newer source. |
 | Landed validate-only core | landing ancestry through `51efaaa4` | `INTEGRATED` | Existing engine, capital, risk, ledger, control, reconciliation, cockpit, operations, and assurance owners remain canonical. |
-| Account A product-truth candidate | The containing final source commit; exact SHA is assigned as C2 only after this state is committed | `FROZEN_SOURCE_PENDING_EXACT_GATES` | Old C has critical provenance defects and is not eligible for final verification. Account A is the sole candidate writer. |
+| Immutable rejected Pass-0 candidate C2 | `dea2d2a5c2b5e83d3aea75b0e368f0a478596561` | `REJECTED_CLEAN_CLONE` | C2 remains immutable. Its canonical gate passed, but the literal no-hardlink single-branch clone exposed the stale census contract and an unreachable dashboard donor object. C2 is not rewritten or relabeled. |
+| Account A Defect Wave 2 candidate | The containing source commit; its exact SHA is assigned as C3 only after this state is committed | `C3_SOURCE_PENDING_LOCAL_GATES_AND_CUSTODY` | C3 is the new accepted source candidate only after the minimal census and donor-proof corrections are frozen. Account A must stop for director custody after local gates; C2 custody does not transfer. |
 | Candidate source base Main | `2ae812624f20b9bc93fc4ad66cb568929101110f` | `INTEGRATED` | Later director-only `current-main` records, including D-LAUNCH-62 at `2a832750…`, are controlling evidence inputs rather than candidate ancestry. No candidate merge or push to `current-main` is claimed. |
 
-The exact frozen candidate SHA cannot self-name inside its own commit. The campaign `INPUTS.lock` binds the containing commit after it is created. No later evidence-only commit changes candidate source C.
+The exact frozen C3 SHA cannot self-name inside its own commit. The campaign evidence child binds the containing commit after it is created. No later evidence-only commit changes candidate source C3.
 
 ## Product posture
 
@@ -24,7 +25,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Capability dimension | State | Exact boundary |
 | --- | --- | --- |
 | Historical validate-only core | `VERIFIED` | Verification applies to historical C2R, not to the new candidate SHA. |
-| Account A candidate source | `FROZEN_SOURCE_PENDING_EXACT_GATES` | D-LAUNCH-62 Wave 1 source corrections and source-unbound evidence contracts are complete; the containing commit becomes provisional C2 for exact root/full/fresh-clone proof. |
+| Account A candidate source | `C3_SOURCE_PENDING_LOCAL_GATES_AND_CUSTODY` | Defect Wave 2 preserves immutable C2, makes the exact donor proof clone-stable without weakening full-workspace proof, and reconciles the live worktree census. The containing source commit becomes C3; exact local gates and new custody remain mandatory. |
 | AI-Ops source: egress, contracts, runtime, adapters, cockpit, proof, replay, operations, runbooks | `INTEGRATED` | Nine sealed lanes and the egress patch are exact second-parent candidate merges. |
 | AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | AI-Ops root-test mount is also `NOT_CONFIGURED`; AI-Ops acceptance is explicitly excluded from the C2 baseline rather than inferred from `npm test`. |
 | AI-Ops composed production runtime | `UNWIRED` | AI code has no live capital, order, signing, self-approval, or silent production-patch authority. |
@@ -56,7 +57,14 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - Focused proof is green at `47/47`; the acceptance contract is green at `44/44`, including a sole branch with no `current-main` ref. The five human I00 reports and machine report are refreshed from a clean tracked-byte source checkpoint.
 - The historical D-LAUNCH-1 Q-lock supersession no longer requires a moving `current-main` ref or an ambient raw owner blob for sealed acceptance. Exact candidate-reachable commit/lock bytes and the director attestation are authoritative; ref/blob availability is diagnostic, with absent raw bytes reported as `DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED`.
 - Exact-C2 evidence generation now reads candidate bytes rather than mutable evidence-child seeds, classifies historical active-name artifacts, confines the post-C2 diff to the campaign directory, and requires the exact candidate-bound gate report before generating the manifest.
-- Exact C2 root, full, exact report-parity, and fresh single-branch clone results are the remaining source-freeze checks. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
+- C2 exact canonical results remain historical builder evidence only; its clean-clone failure rejects C2 as the source candidate. C3 must independently rerun the complete canonical and literal local clean-clone batteries, then stop for new director custody before any live-remote clone. Wave 1b security and cockpit findings remain pending.
+
+## Defect Wave 2 adjudication
+
+- The live Git worktree inventory, not a numeric constant, now supplies the expected registered-worktree count. Exact name-policy reconciliation still fails closed on any unknown, unexpectedly restored, or missing live lane.
+- `prep-act`, `shard-prov`, `shard-sec`, `v-clean`, and `v-cockpit` are explicit `REMOVED_SAFE` tombstones under D-LAUNCH-65. The four accepted outputs are verified byte-for-byte from exact commit `0e4b364849075a454d7dd624ca068c238f4196c2` into candidate-tracked Wave-1 inputs; `shard-sec` and `v-cockpit` are explicitly `NO_ACCEPTED_OUTPUT`.
+- I00 donor equality retains the genuine live full-workspace Git-object/worktree proof. Only an automatically detected, detached, non-shallow, single-worktree/single-branch clone with no `current-main` ref or alternates may use the exact C2-tracked receipt authority. That mode rechecks candidate-reachable integration commits and receipts, the dashboard sealed cut, and current topology; only `DASHBOARD-SHELL` and `PREVERIFY` may be absent as declared non-ancestors. Any missing merge-parent donor fails closed.
+- The campaign evidence child must record immutable C2 and exact C3 separately. It may not call the evidence child a replacement C3, inherit C2 custody, or claim final acceptance or deployment readiness.
 
 ## Previous source evidence
 

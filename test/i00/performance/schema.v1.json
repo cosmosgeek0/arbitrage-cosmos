@@ -1,0 +1,611 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.local-proxy-performance.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "truthClass", "runId", "createdAtUtc", "source", "host", "boundary", "load", "phases", "canonicalRestart", "uncleanRecovery", "continuity", "limitations", "slo", "artifacts"],
+  "properties": {
+    "schemaVersion": { "const": "i00.local-proxy-performance.v1" },
+    "truthClass": { "const": "LOCAL_PROXY_MEASURED" },
+    "runId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{8,120}$" },
+    "createdAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["branch", "headSha", "treeSha", "worktreeState", "protectedOwnerDirectives", "serverBundleSha256", "harnessTreeSha256"],
+      "properties": {
+        "branch": { "enum": ["i00-product-assembly-20260713", "DETACHED"] },
+        "headSha": { "$ref": "#/$defs/sha" },
+        "treeSha": { "$ref": "#/$defs/sha" },
+        "worktreeState": { "enum": ["FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE", "CLEAN_DETACHED_CANDIDATE_WITH_PACKAGED_OWNER_DIRECTIVES"] },
+        "protectedOwnerDirectives": { "type": "array", "minItems": 5, "maxItems": 5, "items": { "$ref": "#/$defs/protectedOwnerDirective" } },
+        "serverBundleSha256": { "$ref": "#/$defs/sha" },
+        "harnessTreeSha256": { "$ref": "#/$defs/sha" }
+      }
+    },
+    "host": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fingerprintSha256", "platform", "release", "arch", "nodeVersion", "cpuModel", "logicalCpuCount", "totalMemoryBytes"],
+      "properties": {
+        "fingerprintSha256": { "$ref": "#/$defs/sha" },
+        "platform": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "release": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "arch": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "nodeVersion": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "cpuModel": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "logicalCpuCount": { "type": "integer", "minimum": 1 },
+        "totalMemoryBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["proxyClass", "fingerprintSha256", "bindHost", "transport", "reverseProxy", "forwardedHeaders", "childEnvironment", "keyMode", "publicSourcePolicy", "forbiddenActions"],
+      "properties": {
+        "proxyClass": { "const": "DOCUMENTED_LOCAL_PROXY" },
+        "fingerprintSha256": { "$ref": "#/$defs/sha" },
+        "bindHost": { "enum": ["127.0.0.1", "::1", "localhost"] },
+        "transport": { "const": "LOOPBACK_HTTP_WS" },
+        "reverseProxy": { "const": "NONE" },
+        "forwardedHeaders": { "const": "ABSENT" },
+        "childEnvironment": { "const": "ALLOWLIST_ONLY" },
+        "keyMode": { "const": "KEYLESS" },
+        "publicSourcePolicy": { "const": "RUNTIME_OWNED_PUBLIC_ONLY" },
+        "forbiddenActions": { "type": "array", "minItems": 5, "items": { "type": "string", "minLength": 3, "maxLength": 120 } }
+      }
+    },
+    "load": {
+      "type": "object", "additionalProperties": false,
+      "required": ["configuredDurationSeconds", "measuredWindowSeconds", "sampleIntervalMs", "httpTargetRps", "httpConcurrency", "webSocketClients", "focusSymbol", "phaseCount", "endpoints"],
+      "properties": {
+        "configuredDurationSeconds": { "type": "integer", "minimum": 60, "maximum": 3600 },
+        "measuredWindowSeconds": { "type": "number", "minimum": 0 },
+        "sampleIntervalMs": { "type": "integer", "minimum": 250, "maximum": 5000 },
+        "httpTargetRps": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "httpConcurrency": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "webSocketClients": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "focusSymbol": { "type": "string", "pattern": "^[A-Z0-9]{5,20}$" },
+        "phaseCount": { "const": 3 },
+        "endpoints": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/endpointPlan" } }
+      }
+    },
+    "phases": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/phase" } },
+    "canonicalRestart": { "$ref": "#/$defs/canonicalRestart" },
+    "uncleanRecovery": { "$ref": "#/$defs/uncleanRecovery" },
+    "continuity": { "$ref": "#/$defs/continuity" },
+    "limitations": { "type": "array", "minItems": 10, "items": { "$ref": "#/$defs/limitation" } },
+    "slo": { "$ref": "#/$defs/slo" },
+    "artifacts": { "$ref": "#/$defs/artifacts" }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
+    "nullableNumber": { "type": ["number", "null"] },
+    "protectedOwnerDirective": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "gitStatus"],
+      "properties": {
+        "path": { "enum": ["I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md", "IP_CONTROL.md", "IP_OPS.md", "IP_PROOF.md", "IP_RUNTIME.md"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "gitStatus": { "enum": ["UNTRACKED_PROTECTED_OWNER_INPUT", "CANDIDATE_COMMITTED_VERIFIER_INPUT"] }
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["count", "min", "p50", "p95", "p99", "max", "mean"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "min": { "$ref": "#/$defs/nullableNumber" },
+        "p50": { "$ref": "#/$defs/nullableNumber" },
+        "p95": { "$ref": "#/$defs/nullableNumber" },
+        "p99": { "$ref": "#/$defs/nullableNumber" },
+        "max": { "$ref": "#/$defs/nullableNumber" },
+        "mean": { "$ref": "#/$defs/nullableNumber" }
+      }
+    },
+    "endpointPlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "expectedStatuses"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "expectedStatuses": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 100, "maximum": 599 } }
+      }
+    },
+    "endpointResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "requests", "responses", "unexpected", "errors", "bytes", "statusCounts", "latencyMs"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "requests": { "type": "integer", "minimum": 0 },
+        "responses": { "type": "integer", "minimum": 0 },
+        "unexpected": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "statusCounts": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "latencyMs": { "$ref": "#/$defs/summary" }
+      }
+    },
+    "http": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scheduled", "skippedForConcurrency", "responses", "expectedResponses", "unexpectedResponses", "networkErrors", "responseBytes", "throughputRps", "responseBytesPerSecond", "latencyMs", "endpoints"],
+      "properties": {
+        "scheduled": { "type": "integer", "minimum": 0 },
+        "skippedForConcurrency": { "type": "integer", "minimum": 0 },
+        "responses": { "type": "integer", "minimum": 0 },
+        "expectedResponses": { "type": "integer", "minimum": 0 },
+        "unexpectedResponses": { "type": "integer", "minimum": 0 },
+        "networkErrors": { "type": "integer", "minimum": 0 },
+        "responseBytes": { "type": "integer", "minimum": 0 },
+        "throughputRps": { "type": "number", "minimum": 0 },
+        "responseBytesPerSecond": { "type": "number", "minimum": 0 },
+        "latencyMs": { "$ref": "#/$defs/summary" },
+        "endpoints": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/endpointResult" } }
+      }
+    },
+    "focus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["symbol", "burstsAttempted", "bookMessages", "tradeMessages", "status", "reason"],
+      "properties": {
+        "symbol": { "type": "string", "pattern": "^[A-Z0-9]{5,20}$" },
+        "burstsAttempted": { "type": "integer", "minimum": 0 },
+        "bookMessages": { "type": "integer", "minimum": 0 },
+        "tradeMessages": { "type": "integer", "minimum": 0 },
+        "status": { "enum": ["MEASURED", "NOT_OBSERVED", "UNAVAILABLE"] },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 400 }
+      }
+    },
+    "slowConsumer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempted", "pauseDurationMs", "observedClose1013", "status", "reason"],
+      "properties": {
+        "attempted": { "type": "boolean" },
+        "pauseDurationMs": { "type": "integer", "minimum": 0 },
+        "observedClose1013": { "type": "boolean" },
+        "status": { "enum": ["MEASURED", "NOT_OBSERVED", "UNAVAILABLE"] },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 400 }
+      }
+    },
+    "websocket": {
+      "type": "object", "additionalProperties": false,
+      "required": ["clientsRequested", "clientsOpened", "openErrors", "messages", "bytes", "maxClientBufferedAmountBytes", "messageTypes", "closeCodes", "shutdownClose1012Count", "uncleanClose1006Count", "focus", "slowConsumer"],
+      "properties": {
+        "clientsRequested": { "type": "integer", "minimum": 1 },
+        "clientsOpened": { "type": "integer", "minimum": 0 },
+        "openErrors": { "type": "integer", "minimum": 0 },
+        "messages": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "maxClientBufferedAmountBytes": { "type": "integer", "minimum": 0 },
+        "messageTypes": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "closeCodes": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "shutdownClose1012Count": { "type": "integer", "minimum": 0 },
+        "uncleanClose1006Count": { "type": "integer", "minimum": 0 },
+        "focus": { "$ref": "#/$defs/focus" },
+        "slowConsumer": { "$ref": "#/$defs/slowConsumer" }
+      }
+    },
+    "process": {
+      "type": "object", "additionalProperties": false,
+      "required": ["samples", "cpuOneCorePercent", "cpuHostPercent", "rssBytes", "heapUsedBytes", "eventLoopP95Ms", "eventLoopP99Ms", "eventLoopMaxMs", "rssSlopeBytesPerHour"],
+      "properties": {
+        "samples": { "type": "integer", "minimum": 0 },
+        "cpuOneCorePercent": { "$ref": "#/$defs/summary" },
+        "cpuHostPercent": { "$ref": "#/$defs/summary" },
+        "rssBytes": { "$ref": "#/$defs/summary" },
+        "heapUsedBytes": { "$ref": "#/$defs/summary" },
+        "eventLoopP95Ms": { "$ref": "#/$defs/summary" },
+        "eventLoopP99Ms": { "$ref": "#/$defs/summary" },
+        "eventLoopMaxMs": { "$ref": "#/$defs/summary" },
+        "rssSlopeBytesPerHour": { "$ref": "#/$defs/nullableNumber" }
+      }
+    },
+    "growth": {
+      "type": "object", "additionalProperties": false,
+      "required": ["initialBytes", "finalBytes", "maxBytes", "growthBytes"],
+      "properties": {
+        "initialBytes": { "type": "integer", "minimum": 0 },
+        "finalBytes": { "type": "integer", "minimum": 0 },
+        "maxBytes": { "type": "integer", "minimum": 0 },
+        "growthBytes": { "type": "integer" }
+      }
+    },
+    "integrity": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["quickCheck", "integrityCheck", "journalMode", "foreignKeyViolationCount", "userVersion", "eventCount", "bootRelease", "controlCommand", "passed"],
+      "properties": {
+        "quickCheck": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "integrityCheck": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "journalMode": { "const": "wal" },
+        "foreignKeyViolationCount": { "type": "integer", "minimum": 0 },
+        "userVersion": { "type": "integer", "minimum": 0 },
+        "eventCount": { "type": "integer", "minimum": 0 },
+        "bootRelease": { "$ref": "#/$defs/bootRelease" },
+        "controlCommand": { "$ref": "#/$defs/controlCommandStorage" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "bootRelease": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rowCount", "latestGeneration", "latestTestedCommit", "latestDeployedCommit", "latestConfigRevision", "latestSchemaRevision", "latestModelRevision", "latestStartedAtMs", "latestCompletedAtMs", "latestClean", "latestBlockerCode", "allRowsClean", "cleanCompletedCount", "crashPendingCount", "crashPendingGenerations", "allRowsIdentityValid", "expectedLatestLifecycle", "latestLifecycleState", "expectedCrashPendingGenerations", "lifecycleExpectationMet", "passed"],
+      "properties": {
+        "rowCount": { "type": "integer", "minimum": 0 },
+        "latestGeneration": { "type": ["integer", "null"], "minimum": 0 },
+        "latestTestedCommit": { "type": ["string", "null"] },
+        "latestDeployedCommit": { "type": ["string", "null"] },
+        "latestConfigRevision": { "type": ["string", "null"] },
+        "latestSchemaRevision": { "type": ["string", "null"] },
+        "latestModelRevision": { "type": ["string", "null"] },
+        "latestStartedAtMs": { "type": ["integer", "null"], "minimum": 0 },
+        "latestCompletedAtMs": { "type": ["integer", "null"], "minimum": 0 },
+        "latestClean": { "type": ["boolean", "null"] },
+        "latestBlockerCode": { "type": ["string", "null"] },
+        "allRowsClean": { "type": "boolean" },
+        "cleanCompletedCount": { "type": "integer", "minimum": 0 },
+        "crashPendingCount": { "type": "integer", "minimum": 0 },
+        "crashPendingGenerations": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 1 } },
+        "allRowsIdentityValid": { "type": "boolean" },
+        "expectedLatestLifecycle": { "enum": ["CLEAN_COMPLETED", "CRASH_PENDING"] },
+        "latestLifecycleState": { "enum": ["CLEAN_COMPLETED", "CRASH_PENDING", "INVALID"] },
+        "expectedCrashPendingGenerations": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 1 } },
+        "lifecycleExpectationMet": { "type": "boolean" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "controlCommandStorage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["idempotencyKey", "durableReceiptObserved", "durableRejectionAuditObserved", "rejectionCode", "rejectionActorSource", "checkpointControlRevision", "checkpointControlGeneration", "passed"],
+      "properties": {
+        "idempotencyKey": { "type": ["string", "null"], "maxLength": 128 },
+        "durableReceiptObserved": { "type": "boolean" },
+        "durableRejectionAuditObserved": { "type": "boolean" },
+        "rejectionCode": { "type": ["string", "null"] },
+        "rejectionActorSource": { "enum": ["loopback", "cloudflare-access", null] },
+        "checkpointControlRevision": { "type": ["integer", "null"], "minimum": 0 },
+        "checkpointControlGeneration": { "type": ["integer", "null"], "minimum": 0 },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "fileState": {
+      "type": "object", "additionalProperties": false,
+      "required": ["databaseBytes", "walBytes", "shmBytes"],
+      "properties": {
+        "databaseBytes": { "type": "integer", "minimum": 0 },
+        "walBytes": { "type": "integer", "minimum": 0 },
+        "shmBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["preLaunch", "samples", "database", "wal", "shm", "integrity"],
+      "properties": {
+        "preLaunch": { "$ref": "#/$defs/fileState" },
+        "samples": { "type": "integer", "minimum": 0 },
+        "database": { "$ref": "#/$defs/growth" },
+        "wal": { "$ref": "#/$defs/growth" },
+        "shm": { "$ref": "#/$defs/growth" },
+        "integrity": { "$ref": "#/$defs/integrity" }
+      }
+    },
+    "managedInventoryEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "componentId", "componentProjectionIndex"],
+      "properties": {
+        "source": { "const": "PRODUCT_RUNTIME_COMPONENT_PROJECTION" },
+        "componentId": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "componentProjectionIndex": { "type": "integer", "minimum": 0, "maximum": 13 }
+      }
+    },
+    "managedInventoryEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "owner", "canonicalComponentIds", "inventoryState", "evidence", "reasonCode"],
+      "properties": {
+        "identity": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "owner": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "canonicalComponentIds": { "type": "array", "maxItems": 14, "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 120 } },
+        "inventoryState": { "enum": ["EVIDENCE_PRESENT", "OWNER_GATED", "NOT_CONFIGURED", "MISSING"] },
+        "evidence": { "type": ["array", "null"], "maxItems": 14, "items": { "$ref": "#/$defs/managedInventoryEvidence" } },
+        "reasonCode": { "type": ["string", "null"], "maxLength": 200 }
+      }
+    },
+    "managedInventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "expectedIdentityCount", "mappedIdentityCount", "evidencePresentCount", "ownerGatedCount", "notConfiguredCount", "missingCount", "canonicalComponentCount", "referencedCanonicalComponentCount", "observedCanonicalComponentCount", "entries"],
+      "properties": {
+        "schemaVersion": { "const": "i00-managed-inventory.v1" },
+        "expectedIdentityCount": { "const": 33 },
+        "mappedIdentityCount": { "type": "integer", "minimum": 0, "maximum": 33 },
+        "evidencePresentCount": { "type": "integer", "minimum": 0, "maximum": 33 },
+        "ownerGatedCount": { "type": "integer", "minimum": 0, "maximum": 33 },
+        "notConfiguredCount": { "type": "integer", "minimum": 0, "maximum": 33 },
+        "missingCount": { "type": "integer", "minimum": 0, "maximum": 33 },
+        "canonicalComponentCount": { "const": 14 },
+        "referencedCanonicalComponentCount": { "const": 14 },
+        "observedCanonicalComponentCount": { "const": 14 },
+        "entries": { "type": "array", "minItems": 33, "maxItems": 33, "items": { "$ref": "#/$defs/managedInventoryEntry" } }
+      }
+    },
+    "canonicalComponentEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["componentId", "owner", "observedLifecycle", "capability", "blocker"],
+      "properties": {
+        "componentId": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "owner": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "observedLifecycle": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "capability": { "type": "string", "minLength": 3, "maxLength": 80 },
+        "blocker": { "type": ["string", "null"], "maxLength": 300 }
+      }
+    },
+    "productControlEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["controlId", "backendCommandId", "wiringState", "owner", "authority", "disabledReason"],
+      "properties": {
+        "controlId": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "backendCommandId": { "type": "string", "minLength": 3, "maxLength": 100 },
+        "wiringState": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "owner": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "authority": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "disabledReason": { "type": ["string", "null"], "maxLength": 300 }
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "capturedAtUtc", "liveStatus", "readyStatus", "readyClassification", "tradeReadyStatus", "tradeReadyClassification", "healthSemanticsValid", "legacyHealthStatus", "stateStatus", "stateNowMs", "eventsCountStatus", "eventsCount", "basisStatus", "basisLastBookTs", "basisLastMarkTs", "volumeStatus", "volumeLastBookTs", "volumeLastTradeTs", "volumeTradeMessages", "productSupervisorStatus", "productRevision", "runtimeGeneration", "controlGeneration", "testedCommitProjection", "deployedCommitProjection", "configRevisionProjection", "schemaRevisionProjection", "modelRevisionProjection", "deploymentFrozenProjection", "exposureStateProjection", "ambiguityStateProjection", "recoveryStateProjection", "opsInterlockState", "opsInterlockBlocksNewEntries", "opsExternalActionAuthorization", "reconciliationStatus", "reconciliationBlocksNewExposure", "reconciliationReasonCodes", "restartControlWiringState", "restartControlRevision", "managedInventory", "canonicalComponents", "productControls", "canonicalRuntimeEvidenceValid", "opsProjectionValid", "bootRevisionProjectionValid", "qComponentPresent", "qAdvisoryAction", "qTruthLabel", "qCapability", "qAuthority", "qCapitalRelevance", "qControlCount", "tradeReadyProjection", "qProjectionValid", "contentSha256"],
+      "properties": {
+        "label": { "enum": ["START", "END"] },
+        "capturedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+        "liveStatus": { "const": 200 },
+        "readyStatus": { "const": 503 },
+        "readyClassification": { "const": "HONEST_NOT_READY_503" },
+        "tradeReadyStatus": { "const": 503 },
+        "tradeReadyClassification": { "const": "HONEST_NOT_READY_503" },
+        "healthSemanticsValid": { "type": "boolean" },
+        "legacyHealthStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "stateStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "stateNowMs": { "type": ["integer", "null"], "minimum": 0 },
+        "eventsCountStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "eventsCount": { "type": ["integer", "null"], "minimum": 0 },
+        "basisStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "basisLastBookTs": { "type": ["integer", "null"], "minimum": 0 },
+        "basisLastMarkTs": { "type": ["integer", "null"], "minimum": 0 },
+        "volumeStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "volumeLastBookTs": { "type": ["integer", "null"], "minimum": 0 },
+        "volumeLastTradeTs": { "type": ["integer", "null"], "minimum": 0 },
+        "volumeTradeMessages": { "type": ["integer", "null"], "minimum": 0 },
+        "productSupervisorStatus": { "type": "integer", "minimum": 0, "maximum": 599 },
+        "productRevision": { "type": ["string", "null"] },
+        "runtimeGeneration": { "type": ["integer", "null"], "minimum": 0 },
+        "controlGeneration": { "type": ["integer", "null"], "minimum": 0 },
+        "testedCommitProjection": { "type": ["string", "null"] },
+        "deployedCommitProjection": { "type": ["string", "null"] },
+        "configRevisionProjection": { "type": ["string", "null"] },
+        "schemaRevisionProjection": { "type": ["string", "null"] },
+        "modelRevisionProjection": { "type": ["string", "null"] },
+        "deploymentFrozenProjection": { "type": ["boolean", "string", "null"] },
+        "exposureStateProjection": { "enum": ["NONE", "ACTIVE", "AMBIGUOUS", "RECOVERY_REQUIRED", "UNKNOWN", null] },
+        "ambiguityStateProjection": { "enum": ["NONE", "AMBIGUOUS", "UNKNOWN", null] },
+        "recoveryStateProjection": { "enum": ["NONE", "RECOVERY_REQUIRED", "UNKNOWN", null] },
+        "opsInterlockState": { "enum": ["OPS_INTERLOCK_CLEAR", "OPS_INTERLOCK_BLOCKED", null] },
+        "opsInterlockBlocksNewEntries": { "type": ["boolean", "null"] },
+        "opsExternalActionAuthorization": { "enum": ["NONE", null] },
+        "reconciliationStatus": { "type": ["string", "null"] },
+        "reconciliationBlocksNewExposure": { "type": ["boolean", "null"] },
+        "reconciliationReasonCodes": { "type": ["array", "null"], "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 160 } },
+        "restartControlWiringState": { "type": ["string", "null"] },
+        "restartControlRevision": { "type": ["string", "null"] },
+        "managedInventory": { "$ref": "#/$defs/managedInventory" },
+        "canonicalComponents": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "$ref": "#/$defs/canonicalComponentEvidence" } },
+        "productControls": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/productControlEvidence" } },
+        "canonicalRuntimeEvidenceValid": { "const": true },
+        "opsProjectionValid": { "type": "boolean" },
+        "bootRevisionProjectionValid": { "type": "boolean" },
+        "qComponentPresent": { "type": "boolean" },
+        "qAdvisoryAction": { "type": ["string", "null"] },
+        "qTruthLabel": { "type": ["string", "null"] },
+        "qCapability": { "type": ["string", "null"] },
+        "qAuthority": { "type": ["string", "null"] },
+        "qCapitalRelevance": { "type": ["string", "null"] },
+        "qControlCount": { "type": ["integer", "null"], "minimum": 0 },
+        "tradeReadyProjection": { "type": ["string", "null"] },
+        "qProjectionValid": { "type": "boolean" },
+        "contentSha256": { "$ref": "#/$defs/sha" }
+      }
+    },
+    "shutdown": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "signal", "exitCode", "exitSignal", "durationMs", "cleanLogMarkerObserved", "stdoutSha256", "stderrSha256", "telemetrySha256", "logOverflow", "passed"],
+      "properties": {
+        "mode": { "enum": ["GRACEFUL", "UNCLEAN_CRASH"] },
+        "signal": { "enum": ["SIGTERM", "SIGKILL"] },
+        "exitCode": { "type": ["integer", "null"] },
+        "exitSignal": { "type": ["string", "null"] },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "cleanLogMarkerObserved": { "type": "boolean" },
+        "stdoutSha256": { "$ref": "#/$defs/sha" },
+        "stderrSha256": { "$ref": "#/$defs/sha" },
+        "telemetrySha256": { "$ref": "#/$defs/sha" },
+        "logOverflow": { "type": "boolean" },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "phase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["phaseId", "bootGeneration", "startedAtUtc", "endedAtUtc", "durationSeconds", "snapshots", "http", "websocket", "process", "storage", "shutdown"],
+      "properties": {
+        "phaseId": { "enum": ["CANONICAL_RESTART_GATE", "UNCLEAN_TERMINATION", "POST_CRASH_RECOVERY"] },
+        "bootGeneration": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "startedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+        "endedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+        "durationSeconds": { "type": "number", "minimum": 0 },
+        "snapshots": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/snapshot" } },
+        "http": { "$ref": "#/$defs/http" },
+        "websocket": { "$ref": "#/$defs/websocket" },
+        "process": { "$ref": "#/$defs/process" },
+        "storage": { "$ref": "#/$defs/storage" },
+        "shutdown": { "$ref": "#/$defs/shutdown" }
+      }
+    },
+    "continuity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sameDataDirectory", "firstCleanEventCount", "recoveredEventCount", "eventCountNondecreasing", "gracefulStopsClean", "gracefulSocketsReceived1012", "crashSocketsClosedAbnormally", "databaseIntegrityOnReadableStops", "bootGenerationsOneTwoThree", "testedShaAllBoots", "deployedShaAbsentAllBoots", "opsReadbackNotFrozenAllBoots", "opsInterlockHonestAllBoots", "canonicalRestartOwnerGateProven", "uncleanRecoveryProven", "passed", "reasonCodes"],
+      "properties": {
+        "sameDataDirectory": { "const": true },
+        "firstCleanEventCount": { "type": "integer", "minimum": 0 },
+        "recoveredEventCount": { "type": "integer", "minimum": 0 },
+        "eventCountNondecreasing": { "type": "boolean" },
+        "gracefulStopsClean": { "type": "boolean" },
+        "gracefulSocketsReceived1012": { "type": "boolean" },
+        "crashSocketsClosedAbnormally": { "type": "boolean" },
+        "databaseIntegrityOnReadableStops": { "type": "boolean" },
+        "bootGenerationsOneTwoThree": { "type": "boolean" },
+        "testedShaAllBoots": { "type": "boolean" },
+        "deployedShaAbsentAllBoots": { "type": "boolean" },
+        "opsReadbackNotFrozenAllBoots": { "type": "boolean" },
+        "opsInterlockHonestAllBoots": { "type": "boolean" },
+        "canonicalRestartOwnerGateProven": { "type": "boolean" },
+        "uncleanRecoveryProven": { "type": "boolean" },
+        "passed": { "type": "boolean" },
+        "reasonCodes": { "type": "array", "items": { "type": "string", "minLength": 3, "maxLength": 160 } }
+      }
+    },
+    "restartBarrier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["exposureState", "ambiguityState", "recoveryState", "opsInterlockState", "opsInterlockBlocksNewEntries", "reconciliationStatus", "reconciliationBlocksNewExposure", "reconciliationReasonCodes", "readyStatus", "tradeReadyStatus"],
+      "properties": {
+        "exposureState": { "const": "UNKNOWN" },
+        "ambiguityState": { "const": "UNKNOWN" },
+        "recoveryState": { "const": "UNKNOWN" },
+        "opsInterlockState": { "const": "OPS_INTERLOCK_BLOCKED" },
+        "opsInterlockBlocksNewEntries": { "const": true },
+        "reconciliationStatus": { "const": "UNAVAILABLE" },
+        "reconciliationBlocksNewExposure": { "const": true },
+        "reconciliationReasonCodes": { "type": "array", "contains": { "const": "RECONCILIATION_TRUTH_UNAVAILABLE" }, "minContains": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 160 } },
+        "readyStatus": { "const": 503 },
+        "tradeReadyStatus": { "const": 503 }
+      }
+    },
+    "canonicalRestart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["controlId", "authentication", "operatorPayloadSent", "previewStatus", "previewId", "previewDigest", "previewSynthetic", "submitStatus", "idempotencyKey", "resultStatus", "commandId", "correlationId", "receiptId", "resultSynthetic", "resultBeforeSha256", "resultAfterSha256", "resultStateUnchanged", "resultBeforeRevision", "resultAfterRevision", "resultBeforeGeneration", "resultAfterGeneration", "beforeBarrier", "afterBarrier", "disposition", "managedRestartAcceptance", "durableReceiptObserved", "durableRejectionAuditObserved", "rejectionCode", "controlGenerationAdvanced", "runtimeGenerationAdvanced", "effectGenerationAdvanced", "webSocketClose1012Observed", "barrierPreserved", "passed"],
+      "properties": {
+        "controlId": { "const": "component.engine-supervisor.restart" },
+        "authentication": { "const": "SERVER_DERIVED_LOOPBACK" },
+        "operatorPayloadSent": { "const": false },
+        "previewStatus": { "const": 200 },
+        "previewId": { "type": "string", "pattern": "^prv_[a-f0-9]{64}$" },
+        "previewDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "previewSynthetic": { "const": false },
+        "submitStatus": { "const": 200 },
+        "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 128 },
+        "resultStatus": { "const": "REJECTED_STATE" },
+        "commandId": { "type": "string", "minLength": 8, "maxLength": 160 },
+        "correlationId": { "type": "string", "minLength": 8, "maxLength": 160 },
+        "receiptId": { "type": "null" },
+        "resultSynthetic": { "const": false },
+        "resultBeforeSha256": { "$ref": "#/$defs/sha" },
+        "resultAfterSha256": { "$ref": "#/$defs/sha" },
+        "resultStateUnchanged": { "const": true },
+        "resultBeforeRevision": { "type": "integer", "minimum": 0 },
+        "resultAfterRevision": { "type": "integer", "minimum": 0 },
+        "resultBeforeGeneration": { "type": "integer", "minimum": 0 },
+        "resultAfterGeneration": { "type": "integer", "minimum": 0 },
+        "beforeBarrier": { "$ref": "#/$defs/restartBarrier" },
+        "afterBarrier": { "$ref": "#/$defs/restartBarrier" },
+        "disposition": { "const": "OWNER_GATED" },
+        "managedRestartAcceptance": { "const": "NOT_PROVEN" },
+        "durableReceiptObserved": { "const": false },
+        "durableRejectionAuditObserved": { "const": true },
+        "rejectionCode": { "const": "RESTART_EXPOSURE_NONE_NOT_PROVEN" },
+        "controlGenerationAdvanced": { "const": false },
+        "runtimeGenerationAdvanced": { "const": false },
+        "effectGenerationAdvanced": { "const": false },
+        "webSocketClose1012Observed": { "const": true },
+        "barrierPreserved": { "const": true },
+        "passed": { "const": true }
+      }
+    },
+    "uncleanRecovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["terminationSignal", "uncleanBootGeneration", "recoveryBootGeneration", "walBytesAfterSigkill", "shmBytesAfterSigkill", "walBytesBeforeRecoveryLaunch", "shmBytesBeforeRecoveryLaunch", "databaseOpenedByHarnessBetweenCrashAndRecovery", "applicationRuntimeFirstRecoveryOpen", "crashPendingGeneration", "crashPendingBootPreserved", "recoveryLatestLifecycleState", "recoveryWalRemovedOnCleanClose", "readinessHonestAfterRecovery", "reconciliationStillBlocksAfterRecovery", "testedShaPreserved", "deployedShaAbsent", "quickCheck", "integrityCheck", "passed"],
+      "properties": {
+        "terminationSignal": { "const": "SIGKILL" },
+        "uncleanBootGeneration": { "const": 2 },
+        "recoveryBootGeneration": { "const": 3 },
+        "walBytesAfterSigkill": { "type": "integer", "minimum": 1 },
+        "shmBytesAfterSigkill": { "type": "integer", "minimum": 0 },
+        "walBytesBeforeRecoveryLaunch": { "type": "integer", "minimum": 1 },
+        "shmBytesBeforeRecoveryLaunch": { "type": "integer", "minimum": 0 },
+        "databaseOpenedByHarnessBetweenCrashAndRecovery": { "const": false },
+        "applicationRuntimeFirstRecoveryOpen": { "const": true },
+        "crashPendingGeneration": { "const": 2 },
+        "crashPendingBootPreserved": { "const": true },
+        "recoveryLatestLifecycleState": { "const": "CLEAN_COMPLETED" },
+        "recoveryWalRemovedOnCleanClose": { "const": true },
+        "readinessHonestAfterRecovery": { "const": true },
+        "reconciliationStillBlocksAfterRecovery": { "const": true },
+        "testedShaPreserved": { "const": true },
+        "deployedShaAbsent": { "const": true },
+        "quickCheck": { "const": "ok" },
+        "integrityCheck": { "const": "ok" },
+        "passed": { "const": true }
+      }
+    },
+    "limitation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metric", "status", "reason"],
+      "properties": {
+        "metric": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "status": { "enum": ["NOT_CONFIGURED", "OWNER_GATED", "UNKNOWN"] },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+      }
+    },
+    "sloCheck": {
+      "type": "object", "additionalProperties": false,
+      "required": ["metric", "unit", "observed", "soft", "hard", "status", "reason"],
+      "properties": {
+        "metric": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "observed": { "$ref": "#/$defs/nullableNumber" },
+        "soft": { "type": "number" },
+        "hard": { "type": "number" },
+        "status": { "enum": ["PASS", "DEGRADED", "BLOCKED", "NOT_CONFIGURED"] },
+        "reason": { "type": "string", "minLength": 3, "maxLength": 500 }
+      }
+    },
+    "slo": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "checks", "invariantFailures", "overall", "degradationVisibility", "productionClaim"],
+      "properties": {
+        "scope": { "const": "LOCAL_PROXY_INITIAL_GATES" },
+        "checks": { "type": "array", "minItems": 8, "items": { "$ref": "#/$defs/sloCheck" } },
+        "invariantFailures": { "type": "array", "items": { "type": "string", "minLength": 3, "maxLength": 160 } },
+        "overall": { "enum": ["PASS", "DEGRADED", "BLOCKED"] },
+        "degradationVisibility": { "enum": ["NO_CAPACITY_BREACH", "CANONICAL_NON_GREEN_VISIBLE", "FALSE_GREEN_BLOCKED"] },
+        "productionClaim": { "const": "UNKNOWN" }
+      }
+    },
+    "secretFinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact", "code", "line"],
+      "properties": {
+        "artifact": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "code": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "artifacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["receiptRelativePath", "receiptWriteMode", "schemaRelativePath", "schemaSha256", "secretScan"],
+      "properties": {
+        "receiptRelativePath": { "type": "string", "pattern": "^evidence/" },
+        "receiptWriteMode": { "const": "IMMUTABLE_CREATE_ONLY" },
+        "schemaRelativePath": { "const": "schema.v1.json" },
+        "schemaSha256": { "$ref": "#/$defs/sha" },
+        "secretScan": {
+          "type": "object", "additionalProperties": false,
+          "required": ["artifactsScanned", "findings", "passed"],
+          "properties": {
+            "artifactsScanned": { "type": "integer", "minimum": 1 },
+            "findings": { "type": "array", "items": { "$ref": "#/$defs/secretFinding" } },
+            "passed": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

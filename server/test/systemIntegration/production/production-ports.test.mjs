@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  PRODUCTION_SOURCE_REGISTRY_RECORDS,
   createProductionSystemIntegrationPorts,
+  validateProductionSourceRegistryRecords,
 } from '../../../dist/systemIntegration/production/index.js';
+import {
+  SourceObservationTracker,
+} from '../../../dist/systemIntegration/production/temporal.js';
 
 const START = Date.UTC(2026, 6, 12, 12, 0, 0);
 
@@ -163,10 +168,70 @@ test('factory construction is inert and exposes only passive public source proje
   assert.deepEqual(Object.keys(world.ports.components).sort(), [
     'public-spot-source',
     'public-usdm-source',
+    'q-inference',
   ]);
+  const q = world.ports.components['q-inference'].readComponentSnapshot();
+  assert.equal(q.readiness, 'STOPPED');
+  assert.ok(q.releaseStatuses.includes('NOT_CONFIGURED'));
   assert.equal(world.ports.components['intelligence-runtime'], undefined);
   assert.equal(world.ports.components['market-intelligence'], undefined);
   assert.equal(world.ports.components['capital-supervision'], undefined);
+  assert.equal(world.ports.sourceRegistry.records.length, 7);
+  assert.equal(Object.isFrozen(world.ports.sourceRegistry), true);
+  assert.deepEqual(
+    world.ports.sourceRegistry.records.map((record) => record.semanticStream).sort(),
+    PRODUCTION_SOURCE_REGISTRY_RECORDS.map((record) => record.semanticStream).sort(),
+  );
+});
+
+test('production source admission rejects duplicate, incomplete, or counterfeit ownership before lifecycle use', () => {
+  const clock = new ManualClock();
+  const duplicate = [
+    ...PRODUCTION_SOURCE_REGISTRY_RECORDS,
+    { ...PRODUCTION_SOURCE_REGISTRY_RECORDS[6], sourceId: 'competing-usdm-liquidation' },
+  ];
+  const inert = {
+    feeds: {}, pairCount: 0,
+    async init() { throw new Error('must remain inert'); },
+    start() { throw new Error('must remain inert'); },
+    stop() { throw new Error('must remain inert'); },
+    allRows() { return []; },
+    priceUpdatedAt() { return null; },
+    markEventTimestamp() { return null; },
+  };
+  const strategy = {
+    async start() { throw new Error('must remain inert'); },
+    stop() { throw new Error('must remain inert'); },
+    connectionStatus() { throw new Error('must remain inert'); },
+    integrationSnapshot() { throw new Error('must remain inert'); },
+  };
+  assert.throws(
+    () => validateProductionSourceRegistryRecords(clock, duplicate),
+    /DUPLICATE_SEMANTIC_PRODUCER/,
+  );
+  assert.throws(
+    () => validateProductionSourceRegistryRecords(clock, PRODUCTION_SOURCE_REGISTRY_RECORDS.slice(0, -1)),
+    /SOURCE_REGISTRY_INCOMPLETE/,
+  );
+  for (const mutation of [
+    (row) => ({ ...row, endpointClass: 'REST' }),
+    (row) => ({ ...row, consumers: ['engine-supervisor'] }),
+    (row) => ({ ...row, physicalProducer: { ...row.physicalProducer, producerId: 'CounterfeitRuntime' } }),
+    (row) => ({ ...row, physicalProducer: { ...row.physicalProducer, ownerPath: 'server/src/binance/liquidations.ts' } }),
+  ]) {
+    const counterfeit = structuredClone(PRODUCTION_SOURCE_REGISTRY_RECORDS);
+    counterfeit[6] = mutation(counterfeit[6]);
+    assert.throws(
+      () => validateProductionSourceRegistryRecords(clock, counterfeit),
+      /SOURCE_REGISTRY_CANONICAL_MISMATCH/,
+    );
+  }
+  const input = { clock, market: inert, basis: strategy, volume: strategy };
+  const ignoredLegacyOverride = createProductionSystemIntegrationPorts({
+    ...input,
+    sourceRegistryRecords: duplicate,
+  });
+  assert.deepEqual(ignoredLegacyOverride.sourceRegistry.records, PRODUCTION_SOURCE_REGISTRY_RECORDS);
 });
 
 test('empty uninitialized market cannot claim source or universe readiness', async () => {
@@ -213,6 +278,200 @@ test('public Spot and USD-M become LIVE_PUBLIC only with connected fresh raw eve
   );
 });
 
+test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge readiness without Q', async () => {
+  const world = createWorld();
+  const originalAllRows = world.market.allRows;
+  const originalPriceUpdatedAt = world.market.priceUpdatedAt;
+  const originalMarkEventTimestamp = world.market.markEventTimestamp;
+  let allRowsReads = 0;
+  let priceTimestampReads = 0;
+  let markTimestampReads = 0;
+  world.market.allRows = function countedAllRows() {
+    allRowsReads += 1;
+    return originalAllRows.call(this);
+  };
+  world.market.priceUpdatedAt = function countedPriceUpdatedAt(symbol) {
+    priceTimestampReads += 1;
+    return originalPriceUpdatedAt.call(this, symbol);
+  };
+  world.market.markEventTimestamp = function countedMarkEventTimestamp(symbol) {
+    markTimestampReads += 1;
+    return originalMarkEventTimestamp.call(this, symbol);
+  };
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+
+  await world.ports.runtimes.intelligenceRuntime.start();
+  const universe = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(universe.running, true);
+  assert.equal(universe.timestamp.sourceTimeMs, START - 250);
+  assert.equal(allRowsReads, 2);
+  assert.equal(priceTimestampReads, 2);
+  assert.equal(markTimestampReads, 2);
+
+  await world.ports.runtimes.marketIntelligence.start();
+  const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(intelligence.running, true);
+  assert.equal(intelligence.timestamp.sourceTimeMs, START - 200);
+  await world.ports.runtimes.q.start();
+  assert.equal(world.ports.runtimes.q.health(world.ctx()).fatal.code, 'CHAMPION_UNAVAILABLE');
+
+  world.clock.now = START + 1_000;
+  world.spot.set('BTCUSDT', START + 900);
+  world.usdm.set('BTCUSDT', START + 950);
+  const held = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(held.timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 4);
+
+  world.clock.now = START + 5_000;
+  world.spot.set('BTCUSDT', START + 4_900);
+  world.usdm.set('BTCUSDT', START + 4_950);
+  const advanced = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(advanced.timestamp.sourceTimeMs, START + 4_950);
+  assert.ok(advanced.timestamp.receivedAtMs >= intelligence.timestamp.receivedAtMs);
+  assert.equal(allRowsReads, 5);
+
+  world.clock.now = START + 14_951;
+  const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(stale.timestamp, null);
+  assert.equal(allRowsReads, 6);
+});
+
+test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  assert.equal(
+    world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp.sourceTimeMs,
+    START - 200,
+  );
+  world.market.feeds['futures-markprice'] = 'closed';
+
+  const disconnected = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(disconnected.running, true);
+  assert.equal(disconnected.timestamp, null);
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp.sourceTimeMs, START - 250);
+});
+
+test('sibling intelligence probes share exactly one same-step refresh and never a later call', async () => {
+  const world = createWorld();
+  const originalAllRows = world.market.allRows;
+  let allRowsReads = 0;
+  world.market.allRows = function countedAllRows() {
+    allRowsReads += 1;
+    return originalAllRows.call(this);
+  };
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  const sameStep = world.ctx();
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(sameStep).timestamp.sourceTimeMs, START - 250);
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 2);
+
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 3);
+
+  world.ports.runtimes.intelligenceRuntime.health(sameStep);
+  const differentStep = { ...sameStep, correlationId: 'different-production-step' };
+  assert.equal(world.ports.runtimes.marketIntelligence.health(differentStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 5);
+
+  world.ports.runtimes.intelligenceRuntime.stop();
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  assert.equal(world.ports.runtimes.marketIntelligence.health(sameStep).timestamp.sourceTimeMs, START - 200);
+  assert.equal(allRowsReads, 6);
+});
+
+test('intelligence projection uses one supervisor-step clock for receipt and freshness truth', async () => {
+  const world = createWorld();
+  let clockReads = 0;
+  world.clock.nowMs = () => START + clockReads++;
+  world.market.rows = [{
+    symbol: 'BTCUSDT',
+    base: 'BTC',
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 60_000,
+    perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+
+  const ctx = world.ctx();
+  const health = world.ports.runtimes.intelligenceRuntime.health(ctx);
+  assert.equal(health.running, true);
+  assert.equal(health.timestamp.sourceTimeMs, START - 250);
+  assert.equal(health.timestamp.receivedAtMs, ctx.nowMs);
+  assert.ok(clockReads > 1);
+});
+
+test('source observation tracker fails closed when a concurrent step regresses behind receipt time', () => {
+  const tracker = new SourceObservationTracker();
+  tracker.beginGeneration(null);
+  const accepted = tracker.read(START - 100, START, 'public.test.source', 10_000);
+  assert.equal(accepted.receivedAtMs, START);
+  assert.equal(tracker.read(START - 100, START - 1, 'public.test.source', 10_000), null);
+  const recovered = tracker.read(START - 100, START + 1, 'public.test.source', 10_000);
+  assert.equal(recovered.receivedAtMs, START);
+});
+
+test('denied or disconnected public owners cannot admit intelligence readiness', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'closed';
+  world.market.feeds['futures-markprice'] = 'closed';
+  world.spot.set('BTCUSDT', START - 100);
+  world.usdm.set('BTCUSDT', START - 90);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp, null);
+  assert.equal(world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp, null);
+});
+
 test('disconnected transport never emits READY or LIVE_PUBLIC despite a fresh cached event', async () => {
   const world = createWorld();
   world.market.rows = [{ symbol: 'BTCUSDT', hasSpot: true, hasPerp: true }];
@@ -226,6 +485,31 @@ test('disconnected transport never emits READY or LIVE_PUBLIC despite a fresh ca
   assert.equal(source.releaseStatuses.includes('LIVE_PUBLIC'), false);
   assert.ok(source.blockerCodes.includes('SOURCE_TRANSPORT_DISCONNECTED'));
   assert.equal(world.ports.runtimes.market.health(world.ctx()).timestamp, null);
+});
+
+test('public retry cooldown and exhaustion remain explicit non-green source truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{ symbol: 'BTCUSDT', hasSpot: true, hasPerp: true }];
+  await startMarket(world);
+  world.spot.set('BTCUSDT', START - 100);
+
+  world.market.feeds['spot-miniticker'] = 'cooldown';
+  const coolingDown = world.ports.components['public-spot-source'].readComponentSnapshot();
+  assert.equal(coolingDown.domainObservedState, 'COOLDOWN');
+  assert.equal(coolingDown.sourceLifecycle, 'BACKING_OFF');
+  assert.equal(coolingDown.readiness, 'BLOCKED');
+  assert.ok(coolingDown.blockerCodes.includes('SOURCE_TRANSPORT_COOLDOWN'));
+  assert.equal(coolingDown.releaseStatuses.includes('LIVE_PUBLIC'), false);
+
+  world.market.feeds['spot-miniticker'] = 'exhausted';
+  world.clock.now = START + 20_000;
+  const exhausted = world.ports.components['public-spot-source'].readComponentSnapshot();
+  assert.equal(exhausted.domainObservedState, 'EXHAUSTED');
+  assert.equal(exhausted.sourceLifecycle, 'FAILED');
+  assert.equal(exhausted.readiness, 'BLOCKED');
+  assert.ok(exhausted.blockerCodes.includes('SOURCE_RETRY_BUDGET_EXHAUSTED'));
+  assert.equal(exhausted.blockerCodes.includes('SOURCE_TRANSPORT_DISCONNECTED'), false);
+  assert.equal(exhausted.releaseStatuses.includes('LIVE_PUBLIC'), false);
 });
 
 test('stale source evidence remains visible but is downgraded from live authority', async () => {

@@ -12,6 +12,7 @@ const OWNER = {
   'market-universe': 'INTELLIGENCE_RUNTIME',
   'intelligence-runtime': 'INTELLIGENCE_RUNTIME',
   'market-intelligence': 'MARKET_INTELLIGENCE',
+  'q-inference': 'Q_INFERENCE',
   'basis-engine': 'BASIS_ENGINE',
   'volume-engine': 'VOLUME_ENGINE',
   'capital-supervision': 'CAPITAL_SUPERVISION',
@@ -28,6 +29,7 @@ const FRESH_COMPONENTS = new Set([
   'market-universe',
   'intelligence-runtime',
   'market-intelligence',
+  'q-inference',
   'basis-engine',
   'volume-engine',
 ]);
@@ -189,6 +191,10 @@ export function summaries(over = {}) {
     ledger: {
       truthLabel: 'LIVE_PUBLIC',
       writable: true,
+      schemaCompatibilityState: 'AVAILABLE',
+      schemaCompatibilityReason: null,
+      currentSchemaVersion: 1,
+      rollbackFloor: 1,
       lastEventId: '100',
       lastPersistedAtMs: NOW - 5,
       checkpointRevision: 'ledger-rev-10',

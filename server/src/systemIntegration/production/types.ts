@@ -10,13 +10,20 @@ import type {
   CoreRuntimePorts,
   UtcClock,
 } from '../composition/types.js';
+import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
+import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
 
-export type ProductionFeedStatus = 'connecting' | 'open' | 'closed';
+export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
 export interface ProductionMarketRow {
   readonly symbol: string;
+  readonly base?: string;
   readonly hasSpot: boolean;
   readonly hasPerp: boolean;
+  readonly perpMark?: number | null;
+  readonly perpIndexPrice?: number | null;
+  readonly fundingRate?: number | null;
+  readonly nextFundingTime?: number | null;
 }
 
 /**
@@ -78,11 +85,14 @@ export interface ProductionSystemIntegrationInput {
   readonly market: ProductionMarketEnginePort;
   readonly basis: ProductionBasisRuntimePort;
   readonly volume: ProductionVolumeRuntimePort;
+  /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
+  readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
 }
 
 export interface ProductionSystemIntegrationPorts {
+  readonly sourceRegistry: Readonly<SystemSourceRegistrySnapshot>;
   readonly runtimes: CoreRuntimePorts;
   /** Only existing public Spot/USD-M projections are wired by this factory. */
   readonly components: ApplicationComponentReadPorts;

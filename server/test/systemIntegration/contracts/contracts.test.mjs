@@ -153,7 +153,8 @@ function liveComponent(overrides = {}) {
 
 test('canonical convergence vocabularies are closed and frozen', () => {
   assert.deepEqual(SYSTEM_SAFE_MODES, ['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY']);
-  assert.equal(SYSTEM_COMPONENT_IDS.length, 13);
+  assert.equal(SYSTEM_COMPONENT_IDS.length, 14);
+  assert.ok(SYSTEM_COMPONENT_IDS.includes('q-inference'));
   assert.ok(SYSTEM_COMPONENT_IDS.includes('execution-coordinator-validate-only'));
   assert.ok(SYSTEM_RELEASE_STATUSES.includes('SYNTHETIC_ONLY'));
   assert.ok(SYSTEM_TRUTH_LABELS.includes('DRY_RUN'));

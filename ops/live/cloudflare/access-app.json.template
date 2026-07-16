@@ -1,0 +1,28 @@
+{
+  "note": "Cloudflare Access self-hosted application template for the cosmos operator boundary. Placeholders are filled at the separately owner-authorized activation step via dashboard or API; this repository never mutates Cloudflare. After creating the app, copy its AUD tag into CF_ACCESS_AUD and the team domain into CF_ACCESS_TEAM_DOMAIN in /etc/cosmos/cosmos-app.env so the origin validates the Access JWT itself.",
+  "application": {
+    "name": "cosmos-operator-cockpit",
+    "type": "self_hosted",
+    "domain": "REPLACE_ME_APP_HOSTNAME",
+    "session_duration": "24h",
+    "auto_redirect_to_identity": true,
+    "http_only_cookie_attribute": true,
+    "enable_binding_cookie": true
+  },
+  "policies": [
+    {
+      "name": "operator-only",
+      "decision": "allow",
+      "include": [
+        { "email": { "email": "REPLACE_ME_OPERATOR_EMAIL" } }
+      ],
+      "require": [],
+      "exclude": []
+    }
+  ],
+  "boundary_invariants": [
+    "no public app or SSH ingress anywhere; administration goes through SSM Session Manager (§24.2)",
+    "the origin validates the Access JWT (team domain + AUD) and its own operator authorization on every request",
+    "adding operators is an owner decision recorded at activation time, never a default"
+  ]
+}

@@ -1,0 +1,28 @@
+# ops/live/systemd/cosmos-backup.service — one application-consistent backup.
+#
+# Fired by cosmos-backup.timer. Runs as the cosmos user: it needs read
+# access to the state store and write access to the backup directory,
+# nothing more.
+
+[Unit]
+Description=Cosmos application-consistent state store backup
+
+[Service]
+Type=oneshot
+User=cosmos
+Group=cosmos
+EnvironmentFile=/etc/cosmos/cosmos-backup.env
+ExecStart=/usr/local/lib/cosmos-ops/bin/backup.sh --env-file /etc/cosmos/cosmos-backup.env
+
+# --- hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cosmos /var/backups/cosmos
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cosmos-backup

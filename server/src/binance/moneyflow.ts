@@ -6,6 +6,8 @@
  * walk BACKWARD from now so a pagination cap keeps the most recent trades and
  * reports honest coverage instead of silently truncating the wrong end. */
 
+import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
+
 const API = 'https://api.binance.com';
 const MAX_CALLS = 60; // 60k aggTrades ceiling per refresh
 const WALK_TIMEOUT_MS = 20_000;
@@ -127,6 +129,7 @@ async function fetchAggTrades(symbol: string, endTime: number, signal: AbortSign
 }
 
 export async function fetchMoneyFlow(symbol: string, window: string): Promise<MoneyFlow | null> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('money flow unavailable');
   const safeSymbol = canonicalSymbol(symbol);
   const windowMs = FLOW_WINDOWS[window];
   if (!safeSymbol || !windowMs) return null;

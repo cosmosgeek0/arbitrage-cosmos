@@ -1,0 +1,31 @@
+# ops/live/systemd/cosmos-watchdog.service — one external watchdog pass.
+#
+# Fired by cosmos-watchdog.timer. The watchdog scripts are installed at
+# /usr/local/lib/cosmos-ops — deliberately OUTSIDE /opt/cosmos/current, so a
+# broken release can never disable its own supervisor. Runs as root because
+# its one privileged action is `systemctl restart` of the app/tunnel units;
+# everything else it does is read-only loopback probing.
+
+[Unit]
+Description=Cosmos external watchdog (single bounded check pass)
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/cosmos/cosmos-watchdog.env
+ExecStart=/usr/local/lib/cosmos-ops/bin/watchdog.sh --env-file /etc/cosmos/cosmos-watchdog.env
+
+# --- hardening (still root, but confined) ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/cosmos /var/backups/cosmos
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cosmos-watchdog

@@ -48,6 +48,10 @@ function digest(value: unknown): string {
   return createHash('sha256').update(canonical(value)).digest('hex');
 }
 
+function requiresRuntimePublication(mutation: Readonly<SystemControlMutation>): boolean {
+  return mutation.command === 'RESTART_COMPONENT' || mutation.command === 'SET_COMPONENT_STATE';
+}
+
 export function controlRequestDigest(request: Readonly<SystemControlMutationRequest>): string {
   return digest({
     expectedRevision: request.expectedRevision,
@@ -107,6 +111,36 @@ export class SystemControlService {
 
   snapshot(): Readonly<SystemControlState> {
     return this.stateValue;
+  }
+
+  /** Read-only access to the one durable control receipt owner. */
+  readResult(idempotencyKey: string): ReturnType<SystemControlServiceOptions['persistence']['findControlMutation']> {
+    return this.persistence.findControlMutation(idempotencyKey);
+  }
+
+  /**
+   * Synchronizes only a durability-proven L14 revision reservation. It cannot
+   * change mode, kill, intake, generation, or skip a revision, and therefore
+   * cannot act as a second control mutation path.
+   */
+  synchronizeReservedRevision(state: Readonly<SystemControlState>): boolean {
+    if (!validControlState(state)) return false;
+    const current = this.stateValue;
+    const unchangedProjection = state.generation === current.generation
+      && state.safeMode === current.safeMode
+      && state.killSwitchEngaged === current.killSwitchEngaged
+      && state.intakePaused === current.intakePaused;
+    const exactReplay = unchangedProjection
+      && state.revision === current.revision
+      && state.updatedAtMs === current.updatedAtMs
+      && state.correlationId === current.correlationId;
+    if (exactReplay) return true;
+    if (!unchangedProjection
+      || state.revision !== current.revision + 1
+      || state.updatedAtMs < current.updatedAtMs
+      || !/^l14\.cmd_[a-f0-9]{16,64}$/.test(state.correlationId)) return false;
+    this.stateValue = freezeState(state);
+    return true;
   }
 
   private async recordRejection(
@@ -215,6 +249,60 @@ export class SystemControlService {
     });
   }
 
+  private runtimePublicationPendingFailure(
+    request: Readonly<SystemControlMutationRequest>,
+  ): Readonly<StructuredFailure> {
+    return this.failure(
+      request,
+      SYSTEM_CONTROL_FAILURE_CODES.CONTROL_COMMITTED_RUNTIME_PENDING,
+      'The control intent is durable, but managed runtime publication is not yet durably confirmed.',
+      true,
+      'Retry the exact request with the same Idempotency-Key after canonical effect readback is available.',
+    );
+  }
+
+  private async publishPendingRuntimeEffect(
+    request: Readonly<SystemControlMutationRequest>,
+    actor: Readonly<SystemControlActor>,
+    receipt: Readonly<SystemControlMutationReceipt>,
+    requestDigest: string,
+    newlyCommitted: boolean,
+  ): Promise<SystemControlMutationResult> {
+    if (!receipt.applied || !requiresRuntimePublication(request.mutation)) return ok(receipt);
+    try {
+      let readback = newlyCommitted
+        ? 'NOT_APPLIED'
+        : await this.composition.inspectCommittedPublication?.(request, receipt) ?? 'UNKNOWN';
+      if (readback === 'UNKNOWN') return fail(this.runtimePublicationPendingFailure(request));
+      if (readback === 'NOT_APPLIED') {
+        // The new commit was already admitted by the exact inspection that
+        // produced its durable receipt. Only a later replay needs a fresh
+        // applicability check before reissuing a proven-absent effect.
+        if (!newlyCommitted) {
+          const decision = await this.composition.inspectMutation(request.mutation, this.stateValue);
+          if (!decision || decision.ok !== true || decision.applied !== true) {
+            return fail(this.runtimePublicationPendingFailure(request));
+          }
+        }
+        await this.composition.publishCommitted(request, actor, receipt);
+        readback = await this.composition.inspectCommittedPublication?.(request, receipt) ?? 'UNKNOWN';
+        if (readback !== 'APPLIED') return fail(this.runtimePublicationPendingFailure(request));
+      }
+      if (typeof this.persistence.markControlRuntimePublished !== 'function') {
+        return fail(this.runtimePublicationPendingFailure(request));
+      }
+      await this.persistence.markControlRuntimePublished({
+        idempotencyKey: request.idempotencyKey,
+        requestDigest,
+        correlationId: receipt.after.correlationId,
+        occurredAtMs: receipt.after.updatedAtMs,
+      });
+      return ok(receipt);
+    } catch {
+      return fail(this.runtimePublicationPendingFailure(request));
+    }
+  }
+
   private validateRequest(
     request: Readonly<SystemControlMutationRequest>,
     actor: Readonly<SystemControlActor>,
@@ -302,6 +390,11 @@ export class SystemControlService {
       if (existing) {
         if (existing.requestDigest !== requestDigest) {
           return this.rejected(request, actor, this.failure(request, SYSTEM_CONTROL_FAILURE_CODES.IDEMPOTENCY_KEY_CONFLICT, 'Idempotency-Key was already used for different control intent.'));
+        }
+        if (requiresRuntimePublication(request.mutation)
+          && existing.receipt.applied
+          && existing.runtimePublication !== 'PUBLISHED') {
+          return this.publishPendingRuntimeEffect(request, actor, existing.receipt, requestDigest, false);
         }
         return ok(existing.receipt);
       }
@@ -398,10 +491,20 @@ export class SystemControlService {
       ));
     }
     if (persisted.kind === 'IDEMPOTENT_REPLAY') {
+      if (requiresRuntimePublication(request.mutation)
+        && persisted.receipt.applied
+        && persisted.runtimePublication !== 'PUBLISHED') {
+        return this.publishPendingRuntimeEffect(request, actor, persisted.receipt, requestDigest, false);
+      }
       return ok(persisted.receipt);
     }
 
     this.stateValue = freezeState(persisted.receipt.after);
+    if (requiresRuntimePublication(request.mutation)
+      && persisted.receipt.applied
+      && persisted.runtimePublication !== 'PUBLISHED') {
+      return this.publishPendingRuntimeEffect(request, actor, persisted.receipt, requestDigest, true);
+    }
     try {
       await this.composition.publishCommitted(request, actor, persisted.receipt);
     } catch {

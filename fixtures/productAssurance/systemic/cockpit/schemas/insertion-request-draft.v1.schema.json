@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:systemic:cockpit:insertion-request-draft:v1",
+  "title": "IP Assurance S5 Cockpit Machine-Checkable Insertion Rows v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactState",
+    "rows"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "artifactState": {
+      "const": "DRAFT_ONLY"
+    },
+    "rows": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "$ref": "#/$defs/requestRow"
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "texts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "requestRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "status",
+        "requestedOwner",
+        "targetSeam",
+        "reason",
+        "contract",
+        "tests",
+        "expectedBehavior",
+        "integrationState"
+      ],
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "status": {
+          "const": "DRAFT"
+        },
+        "requestedOwner": {
+          "enum": [
+            "I00_DIRECTOR",
+            "IP_CONTROL",
+            "IP_PROOF"
+          ]
+        },
+        "targetSeam": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "contract": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/telemetryContract"
+            },
+            {
+              "$ref": "#/$defs/resourceContract"
+            },
+            {
+              "$ref": "#/$defs/pageMatrixContract"
+            },
+            {
+              "$ref": "#/$defs/proofSweepContract"
+            },
+            {
+              "$ref": "#/$defs/assuranceContract"
+            }
+          ]
+        },
+        "tests": {
+          "$ref": "#/$defs/texts"
+        },
+        "expectedBehavior": {
+          "$ref": "#/$defs/text"
+        },
+        "integrationState": {
+          "const": "DIRECTOR_MOUNT_REQUIRED"
+        }
+      }
+    },
+    "telemetryContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "columns"
+      ],
+      "properties": {
+        "kind": {
+          "const": "TELEMETRY_COVERAGE_COLUMNS"
+        },
+        "columns": {
+          "$ref": "#/$defs/texts"
+        }
+      }
+    },
+    "resourceContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "categories",
+        "shedFirst",
+        "protectedSafetyOwners"
+      ],
+      "properties": {
+        "kind": {
+          "const": "RESOURCE_BACKPRESSURE_CATEGORIES"
+        },
+        "categories": {
+          "$ref": "#/$defs/texts"
+        },
+        "shedFirst": {
+          "$ref": "#/$defs/texts"
+        },
+        "protectedSafetyOwners": {
+          "$ref": "#/$defs/texts"
+        }
+      }
+    },
+    "pageMatrixContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "columns",
+        "rows"
+      ],
+      "properties": {
+        "kind": {
+          "const": "I17_PAGE_MATRIX"
+        },
+        "columns": {
+          "$ref": "#/$defs/texts"
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 18,
+          "maxItems": 18,
+          "items": {
+            "$ref": "#/$defs/pageRow"
+          }
+        }
+      }
+    },
+    "pageRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Page",
+        "Canonical APIs",
+        "Live/Synthetic/Unwired Status",
+        "Controls",
+        "Empty/Error Behavior",
+        "Acceptance Evidence",
+        "Remaining Blocker",
+        "routeKind",
+        "canonicalRoute",
+        "pageOwner"
+      ],
+      "properties": {
+        "Page": {
+          "$ref": "#/$defs/text"
+        },
+        "Canonical APIs": {
+          "$ref": "#/$defs/text"
+        },
+        "Live/Synthetic/Unwired Status": {
+          "const": "SYNTHETIC_ONLY | WIRED_FIXTURE | DIRECTOR_MOUNT_REQUIRED"
+        },
+        "Controls": {
+          "$ref": "#/$defs/text"
+        },
+        "Empty/Error Behavior": {
+          "$ref": "#/$defs/text"
+        },
+        "Acceptance Evidence": {
+          "$ref": "#/$defs/text"
+        },
+        "Remaining Blocker": {
+          "$ref": "#/$defs/text"
+        },
+        "routeKind": {
+          "enum": [
+            "CANONICAL_SURFACE",
+            "ACCOUNT_ALIAS"
+          ]
+        },
+        "canonicalRoute": {
+          "$ref": "#/$defs/surfaceId"
+        },
+        "pageOwner": {
+          "$ref": "#/$defs/surfaceId"
+        }
+      }
+    },
+    "proofSweepContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "cases"
+      ],
+      "properties": {
+        "kind": {
+          "const": "IP_PROOF_S5_BROWSER_SWEEP"
+        },
+        "cases": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/proofCase"
+          }
+        }
+      }
+    },
+    "proofCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caseId",
+        "input",
+        "expected"
+      ],
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "input": {
+          "$ref": "#/$defs/text"
+        },
+        "expected": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "assuranceContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "packetArtifacts",
+        "forbiddenClaims"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ASSURANCE_PACKET_FOLD"
+        },
+        "packetArtifacts": {
+          "$ref": "#/$defs/texts"
+        },
+        "forbiddenClaims": {
+          "$ref": "#/$defs/texts"
+        }
+      }
+    },
+    "surfaceId": {
+      "enum": [
+        "dashboard",
+        "control-room",
+        "account",
+        "markets",
+        "token",
+        "basis",
+        "volume",
+        "opportunities",
+        "borrow",
+        "execution",
+        "orders",
+        "positions",
+        "fills",
+        "pnl",
+        "risk",
+        "health",
+        "logs-ledger",
+        "notifications"
+      ]
+    }
+  }
+}

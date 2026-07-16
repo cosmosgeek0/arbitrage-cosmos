@@ -22,14 +22,23 @@ import {
   createManagedRuntimeComposition,
   type CoreRuntimePorts,
   type ManagedCompositionReadSnapshot,
+  type ManagedRestartCommandIdentity,
   type RuntimeHealthEvidence,
+  type ScheduledTask,
 } from '../composition/index.js';
 import {
+  SYSTEM_PERSISTENCE_LIMITS,
   SystemIntegrationLedgerAdapter,
   createInitialCheckpointState,
   failClosedRestartBarrier,
+  type LocalMutationAuthorityPosture,
   type PersistenceLoadResult,
+  type PersistedControlRuntimePublicationReference,
+  type PersistedRestartTruth,
   type RestartBarrierProjection,
+  type LedgerSchemaCompatibilityReadback,
+  type SystemLifecycleTruthReadPort,
+  type SystemRestartTruthRefreshEffectPort,
   type SystemIntegrationCheckpointState,
 } from '../persistence/index.js';
 import {
@@ -42,6 +51,7 @@ import {
   type SystemControlActor,
   type SystemControlCompositionDecision,
   type SystemControlCompositionPort,
+  type SystemControlRuntimeEffectReadback,
 } from '../controls/index.js';
 import {
   ValidateOnlyOrchestrator,
@@ -64,6 +74,7 @@ import {
 import type {
   ApplicationOwnerSummaries,
   ManagedRuntimeRestartResult,
+  SystemApplicationDrainBlockingReference,
   SystemApplicationDrainResult,
   SystemApplicationPhase,
   SystemApplicationStartResult,
@@ -72,6 +83,159 @@ import type {
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
+const MAX_UTC_MS = 4_102_444_800_000;
+const MAX_DRAIN_TRUTH_LEASE_MS = 60 * 60_000;
+const MIN_DRAIN_TRUTH_LEASE_MS = 5 * 60_000;
+const UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+const RESTART_TRUTH_STATES = new Set(['FRESH', 'STALE', 'UNKNOWN', 'UNAVAILABLE']);
+const DEFAULT_RESTART_TRUTH_REFRESH_INTERVAL_MS = Math.floor(
+  SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs / 2,
+);
+
+export type SystemIntegrationApplicationLifecycleOptions = SystemIntegrationApplicationOptions & Readonly<{
+  lifecycleTruth?: SystemLifecycleTruthReadPort;
+  restartTruthRefresh?: SystemRestartTruthRefreshEffectPort;
+}>;
+
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function validUtcMs(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && value <= MAX_UTC_MS;
+}
+
+function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>): boolean {
+  if (mutation.command === 'SET_SAFE_MODE') return mutation.safeMode === 'READ_ONLY';
+  if (mutation.command === 'SET_KILL_SWITCH') return mutation.engaged === true;
+  if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
+  return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
+}
+
+function failClosedObservedRestartTruth(nowMs: number): Readonly<PersistedRestartTruth> {
+  return Object.freeze({
+    publicSourceTruth: 'UNKNOWN',
+    accountTruth: 'UNAVAILABLE',
+    reconciliationTruth: 'UNKNOWN',
+    observedAtMs: nowMs,
+  });
+}
+
+function normalizedRestartTruth(value: unknown, nowMs: number): Readonly<PersistedRestartTruth> | null {
+  if (!plainRecord(value)
+    || !RESTART_TRUTH_STATES.has(String(value.publicSourceTruth))
+    || !RESTART_TRUTH_STATES.has(String(value.accountTruth))
+    || !RESTART_TRUTH_STATES.has(String(value.reconciliationTruth))
+    || !validUtcMs(value.observedAtMs)
+    || value.observedAtMs > nowMs) return null;
+  return Object.freeze({
+    publicSourceTruth: value.publicSourceTruth as PersistedRestartTruth['publicSourceTruth'],
+    accountTruth: value.accountTruth as PersistedRestartTruth['accountTruth'],
+    reconciliationTruth: value.reconciliationTruth as PersistedRestartTruth['reconciliationTruth'],
+    observedAtMs: value.observedAtMs,
+  });
+}
+
+function exactUtcSeconds(value: unknown): number | null {
+  if (typeof value !== 'string' || !UTC_SECONDS.test(value)) return null;
+  const parsed = Date.parse(value);
+  if (!validUtcMs(parsed)) return null;
+  return new Date(parsed).toISOString().replace('.000Z', 'Z') === value ? parsed : null;
+}
+
+function canonicalDrainTruthBlockers(
+  value: unknown,
+  nowMs: number,
+  localMutationAuthority: LocalMutationAuthorityPosture,
+): readonly string[] {
+  if (!plainRecord(value)
+    || value.source !== 'CANONICAL_SUPERVISOR_READBACK'
+    || !['NONE', 'ACTIVE', 'AMBIGUOUS', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(value.exposureState))
+    || !['NONE', 'AMBIGUOUS', 'UNKNOWN'].includes(String(value.ambiguityState))
+    || !['NONE', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(value.recoveryState))) {
+    return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_INVALID']);
+  }
+  const observedAtMs = exactUtcSeconds(value.observedAtUtc);
+  const validUntilMs = exactUtcSeconds(value.validUntilUtc);
+  if (observedAtMs === null || validUntilMs === null || validUntilMs <= observedAtMs) {
+    return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_INVALID']);
+  }
+  const leaseMs = validUntilMs - observedAtMs;
+  if (observedAtMs > nowMs) return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_CLOCK_SKEWED']);
+  if (nowMs - observedAtMs > SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs) {
+    return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_STALE']);
+  }
+  if (validUntilMs <= nowMs) return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_EXPIRED']);
+  if (leaseMs < MIN_DRAIN_TRUTH_LEASE_MS || leaseMs > MAX_DRAIN_TRUTH_LEASE_MS) {
+    return Object.freeze(['ORDINARY_DRAIN_CANONICAL_TRUTH_INVALID']);
+  }
+
+  const blockers = new Set<string>();
+  if (localMutationAuthority === 'UNKNOWN') blockers.add('ORDINARY_DRAIN_LOCAL_MUTATION_AUTHORITY_UNKNOWN');
+  if (localMutationAuthority === 'AMBIGUOUS') blockers.add('ORDINARY_DRAIN_LOCAL_MUTATION_AUTHORITY_AMBIGUOUS');
+  if (value.exposureState === 'ACTIVE') blockers.add('ORDINARY_DRAIN_EXPOSURE_ACTIVE');
+  if (value.exposureState === 'AMBIGUOUS') blockers.add('ORDINARY_DRAIN_EXPOSURE_AMBIGUOUS');
+  if (value.exposureState === 'RECOVERY_REQUIRED') blockers.add('ORDINARY_DRAIN_EXPOSURE_RECOVERY_REQUIRED');
+  if (value.ambiguityState === 'AMBIGUOUS') blockers.add('ORDINARY_DRAIN_AMBIGUITY_PRESENT');
+  if (value.recoveryState === 'RECOVERY_REQUIRED') blockers.add('ORDINARY_DRAIN_RECOVERY_REQUIRED');
+
+  if (localMutationAuthority === 'PRESENT') {
+    if (value.exposureState !== 'NONE') blockers.add('ORDINARY_DRAIN_STRONG_ZERO_EXPOSURE_NOT_PROVEN');
+    if (value.ambiguityState !== 'NONE') blockers.add('ORDINARY_DRAIN_AMBIGUITY_NOT_CLEARED');
+    if (value.recoveryState !== 'NONE') blockers.add('ORDINARY_DRAIN_RECOVERY_NOT_CLEARED');
+  }
+  return Object.freeze([...blockers].sort());
+}
+
+function canonicalRestartTruthBlockers(
+  value: unknown,
+  nowMs: number,
+  localMutationAuthority: LocalMutationAuthorityPosture,
+): readonly string[] {
+  if (!plainRecord(value)
+    || value.source !== 'CANONICAL_SUPERVISOR_READBACK'
+    || !['NONE', 'ACTIVE', 'AMBIGUOUS', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(value.exposureState))
+    || !['NONE', 'AMBIGUOUS', 'UNKNOWN'].includes(String(value.ambiguityState))
+    || !['NONE', 'RECOVERY_REQUIRED', 'UNKNOWN'].includes(String(value.recoveryState))) {
+    return Object.freeze(['RESTART_CANONICAL_TRUTH_INVALID']);
+  }
+  const observedAtMs = exactUtcSeconds(value.observedAtUtc);
+  const validUntilMs = exactUtcSeconds(value.validUntilUtc);
+  if (observedAtMs === null || validUntilMs === null || validUntilMs <= observedAtMs) {
+    return Object.freeze(['RESTART_CANONICAL_TRUTH_INVALID']);
+  }
+  const leaseMs = validUntilMs - observedAtMs;
+  if (observedAtMs > nowMs) return Object.freeze(['RESTART_CANONICAL_TRUTH_CLOCK_SKEWED']);
+  if (nowMs - observedAtMs > SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs) {
+    return Object.freeze(['RESTART_CANONICAL_TRUTH_STALE']);
+  }
+  if (validUntilMs <= nowMs) return Object.freeze(['RESTART_CANONICAL_TRUTH_EXPIRED']);
+  if (leaseMs < MIN_DRAIN_TRUTH_LEASE_MS || leaseMs > MAX_DRAIN_TRUTH_LEASE_MS) {
+    return Object.freeze(['RESTART_CANONICAL_TRUTH_INVALID']);
+  }
+
+  const blockers: string[] = [];
+  if (localMutationAuthority !== 'PROVEN_ABSENT') {
+    blockers.push('RESTART_LOCAL_MUTATION_AUTHORITY_NOT_PROVEN_ABSENT');
+  }
+  if (value.exposureState !== 'NONE') blockers.push('RESTART_EXPOSURE_NONE_NOT_PROVEN');
+  if (value.ambiguityState !== 'NONE') blockers.push('RESTART_AMBIGUITY_NONE_NOT_PROVEN');
+  if (value.recoveryState !== 'NONE') blockers.push('RESTART_RECOVERY_NONE_NOT_PROVEN');
+  return Object.freeze(blockers);
+}
+
+function localMutationAuthorityBlockers(
+  posture: LocalMutationAuthorityPosture,
+): readonly string[] {
+  if (posture === 'UNKNOWN') return Object.freeze(['ORDINARY_DRAIN_LOCAL_MUTATION_AUTHORITY_UNKNOWN']);
+  if (posture === 'AMBIGUOUS') return Object.freeze(['ORDINARY_DRAIN_LOCAL_MUTATION_AUTHORITY_AMBIGUOUS']);
+  return Object.freeze([]);
+}
 
 function correlationId(prefix: string, nowMs: number): string {
   return `${prefix}-${nowMs}`;
@@ -82,6 +246,19 @@ function frozenHealth(evidence: Readonly<RuntimeHealthEvidence>): Readonly<Runti
     ...evidence,
     timestamp: evidence.timestamp ? Object.freeze({ ...evidence.timestamp }) : null,
     fatal: evidence.fatal ? Object.freeze({ ...evidence.fatal }) : null,
+  });
+}
+
+function frozenDrainBlockingReference(
+  reference: Readonly<SystemApplicationDrainBlockingReference>,
+): Readonly<SystemApplicationDrainBlockingReference> {
+  return Object.freeze({
+    referenceType: reference.referenceType,
+    referenceId: reference.referenceId,
+    ownerId: reference.ownerId,
+    ownerRevision: reference.ownerRevision,
+    resolutionState: reference.resolutionState,
+    correlationId: reference.correlationId,
   });
 }
 
@@ -121,11 +298,18 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   private latestValidateOnly: Readonly<ValidateOnlyRunSnapshot> | null = null;
   private applicationFailureCode: string | null = null;
   private controlPublicationFailureCode: string | null = null;
+  private restartTruthRefreshFailureCode: string | null = null;
+  private restartTruthRefreshPromise: Promise<Readonly<RestartBarrierProjection>> | null = null;
+  private restartTruthRefreshTask: ScheduledTask | null = null;
+  private restartTruthRefreshEpoch = 0;
+  private drainAdmissionInProgress = false;
+  private readonly runtimePublicationEffects = new Map<string, SystemControlRuntimeEffectReadback>();
+  private readonly pendingRestartPublications = new Map<string, Readonly<ManagedRestartCommandIdentity>>();
   private startupSucceeded = false;
 
   readonly read: SystemIntegrationReadPort;
 
-  constructor(private readonly options: SystemIntegrationApplicationOptions) {
+  constructor(private readonly options: SystemIntegrationApplicationLifecycleOptions) {
     if (!options || typeof options.clock?.nowMs !== 'function') {
       throw new TypeError('SystemIntegrationApplication requires an injected clock.');
     }
@@ -134,6 +318,13 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
     if (typeof options.readEnvironment !== 'function') {
       throw new TypeError('SystemIntegrationApplication requires an environment read port.');
+    }
+    if (options.restartTruthRefreshIntervalMs !== undefined && (
+      !Number.isSafeInteger(options.restartTruthRefreshIntervalMs)
+      || options.restartTruthRefreshIntervalMs < 1
+      || options.restartTruthRefreshIntervalMs >= SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs
+    )) {
+      throw new TypeError('restartTruthRefreshIntervalMs must be a positive safe integer below the restart-truth freshness lease.');
     }
     this.persistence = new SystemIntegrationLedgerAdapter(options.ledger);
     this.validateOnly = new ValidateOnlyOrchestrator(this.persistence);
@@ -173,9 +364,96 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     });
   }
 
+  private startupRestartTruth(nowMs: number): Readonly<PersistedRestartTruth> {
+    const read = this.options.lifecycleTruth?.readRestartTruth;
+    if (typeof read !== 'function') return failClosedObservedRestartTruth(nowMs);
+    try {
+      return normalizedRestartTruth(read(nowMs), nowMs) ?? failClosedObservedRestartTruth(nowMs);
+    } catch {
+      return failClosedObservedRestartTruth(nowMs);
+    }
+  }
+
+  private localMutationAuthority(): LocalMutationAuthorityPosture {
+    const read = this.options.lifecycleTruth?.readLocalMutationAuthority;
+    if (typeof read !== 'function') return 'UNKNOWN';
+    try {
+      const posture = read();
+      return ['PROVEN_ABSENT', 'PRESENT', 'AMBIGUOUS', 'UNKNOWN'].includes(posture)
+        ? posture
+        : 'UNKNOWN';
+    } catch {
+      return 'UNKNOWN';
+    }
+  }
+
+  private pendingControlRuntimePublications(): readonly Readonly<PersistedControlRuntimePublicationReference>[] {
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    if (!pending.ok || pending.value.length > 0) {
+      this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+      return pending.ok ? pending.value : Object.freeze([]);
+    }
+    if (this.controlPublicationFailureCode === 'CONTROL_COMMITTED_RUNTIME_PENDING') {
+      this.controlPublicationFailureCode = null;
+    }
+    return pending.value;
+  }
+
+  private controlPublicationBlockingReference(
+    reference: Readonly<PersistedControlRuntimePublicationReference>,
+  ): Readonly<SystemApplicationDrainBlockingReference> {
+    return Object.freeze({
+      referenceType: 'AMBIGUOUS_MUTATION',
+      referenceId: reference.effectId,
+      ownerId: 'systemIntegration.controls',
+      ownerRevision: reference.requestDigest,
+      resolutionState: reference.state === 'UNKNOWN' ? 'UNKNOWN' : 'RECOVERY_REQUIRED',
+      correlationId: reference.correlationId,
+    });
+  }
+
+  private async ordinaryDrainTruthBlockers(nowMs: number): Promise<readonly string[]> {
+    const posture = this.localMutationAuthority();
+    const read = this.options.lifecycleTruth?.readOrdinaryDrainTruth;
+    if (typeof read !== 'function') {
+      return Object.freeze([
+        'ORDINARY_DRAIN_CANONICAL_TRUTH_UNAVAILABLE',
+        ...localMutationAuthorityBlockers(posture),
+      ]);
+    }
+    try {
+      const truth = await read();
+      return canonicalDrainTruthBlockers(truth, nowMs, posture);
+    } catch {
+      return Object.freeze([
+        'ORDINARY_DRAIN_CANONICAL_TRUTH_READ_FAILED',
+        ...localMutationAuthorityBlockers(posture),
+      ]);
+    }
+  }
+
+  private async restartControlBlockers(nowMs: number): Promise<readonly string[]> {
+    const posture = this.localMutationAuthority();
+    const read = this.options.lifecycleTruth?.readOrdinaryDrainTruth;
+    if (typeof read !== 'function') {
+      return Object.freeze([
+        'RESTART_CANONICAL_TRUTH_UNAVAILABLE',
+        ...(posture === 'PROVEN_ABSENT' ? [] : ['RESTART_LOCAL_MUTATION_AUTHORITY_NOT_PROVEN_ABSENT']),
+      ]);
+    }
+    try {
+      return canonicalRestartTruthBlockers(await read(), nowMs, posture);
+    } catch {
+      return Object.freeze([
+        'RESTART_CANONICAL_TRUTH_READ_FAILED',
+        ...(posture === 'PROVEN_ABSENT' ? [] : ['RESTART_LOCAL_MUTATION_AUTHORITY_NOT_PROVEN_ABSENT']),
+      ]);
+    }
+  }
+
   private instrumentRuntimes(ports: CoreRuntimePorts): CoreRuntimePorts {
-    if (!ports?.market || !ports.basis || !ports.volume) {
-      throw new TypeError('SystemIntegrationApplication requires Market, Basis, and Volume runtime ports.');
+    if (!ports?.market || !ports.intelligenceRuntime || !ports.marketIntelligence || !ports.basis || !ports.volume) {
+      throw new TypeError('SystemIntegrationApplication requires Market, IntelligenceRuntime, MarketIntelligence, Basis, and Volume runtime ports.');
     }
     const record = (
       componentId: PhysicalComponentId,
@@ -193,6 +471,23 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         stop: () => ports.market.stop(),
         health: record('market-universe', (ctx) => ports.market.health(ctx)),
       }),
+      intelligenceRuntime: Object.freeze({
+        ...(ports.intelligenceRuntime.validate
+          ? { validate: (ctx: ComponentStepContext) => ports.intelligenceRuntime.validate?.(ctx) }
+          : {}),
+        start: () => ports.intelligenceRuntime.start(),
+        stop: () => ports.intelligenceRuntime.stop(),
+        health: record('intelligence-runtime', (ctx) => ports.intelligenceRuntime.health(ctx)),
+      }),
+      marketIntelligence: Object.freeze({
+        ...(ports.marketIntelligence.validate
+          ? { validate: (ctx: ComponentStepContext) => ports.marketIntelligence.validate?.(ctx) }
+          : {}),
+        start: () => ports.marketIntelligence.start(),
+        stop: () => ports.marketIntelligence.stop(),
+        health: record('market-intelligence', (ctx) => ports.marketIntelligence.health(ctx)),
+      }),
+      ...(ports.q === undefined ? {} : { q: ports.q }),
       basis: Object.freeze({
         ...(ports.basis.validate ? { validate: (ctx: ComponentStepContext) => ports.basis.validate?.(ctx) } : {}),
         start: () => ports.basis.start(),
@@ -255,6 +550,27 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    const restartTruth = this.persistence.persistRestartTruth(
+      this.startupRestartTruth(nowMs),
+      startCorrelationId,
+    );
+    if (!restartTruth.ok) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = restartTruth.code;
+      this.barrierValue = this.readRestartBarrier(nowMs);
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: restartTruth.code,
+        restartBarrier: this.barrierValue,
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     const current = this.persistence.currentState();
     if (!current.ok) {
       this.phaseValue = 'FAILED';
@@ -272,6 +588,8 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    this.pendingControlRuntimePublications();
+
     // The authenticated control shell exists before any data component is
     // admitted. Publication remains persistence-first inside the service.
     this.controlService = new SystemControlService({
@@ -280,16 +598,24 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       composition: this.controlCompositionPort(),
     });
     this.barrierValue = this.readRestartBarrier(nowMs);
-    const command = this.composition.start();
-    if (!command.ok) {
+    const persistedRootDesiredState = current.value.desiredComponents.find(
+      (entry) => entry.componentId === 'market-universe',
+    )?.desiredState ?? 'RUNNING';
+    const command = persistedRootDesiredState === 'STOPPED'
+      ? null
+      : persistedRootDesiredState === 'PAUSED'
+        ? this.composition.startPaused()
+        : this.composition.start();
+    if (command !== null && !command.ok) {
       this.phaseValue = 'FAILED';
       this.applicationFailureCode = command.failure.code;
     } else {
       this.phaseValue = 'RUNNING';
       this.startupSucceeded = true;
+      this.startRestartTruthRefresh();
     }
     return this.cacheStartResult({
-      ok: command.ok,
+      ok: command?.ok ?? true,
       phase: this.phaseValue,
       correlationId: startCorrelationId,
       persistenceLoad: loaded,
@@ -307,6 +633,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   }
 
   private readRestartBarrier(nowMs: number): Readonly<RestartBarrierProjection> {
+    if (this.restartTruthRefreshFailureCode !== null) {
+      return failClosedRestartBarrier(nowMs, this.restartTruthRefreshFailureCode);
+    }
     const barrier = this.persistence.restartBarrier(nowMs);
     if (barrier.ok) return barrier.value;
     return failClosedRestartBarrier(nowMs, barrier.code);
@@ -314,6 +643,84 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   restartBarrier(): Readonly<RestartBarrierProjection> {
     if (this.phaseValue === 'CREATED') return this.barrierValue;
+    this.barrierValue = this.readRestartBarrier(this.options.clock.nowMs());
+    return this.barrierValue;
+  }
+
+  private startRestartTruthRefresh(): void {
+    if (typeof this.options.restartTruthRefresh?.refreshRestartTruth !== 'function') return;
+    if (this.restartTruthRefreshTask === null) {
+      const intervalMs = this.options.restartTruthRefreshIntervalMs
+        ?? DEFAULT_RESTART_TRUTH_REFRESH_INTERVAL_MS;
+      this.restartTruthRefreshTask = this.options.scheduler.scheduleEvery(intervalMs, () => {
+        void this.refreshRestartTruth();
+      });
+    }
+    void this.refreshRestartTruth();
+  }
+
+  private stopRestartTruthRefresh(): void {
+    this.restartTruthRefreshEpoch += 1;
+    this.restartTruthRefreshTask?.cancel();
+    this.restartTruthRefreshTask = null;
+    // Detach the fenced read so a refused drain can immediately re-arm a new
+    // epoch without waiting for an uncooperative old owner promise to settle.
+    this.restartTruthRefreshPromise = null;
+  }
+
+  refreshRestartTruth(): Promise<Readonly<RestartBarrierProjection>> {
+    const read = this.options.restartTruthRefresh?.refreshRestartTruth;
+    if (typeof read !== 'function'
+      || this.phaseValue !== 'RUNNING'
+      || !this.startupSucceeded
+      || this.drainAdmissionInProgress) {
+      return Promise.resolve(this.restartBarrier());
+    }
+    if (this.restartTruthRefreshPromise !== null) return this.restartTruthRefreshPromise;
+    const epoch = this.restartTruthRefreshEpoch;
+    const pending = this.performRestartTruthRefresh(read, epoch);
+    this.restartTruthRefreshPromise = pending;
+    void pending.then(
+      () => {
+        if (this.restartTruthRefreshPromise === pending) this.restartTruthRefreshPromise = null;
+      },
+      () => {
+        if (this.restartTruthRefreshPromise === pending) this.restartTruthRefreshPromise = null;
+      },
+    );
+    return pending;
+  }
+
+  private async performRestartTruthRefresh(
+    read: SystemRestartTruthRefreshEffectPort['refreshRestartTruth'],
+    epoch: number,
+  ): Promise<Readonly<RestartBarrierProjection>> {
+    const readAtMs = this.options.clock.nowMs();
+    let candidate: unknown;
+    try {
+      candidate = await read(readAtMs);
+    } catch {
+      candidate = null;
+    }
+    const commitAtMs = this.options.clock.nowMs();
+    if (
+      epoch !== this.restartTruthRefreshEpoch
+      || this.phaseValue !== 'RUNNING'
+      || !this.startupSucceeded
+    ) return failClosedRestartBarrier(commitAtMs, 'RESTART_TRUTH_REFRESH_CANCELLED');
+
+    const truth = normalizedRestartTruth(candidate, commitAtMs)
+      ?? failClosedObservedRestartTruth(commitAtMs);
+    const committed = this.persistence.persistRestartTruth(
+      truth,
+      correlationId('restart-truth-refresh', truth.observedAtMs ?? commitAtMs),
+    );
+    if (!committed.ok) {
+      this.restartTruthRefreshFailureCode = `RESTART_TRUTH_REFRESH_${committed.code}`;
+      this.barrierValue = failClosedRestartBarrier(commitAtMs, this.restartTruthRefreshFailureCode);
+      return this.barrierValue;
+    }
+    this.restartTruthRefreshFailureCode = null;
     this.barrierValue = this.readRestartBarrier(this.options.clock.nowMs());
     return this.barrierValue;
   }
@@ -354,7 +761,51 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         actor: Readonly<SystemControlActor>,
         receipt: Readonly<SystemControlMutationReceipt>,
       ) => this.publishControlMutation(request, actor, receipt),
+      inspectCommittedPublication: (
+        request: Readonly<SystemControlMutationRequest>,
+        receipt: Readonly<SystemControlMutationReceipt>,
+      ) => this.controlRuntimeEffectReadback(request, receipt),
     });
+  }
+
+  private runtimePublicationEffectId(
+    request: Readonly<SystemControlMutationRequest>,
+    receipt: Readonly<SystemControlMutationReceipt>,
+  ): string {
+    return `${request.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`;
+  }
+
+  private async controlRuntimeEffectReadback(
+    request: Readonly<SystemControlMutationRequest>,
+    receipt: Readonly<SystemControlMutationReceipt>,
+  ): Promise<SystemControlRuntimeEffectReadback> {
+    const effectId = this.runtimePublicationEffectId(request, receipt);
+    const local = this.runtimePublicationEffects.get(effectId);
+    if (local !== undefined) return local;
+    const pendingRestart = this.pendingRestartPublications.get(effectId);
+    if (pendingRestart !== undefined) {
+      if (request.mutation.command !== 'RESTART_COMPONENT') return 'UNKNOWN';
+      const completion = this.composition.readRestartCompletion(pendingRestart);
+      if (completion === 'APPLIED') {
+        this.pendingRestartPublications.delete(effectId);
+        this.runtimePublicationEffects.set(effectId, 'APPLIED');
+        return 'APPLIED';
+      }
+      if (completion === 'FAILED') {
+        this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+      }
+      return 'UNKNOWN';
+    }
+    const read = this.options.lifecycleTruth?.readControlRuntimeEffect;
+    if (typeof read !== 'function') return 'UNKNOWN';
+    try {
+      const evidence = await read(effectId, request.mutation);
+      return ['APPLIED', 'NOT_APPLIED', 'UNKNOWN'].includes(evidence)
+        ? evidence
+        : 'UNKNOWN';
+    } catch {
+      return 'UNKNOWN';
+    }
   }
 
   private decision(
@@ -367,11 +818,13 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     return Object.freeze({ ok, code, message, applied, riskIncreasing });
   }
 
-  private inspectControlMutation(
+  private async inspectControlMutation(
     mutation: Readonly<SystemControlMutation>,
     control: Readonly<SystemControlState>,
-  ): SystemControlCompositionDecision {
-    if (this.phaseValue !== 'RUNNING' || this.composition.read().draining) {
+  ): Promise<SystemControlCompositionDecision> {
+    const maintenanceRecovery = this.phaseValue === 'MAINTENANCE'
+      && maintenanceRecoveryMutation(mutation);
+    if ((this.phaseValue !== 'RUNNING' && !maintenanceRecovery) || this.composition.read().draining) {
       return this.decision(false, 'APPLICATION_NOT_READY', 'The managed application is not accepting control mutations.', false);
     }
     const managed = this.composition.read();
@@ -408,9 +861,13 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         : this.decision(false, mutation.command === 'REVOKE_APPROVAL' ? 'APPROVAL_NOT_FOUND' : 'RESERVATION_NOT_FOUND', 'The referenced active owner record was not found.', false);
     }
     if (mutation.command === 'RESTART_COMPONENT') {
-      return mutation.componentId === 'market-universe'
+      if (mutation.componentId !== 'market-universe') {
+        return this.decision(false, 'INDIVIDUAL_RUNTIME_RESTART_NOT_SUPPORTED', 'Only the dependency-root managed runtime can restart as one graph.', false);
+      }
+      const blockers = await this.restartControlBlockers(this.options.clock.nowMs());
+      return blockers.length === 0
         ? this.decision(true, 'MANAGED_RUNTIME_RESTART_ACCEPTED', '', true)
-        : this.decision(false, 'INDIVIDUAL_RUNTIME_RESTART_NOT_SUPPORTED', 'Only the dependency-root managed runtime can restart as one graph.', false);
+        : this.decision(false, blockers[0], 'Managed restart requires current canonical strong-zero truth and proven-absent local mutation authority.', false);
     }
     if (mutation.componentId !== 'market-universe') {
       return this.decision(false, 'INDIVIDUAL_COMPONENT_CONTROL_NOT_SUPPORTED', 'The managed graph has one dependency-root lifecycle command.', false);
@@ -433,19 +890,48 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   ): Promise<void> {
     if (!receipt.applied) return;
     const mutation = request.mutation;
+    const runtimeEffectId = mutation.command === 'RESTART_COMPONENT' || mutation.command === 'SET_COMPONENT_STATE'
+      ? this.runtimePublicationEffectId(request, receipt)
+      : null;
+    const restartGenerationBefore = mutation.command === 'RESTART_COMPONENT'
+      ? this.composition.read().supervisor.generation
+      : null;
     let command: CommandResult | null = null;
-    if (mutation.command === 'RESTART_COMPONENT') {
-      command = this.composition.restart();
-    } else if (mutation.command === 'SET_COMPONENT_STATE') {
-      if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
-      else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
-      else command = this.composition.read().supervisor.phase === 'PAUSED'
-        ? this.composition.issue('RESUME')
-        : this.composition.start();
+    try {
+      if (mutation.command === 'RESTART_COMPONENT') {
+        command = this.composition.restart();
+      } else if (mutation.command === 'SET_COMPONENT_STATE') {
+        if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
+        else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
+        else command = this.composition.read().supervisor.phase === 'PAUSED'
+          ? this.composition.issue('RESUME')
+          : this.composition.start();
+      }
+    } catch {
+      if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'NOT_APPLIED');
+      this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+      throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
     }
     if (command !== null && !command.ok) {
-      this.controlPublicationFailureCode = command.failure.code;
-      return;
+      if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'NOT_APPLIED');
+      this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+      throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
+    }
+    if (runtimeEffectId !== null && command !== null) {
+      if (mutation.command === 'RESTART_COMPONENT') {
+        if (!command.ok || command.value.command !== 'RESTART' || !command.value.applied
+          || restartGenerationBefore === null) {
+          this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+          throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
+        }
+        this.pendingRestartPublications.set(runtimeEffectId, Object.freeze({
+          correlationId: command.value.correlationId,
+          revision: command.value.revision,
+          targetGeneration: restartGenerationBefore + 1,
+        }));
+      } else {
+        this.runtimePublicationEffects.set(runtimeEffectId, 'APPLIED');
+      }
     }
     if (command !== null) this.controlPublicationFailureCode = null;
   }
@@ -516,6 +1002,27 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     try { return this.options.ledger.probeWritable(false); } catch { return false; }
   }
 
+  private ledgerSchemaCompatibility(): Readonly<LedgerSchemaCompatibilityReadback> {
+    if (!this.options.ledger.readSchemaCompatibility) {
+      return Object.freeze({
+        state: 'UNAVAILABLE',
+        currentSchemaVersion: null,
+        rollbackFloor: null,
+        reasonCode: 'LEDGER_SCHEMA_COMPATIBILITY_CAPABILITY_NOT_CONFIGURED',
+      });
+    }
+    try {
+      return this.options.ledger.readSchemaCompatibility();
+    } catch {
+      return Object.freeze({
+        state: 'UNAVAILABLE',
+        currentSchemaVersion: null,
+        rollbackFloor: null,
+        reasonCode: 'LEDGER_SCHEMA_COMPATIBILITY_READ_FAILED',
+      });
+    }
+  }
+
   private persistedTraceEvents(): readonly Readonly<SystemTraceEvent>[] {
     const state = this.checkpoint();
     if (!state) return Object.freeze([]);
@@ -545,6 +1052,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   supervisor(): Readonly<SystemSupervisorReadModel> {
     const nowMs = this.options.clock.nowMs();
+    this.pendingControlRuntimePublications();
     const managed = this.composition.read();
     const checkpoint = this.checkpoint();
     const control = this.effectiveControlState();
@@ -556,17 +1064,25 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       ...(this.options.components ? { ports: this.options.components } : {}),
       checkpoint,
       persistenceFailureCode,
-      applicationFailureCode: this.applicationFailureCode ?? this.controlPublicationFailureCode,
+      applicationFailureCode: this.applicationFailureCode
+        ?? this.controlPublicationFailureCode
+        ?? this.restartTruthRefreshFailureCode,
       postureBlockerCodes: this.postureBlockerCodes(control),
       control,
       validateOnlyRun: this.latestValidateOnly,
     });
     const summaries = mergeApplicationSummaries(
-      defaultApplicationSummaries(checkpoint, this.ledgerWritable()),
+      defaultApplicationSummaries(
+        checkpoint,
+        this.ledgerWritable(),
+        this.ledgerSchemaCompatibility(),
+      ),
       this.ownerSummaries(),
       this.latestValidateOnly,
     );
-    const applicationProjectionFailure = this.applicationFailureCode ?? this.controlPublicationFailureCode;
+    const applicationProjectionFailure = this.applicationFailureCode
+      ?? this.controlPublicationFailureCode
+      ?? this.restartTruthRefreshFailureCode;
     const runtime: Readonly<RuntimeStatusSnapshot> = applicationProjectionFailure === null
       ? managed.supervisor
       : Object.freeze({
@@ -627,11 +1143,116 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     });
   }
 
+  private refusedDrainResult(
+    drainCorrelationId: string,
+    blockerCodes: readonly string[],
+    blockingIdentityReferences: readonly Readonly<SystemApplicationDrainBlockingReference>[],
+    persistenceFailureCode: SystemApplicationDrainResult['persistenceFailureCode'],
+  ): Readonly<SystemApplicationDrainResult> {
+    const result = Object.freeze({
+      ok: false,
+      clean: false,
+      disposition: 'REFUSED_RECOVERY_SUPERVISION_REQUIRED' as const,
+      phase: this.phaseValue,
+      correlationId: drainCorrelationId,
+      blockerCodes: Object.freeze([...blockerCodes]),
+      blockingIdentityReferences: Object.freeze([...blockingIdentityReferences]),
+      composition: this.composition.read(),
+      finalCheckpoint: null,
+      persistenceFailureCode,
+      ledgerCloseMayProceed: false,
+    });
+    this.drainAdmissionInProgress = false;
+    if (this.phaseValue === 'RUNNING' && this.startupSucceeded) {
+      this.startRestartTruthRefresh();
+    }
+    return result;
+  }
+
   drain(): Promise<Readonly<SystemApplicationDrainResult>> {
     if (this.drainPromise !== null) return this.drainPromise;
+    const attempt = this.prepareDrain();
+    this.drainPromise = attempt;
+    void attempt.then(
+      (result) => {
+        if ((result.disposition === 'REFUSED_RECOVERY_SUPERVISION_REQUIRED'
+          || result.disposition === 'DRAIN_FAILED')
+          && this.drainPromise === attempt) this.drainPromise = null;
+      },
+      () => {
+        this.drainAdmissionInProgress = false;
+        if (this.phaseValue === 'RUNNING' && this.startupSucceeded) {
+          this.startRestartTruthRefresh();
+        }
+        if (this.drainPromise === attempt) this.drainPromise = null;
+      },
+    );
+    return attempt;
+  }
+
+  private async prepareDrain(): Promise<Readonly<SystemApplicationDrainResult>> {
+    // Fence effectful owner reads at drain-attempt admission, before any
+    // asynchronous identity or canonical-truth check can yield control.
+    this.drainAdmissionInProgress = true;
+    this.stopRestartTruthRefresh();
+    const nowMs = this.options.clock.nowMs();
+    const drainCorrelationId = correlationId('system-drain', nowMs);
+    const blockingRead = this.persistence.readProductBlockingIdentityReferences();
+    if (!blockingRead.ok) {
+      return this.refusedDrainResult(
+        drainCorrelationId,
+        [
+          'ORDINARY_DRAIN_IDENTITY_REFERENCE_READ_UNAVAILABLE',
+          blockingRead.code,
+        ],
+        [],
+        blockingRead.code,
+      );
+    }
+    // The canonical Ledger reader owns the exact blocking vocabulary and
+    // returns only unresolved restart/shutdown references. The application
+    // consumes that truth without maintaining a second policy list.
+    const controlPublicationReferences = this.pendingControlRuntimePublications()
+      .map((reference) => this.controlPublicationBlockingReference(reference));
+    const blockingIdentityReferences = [
+      ...blockingRead.value.map(frozenDrainBlockingReference),
+      ...controlPublicationReferences,
+    ]
+      .sort((left, right) => (
+        left.referenceType.localeCompare(right.referenceType, 'en')
+        || left.referenceId.localeCompare(right.referenceId, 'en')
+        || left.ownerRevision.localeCompare(right.ownerRevision, 'en')
+      ));
+    if (blockingIdentityReferences.length > 0) {
+      const typeCodes = [...new Set(blockingIdentityReferences.map(
+        (reference) => `UNRESOLVED_PRODUCT_IDENTITY_REFERENCE_${reference.referenceType}`,
+      ))].sort();
+      return this.refusedDrainResult(
+        drainCorrelationId,
+        [
+          'ORDINARY_DRAIN_REFUSED_RECOVERY_SUPERVISION_REQUIRED',
+          ...typeCodes,
+        ],
+        blockingIdentityReferences,
+        null,
+      );
+    }
+
+    const canonicalTruthBlockers = await this.ordinaryDrainTruthBlockers(nowMs);
+    if (canonicalTruthBlockers.length > 0) {
+      return this.refusedDrainResult(
+        drainCorrelationId,
+        [
+          'ORDINARY_DRAIN_REFUSED_RECOVERY_SUPERVISION_REQUIRED',
+          ...canonicalTruthBlockers,
+        ],
+        [],
+        null,
+      );
+    }
+    this.drainAdmissionInProgress = false;
     this.phaseValue = 'DRAINING';
-    this.drainPromise = this.drainApplication();
-    return this.drainPromise;
+    return this.drainApplication();
   }
 
   private async drainApplication(): Promise<Readonly<SystemApplicationDrainResult>> {
@@ -656,7 +1277,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           ...(this.options.components ? { ports: this.options.components } : {}),
           checkpoint,
           persistenceFailureCode: checkpoint === null ? 'PERSISTENCE_NOT_LOADED' : null,
-          applicationFailureCode: this.applicationFailureCode ?? this.controlPublicationFailureCode,
+          applicationFailureCode: this.applicationFailureCode
+            ?? this.controlPublicationFailureCode
+            ?? this.restartTruthRefreshFailureCode,
           postureBlockerCodes: this.postureBlockerCodes(control),
           control,
           validateOnlyRun: this.latestValidateOnly,
@@ -671,21 +1294,45 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
             generation: component.generation,
           })),
     });
-    this.phaseValue = 'DRAINED';
+    const durableShutdown = finalCheckpoint.ok ? this.checkpoint()?.lastShutdown ?? null : null;
+    const finalCheckpointReadbackProven = finalCheckpoint.ok
+      && durableShutdown !== null
+      && durableShutdown.stoppedAtMs === nowMs
+      && durableShutdown.correlationId === drainCorrelationId
+      && durableShutdown.clean === physicalClean;
+    const finalCheckpointFailureCode = finalCheckpoint.ok
+      ? finalCheckpointReadbackProven ? null : 'PERSISTENCE_READ_FAILED' as const
+      : finalCheckpoint.code;
+    const clean = physicalClean
+      && finalCheckpointReadbackProven
+      && durableShutdown?.clean === true;
+    this.phaseValue = clean ? 'DRAINED' : 'MAINTENANCE';
+    const blockerCodes = clean
+      ? Object.freeze([])
+      : Object.freeze([
+          ...(this.startupSucceeded ? [] : ['APPLICATION_STARTUP_NOT_PROVEN']),
+          ...(managed.driverFailureCode === null ? [] : [managed.driverFailureCode]),
+          ...(managed.drainFailureCode === null ? [] : [managed.drainFailureCode]),
+          ...(finalCheckpointFailureCode === null ? [] : [finalCheckpointFailureCode]),
+        ]);
     return Object.freeze({
-      ok: physicalClean && finalCheckpoint.ok,
-      clean: physicalClean && finalCheckpoint.ok,
+      ok: clean,
+      clean,
+      disposition: clean ? 'DRAINED' as const : 'DRAIN_FAILED' as const,
+      phase: this.phaseValue,
       correlationId: drainCorrelationId,
+      blockerCodes,
+      blockingIdentityReferences: Object.freeze([]),
       composition: managed,
-      finalCheckpoint: finalCheckpoint.ok ? finalCheckpoint.value : null,
-      persistenceFailureCode: finalCheckpoint.ok ? null : finalCheckpoint.code,
-      ledgerCloseMayProceed: true as const,
+      finalCheckpoint: finalCheckpointReadbackProven ? finalCheckpoint.value : null,
+      persistenceFailureCode: finalCheckpointFailureCode,
+      ledgerCloseMayProceed: clean,
     });
   }
 }
 
 export function createSystemIntegrationApplication(
-  options: SystemIntegrationApplicationOptions,
+  options: SystemIntegrationApplicationLifecycleOptions,
 ): SystemIntegrationApplication {
   return new SystemIntegrationApplication(options);
 }

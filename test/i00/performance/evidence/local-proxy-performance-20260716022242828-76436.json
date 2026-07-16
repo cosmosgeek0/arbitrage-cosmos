@@ -1,0 +1,5135 @@
+{
+  "schemaVersion": "i00.local-proxy-performance.v1",
+  "truthClass": "LOCAL_PROXY_MEASURED",
+  "runId": "20260716024026126-7617-74eb452e",
+  "createdAtUtc": "2026-07-16T02:40:26.126Z",
+  "source": {
+    "branch": "i00-product-assembly-20260713",
+    "headSha": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+    "treeSha": "6930f71f1191394ffaf317279c9e43f15bf672cf",
+    "worktreeState": "FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE",
+    "protectedOwnerDirectives": [
+      {
+        "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+        "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+        "gitStatus": "UNTRACKED_PROTECTED_OWNER_INPUT"
+      },
+      {
+        "path": "IP_CONTROL.md",
+        "sha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278",
+        "gitStatus": "UNTRACKED_PROTECTED_OWNER_INPUT"
+      },
+      {
+        "path": "IP_OPS.md",
+        "sha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779",
+        "gitStatus": "UNTRACKED_PROTECTED_OWNER_INPUT"
+      },
+      {
+        "path": "IP_PROOF.md",
+        "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+        "gitStatus": "UNTRACKED_PROTECTED_OWNER_INPUT"
+      },
+      {
+        "path": "IP_RUNTIME.md",
+        "sha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810",
+        "gitStatus": "UNTRACKED_PROTECTED_OWNER_INPUT"
+      }
+    ],
+    "serverBundleSha256": "9d2ad8a3023502c18298b40ae54c2e00d1fbe89baf8a32ea89b0133ee0eb5b96",
+    "harnessTreeSha256": "268eecfc8dcdad8a8ae6c6d74002a51ef6e254a7c3d5d51e1268392874481ed1"
+  },
+  "host": {
+    "fingerprintSha256": "20f24e1d067459487b9e77a726641341182aad8f65badebcf412bdeefba1d4e1",
+    "platform": "darwin",
+    "release": "25.5.0",
+    "arch": "arm64",
+    "nodeVersion": "v22.23.1",
+    "cpuModel": "Apple M4 Max",
+    "logicalCpuCount": 16,
+    "totalMemoryBytes": 51539607552
+  },
+  "boundary": {
+    "proxyClass": "DOCUMENTED_LOCAL_PROXY",
+    "fingerprintSha256": "e57cf37a12885b098845a138b022519a85cd14f8d9700dc5e139accaea160878",
+    "bindHost": "127.0.0.1",
+    "transport": "LOOPBACK_HTTP_WS",
+    "reverseProxy": "NONE",
+    "forwardedHeaders": "ABSENT",
+    "childEnvironment": "ALLOWLIST_ONLY",
+    "keyMode": "KEYLESS",
+    "publicSourcePolicy": "RUNTIME_OWNED_PUBLIC_ONLY",
+    "forbiddenActions": [
+      "PRIVATE_READS",
+      "SIGNED_CALLS",
+      "LIVE_ORDERS",
+      "TEST_ORDERS",
+      "BORROW_REPAY",
+      "TRANSFER_WITHDRAWAL",
+      "AWS_CLOUDFLARE_MUTATION",
+      "DEPLOYMENT",
+      "PUSH"
+    ]
+  },
+  "load": {
+    "configuredDurationSeconds": 60,
+    "measuredWindowSeconds": 60.052,
+    "sampleIntervalMs": 1000,
+    "httpTargetRps": 24,
+    "httpConcurrency": 8,
+    "webSocketClients": 4,
+    "focusSymbol": "BTCUSDT",
+    "phaseCount": 3,
+    "endpoints": [
+      {
+        "path": "/health/live",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/health/ready",
+        "expectedStatuses": [
+          200,
+          503
+        ]
+      },
+      {
+        "path": "/health/trade-ready",
+        "expectedStatuses": [
+          200,
+          503
+        ]
+      },
+      {
+        "path": "/api/health",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/state",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/events?limit=25",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/events/count",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/engine/volume",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/engine/basis",
+        "expectedStatuses": [
+          200
+        ]
+      },
+      {
+        "path": "/api/product-integration/v1/supervisor",
+        "expectedStatuses": [
+          200
+        ]
+      }
+    ]
+  },
+  "phases": [
+    {
+      "phaseId": "CANONICAL_RESTART_GATE",
+      "bootGeneration": 1,
+      "startedAtUtc": "2026-07-16T02:40:26.129Z",
+      "endedAtUtc": "2026-07-16T02:41:00.158Z",
+      "durationSeconds": 20.015,
+      "snapshots": [
+        {
+          "label": "START",
+          "capturedAtUtc": "2026-07-16T02:40:39.967Z",
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "tradeReadyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169639953,
+          "eventsCount": 75,
+          "basisLastBookTs": 1784169639751,
+          "basisLastMarkTs": 1784169639000,
+          "volumeLastBookTs": 1784169638318,
+          "volumeLastTradeTs": 1784169639840,
+          "volumeTradeMessages": 357,
+          "productRevision": "system-4-runtime-1-control-1",
+          "runtimeGeneration": 1,
+          "controlGeneration": 1,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "45874f461ecb7690beed808f8a2a26f17e419592f325561235b4d3ee974b535b"
+        },
+        {
+          "label": "END",
+          "capturedAtUtc": "2026-07-16T02:41:00.101Z",
+          "tradeReadyStatus": 503,
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169660087,
+          "eventsCount": 81,
+          "basisLastBookTs": 1784169659589,
+          "basisLastMarkTs": 1784169659000,
+          "volumeLastBookTs": 1784169657340,
+          "volumeLastTradeTs": 1784169660025,
+          "volumeTradeMessages": 1139,
+          "productRevision": "system-6-runtime-1-control-1",
+          "runtimeGeneration": 1,
+          "controlGeneration": 1,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "5ae1671d6cb1f2eb7ae23fc0e7426fc01e3e2a36109b9ab6d1274afa8fd255a6"
+        }
+      ],
+      "http": {
+        "scheduled": 481,
+        "skippedForConcurrency": 0,
+        "responses": 481,
+        "expectedResponses": 481,
+        "unexpectedResponses": 0,
+        "networkErrors": 0,
+        "responseBytes": 17016459,
+        "throughputRps": 24.033,
+        "responseBytesPerSecond": 850212.145,
+        "latencyMs": {
+          "count": 481,
+          "min": 0.63,
+          "p50": 12.565,
+          "p95": 26.209,
+          "p99": 75.06,
+          "max": 116.628,
+          "mean": 11.419
+        },
+        "endpoints": [
+          {
+            "path": "/health/live",
+            "requests": 49,
+            "responses": 49,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 19404,
+            "statusCounts": {
+              "200": 49
+            },
+            "latencyMs": {
+              "count": 49,
+              "min": 10.431,
+              "p50": 15.492,
+              "p95": 16.837,
+              "p99": 27.173,
+              "max": 27.173,
+              "mean": 15.368
+            }
+          },
+          {
+            "path": "/health/ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 21368,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 10.765,
+              "p50": 14.378,
+              "p95": 15.281,
+              "p99": 15.481,
+              "max": 15.481,
+              "mean": 14.153
+            }
+          },
+          {
+            "path": "/health/trade-ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 23238,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 11.217,
+              "p50": 13.916,
+              "p95": 14.871,
+              "p99": 22.944,
+              "max": 22.944,
+              "mean": 13.966
+            }
+          },
+          {
+            "path": "/api/health",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 17520,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.63,
+              "p50": 1.947,
+              "p95": 2.066,
+              "p99": 91.558,
+              "max": 91.558,
+              "mean": 3.76
+            }
+          },
+          {
+            "path": "/api/state",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 2653752,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 11.755,
+              "p50": 16.727,
+              "p95": 56.989,
+              "p99": 116.628,
+              "max": 116.628,
+              "mean": 20.703
+            }
+          },
+          {
+            "path": "/api/events?limit=25",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 431879,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 1.358,
+              "p50": 2.184,
+              "p95": 50.242,
+              "p99": 97.565,
+              "max": 97.565,
+              "mean": 6.972
+            }
+          },
+          {
+            "path": "/api/events/count",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 576,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.756,
+              "p50": 1.996,
+              "p95": 9.005,
+              "p99": 55.871,
+              "max": 55.871,
+              "mean": 3.893
+            }
+          },
+          {
+            "path": "/api/engine/volume",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 5035817,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 2.869,
+              "p50": 7.17,
+              "p95": 9.452,
+              "p99": 16.526,
+              "max": 16.526,
+              "mean": 6.897
+            }
+          },
+          {
+            "path": "/api/engine/basis",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 3133668,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 1.995,
+              "p50": 4.548,
+              "p95": 7.598,
+              "p99": 21.966,
+              "max": 21.966,
+              "mean": 4.888
+            }
+          },
+          {
+            "path": "/api/product-integration/v1/supervisor",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 5679237,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 14.199,
+              "p50": 24.744,
+              "p95": 27.819,
+              "p99": 28.49,
+              "max": 28.49,
+              "mean": 23.505
+            }
+          }
+        ]
+      },
+      "websocket": {
+        "clientsRequested": 4,
+        "clientsOpened": 4,
+        "openErrors": 0,
+        "messages": 67,
+        "bytes": 77875,
+        "maxClientBufferedAmountBytes": 0,
+        "messageTypes": {
+          "canonical-supervisor-delta": 8,
+          "book": 55,
+          "btrades": 4
+        },
+        "closeCodes": {
+          "1012": 4
+        },
+        "shutdownClose1012Count": 4,
+        "uncleanClose1006Count": 0,
+        "focus": {
+          "symbol": "BTCUSDT",
+          "burstsAttempted": 2,
+          "bookMessages": 55,
+          "tradeMessages": 4,
+          "status": "MEASURED",
+          "reason": "Public-compatible focused book/trade messages were observed during bounded subscribe/unsubscribe bursts."
+        },
+        "slowConsumer": {
+          "attempted": true,
+          "pauseDurationMs": 19501,
+          "observedClose1013": false,
+          "status": "NOT_OBSERVED",
+          "reason": "A bounded client read pause was exercised without reaching the server buffer threshold; no backpressure close is claimed."
+        }
+      },
+      "process": {
+        "samples": 20,
+        "cpuOneCorePercent": {
+          "count": 20,
+          "min": 24.085,
+          "p50": 27.046,
+          "p95": 35.124,
+          "p99": 39.228,
+          "max": 39.228,
+          "mean": 28.322
+        },
+        "cpuHostPercent": {
+          "count": 20,
+          "min": 1.505,
+          "p50": 1.69,
+          "p95": 2.195,
+          "p99": 2.452,
+          "max": 2.452,
+          "mean": 1.77
+        },
+        "rssBytes": {
+          "count": 20,
+          "min": 360366080,
+          "p50": 396640256,
+          "p95": 435945472,
+          "p99": 441843712,
+          "max": 441843712,
+          "mean": 402844058
+        },
+        "heapUsedBytes": {
+          "count": 20,
+          "min": 178828184,
+          "p50": 205950264,
+          "p95": 265138288,
+          "p99": 266628544,
+          "max": 266628544,
+          "mean": 219020089
+        },
+        "eventLoopP95Ms": {
+          "count": 1,
+          "min": 21.217,
+          "p50": 21.217,
+          "p95": 21.217,
+          "p99": 21.217,
+          "max": 21.217,
+          "mean": 21.217
+        },
+        "eventLoopP99Ms": {
+          "count": 1566,
+          "min": 0.258048,
+          "p50": 11.165695,
+          "p95": 21.217279,
+          "p99": 30.719999,
+          "max": 119.406591,
+          "mean": 12.780656796934865
+        },
+        "eventLoopMaxMs": {
+          "count": 1,
+          "min": 119.407,
+          "p50": 119.407,
+          "p95": 119.407,
+          "p99": 119.407,
+          "max": 119.407,
+          "mean": 119.407
+        },
+        "rssSlopeBytesPerHour": null
+      },
+      "storage": {
+        "preLaunch": {
+          "databaseBytes": 0,
+          "walBytes": 0,
+          "shmBytes": 0
+        },
+        "samples": 35,
+        "database": {
+          "initialBytes": 4096,
+          "finalBytes": 229376,
+          "maxBytes": 229376,
+          "growthBytes": 225280
+        },
+        "wal": {
+          "initialBytes": 515032,
+          "finalBytes": 0,
+          "maxBytes": 1858152,
+          "growthBytes": -515032
+        },
+        "shm": {
+          "initialBytes": 32768,
+          "finalBytes": 0,
+          "maxBytes": 32768,
+          "growthBytes": -32768
+        },
+        "integrity": {
+          "quickCheck": "ok",
+          "integrityCheck": "ok",
+          "journalMode": "wal",
+          "foreignKeyViolationCount": 0,
+          "userVersion": 1,
+          "eventCount": 85,
+          "bootRelease": {
+            "rowCount": 1,
+            "latestGeneration": 1,
+            "latestTestedCommit": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+            "latestDeployedCommit": null,
+            "latestConfigRevision": null,
+            "latestSchemaRevision": "1",
+            "latestModelRevision": null,
+            "latestStartedAtMs": 1784169626441,
+            "latestCompletedAtMs": 1784169660120,
+            "latestClean": true,
+            "latestBlockerCode": null,
+            "allRowsClean": true,
+            "cleanCompletedCount": 1,
+            "crashPendingCount": 0,
+            "crashPendingGenerations": [],
+            "allRowsIdentityValid": true,
+            "expectedLatestLifecycle": "CLEAN_COMPLETED",
+            "latestLifecycleState": "CLEAN_COMPLETED",
+            "expectedCrashPendingGenerations": [],
+            "lifecycleExpectationMet": true,
+            "passed": true
+          },
+          "controlCommand": {
+            "idempotencyKey": "i00.performance.restart.g1.74eb452efab8",
+            "durableReceiptObserved": false,
+            "durableRejectionAuditObserved": true,
+            "rejectionCode": "RESTART_EXPOSURE_NONE_NOT_PROVEN",
+            "rejectionActorSource": "loopback",
+            "checkpointControlRevision": 0,
+            "checkpointControlGeneration": 1,
+            "passed": true
+          },
+          "passed": true
+        }
+      },
+      "shutdown": {
+        "mode": "GRACEFUL",
+        "signal": "SIGTERM",
+        "exitCode": 0,
+        "exitSignal": null,
+        "durationMs": 52.793,
+        "cleanLogMarkerObserved": true,
+        "stdoutSha256": "08b7262b5597d70e304614aa03f6991bfbb393d498429da5a46aad96e668683a",
+        "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "telemetrySha256": "4cb8db6f17c7e80641afa7ee22946f109ac9861241a1412af93984c6536486df",
+        "logOverflow": false,
+        "passed": true
+      }
+    },
+    {
+      "phaseId": "UNCLEAN_TERMINATION",
+      "bootGeneration": 2,
+      "startedAtUtc": "2026-07-16T02:41:00.160Z",
+      "endedAtUtc": "2026-07-16T02:41:29.508Z",
+      "durationSeconds": 20.02,
+      "snapshots": [
+        {
+          "label": "START",
+          "capturedAtUtc": "2026-07-16T02:41:09.365Z",
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "tradeReadyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169669351,
+          "eventsCount": 103,
+          "basisLastBookTs": 1784169668156,
+          "basisLastMarkTs": 1784169668000,
+          "volumeLastBookTs": 1784169668343,
+          "volumeLastTradeTs": 1784169669198,
+          "volumeTradeMessages": 82,
+          "productRevision": "system-10-runtime-1-control-2",
+          "runtimeGeneration": 1,
+          "controlGeneration": 2,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "2953d00400f9ccc88a7775aebd60d129e7665aee3bcadb839cb993a77f67bf13"
+        },
+        {
+          "label": "END",
+          "capturedAtUtc": "2026-07-16T02:41:29.472Z",
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "tradeReadyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169689457,
+          "eventsCount": 169,
+          "basisLastBookTs": 1784169687829,
+          "basisLastMarkTs": 1784169687006,
+          "volumeLastBookTs": 1784169687622,
+          "volumeLastTradeTs": 1784169689333,
+          "volumeTradeMessages": 1064,
+          "productRevision": "system-10-runtime-1-control-2",
+          "runtimeGeneration": 1,
+          "controlGeneration": 2,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": "REQUIRED_SOURCE_STALE"
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "356845857ea17e082c8dbfe41ced5882b2d6248dbda29519ef503f79fb51c7a1"
+        }
+      ],
+      "http": {
+        "scheduled": 481,
+        "skippedForConcurrency": 0,
+        "responses": 481,
+        "expectedResponses": 481,
+        "unexpectedResponses": 0,
+        "networkErrors": 0,
+        "responseBytes": 19193208,
+        "throughputRps": 24.027,
+        "responseBytesPerSecond": 958746.345,
+        "latencyMs": {
+          "count": 481,
+          "min": 0.634,
+          "p50": 10.265,
+          "p95": 26.373,
+          "p99": 92.091,
+          "max": 125.59,
+          "mean": 11.524
+        },
+        "endpoints": [
+          {
+            "path": "/health/live",
+            "requests": 49,
+            "responses": 49,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 19458,
+            "statusCounts": {
+              "200": 49
+            },
+            "latencyMs": {
+              "count": 49,
+              "min": 10.265,
+              "p50": 15.496,
+              "p95": 71.553,
+              "p99": 115.422,
+              "max": 115.422,
+              "mean": 20.463
+            }
+          },
+          {
+            "path": "/health/ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 21437,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 11.232,
+              "p50": 14.481,
+              "p95": 36.138,
+              "p99": 81.674,
+              "max": 81.674,
+              "mean": 17.028
+            }
+          },
+          {
+            "path": "/health/trade-ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 23308,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 9.779,
+              "p50": 13.761,
+              "p95": 15.072,
+              "p99": 49.264,
+              "max": 49.264,
+              "mean": 14.418
+            }
+          },
+          {
+            "path": "/api/health",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 17519,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.634,
+              "p50": 1.874,
+              "p95": 2.096,
+              "p99": 8.202,
+              "max": 8.202,
+              "mean": 1.988
+            }
+          },
+          {
+            "path": "/api/state",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 2842676,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 10.688,
+              "p50": 15.973,
+              "p95": 17.526,
+              "p99": 18.319,
+              "max": 18.319,
+              "mean": 15.633
+            }
+          },
+          {
+            "path": "/api/events?limit=25",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 358001,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.734,
+              "p50": 2.03,
+              "p95": 2.363,
+              "p99": 4.32,
+              "max": 4.32,
+              "mean": 2.113
+            }
+          },
+          {
+            "path": "/api/events/count",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 624,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 1.813,
+              "p50": 1.97,
+              "p95": 2.155,
+              "p99": 2.184,
+              "max": 2.184,
+              "mean": 1.976
+            }
+          },
+          {
+            "path": "/api/engine/volume",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 5602117,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 3.708,
+              "p50": 6.501,
+              "p95": 9.363,
+              "p99": 10.478,
+              "max": 10.478,
+              "mean": 6.372
+            }
+          },
+          {
+            "path": "/api/engine/basis",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 4195562,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 2.615,
+              "p50": 3.748,
+              "p95": 6.345,
+              "p99": 114.115,
+              "max": 114.115,
+              "mean": 6.147
+            }
+          },
+          {
+            "path": "/api/product-integration/v1/supervisor",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 6112506,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 13.96,
+              "p50": 24.973,
+              "p95": 83.06,
+              "p99": 125.59,
+              "max": 125.59,
+              "mean": 28.916
+            }
+          }
+        ]
+      },
+      "websocket": {
+        "clientsRequested": 4,
+        "clientsOpened": 4,
+        "openErrors": 0,
+        "messages": 73,
+        "bytes": 79149,
+        "maxClientBufferedAmountBytes": 0,
+        "messageTypes": {
+          "book": 54,
+          "canonical-supervisor-delta": 8,
+          "material-event-page": 4,
+          "btrades": 7
+        },
+        "closeCodes": {
+          "1006": 4
+        },
+        "shutdownClose1012Count": 0,
+        "uncleanClose1006Count": 4,
+        "focus": {
+          "symbol": "BTCUSDT",
+          "burstsAttempted": 2,
+          "bookMessages": 54,
+          "tradeMessages": 7,
+          "status": "MEASURED",
+          "reason": "Public-compatible focused book/trade messages were observed during bounded subscribe/unsubscribe bursts."
+        },
+        "slowConsumer": {
+          "attempted": true,
+          "pauseDurationMs": 19502,
+          "observedClose1013": false,
+          "status": "NOT_OBSERVED",
+          "reason": "A bounded client read pause was exercised without reaching the server buffer threshold; no backpressure close is claimed."
+        }
+      },
+      "process": {
+        "samples": 20,
+        "cpuOneCorePercent": {
+          "count": 20,
+          "min": 21.787,
+          "p50": 27.864,
+          "p95": 39.275,
+          "p99": 40.21,
+          "max": 40.21,
+          "mean": 28.824
+        },
+        "cpuHostPercent": {
+          "count": 20,
+          "min": 1.362,
+          "p50": 1.741,
+          "p95": 2.455,
+          "p99": 2.513,
+          "max": 2.513,
+          "mean": 1.801
+        },
+        "rssBytes": {
+          "count": 20,
+          "min": 339181568,
+          "p50": 400392192,
+          "p95": 456245248,
+          "p99": 457834496,
+          "max": 457834496,
+          "mean": 400081715
+        },
+        "heapUsedBytes": {
+          "count": 20,
+          "min": 152580640,
+          "p50": 206475112,
+          "p95": 250302512,
+          "p99": 252610904,
+          "max": 252610904,
+          "mean": 203328568
+        },
+        "eventLoopP95Ms": {
+          "count": 1,
+          "min": 21.086,
+          "p50": 21.086,
+          "p95": 21.086,
+          "p99": 21.086,
+          "max": 21.086,
+          "mean": 21.086
+        },
+        "eventLoopP99Ms": {
+          "count": 1573,
+          "min": 0.003584,
+          "p50": 11.132927,
+          "p95": 21.086207,
+          "p99": 31.227903,
+          "max": 135.659519,
+          "mean": 12.725897520661157
+        },
+        "eventLoopMaxMs": {
+          "count": 1,
+          "min": 135.66,
+          "p50": 135.66,
+          "p95": 135.66,
+          "p99": 135.66,
+          "max": 135.66,
+          "mean": 135.66
+        },
+        "rssSlopeBytesPerHour": null
+      },
+      "storage": {
+        "preLaunch": {
+          "databaseBytes": 229376,
+          "walBytes": 0,
+          "shmBytes": 32768
+        },
+        "samples": 30,
+        "database": {
+          "initialBytes": 229376,
+          "finalBytes": 229376,
+          "maxBytes": 229376,
+          "growthBytes": 0
+        },
+        "wal": {
+          "initialBytes": 98912,
+          "finalBytes": 1499712,
+          "maxBytes": 1499712,
+          "growthBytes": 1400800
+        },
+        "shm": {
+          "initialBytes": 32768,
+          "finalBytes": 32768,
+          "maxBytes": 32768,
+          "growthBytes": 0
+        },
+        "integrity": null
+      },
+      "shutdown": {
+        "mode": "UNCLEAN_CRASH",
+        "signal": "SIGKILL",
+        "exitCode": null,
+        "exitSignal": "SIGKILL",
+        "durationMs": 34.782,
+        "cleanLogMarkerObserved": false,
+        "stdoutSha256": "49f4850e1cbb22bb2db255ba86700b1558756cdf32f0448a3df37a46f53bdb94",
+        "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "telemetrySha256": "b8c71d1c95515e6d3b94c57878f794e2ff6b37725a0a3e6fe3eba478a35a9077",
+        "logOverflow": false,
+        "passed": true
+      }
+    },
+    {
+      "phaseId": "POST_CRASH_RECOVERY",
+      "bootGeneration": 3,
+      "startedAtUtc": "2026-07-16T02:41:29.509Z",
+      "endedAtUtc": "2026-07-16T02:41:59.435Z",
+      "durationSeconds": 20.017,
+      "snapshots": [
+        {
+          "label": "START",
+          "capturedAtUtc": "2026-07-16T02:41:39.280Z",
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "tradeReadyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169699266,
+          "eventsCount": 186,
+          "basisLastBookTs": 1784169698027,
+          "basisLastMarkTs": 1784169697000,
+          "volumeLastBookTs": 1784169698213,
+          "volumeLastTradeTs": 1784169699125,
+          "volumeTradeMessages": 9,
+          "productRevision": "system-13-runtime-1-control-3",
+          "runtimeGeneration": 1,
+          "controlGeneration": 3,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "d1f4c19f3348d1ecc09e269d765fb98c1be3ad57fb8be2d7f8b178e5e553efb1"
+        },
+        {
+          "label": "END",
+          "capturedAtUtc": "2026-07-16T02:41:59.384Z",
+          "liveStatus": 200,
+          "readyStatus": 503,
+          "tradeReadyStatus": 503,
+          "legacyHealthStatus": 200,
+          "stateStatus": 200,
+          "eventsCountStatus": 200,
+          "basisStatus": 200,
+          "volumeStatus": 200,
+          "productSupervisorStatus": 200,
+          "readyClassification": "HONEST_NOT_READY_503",
+          "tradeReadyClassification": "HONEST_NOT_READY_503",
+          "healthSemanticsValid": true,
+          "stateNowMs": 1784169719370,
+          "eventsCount": 251,
+          "basisLastBookTs": 1784169717714,
+          "basisLastMarkTs": 1784169717000,
+          "volumeLastBookTs": 1784169717714,
+          "volumeLastTradeTs": 1784169719305,
+          "volumeTradeMessages": 1077,
+          "productRevision": "system-13-runtime-1-control-3",
+          "runtimeGeneration": 1,
+          "controlGeneration": 3,
+          "testedCommitProjection": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+          "deployedCommitProjection": null,
+          "configRevisionProjection": null,
+          "schemaRevisionProjection": "product-supervisor.v1",
+          "modelRevisionProjection": null,
+          "deploymentFrozenProjection": false,
+          "exposureStateProjection": "UNKNOWN",
+          "ambiguityStateProjection": "UNKNOWN",
+          "recoveryStateProjection": "UNKNOWN",
+          "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+          "opsInterlockBlocksNewEntries": true,
+          "opsExternalActionAuthorization": "NONE",
+          "reconciliationStatus": "UNAVAILABLE",
+          "reconciliationBlocksNewExposure": true,
+          "reconciliationReasonCodes": [
+            "RECONCILIATION_TRUTH_UNAVAILABLE"
+          ],
+          "restartControlWiringState": "WIRED_LIVE",
+          "restartControlRevision": "0",
+          "managedInventory": {
+            "schemaVersion": "i00-managed-inventory.v1",
+            "expectedIdentityCount": 33,
+            "mappedIdentityCount": 14,
+            "evidencePresentCount": 14,
+            "ownerGatedCount": 13,
+            "notConfiguredCount": 3,
+            "missingCount": 3,
+            "canonicalComponentCount": 14,
+            "referencedCanonicalComponentCount": 14,
+            "observedCanonicalComponentCount": 14,
+            "entries": [
+              {
+                "identity": "operator-auth",
+                "owner": "AUDITED_BACKEND_SECURITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REMOTE_OPERATOR_IDENTITY_OWNER_GATED"
+              },
+              {
+                "identity": "configuration-authority",
+                "owner": "SYSTEM_CONTROL_CONFIGURATION_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED"
+              },
+              {
+                "identity": "ledger-persistence",
+                "owner": "EXISTING_LEDGER",
+                "canonicalComponentIds": [
+                  "ledger-persistence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "ledger-persistence",
+                    "componentProjectionIndex": 12
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "database",
+                "owner": "EXISTING_LEDGER_DATABASE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "clock-sync",
+                "owner": "CANONICAL_CLOCK_SYNC_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND"
+              },
+              {
+                "identity": "spot-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-spot-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-spot-source",
+                    "componentProjectionIndex": 0
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "usdm-public-source",
+                "owner": "AUDITED_APP_PUBLIC_SOURCE",
+                "canonicalComponentIds": [
+                  "public-usdm-source"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "public-usdm-source",
+                    "componentProjectionIndex": 1
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "spot-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "usdm-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "margin-private-truth",
+                "owner": "LIVE_EDGE_PRIVATE_TRUTH",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_READ_AUTHORIZATION_REQUIRED"
+              },
+              {
+                "identity": "instrument-filter-registry",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "universe",
+                "owner": "CANONICAL_MARKET_UNIVERSE",
+                "canonicalComponentIds": [
+                  "market-universe"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-universe",
+                    "componentProjectionIndex": 2
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "evidence-attention-runtime",
+                "owner": "INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE",
+                "canonicalComponentIds": [
+                  "intelligence-runtime",
+                  "market-intelligence"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "intelligence-runtime",
+                    "componentProjectionIndex": 3
+                  },
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "market-intelligence",
+                    "componentProjectionIndex": 4
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "q-inference",
+                "owner": "Q_INFERENCE",
+                "canonicalComponentIds": [
+                  "q-inference"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "q-inference",
+                    "componentProjectionIndex": 5
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "basis-engine",
+                "owner": "BASIS_ENGINE",
+                "canonicalComponentIds": [
+                  "basis-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "basis-engine",
+                    "componentProjectionIndex": 6
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "volume-engine",
+                "owner": "VOLUME_ENGINE",
+                "canonicalComponentIds": [
+                  "volume-engine"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "volume-engine",
+                    "componentProjectionIndex": 7
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "opportunity-authority",
+                "owner": "FOUNDATION_CANONICAL_OPPORTUNITY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "capital-supervision",
+                "owner": "CAPITAL_SUPERVISION",
+                "canonicalComponentIds": [
+                  "capital-supervision"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "capital-supervision",
+                    "componentProjectionIndex": 8
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "risk-gate",
+                "owner": "BACKEND_FOUNDATION_RISK",
+                "canonicalComponentIds": [
+                  "multileg-risk"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "multileg-risk",
+                    "componentProjectionIndex": 9
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "execution-hand",
+                "owner": "BACKEND_FOUNDATION_EXECUTION",
+                "canonicalComponentIds": [
+                  "execution-coordinator-validate-only"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "execution-coordinator-validate-only",
+                    "componentProjectionIndex": 10
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "normal-basis-coordinator",
+                "owner": "LIVE_EDGE_NORMAL_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reverse-basis-coordinator",
+                "owner": "LIVE_EDGE_REVERSE_BASIS_COORDINATOR",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "volume-position-lifecycle",
+                "owner": "LIVE_EDGE_VOLUME_POSITION_LIFECYCLE",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND"
+              },
+              {
+                "identity": "reconciliation",
+                "owner": "BACKEND_FOUNDATION_RECONCILIATION",
+                "canonicalComponentIds": [
+                  "reconciliation"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "reconciliation",
+                    "componentProjectionIndex": 11
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "exposure-position-recovery",
+                "owner": "LIVE_EDGE_EXPOSURE_RECOVERY",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "PRIVATE_ACCOUNT_TRUTH_OWNER_GATED"
+              },
+              {
+                "identity": "outcome-feedback",
+                "owner": "Q_OUTCOME_FEEDBACK_OWNER",
+                "canonicalComponentIds": [],
+                "inventoryState": "OWNER_GATED",
+                "evidence": null,
+                "reasonCode": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+              },
+              {
+                "identity": "machine-supervisor",
+                "owner": "BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION",
+                "canonicalComponentIds": [
+                  "engine-supervisor"
+                ],
+                "inventoryState": "EVIDENCE_PRESENT",
+                "evidence": [
+                  {
+                    "source": "PRODUCT_RUNTIME_COMPONENT_PROJECTION",
+                    "componentId": "engine-supervisor",
+                    "componentProjectionIndex": 13
+                  }
+                ],
+                "reasonCode": null
+              },
+              {
+                "identity": "api-read-model",
+                "owner": "PRODUCT_INTEGRATION_READ_MODEL",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "API_READ_MODEL_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "notification-incident-router",
+                "owner": "NOTIFICATION_INCIDENT_ROUTER",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "INCIDENT_OWNER_NOT_CONFIGURED"
+              },
+              {
+                "identity": "web-cockpit",
+                "owner": "PRODUCT_CONTROL_WEB",
+                "canonicalComponentIds": [],
+                "inventoryState": "NOT_CONFIGURED",
+                "evidence": null,
+                "reasonCode": "WEB_COCKPIT_NOT_LIFECYCLE_MANAGED"
+              },
+              {
+                "identity": "backup-restore",
+                "owner": "OPS_BACKUP_RESTORE",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "external-watchdog",
+                "owner": "OPS_EXTERNAL_WATCHDOG",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING"
+              },
+              {
+                "identity": "cloudflare-tunnel-access",
+                "owner": "OPS_CLOUDFLARE_ACCESS",
+                "canonicalComponentIds": [],
+                "inventoryState": "MISSING",
+                "evidence": null,
+                "reasonCode": "CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING"
+              }
+            ]
+          },
+          "canonicalComponents": [
+            {
+              "componentId": "public-spot-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "public-usdm-source",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-universe",
+              "owner": "AUDITED_APP:server/src/engine/marketData.ts",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "intelligence-runtime",
+              "owner": "INTELLIGENCE_RUNTIME:server/src/intelligenceRuntime",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "market-intelligence",
+              "owner": "MARKET_INTELLIGENCE:server/src/intelligenceFoundation",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "q-inference",
+              "owner": "Q_INFERENCE:quant/src/quant_edge/inference",
+              "observedLifecycle": "DEGRADED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "CHAMPION_UNAVAILABLE"
+            },
+            {
+              "componentId": "basis-engine",
+              "owner": "BASIS_ENGINE:server/src/engine/basis",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "volume-engine",
+              "owner": "VOLUME_ENGINE:server/src/engine/volume",
+              "observedLifecycle": "READY",
+              "capability": "LIVE_PUBLIC",
+              "blocker": null
+            },
+            {
+              "componentId": "capital-supervision",
+              "owner": "CAPITAL_SUPERVISION:server/src/capitalFoundation",
+              "observedLifecycle": "BLOCKED",
+              "capability": "UNAVAILABLE",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "multileg-risk",
+              "owner": "BACKEND_FOUNDATION_RISK:server/src/foundation/risk",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "execution-coordinator-validate-only",
+              "owner": "BACKEND_FOUNDATION_EXECUTION:server/src/foundation/execution",
+              "observedLifecycle": "BLOCKED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "reconciliation",
+              "owner": "BACKEND_FOUNDATION_RECONCILIATION:server/src/foundation/reconciliation",
+              "observedLifecycle": "RECOVERY_REQUIRED",
+              "capability": "NOT_CONFIGURED",
+              "blocker": "OWNER_PROJECTION_NOT_WIRED"
+            },
+            {
+              "componentId": "ledger-persistence",
+              "owner": "EXISTING_LEDGER:server/src/ledger.ts",
+              "observedLifecycle": "READY",
+              "capability": "REPLAY",
+              "blocker": null
+            },
+            {
+              "componentId": "engine-supervisor",
+              "owner": "SYSTEM_INTEGRATION:server/src/systemIntegration",
+              "observedLifecycle": "DEGRADED",
+              "capability": "UNKNOWN",
+              "blocker": "EFFECTIVE_INTAKE_PAUSED"
+            }
+          ],
+          "productControls": [
+            {
+              "controlId": "global.safe-mode.read-only",
+              "backendCommandId": "SET_SAFE_MODE",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.kill-switch.engage",
+              "backendCommandId": "SET_KILL_SWITCH",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "global.intake.pause",
+              "backendCommandId": "SET_INTAKE_PAUSED",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            },
+            {
+              "controlId": "component.engine-supervisor.restart",
+              "backendCommandId": "RESTART_COMPONENT",
+              "wiringState": "WIRED_LIVE",
+              "owner": "systemIntegration.canonical-control-service",
+              "authority": "SERVER_DERIVED_OPERATOR",
+              "disabledReason": null
+            }
+          ],
+          "canonicalRuntimeEvidenceValid": true,
+          "opsProjectionValid": true,
+          "bootRevisionProjectionValid": true,
+          "qComponentPresent": true,
+          "qAdvisoryAction": "ABSTAIN_UNKNOWN",
+          "qTruthLabel": "NOT_CONFIGURED",
+          "qCapability": "NOT_CONFIGURED",
+          "qAuthority": "UNAVAILABLE",
+          "qCapitalRelevance": "NONE",
+          "qControlCount": 0,
+          "tradeReadyProjection": "NO",
+          "qProjectionValid": true,
+          "contentSha256": "6590a35ff6884a9d13c1b6a63a40dd01dcb7eb8773280f6037101c3a7f0d2eaf"
+        }
+      ],
+      "http": {
+        "scheduled": 481,
+        "skippedForConcurrency": 0,
+        "responses": 481,
+        "expectedResponses": 481,
+        "unexpectedResponses": 0,
+        "networkErrors": 0,
+        "responseBytes": 18631815,
+        "throughputRps": 24.03,
+        "responseBytesPerSecond": 930819.669,
+        "latencyMs": {
+          "count": 481,
+          "min": 0.599,
+          "p50": 10.839,
+          "p95": 26.452,
+          "p99": 80.992,
+          "max": 121.271,
+          "mean": 11.522
+        },
+        "endpoints": [
+          {
+            "path": "/health/live",
+            "requests": 49,
+            "responses": 49,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 19404,
+            "statusCounts": {
+              "200": 49
+            },
+            "latencyMs": {
+              "count": 49,
+              "min": 9.662,
+              "p50": 15.621,
+              "p95": 17.105,
+              "p99": 73.569,
+              "max": 73.569,
+              "mean": 16.943
+            }
+          },
+          {
+            "path": "/health/ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 21368,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 9.799,
+              "p50": 14.379,
+              "p95": 15.555,
+              "p99": 38.151,
+              "max": 38.151,
+              "mean": 14.589
+            }
+          },
+          {
+            "path": "/health/trade-ready",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 23240,
+            "statusCounts": {
+              "503": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 9.956,
+              "p50": 13.872,
+              "p95": 14.925,
+              "p99": 17.564,
+              "max": 17.564,
+              "mean": 13.698
+            }
+          },
+          {
+            "path": "/api/health",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 17520,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.599,
+              "p50": 1.895,
+              "p95": 1.971,
+              "p99": 2.177,
+              "max": 2.177,
+              "mean": 1.858
+            }
+          },
+          {
+            "path": "/api/state",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 2941074,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 13.53,
+              "p50": 16.342,
+              "p95": 17.432,
+              "p99": 17.784,
+              "max": 17.784,
+              "mean": 16.103
+            }
+          },
+          {
+            "path": "/api/events?limit=25",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 408000,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 1.931,
+              "p50": 2.029,
+              "p95": 2.287,
+              "p99": 2.844,
+              "max": 2.844,
+              "mean": 2.076
+            }
+          },
+          {
+            "path": "/api/events/count",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 624,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 0.68,
+              "p50": 1.915,
+              "p95": 2.082,
+              "p99": 3.502,
+              "max": 3.502,
+              "mean": 1.905
+            }
+          },
+          {
+            "path": "/api/engine/volume",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 5433339,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 3.9,
+              "p50": 6.811,
+              "p95": 9.258,
+              "p99": 121.271,
+              "max": 121.271,
+              "mean": 10.751
+            }
+          },
+          {
+            "path": "/api/engine/basis",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 3574412,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 2.72,
+              "p50": 3.943,
+              "p95": 54.365,
+              "p99": 107.833,
+              "max": 107.833,
+              "mean": 9.28
+            }
+          },
+          {
+            "path": "/api/product-integration/v1/supervisor",
+            "requests": 48,
+            "responses": 48,
+            "unexpected": 0,
+            "errors": 0,
+            "bytes": 6192834,
+            "statusCounts": {
+              "200": 48
+            },
+            "latencyMs": {
+              "count": 48,
+              "min": 14.874,
+              "p50": 25.541,
+              "p95": 47.757,
+              "p99": 103.793,
+              "max": 103.793,
+              "mean": 27.899
+            }
+          }
+        ]
+      },
+      "websocket": {
+        "clientsRequested": 4,
+        "clientsOpened": 4,
+        "openErrors": 0,
+        "messages": 69,
+        "bytes": 77634,
+        "maxClientBufferedAmountBytes": 0,
+        "messageTypes": {
+          "canonical-supervisor-delta": 4,
+          "material-event-page": 4,
+          "book": 54,
+          "btrades": 7
+        },
+        "closeCodes": {
+          "1012": 4
+        },
+        "shutdownClose1012Count": 4,
+        "uncleanClose1006Count": 0,
+        "focus": {
+          "symbol": "BTCUSDT",
+          "burstsAttempted": 2,
+          "bookMessages": 54,
+          "tradeMessages": 7,
+          "status": "MEASURED",
+          "reason": "Public-compatible focused book/trade messages were observed during bounded subscribe/unsubscribe bursts."
+        },
+        "slowConsumer": {
+          "attempted": true,
+          "pauseDurationMs": 19502,
+          "observedClose1013": false,
+          "status": "NOT_OBSERVED",
+          "reason": "A bounded client read pause was exercised without reaching the server buffer threshold; no backpressure close is claimed."
+        }
+      },
+      "process": {
+        "samples": 20,
+        "cpuOneCorePercent": {
+          "count": 20,
+          "min": 23.653,
+          "p50": 28.666,
+          "p95": 36.884,
+          "p99": 37.946,
+          "max": 37.946,
+          "mean": 29.587
+        },
+        "cpuHostPercent": {
+          "count": 20,
+          "min": 1.478,
+          "p50": 1.792,
+          "p95": 2.305,
+          "p99": 2.372,
+          "max": 2.372,
+          "mean": 1.849
+        },
+        "rssBytes": {
+          "count": 20,
+          "min": 339574784,
+          "p50": 400834560,
+          "p95": 457113600,
+          "p99": 462225408,
+          "max": 462225408,
+          "mean": 401403904
+        },
+        "heapUsedBytes": {
+          "count": 20,
+          "min": 152393640,
+          "p50": 205940168,
+          "p95": 262144624,
+          "p99": 263315168,
+          "max": 263315168,
+          "mean": 206261022
+        },
+        "eventLoopP95Ms": {
+          "count": 1,
+          "min": 21.053,
+          "p50": 21.053,
+          "p95": 21.053,
+          "p99": 21.053,
+          "max": 21.053,
+          "mean": 21.053
+        },
+        "eventLoopP99Ms": {
+          "count": 1568,
+          "min": 0.004608,
+          "p50": 11.173887,
+          "p95": 21.053439,
+          "p99": 30.064639,
+          "max": 137.232383,
+          "mean": 12.765708081632653
+        },
+        "eventLoopMaxMs": {
+          "count": 1,
+          "min": 137.232,
+          "p50": 137.232,
+          "p95": 137.232,
+          "p99": 137.232,
+          "max": 137.232,
+          "mean": 137.232
+        },
+        "rssSlopeBytesPerHour": null
+      },
+      "storage": {
+        "preLaunch": {
+          "databaseBytes": 229376,
+          "walBytes": 1499712,
+          "shmBytes": 32768
+        },
+        "samples": 31,
+        "database": {
+          "initialBytes": 229376,
+          "finalBytes": 299008,
+          "maxBytes": 299008,
+          "growthBytes": 69632
+        },
+        "wal": {
+          "initialBytes": 1635672,
+          "finalBytes": 0,
+          "maxBytes": 3024112,
+          "growthBytes": -1635672
+        },
+        "shm": {
+          "initialBytes": 32768,
+          "finalBytes": 0,
+          "maxBytes": 32768,
+          "growthBytes": -32768
+        },
+        "integrity": {
+          "quickCheck": "ok",
+          "integrityCheck": "ok",
+          "journalMode": "wal",
+          "foreignKeyViolationCount": 0,
+          "userVersion": 1,
+          "eventCount": 255,
+          "bootRelease": {
+            "rowCount": 3,
+            "latestGeneration": 3,
+            "latestTestedCommit": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+            "latestDeployedCommit": null,
+            "latestConfigRevision": null,
+            "latestSchemaRevision": "1",
+            "latestModelRevision": null,
+            "latestStartedAtMs": 1784169689816,
+            "latestCompletedAtMs": 1784169719399,
+            "latestClean": true,
+            "latestBlockerCode": null,
+            "allRowsClean": false,
+            "cleanCompletedCount": 2,
+            "crashPendingCount": 1,
+            "crashPendingGenerations": [
+              2
+            ],
+            "allRowsIdentityValid": true,
+            "expectedLatestLifecycle": "CLEAN_COMPLETED",
+            "latestLifecycleState": "CLEAN_COMPLETED",
+            "expectedCrashPendingGenerations": [
+              2
+            ],
+            "lifecycleExpectationMet": true,
+            "passed": true
+          },
+          "controlCommand": {
+            "idempotencyKey": "i00.performance.restart.g1.74eb452efab8",
+            "durableReceiptObserved": false,
+            "durableRejectionAuditObserved": true,
+            "rejectionCode": "RESTART_EXPOSURE_NONE_NOT_PROVEN",
+            "rejectionActorSource": "loopback",
+            "checkpointControlRevision": 0,
+            "checkpointControlGeneration": 3,
+            "passed": true
+          },
+          "passed": true
+        }
+      },
+      "shutdown": {
+        "mode": "GRACEFUL",
+        "signal": "SIGTERM",
+        "exitCode": 0,
+        "exitSignal": null,
+        "durationMs": 48.103,
+        "cleanLogMarkerObserved": true,
+        "stdoutSha256": "bcb37a378b3e54c4dd292bbd465cff9972df2dc72dea04d756f29a8ff5093097",
+        "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "telemetrySha256": "a601b7bcaeb0fcb8df62b608260522d32f6e70a7dcc415a7a66582184d133832",
+        "logOverflow": false,
+        "passed": true
+      }
+    }
+  ],
+  "canonicalRestart": {
+    "controlId": "component.engine-supervisor.restart",
+    "authentication": "SERVER_DERIVED_LOOPBACK",
+    "operatorPayloadSent": false,
+    "previewStatus": 200,
+    "previewId": "prv_08ef3ef242bdc9103b14fe74f6d20d50aa841d1ea94581f1715df28a86aa2694",
+    "previewDigest": "sha256:3babea831c54f015ae325007c0760044db5a99b431e0d0b12a5d4e238c85d865",
+    "previewSynthetic": false,
+    "submitStatus": 200,
+    "idempotencyKey": "i00.performance.restart.g1.74eb452efab8",
+    "resultStatus": "REJECTED_STATE",
+    "commandId": "sysctrl_a65ed3fe716da4ed93fa5a1e9ba4f4c7ddb33fda8cca4147100fd5eac3d19717",
+    "correlationId": "product.control.a65ed3fe716da4ed93fa5a1e9ba4f4c7ddb33fda8cca4147",
+    "receiptId": null,
+    "resultSynthetic": false,
+    "resultBeforeSha256": "c4f7383fbb42a44f291a130e6c1d743a90085dcff1a6e23f58b28f0633ee0ec9",
+    "resultAfterSha256": "c4f7383fbb42a44f291a130e6c1d743a90085dcff1a6e23f58b28f0633ee0ec9",
+    "resultStateUnchanged": true,
+    "resultBeforeRevision": 0,
+    "resultAfterRevision": 0,
+    "resultBeforeGeneration": 1,
+    "resultAfterGeneration": 1,
+    "beforeBarrier": {
+      "exposureState": "UNKNOWN",
+      "ambiguityState": "UNKNOWN",
+      "recoveryState": "UNKNOWN",
+      "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+      "opsInterlockBlocksNewEntries": true,
+      "reconciliationStatus": "UNAVAILABLE",
+      "reconciliationBlocksNewExposure": true,
+      "reconciliationReasonCodes": [
+        "RECONCILIATION_TRUTH_UNAVAILABLE"
+      ],
+      "readyStatus": 503,
+      "tradeReadyStatus": 503
+    },
+    "afterBarrier": {
+      "exposureState": "UNKNOWN",
+      "ambiguityState": "UNKNOWN",
+      "recoveryState": "UNKNOWN",
+      "opsInterlockState": "OPS_INTERLOCK_BLOCKED",
+      "opsInterlockBlocksNewEntries": true,
+      "reconciliationStatus": "UNAVAILABLE",
+      "reconciliationBlocksNewExposure": true,
+      "reconciliationReasonCodes": [
+        "RECONCILIATION_TRUTH_UNAVAILABLE"
+      ],
+      "readyStatus": 503,
+      "tradeReadyStatus": 503
+    },
+    "disposition": "OWNER_GATED",
+    "managedRestartAcceptance": "NOT_PROVEN",
+    "durableReceiptObserved": false,
+    "durableRejectionAuditObserved": true,
+    "rejectionCode": "RESTART_EXPOSURE_NONE_NOT_PROVEN",
+    "controlGenerationAdvanced": false,
+    "runtimeGenerationAdvanced": false,
+    "effectGenerationAdvanced": false,
+    "webSocketClose1012Observed": true,
+    "barrierPreserved": true,
+    "passed": true
+  },
+  "uncleanRecovery": {
+    "terminationSignal": "SIGKILL",
+    "uncleanBootGeneration": 2,
+    "recoveryBootGeneration": 3,
+    "walBytesAfterSigkill": 1499712,
+    "shmBytesAfterSigkill": 32768,
+    "walBytesBeforeRecoveryLaunch": 1499712,
+    "shmBytesBeforeRecoveryLaunch": 32768,
+    "databaseOpenedByHarnessBetweenCrashAndRecovery": false,
+    "applicationRuntimeFirstRecoveryOpen": true,
+    "crashPendingGeneration": 2,
+    "crashPendingBootPreserved": true,
+    "recoveryLatestLifecycleState": "CLEAN_COMPLETED",
+    "recoveryWalRemovedOnCleanClose": true,
+    "readinessHonestAfterRecovery": true,
+    "reconciliationStillBlocksAfterRecovery": true,
+    "testedShaPreserved": true,
+    "deployedShaAbsent": true,
+    "quickCheck": "ok",
+    "integrityCheck": "ok",
+    "passed": true
+  },
+  "continuity": {
+    "sameDataDirectory": true,
+    "firstCleanEventCount": 85,
+    "recoveredEventCount": 255,
+    "eventCountNondecreasing": true,
+    "gracefulStopsClean": true,
+    "gracefulSocketsReceived1012": true,
+    "crashSocketsClosedAbnormally": true,
+    "databaseIntegrityOnReadableStops": true,
+    "bootGenerationsOneTwoThree": true,
+    "testedShaAllBoots": true,
+    "deployedShaAbsentAllBoots": true,
+    "opsReadbackNotFrozenAllBoots": true,
+    "opsInterlockHonestAllBoots": true,
+    "canonicalRestartOwnerGateProven": true,
+    "uncleanRecoveryProven": true,
+    "passed": true,
+    "reasonCodes": []
+  },
+  "limitations": [
+    {
+      "metric": "q.production_inference_latency",
+      "status": "NOT_CONFIGURED",
+      "reason": "No accepted production Q transport is mounted; no latency value exists."
+    },
+    {
+      "metric": "private.events_per_second",
+      "status": "OWNER_GATED",
+      "reason": "Private reads and credentials are outside this keyless local campaign."
+    },
+    {
+      "metric": "exchange.weight_utilization",
+      "status": "NOT_CONFIGURED",
+      "reason": "The assembled runtime does not expose a canonical exchange-weight metric."
+    },
+    {
+      "metric": "runtime.real_reconnect_storm",
+      "status": "NOT_CONFIGURED",
+      "reason": "The harness does not manipulate upstream public networks or claim a real reconnect storm."
+    },
+    {
+      "metric": "backup.during_observation",
+      "status": "NOT_CONFIGURED",
+      "reason": "The accepted simulation-only backup owner exists, but no concurrent backup was exercised in this soak and no production backup claim is made."
+    },
+    {
+      "metric": "ledger.commit_latency",
+      "status": "NOT_CONFIGURED",
+      "reason": "The existing Ledger does not expose canonical per-commit latency telemetry."
+    },
+    {
+      "metric": "runtime.full_universe_event_rate",
+      "status": "NOT_CONFIGURED",
+      "reason": "No canonical full-universe event-rate counter is exposed by the assembled runtime."
+    },
+    {
+      "metric": "runtime.reconnect_resync",
+      "status": "NOT_CONFIGURED",
+      "reason": "Normal public-source status is observable, but a controlled reconnect campaign is not implemented here."
+    },
+    {
+      "metric": "runtime.log_notification_flood",
+      "status": "NOT_CONFIGURED",
+      "reason": "This bounded safe campaign does not inject synthetic production incidents."
+    },
+    {
+      "metric": "runtime.constrained_resource_degradation",
+      "status": "NOT_CONFIGURED",
+      "reason": "No cgroup or host resource mutation is performed by this local harness."
+    },
+    {
+      "metric": "cockpit.browser_render",
+      "status": "NOT_CONFIGURED",
+      "reason": "This receipt measures canonical APIs and WebSocket behavior; browser rendering requires the separate browser acceptance artifact."
+    },
+    {
+      "metric": "production.capacity_slo",
+      "status": "UNKNOWN",
+      "reason": "Local proxy bounds are measurement gates, not measured production capacity."
+    }
+  ],
+  "slo": {
+    "scope": "LOCAL_PROXY_INITIAL_GATES",
+    "checks": [
+      {
+        "metric": "host.cpu.percent.p95",
+        "unit": "percent",
+        "observed": 2.414,
+        "soft": 70,
+        "hard": 90,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "node.event_loop_lag_ms.p99",
+        "unit": "ms",
+        "observed": 31.228,
+        "soft": 50,
+        "hard": 200,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "process.rss_bytes.max",
+        "unit": "bytes",
+        "observed": 462225408,
+        "soft": 536870912,
+        "hard": 805306368,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "soak.rss_slope_bytes_per_hour.max",
+        "unit": "bytes/hour",
+        "observed": null,
+        "soft": 10485760,
+        "hard": 52428800,
+        "status": "NOT_CONFIGURED",
+        "reason": "No measured numeric value exists."
+      },
+      {
+        "metric": "storage.wal_bytes.max",
+        "unit": "bytes",
+        "observed": 3024112,
+        "soft": 1073741824,
+        "hard": 5368709120,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "api.http_latency_ms.p95",
+        "unit": "ms",
+        "observed": 26.358,
+        "soft": 250,
+        "hard": 1000,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "api.unexpected_percent",
+        "unit": "percent",
+        "observed": 0,
+        "soft": 1,
+        "hard": 5,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      },
+      {
+        "metric": "api.response_bytes_per_second",
+        "unit": "bytes/second",
+        "observed": 913233.231,
+        "soft": 5242880,
+        "hard": 20971520,
+        "status": "PASS",
+        "reason": "Measured value is within the documented local-proxy soft bound."
+      }
+    ],
+    "invariantFailures": [],
+    "overall": "PASS",
+    "degradationVisibility": "CANONICAL_NON_GREEN_VISIBLE",
+    "productionClaim": "UNKNOWN"
+  },
+  "artifacts": {
+    "receiptRelativePath": "evidence/local-proxy-performance-20260716022242828-76436.json",
+    "receiptWriteMode": "IMMUTABLE_CREATE_ONLY",
+    "schemaRelativePath": "schema.v1.json",
+    "schemaSha256": "b3eb274169cac360a74bff8ca6c1364dbedb1eaf7f0b99612948309e4c8f3ebc",
+    "secretScan": {
+      "artifactsScanned": 10,
+      "findings": [],
+      "passed": true
+    }
+  }
+}

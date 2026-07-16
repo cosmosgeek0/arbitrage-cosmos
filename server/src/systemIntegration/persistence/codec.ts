@@ -18,6 +18,7 @@ import {
   type SystemJsonValue,
   type SystemPersistenceCheckpoint,
 } from './types.js';
+import { validatePersistedLiveEdgeControlEvents } from './liveEdgeControlCheckpoint.js';
 
 const MAX_UTC_MS = 4_102_444_800_000;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
@@ -142,7 +143,11 @@ function inspectJson(value: unknown): string[] {
     }
     for (let index = keys.length - 1; index >= 0; index -= 1) {
       const key = keys[index];
-      if (FORBIDDEN_KEY.test(key)) issues.push(`${current.path}.${key}:SECRET_FIELD_FORBIDDEN`);
+      const explicitlyNoneAuthorization = key === 'externalActionAuthorization'
+        && (candidate as Record<string, unknown>)[key] === 'NONE';
+      if (FORBIDDEN_KEY.test(key) && !explicitlyNoneAuthorization) {
+        issues.push(`${current.path}.${key}:SECRET_FIELD_FORBIDDEN`);
+      }
       if (Buffer.byteLength(key, 'utf8') > 256) issues.push(`${current.path}.${key}:FIELD_NAME_LIMIT_EXCEEDED`);
       stack.push({
         value: (candidate as Record<string, unknown>)[key],
@@ -259,7 +264,7 @@ export function validateCheckpointState(value: unknown): string[] {
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
     'revision', 'generation', 'control', 'desiredComponents', 'authorityReferences', 'reservations',
-    'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'traceIndex',
+    'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
   if (!safeInteger(value.revision)) issues.push('$.revision:NON_NEGATIVE_INTEGER_REQUIRED');
@@ -406,6 +411,12 @@ export function validateCheckpointState(value: unknown): string[] {
   );
   duplicateValues(idempotency.flatMap((entry) => typeof entry.idempotencyKey === 'string' ? [entry.idempotencyKey] : []), '$.idempotencyReceipts', issues);
 
+  issues.push(...validatePersistedLiveEdgeControlEvents(
+    value.liveEdgeControlEvents,
+    value.revision,
+    SYSTEM_PERSISTENCE_LIMITS.maximumLiveEdgeControlEvents,
+  ));
+
   const controlRejections = validateArray(
     value.controlRejections,
     '$.controlRejections',
@@ -534,13 +545,17 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
   if (typeof parsed.checksum !== 'string' || !CHECKSUM.test(parsed.checksum)) {
     return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint checksum is malformed' };
   }
-  const issues = validateCheckpointState(parsed.state);
-  if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };
   try {
     const expected = persistenceDigest({ schema: parsed.schema, version: parsed.version, state: parsed.state });
     if (parsed.checksum !== expected) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint checksum does not match its state' };
     if (canonicalPersistenceJson(parsed) !== serialized) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint is not canonically serialized' };
-    return { ok: true, value: frozenClone(parsed.state as SystemIntegrationCheckpointState) };
+    if (!plainObject(parsed.state)) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint state must be an object' };
+    const migratedState = Object.hasOwn(parsed.state, 'liveEdgeControlEvents')
+      ? parsed.state
+      : { ...parsed.state, liveEdgeControlEvents: [] };
+    const issues = validateCheckpointState(migratedState);
+    if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };
+    return { ok: true, value: frozenClone(migratedState as unknown as SystemIntegrationCheckpointState) };
   } catch (error) {
     return {
       ok: false,

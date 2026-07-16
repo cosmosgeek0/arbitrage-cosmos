@@ -1,6 +1,5 @@
-/* Shared executive-metric grammar.
-   These are the only inset cards on operator pages: large, scan-first facts.
-   Everything beneath them remains a continuous hairline-divided surface. */
+/* Shared executive-metric grammar: one continuous 102px summary band.
+   Cells are separated by a single hairline; nested summary cards are retired. */
 
 :is(
   .accountx-summary,
@@ -16,9 +15,9 @@
   .dcx-performance-summary
 ) {
   display: grid;
-  gap: 8px;
-  min-height: 128px;
-  padding: 12px 14px;
+  gap: 0;
+  min-height: 102px;
+  padding: 0;
   border-top: 0;
   border-bottom: 1px solid var(--line-2);
   background: var(--panel);
@@ -39,14 +38,14 @@
 ) {
   display: flex;
   min-width: 0;
-  min-height: 104px;
+  min-height: 0;
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  padding: 12px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  background: var(--panel);
+  padding: 17px 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -80,11 +79,11 @@
 ) {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 480;
-  line-height: 15px;
-  letter-spacing: 0;
-  text-transform: none;
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
 }
 
 :is(
@@ -102,7 +101,7 @@
 ) {
   margin: 0;
   font-size: 18px;
-  font-weight: 470;
+  font-weight: 510;
   line-height: 23px;
   letter-spacing: -.012em;
 }
@@ -131,10 +130,17 @@
   :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  :is(.dcx-summary, .dcx-performance-summary) > :is(article, div):nth-child(n + 4),
+  :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) > :is(article, div):nth-child(n + 3) {
+    border-top: 1px solid var(--line-2);
+  }
 }
 
 @container (max-width: 620px) {
   :is(.dcx-summary, .dcx-performance-summary, .accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
     grid-template-columns: minmax(0, 1fr);
+  }
+  :is(.dcx-summary, .dcx-performance-summary, .accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) > :is(article, div):nth-child(n + 2) {
+    border-top: 1px solid var(--line-2);
   }
 }

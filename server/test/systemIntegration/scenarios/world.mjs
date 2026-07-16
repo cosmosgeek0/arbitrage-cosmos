@@ -335,19 +335,50 @@ export function createCompositionWorld(options = {}) {
       };
     },
   };
+  const intelligenceRuntime = strategy(
+    'intelligence-runtime',
+    options.intelligenceRuntimeStartMode,
+    options.intelligenceRuntimeStopMode,
+  );
+  const marketIntelligence = strategy(
+    'market-intelligence',
+    options.marketIntelligenceStartMode,
+    options.marketIntelligenceStopMode,
+  );
   const basis = strategy('basis', options.basisStartMode, options.basisStopMode);
   const volume = strategy('volume', options.volumeStartMode, options.volumeStopMode);
+  const q = options.includeQ ? strategy('q', options.qStartMode, options.qStopMode) : null;
   const composition = createManagedRuntimeComposition({
     clock,
     scheduler,
-    ports: { market, basis: basis.port, volume: volume.port },
+    ports: {
+      market,
+      intelligenceRuntime: intelligenceRuntime.port,
+      marketIntelligence: marketIntelligence.port,
+      ...(q === null ? {} : { q: q.port }),
+      basis: basis.port,
+      volume: volume.port,
+    },
     readEnvironment: () => ({ privateKeysAvailable: false, killSwitchEngaged: true, borrowTruthPresent: false }),
     tickIntervalMs: 1,
     defaultGateTimeoutMs: 5,
     defaultComponentTimeoutMs: 20,
     drainTimeoutMs: 50,
   });
-  return { composition, clock, scheduler, log, states: { market: marketState, basis: basis.state, volume: volume.state } };
+  return {
+    composition,
+    clock,
+    scheduler,
+    log,
+    states: {
+      market: marketState,
+      intelligenceRuntime: intelligenceRuntime.state,
+      marketIntelligence: marketIntelligence.state,
+      q: q?.state ?? null,
+      basis: basis.state,
+      volume: volume.state,
+    },
+  };
 }
 
 export async function driveComposition(world, count = 1) {
@@ -360,7 +391,7 @@ export async function driveComposition(world, count = 1) {
 
 export async function startCompositionReady(world) {
   const result = world.composition.start();
-  await driveComposition(world, 3);
+  await driveComposition(world, 8);
   return result;
 }
 

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "attestationType": "I00_PRODUCTION_BUILD_V1",
+  "testedSha": "REPLACE_WITH_FULL_TESTED_GIT_SHA",
+  "sourceTree": "REPLACE_WITH_FULL_GIT_TREE_SHA",
+  "testedReceiptSha256": "REPLACE_WITH_SHA256",
+  "packageLockSha256": "REPLACE_WITH_SHA256",
+  "runtimeDepsDigestSha256": "REPLACE_WITH_SHA256",
+  "serverDistDigestSha256": "REPLACE_WITH_SHA256",
+  "webDistDigestSha256": "REPLACE_WITH_SHA256",
+  "requiredCommands": [
+    {
+      "command": "npm test",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:all",
+      "exitCode": 0
+    },
+    {
+      "command": "bash ops/tests/i00/run-all.sh",
+      "exitCode": 0
+    }
+  ],
+  "testsCompletedAtUtc": "REPLACE_WITH_EXACT_UTC_SECONDS",
+  "buildCompletedAtUtc": "REPLACE_WITH_EXACT_UTC_SECONDS",
+  "builderIdentity": "REPLACE_WITH_DURABLE_OWNER_OR_CI_IDENTITY"
+}

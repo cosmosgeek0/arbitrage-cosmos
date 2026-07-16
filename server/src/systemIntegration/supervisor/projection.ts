@@ -324,6 +324,23 @@ function validateSummaries(summaries: SystemSupervisorSummaries): void {
 
   const ledger = summaries.ledger;
   if (ledger.writable !== null && typeof ledger.writable !== 'boolean') throw new TypeError('ledger.writable is invalid');
+  if (!['AVAILABLE', 'UNAVAILABLE', 'MALFORMED', 'MISMATCH'].includes(ledger.schemaCompatibilityState)) {
+    throw new TypeError('ledger.schemaCompatibilityState is invalid');
+  }
+  if (ledger.schemaCompatibilityState === 'AVAILABLE') {
+    if (!Number.isSafeInteger(ledger.currentSchemaVersion) || (ledger.currentSchemaVersion as number) < 1
+        || !Number.isSafeInteger(ledger.rollbackFloor) || (ledger.rollbackFloor as number) < 0
+        || (ledger.rollbackFloor as number) > (ledger.currentSchemaVersion as number)
+        || ledger.schemaCompatibilityReason !== null) {
+      throw new TypeError('ledger schema compatibility available shape is invalid');
+    }
+  } else if (ledger.currentSchemaVersion !== null
+      || ledger.rollbackFloor !== null
+      || typeof ledger.schemaCompatibilityReason !== 'string'
+      || !CODE_PATTERN.test(ledger.schemaCompatibilityReason)
+      || ledger.truthLabel !== 'UNAVAILABLE') {
+    throw new TypeError('ledger schema compatibility failure shape is invalid');
+  }
   optionalString('ledger.lastEventId', ledger.lastEventId, 256);
   optionalTimestamp('ledger.lastPersistedAtMs', ledger.lastPersistedAtMs);
   optionalString('ledger.checkpointRevision', ledger.checkpointRevision, 256);
@@ -362,6 +379,45 @@ function mergeFoundationStatus(
     lastFailure,
     generation: isSupervisor ? runtime.generation : source.generation,
   };
+}
+
+function projectLedgerCapabilityTruth(
+  component: Readonly<SystemComponentSnapshot>,
+  ledger: Readonly<SystemLedgerSummary>,
+): Readonly<SystemComponentSnapshot> {
+  if (component.componentId !== 'ledger-persistence'
+      || component.readiness === 'FAILED'
+      || component.readiness === 'STOPPED') return component;
+
+  const blockerCodes = new Set(component.blockerCodes);
+  let blocked = false;
+  if (ledger.writable === false) {
+    blockerCodes.add('LEDGER_NOT_WRITABLE');
+    blocked = true;
+  } else if (ledger.writable === null) {
+    blockerCodes.add('LEDGER_WRITABILITY_UNKNOWN');
+    blocked = true;
+  }
+
+  const schemaUnavailable = ledger.schemaCompatibilityState !== 'AVAILABLE';
+  if (schemaUnavailable) {
+    blockerCodes.add(`LEDGER_SCHEMA_COMPATIBILITY_${ledger.schemaCompatibilityState}`);
+    if (ledger.schemaCompatibilityReason !== null) blockerCodes.add(ledger.schemaCompatibilityReason);
+    blocked = true;
+  }
+  if (!blocked) return component;
+
+  return Object.freeze({
+    ...component,
+    releaseStatuses: Object.freeze(component.releaseStatuses.filter((status) => status !== 'LIVE_PUBLIC')),
+    phase: 'BLOCKED',
+    readiness: 'BLOCKED',
+    truthLabel: 'UNAVAILABLE',
+    authority: 'UNAVAILABLE',
+    completeness: 'UNAVAILABLE',
+    blockerCodes: Object.freeze([...blockerCodes]),
+    operatorAttentionRequired: true,
+  });
 }
 
 function cloneStrategy(summary: SystemStrategyRuntimeSummary, truthLabel: SystemTruthLabel): Readonly<SystemStrategyRuntimeSummary> {
@@ -486,7 +542,8 @@ export function buildSystemSupervisorProjection(
 
     const components = SYSTEM_COMPONENT_IDS.map((componentId) => {
       const source = sourceComponentMap.get(componentId) as Readonly<SystemComponentSnapshot>;
-      const normalized = normalizeComponentTruth(mergeFoundationStatus(source, input.runtime), input.nowMs);
+      const truthNormalized = normalizeComponentTruth(mergeFoundationStatus(source, input.runtime), input.nowMs);
+      const normalized = projectLedgerCapabilityTruth(truthNormalized, input.summaries.ledger);
       const outputIssues = validateSystemComponentSnapshot(normalized);
       if (outputIssues.length > 0) {
         throw new TypeError(`${componentId} projection violates the integration contract: ${outputIssues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);

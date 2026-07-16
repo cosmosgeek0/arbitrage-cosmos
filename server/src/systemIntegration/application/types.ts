@@ -24,6 +24,7 @@ import type {
   PersistedCommitReceipt,
   PersistenceFailureCode,
   PersistenceLoadResult,
+  ProductIdentityReferenceRecord,
   RestartBarrierProjection,
 } from '../persistence/types.js';
 import type {
@@ -76,6 +77,8 @@ export interface SystemIntegrationApplicationOptions {
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
   readonly drainTimeoutMs?: number;
+  /** Must remain below the durable restart-truth freshness lease. */
+  readonly restartTruthRefreshIntervalMs?: number;
 }
 
 export type SystemApplicationPhase =
@@ -84,7 +87,18 @@ export type SystemApplicationPhase =
   | 'RUNNING'
   | 'FAILED'
   | 'DRAINING'
+  | 'MAINTENANCE'
   | 'DRAINED';
+
+export type SystemApplicationDrainDisposition =
+  | 'DRAINED'
+  | 'REFUSED_RECOVERY_SUPERVISION_REQUIRED'
+  | 'DRAIN_FAILED';
+
+export type SystemApplicationDrainBlockingReference = Readonly<Pick<
+  ProductIdentityReferenceRecord,
+  'referenceType' | 'referenceId' | 'ownerId' | 'ownerRevision' | 'resolutionState' | 'correlationId'
+>>;
 
 export interface SystemApplicationStartResult {
   readonly ok: boolean;
@@ -108,12 +122,16 @@ export interface ManagedRuntimeRestartResult {
 export interface SystemApplicationDrainResult {
   readonly ok: boolean;
   readonly clean: boolean;
+  readonly disposition: SystemApplicationDrainDisposition;
+  readonly phase: SystemApplicationPhase;
   readonly correlationId: string;
+  readonly blockerCodes: readonly string[];
+  readonly blockingIdentityReferences: readonly SystemApplicationDrainBlockingReference[];
   readonly composition: Readonly<ManagedCompositionReadSnapshot>;
   readonly finalCheckpoint: Readonly<PersistedCommitReceipt> | null;
   readonly persistenceFailureCode: PersistenceFailureCode | null;
-  /** True only after the final checkpoint attempt has completed. */
-  readonly ledgerCloseMayProceed: true;
+  /** True only after a clean physical drain and durable final checkpoint. */
+  readonly ledgerCloseMayProceed: boolean;
 }
 
 export interface SystemIntegrationApplicationFacade {
@@ -124,6 +142,7 @@ export interface SystemIntegrationApplicationFacade {
     input: Readonly<ValidateOnlyOrchestratorInput>,
   ): Promise<Readonly<ValidateOnlyRunResult>>;
   restartManagedRuntime(): Readonly<ManagedRuntimeRestartResult>;
+  refreshRestartTruth(): Promise<Readonly<RestartBarrierProjection>>;
   managedRuntime(): Readonly<ManagedCompositionReadSnapshot>;
   supervisor(): Readonly<SystemSupervisorReadModel>;
   controlState(): Readonly<SystemControlState>;

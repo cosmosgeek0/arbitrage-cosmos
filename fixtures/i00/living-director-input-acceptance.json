@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
+  "recordedAtUtc": "2026-07-14T12:38:21Z",
+  "ruling": "D-LAUNCH-7",
+  "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+  "sourceRef": "current-main",
+  "sourceCutoffCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
+  "mode": "LATEST_CURRENT_MAIN_TOUCH",
+  "historicalPacketPinsPreserved": true,
+  "finalRealAdapterRepinRequired": false,
+  "finalRealAdapterRepinCompleted": true,
+  "acceptAssemblyWorkingTreeCopies": false,
+  "livingDirectorInputs": [
+    {
+      "path": "QL_DIRECTOR_STATE.md",
+      "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
+      "observedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
+      "observedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
+      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+    },
+    {
+      "path": "QL_PARALLEL_DAG.md",
+      "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
+      "observedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
+      "observedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
+      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+    }
+  ],
+  "ownerDirectives": [
+    {
+      "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5"
+    },
+    {
+      "path": "IP_RUNTIME.md",
+      "sha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810"
+    },
+    {
+      "path": "IP_CONTROL.md",
+      "sha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278"
+    },
+    {
+      "path": "IP_OPS.md",
+      "sha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779"
+    },
+    {
+      "path": "IP_PROOF.md",
+      "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6"
+    }
+  ],
+  "verificationCommands": [
+    "git log -1 --format=%H current-main -- QL_DIRECTOR_STATE.md",
+    "git log -1 --format=%H current-main -- QL_PARALLEL_DAG.md",
+    "git show <latest-touch-commit>:<path>",
+    "git rev-parse <latest-touch-commit>:<path>"
+  ]
+}

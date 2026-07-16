@@ -93,18 +93,6 @@ export function WarnStrip({ children }: { children: ReactNode }) {
   );
 }
 
-export function SetupChecklist() {
-  return (
-    <ol className="setup-list">
-      <li>Create an API key on Binance → <b>API Management</b></li>
-      <li>Enable <b>Reading</b>. Leave withdrawals <b>disabled</b>. Enable spot trading only when ready for live sends.</li>
-      <li>Restrict the key to this server’s IP</li>
-      <li>On the server: copy <b>.env.example</b> → <b>.env</b>, fill the two key variables</li>
-      <li>Restart the app — balances appear within seconds</li>
-    </ol>
-  );
-}
-
 export function SideTag({ side }: { side: string }) {
   return <span className={`chip-tag ${side === 'BUY' ? 'ok' : 'bad'}`}>{side}</span>;
 }

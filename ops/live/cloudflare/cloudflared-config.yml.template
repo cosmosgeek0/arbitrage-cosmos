@@ -1,0 +1,26 @@
+# ops/live/cloudflare/cloudflared-config.yml.template
+# Install as /etc/cloudflared/config.yml (owner cloudflared, mode 0640).
+#
+# Operator boundary shape (§24.2):
+#   - the app binds 127.0.0.1 only; this tunnel is the ONLY ingress;
+#   - Cloudflare Access protects the hostname (see access-app.json.template);
+#   - the origin still validates the Access JWT itself (CF_ACCESS_* in
+#     cosmos-app.env) — the tunnel alone is never trusted;
+#   - the catch-all rule refuses every hostname not explicitly published.
+#
+# Placeholders are filled at the separately owner-authorized activation step.
+# Creating the tunnel and its credentials file is that activation step —
+# never done from this repository's tests.
+
+tunnel: REPLACE_ME_TUNNEL_UUID
+credentials-file: /etc/cloudflared/REPLACE_ME_TUNNEL_UUID.json
+
+ingress:
+  # The cockpit/app hostname, private to the operator via Cloudflare Access.
+  - hostname: REPLACE_ME_APP_HOSTNAME
+    service: http://127.0.0.1:8080
+    originRequest:
+      noHappyEyeballs: true
+      connectTimeout: 10s
+  # Everything else is refused.
+  - service: http_status:404

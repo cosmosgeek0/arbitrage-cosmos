@@ -1,0 +1,198 @@
+#!/usr/bin/env node
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  OPERATION_KINDS,
+  OPERATION_MAPPING_REGISTRY,
+  REVIEWED_OPERATION_DISPOSITIONS,
+  scanProductionOperations,
+} from '../productAssurance/production-operation-scan.mjs';
+
+const TWIN_PATH = 'server/src/liveEdge/adapters/exchangeTwin/twin.ts';
+const TWIN_SOURCE_SHA256 = '4084c2bb579a6b8e31cc3335ea5239aecb0c4d02069be149c16cf041ad6d726d';
+const TWIN_SITE_IDS = Object.freeze([
+  'OPSITE_EC1F177AF129B3ADC45F',
+  'OPSITE_BBF6A6E3E6D0468FD096',
+  'OPSITE_681C6289EB16650A7095',
+  'OPSITE_E1DFC0EA92073B636F85',
+  'OPSITE_4313D4CAC1BE118FA9C7',
+  'OPSITE_C3A4E3DF89FAAE01DB37',
+  'OPSITE_2FBD24490D95366BBEC9',
+  'OPSITE_FA39DF346D81D5807F15',
+  'OPSITE_613F1008C4901A5BC2F2',
+  'OPSITE_BFF76F75E2CEBDCF1F2E',
+  'OPSITE_67E9868170DACA0EA4B4',
+  'OPSITE_8A41F617689711AB0F24',
+  'OPSITE_4F03FF2180B9D93D6ECF',
+  'OPSITE_7B8A49CB49C59D501D3E',
+  'OPSITE_B3E6F79CD0FDFBB6AB4B',
+  'OPSITE_E2C4B80645CF74F5E209',
+  'OPSITE_978ACBE891DB4E20A632',
+  'OPSITE_C14963BAE18A1A999A3B',
+  'OPSITE_C08CC5189218F0DA4BC2',
+].sort());
+
+const ASSESSMENT_PATH = 'server/src/liveEdge/integration/assessmentBridge.ts';
+const ASSESSMENT_SOURCE_SHA256 = '0ece8a5b47d7a01752f758c30cbd5aa84e023f402feaae38e3fe76946dcbe316';
+const ASSESSMENT_SITE_IDS = Object.freeze([
+  'OPSITE_F8EB465F752C00771526',
+  'OPSITE_11D05D78F943C928C8F9',
+  'OPSITE_3EC04308A744BC59E87E',
+].sort());
+
+const TWIN_RULE = Object.freeze({
+  ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
+  operationId: 'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
+  pathExact: Object.freeze([TWIN_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.MUTATION_CALL]),
+  symbolPattern: '^replaceOrder$',
+});
+
+const ASSESSMENT_RULE = Object.freeze({
+  ruleId: 'i00-live-edge-assessment-bounded-queue-v1',
+  operationId: 'OP_RUNTIME_IN_MEMORY_QUEUE',
+  pathExact: Object.freeze([ASSESSMENT_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([
+    OPERATION_KINDS.QUEUE_CREATE,
+    OPERATION_KINDS.QUEUE_PUBLISH,
+    OPERATION_KINDS.QUEUE_CONSUME,
+  ]),
+  symbolPattern: '^(?:new:BoundedInboundQueue|this\\.#queue\\.(?:offer|shift))$',
+});
+
+export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
+  TWIN_RULE,
+  ASSESSMENT_RULE,
+]);
+
+function exactMembers(actual, expected) {
+  return actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+}
+
+function exactSites(report, {
+  path,
+  sourceSha256,
+  siteIds,
+  kindSet,
+  symbolSet,
+  operationId = null,
+  mappingRuleId = null,
+}) {
+  const sites = report.sites
+    .filter((site) => site.path === path)
+    .filter((site) => kindSet.has(site.rawKind))
+    .filter((site) => symbolSet.has(site.rawSymbol));
+  const observedIds = sites.map((site) => site.siteId).sort();
+  return exactMembers(observedIds, siteIds)
+    && sites.every((site) => site.sourceSha256 === sourceSha256)
+    && sites.every((site) => site.operationId === operationId)
+    && sites.every((site) => site.mappingRuleId === mappingRuleId);
+}
+
+function verifyBaseUncovered(report) {
+  const observed = report.uncoveredSites.map((site) => site.siteId).sort();
+  const expected = [...TWIN_SITE_IDS, ...ASSESSMENT_SITE_IDS].sort();
+  if (!exactMembers(observed, expected)) {
+    throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
+  }
+  if (!exactSites(report, {
+    path: TWIN_PATH,
+    sourceSha256: TWIN_SOURCE_SHA256,
+    siteIds: TWIN_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['replaceOrder']),
+  })) throw new Error('I00_OPERATION_OVERLAY_TWIN_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: ASSESSMENT_PATH,
+    sourceSha256: ASSESSMENT_SOURCE_SHA256,
+    siteIds: ASSESSMENT_SITE_IDS,
+    kindSet: new Set([
+      OPERATION_KINDS.QUEUE_CREATE,
+      OPERATION_KINDS.QUEUE_PUBLISH,
+      OPERATION_KINDS.QUEUE_CONSUME,
+    ]),
+    symbolSet: new Set(['new:BoundedInboundQueue', 'this.#queue.offer', 'this.#queue.shift']),
+  })) throw new Error('I00_OPERATION_OVERLAY_ASSESSMENT_SOURCE_DRIFT');
+}
+
+function verifyIntegratedMappings(report) {
+  if (!exactSites(report, {
+    path: TWIN_PATH,
+    sourceSha256: TWIN_SOURCE_SHA256,
+    siteIds: TWIN_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['replaceOrder']),
+    operationId: TWIN_RULE.operationId,
+    mappingRuleId: TWIN_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_TWIN_MAPPING_DRIFT');
+  if (!exactSites(report, {
+    path: ASSESSMENT_PATH,
+    sourceSha256: ASSESSMENT_SOURCE_SHA256,
+    siteIds: ASSESSMENT_SITE_IDS,
+    kindSet: new Set([
+      OPERATION_KINDS.QUEUE_CREATE,
+      OPERATION_KINDS.QUEUE_PUBLISH,
+      OPERATION_KINDS.QUEUE_CONSUME,
+    ]),
+    symbolSet: new Set(['new:BoundedInboundQueue', 'this.#queue.offer', 'this.#queue.shift']),
+    operationId: ASSESSMENT_RULE.operationId,
+    mappingRuleId: ASSESSMENT_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_ASSESSMENT_MAPPING_DRIFT');
+  if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
+    throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
+  }
+}
+
+/**
+ * Integration-owned overlay for the exact accepted L source bytes. It does not
+ * modify A-CORE's immutable scanner and refuses source drift, a twentieth
+ * synthetic replace site, a widened queue site, or any additional uncovered
+ * operation. Registration is coverage evidence only; it grants no runtime,
+ * command, persistence, exchange, or money authority.
+ */
+export function scanIntegratedProductionOperations(options = {}) {
+  const baseReport = scanProductionOperations({
+    repositoryRoot: options.repositoryRoot,
+    registry: OPERATION_MAPPING_REGISTRY,
+    reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
+  });
+  verifyBaseUncovered(baseReport);
+  const report = scanProductionOperations({
+    repositoryRoot: options.repositoryRoot,
+    registry: Object.freeze([...OPERATION_MAPPING_REGISTRY, ...I00_OPERATION_MAPPING_OVERLAY]),
+    reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
+  });
+  verifyIntegratedMappings(report);
+  return report;
+}
+
+function printHumanReport(report) {
+  process.stdout.write(`${report.schemaVersion}\n`);
+  process.stdout.write(`files scanned: ${report.filesScanned}\n`);
+  process.stdout.write(`operation sites: ${report.discovered}\n`);
+  process.stdout.write(`registered: ${report.covered}\n`);
+  process.stdout.write(`uncovered: ${report.uncovered}\n`);
+  for (const [operationId, count] of Object.entries(report.operationCounts)) {
+    process.stdout.write(`  ${operationId}: ${count}\n`);
+  }
+}
+
+const isMain = process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  try {
+    const json = process.argv.includes('--json');
+    const unknown = process.argv.slice(2).filter((argument) => argument !== '--json' && argument !== '--fail-on-uncovered');
+    if (unknown.length > 0) throw new Error(`unknown argument: ${unknown[0]}`);
+    const report = scanIntegratedProductionOperations();
+    if (json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    else printHumanReport(report);
+    if (process.argv.includes('--fail-on-uncovered') && report.uncovered > 0) process.exitCode = 1;
+  } catch (error) {
+    process.stderr.write(`I00 production operation overlay failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 2;
+  }
+}

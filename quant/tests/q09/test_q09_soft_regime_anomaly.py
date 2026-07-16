@@ -1,0 +1,715 @@
+from __future__ import annotations
+
+import pytest
+
+from quant_edge.errors import ContractValueError
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.lake.contracts import QualityState
+from quant_edge.regime.alphabet import AlphabetConfigV1
+from quant_edge.regime.anomaly import (
+    AnomalyReason,
+    AnomalyStepV1,
+    DisorderAssessmentV1,
+    DisorderConfigV1,
+    DisorderReason,
+    DisorderState,
+    RobustAnomalyConfigV1,
+    RobustAnomalyScorer,
+    fuse_disorder,
+)
+from quant_edge.regime.contracts import ObservationV1, StepStatus
+from quant_edge.regime.soft_regime import (
+    RegimeSpecV1,
+    RegimeStepV1,
+    SoftRegimeFilter,
+    v1_regime_spec,
+)
+
+BASE_NS = 1_772_000_000_000_000_000
+SECOND_NS = 1_000_000_000
+HUNDREDTH = FIXED_POINT_SCALE // 100
+THOUSANDTH = FIXED_POINT_SCALE // 1_000
+
+
+def _observation(
+    index: int,
+    hundredths: int,
+    quality: QualityState = QualityState.SYNTHETIC,
+) -> ObservationV1:
+    return ObservationV1(
+        event_time_ns=BASE_NS + index * SECOND_NS,
+        ordinal=index,
+        value=FixedPointV1(hundredths * HUNDREDTH),
+        quality=quality,
+    )
+
+
+def _fp_thousandths(thousandths: int) -> FixedPointV1:
+    return FixedPointV1(thousandths * THOUSANDTH)
+
+
+def _tiny_spec(*, floor_mantissa: int = THOUSANDTH) -> RegimeSpecV1:
+    return RegimeSpecV1(
+        spec_id="spec-tiny",
+        states=("CALM", "WILD"),
+        alphabet=AlphabetConfigV1(
+            baseline_window=3,
+            thresholds=(FixedPointV1(FIXED_POINT_SCALE), FixedPointV1(3 * FIXED_POINT_SCALE)),
+        ),
+        transition=(
+            (_fp_thousandths(800), _fp_thousandths(200)),
+            (_fp_thousandths(200), _fp_thousandths(800)),
+        ),
+        emission=(
+            (
+                _fp_thousandths(20),
+                _fp_thousandths(150),
+                _fp_thousandths(660),
+                _fp_thousandths(150),
+                _fp_thousandths(20),
+            ),
+            (
+                _fp_thousandths(300),
+                _fp_thousandths(150),
+                _fp_thousandths(100),
+                _fp_thousandths(150),
+                _fp_thousandths(300),
+            ),
+        ),
+        floor=FixedPointV1(floor_mantissa),
+    )
+
+
+class TestRegimeSpec:
+    def test_v1_spec_is_lawful_and_maps(self) -> None:
+        spec = v1_regime_spec()
+        mapping = spec.as_mapping()
+        assert mapping["states"] == ["QUIET", "TRENDING", "VOLATILE", "DISORDERED"]
+        for row in spec.transition:
+            assert sum(entry.mantissa for entry in row) == FIXED_POINT_SCALE
+        for row in spec.emission:
+            assert sum(entry.mantissa for entry in row) == FIXED_POINT_SCALE
+
+    def test_rejects_bad_states(self) -> None:
+        spec = v1_regime_spec()
+        with pytest.raises(ContractValueError, match="spec_id"):
+            RegimeSpecV1(
+                spec_id="",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        with pytest.raises(ContractValueError, match="states must be a tuple"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=("ONLY",),
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        with pytest.raises(ContractValueError, match="unique"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=("A", "A", "B", "C"),
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        with pytest.raises(ContractValueError, match="alphabet must be AlphabetConfigV1"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=None,  # type: ignore[arg-type]
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+
+    def test_rejects_bad_transition_and_emission(self) -> None:
+        spec = v1_regime_spec()
+        with pytest.raises(ContractValueError, match="transition must carry one row"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition[:3],
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        bad_row = (spec.transition[0][0],) * 3
+        with pytest.raises(ContractValueError, match="width"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=(bad_row, *spec.transition[1:]),
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        unnormalized = (
+            FixedPointV1(1),
+            FixedPointV1(1),
+            FixedPointV1(1),
+            FixedPointV1(1),
+        )
+        with pytest.raises(ContractValueError, match="sum exactly to one"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=(unnormalized, *spec.transition[1:]),
+                emission=spec.emission,
+                floor=spec.floor,
+            )
+        with pytest.raises(ContractValueError, match="emission must carry one row"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission[:2],
+                floor=spec.floor,
+            )
+        zero_emission = (
+            FixedPointV1(0),
+            FixedPointV1(0),
+            FixedPointV1(FIXED_POINT_SCALE),
+            FixedPointV1(0),
+            FixedPointV1(0),
+        )
+        with pytest.raises(ContractValueError, match="below the required minimum"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=(zero_emission, *spec.emission[1:]),
+                floor=spec.floor,
+            )
+
+    def test_rejects_bad_floor(self) -> None:
+        spec = v1_regime_spec()
+        with pytest.raises(ContractValueError, match="floor cannot be negative"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=FixedPointV1(-1),
+            )
+        with pytest.raises(ContractValueError, match="leave room for evidence"):
+            RegimeSpecV1(
+                spec_id="spec-1",
+                states=spec.states,
+                alphabet=spec.alphabet,
+                transition=spec.transition,
+                emission=spec.emission,
+                floor=FixedPointV1(FIXED_POINT_SCALE // 4),
+            )
+
+
+class TestRegimeStepContract:
+    def test_rejects_bad_probabilities_and_uncertainty(self) -> None:
+        with pytest.raises(ContractValueError, match="sum exactly to one"):
+            RegimeStepV1(
+                spec_id="spec-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                symbol=0,
+                probabilities=(1, 2),
+                map_state="CALM",
+                uncertainty=FixedPointV1(0),
+            )
+        with pytest.raises(ContractValueError, match="at least two states"):
+            RegimeStepV1(
+                spec_id="spec-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                symbol=0,
+                probabilities=(FIXED_POINT_SCALE,),
+                map_state="CALM",
+                uncertainty=FixedPointV1(0),
+            )
+        with pytest.raises(ContractValueError, match="uncertainty must equal"):
+            RegimeStepV1(
+                spec_id="spec-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                symbol=0,
+                probabilities=(FIXED_POINT_SCALE - 5, 5),
+                map_state="CALM",
+                uncertainty=FixedPointV1(0),
+            )
+        with pytest.raises(ContractValueError, match="symbol exists exactly"):
+            RegimeStepV1(
+                spec_id="spec-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.WARMUP,
+                symbol=1,
+                probabilities=(FIXED_POINT_SCALE - 5, 5),
+                map_state="CALM",
+                uncertainty=FixedPointV1(5),
+            )
+        with pytest.raises(ContractValueError, match="status must be StepStatus"):
+            RegimeStepV1(
+                spec_id="spec-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=1,  # type: ignore[arg-type]
+                symbol=None,
+                probabilities=(FIXED_POINT_SCALE - 5, 5),
+                map_state="CALM",
+                uncertainty=FixedPointV1(5),
+            )
+
+    def test_mapping_round_trips(self) -> None:
+        step = RegimeStepV1(
+            spec_id="spec-1",
+            ordinal=0,
+            event_time_ns=BASE_NS,
+            status=StepStatus.OK,
+            symbol=2,
+            probabilities=(FIXED_POINT_SCALE - 5, 5),
+            map_state="CALM",
+            uncertainty=FixedPointV1(5),
+        )
+        mapping = step.as_mapping()
+        assert mapping["probabilities"] == [str(FIXED_POINT_SCALE - 5), "5"]
+        assert mapping["mapState"] == "CALM"
+
+
+class TestSoftRegimeFilter:
+    def test_rejects_bad_spec_observation_and_order(self) -> None:
+        with pytest.raises(ContractValueError, match="spec must be RegimeSpecV1"):
+            SoftRegimeFilter(None)  # type: ignore[arg-type]
+        regime_filter = SoftRegimeFilter(_tiny_spec())
+        with pytest.raises(ContractValueError, match="observation must be ObservationV1"):
+            regime_filter.update(None)  # type: ignore[arg-type]
+        regime_filter.update(_observation(0, 1_000))
+        with pytest.raises(ContractValueError, match="ordinal-ordered"):
+            regime_filter.update(_observation(0, 1_000))
+
+    def test_warmup_keeps_uniform_posterior(self) -> None:
+        regime_filter = SoftRegimeFilter(_tiny_spec())
+        step = regime_filter.update(_observation(0, 1_000))
+        assert step.status is StepStatus.WARMUP
+        assert step.symbol is None
+        assert step.probabilities == (FIXED_POINT_SCALE // 2, FIXED_POINT_SCALE // 2)
+
+    def test_probabilities_always_sum_exactly_and_respect_floor(self) -> None:
+        floor = 2 * THOUSANDTH
+        regime_filter = SoftRegimeFilter(_tiny_spec(floor_mantissa=floor))
+        for index in range(40):
+            value = 1_000 + ((index * 37) % 21 - 10) // 10
+            if index in (20, 25, 30):
+                value += 400
+            step = regime_filter.update(_observation(index, value))
+            assert sum(step.probabilities) == FIXED_POINT_SCALE
+            if step.status is StepStatus.OK:
+                for mass in step.probabilities:
+                    assert mass >= floor
+
+    def test_extreme_symbols_move_map_state_toward_wild(self) -> None:
+        regime_filter = SoftRegimeFilter(_tiny_spec())
+        for index in range(3):
+            regime_filter.update(_observation(index, 1_000))
+        wild_mass_before: int | None = None
+        step: RegimeStepV1 | None = None
+        for index in range(3, 9):
+            step = regime_filter.update(_observation(index, 1_000 + 300 * (index % 2)))
+            if wild_mass_before is None:
+                wild_mass_before = step.probabilities[1]
+        assert step is not None
+        assert wild_mass_before is not None
+        assert step.probabilities[1] > wild_mass_before
+        assert step.map_state == "WILD"
+        assert step.uncertainty.mantissa == FIXED_POINT_SCALE - max(step.probabilities)
+
+    def test_stale_suppresses_and_gap_resets_to_uniform(self) -> None:
+        regime_filter = SoftRegimeFilter(_tiny_spec())
+        for index in range(6):
+            regime_filter.update(_observation(index, 1_000 + 300 * (index % 2)))
+        suppressed = regime_filter.update(_observation(6, 1_000, QualityState.STALE))
+        assert suppressed.status is StepStatus.SUPPRESSED
+        reset = regime_filter.update(_observation(7, 1_000, QualityState.PARTIAL))
+        assert reset.status is StepStatus.RESET
+        assert reset.probabilities == (FIXED_POINT_SCALE // 2, FIXED_POINT_SCALE // 2)
+        assert regime_filter.update(_observation(8, 1_000)).status is StepStatus.WARMUP
+
+
+class TestAnomalyConfigAndStep:
+    def test_config_rejects_bad_fields_and_maps(self) -> None:
+        with pytest.raises(ContractValueError, match="scorer_id"):
+            RobustAnomalyConfigV1(scorer_id="", window=4, z_threshold=FixedPointV1(1))
+        with pytest.raises(ContractValueError, match="window"):
+            RobustAnomalyConfigV1(scorer_id="scorer-1", window=1, z_threshold=FixedPointV1(1))
+        with pytest.raises(ContractValueError, match="z_threshold"):
+            RobustAnomalyConfigV1(scorer_id="scorer-1", window=4, z_threshold=FixedPointV1(0))
+        mapping = RobustAnomalyConfigV1(
+            scorer_id="scorer-1",
+            window=4,
+            z_threshold=FixedPointV1(1),
+        ).as_mapping()
+        assert mapping["scoreSemantics"] == "UNCALIBRATED_SCORE"
+
+    def test_step_contract_laws(self) -> None:
+        with pytest.raises(ContractValueError, match="only an OK step may exceed"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.WARMUP,
+                score=None,
+                exceeds=True,
+                persistence=1,
+                reasons=(AnomalyReason.THRESHOLD_EXCEEDED,),
+            )
+        with pytest.raises(ContractValueError, match="persistence counts"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=FixedPointV1(0),
+                exceeds=False,
+                persistence=2,
+                reasons=(),
+            )
+        with pytest.raises(ContractValueError, match="reasons exist exactly"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=FixedPointV1(10 * FIXED_POINT_SCALE),
+                exceeds=True,
+                persistence=1,
+                reasons=(),
+            )
+        with pytest.raises(ContractValueError, match="reasons must contain AnomalyReason"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=FixedPointV1(10 * FIXED_POINT_SCALE),
+                exceeds=True,
+                persistence=1,
+                reasons=("THRESHOLD_EXCEEDED",),  # type: ignore[arg-type]
+            )
+        with pytest.raises(ContractValueError, match="reasons must be a tuple"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=FixedPointV1(0),
+                exceeds=False,
+                persistence=0,
+                reasons=[],  # type: ignore[arg-type]
+            )
+        with pytest.raises(ContractValueError, match="status must be StepStatus"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status="OK",  # type: ignore[arg-type]
+                score=None,
+                exceeds=False,
+                persistence=0,
+                reasons=(),
+            )
+        with pytest.raises(ContractValueError, match="exceeds must be boolean"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=None,
+                exceeds=1,  # type: ignore[arg-type]
+                persistence=0,
+                reasons=(),
+            )
+        with pytest.raises(ContractValueError, match="score"):
+            AnomalyStepV1(
+                scorer_id="scorer-1",
+                ordinal=0,
+                event_time_ns=BASE_NS,
+                status=StepStatus.OK,
+                score=1.5,  # type: ignore[arg-type]
+                exceeds=False,
+                persistence=0,
+                reasons=(),
+            )
+
+
+class TestRobustAnomalyScorer:
+    def _scorer(self, *, window: int = 4, threshold_units: int = 6) -> RobustAnomalyScorer:
+        return RobustAnomalyScorer(
+            RobustAnomalyConfigV1(
+                scorer_id="scorer-1",
+                window=window,
+                z_threshold=FixedPointV1(threshold_units * FIXED_POINT_SCALE),
+            )
+        )
+
+    def test_rejects_bad_config_observation_and_order(self) -> None:
+        with pytest.raises(ContractValueError, match="config must be RobustAnomalyConfigV1"):
+            RobustAnomalyScorer(None)  # type: ignore[arg-type]
+        scorer = self._scorer()
+        with pytest.raises(ContractValueError, match="observation must be ObservationV1"):
+            scorer.update(None)  # type: ignore[arg-type]
+        scorer.update(_observation(0, 1_000))
+        with pytest.raises(ContractValueError, match="ordinal-ordered"):
+            scorer.update(_observation(0, 1_000))
+
+    def test_warmup_then_scores_and_flags_spikes_with_persistence(self) -> None:
+        scorer = self._scorer()
+        for index, value in enumerate((1_000, 1_010, 990, 1_005)):
+            step = scorer.update(_observation(index, value))
+            assert step.status is StepStatus.WARMUP
+            assert step.score is None
+        calm = scorer.update(_observation(4, 1_003))
+        assert calm.status is StepStatus.OK
+        assert calm.score is not None
+        assert not calm.exceeds
+        spike = scorer.update(_observation(5, 1_500))
+        assert spike.exceeds
+        assert spike.persistence == 1
+        assert spike.reasons == (AnomalyReason.THRESHOLD_EXCEEDED,)
+        second = scorer.update(_observation(6, 1_600))
+        assert second.persistence == 2
+        settled = scorer.update(_observation(7, 1_004))
+        assert not settled.exceeds
+        assert settled.persistence == 0
+
+    def test_zero_mad_zero_deviation_scores_zero(self) -> None:
+        scorer = self._scorer(window=3)
+        for index in range(3):
+            scorer.update(_observation(index, 1_000))
+        step = scorer.update(_observation(3, 1_000))
+        assert step.status is StepStatus.OK
+        assert step.score == FixedPointV1(0)
+        assert not step.exceeds
+
+    def test_zero_mad_nonzero_deviation_is_unbounded_surprise(self) -> None:
+        scorer = self._scorer(window=3)
+        for index in range(3):
+            scorer.update(_observation(index, 1_000))
+        step = scorer.update(_observation(3, 1_001))
+        assert step.exceeds
+        assert step.score is None
+        assert step.reasons == (AnomalyReason.ZERO_MAD_DEVIATION,)
+
+    def test_stale_suppresses_and_gap_resets(self) -> None:
+        scorer = self._scorer()
+        for index, value in enumerate((1_000, 1_010, 990, 1_005)):
+            scorer.update(_observation(index, value))
+        scorer.update(_observation(4, 1_500))
+        suppressed = scorer.update(_observation(5, 1_500, QualityState.STALE))
+        assert suppressed.status is StepStatus.SUPPRESSED
+        assert suppressed.persistence == 1
+        reset = scorer.update(_observation(6, 1_500, QualityState.GAPPED))
+        assert reset.status is StepStatus.RESET
+        assert reset.persistence == 0
+        assert scorer.update(_observation(7, 1_500)).status is StepStatus.WARMUP
+
+
+class TestDisorderFusion:
+    def _config(self) -> DisorderConfigV1:
+        return DisorderConfigV1(
+            fusion_id="fusion-1",
+            alarm_recency_bars=5,
+            persistence_watch=2,
+            persistence_ood=4,
+            uncertainty_threshold=FixedPointV1(FIXED_POINT_SCALE // 2),
+        )
+
+    def test_config_rejects_bad_fields(self) -> None:
+        with pytest.raises(ContractValueError, match="fusion_id"):
+            DisorderConfigV1(
+                fusion_id="",
+                alarm_recency_bars=5,
+                persistence_watch=2,
+                persistence_ood=4,
+                uncertainty_threshold=FixedPointV1(1),
+            )
+        with pytest.raises(ContractValueError, match="persistence_ood"):
+            DisorderConfigV1(
+                fusion_id="fusion-1",
+                alarm_recency_bars=5,
+                persistence_watch=4,
+                persistence_ood=2,
+                uncertainty_threshold=FixedPointV1(1),
+            )
+        with pytest.raises(ContractValueError, match="uncertainty_threshold"):
+            DisorderConfigV1(
+                fusion_id="fusion-1",
+                alarm_recency_bars=5,
+                persistence_watch=2,
+                persistence_ood=4,
+                uncertainty_threshold=FixedPointV1(0),
+            )
+        mapping = self._config().as_mapping()
+        assert mapping["persistenceOod"] == 4
+
+    def test_assessment_contract(self) -> None:
+        with pytest.raises(ContractValueError, match="state must be DisorderState"):
+            DisorderAssessmentV1(fusion_id="fusion-1", state="NORMAL", reasons=())  # type: ignore[arg-type]
+        with pytest.raises(ContractValueError, match="reasons must be a tuple"):
+            DisorderAssessmentV1(
+                fusion_id="fusion-1",
+                state=DisorderState.NORMAL,
+                reasons=[],  # type: ignore[arg-type]
+            )
+        with pytest.raises(ContractValueError, match="reasons must contain DisorderReason"):
+            DisorderAssessmentV1(
+                fusion_id="fusion-1",
+                state=DisorderState.NORMAL,
+                reasons=("INPUT_QUALITY",),  # type: ignore[arg-type]
+            )
+        with pytest.raises(ContractValueError, match="sorted"):
+            DisorderAssessmentV1(
+                fusion_id="fusion-1",
+                state=DisorderState.WATCH,
+                reasons=(
+                    DisorderReason.REGIME_UNCERTAIN,
+                    DisorderReason.ANOMALY_PERSISTENCE_WATCH,
+                ),
+            )
+        mapping = DisorderAssessmentV1(
+            fusion_id="fusion-1",
+            state=DisorderState.NORMAL,
+            reasons=(),
+        ).as_mapping()
+        assert mapping["state"] == "NORMAL"
+
+    def test_bad_quality_is_unknown(self) -> None:
+        assessment = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.GAPPED,
+            last_alarm_age=None,
+            anomaly_persistence=0,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert assessment.state is DisorderState.UNKNOWN
+        assert assessment.reasons == (DisorderReason.INPUT_QUALITY,)
+
+    def test_quiet_inputs_are_normal(self) -> None:
+        assessment = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=None,
+            anomaly_persistence=0,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert assessment.state is DisorderState.NORMAL
+        assert assessment.reasons == ()
+
+    def test_recent_changepoint_is_disordered(self) -> None:
+        assessment = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=3,
+            anomaly_persistence=0,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert assessment.state is DisorderState.DISORDERED
+        assert DisorderReason.RECENT_CHANGEPOINT in assessment.reasons
+        aged_out = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=6,
+            anomaly_persistence=0,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert aged_out.state is DisorderState.NORMAL
+
+    def test_persistence_escalates_watch_then_ood(self) -> None:
+        watch = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=None,
+            anomaly_persistence=2,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert watch.state is DisorderState.WATCH
+        assert watch.reasons == (DisorderReason.ANOMALY_PERSISTENCE_WATCH,)
+        ood = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=None,
+            anomaly_persistence=4,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert ood.state is DisorderState.OOD_SUSPECT
+        assert ood.reasons == (DisorderReason.ANOMALY_PERSISTENCE_OOD,)
+
+    def test_ood_outranks_disordered(self) -> None:
+        assessment = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=1,
+            anomaly_persistence=9,
+            regime_uncertainty=FixedPointV1(0),
+        )
+        assert assessment.state is DisorderState.OOD_SUSPECT
+        assert assessment.reasons == (
+            DisorderReason.ANOMALY_PERSISTENCE_OOD,
+            DisorderReason.RECENT_CHANGEPOINT,
+        )
+
+    def test_regime_uncertainty_and_unavailability_watch(self) -> None:
+        uncertain = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=None,
+            anomaly_persistence=0,
+            regime_uncertainty=FixedPointV1(FIXED_POINT_SCALE // 2),
+        )
+        assert uncertain.state is DisorderState.WATCH
+        assert uncertain.reasons == (DisorderReason.REGIME_UNCERTAIN,)
+        unavailable = fuse_disorder(
+            config=self._config(),
+            input_quality=QualityState.COMPLETE,
+            last_alarm_age=None,
+            anomaly_persistence=0,
+            regime_uncertainty=None,
+        )
+        assert unavailable.state is DisorderState.WATCH
+        assert unavailable.reasons == (DisorderReason.REGIME_STATE_UNAVAILABLE,)
+
+    def test_rejects_bad_inputs(self) -> None:
+        with pytest.raises(ContractValueError, match="config must be DisorderConfigV1"):
+            fuse_disorder(
+                config=None,  # type: ignore[arg-type]
+                input_quality=QualityState.COMPLETE,
+                last_alarm_age=None,
+                anomaly_persistence=0,
+                regime_uncertainty=None,
+            )
+        with pytest.raises(ContractValueError, match="last_alarm_age"):
+            fuse_disorder(
+                config=self._config(),
+                input_quality=QualityState.COMPLETE,
+                last_alarm_age=-1,
+                anomaly_persistence=0,
+                regime_uncertainty=None,
+            )
+        with pytest.raises(ContractValueError, match="regime_uncertainty"):
+            fuse_disorder(
+                config=self._config(),
+                input_quality=QualityState.COMPLETE,
+                last_alarm_age=None,
+                anomaly_persistence=0,
+                regime_uncertainty=0.5,  # type: ignore[arg-type]
+            )

@@ -8,6 +8,17 @@ import { createSystemIntegrationRouter } from '../../../dist/systemIntegration/r
 
 const HOST = '127.0.0.1';
 const T0 = 1_800_000_000_000;
+const OPS_READBACK = Object.freeze({
+  source: 'CANONICAL_SUPERVISOR_READBACK',
+  observedAtUtc: new Date(T0).toISOString().replace('.000Z', 'Z'),
+  validUntilUtc: new Date(T0 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
+  deploymentFrozen: false,
+  exposureState: 'NONE',
+  ambiguityState: 'NONE',
+  recoveryState: 'NONE',
+  currentSchemaVersion: 1,
+  rollbackFloor: 1,
+});
 
 class Persistence {
   constructor(state) {
@@ -42,20 +53,45 @@ class Persistence {
       after: commit.after,
       ledgerEventId: this.nextId++,
     });
+    const runtimePublication = commit.applied
+      && ['RESTART_COMPONENT', 'SET_COMPONENT_STATE'].includes(commit.request.mutation.command)
+      ? 'PENDING'
+      : 'NOT_REQUIRED';
     this.state = receipt.after;
     this.commits.push(commit);
-    this.records.set(commit.request.idempotencyKey, { requestDigest: commit.requestDigest, receipt });
-    return { kind: 'COMMITTED', receipt };
+    this.records.set(commit.request.idempotencyKey, {
+      requestDigest: commit.requestDigest,
+      receipt,
+      runtimePublication,
+    });
+    return { kind: 'COMMITTED', receipt, runtimePublication };
+  }
+  async markControlRuntimePublished(commit) {
+    const prior = this.records.get(commit.idempotencyKey);
+    if (!prior || prior.requestDigest !== commit.requestDigest) throw new Error('publication identity mismatch');
+    if (prior.runtimePublication === 'PUBLISHED') return { kind: 'IDEMPOTENT_REPLAY' };
+    prior.runtimePublication = 'PUBLISHED';
+    return { kind: 'PUBLISHED' };
   }
 }
 
 class Composition {
-  constructor() { this.inspected = []; this.published = []; }
+  constructor() { this.inspected = []; this.published = []; this.effects = new Map(); }
   async inspectMutation(mutation) {
     this.inspected.push(mutation);
     return { ok: true, applied: true, riskIncreasing: false, code: 'CONTROL_APPLIED', message: '' };
   }
-  async publishCommitted(request, actor, receipt) { this.published.push({ request, actor, receipt }); }
+  async publishCommitted(request, actor, receipt) {
+    this.published.push({ request, actor, receipt });
+    if (['RESTART_COMPONENT', 'SET_COMPONENT_STATE'].includes(request.mutation.command)) {
+      this.effects.set(`${request.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`, 'APPLIED');
+    }
+  }
+  inspectCommittedPublication(request, receipt) {
+    return this.effects.get(
+      `${request.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`,
+    ) ?? 'UNKNOWN';
+  }
 }
 
 function baseState() {
@@ -93,7 +129,7 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
   const persistence = new Persistence(state);
   const composition = new Composition();
   const controls = new SystemControlService({ initialState: state, persistence, composition });
-  const calls = { supervisor: 0, graph: 0, events: 0, controls: 0, trace: 0 };
+  const calls = { supervisor: 0, graph: 0, events: 0, controls: 0, trace: 0, ops: 0 };
   let eventQuery = null;
   const read = {
     supervisor() {
@@ -118,8 +154,28 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
         : null;
     },
   };
+  const opsReadback = {
+    read() { calls.ops++; return OPS_READBACK; },
+  };
+  let validateOnlyCalls = 0;
+  let validateOnlyInput = null;
+  const validateOnly = {
+    async executeValidateOnly(input) {
+      validateOnlyCalls++;
+      validateOnlyInput = input;
+      return {
+        ok: true,
+        snapshot: {
+          disposition: 'READY',
+          rootCorrelationId: input.correlationId,
+          executionAuthority: 'NONE',
+          liveExecutionPermitted: false,
+        },
+      };
+    },
+  };
   let now = T0 + 1_000;
-  const router = createSystemIntegrationRouter({ read, controls, clock: { nowMs: () => now++ } });
+  const router = createSystemIntegrationRouter({ read, controls, validateOnly, clock: { nowMs: () => now++ }, opsReadback });
   const access = new OperatorAccess();
   const app = express();
   app.disable('x-powered-by');
@@ -159,6 +215,28 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     assert.equal(supervisor.headers.get('x-powered-by'), null);
     assert.equal((await json(supervisor)).truthLabel, 'DRY_RUN');
     assert.equal(calls.supervisor, 1);
+
+    const ops = await fetchLocal('/api/system-integration/ops/readback');
+    assert.equal(ops.status, 200);
+    assert.deepEqual(await json(ops), OPS_READBACK);
+    const interlock = await fetchLocal('/api/system-integration/ops/intake-gate');
+    assert.equal(interlock.status, 200);
+    assert.deepEqual(await json(interlock), {
+      source: 'CANONICAL_OPS_INTAKE_INTERLOCK',
+      state: 'OPS_INTERLOCK_CLEAR',
+      blocksNewEntries: false,
+      externalActionAuthorization: 'NONE',
+      evaluatedAtUtc: new Date(T0 + 1_000).toISOString().replace('.000Z', 'Z'),
+      readbackValidUntilUtc: OPS_READBACK.validUntilUtc,
+      reasonCodes: [],
+    });
+    assert.equal(calls.ops, 2);
+    assert.equal(persistence.commits.length, 0, 'ops reads must not mutate controls');
+
+    const opsQuery = await fetchLocal('/api/system-integration/ops/readback?refresh=1');
+    assert.equal(opsQuery.status, 400);
+    assert.equal((await json(opsQuery)).code, 'REFRESH_REQUIRES_POST');
+    assert.equal(calls.ops, 2);
 
     const forgedEdge = await fetchLocal('/api/system-integration/supervisor', {
       headers: { 'x-forwarded-for': '127.0.0.1' },
@@ -205,6 +283,36 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     assert.equal((await json(absentTrace)).code, 'TRACE_NOT_FOUND');
     const presentTrace = await fetchLocal('/api/system-integration/traces/cor_present');
     assert.equal(presentTrace.status, 200);
+
+    const validateOnlyResponse = await fetchLocal('/api/system-integration/validate-only', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        requestedMode: 'VALIDATE_ONLY',
+        correlationId: 'cor_route_validate_only',
+        nowMs: 1,
+      }),
+    });
+    assert.equal(validateOnlyResponse.status, 200);
+    assert.deepEqual(await json(validateOnlyResponse), {
+      ok: true,
+      snapshot: {
+        disposition: 'READY',
+        rootCorrelationId: 'cor_route_validate_only',
+        executionAuthority: 'NONE',
+        liveExecutionPermitted: false,
+      },
+    });
+    assert.equal(validateOnlyCalls, 1);
+    assert.equal(validateOnlyInput.nowMs, T0 + 1_001, 'route must replace untrusted client time with its injected clock');
+
+    const validateOnlyNoContentType = await fetchLocal('/api/system-integration/validate-only', {
+      method: 'POST',
+      body: JSON.stringify({ requestedMode: 'VALIDATE_ONLY' }),
+    });
+    assert.equal(validateOnlyNoContentType.status, 415);
+    assert.equal((await json(validateOnlyNoContentType)).code, 'UNSUPPORTED_MEDIA_TYPE');
+    assert.equal(validateOnlyCalls, 1);
 
     const noContentType = await fetchLocal('/api/system-integration/controls', {
       method: 'POST', body: JSON.stringify({ command: 'SET_SAFE_MODE' }),
@@ -300,7 +408,9 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
   missingOperatorApp.use('/api/system-integration', createSystemIntegrationRouter({
     read,
     controls,
+    validateOnly,
     clock: { nowMs: () => now++ },
+    opsReadback,
   }));
   const missingOperatorServer = http.createServer(missingOperatorApp);
   const missingOperatorBase = await listen(missingOperatorServer);

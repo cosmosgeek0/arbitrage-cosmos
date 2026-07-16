@@ -9,7 +9,7 @@ import { TIME_ZONE_OPTIONS, addDays, dayBounds, dayKey, formatKey, resolvedZoneL
 import type { LedgerEvent } from '../types';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
-import { SystemIntegrationSurface } from '../components/SystemIntegrationSurface';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import {
   IconChart,
   IconDatabase,
@@ -542,7 +542,7 @@ export function LedgerPage() {
           </label>
         </header>
 
-        <SystemIntegrationSurface surface="logs" />
+        <ProductSurfaceAdapter surfaceId="logs-ledger" />
 
         <section className="calx-navigation logx-navigation" aria-label="Logs Navigation">
           <div className="calx-range-controls">

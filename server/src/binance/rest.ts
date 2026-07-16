@@ -1,3 +1,5 @@
+import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
+
 const SPOT_API = 'https://api.binance.com';
 const FAPI = 'https://fapi.binance.com';
 
@@ -73,6 +75,7 @@ async function readBoundedBody(res: Response, maxBytes: number): Promise<string>
 }
 
 async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAULT_JSON_LIMIT_BYTES): Promise<T> {
+  if (deterministicOfflinePublicSourcesEnabled()) throw new Error(`${label} unavailable`);
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || !BINANCE_HOSTS.has(url.hostname)) throw new Error(`${label} unavailable`);
   const key = url.toString();

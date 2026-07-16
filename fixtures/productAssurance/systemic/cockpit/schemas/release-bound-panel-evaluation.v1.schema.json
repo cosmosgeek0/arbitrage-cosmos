@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ip-assurance:systemic:cockpit:release-bound-panel-evaluation:v1",
+  "title": "IP Assurance S5 Release-Bound Panel Evaluation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evaluatedAtMs",
+    "panel",
+    "releaseManifestGate"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "release-bound-panel-evaluation.v1"
+    },
+    "evaluatedAtMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "panel": {
+      "$ref": "urn:ip-assurance:systemic:cockpit:view-model:v1#/$defs/panel"
+    },
+    "releaseManifestGate": {
+      "$ref": "#/$defs/releaseManifestGate"
+    }
+  },
+  "$defs": {
+    "result": {
+      "enum": ["PASS", "FAIL", "UNKNOWN"]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nullableSha256": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/sha256" }
+      ]
+    },
+    "nullableString": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "minLength": 1, "maxLength": 240 }
+      ]
+    },
+    "nullableBoolean": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "boolean" }
+      ]
+    },
+    "nullableResult": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/result" }
+      ]
+    },
+    "idArray": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240
+      }
+    },
+    "reasonCodes": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "PANEL_ACCEPTED_RELEASE_SHA_MISMATCH",
+          "PANEL_COMPONENT_FACT_IDENTITY_SET_MISMATCH",
+          "PANEL_COMPONENT_FACT_RELEASE_MISMATCH",
+          "PANEL_COMPONENT_INVENTORY_NOT_PASS",
+          "PANEL_COMPONENT_DEPENDENCY_GRAPH_NOT_PASS",
+          "PANEL_CONTROL_COMMAND_BINDING_MISMATCH",
+          "PANEL_CONTROL_COMMAND_ITEM_NOT_LIVE",
+          "PANEL_CONTROL_COMMAND_ITEM_NOT_PASS",
+          "PANEL_EXPECTED_MANIFEST_ITEM_DISABLED",
+          "PANEL_EXPECTED_MANIFEST_ITEM_EVALUATION_MISSING",
+          "PANEL_EXPECTED_MANIFEST_ITEM_KIND_MISMATCH",
+          "PANEL_EXPECTED_MANIFEST_ITEM_MISSING",
+          "PANEL_EXPECTED_MANIFEST_ITEM_NOT_BLOCKING",
+          "PANEL_EXPECTED_MANIFEST_ITEM_NOT_LIVE",
+          "PANEL_EXPECTED_MANIFEST_ITEM_NOT_PASS",
+          "PANEL_EXPECTED_MANIFEST_ITEM_NOT_REQUIRED",
+          "PANEL_INTERNAL_DEPENDENCY_REFERENCE_NOT_PASS",
+          "PANEL_MANIFEST_BINDING_NOT_PASS",
+          "PANEL_MANIFEST_CANONICAL_DIGEST_NOT_PASS",
+          "PANEL_MANIFEST_DENOMINATOR_COUNT_MISMATCH",
+          "PANEL_MANIFEST_DENOMINATOR_EVIDENCE_COUNT_MISMATCH",
+          "PANEL_MANIFEST_DENOMINATOR_NOT_PASS",
+          "PANEL_MANIFEST_DENOMINATOR_PARTITION_MISMATCH",
+          "PANEL_MANIFEST_DENOMINATOR_SOURCE_MISSING",
+          "PANEL_MANIFEST_DENOMINATOR_UNKNOWN_NONZERO",
+          "PANEL_MANIFEST_DIGEST_VERIFICATION_NOT_PASS",
+          "PANEL_MANIFEST_ID_MISMATCH",
+          "PANEL_MANIFEST_REVISION_MISMATCH",
+          "PANEL_MANIFEST_REVIEW_NOT_PASS",
+          "PANEL_MANIFEST_SHA256_MISMATCH",
+          "PANEL_SOURCE_AGGREGATION_COVERAGE_MISMATCH",
+          "PANEL_SOURCE_AGGREGATION_IDENTITY_MISMATCH",
+          "PANEL_SOURCE_INVENTORY_NOT_PASS",
+          "PANEL_SOURCE_PRODUCER_BINDING_MISMATCH",
+          "PANEL_DEPENDENCY_SCOPE_MISSING",
+          "PANEL_DEPENDENT_COMPONENT_NOT_PASS",
+          "PANEL_WHOLE_MACHINE_COMPONENT_NOT_PASS",
+          "PANEL_WHOLE_MACHINE_MANIFEST_NOT_PASS"
+        ]
+      }
+    },
+    "denominatorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "result",
+        "identitySetSha256",
+        "evaluationEvidenceSha256",
+        "expectedRequiredEnabledCount",
+        "expectedRequiredEnabledIds",
+        "manifestRequiredEnabledIds",
+        "observedIds",
+        "missingRequiredObservedIds",
+        "unexpectedObservedIds",
+        "nonPassingIds",
+        "nonLiveIds",
+        "contractExpectedCount",
+        "observationExpectedCount",
+        "observationPartitionCount",
+        "observationEvidenceCount",
+        "observationUnknownCount"
+      ],
+      "properties": {
+        "source": { "$ref": "#/$defs/nullableString" },
+        "result": { "$ref": "#/$defs/result" },
+        "identitySetSha256": { "$ref": "#/$defs/nullableSha256" },
+        "evaluationEvidenceSha256": { "$ref": "#/$defs/nullableSha256" },
+        "expectedRequiredEnabledCount": { "type": "integer", "minimum": 0 },
+        "expectedRequiredEnabledIds": { "$ref": "#/$defs/idArray" },
+        "manifestRequiredEnabledIds": { "$ref": "#/$defs/idArray" },
+        "observedIds": { "$ref": "#/$defs/idArray" },
+        "missingRequiredObservedIds": { "$ref": "#/$defs/idArray" },
+        "unexpectedObservedIds": { "$ref": "#/$defs/idArray" },
+        "nonPassingIds": { "$ref": "#/$defs/idArray" },
+        "nonLiveIds": { "$ref": "#/$defs/idArray" },
+        "contractExpectedCount": { "type": "integer", "minimum": 0 },
+        "observationExpectedCount": { "type": "integer", "minimum": 0 },
+        "observationPartitionCount": { "type": "integer", "minimum": 0 },
+        "observationEvidenceCount": { "type": "integer", "minimum": 0 },
+        "observationUnknownCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "componentBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "identitySetSha256",
+        "exact",
+        "rowIds",
+        "duplicateIds",
+        "missingIds",
+        "unexpectedIds",
+        "releaseMismatchIds",
+        "nonPassingIds",
+        "nonLiveIds"
+      ],
+      "properties": {
+        "required": { "type": "boolean" },
+        "identitySetSha256": { "$ref": "#/$defs/sha256" },
+        "exact": { "type": "boolean" },
+        "rowIds": { "$ref": "#/$defs/idArray" },
+        "duplicateIds": { "$ref": "#/$defs/idArray" },
+        "missingIds": { "$ref": "#/$defs/idArray" },
+        "unexpectedIds": { "$ref": "#/$defs/idArray" },
+        "releaseMismatchIds": { "$ref": "#/$defs/idArray" },
+        "nonPassingIds": { "$ref": "#/$defs/idArray" },
+        "nonLiveIds": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "identitySetSha256",
+        "exact",
+        "rowIds",
+        "coveredStreamIds",
+        "duplicateStreamIds",
+        "missingStreamIds",
+        "unexpectedStreamIds",
+        "producerMismatchRowIds",
+        "releaseMismatchRowIds",
+        "nonPassingIds",
+        "nonLiveIds",
+        "streamDenominatorMatches",
+        "aggregationDenominatorMatches"
+      ],
+      "properties": {
+        "required": { "type": "boolean" },
+        "identitySetSha256": { "$ref": "#/$defs/sha256" },
+        "exact": { "type": "boolean" },
+        "rowIds": { "$ref": "#/$defs/idArray" },
+        "coveredStreamIds": { "$ref": "#/$defs/idArray" },
+        "duplicateStreamIds": { "$ref": "#/$defs/idArray" },
+        "missingStreamIds": { "$ref": "#/$defs/idArray" },
+        "unexpectedStreamIds": { "$ref": "#/$defs/idArray" },
+        "producerMismatchRowIds": { "$ref": "#/$defs/idArray" },
+        "releaseMismatchRowIds": { "$ref": "#/$defs/idArray" },
+        "nonPassingIds": { "$ref": "#/$defs/idArray" },
+        "nonLiveIds": { "$ref": "#/$defs/idArray" },
+        "streamDenominatorMatches": { "type": "boolean" },
+        "aggregationDenominatorMatches": { "type": "boolean" }
+      }
+    },
+    "controlBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "expectedManifestItemId",
+        "backendMutationId",
+        "result",
+        "liveEligible",
+        "reasonCodes"
+      ],
+      "properties": {
+        "required": { "type": "boolean" },
+        "expectedManifestItemId": { "$ref": "#/$defs/nullableString" },
+        "backendMutationId": { "$ref": "#/$defs/nullableString" },
+        "result": { "$ref": "#/$defs/result" },
+        "liveEligible": { "type": "boolean" },
+        "reasonCodes": { "$ref": "#/$defs/reasonCodes" }
+      }
+    },
+    "dependencyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "result",
+        "expectedComponentIds",
+        "unresolvedComponentIds",
+        "nonPassingIds",
+        "nonLiveIds",
+        "rootCauseExpectedIds",
+        "reasonCodes"
+      ],
+      "properties": {
+        "scope": { "enum": ["WHOLE_MACHINE", "DEPENDENT_CAPABILITY", "CONTROL_RECOVERY"] },
+        "result": { "$ref": "#/$defs/result" },
+        "expectedComponentIds": { "$ref": "#/$defs/idArray" },
+        "unresolvedComponentIds": { "$ref": "#/$defs/idArray" },
+        "nonPassingIds": { "$ref": "#/$defs/idArray" },
+        "nonLiveIds": { "$ref": "#/$defs/idArray" },
+        "rootCauseExpectedIds": { "$ref": "#/$defs/idArray" },
+        "reasonCodes": { "$ref": "#/$defs/reasonCodes" }
+      }
+    },
+    "releaseManifestGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "greenEligible",
+        "liveGreenEligible",
+        "expectedManifestItemId",
+        "itemPresent",
+        "itemKind",
+        "itemBlocking",
+        "itemResult",
+        "itemLiveEligible",
+        "manifestId",
+        "manifestRevision",
+        "manifestSha256",
+        "acceptedReleaseSha",
+        "manifestEvaluationEvidenceSha256",
+        "manifestObservationSha256",
+        "gateEvidenceSha256",
+        "denominatorBinding",
+        "componentBinding",
+        "dependencyBinding",
+        "sourceBinding",
+        "controlBinding",
+        "reasonCodes"
+      ],
+      "properties": {
+        "result": { "$ref": "#/$defs/result" },
+        "greenEligible": { "type": "boolean" },
+        "liveGreenEligible": { "type": "boolean" },
+        "expectedManifestItemId": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "itemPresent": { "type": "boolean" },
+        "itemKind": { "$ref": "#/$defs/nullableString" },
+        "itemBlocking": { "$ref": "#/$defs/nullableBoolean" },
+        "itemResult": { "$ref": "#/$defs/nullableResult" },
+        "itemLiveEligible": { "$ref": "#/$defs/nullableBoolean" },
+        "manifestId": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "manifestRevision": { "type": "integer", "minimum": 1 },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "acceptedReleaseSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "manifestEvaluationEvidenceSha256": { "$ref": "#/$defs/sha256" },
+        "manifestObservationSha256": { "$ref": "#/$defs/sha256" },
+        "gateEvidenceSha256": { "$ref": "#/$defs/sha256" },
+        "denominatorBinding": { "$ref": "#/$defs/denominatorBinding" },
+        "componentBinding": { "$ref": "#/$defs/componentBinding" },
+        "dependencyBinding": { "$ref": "#/$defs/dependencyBinding" },
+        "sourceBinding": { "$ref": "#/$defs/sourceBinding" },
+        "controlBinding": { "$ref": "#/$defs/controlBinding" },
+        "reasonCodes": { "$ref": "#/$defs/reasonCodes" }
+      }
+    }
+  }
+}

@@ -39,6 +39,10 @@ export interface SystemControlCompositionPort {
     actor: Readonly<SystemControlActor>,
     receipt: Readonly<SystemControlMutationReceipt>,
   ): void | Promise<void>;
+  inspectCommittedPublication?(
+    request: Readonly<SystemControlMutationRequest>,
+    receipt: Readonly<SystemControlMutationReceipt>,
+  ): SystemControlRuntimeEffectReadback | Promise<SystemControlRuntimeEffectReadback>;
 }
 
 export interface SystemControlPersistenceCommit {
@@ -50,6 +54,20 @@ export interface SystemControlPersistenceCommit {
   readonly applied: boolean;
   readonly code: string;
 }
+
+export type SystemControlRuntimePublicationState = 'NOT_REQUIRED' | 'PENDING' | 'PUBLISHED' | 'UNKNOWN';
+export type SystemControlRuntimeEffectReadback = 'APPLIED' | 'NOT_APPLIED' | 'UNKNOWN';
+
+export interface SystemControlRuntimePublicationCommit {
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly correlationId: string;
+  readonly occurredAtMs: number;
+}
+
+export type SystemControlRuntimePublicationResult =
+  | { readonly kind: 'PUBLISHED' }
+  | { readonly kind: 'IDEMPOTENT_REPLAY' };
 
 /** Redacted, bounded evidence for a rejected control. No raw request body. */
 export interface SystemControlRejectionAudit {
@@ -85,11 +103,13 @@ export type SystemControlPersistenceResult =
   | {
       readonly kind: 'COMMITTED';
       readonly receipt: Readonly<SystemControlMutationReceipt>;
+      readonly runtimePublication: SystemControlRuntimePublicationState;
     }
   | {
       readonly kind: 'IDEMPOTENT_REPLAY';
       readonly requestDigest: string;
       readonly receipt: Readonly<SystemControlMutationReceipt>;
+      readonly runtimePublication: SystemControlRuntimePublicationState;
     }
   | {
       readonly kind: 'IDEMPOTENCY_CONFLICT';
@@ -104,7 +124,11 @@ export type SystemControlPersistenceResult =
 export interface SystemControlPersistencePort {
   findControlMutation(idempotencyKey: string): Promise<Readonly<{
     requestDigest: string;
+    correlationId: string;
+    recordedAtMs: number;
+    mutation: Readonly<SystemControlMutation> | null;
     receipt: Readonly<SystemControlMutationReceipt>;
+    runtimePublication: SystemControlRuntimePublicationState;
   }> | null>;
   recordControlRejection(
     audit: Readonly<SystemControlRejectionAudit>,
@@ -112,6 +136,9 @@ export interface SystemControlPersistencePort {
   commitControlMutation(
     commit: Readonly<SystemControlPersistenceCommit>,
   ): Promise<SystemControlPersistenceResult>;
+  markControlRuntimePublished?(
+    commit: Readonly<SystemControlRuntimePublicationCommit>,
+  ): Promise<SystemControlRuntimePublicationResult>;
 }
 
 export interface SystemControlServiceOptions {

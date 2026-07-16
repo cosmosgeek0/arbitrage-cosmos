@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/deployment-receipt.schema.json",
+  "title": "I00 deployment receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "releaseId", "testedSha", "deployedSha", "evidence", "status", "startedAtUtc", "completedAtUtc", "recordedAtUtc"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "DEPLOYMENT"},
+    "releaseId": {"type": "string", "pattern": "^i00-[0-9a-f]{40}$"},
+    "testedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "deployedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseManifest", "targetReadback", "cloudflareBoundary", "watchdog", "backup", "restore", "reconciliation", "authorization"],
+      "properties": {
+        "releaseManifest": {"$ref": "#/$defs/evidenceReference"},
+        "targetReadback": {"$ref": "#/$defs/evidenceReference"},
+        "cloudflareBoundary": {"$ref": "#/$defs/evidenceReference"},
+        "watchdog": {"$ref": "#/$defs/evidenceReference"},
+        "backup": {"$ref": "#/$defs/evidenceReference"},
+        "restore": {"$ref": "#/$defs/evidenceReference"},
+        "reconciliation": {"$ref": "#/$defs/evidenceReference"},
+        "authorization": {"$ref": "#/$defs/evidenceReference"}
+      }
+    },
+    "status": {"const": "DEPLOYED_PROVED"},
+    "startedAtUtc": {"type": "string", "format": "date-time"},
+    "completedAtUtc": {"type": "string", "format": "date-time"},
+    "recordedAtUtc": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\)(?!.*//).+$"
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

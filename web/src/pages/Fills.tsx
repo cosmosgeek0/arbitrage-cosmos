@@ -6,13 +6,12 @@ import { createSettledPoll, type SettledPoll } from '../lib/polling';
 import { Empty, Pill, Seg } from '../components/px';
 import { PillSelect } from '../components/PillSelect';
 import { TokenIcon } from '../components/TokenIcon';
-import { IconReceipt, IconRefresh } from '../components/Icons';
+import { IconRefresh } from '../components/Icons';
 import { baseOf, fmtDateTime, fmtMoney, fmtPrice, fmtQty, timeAgo } from '../format';
 import type { FillRow } from '../types';
 
 type SideFilter = 'ALL' | 'BUY' | 'SELL';
 type SourceFilter = 'ALL' | string;
-type MsgTone = 'ok' | 'bad' | 'warn';
 
 function finite(v: number | null | undefined): v is number {
   return typeof v === 'number' && Number.isFinite(v);
@@ -39,12 +38,10 @@ function feeSummary(fills: FillRow[]): string {
 }
 
 export function Fills() {
-  const { state, importFills, openDetail, setPage, prefs } = useStore();
-  const [fills, setFills] = useState<FillRow[]>([]);
-  const [importSymbol, setImportSymbol] = useState('');
-  const [importMsg, setImportMsg] = useState<{ tone: MsgTone; text: string } | null>(null);
+  const { state, openDetail, setPage, prefs } = useStore();
+  const [fills, setFills] = useState<FillRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [query, setQuery] = useState('');
   const [side, setSide] = useState<SideFilter>('ALL');
   const [source, setSource] = useState<SourceFilter>('ALL');
@@ -60,10 +57,11 @@ export function Fills() {
       },
       onSuccess: (next) => {
         setFills(next);
+        setLoadError(null);
         setLoading(false);
       },
       onError: (error) => {
-        setImportMsg({ tone: 'bad', text: apiErrorMessage(error, 'Could not refresh fills from the local ledger.') });
+        setLoadError(apiErrorMessage(error, 'Could not refresh fills from the local ledger.'));
         setLoading(false);
       },
     });
@@ -77,21 +75,14 @@ export function Fills() {
   useRefreshSignal(() => pollRef.current?.refresh());
 
   useEffect(() => {
-    if (!selectedKey && fills.length > 0) setSelectedKey(fillKey(fills[0]));
+    if (!selectedKey && fills && fills.length > 0) setSelectedKey(fillKey(fills[0]));
   }, [fills, selectedKey]);
 
-  const keysPresent = !!state?.binance.keysPresent;
-  const normalizedImport = importSymbol.trim().toUpperCase();
-  const importDisabledReason = !keysPresent
-    ? 'Read-only Binance keys must be configured on the server first'
-    : normalizedImport.length < 5
-      ? 'Enter a Binance symbol such as BTCUSDT'
-      : '';
-
-  const sources = useMemo(() => Array.from(new Set(fills.map((f) => f.source).filter(Boolean))).sort(), [fills]);
+  const rows = fills ?? [];
+  const sources = useMemo(() => Array.from(new Set(rows.map((f) => f.source).filter(Boolean))).sort(), [rows]);
   const queryText = query.trim().toUpperCase();
   const filtered = useMemo(() => {
-    return fills.filter((f) => {
+    return rows.filter((f) => {
       if (side !== 'ALL' && f.side !== side) return false;
       if (source !== 'ALL' && f.source !== source) return false;
       if (!queryText) return true;
@@ -102,52 +93,35 @@ export function Fills() {
         baseOf(f.symbol).includes(queryText)
       );
     });
-  }, [fills, queryText, side, source]);
+  }, [rows, queryText, side, source]);
 
-  const selected = filtered.find((f) => fillKey(f) === selectedKey) ?? filtered[0] ?? fills.find((f) => fillKey(f) === selectedKey) ?? fills[0] ?? null;
-  const buyFills = fills.filter((f) => f.side === 'BUY');
-  const sellFills = fills.filter((f) => f.side === 'SELL');
-  const totalNotional = sum(fills.map((f) => f.quoteQty));
+  const selected = filtered.find((f) => fillKey(f) === selectedKey) ?? filtered[0] ?? rows.find((f) => fillKey(f) === selectedKey) ?? rows[0] ?? null;
+  const buyFills = rows.filter((f) => f.side === 'BUY');
+  const sellFills = rows.filter((f) => f.side === 'SELL');
+  const totalNotional = sum(rows.map((f) => f.quoteQty));
   const buyNotional = sum(buyFills.map((f) => f.quoteQty));
   const sellNotional = sum(sellFills.map((f) => f.quoteQty));
-  const uniqueSymbols = new Set(fills.map((f) => f.symbol)).size;
-  const lastTs = fills[0]?.ts ?? null;
-
-  const runImport = async () => {
-    if (importDisabledReason) return;
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const res = await importFills(normalizedImport);
-      if (res.error) {
-        setImportMsg({ tone: 'bad', text: `Import failed: ${res.error}` });
-      } else {
-        setImportMsg({ tone: 'ok', text: `Imported ${res.imported ?? 0} new fills for ${normalizedImport}` });
-        setImportSymbol('');
-      }
-      pollRef.current?.refresh();
-    } finally {
-      setImporting(false);
-    }
-  };
+  const uniqueSymbols = new Set(rows.map((f) => f.symbol)).size;
+  const lastTs = rows[0]?.ts ?? null;
+  const ledgerReady = fills !== null;
 
   return (
     <>
       <div className="hp-stats exec-stats">
         <div className="hp-stat">
           <span className="k">Executed notional</span>
-          <span className="v">{fmtMoney(totalNotional)}</span>
-          <span className="s">{fills.length ? `${fills.length} fills · ${uniqueSymbols} symbols · last ${lastTs ? timeAgo(lastTs) : '—'}` : 'waiting for live fills or import'}</span>
+          <span className="v">{ledgerReady ? fmtMoney(totalNotional) : '—'}</span>
+          <span className="s">{ledgerReady ? rows.length ? `${rows.length} fills · ${uniqueSymbols} symbols · last ${lastTs ? timeAgo(lastTs) : '—'}` : 'No durable fill evidence recorded' : loadError ? 'Local ledger unavailable' : 'Loading local ledger'}</span>
         </div>
         <div className="hp-stat">
           <span className="k">Buy / sell flow</span>
-          <span className="v">{fmtMoney(buyNotional)} / {fmtMoney(sellNotional)}</span>
-          <span className="s">{buyFills.length} buys · {sellFills.length} sells</span>
+          <span className="v">{ledgerReady ? `${fmtMoney(buyNotional)} / ${fmtMoney(sellNotional)}` : '—'}</span>
+          <span className="s">{ledgerReady ? `${buyFills.length} buys · ${sellFills.length} sells` : 'Unknown until the local ledger responds'}</span>
         </div>
         <div className="hp-stat">
           <span className="k">Commissions</span>
-          <span className="v">{feeSummary(fills)}</span>
-          <span className="s">as reported by Binance trades</span>
+          <span className="v">{ledgerReady ? feeSummary(rows) : '—'}</span>
+          <span className="s">Recorded evidence only · private import not configured</span>
         </div>
       </div>
 
@@ -182,32 +156,11 @@ export function Fills() {
           <IconRefresh size={13} />
           Refresh
         </button>
-        <span className="lg-filter-gap" />
-        <input
-          className="hp-input lg-symbol"
-          placeholder="BTCUSDT"
-          value={importSymbol}
-          onChange={(e) => setImportSymbol(e.target.value.toUpperCase())}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void runImport();
-          }}
-          spellCheck={false}
-        />
-        <button
-          className="hp-btn"
-          type="button"
-          disabled={!!importDisabledReason || importing}
-          title={importDisabledReason || 'Import the last 200 Binance trades for this symbol into the ledger'}
-          onClick={runImport}
-        >
-          <IconReceipt size={13} />
-          {importing ? 'Importing…' : 'Import history'}
-        </button>
       </div>
 
-      {importMsg && (
-        <div className={importMsg.tone === 'bad' ? 'hp-alert' : 'hp-note'} style={{ marginBottom: 12 }}>
-          {importMsg.text}
+      {loadError && (
+        <div className="hp-alert" role="alert" style={{ marginBottom: 12 }}>
+          {loadError}
         </div>
       )}
 
@@ -215,12 +168,14 @@ export function Fills() {
         <section className="hp-group lg-feed" aria-label="Execution tape">
           <div className="lg-feed-head">
             <h3>Execution tape</h3>
-            <span className="hp-val">{filtered.length} of {fills.length} ledger fills</span>
+            <span className="hp-val">{ledgerReady ? `${filtered.length} of ${rows.length} ledger fills` : 'Unknown · Local Ledger Unavailable'}</span>
           </div>
-          {fills.length === 0 ? (
+          {!ledgerReady || rows.length === 0 ? (
             <div className="lg-empty-pad">
-              <Empty title="No fills in the ledger">
-                Live executions stream here once Binance is connected. Already traded on this account? Import a symbol to backfill history — rows become immutable ledger fills.
+              <Empty title={ledgerReady ? 'No Durable Fills Recorded' : 'Local Fill Evidence Is Unavailable'}>
+                {ledgerReady
+                  ? 'This read-only view shows only fills already present in the durable ledger. Private exchange import is NOT_CONFIGURED.'
+                  : 'The app will not infer zero fills while the local ledger read is unavailable.'}
               </Empty>
             </div>
           ) : filtered.length === 0 ? (

@@ -1,0 +1,12 @@
+# ops/live/systemd/journald-cosmos.conf.template
+# Install as /etc/systemd/journald.conf.d/cosmos.conf, then
+# `systemctl restart systemd-journald` (owner-authorized activation step).
+#
+# §24.2: bounded, journaled logs. Caps total journal disk usage and
+# retention so a chatty failure mode can never fill the root volume.
+# Per-unit burst limits live in the unit files (LogRateLimit*).
+
+[Journal]
+SystemMaxUse=1G
+SystemKeepFree=2G
+MaxRetentionSec=1month

@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 /**
  * Server-side token-icon resolver (technique adopted from CG Signal Lab, ported
@@ -13,7 +14,8 @@ import path from 'node:path';
 const CG = 'https://api.coingecko.com/api/v3';
 const ICON_TTL = 7 * 86400 * 1000; // successes: 7 days
 const ICON_RETRY = 180 * 1000; // failures: retry after 3 min
-const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? 'data/icon_cache.json');
+const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
+const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? path.join(DATA_ROOT, 'icon_cache.json'));
 // CoinGecko keyless throttles harder than its published limit — 1.3s gaps got
 // 429s that looked like "no logo". 4.5s converges slower but never lies.
 const RESOLVE_GAP_MS = 4500;
@@ -215,6 +217,7 @@ async function drain(): Promise<void> {
 /** Known logo URLs for the requested bases; unknown ones queue for background
  * resolution and appear on a later call. */
 export function resolveIcons(bases: string[]): Record<string, string> {
+  if (deterministicOfflinePublicSourcesEnabled()) return {};
   const now = Date.now();
   const out: Record<string, string> = {};
   for (const base of bases) {

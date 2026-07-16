@@ -3,9 +3,39 @@ import {
   isValidUtcMillis,
   type SourcedTimestamp,
 } from '../../foundation/contracts/index.js';
+import {
+  stableId,
+  type InstrumentIdentity,
+  type NormalizedEvidence,
+  type TruthMetadata,
+} from '../../intelligenceFoundation/contracts/index.js';
+import {
+  BINANCE_SOURCE_FACTS,
+  normalizeMarkPrice,
+} from '../../intelligenceFoundation/evidence/index.js';
+import {
+  buildUniverseGraph,
+  type CoverageObservation,
+  type ListingObservation,
+  type UniverseSnapshotInput,
+  type UniverseSourceKind,
+  type UniverseSourceSlice,
+  type UniverseSourceState,
+} from '../../intelligenceFoundation/universe/index.js';
+import {
+  IntelligenceRuntimeBridge,
+} from '../../intelligenceRuntime/bridge/index.js';
+import {
+  runtimeUniverseTruth,
+  unavailableUniverseTruth,
+} from '../../intelligenceRuntime/universe/index.js';
 import type {
   ComponentStepContext,
 } from '../../foundation/control/index.js';
+import {
+  createAcceptedQAbstentionBinding,
+  createProductionQAdvisoryRuntime,
+} from '../adapters/qAdvisory.js';
 import type {
   SystemComponentSnapshot,
 } from '../contracts/types.js';
@@ -24,11 +54,13 @@ import {
   validUtcOrNull,
   weakestTemporalFact,
 } from './temporal.js';
+import { admitProductionSourceRegistry } from './sourceAdmission.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
   ProductionMarketEnginePort,
   ProductionMarketRow,
+  ProductionFeedStatus,
   ProductionStrategySnapshot,
   ProductionSystemIntegrationInput,
   ProductionSystemIntegrationPorts,
@@ -59,9 +91,38 @@ interface LifecycleReadState {
 
 interface SourceProjectionEvidence {
   readonly connected: boolean;
-  readonly feedState: 'connecting' | 'open' | 'closed' | 'missing';
+  readonly feedState: ProductionFeedStatus | 'missing';
   readonly timestamp: Readonly<SourcedTimestamp> | null;
   readonly facts: Readonly<MarketFacts>;
+}
+
+interface MarketFactsCut {
+  readonly facts: Readonly<MarketFacts>;
+  readonly rows: readonly Readonly<ProductionMarketRow>[];
+  readonly spotSourceTimes: ReadonlyMap<string, number | null>;
+  readonly usdmSourceTimes: ReadonlyMap<string, number | null>;
+}
+
+interface IntelligenceSourceCut {
+  readonly spot: Readonly<SourceProjectionEvidence>;
+  readonly usdm: Readonly<SourceProjectionEvidence>;
+  readonly market: Readonly<MarketFactsCut>;
+}
+
+function invalidMarketFactsCut(): Readonly<MarketFactsCut> {
+  return Object.freeze({
+    facts: Object.freeze({
+      valid: false,
+      universeSymbols: null,
+      spotObservedSymbols: null,
+      usdmObservedSymbols: null,
+      latestSpotSourceTimeMs: null,
+      latestUsdmSourceTimeMs: null,
+    }),
+    rows: Object.freeze([]),
+    spotSourceTimes: new Map<string, number | null>(),
+    usdmSourceTimes: new Map<string, number | null>(),
+  });
 }
 
 function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>): void {
@@ -156,30 +217,22 @@ class MarketEvidenceReader {
   }
 
   readFacts(): Readonly<MarketFacts> {
+    return this.readFactsCut().facts;
+  }
+
+  private readFactsCut(): Readonly<MarketFactsCut> {
     let rows: readonly Readonly<ProductionMarketRow>[];
     try {
       rows = this.market.allRows();
     } catch {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     if (!Array.isArray(rows) || rows.length > MAX_MARKET_ROWS) {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     const symbols = new Set<string>();
+    const spotSourceTimes = new Map<string, number | null>();
+    const usdmSourceTimes = new Map<string, number | null>();
     let spotObservedSymbols = 0;
     let usdmObservedSymbols = 0;
     let latestSpotSourceTimeMs: number | null = null;
@@ -192,6 +245,7 @@ class MarketEvidenceReader {
         symbols.add(row.symbol);
         if (row.hasSpot) {
           const sourceTime = validUtcOrNull(this.market.priceUpdatedAt(row.symbol));
+          spotSourceTimes.set(row.symbol, sourceTime);
           if (sourceTime !== null) {
             spotObservedSymbols += 1;
             latestSpotSourceTimeMs = latest(latestSpotSourceTimeMs, sourceTime);
@@ -199,6 +253,7 @@ class MarketEvidenceReader {
         }
         if (row.hasPerp) {
           const sourceTime = validUtcOrNull(this.market.markEventTimestamp(row.symbol));
+          usdmSourceTimes.set(row.symbol, sourceTime);
           if (sourceTime !== null) {
             usdmObservedSymbols += 1;
             latestUsdmSourceTimeMs = latest(latestUsdmSourceTimeMs, sourceTime);
@@ -206,28 +261,45 @@ class MarketEvidenceReader {
         }
       }
     } catch {
-      return Object.freeze({
-        valid: false,
-        universeSymbols: null,
-        spotObservedSymbols: null,
-        usdmObservedSymbols: null,
-        latestSpotSourceTimeMs: null,
-        latestUsdmSourceTimeMs: null,
-      });
+      return invalidMarketFactsCut();
     }
     return Object.freeze({
-      valid: true,
-      universeSymbols: symbols.size,
-      spotObservedSymbols,
-      usdmObservedSymbols,
-      latestSpotSourceTimeMs,
-      latestUsdmSourceTimeMs,
+      facts: Object.freeze({
+        valid: true,
+        universeSymbols: symbols.size,
+        spotObservedSymbols,
+        usdmObservedSymbols,
+        latestSpotSourceTimeMs,
+        latestUsdmSourceTimeMs,
+      }),
+      rows: Object.freeze([...rows]),
+      spotSourceTimes,
+      usdmSourceTimes,
     });
   }
 
-  readSource(kind: PublicSourceKind): Readonly<SourceProjectionEvidence> {
-    const nowMs = this.clock.nowMs();
+  readSource(kind: PublicSourceKind, nowMs = this.clock.nowMs()): Readonly<SourceProjectionEvidence> {
     const facts = this.readFacts();
+    return this.sourceEvidence(kind, nowMs, facts);
+  }
+
+  readSourcesWithMarketCut(nowMs = this.clock.nowMs()): Readonly<IntelligenceSourceCut> {
+    // Spot and USD-M belong to one supervisor step. Scanning the accepted
+    // MarketEngine cache once both removes duplicate full-universe work and
+    // prevents the two source projections from observing different row cuts.
+    const market = this.readFactsCut();
+    return Object.freeze({
+      spot: this.sourceEvidence('SPOT', nowMs, market.facts),
+      usdm: this.sourceEvidence('USDM', nowMs, market.facts),
+      market,
+    });
+  }
+
+  private sourceEvidence(
+    kind: PublicSourceKind,
+    nowMs: number,
+    facts: Readonly<MarketFacts>,
+  ): Readonly<SourceProjectionEvidence> {
     const sourceTime = kind === 'SPOT'
       ? facts.latestSpotSourceTimeMs
       : facts.latestUsdmSourceTimeMs;
@@ -242,7 +314,10 @@ class MarketEvidenceReader {
       : null;
     const feedName = kind === 'SPOT' ? 'spot-miniticker' : 'futures-markprice';
     const feed = this.market.feeds[feedName];
-    const feedState = feed === 'open' || feed === 'connecting' || feed === 'closed' ? feed : 'missing';
+    const feedState = (
+      feed === 'open' || feed === 'connecting' || feed === 'closed' ||
+      feed === 'cooldown' || feed === 'exhausted'
+    ) ? feed : 'missing';
     return Object.freeze({
       connected: this.lifecycle().active && feedState === 'open',
       feedState,
@@ -254,13 +329,15 @@ class MarketEvidenceReader {
   readComponent(kind: PublicSourceKind): Readonly<SystemComponentSnapshot> {
     const lifecycle = this.lifecycle();
     const nowMs = this.clock.nowMs();
-    const evidence = this.readSource(kind);
+    const evidence = this.readSource(kind, nowMs);
     const freshness = evidence.timestamp ? evaluateFreshness(evidence.timestamp, nowMs) : null;
     const ready = evidence.connected && freshness?.state === 'FRESH';
     const stopped = !lifecycle.active;
     const blockerCodes: string[] = [];
     if (stopped) blockerCodes.push('SOURCE_NOT_STARTED');
     else if (evidence.feedState === 'connecting') blockerCodes.push('SOURCE_TRANSPORT_CONNECTING');
+    else if (evidence.feedState === 'cooldown') blockerCodes.push('SOURCE_TRANSPORT_COOLDOWN');
+    else if (evidence.feedState === 'exhausted') blockerCodes.push('SOURCE_RETRY_BUDGET_EXHAUSTED');
     else if (evidence.feedState !== 'open') blockerCodes.push('SOURCE_TRANSPORT_DISCONNECTED');
     if (evidence.timestamp === null) blockerCodes.push('SOURCE_OBSERVATION_UNAVAILABLE');
     if (freshness?.state === 'STALE') blockerCodes.push('SOURCE_STALE');
@@ -271,31 +348,37 @@ class MarketEvidenceReader {
         ? 'RUNNING'
         : evidence.feedState === 'connecting' || (evidence.feedState === 'open' && evidence.timestamp === null)
           ? 'STARTING'
-          : freshness?.state === 'STALE'
-            ? 'DEGRADED'
-            : 'BLOCKED';
+          : evidence.feedState === 'exhausted'
+            ? 'BLOCKED'
+            : freshness?.state === 'STALE'
+              ? 'DEGRADED'
+              : 'BLOCKED';
     const readiness = stopped
       ? 'STOPPED'
       : ready
         ? 'READY'
         : evidence.feedState === 'connecting' || (evidence.feedState === 'open' && evidence.timestamp === null)
           ? 'WARMING'
-          : freshness?.state === 'STALE'
-            ? 'DEGRADED'
-            : 'BLOCKED';
+          : evidence.feedState === 'exhausted'
+            ? 'BLOCKED'
+            : freshness?.state === 'STALE'
+              ? 'DEGRADED'
+              : 'BLOCKED';
     const sourceLifecycle = stopped
       ? 'STOPPED'
       : ready
         ? 'LIVE'
         : evidence.feedState === 'connecting'
           ? 'CONNECTING'
-          : evidence.feedState === 'open' && evidence.timestamp === null
-            ? 'WARMING'
-            : freshness?.state === 'STALE'
-              ? 'STALE'
-              : evidence.feedState !== 'open'
-                ? 'BACKING_OFF'
-                : 'DEGRADED';
+          : evidence.feedState === 'exhausted'
+            ? 'FAILED'
+            : evidence.feedState === 'open' && evidence.timestamp === null
+              ? 'WARMING'
+              : freshness?.state === 'STALE'
+                ? 'STALE'
+                : evidence.feedState !== 'open'
+                  ? 'BACKING_OFF'
+                  : 'DEGRADED';
     const component: SystemComponentSnapshot = Object.freeze({
       componentId: kind === 'SPOT' ? 'public-spot-source' : 'public-usdm-source',
       owner: 'INTELLIGENCE_RUNTIME',
@@ -334,6 +417,509 @@ class MarketEvidenceReader {
   }
 }
 
+const PUBLIC_UNIVERSE_CONFIGURATION = 'i00-public-universe-v1';
+const MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS = 5_000;
+const MAX_PROJECTED_UNIVERSE_ROWS = 640;
+const MAX_PROJECTED_MARK_EVIDENCE = 256;
+
+interface IntelligenceRefresh {
+  readonly universeReady: boolean;
+  readonly evidenceReady: boolean;
+  readonly spotTimestamp: Readonly<SourcedTimestamp> | null;
+  readonly usdmTimestamp: Readonly<SourcedTimestamp> | null;
+}
+
+interface IntelligenceRefreshHandoff {
+  readonly nowMs: number;
+  readonly generation: number;
+  readonly correlationId: string;
+  readonly value: Readonly<IntelligenceRefresh>;
+}
+
+function marketInstrument(
+  row: Readonly<ProductionMarketRow>,
+  productFamily: 'SPOT' | 'USD_M_PERPETUAL',
+): Readonly<InstrumentIdentity> | null {
+  if (!SYMBOL.test(row.symbol) || typeof row.base !== 'string' || !/^[A-Z0-9]{1,24}$/.test(row.base)) return null;
+  const instrument: InstrumentIdentity = {
+    instrumentId: '',
+    venue: 'BINANCE',
+    productFamily,
+    symbol: row.symbol,
+    pair: row.symbol,
+    baseAsset: row.base,
+    quoteAsset: 'USDT',
+    contractType: productFamily === 'USD_M_PERPETUAL' ? 'PERPETUAL' : null,
+    sourceMarketType: productFamily === 'USD_M_PERPETUAL' ? 1 : null,
+  };
+  instrument.instrumentId = stableId('instrument', {
+    venue: instrument.venue,
+    productFamily: instrument.productFamily,
+    symbol: instrument.symbol,
+    pair: instrument.pair,
+    baseAsset: instrument.baseAsset,
+    quoteAsset: instrument.quoteAsset,
+    contractType: instrument.contractType,
+    sourceMarketType: instrument.sourceMarketType,
+  });
+  return Object.freeze(instrument);
+}
+
+function publicUniverseTruth(input: Readonly<{
+  nowMs: number;
+  timestamp: Readonly<SourcedTimestamp>;
+  sourceId: string;
+  dataset: string;
+  sourceRecordIds: readonly string[];
+  observedFields: readonly string[];
+  missingFields?: readonly string[];
+}>): Readonly<TruthMetadata> {
+  const missingFields = input.missingFields ?? Object.freeze([]);
+  return runtimeUniverseTruth({
+    configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+    sourceId: input.sourceId,
+    dataset: input.dataset,
+    endpointClass: 'MARKET',
+    authorityKind: 'EXCHANGE_PRIMARY',
+    evaluatedAtMs: input.nowMs,
+    receivedTimeMs: input.timestamp.receivedAtMs,
+    maxAgeMs: input.timestamp.maxAgeMs,
+    sourceRecordIds: input.sourceRecordIds,
+    transforms: ['project-existing-market-owner-v1'],
+    completeness: missingFields.length === 0 ? 'COMPLETE' : 'PARTIAL',
+    observedFields: input.observedFields,
+    missingFields,
+    reasonCodes: missingFields.length === 0 ? [] : ['OWNER_FIELDS_NOT_EXPOSED'],
+  });
+}
+
+function unavailableSlice<T>(source: UniverseSourceKind, nowMs: number): Readonly<UniverseSourceSlice<T>> {
+  return Object.freeze({
+    source,
+    state: 'UNAVAILABLE' as const,
+    records: Object.freeze([]) as readonly T[],
+    truth: unavailableUniverseTruth({
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      sourceId: `i00.${source.toLowerCase()}.not-mounted`,
+      dataset: `${source.toLowerCase()}-universe`,
+      evaluatedAtMs: nowMs,
+      missingField: `${source.toLowerCase()}SourceTruth`,
+      reasonCode: `${source}_SOURCE_NOT_MOUNTED`,
+    }),
+  });
+}
+
+function listing(
+  row: Readonly<ProductionMarketRow>,
+  productFamily: 'SPOT' | 'USD_M_PERPETUAL',
+  nowMs: number,
+  timestamp: Readonly<SourcedTimestamp>,
+): Readonly<ListingObservation> | null {
+  const instrument = marketInstrument(row, productFamily);
+  if (instrument === null) return null;
+  const sourceId = productFamily === 'SPOT'
+    ? 'binance.spot.miniTicker.existing-cache'
+    : 'binance.usdm.markPrice.existing-cache';
+  const dataset = productFamily === 'SPOT' ? 'spot-mini-ticker-universe' : 'usd-m-mark-price-universe';
+  const sourceTime = productFamily === 'SPOT'
+    ? timestamp.sourceTimeMs
+    : timestamp.sourceTimeMs;
+  const recordId = stableId('existing-market-listing', {
+    productFamily,
+    symbol: row.symbol,
+    sourceTime,
+  });
+  return Object.freeze({
+    id: recordId,
+    kind: productFamily === 'SPOT' ? 'SPOT_LISTING' : 'USD_M_PERPETUAL_LISTING',
+    instrument,
+    tradingStatus: 'TRADING',
+    tradingAllowed: null,
+    aliases: Object.freeze([row.symbol]),
+    rules: Object.freeze({
+      minimumPrice: null,
+      maximumPrice: null,
+      tickSize: null,
+      minimumQuantity: null,
+      maximumQuantity: null,
+      quantityStep: null,
+      minimumNotional: null,
+      maximumNotional: null,
+    }),
+    quoteVolume: null,
+    quoteVolume24hUsd: null,
+    truth: publicUniverseTruth({
+      nowMs,
+      timestamp,
+      sourceId,
+      dataset,
+      sourceRecordIds: [recordId],
+      observedFields: ['symbol', 'baseAsset', 'quoteAsset', 'tradingStatus'],
+      missingFields: ['tradingAllowed', 'tradingRules', 'quoteVolume24hUsd'],
+    }),
+  });
+}
+
+function coverage(
+  listingRecord: Readonly<ListingObservation>,
+  nowMs: number,
+  timestamp: Readonly<SourcedTimestamp>,
+): Readonly<CoverageObservation> {
+  const evidenceKinds = listingRecord.kind === 'SPOT_LISTING'
+    ? Object.freeze(['CONTEXT'] as const)
+    : Object.freeze(['MARK_PRICE'] as const);
+  const id = stableId('existing-market-coverage', {
+    instrumentId: listingRecord.instrument.instrumentId,
+    sourceTimeMs: timestamp.sourceTimeMs,
+  });
+  return Object.freeze({
+    id,
+    instrument: listingRecord.instrument,
+    publicData: Object.freeze({ state: 'AVAILABLE' as const, evidenceKinds, reasonCodes: Object.freeze([]) }),
+    focusedData: Object.freeze({
+      state: 'UNKNOWN' as const,
+      evidenceKinds: Object.freeze([]),
+      reasonCodes: Object.freeze(['FOCUSED_TRANSPORT_NOT_OWNED']),
+    }),
+    truth: publicUniverseTruth({
+      nowMs,
+      timestamp,
+      sourceId: timestamp.sourceId,
+      dataset: 'existing-public-market-coverage',
+      sourceRecordIds: [id],
+      observedFields: ['publicData'],
+      missingFields: ['focusedData'],
+    }),
+  });
+}
+
+function availableSlice<T>(
+  source: UniverseSourceKind,
+  nowMs: number,
+  timestamp: Readonly<SourcedTimestamp>,
+  records: readonly T[],
+): Readonly<UniverseSourceSlice<T>> {
+  const state: UniverseSourceState = records.length > 0 ? 'PARTIAL' : 'UNAVAILABLE';
+  if (state === 'UNAVAILABLE') return unavailableSlice<T>(source, nowMs);
+  return Object.freeze({
+    source,
+    state,
+    records: Object.freeze([...records]),
+    truth: publicUniverseTruth({
+      nowMs,
+      timestamp,
+      sourceId: timestamp.sourceId,
+      dataset: `${source.toLowerCase()}-existing-owner-slice`,
+      sourceRecordIds: records.flatMap((record) => {
+        const id = (record as { id?: unknown }).id;
+        return typeof id === 'string' ? [id] : [];
+      }),
+      observedFields: ['records'],
+      missingFields: ['independentCompletenessReceipt'],
+    }),
+  });
+}
+
+function coverageSlice(
+  nowMs: number,
+  spotTimestamp: Readonly<SourcedTimestamp>,
+  usdmTimestamp: Readonly<SourcedTimestamp> | null,
+  records: readonly Readonly<CoverageObservation>[],
+): Readonly<UniverseSourceSlice<CoverageObservation>> {
+  if (records.length === 0) return unavailableSlice('COVERAGE', nowMs);
+  const receipts = [spotTimestamp.receivedAtMs, ...(usdmTimestamp === null ? [] : [usdmTimestamp.receivedAtMs])];
+  const sourceSet = [spotTimestamp.sourceId, ...(usdmTimestamp === null ? [] : [usdmTimestamp.sourceId])];
+  return Object.freeze({
+    source: 'COVERAGE' as const,
+    state: 'PARTIAL' as const,
+    records: Object.freeze([...records]),
+    truth: runtimeUniverseTruth({
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      sourceId: 'system-integration.existing-public-coverage-projection',
+      dataset: 'existing-public-market-coverage',
+      endpointClass: 'INJECTED',
+      authorityKind: 'ENGINE_DERIVED',
+      evaluatedAtMs: nowMs,
+      receivedTimeMs: Math.min(...receipts),
+      maxAgeMs: Math.min(spotTimestamp.maxAgeMs, usdmTimestamp?.maxAgeMs ?? spotTimestamp.maxAgeMs),
+      sourceRecordIds: records.map((record) => record.id),
+      sourceSet,
+      transforms: ['join-existing-owner-coverage-v1'],
+      completeness: 'PARTIAL',
+      observedFields: ['publicData'],
+      missingFields: ['focusedData', 'independentCompletenessReceipt'],
+      reasonCodes: ['FOCUSED_TRANSPORT_NOT_OWNED'],
+    }),
+  });
+}
+
+/**
+ * Serial, read-only projection into the accepted intelligence owners. It reads
+ * the already-running MarketEngine cache and never constructs transport,
+ * duplicates a source cache, computes a strategy score, or gains money-path
+ * authority.
+ */
+class PublicIntelligenceLifecycle {
+  private readonly bridge: IntelligenceRuntimeBridge;
+  private readonly projectionIntervalMs: number;
+  private runtimeActive = false;
+  private intelligenceActive = false;
+  private lastProjectionKey: string | null = null;
+  private lastProjectionAtMs: number | null = null;
+  private lastProjectedSpotTimestamp: Readonly<SourcedTimestamp> | null = null;
+  private lastProjectedUsdmTimestamp: Readonly<SourcedTimestamp> | null = null;
+  private lastUniverseReady = false;
+  private lastEvidenceReady = false;
+  private siblingRefreshHandoff: Readonly<IntelligenceRefreshHandoff> | null = null;
+
+  constructor(
+    private readonly clock: ProductionSystemIntegrationInput['clock'],
+    private readonly market: ProductionMarketEnginePort,
+    private readonly evidence: MarketEvidenceReader,
+    private readonly maxAgeMs: number,
+  ) {
+    this.bridge = new IntelligenceRuntimeBridge({ clock });
+    // Sampling may reduce allocation churn, but it must never outlive the
+    // source contract. Re-project at least twice inside the configured
+    // freshness window and immediately fail closed on the source reads below.
+    this.projectionIntervalMs = Math.min(
+      MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS,
+      Math.max(1, Math.floor(maxAgeMs / 2)),
+    );
+  }
+
+  startRuntime(): Promise<void> {
+    this.runtimeActive = true;
+    return Promise.resolve();
+  }
+
+  stopRuntime(): void {
+    this.runtimeActive = false;
+    this.intelligenceActive = false;
+    this.resetGenerationProjection();
+  }
+
+  startIntelligence(): Promise<void> {
+    if (!this.runtimeActive) throw new TypeError('market intelligence requires the intelligence runtime');
+    this.siblingRefreshHandoff = null;
+    this.intelligenceActive = true;
+    return Promise.resolve();
+  }
+
+  stopIntelligence(): void {
+    this.intelligenceActive = false;
+    this.siblingRefreshHandoff = null;
+    this.lastEvidenceReady = false;
+  }
+
+  runtimeHealth(ctx: ComponentStepContext): Readonly<RuntimeHealthEvidence> {
+    if (!this.runtimeActive) return frozenHealth(false, null, null);
+    const refreshed = this.refresh(ctx);
+    // The canonical supervisor probes the runtime immediately before its
+    // intelligence sibling. Hand off exactly one same-step result so that pair
+    // observes one market cut without creating a cross-step cache.
+    this.siblingRefreshHandoff = Object.freeze({
+      nowMs: ctx.nowMs,
+      generation: ctx.generation,
+      correlationId: ctx.correlationId,
+      value: refreshed,
+    });
+    return frozenHealth(
+      true,
+      refreshed.universeReady ? refreshed.spotTimestamp : null,
+      refreshed.universeReady
+        ? refreshed.spotTimestamp?.sourceTimeMs ?? refreshed.spotTimestamp?.receivedAtMs ?? null
+        : null,
+    );
+  }
+
+  intelligenceHealth(ctx: ComponentStepContext): Readonly<RuntimeHealthEvidence> {
+    if (!this.intelligenceActive) return frozenHealth(false, null, null);
+    const handoff = this.siblingRefreshHandoff;
+    this.siblingRefreshHandoff = null;
+    const refreshed = handoff !== null
+        && handoff.nowMs === ctx.nowMs
+        && handoff.generation === ctx.generation
+        && handoff.correlationId === ctx.correlationId
+      ? handoff.value
+      : this.refresh(ctx);
+    return frozenHealth(
+      true,
+      refreshed.universeReady && refreshed.evidenceReady ? refreshed.usdmTimestamp : null,
+      refreshed.universeReady && refreshed.evidenceReady
+        ? refreshed.usdmTimestamp?.sourceTimeMs ?? refreshed.usdmTimestamp?.receivedAtMs ?? null
+        : null,
+    );
+  }
+
+  private resetGenerationProjection(): void {
+    this.siblingRefreshHandoff = null;
+    this.lastProjectionKey = null;
+    this.lastProjectionAtMs = null;
+    this.lastProjectedSpotTimestamp = null;
+    this.lastProjectedUsdmTimestamp = null;
+    this.lastUniverseReady = false;
+    this.lastEvidenceReady = false;
+  }
+
+  private refresh(ctx: ComponentStepContext): Readonly<IntelligenceRefresh> {
+    // Receipt time and evaluation time belong to the same deterministic
+    // supervisor step. Taking a second clock sample here can place a newly
+    // accepted receipt after ctx.nowMs and manufacture a negative age.
+    const sourceCut = this.evidence.readSourcesWithMarketCut(ctx.nowMs);
+    const { spot, usdm } = sourceCut;
+    const spotFresh = spot.timestamp !== null && evaluateFreshness(spot.timestamp, ctx.nowMs).state === 'FRESH';
+    const usdmFresh = usdm.connected
+      && usdm.timestamp !== null
+      && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
+    if (!spot.connected || !spotFresh) {
+      this.lastUniverseReady = false;
+      this.lastEvidenceReady = false;
+      return Object.freeze({
+        universeReady: false,
+        evidenceReady: false,
+        spotTimestamp: spot.timestamp,
+        usdmTimestamp: usdm.timestamp,
+      });
+    }
+
+    const key = `${spot.timestamp?.sourceTimeMs ?? 'receive'}:${usdmFresh ? usdm.timestamp?.sourceTimeMs ?? 'receive' : 'unavailable'}`;
+    const projectionDue = this.lastProjectionAtMs === null
+      || ctx.nowMs - this.lastProjectionAtMs >= this.projectionIntervalMs;
+    const retryNeeded = !this.lastUniverseReady || (usdmFresh && !this.lastEvidenceReady);
+    if (projectionDue && (key !== this.lastProjectionKey || retryNeeded)) {
+      const projected = this.project(
+        ctx.nowMs,
+        spot.timestamp as Readonly<SourcedTimestamp>,
+        usdmFresh ? usdm.timestamp : null,
+        sourceCut.market,
+      );
+      this.lastProjectionKey = key;
+      this.lastProjectionAtMs = ctx.nowMs;
+      this.lastProjectedSpotTimestamp = spot.timestamp;
+      this.lastProjectedUsdmTimestamp = usdmFresh ? usdm.timestamp : null;
+      this.lastUniverseReady = projected.universeReady;
+      this.lastEvidenceReady = projected.evidenceReady;
+    }
+    return Object.freeze({
+      universeReady: this.lastUniverseReady,
+      evidenceReady: this.lastEvidenceReady && usdmFresh,
+      spotTimestamp: this.lastProjectedSpotTimestamp,
+      usdmTimestamp: this.lastProjectedUsdmTimestamp,
+    });
+  }
+
+  private project(
+    nowMs: number,
+    spotTimestamp: Readonly<SourcedTimestamp>,
+    usdmTimestamp: Readonly<SourcedTimestamp> | null,
+    marketCut: Readonly<MarketFactsCut>,
+  ): Readonly<Pick<IntelligenceRefresh, 'universeReady' | 'evidenceReady'>> {
+    if (!marketCut.facts.valid || marketCut.rows.length === 0 || marketCut.rows.length > MAX_MARKET_ROWS) {
+      return Object.freeze({ universeReady: false, evidenceReady: false });
+    }
+    const boundedRows = marketCut.rows.slice(0, MAX_PROJECTED_UNIVERSE_ROWS);
+    const spotListings = boundedRows
+      .filter((row) => row.hasSpot
+        && marketCut.spotSourceTimes.get(row.symbol) === spotTimestamp.sourceTimeMs)
+      .map((row) => listing(row, 'SPOT', nowMs, spotTimestamp))
+      .filter((record): record is Readonly<ListingObservation> => record !== null);
+    const perpetualListings = usdmTimestamp === null
+      ? []
+      : boundedRows
+        .filter((row) => row.hasPerp
+          && marketCut.usdmSourceTimes.get(row.symbol) === usdmTimestamp.sourceTimeMs)
+        .map((row) => listing(row, 'USD_M_PERPETUAL', nowMs, usdmTimestamp))
+        .filter((record): record is Readonly<ListingObservation> => record !== null);
+    const coverageRecords = [
+      ...spotListings.map((record) => coverage(record, nowMs, spotTimestamp)),
+      ...perpetualListings.map((record) => coverage(record, nowMs, usdmTimestamp as Readonly<SourcedTimestamp>)),
+    ];
+    const input: UniverseSnapshotInput = {
+      observedAtMs: nowMs,
+      spot: availableSlice('SPOT', nowMs, spotTimestamp, spotListings),
+      usdMPerpetual: usdmTimestamp === null
+        ? unavailableSlice('USD_M_PERPETUAL', nowMs)
+        : availableSlice('USD_M_PERPETUAL', nowMs, usdmTimestamp, perpetualListings),
+      margin: unavailableSlice('MARGIN', nowMs),
+      borrow: unavailableSlice('BORROW', nowMs),
+      coverage: coverageSlice(nowMs, spotTimestamp, usdmTimestamp, coverageRecords),
+    };
+    const graph = buildUniverseGraph(input, {
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      requireSpotForFocus: true,
+      requirePerpetualForFocus: false,
+      requirePublicDataForFocus: true,
+      requireFocusedDataForFocus: false,
+      maxRecordsPerSource: MAX_PROJECTED_UNIVERSE_ROWS * 2,
+    });
+    const universeReceipt = this.bridge.updateUniverse(graph);
+    const universeReady = universeReceipt.accepted && universeReceipt.nodeCount > 0;
+    if (!universeReady || usdmTimestamp === null) {
+      return Object.freeze({ universeReady, evidenceReady: false });
+    }
+
+    const normalized: NormalizedEvidence[] = [];
+    const qualityFailures = [];
+    const fact = BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE;
+    for (const row of boundedRows) {
+      if (normalized.length >= MAX_PROJECTED_MARK_EVIDENCE || !row.hasPerp
+          || typeof row.perpMark !== 'number' || !Number.isFinite(row.perpMark) || row.perpMark <= 0) continue;
+      const sourceTimeMs = marketCut.usdmSourceTimes.get(row.symbol) ?? null;
+      if (sourceTimeMs === null || sourceTimeMs !== usdmTimestamp.sourceTimeMs
+          || sourceTimeMs > usdmTimestamp.receivedAtMs) continue;
+      const result = normalizeMarkPrice({
+        e: 'markPriceUpdate',
+        E: sourceTimeMs,
+        s: row.symbol,
+        ps: row.symbol,
+        st: 1,
+        p: String(row.perpMark),
+        ...(typeof row.perpIndexPrice === 'number' && Number.isFinite(row.perpIndexPrice) && row.perpIndexPrice > 0
+          ? { i: String(row.perpIndexPrice) }
+          : {}),
+      }, {
+        sourceKey: 'USD_M_MARK_PRICE',
+        sourceId: fact.sourceId,
+        endpointClass: fact.endpointClass,
+        instrument: {
+          venue: 'BINANCE',
+          productFamily: 'USD_M_PERPETUAL',
+          symbol: row.symbol,
+          pair: row.symbol,
+          baseAsset: row.base,
+          quoteAsset: 'USDT',
+          contractType: 'PERPETUAL',
+        },
+        receivedTimeMs: usdmTimestamp.receivedAtMs,
+        evaluatedAtMs: nowMs,
+        maxAgeMs: this.maxAgeMs,
+        configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      });
+      if (result.ok) {
+        normalized.push(result.value);
+        qualityFailures.push(...result.qualityFailures);
+      } else {
+        qualityFailures.push(...result.failures);
+      }
+    }
+    if (normalized.length === 0) return Object.freeze({ universeReady, evidenceReady: false });
+    const receipt = this.bridge.ingest({
+      correlationId: stableId('existing-market-intelligence-ingest', {
+        sourceTimeMs: usdmTimestamp.sourceTimeMs,
+        evidenceIds: normalized.map((record) => record.id),
+      }),
+      scope: 'BROAD',
+      evidence: normalized,
+      qualityFailures,
+    });
+    return Object.freeze({
+      universeReady,
+      evidenceReady: receipt.accepted + receipt.duplicate > 0,
+    });
+  }
+}
+
 class MarketLifecyclePort {
   private active = false;
   private generation = 0;
@@ -360,6 +946,7 @@ class MarketLifecyclePort {
     try {
       this.market.start();
     } catch (error) {
+      try { this.market.stop(); } catch { /* preserve the first startup failure */ }
       this.evidence.stop();
       throw error;
     }
@@ -369,12 +956,16 @@ class MarketLifecyclePort {
   }
 
   stop(): void {
+    let failure: unknown = null;
     try {
       this.market.stop();
+    } catch (error) {
+      failure ??= error;
     } finally {
       this.active = false;
       this.evidence.stop();
     }
+    if (failure !== null) throw failure;
   }
 
   health(_ctx: ComponentStepContext): Readonly<RuntimeHealthEvidence> {
@@ -538,6 +1129,7 @@ export function createProductionSystemIntegrationPorts(
   input: Readonly<ProductionSystemIntegrationInput>,
 ): Readonly<ProductionSystemIntegrationPorts> {
   validateFactoryInput(input);
+  const sourceRegistry = admitProductionSourceRegistry(input.clock);
   const maxAgeMs = publicSourceMaxAgeMs(input.sourceMaxAgeMs);
 
   let marketLifecycle: MarketLifecyclePort;
@@ -548,8 +1140,20 @@ export function createProductionSystemIntegrationPorts(
     () => marketLifecycle.readState(),
   );
   marketLifecycle = new MarketLifecyclePort(input.market, evidence);
+  const publicIntelligence = new PublicIntelligenceLifecycle(
+    input.clock,
+    input.market,
+    evidence,
+    maxAgeMs,
+  );
   const basisLifecycle = new BasisLifecyclePort(input.basis, maxAgeMs);
   const volumeLifecycle = new VolumeLifecyclePort(input.volume, maxAgeMs);
+  const qAdvisory = createProductionQAdvisoryRuntime({
+    clock: input.clock,
+    binding: input.qAdvisory === undefined
+      ? createAcceptedQAbstentionBinding()
+      : input.qAdvisory,
+  });
 
   const runtimes = Object.freeze({
     market: Object.freeze({
@@ -557,6 +1161,22 @@ export function createProductionSystemIntegrationPorts(
       start: () => marketLifecycle.start(),
       stop: () => marketLifecycle.stop(),
       health: (ctx: ComponentStepContext) => marketLifecycle.health(ctx),
+    }),
+    intelligenceRuntime: Object.freeze({
+      start: () => publicIntelligence.startRuntime(),
+      stop: () => publicIntelligence.stopRuntime(),
+      health: (ctx: ComponentStepContext) => publicIntelligence.runtimeHealth(ctx),
+    }),
+    marketIntelligence: Object.freeze({
+      start: () => publicIntelligence.startIntelligence(),
+      stop: () => publicIntelligence.stopIntelligence(),
+      health: (ctx: ComponentStepContext) => publicIntelligence.intelligenceHealth(ctx),
+    }),
+    q: Object.freeze({
+      validate: (ctx: ComponentStepContext) => qAdvisory.validate?.(ctx),
+      start: () => qAdvisory.start(),
+      stop: () => qAdvisory.stop(),
+      health: (ctx: ComponentStepContext) => qAdvisory.health(ctx),
     }),
     basis: Object.freeze({
       start: () => basisLifecycle.start(),
@@ -576,6 +1196,9 @@ export function createProductionSystemIntegrationPorts(
     }),
     'public-usdm-source': Object.freeze({
       readComponentSnapshot: () => evidence.readComponent('USDM'),
+    }),
+    'q-inference': Object.freeze({
+      readComponentSnapshot: () => qAdvisory.readComponentSnapshot(),
     }),
   });
 
@@ -616,5 +1239,5 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
-  return Object.freeze({ runtimes, components, summaries });
+  return Object.freeze({ sourceRegistry, runtimes, components, summaries });
 }

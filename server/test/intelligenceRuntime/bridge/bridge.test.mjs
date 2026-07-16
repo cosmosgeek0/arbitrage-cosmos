@@ -764,6 +764,36 @@ test('evidence, lineage, failures, and artifacts remain inside configured memory
   assert.ok(snapshot.artifacts.length <= 1);
 });
 
+test('one oversized failure batch evicts the exact oldest records without repeated full-map eviction', () => {
+  const { bridge } = prepare({ config: { maximumFailureRecords: 4 } });
+  const { bridge: reference } = prepare({ config: { maximumFailureRecords: 8 } });
+  const qualityFailures = Array.from({ length: 8 }, (_, index) => ({
+    id: `batch-failure-${String(index).padStart(2, '0')}`,
+    code: 'MISSING_SOURCE',
+    component: 'batch-source',
+    message: `batch source failure ${index}`,
+    retryable: true,
+    field: 'source',
+    evidenceIds: [],
+  }));
+  const batch = {
+    correlationId: 'bounded-failure-batch',
+    scope: 'BROAD',
+    evidence: [],
+    qualityFailures,
+  };
+  bridge.ingest(batch);
+  reference.ingest(batch);
+  const expected = reference.snapshot().failures
+    .map((record) => record.failure.id)
+    .sort()
+    .slice(-4);
+  assert.deepEqual(
+    bridge.snapshot().failures.map((record) => record.failure.id),
+    expected,
+  );
+});
+
 test('historical bounded eviction remains counted but stops blocking completeness after the active feature window', () => {
   const { bridge, clock, identity } = prepare({
     config: {

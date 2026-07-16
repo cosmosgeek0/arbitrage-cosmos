@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "I00_Q_DIRECTIVE_INPUT_SUPERSESSION_V1",
+  "status": "AUTHORIZED_EXTERNAL_SUPERSESSION",
+  "donor": {
+    "tip": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
+    "tree": "5c86cebf0966cedd7ba01c56a01704b4f7bd0224",
+    "lockPath": "quant/DIRECTIVE_INPUTS.lock",
+    "lockGitBlob": "cf414da3b46d46d1807f4c04939c7ee1121f5895",
+    "lockSha256": "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1",
+    "lockBytes": 1568
+  },
+  "authority": {
+    "commit": "9ca01537f4edda06ee566cd261e612d5c315fb76",
+    "sourceRef": "current-main",
+    "lockPath": "quant/DIRECTIVE_INPUTS.lock",
+    "parentLockGitBlob": "cf414da3b46d46d1807f4c04939c7ee1121f5895",
+    "resultLockGitBlob": "d1ebc3b6ddeae9f0b92520f9ca1bc5a3270430d5",
+    "ownerLaunchGitBlob": "587c1b83e8f9d32b9097d88df7fea40d9829b68e",
+    "ownerLaunchSha256": "26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06",
+    "ownerLaunchBytes": 20763,
+    "commitMessageNeedles": [
+      "D-LAUNCH-1",
+      "587c1b83",
+      "26b1d5ce"
+    ]
+  },
+  "current": {
+    "lockPath": "quant/DIRECTIVE_INPUTS.lock",
+    "lockGitBlob": "d1ebc3b6ddeae9f0b92520f9ca1bc5a3270430d5",
+    "lockSha256": "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
+    "lockBytes": 1757
+  },
+  "transition": {
+    "donorLaunchRow": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md | 587c1b83e8f9d32b9097d88df7fea40d9829b68e | 0cc192e348f51f7ab372b0245568bbf88f3ccbf23d3f0c581e853dd9f30cd3cc | CANONICAL_BASE 7010499 (untracked owner input, preserved byte-for-byte) | supersedes DIRECTOR_VERDICT_GAP_AUDIT.md (non-controlling; not an input)",
+    "currentLaunchRow": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md | 587c1b83e8f9d32b9097d88df7fea40d9829b68e | 26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06 | CANONICAL_BASE 7010499 (untracked owner input, preserved byte-for-byte; director acceptance D-LAUNCH-1 binds blob 587c1b83 to this sha256 — the earlier 0cc192e3… value was a stale pre-resave measurement, superseded; blob matched the frozen lock throughout) | supersedes DIRECTOR_VERDICT_GAP_AUDIT.md (non-controlling; not an input)"
+  }
+}

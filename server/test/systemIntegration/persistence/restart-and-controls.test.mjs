@@ -9,6 +9,8 @@ import {
   SYSTEM_PERSISTENCE_CONFIG_KEY,
   SYSTEM_PERSISTENCE_EVENT_KIND,
   SystemLedgerPersistenceAdapter,
+  decodeSystemCheckpoint,
+  encodeSystemCheckpoint,
   evaluateRestartBarrier,
   upsertDryRunExecutionReference,
   upsertReconciliationReference,
@@ -99,6 +101,48 @@ test('restart barrier blocks before truth and through partial dry-run, then admi
   }
 });
 
+test('restart barrier fails closed when the canonical Product identity reader is unavailable', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const canonical = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(canonical.load(T0, 'restart.identity-reader.load').ok, true);
+    assert.equal(canonical.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'restart.identity-reader.start',
+    }).ok, true);
+    assert.equal(canonical.persistRestartTruth({
+      publicSourceTruth: 'FRESH',
+      accountTruth: 'FRESH',
+      reconciliationTruth: 'FRESH',
+      observedAtMs: T0 + 2,
+    }, 'restart.identity-reader.truth').ok, true);
+    assert.equal(canonical.restartBarrier(T0 + 3).value.canOpenOrIncrease, true);
+
+    const missingReaderPort = new Proxy(ledger, {
+      get(target, property) {
+        if (property === 'readProductBlockingIdentityReferences') return undefined;
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const restarted = new SystemLedgerPersistenceAdapter(missingReaderPort);
+    const loaded = restarted.load(T0 + 3, 'restart.identity-reader.reload');
+    assert.equal(loaded.ok, true);
+    assert.equal(loaded.source, 'CHECKPOINT');
+    assert.equal(loaded.barrier.canOpenOrIncrease, false);
+    assert.ok(loaded.barrier.reasonCodes.includes('PRODUCT_IDENTITY_REFERENCE_READ_UNAVAILABLE'));
+    const barrier = restarted.restartBarrier(T0 + 3);
+    assert.equal(barrier.ok, true);
+    assert.equal(barrier.value.canOpenOrIncrease, false);
+    assert.equal(barrier.value.supervisionContinues, true);
+    assert.ok(barrier.value.reasonCodes.includes('PRODUCT_IDENTITY_REFERENCE_READ_UNAVAILABLE'));
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('clean shutdown is persisted once, seals writes, and reloads as restart evidence', () => {
   const dataDir = tempDataDir();
   let ledger = new Ledger(dataDir);
@@ -134,6 +178,49 @@ test('clean shutdown is persisted once, seals writes, and reloads as restart evi
     assert.equal(loaded.state.lastShutdown.correlationId, 'shutdown.final');
   } finally {
     try { ledger.close(); } catch {}
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('unclean shutdown evidence remains writable until a later clean checkpoint seals it', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(ledger);
+    adapter.load(T0, 'shutdown.recovery.empty');
+    adapter.persistStartup({ startedAtMs: T0 + 1, correlationId: 'shutdown.recovery.start' });
+    const componentStates = [
+      { componentId: 'ledger-persistence', desiredState: 'STOPPED', generation: 1 },
+    ];
+    const unclean = adapter.persistFinalShutdown({
+      stoppedAtMs: T0 + 2,
+      correlationId: 'shutdown.recovery.unclean',
+      clean: false,
+      componentStates,
+    });
+    assert.equal(unclean.ok, true);
+    assert.equal(adapter.currentState().value.lastShutdown.clean, false);
+    assert.equal(adapter.persistRestartTruth({
+      publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0 + 3,
+    }, 'shutdown.recovery.repaired-truth').ok, true);
+
+    const clean = adapter.persistFinalShutdown({
+      stoppedAtMs: T0 + 4,
+      correlationId: 'shutdown.recovery.clean',
+      clean: true,
+      componentStates,
+    });
+    assert.equal(clean.ok, true);
+    assert.notEqual(clean.value.checkpointRevision, unclean.value.checkpointRevision);
+    assert.equal(adapter.currentState().value.lastShutdown.clean, true);
+    assert.equal(adapter.currentState().value.lastShutdown.correlationId, 'shutdown.recovery.clean');
+    const sealed = adapter.persistRestartTruth({
+      publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0 + 5,
+    }, 'shutdown.recovery.after-clean');
+    assert.equal(sealed.ok, false);
+    assert.equal(sealed.code, 'PERSISTENCE_SEALED');
+  } finally {
+    ledger.close();
     rmSync(dataDir, { recursive: true, force: true });
   }
 });
@@ -188,6 +275,110 @@ test('control commits replay exactly and rejection audit is atomic, idempotent, 
     const state = adapter.currentState().value;
     assert.equal(state.controlRejections.at(-1).command, null);
     assert.equal(state.controlRejections.at(-1).message, 'Control request rejected.');
+
+    const restartBefore = state.control;
+    const restartRequest = {
+      idempotencyKey: 'control.restart.0001', expectedRevision: restartBefore.revision,
+      reason: 'Restart the managed dependency root', requestedAtMs: T0 + 5, correlationId: 'control.restart',
+      mutation: { command: 'RESTART_COMPONENT', componentId: 'market-universe' },
+    };
+    const restartAfter = {
+      ...restartBefore,
+      revision: restartBefore.revision + 1,
+      generation: restartBefore.generation + 1,
+      updatedAtMs: T0 + 5,
+      correlationId: 'control.restart',
+    };
+    const restartDigest = 'c'.repeat(64);
+    const restartCommit = {
+      request: restartRequest,
+      actor: { id: 'local-operator', email: null, source: 'loopback' },
+      requestDigest: restartDigest,
+      before: restartBefore,
+      after: restartAfter,
+      applied: true,
+      code: 'MANAGED_RUNTIME_RESTART_ACCEPTED',
+    };
+    const restartCommitted = await adapter.commitControlMutation(restartCommit);
+    assert.equal(restartCommitted.kind, 'COMMITTED');
+    assert.equal(restartCommitted.runtimePublication, 'PENDING');
+    assert.equal(adapter.readPendingControlRuntimePublications().value[0].state, 'PENDING');
+    assert.ok(adapter.restartBarrier(T0 + 6).value.reasonCodes.includes('CONTROL_COMMITTED_RUNTIME_PENDING'));
+    ledger.close();
+
+    ledger = new Ledger(dataDir);
+    adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0 + 6, 'control.restart.reload').ok, true);
+    const pendingRestart = await adapter.findControlMutation(restartRequest.idempotencyKey);
+    assert.equal(pendingRestart.runtimePublication, 'PENDING');
+    const marked = await adapter.markControlRuntimePublished({
+      idempotencyKey: restartRequest.idempotencyKey,
+      requestDigest: restartDigest,
+      correlationId: restartAfter.correlationId,
+      occurredAtMs: restartAfter.updatedAtMs,
+    });
+    assert.equal(marked.kind, 'PUBLISHED');
+    assert.equal((await adapter.findControlMutation(restartRequest.idempotencyKey)).runtimePublication, 'PUBLISHED');
+    assert.deepEqual(adapter.readPendingControlRuntimePublications().value, []);
+    assert.equal(adapter.restartBarrier(T0 + 6).value.reasonCodes.includes('CONTROL_COMMITTED_RUNTIME_PENDING'), false);
+  } finally {
+    try { ledger.close(); } catch {}
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('historical effectful control receipt without a publication marker loads as UNKNOWN attention', async () => {
+  const dataDir = tempDataDir();
+  let ledger = new Ledger(dataDir);
+  try {
+    let adapter = new SystemLedgerPersistenceAdapter(ledger);
+    adapter.load(T0, 'historical.empty');
+    adapter.persistStartup({ startedAtMs: T0 + 1, correlationId: 'historical.start' });
+    const before = adapter.currentState().value.control;
+    const request = {
+      idempotencyKey: 'historical.restart.0001', expectedRevision: before.revision,
+      reason: 'Historical managed restart', requestedAtMs: T0 + 2, correlationId: 'historical.restart',
+      mutation: { command: 'RESTART_COMPONENT', componentId: 'market-universe' },
+    };
+    const after = {
+      ...before,
+      revision: before.revision + 1,
+      generation: before.generation + 1,
+      updatedAtMs: T0 + 2,
+      correlationId: 'historical.restart',
+    };
+    await adapter.commitControlMutation({
+      request,
+      actor: { id: 'local-operator', email: null, source: 'loopback' },
+      requestDigest: 'd'.repeat(64),
+      before,
+      after,
+      applied: true,
+      code: 'MANAGED_RUNTIME_RESTART_ACCEPTED',
+    });
+    const decoded = decodeSystemCheckpoint(ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+    assert.equal(decoded.ok, true);
+    const historical = structuredClone(decoded.value);
+    delete historical.idempotencyReceipts[0].receipt.runtimePublication;
+    ledger.setConfigValueAndLogEvent(
+      SYSTEM_PERSISTENCE_CONFIG_KEY,
+      encodeSystemCheckpoint(historical),
+      SYSTEM_PERSISTENCE_EVENT_KIND,
+      null,
+      { migrationFixture: true },
+    );
+    ledger.close();
+
+    ledger = new Ledger(dataDir);
+    adapter = new SystemLedgerPersistenceAdapter(ledger);
+    const loaded = adapter.load(T0 + 3, 'historical.reload');
+    assert.equal(loaded.ok, true);
+    const found = await adapter.findControlMutation(request.idempotencyKey);
+    assert.equal(found.runtimePublication, 'UNKNOWN');
+    const references = adapter.readPendingControlRuntimePublications();
+    assert.equal(references.ok, true);
+    assert.equal(references.value[0].state, 'UNKNOWN');
+    assert.ok(loaded.barrier.reasonCodes.includes('CONTROL_RUNTIME_PUBLICATION_EFFECT_UNKNOWN'));
   } finally {
     try { ledger.close(); } catch {}
     rmSync(dataDir, { recursive: true, force: true });

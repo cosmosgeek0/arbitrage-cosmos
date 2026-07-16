@@ -15,6 +15,7 @@ import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPrice, timeAgo } from '..
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './VolumeScanner.css';
 import './BasisScanner.css';
@@ -204,6 +205,8 @@ export function Strategies() {
             <small>Unknown borrow is blocked, never inferred</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="basis" />
 
         <div className="volx-filters">
           <div className="volx-segments" role="tablist" aria-label="Basis Views">

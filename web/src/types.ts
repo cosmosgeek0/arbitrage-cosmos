@@ -1,3 +1,5 @@
+import type { SystemSupervisorSnapshot } from './lib/systemIntegration';
+
 export type Side = 'BUY' | 'SELL';
 export type OrderType = 'MARKET' | 'LIMIT';
 export type ControlMode = 'blocked' | 'paused' | 'allowed';
@@ -218,52 +220,17 @@ export interface LedgerEvent {
   data: unknown;
 }
 
-export interface RiskCheck {
-  name: string;
-  pass: boolean;
-  detail: string;
-}
-
-export interface RiskDecision {
-  allowed: boolean;
-  checks: RiskCheck[];
-  reasons: string[];
-}
-
-export interface PreviewResult {
-  ok: boolean;
-  errors: string[];
-  symbol: string;
-  side: string;
-  type: string;
-  lastPrice: number | null;
-  effectivePrice: number | null;
-  quantity: number | null;
-  quoteQty: number | null;
-  estNotionalUsd: number | null;
-  filters: { stepSize: number; minQty: number; tickSize: number; minNotional: number } | null;
-  risk: RiskDecision;
-}
-
-export interface SendResult {
-  sent: boolean;
-  outcome?: 'accepted' | 'not_sent' | 'unknown';
-  reconciliationRequired?: boolean;
-  risk?: RiskDecision;
-  error?: string;
-  order?: { orderId: number; status: string; executedQty: string; cummulativeQuoteQty: string };
-}
-
-export interface CancelResult {
-  ok: boolean;
-  outcome?: 'canceled' | 'not_canceled' | 'unknown';
-  reconciliationRequired?: boolean;
-  error?: string;
-}
-
 export interface ServerState {
+  schemaVersion: 'legacy.state.compatibility.v2';
+  stateClass: 'COMPATIBILITY_VIEW';
+  readinessSemantics: 'NOT_EVALUATED';
+  canonicalReadinessEndpoint: '/health/ready';
+  canonicalSupervisorEndpoint: '/api/system-integration/supervisor';
+  canonicalSupervisor: SystemSupervisorSnapshot;
   now: number;
-  mode: 'HALTED' | 'MANUAL' | 'LIVE_ARMED';
+  mode: 'HALTED' | 'MANUAL';
+  privateAccountTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  privateOrderTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
   binance: {
     keysPresent: boolean;
     connected: boolean;
@@ -319,11 +286,20 @@ export interface ServerState {
     };
     entries: BalanceEntry[];
   } | null;
-  positions: PositionEntry[];
-  openOrders: OpenOrderRow[];
+  /** Null means private position truth is unavailable. An empty array is a
+   * configured, successfully observed zero-position account. */
+  positions: PositionEntry[] | null;
+  /** Null means private open-order truth is unavailable. */
+  openOrders: OpenOrderRow[] | null;
   recentFills: FillRow[];
   proposals: Proposal[];
-  scanner: { pairs: number; watching: number; lastTickTs: number | null; grossThresholdPct: number };
+  scanner: {
+    state: 'RETIRED';
+    pairs: number;
+    watching: 0;
+    lastTickTs: null;
+    grossThresholdPct: null;
+  };
   risk: { dailyNotionalUsedUsd: number; lastOrderTs: number | null; rejectionsToday: number };
   events: LedgerEvent[];
 }

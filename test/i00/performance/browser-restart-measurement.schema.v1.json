@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "i00.browser-restart-measurement.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "capturedAtUtc", "source", "selector", "observationMethod", "status", "code", "reason", "wasClean", "reconnectGeneration", "postRestartRendered", "passed"],
+  "properties": {
+    "schemaVersion": { "const": "i00.browser-restart-measurement.v1" },
+    "capturedAtUtc": { "type": "string", "minLength": 20, "maxLength": 40 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["headSha", "treeSha", "appOrigin", "captureProvenance", "captureSessionId", "captureTranscriptPath", "captureTranscriptSha256"],
+      "properties": {
+        "headSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "treeSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "appOrigin": { "type": "string", "pattern": "^http://(?:127\\.0\\.0\\.1|localhost):[0-9]{1,5}$" },
+        "captureProvenance": { "const": "IN_APP_BROWSER_MCP" },
+        "captureSessionId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,160}$" },
+        "captureTranscriptPath": { "type": "string", "pattern": "^test/i00/performance/evidence/browser/[A-Za-z0-9._@/-]+\\.json$" },
+        "captureTranscriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "selector": { "const": "#i00-ws-close-diagnostic" },
+    "observationMethod": { "const": "IN_APP_BROWSER_MCP_DOM_READ" },
+    "status": { "const": "OBSERVED" },
+    "code": { "const": 1012 },
+    "reason": { "const": "service restart" },
+    "wasClean": { "const": true },
+    "reconnectGeneration": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+    "postRestartRendered": { "const": true },
+    "passed": { "const": true }
+  }
+}

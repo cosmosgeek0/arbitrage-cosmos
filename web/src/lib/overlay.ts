@@ -3,7 +3,7 @@
 // itself renders at the app root (outside the sidebar's backdrop-filter box).
 import { useEffect, useState } from 'react';
 
-export type OverlayKind = 'news' | 'calendar' | 'cloudshell' | 'apikey' | null;
+export type OverlayKind = 'news' | 'calendar' | null;
 
 let current: OverlayKind = null;
 const subs = new Set<(o: OverlayKind) => void>();

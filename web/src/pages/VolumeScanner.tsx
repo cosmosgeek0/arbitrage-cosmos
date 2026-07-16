@@ -14,6 +14,7 @@ import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import './VolumeScanner.css';
 
 type Filter = 'all' | 'watching' | 'focus' | 'rejected' | 'warming';
@@ -251,6 +252,8 @@ export function VolumeScanner() {
             <small>{snapshot?.status.openProposals ? 'Volume proposals in engine' : 'No verified wakeup staged'}</small>
           </div>
         </div>
+
+        <ProductSurfaceAdapter surfaceId="volume" />
 
         <div className="volx-filters">
           <div className="volx-segments" role="tablist" aria-label="Volume Views">

@@ -209,6 +209,9 @@
   font-variant-numeric: lining-nums tabular-nums;
 }
 
+.dcx-summary > .dcx-summary-cell > span { letter-spacing: .055em; }
+.dcx-summary > .dcx-summary-cell > strong { font-weight: 510; }
+
 .dcx-summary-cell.ok > strong { color: var(--up); }
 .dcx-summary-cell.bad > strong { color: var(--down); }
 .dcx-summary-cell.warn > strong { color: var(--hp-amber, #c57921); }

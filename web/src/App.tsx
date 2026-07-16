@@ -19,12 +19,46 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
+import {
+  ProductControlRoomProvider,
+  ProductControlRoomRoute,
+  useProductControlRoomContext,
+} from './features/productControlRoom';
+import {
+  createHttpProductIntegrationTransport,
+  createProductIntegrationClient,
+  readDurableMaterialCursor,
+  type ProductIntegrationEndpoints,
+} from './lib/productIntegration';
 import './pages/MetricTiles.css';
+
+const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
+  supervisor: '/api/product-integration/v1/supervisor',
+  materialEvents: '/api/product-integration/v1/material-events',
+  trace: (correlationId: string) => `/api/product-integration/v1/traces/${encodeURIComponent(correlationId)}`,
+  commandResult: (commandId: string) => `/api/product-integration/v1/commands/${encodeURIComponent(commandId)}/result`,
+  commandPreview: '/api/product-integration/v1/commands/preview',
+  commandSubmit: '/api/product-integration/v1/commands',
+});
+
+const productIntegrationClient = createProductIntegrationClient(
+  createHttpProductIntegrationTransport(PRODUCT_INTEGRATION_ENDPOINTS),
+);
+const durableResumeCursor = readDurableMaterialCursor();
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const mainRef = useRef<HTMLElement | null>(null);
   const framePage = page === 'detail' ? 'detail' : page;
+  const productSnapshot = productBinding.snapshot;
+  const productBindingState = productBinding.loading
+    ? 'LOADING'
+    : productBinding.error !== null
+      ? 'BLOCKED'
+      : productSnapshot === null
+        ? 'UNAVAILABLE'
+        : 'OBSERVED';
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0 });
@@ -38,15 +72,35 @@ function Shell() {
         <div className="app-main">
           {prefs.tape && <Tape />}
           <main ref={mainRef} className={`app-page-main page-${framePage}`}>
-            <section className={`app-page-frame frame-${framePage}`} aria-label={`${framePage} workspace`}>
+            <section
+              className={`app-page-frame frame-${framePage}`}
+              aria-label={`${framePage} workspace`}
+              data-i00-product-binding-state={productBindingState}
+              data-i00-product-revision={productSnapshot?.revision ?? 'null'}
+              data-i00-product-digest={productSnapshot?.digest ?? 'null'}
+              data-i00-product-evaluated-at-ms={productSnapshot?.evaluatedAtMs ?? 'null'}
+              data-i00-product-truth-label={productSnapshot?.truthLabel ?? 'UNAVAILABLE'}
+              data-i00-product-persistent-synthetic={productSnapshot === null ? 'null' : String(productSnapshot.persistentSyntheticLabel)}
+              data-i00-product-continuity={productBinding.continuity}
+              data-i00-product-machine-ready={productSnapshot?.ownerView.machineReady ?? 'UNKNOWN'}
+              data-i00-product-trade-ready={productSnapshot?.ownerView.tradeReady ?? 'UNKNOWN'}
+              data-i00-product-effective-mode={productSnapshot?.ownerView.effectiveMode ?? 'UNKNOWN'}
+              data-i00-product-tested-commit={productSnapshot?.ownerView.revisions.testedCommit ?? 'null'}
+              data-i00-product-schema-revision={productSnapshot?.ownerView.revisions.schemaRevision ?? 'null'}
+            >
               <ErrorBoundary resetKey={`${page}-${detailSymbol}`} label={page}>
                 {page === 'dashboard' && <Dashboard />}
-                {page === 'account' && <Account />}
-                {page === 'wallets' && <Account />}
+                {page === 'control-room' && <ProductControlRoomRoute />}
+                {page === 'account' && <Account view="overview" />}
+                {page === 'wallets' && <Account view="overview" />}
                 {page === 'markets' && <Markets />}
                 {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
                 {page === 'loans' && <Loans />}
-                {['orders', 'positions', 'fills', 'pnl'].includes(page) && <Account />}
+                {page === 'execution' && <Account view="execution" />}
+                {page === 'orders' && <Account view="orders" />}
+                {page === 'positions' && <Account view="positions" />}
+                {page === 'fills' && <Account view="fills" />}
+                {page === 'pnl' && <Account view="pnl" />}
                 {page === 'strategies' && <Strategies />}
                 {page === 'volume' && <VolumeScanner />}
                 {page === 'opportunities' && <Opportunities />}
@@ -63,9 +117,9 @@ function Shell() {
                 <span className="ftr-left">
                   <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
                   <i>•</i>
-                  <span>Private</span>
+                  <span>Local Candidate</span>
                   <i>•</i>
-                  <span>No withdrawals</span>
+                  <span>No Money Paths</span>
                   <i>•</i>
                   <span>Every action ledgered</span>
                 </span>
@@ -91,7 +145,9 @@ function Shell() {
 export default function App() {
   return (
     <StoreProvider>
-      <Shell />
+      <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
+        <Shell />
+      </ProductControlRoomProvider>
     </StoreProvider>
   );
 }

@@ -1,4 +1,5 @@
 import type {
+  SystemControlMutation,
   SystemControlState,
   SystemTraceEvent,
 } from '../contracts/types.js';
@@ -24,8 +25,10 @@ export const SYSTEM_PERSISTENCE_LIMITS = Object.freeze({
   maximumExecutions: 256,
   maximumReconciliations: 256,
   maximumIdempotencyReceipts: 512,
+  maximumLiveEdgeControlEvents: 256,
   maximumControlRejections: 512,
   maximumTraceIndexEntries: 1_024,
+  maximumTraceEventsPerCommit: 8,
   maximumReasonCodes: 32,
   maximumTraceQueryLimit: 200,
   maximumLedgerScan: 2_000,
@@ -48,9 +51,240 @@ export interface LedgerEventRecord {
   readonly data: unknown;
 }
 
+export interface LedgerEventInputRecord {
+  readonly kind: string;
+  readonly symbol?: string | null;
+  readonly data?: unknown;
+}
+
+export type LedgerConfigCompareAndSetResult =
+  | {
+      readonly committed: true;
+      readonly events: readonly LedgerEventRecord[];
+    }
+  | {
+      readonly committed: false;
+      readonly reason: 'VERSION_CONFLICT' | 'DEADLINE_EXCEEDED';
+      readonly currentValue: string | null;
+    };
+
+export const PRODUCT_IDENTITY_REFERENCE_TYPES = Object.freeze([
+  'OPPORTUNITY',
+  'CAPITAL_VERDICT',
+  'RISK_VERDICT',
+  'TICKET',
+  'LEG',
+  'ORDER',
+  'AMBIGUOUS_MUTATION',
+  'POSITION',
+  'LIABILITY',
+  'RECOVERY_CAMPAIGN',
+  'MODEL_ASSESSMENT',
+  'OUTCOME',
+  'BOOT_OPERATION',
+  'SHUTDOWN_OPERATION',
+  'DEPLOYMENT_REVISION',
+] as const);
+
+export type ProductIdentityReferenceType = (typeof PRODUCT_IDENTITY_REFERENCE_TYPES)[number];
+
+export const PRODUCT_IDENTITY_RESOLUTION_STATES = Object.freeze([
+  'OPEN',
+  'TERMINAL_PROVEN',
+  'AMBIGUOUS',
+  'RECOVERY_REQUIRED',
+  'UNAVAILABLE',
+  'UNKNOWN',
+] as const);
+
+export type ProductIdentityResolutionState = (typeof PRODUCT_IDENTITY_RESOLUTION_STATES)[number];
+
+export interface ProductPersistenceAuditRecord extends LedgerEventInputRecord {
+  readonly data: SystemJsonValue;
+}
+
+export interface ProductDesiredStatePersistenceInput {
+  readonly componentId: SystemComponentId;
+  readonly expectedStateRevision: number | null;
+  readonly desiredState: 'STOPPED' | 'RUNNING' | 'PAUSED';
+  readonly stateRevision: number;
+  readonly restartGeneration: number;
+  readonly updatedAtMs: number;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductCommandPersistenceInput {
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly commandType: string;
+  readonly targetComponentId: string;
+  readonly authenticatedOperatorId: string;
+  readonly reason: string;
+  readonly requiredAuthority: string;
+  readonly requestPayload: SystemJsonValue;
+  readonly previewDigest: string;
+  readonly preview: SystemJsonValue;
+  readonly expectedRevision: number;
+  readonly resultingRevision: number | null;
+  readonly status: string;
+  readonly createdAtMs: number;
+  readonly expiresAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly correlationId: string;
+  readonly beforeProjection: SystemJsonValue | null;
+  readonly afterProjection: SystemJsonValue | null;
+  readonly result: SystemJsonValue | null;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductConfigRevisionPersistenceInput {
+  readonly configRevision: string;
+  readonly contentDigest: string;
+  readonly status: string;
+  readonly effectiveAtMs: number | null;
+  readonly createdAtMs: number;
+  readonly createdByOperatorId: string;
+  readonly correlationId: string;
+  readonly config: SystemJsonValue;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIdentityReferencePersistenceInput {
+  readonly referenceType: ProductIdentityReferenceType;
+  readonly referenceId: string;
+  readonly ownerId: string;
+  readonly ownerRevision: string;
+  readonly expectedResolutionState: ProductIdentityResolutionState | null;
+  readonly ownerState: string;
+  readonly resolutionState: ProductIdentityResolutionState;
+  readonly correlationId: string;
+  readonly parentReferenceType: ProductIdentityReferenceType | null;
+  readonly parentReferenceId: string | null;
+  readonly payloadHash: string | null;
+  readonly ownerProjection: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly validUntilMs: number | null;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIdentityReferenceRecord {
+  readonly referenceType: ProductIdentityReferenceType;
+  readonly referenceId: string;
+  readonly ownerId: string;
+  readonly ownerRevision: string;
+  readonly ownerState: string;
+  readonly resolutionState: ProductIdentityResolutionState;
+  readonly correlationId: string;
+  readonly parentReferenceType: ProductIdentityReferenceType | null;
+  readonly parentReferenceId: string | null;
+  readonly payloadHash: string | null;
+  readonly ownerProjection: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly validUntilMs: number | null;
+  readonly ledgerEventId: number;
+}
+
+export interface ProductIncidentPersistenceInput {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly rootComponentId: string;
+  readonly severity: string;
+  readonly capitalRelevant: boolean;
+  readonly expectedEventCount: number | null;
+  readonly state: string;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly eventCount: number;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductBootReleasePersistenceInput {
+  readonly operationId: string;
+  readonly operationType: string;
+  readonly expectedLedgerEventId: number | null;
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+/**
+ * Bounded, validated readback of the existing Ledger boot/release table.
+ * This is evidence only: a non-null deployed commit never authorizes or
+ * performs a release switch.
+ */
+export interface ProductBootReleaseRecord {
+  readonly operationId: string;
+  readonly operationType: string;
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+}
+
+export type ProductPersistenceMutationResult =
+  | {
+      readonly disposition: 'COMMITTED_NEW' | 'IDEMPOTENT_REPLAY';
+      readonly ledgerEvent: Readonly<LedgerEventRecord>;
+      readonly currentRevision: string | null;
+    }
+  | {
+      readonly disposition: 'VERSION_CONFLICT' | 'IDEMPOTENCY_CONFLICT';
+      readonly ledgerEvent: null;
+      readonly currentRevision: string | null;
+    };
+
+export type LedgerSchemaCompatibilityState =
+  | 'AVAILABLE'
+  | 'UNAVAILABLE'
+  | 'MALFORMED'
+  | 'MISMATCH';
+
+/**
+ * Durable schema-compatibility truth owned by the canonical Ledger. Numeric
+ * values are publishable only when the metadata row and SQLite user_version
+ * agree; every other state is deliberately null-valued.
+ */
+export interface LedgerSchemaCompatibilityReadback {
+  readonly state: LedgerSchemaCompatibilityState;
+  readonly currentSchemaVersion: number | null;
+  readonly rollbackFloor: number | null;
+  readonly reasonCode: string | null;
+}
+
 /** Structural port implemented by the existing Ledger. No second store exists. */
 export interface LedgerPersistencePort {
   getConfigValue(key: string): string | null;
+  /** Canonical Ledger capability; optional so legacy read/checkpoint doubles remain structural ports. */
+  compareAndSetConfigValueAndLogEvents?(
+    key: string,
+    expectedValue: string | null,
+    nextValue: string,
+    records: readonly LedgerEventInputRecord[],
+    commitBeforeMs?: number,
+  ): LedgerConfigCompareAndSetResult;
   setConfigValueAndLogEvent(
     key: string,
     value: string,
@@ -69,6 +303,31 @@ export interface LedgerPersistencePort {
     offset?: number,
     afterId?: number,
   ): LedgerEventRecord[];
+  compareAndSetProductComponentDesiredState?(
+    input: Readonly<ProductDesiredStatePersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndAppendProductCommand?(
+    input: Readonly<ProductCommandPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  recordProductConfigRevision?(
+    input: Readonly<ProductConfigRevisionPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndUpsertProductIdentityReference?(
+    input: Readonly<ProductIdentityReferencePersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  readProductBlockingIdentityReferences?(
+    limit?: number,
+  ): readonly Readonly<ProductIdentityReferenceRecord>[];
+  compareAndTransitionProductIncident?(
+    input: Readonly<ProductIncidentPersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  compareAndSetProductBootReleaseRevision?(
+    input: Readonly<ProductBootReleasePersistenceInput>,
+  ): ProductPersistenceMutationResult;
+  readProductBootReleaseRevisions?(
+    limit?: number,
+  ): readonly Readonly<ProductBootReleaseRecord>[];
+  readSchemaCompatibility?(): Readonly<LedgerSchemaCompatibilityReadback>;
   probeWritable?(force?: boolean): boolean;
 }
 
@@ -148,6 +407,70 @@ export interface PersistedRestartTruth {
   readonly observedAtMs: number | null;
 }
 
+/**
+ * Canonical ordinary-stop truth projected by the supervisor/ops owner. `NONE`
+ * is deliberately stronger than an empty identity query: that owner may emit
+ * it only when reconciliation is current and canonical zero exposure is
+ * proven. System Integration consumes this projection without recomputing it.
+ */
+export interface CanonicalOrdinaryDrainTruth {
+  readonly source: 'CANONICAL_SUPERVISOR_READBACK';
+  readonly observedAtUtc: string;
+  readonly validUntilUtc: string;
+  readonly exposureState: 'NONE' | 'ACTIVE' | 'AMBIGUOUS' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+  readonly ambiguityState: 'NONE' | 'AMBIGUOUS' | 'UNKNOWN';
+  readonly recoveryState: 'NONE' | 'RECOVERY_REQUIRED' | 'UNKNOWN';
+}
+
+/**
+ * Mechanical process-local capability posture, never an account/exchange
+ * balance claim. `PROVEN_ABSENT` requires proof that no signed/test/private
+ * mutation port is mounted and no unresolved local mutation history is hidden
+ * outside the canonical blocking-reference read.
+ */
+export type LocalMutationAuthorityPosture =
+  | 'PROVEN_ABSENT'
+  | 'PRESENT'
+  | 'AMBIGUOUS'
+  | 'UNKNOWN';
+
+/**
+ * Narrow lifecycle-truth seam. It owns no storage and may only supply owner
+ * projections for persistence and ordinary-stop admission.
+ */
+export interface SystemLifecycleTruthReadPort {
+  readRestartTruth?(nowMs: number): Readonly<PersistedRestartTruth>;
+  readLocalMutationAuthority?(): LocalMutationAuthorityPosture;
+  readOrdinaryDrainTruth?(): (
+    Readonly<CanonicalOrdinaryDrainTruth>
+    | Promise<Readonly<CanonicalOrdinaryDrainTruth>>
+  );
+  /**
+   * Owner-supplied readback for a durable runtime effect identity after an
+   * application-process restart. Missing, throwing, or malformed evidence is
+   * always consumed as UNKNOWN and therefore can never authorize reissue.
+   */
+  readControlRuntimeEffect?(
+    effectId: string,
+    mutation: Readonly<SystemControlMutation>,
+  ): (
+    'APPLIED'
+    | 'NOT_APPLIED'
+    | 'UNKNOWN'
+    | Promise<'APPLIED' | 'NOT_APPLIED' | 'UNKNOWN'>
+  );
+}
+
+/**
+ * Explicit effectful restart-truth owner. It is deliberately separate from
+ * passive lifecycle read ports; only the lifecycle driver invokes it.
+ */
+export interface SystemRestartTruthRefreshEffectPort {
+  refreshRestartTruth(
+    nowMs: number,
+  ): Readonly<PersistedRestartTruth> | Promise<Readonly<PersistedRestartTruth>>;
+}
+
 export interface PersistedIdempotencyReceipt {
   readonly idempotencyKey: string;
   readonly requestDigest: string;
@@ -155,6 +478,35 @@ export interface PersistedIdempotencyReceipt {
   readonly recordedAtMs: number;
   readonly checkpointRevision: number;
   readonly receipt: SystemJsonValue;
+}
+
+export interface PersistedControlRuntimePublicationReference {
+  readonly effectId: string;
+  readonly idempotencyKey: string;
+  readonly requestDigest: string;
+  readonly correlationId: string;
+  readonly generation: number;
+  readonly state: 'PENDING' | 'UNKNOWN';
+}
+
+/**
+ * Explicit L14 control-journal storage inside the one canonical System
+ * Integration checkpoint. This is not a second command store: it is the
+ * typed persisted projection consumed by the accepted L14 persistence port.
+ */
+export interface PersistedLiveEdgeControlEvent {
+  readonly storageKey: string;
+  readonly storageKind: 'JOURNAL' | 'PRE_INTENT_AUDIT';
+  readonly commandId: string;
+  readonly eventId: string;
+  readonly idempotencyKey: string;
+  readonly appendRequestDigest: string;
+  readonly journalVersion: number;
+  readonly previousHeadDigest: string | null;
+  readonly headDigest: string;
+  readonly event: SystemJsonValue;
+  readonly occurredAtMs: number;
+  readonly checkpointRevision: number;
 }
 
 /**
@@ -211,6 +563,7 @@ export interface SystemIntegrationCheckpointState {
   readonly dryRunExecutions: readonly Readonly<PersistedDryRunExecutionReference>[];
   readonly reconciliations: readonly Readonly<PersistedReconciliationReference>[];
   readonly idempotencyReceipts: readonly Readonly<PersistedIdempotencyReceipt>[];
+  readonly liveEdgeControlEvents: readonly Readonly<PersistedLiveEdgeControlEvent>[];
   readonly controlRejections: readonly Readonly<PersistedControlRejectionReceipt>[];
   readonly traceIndex: readonly Readonly<PersistedTraceIndexEntry>[];
   readonly restartTruth: Readonly<PersistedRestartTruth>;
@@ -270,6 +623,7 @@ export interface PersistenceAuditInput {
   readonly correlationId: string;
   readonly occurredAtMs: number;
   readonly traceEvent?: Readonly<SystemTraceEvent>;
+  readonly traceEvents?: readonly Readonly<SystemTraceEvent>[];
 }
 
 export interface PersistedCommitReceipt {
@@ -278,12 +632,11 @@ export interface PersistedCommitReceipt {
   readonly checksum: string;
 }
 
-export interface IdempotentTransitionInput<T extends SystemJsonValue> {
+interface IdempotentTransitionBase<T extends SystemJsonValue> {
   readonly idempotencyKey: string;
   readonly requestDigest: string;
   readonly correlationId: string;
   readonly occurredAtMs: number;
-  readonly traceEvent: Readonly<SystemTraceEvent>;
   readonly transition: (
     current: Readonly<SystemIntegrationCheckpointState>,
   ) => {
@@ -291,6 +644,18 @@ export interface IdempotentTransitionInput<T extends SystemJsonValue> {
     readonly receipt: T;
   };
 }
+
+export type IdempotentTransitionInput<T extends SystemJsonValue> =
+  Readonly<IdempotentTransitionBase<T> & (
+    | {
+        readonly traceEvent: Readonly<SystemTraceEvent>;
+        readonly traceEvents?: never;
+      }
+    | {
+        readonly traceEvent?: never;
+        readonly traceEvents: readonly [Readonly<SystemTraceEvent>, ...Readonly<SystemTraceEvent>[]];
+      }
+  )>;
 
 export interface IdempotentTransitionReceipt<T extends SystemJsonValue> {
   readonly replayed: boolean;

@@ -56,6 +56,7 @@ const FRESH_SOURCE_COMPONENTS = new Set<SystemComponentId>([
   'market-universe',
   'intelligence-runtime',
   'market-intelligence',
+  'q-inference',
   'basis-engine',
   'volume-engine',
 ]);

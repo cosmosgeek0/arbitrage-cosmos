@@ -12,12 +12,16 @@ import { setBasisUnit, setDisplayUtc, setFxRate } from './format';
 import { fireRefresh } from './lib/refresh';
 import { ApiRequestError, fetchJson, type ApiFailure } from './lib/http';
 import { createSettledPoll } from './lib/polling';
+import { readDurableMaterialCursor } from './lib/productIntegration/useProductControlRoomBinding';
+import {
+  WEB_SOCKET_CLOSE_DIAGNOSTIC_ID,
+  reduceTrustedWebSocketCloseDiagnostic,
+  webSocketCloseDiagnosticAttributes,
+  type WebSocketCloseDiagnostic,
+} from './lib/webSocketCloseDiagnostic';
 import type {
   AppConfig,
-  CancelResult,
   MarketRow,
-  PreviewResult,
-  SendResult,
   ServerState,
 } from './types';
 
@@ -25,21 +29,19 @@ export type RefreshResult = {
   ok: boolean;
   issues: string[];
   ts?: number;
-  binanceConnected?: boolean;
-  feedsOk?: boolean;
-  keysPresent?: boolean;
 };
 
-// 'orders' | 'positions' | 'fills' | 'pnl' are deep links that all
-// render the merged Execution page (each id = its active tab), so existing
-// setPage(...) call sites keep working. 'detail' opens from Markets rows only.
+// Account detail ids render controlled, read-only Account subviews. Product
+// truth remains in ProductControlRoomProvider; this store owns navigation only.
 export type Page =
   | 'dashboard'
+  | 'control-room'
   | 'account'
   | 'wallets'
   | 'markets'
   | 'detail'
   | 'loans'
+  | 'execution'
   | 'orders'
   | 'positions'
   | 'fills'
@@ -55,7 +57,7 @@ export type Page =
   | 'calendar';
 
 const PAGE_IDS: Page[] = [
-  'dashboard', 'account', 'wallets', 'markets', 'detail', 'loans', 'orders',
+  'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
   'notifications', 'news', 'calendar',
 ];
@@ -80,22 +82,14 @@ interface Store {
   setPaletteOpen: (v: boolean) => void;
   toggleWatch: (symbol: string) => Promise<ApiFailure | null>;
   saveConfig: (patch: Partial<AppConfig>) => Promise<AppConfig | null>;
-  setKill: (on: boolean) => Promise<ApiFailure | null>;
-  setLive: (on: boolean) => Promise<ApiFailure | null>;
-  preview: (intent: Record<string, unknown>) => Promise<PreviewResult | null>;
-  testOrder: (intent: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
-  sendLive: (intent: Record<string, unknown>, confirmSymbol: string) => Promise<SendResult>;
-  cancelOrder: (symbol: string, orderId: number) => Promise<CancelResult>;
-  cancelAll: (symbol: string) => Promise<CancelResult>;
-  approveProposal: (id: number) => Promise<ApiFailure | null>;
-  importFills: (symbol: string) => Promise<{ imported?: number; error?: string }>;
 }
 
 const StoreContext = createContext<Store | null>(null);
 
 // ---- live order-book stream (Token Detail) -------------------------------
-// Rides the same /ws socket as state broadcasts. One symbol at a time; the
-// server opens a Binance depth20@100ms + aggTrade stream while subscribed.
+// Rides the same /ws socket as canonical invalidations and material-event
+// pages. One symbol at a time; the server opens a Binance depth20@100ms +
+// aggTrade stream while subscribed.
 export type LiveBookMsg =
   | { type: 'book'; symbol: string; bids: [string, string][]; asks: [string, string][]; ts: number }
   | { type: 'btrades'; symbol: string; trades: { id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[] };
@@ -157,15 +151,69 @@ function isConfigAcknowledgement(value: unknown): value is AppConfig {
   );
 }
 
-function isCancelAcknowledgement(value: unknown): value is CancelResult {
-  if (!value || typeof value !== 'object') return false;
-  const result = value as CancelResult;
-  return (
-    typeof result.ok === 'boolean' &&
-    (result.outcome === undefined || ['canceled', 'not_canceled', 'unknown'].includes(result.outcome)) &&
-    (result.reconciliationRequired === undefined || typeof result.reconciliationRequired === 'boolean') &&
-    (result.error === undefined || typeof result.error === 'string')
-  );
+function isCanonicalSupervisorDeltaMessage(value: unknown): value is Readonly<{
+  type: 'canonical-supervisor-delta';
+  payload: Readonly<{ schemaVersion: 'canonical-supervisor-delta.v1'; revision: string }>;
+}> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== 'canonical-supervisor-delta'
+      || !message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)) return false;
+  const payload = message.payload as Record<string, unknown>;
+  return payload.schemaVersion === 'canonical-supervisor-delta.v1'
+    && typeof payload.revision === 'string'
+    && payload.revision.length > 0
+    && payload.revision.length <= 256;
+}
+
+function failClosedConfig(config: AppConfig): AppConfig {
+  return {
+    ...config,
+    liveTradingEnabled: false,
+    fundsLocked: true,
+    automationPaused: true,
+    controlModes: {
+      ...config.controlModes,
+      funds: 'blocked',
+      borrowing: 'blocked',
+      automation: 'paused',
+      liveOrders: 'blocked',
+    },
+    borrowGuard: {
+      ...config.borrowGuard,
+      enabled: true,
+      newBorrowPaused: true,
+      repayOnly: true,
+    },
+  };
+}
+
+export function failClosedState(serverState: ServerState): ServerState {
+  const config = failClosedConfig(serverState.config);
+  // A compatibility payload without the canonical control snapshot is not
+  // evidence that the kill is clear. Treat missing or malformed truth as halt.
+  const canonicalKillEngaged = serverState.canonicalSupervisor?.control?.killSwitchEngaged !== false;
+  const hasCompletePrivateAccountReadback = serverState.account != null && Array.isArray(serverState.positions);
+  const privateAccountTruth = !serverState.binance.keysPresent || serverState.privateAccountTruth === 'NOT_CONFIGURED'
+    ? 'NOT_CONFIGURED'
+    : serverState.privateAccountTruth === 'AVAILABLE' && hasCompletePrivateAccountReadback
+      ? 'AVAILABLE'
+      : 'UNAVAILABLE';
+  const privateOrderTruth = privateAccountTruth !== 'AVAILABLE'
+    ? privateAccountTruth
+    : serverState.privateOrderTruth === 'AVAILABLE' && Array.isArray(serverState.openOrders)
+      ? 'AVAILABLE'
+      : 'UNAVAILABLE';
+  return {
+    ...serverState,
+    mode: config.killSwitch || canonicalKillEngaged ? 'HALTED' : 'MANUAL',
+    config,
+    privateAccountTruth,
+    privateOrderTruth,
+    account: privateAccountTruth === 'AVAILABLE' ? serverState.account : null,
+    positions: privateAccountTruth === 'AVAILABLE' ? serverState.positions : null,
+    openOrders: privateOrderTruth === 'AVAILABLE' ? serverState.openOrders : null,
+  };
 }
 
 async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
@@ -205,6 +253,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [detailSymbol, setDetailSymbol] = useState(() => localStorage.getItem('cosmos-detail-symbol') || 'BTCUSDT');
   const [dataNonce, setDataNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
   const [, bumpFx] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
@@ -257,13 +306,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void fetchJson<ServerState>('/api/state')
-      .then((s) => setState(s))
-      .catch(() => undefined);
-
     let closed = false;
     let retry: number | null = null;
     let generation = 0;
+    let stateRefreshInFlight = false;
+    let stateRefreshQueued = false;
+    let stateRefreshController: AbortController | null = null;
+    const requestCompatibilityState = () => {
+      if (closed) return;
+      if (stateRefreshInFlight) {
+        stateRefreshQueued = true;
+        return;
+      }
+      stateRefreshInFlight = true;
+      const controller = new AbortController();
+      stateRefreshController = controller;
+      void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
+        .then((snapshot) => {
+          if (!closed && !controller.signal.aborted) setState(failClosedState(snapshot));
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (stateRefreshController === controller) stateRefreshController = null;
+          stateRefreshInFlight = false;
+          if (!closed && stateRefreshQueued) {
+            stateRefreshQueued = false;
+            requestCompatibilityState();
+          }
+        });
+    };
+    requestCompatibilityState();
     const clearRetry = () => {
       if (retry !== null) window.clearTimeout(retry);
       retry = null;
@@ -293,28 +365,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       const socketGeneration = ++generation;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const socketUrl = new URL(`${proto}://${location.host}/ws`);
+      const durableCursor = readDurableMaterialCursor();
+      if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
+      const ws = new WebSocket(socketUrl.toString());
+      let connectionEstablished = false;
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
+        connectionEstablished = true;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
       };
       ws.onmessage = (msg) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         try {
-          const data = JSON.parse(msg.data as string) as { type: string; payload: unknown };
-          if (data.type === 'state') setState(data.payload as ServerState);
-          else if (data.type === 'book' || data.type === 'btrades') {
+          const data: unknown = JSON.parse(msg.data as string);
+          if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
+          else if (data && typeof data === 'object'
+              && ((data as { type?: unknown }).type === 'book' || (data as { type?: unknown }).type === 'btrades')) {
             for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
           }
+          // Material-event cursor consumption stays with the existing Product
+          // Control Room binding; this compatibility store never advances it.
         } catch {
           // ignore
         }
       };
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
+        setWebSocketCloseDiagnostic((current) => reduceTrustedWebSocketCloseDiagnostic(
+          current,
+          event,
+          socketGeneration,
+          connectionEstablished,
+        ));
         wsRef.current = null;
         if (liveWs === ws) liveWs = null;
         setConnected(false);
@@ -337,6 +423,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closed = true;
       generation += 1;
       clearRetry();
+      stateRefreshController?.abort();
+      stateRefreshController = null;
+      stateRefreshQueued = false;
       reconnectRef.current = null;
       closeCurrent();
       setConnected(false);
@@ -380,30 +469,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveConfig = useCallback(async (patch: Partial<AppConfig>) => {
     const result = await post<AppConfig>('/api/config', patch);
-    const config = result.data && isConfigAcknowledgement(result.data) ? result.data : null;
+    const config = result.data && isConfigAcknowledgement(result.data) ? failClosedConfig(result.data) : null;
     const error = result.error ?? (config ? null : acknowledgementFailure('Configuration acknowledgement was malformed.'));
     setMutationError(error);
-    if (config) setState((s) => (s ? { ...s, config, mode: config.killSwitch ? 'HALTED' : config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
+    if (config) setState((s) => (s ? failClosedState({ ...s, config }) : s));
     return config;
   }, []);
 
-  // In-place reset for the bottom Connection Control: rebuild the browser
-  // socket, ask the server to reset every live source, then fan a refresh signal
-  // to page-owned fetchers without reloading the document.
+  // Read-only browser snapshot refresh retained for compatibility consumers.
+  // It never calls the managed-runtime /api/refresh targets: those require the
+  // canonical Product preview/digest/revision/receipt protocol.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
-    let health: RefreshResult | null = null;
-    try {
-      const result = await post<RefreshResult>('/api/refresh', { target: 'all' });
-      health = result.data;
-      setMutationError(result.error);
-      if (!health) issues.push(result.error?.message ?? 'Server refresh request failed');
-    } catch {
-      issues.push('Server refresh request failed');
-    }
     try {
       const s = await fetchJson<ServerState>('/api/state');
-      setState(s);
+      setState(failClosedState(s));
     } catch {
       issues.push('State snapshot failed');
     }
@@ -417,19 +497,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       issues.push('Market refresh failed');
     }
-    // A reset is explicit: rebuild the browser's cockpit socket too, then
-    // re-attach any active token book subscription on open.
+    // Rebuild only the browser's cockpit socket, then re-attach any active
+    // token-book subscription. No server runtime is restarted here.
     reconnectRef.current?.();
     setDataNonce((n) => n + 1);
     fireRefresh();
-    if (health?.issues?.length) for (const i of health.issues) issues.push(i);
     return {
       ok: issues.length === 0,
       issues,
-      ts: health?.ts ?? Date.now(),
-      binanceConnected: health?.binanceConnected,
-      feedsOk: health?.feedsOk,
-      keysPresent: health?.keysPresent,
+      ts: Date.now(),
     };
   }, []);
 
@@ -469,100 +545,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       [state, saveConfig]
     ),
     saveConfig,
-    setKill: useCallback(async (on) => {
-      const result = await post<{ killSwitch: boolean }>('/api/kill', { on });
-      const error = result.error ?? (result.data?.killSwitch === on ? null : acknowledgementFailure('Kill-switch acknowledgement did not match the requested state.'));
-      setMutationError(error);
-      if (!error && result.data) setState((s) => (s ? { ...s, config: { ...s.config, killSwitch: result.data.killSwitch }, mode: result.data.killSwitch ? 'HALTED' : s.config.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL' } : s));
-      return error;
-    }, []),
-    setLive: useCallback(async (on) => {
-      const result = await post<{ liveTradingEnabled: boolean }>('/api/live', { on });
-      const error = result.error ?? (result.data?.liveTradingEnabled === on ? null : acknowledgementFailure('Live-control acknowledgement did not match the requested state.'));
-      setMutationError(error);
-      if (!error && result.data) setState((s) => (s ? {
-        ...s,
-        config: {
-          ...s.config,
-          liveTradingEnabled: result.data.liveTradingEnabled,
-          controlModes: { ...s.config.controlModes, liveOrders: result.data.liveTradingEnabled ? 'allowed' : 'paused' },
-        },
-        mode: s.config.killSwitch ? 'HALTED' : result.data.liveTradingEnabled ? 'LIVE_ARMED' : 'MANUAL',
-      } : s));
-      return error;
-    }, []),
-    preview: useCallback(async (intent) => {
-      const result = await post<PreviewResult>('/api/trade/preview', intent);
-      setMutationError(result.error);
-      return result.data;
-    }, []),
-    testOrder: useCallback(
-      async (intent) => {
-        const result = await post<{ ok: boolean; error?: string }>('/api/trade/test', intent);
-        setMutationError(result.error);
-        return result.data ?? { ok: false, error: result.error.message };
-      },
-      []
-    ),
-    sendLive: useCallback(
-      async (intent, confirmSymbol) => {
-        const result = await post<SendResult>('/api/trade/send', { ...intent, confirmSymbol });
-        setMutationError(result.error);
-        return result.data ?? { sent: false, error: result.error.message };
-      },
-      []
-    ),
-    cancelOrder: useCallback(
-      async (symbol, orderId) => {
-        const result = await post<CancelResult>('/api/orders/cancel', { symbol, orderId });
-        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
-        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel acknowledgement was malformed.'));
-        setMutationError(error);
-        return data ?? {
-          ok: false,
-          outcome: 'unknown',
-          reconciliationRequired: true,
-          error: error?.message ?? 'Cancel acknowledgement was unavailable.',
-        };
-      },
-      []
-    ),
-    cancelAll: useCallback(
-      async (symbol) => {
-        const result = await post<CancelResult>('/api/orders/cancel-all', { symbol });
-        const data = result.data && isCancelAcknowledgement(result.data) ? result.data : null;
-        const error = result.error ?? (data ? null : acknowledgementFailure('Cancel-all acknowledgement was malformed.'));
-        setMutationError(error);
-        return data ?? {
-          ok: false,
-          outcome: 'unknown',
-          reconciliationRequired: true,
-          error: error?.message ?? 'Cancel-all acknowledgement was unavailable.',
-        };
-      },
-      []
-    ),
-    approveProposal: useCallback(
-      async (id) => {
-        // approval is server-side; with execution removed the returned intent
-        // is informational only — orders go through Binance itself
-        const result = await post(`/api/proposals/${id}/approve`, {});
-        setMutationError(result.error);
-        return result.error;
-      },
-      []
-    ),
-    importFills: useCallback(
-      async (symbol) => {
-        const result = await post<{ imported?: number; error?: string }>('/api/fills/import', { symbol });
-        setMutationError(result.error);
-        return result.data ?? { error: result.error.message };
-      },
-      []
-    ),
   };
 
-  return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;
+  return (
+    <StoreContext.Provider value={store}>
+      {children}
+      <span
+        id={WEB_SOCKET_CLOSE_DIAGNOSTIC_ID}
+        hidden
+        aria-hidden="true"
+        {...webSocketCloseDiagnosticAttributes(webSocketCloseDiagnostic)}
+      />
+    </StoreContext.Provider>
+  );
 }
 
 export function useStore(): Store {

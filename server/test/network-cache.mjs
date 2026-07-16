@@ -148,3 +148,28 @@ test('news archive sanitizes retained strings and URLs and never follows a disal
   assert.equal(disallowedFollow, false);
   delete process.env.DATA_DIR;
 });
+
+test('news context upstream policy rejects non-GET methods before fetch state and forces normalized GET', { concurrency: false }, async () => {
+  const news = await import(`${modulePath('services/newsContext')}?get-only=${Date.now()}`);
+
+  for (const method of ['POST', 'PUT', 'pOsT', '', ' ', 'GET ', null, 1]) {
+    assert.throws(
+      () => news.normalizeNewsContextRequestMethod(method),
+      /News context upstream requests are GET-only/,
+    );
+  }
+  assert.equal(news.normalizeNewsContextRequestMethod(undefined), 'GET');
+  assert.equal(news.normalizeNewsContextRequestMethod('gEt'), 'GET');
+
+  const source = await readFile(new URL('../src/services/newsContext.ts', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /async function fetchBodyWithRetry[\s\S]*?\{\s*\/\/ Reject before URL\/cache\/single-flight[\s\S]*?normalizeNewsContextRequestMethod\([^;]+;\s*const url = validateFetchUrl/,
+    'retry owner must enforce GET before URL, cache, and single-flight state',
+  );
+  assert.match(
+    source,
+    /async function fetchBodyOnce[\s\S]*?\{\s*const method = normalizeNewsContextRequestMethod\([^;]+;[\s\S]*?await fetch\(current, \{\s*\.\.\.init,\s*method,/,
+    'the private fetch call must use only the normalized literal GET result',
+  );
+});

@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "i00.browser-measurement.v1",
+  "capturedAtUtc": "2026-07-16T02:08:28.574Z",
+  "source": {
+    "headSha": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+    "treeSha": "6930f71f1191394ffaf317279c9e43f15bf672cf",
+    "appOrigin": "http://127.0.0.1:3317",
+    "captureProvenance": "IN_APP_BROWSER_MCP",
+    "captureSessionId": "iab-c2r-20260716T020828574Z",
+    "captureTranscriptPath": "test/i00/performance/evidence/browser/c2r-74eb452efab89ca92ec9ff5cb192b723b5f198f3/iab-c2r-20260716T020828574Z/capture/iab-c2r-20260716T020828574Z.json",
+    "captureTranscriptSha256": "c58f536caf90c2c1a3aaee2446b101df4ddd3a818c66e22a152be80c8aa8f255"
+  },
+  "documentOverflowX": 0,
+  "footerBarCount": 0,
+  "frameRect": {
+    "height": 719,
+    "width": 1385,
+    "x": 189,
+    "y": 75
+  },
+  "kind": "BOTTOM_UP_PAGE",
+  "panelMetrics": null,
+  "passed": true,
+  "roles": [
+    {
+      "computed": {
+        "borderRadiusPx": 12,
+        "borderWidthPx": 1,
+        "color": "rgb(232, 237, 244)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 13.5,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 400,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 20.25,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "frame",
+      "selector": ".opportunityx-frame",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(232, 237, 244)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 22,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 540,
+        "letterSpacingPx": -0.308,
+        "lineHeightPx": 30,
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textTransform": "none"
+      },
+      "role": "title",
+      "selector": ".opportunityx-title h1",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(113, 123, 138)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 10.5,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 560,
+        "letterSpacingPx": 0.5775,
+        "lineHeightPx": 14,
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textTransform": "uppercase"
+      },
+      "role": "summary-label",
+      "selector": ".opportunityx-summary-cell > span",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(232, 237, 244)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 18,
+        "fontVariantNumeric": "tabular-nums",
+        "fontWeight": 510,
+        "letterSpacingPx": -0.216,
+        "lineHeightPx": 23,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "summary-value",
+      "selector": ".opportunityx-summary-cell > strong",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(232, 237, 244)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 12.75,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 500,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 17,
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textTransform": "none"
+      },
+      "role": "row-primary",
+      "selector": ".pcr-surface > span:first-child > strong",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(113, 123, 138)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 10.5,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 420,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 14,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "row-secondary",
+      "selector": ".pcr-surface > span:first-child > small",
+      "state": "MEASURED"
+    }
+  ],
+  "subjectId": "opportunities",
+  "surfaceOverflowX": 0,
+  "theme": "DARK",
+  "viewport": {
+    "height": 900,
+    "width": 1600,
+    "zoom": 1
+  }
+}

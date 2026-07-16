@@ -75,6 +75,130 @@ test('existing Ledger atomically commits checkpoint plus audit before changing a
   }
 });
 
+test('missing checkpoint CAS fails closed without invoking the unconditional legacy write', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  let unconditionalWrites = 0;
+  try {
+    const missingCasPort = new Proxy(ledger, {
+      get(target, property) {
+        if (property === 'compareAndSetConfigValueAndLogEvents') return undefined;
+        if (property === 'setConfigValueAndLogEvent') {
+          return (...args) => {
+            unconditionalWrites += 1;
+            return target.setConfigValueAndLogEvent(...args);
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const adapter = new SystemLedgerPersistenceAdapter(missingCasPort);
+    const loaded = adapter.load(T0, 'ledger.missing-cas.load');
+    assert.equal(loaded.ok, true);
+    assert.equal(loaded.source, 'EMPTY');
+
+    const failed = adapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'ledger.missing-cas.start',
+    });
+    assert.equal(failed.ok, false);
+    assert.equal(failed.code, 'PERSISTENCE_WRITE_FAILED');
+    assert.match(failed.message, /lacks checkpoint compare-and-set capability/);
+    assert.equal(unconditionalWrites, 0);
+    assert.equal(ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY), null);
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    assert.equal(adapter.currentState().value.revision, 0);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('trace batches and idempotent transitions reject hostile or missing trace fields before any write', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0, 'trace.batch.hostile.load').ok, true);
+    const before = adapter.currentState().value;
+    const validTrace = trace('trace.batch.valid', 1, 'trace.batch.hostile', T0 + 1);
+    for (const traceEvents of [{}, [null], [validTrace, null]]) {
+      const result = adapter.commitCheckpoint({ ...before, revision: before.revision + 1 }, {
+        auditKind: 'TRANSITION',
+        correlationId: 'trace.batch.hostile',
+        occurredAtMs: T0 + 1,
+        traceEvents,
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'INVALID_PERSISTENCE_REQUEST');
+      assert.deepEqual(adapter.currentState().value, before);
+      assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    }
+
+    let transitionCalls = 0;
+    const transition = (state) => {
+      transitionCalls++;
+      return { nextState: { ...state, revision: state.revision + 1 }, receipt: { accepted: true } };
+    };
+    for (const fields of [{}, { traceEvent: validTrace, traceEvents: [validTrace] }]) {
+      const result = adapter.applyIdempotentTransition({
+        idempotencyKey: `trace.hostile.${transitionCalls}.0001`,
+        requestDigest: 'a'.repeat(64),
+        correlationId: 'trace.batch.hostile',
+        occurredAtMs: T0 + 1,
+        transition,
+        ...fields,
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.code, 'INVALID_PERSISTENCE_REQUEST');
+    }
+    assert.equal(transitionCalls, 0);
+    assert.deepEqual(adapter.currentState().value, before);
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('batched transition replay retains the first atomic Ledger event anchor across adapter restart', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0, 'trace.batch.anchor.load').ok, true);
+    const traces = [0, 1, 2].map((index) => (
+      trace(`trace.batch.anchor.${index}`, index + 1, 'trace.batch.anchor', T0 + 1)
+    ));
+    let transitionCalls = 0;
+    const input = {
+      idempotencyKey: 'trace.batch.anchor.0001',
+      requestDigest: 'b'.repeat(64),
+      correlationId: 'trace.batch.anchor',
+      occurredAtMs: T0 + 1,
+      traceEvents: traces,
+      transition: (state) => {
+        transitionCalls++;
+        return { nextState: { ...state, revision: state.revision + 1 }, receipt: { accepted: true } };
+      },
+    };
+    const first = adapter.applyIdempotentTransition(input);
+    assert.equal(first.ok, true);
+    assert.equal(first.value.replayed, false);
+    const restarted = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(restarted.load(T0 + 2, 'trace.batch.anchor.restart').ok, true);
+    const replay = restarted.applyIdempotentTransition(input);
+    assert.equal(replay.ok, true);
+    assert.equal(replay.value.replayed, true);
+    assert.equal(replay.value.ledgerEventId, first.value.ledgerEventId);
+    assert.equal(transitionCalls, 1);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('corrupt durable checkpoints fail closed and post-commit listener failure is reconciled from Ledger truth', () => {
   const corruptDir = tempDataDir();
   const corruptLedger = new Ledger(corruptDir);
@@ -105,6 +229,74 @@ test('corrupt durable checkpoints fail closed and post-commit listener failure i
   } finally {
     listenerLedger.close();
     rmSync(listenerDir, { recursive: true, force: true });
+  }
+});
+
+test('two independent adapters admit one checkpoint writer and refresh the stale loser without a loser event', () => {
+  const dataDir = tempDataDir();
+  const winnerLedger = new Ledger(dataDir);
+  const loserLedger = new Ledger(dataDir);
+  try {
+    const winnerAdapter = new SystemLedgerPersistenceAdapter(winnerLedger);
+    const loserAdapter = new SystemLedgerPersistenceAdapter(loserLedger);
+    assert.equal(winnerAdapter.load(T0, 'race.winner.load').ok, true);
+    assert.equal(loserAdapter.load(T0, 'race.loser.load').ok, true);
+
+    const winner = winnerAdapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'race.winner.start',
+    });
+    assert.equal(winner.ok, true);
+    const durableAfterWinner = winnerLedger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY);
+    const eventsAfterWinner = winnerLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND);
+    assert.notEqual(durableAfterWinner, null);
+    assert.equal(eventsAfterWinner.length, 1);
+
+    const loser = loserAdapter.persistStartup({
+      startedAtMs: T0 + 2,
+      correlationId: 'race.loser.start',
+    });
+    assert.equal(loser.ok, false);
+    assert.equal(loser.code, 'CHECKPOINT_REVISION_CONFLICT');
+    assert.equal(loserLedger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY), durableAfterWinner);
+    assert.equal(loserLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, eventsAfterWinner.length);
+
+    const winnerState = winnerAdapter.currentState();
+    const recoveredLoserState = loserAdapter.currentState();
+    assert.equal(winnerState.ok, true);
+    assert.equal(recoveredLoserState.ok, true);
+    assert.deepEqual(recoveredLoserState.value, winnerState.value);
+    assert.equal(recoveredLoserState.value.lastStartup.correlationId, 'race.winner.start');
+  } finally {
+    winnerLedger.close();
+    loserLedger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a stale compare-and-set conflict with invalid durable truth fails the adapter closed without an audit event', () => {
+  const dataDir = tempDataDir();
+  const writerLedger = new Ledger(dataDir);
+  const staleLedger = new Ledger(dataDir);
+  try {
+    const staleAdapter = new SystemLedgerPersistenceAdapter(staleLedger);
+    assert.equal(staleAdapter.load(T0, 'race.corrupt.load').ok, true);
+    writerLedger.setConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY, '{"schema":"corrupt"}');
+
+    const stale = staleAdapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'race.corrupt.start',
+    });
+    assert.equal(stale.ok, false);
+    assert.equal(stale.code, 'CHECKPOINT_REVISION_CONFLICT');
+    assert.equal(staleLedger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    const failedClosed = staleAdapter.currentState();
+    assert.equal(failedClosed.ok, false);
+    assert.equal(failedClosed.code, 'PERSISTENCE_CORRUPT');
+  } finally {
+    writerLedger.close();
+    staleLedger.close();
+    rmSync(dataDir, { recursive: true, force: true });
   }
 });
 

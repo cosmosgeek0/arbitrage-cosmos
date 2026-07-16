@@ -1,5 +1,6 @@
 import {
   createStructuredFailure,
+  evaluateFreshness,
   type StructuredFailure,
 } from '../../foundation/contracts/index.js';
 import type {
@@ -31,6 +32,13 @@ export interface PromisePollAdapterSpec {
   readonly requiresPrivateKeys?: boolean;
   readonly requiresBorrowTruth?: boolean;
   readonly riskIncreasing?: boolean;
+  /**
+   * RUNNING admits a lifecycle after its owner proves liveness. FRESH_SOURCE
+   * keeps the start step pending until the owner also supplies a current
+   * sourced observation, so downstream components cannot start on liveness
+   * alone.
+   */
+  readonly readinessRequirement?: 'RUNNING' | 'FRESH_SOURCE';
   /** True for Basis/Volume, which become internally live before start() settles. */
   readonly ownsUnderlyingOnLaunch: boolean;
   readonly validate?: (ctx: ComponentStepContext) => void;
@@ -271,6 +279,13 @@ export class PromisePollManagedComponent implements ManagedComponent {
           true,
         ),
       };
+    }
+
+    if (this.spec.readinessRequirement === 'FRESH_SOURCE') {
+      const freshness = health.timestamp === null ? null : evaluateFreshness(health.timestamp, ctx.nowMs);
+      if (freshness?.state !== 'FRESH') {
+        return { kind: 'PENDING', detail: `${this.name} is running and waiting for current owner source truth` };
+      }
     }
 
     if (this.admittedGeneration !== ctx.generation) {

@@ -1,6 +1,44 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
-# >>>>> RUN NOW: the six ARMED V-SHARD + VERIFIER blocks below (SHA already filled = 74eb452e). Folders v1 v2 v3 v4 v5 role3-c2. Everything else DONE/history. <<<<<
+# >>>>> PASTE THESE 6 NOW, one per NEW chat. Folder name = heading. NOTHING ELSE. <<<<<
+
+## CHAT 1 — folder /Users/cosmosgeek/Desktop/v1
+```text
+You are read-only verification shard V1 for frozen candidate C2. FIRST: run `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3` then verify HEAD equals 74eb452efab89ca92ec9ff5cb192b723b5f198f3 exactly (branch role4-fix-20260715 must contain it; its sole-child seal must exist). Fresh hydrated install (npm ci). Run ONLY your shard family (V1 build/typecheck/lint/unit + root npm test; V2 quant venv pytest + liveEdge + foundation + reconciliation + restart/readback; V3 browser ship gate + DASHBOARD_TRUTH + zero-egress watch; V4 security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry + secret scan; V5 restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts — local only, zero external actions). Record EXACT commands, env, exit codes, counts, durations, artifact hashes into SHARD_RECEIPT.md (untracked, your only output). No source edits, no verdict — one fresh Role-3 owns the verdict. D-LAUNCH-22 egress disposition applies. Usage limit → save+stop; same message resumes. Stop at V1_RECEIPT_READY or precise BLOCKED.
+YOUR shard family (V1): repository/build/typecheck/lint/unit gates (npm ci; npm test; build outputs hashed).
+```
+
+## CHAT 2 — folder /Users/cosmosgeek/Desktop/v2
+```text
+You are read-only verification shard V2 for frozen candidate C2. FIRST: run `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3` then verify HEAD equals 74eb452efab89ca92ec9ff5cb192b723b5f198f3 exactly (branch role4-fix-20260715 must contain it; its sole-child seal must exist). Fresh hydrated install (npm ci). Run ONLY your shard family (V1 build/typecheck/lint/unit + root npm test; V2 quant venv pytest + liveEdge + foundation + reconciliation + restart/readback; V3 browser ship gate + DASHBOARD_TRUTH + zero-egress watch; V4 security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry + secret scan; V5 restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts — local only, zero external actions). Record EXACT commands, env, exit codes, counts, durations, artifact hashes into SHARD_RECEIPT.md (untracked, your only output). No source edits, no verdict — one fresh Role-3 owns the verdict. D-LAUNCH-22 egress disposition applies. Usage limit → save+stop; same message resumes. Stop at V2_RECEIPT_READY or precise BLOCKED.
+YOUR shard family (V2): quant venv pytest + liveEdge suites + foundation battery + reconciliation + restart/readback campaigns.
+```
+
+## CHAT 3 — folder /Users/cosmosgeek/Desktop/v3
+```text
+You are read-only verification shard V3 for frozen candidate C2. FIRST: run `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3` then verify HEAD equals 74eb452efab89ca92ec9ff5cb192b723b5f198f3 exactly (branch role4-fix-20260715 must contain it; its sole-child seal must exist). Fresh hydrated install (npm ci). Run ONLY your shard family (V1 build/typecheck/lint/unit + root npm test; V2 quant venv pytest + liveEdge + foundation + reconciliation + restart/readback; V3 browser ship gate + DASHBOARD_TRUTH + zero-egress watch; V4 security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry + secret scan; V5 restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts — local only, zero external actions). Record EXACT commands, env, exit codes, counts, durations, artifact hashes into SHARD_RECEIPT.md (untracked, your only output). No source edits, no verdict — one fresh Role-3 owns the verdict. D-LAUNCH-22 egress disposition applies. Usage limit → save+stop; same message resumes. Stop at V3_RECEIPT_READY or precise BLOCKED.
+YOUR shard family (V3): browser ship gate + DASHBOARD_TRUTH acceptance + zero-egress watch.
+```
+
+## CHAT 4 — folder /Users/cosmosgeek/Desktop/v4
+```text
+You are read-only verification shard V4 for frozen candidate C2. FIRST: run `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3` then verify HEAD equals 74eb452efab89ca92ec9ff5cb192b723b5f198f3 exactly (branch role4-fix-20260715 must contain it; its sole-child seal must exist). Fresh hydrated install (npm ci). Run ONLY your shard family (V1 build/typecheck/lint/unit + root npm test; V2 quant venv pytest + liveEdge + foundation + reconciliation + restart/readback; V3 browser ship gate + DASHBOARD_TRUTH + zero-egress watch; V4 security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry + secret scan; V5 restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts — local only, zero external actions). Record EXACT commands, env, exit codes, counts, durations, artifact hashes into SHARD_RECEIPT.md (untracked, your only output). No source edits, no verdict — one fresh Role-3 owns the verdict. D-LAUNCH-22 egress disposition applies. Usage limit → save+stop; same message resumes. Stop at V4_RECEIPT_READY or precise BLOCKED.
+YOUR shard family (V4): security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry re-derivation + secret scans.
+```
+
+## CHAT 5 — folder /Users/cosmosgeek/Desktop/v5
+```text
+You are read-only verification shard V5 for frozen candidate C2. FIRST: run `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3` then verify HEAD equals 74eb452efab89ca92ec9ff5cb192b723b5f198f3 exactly (branch role4-fix-20260715 must contain it; its sole-child seal must exist). Fresh hydrated install (npm ci). Run ONLY your shard family (V1 build/typecheck/lint/unit + root npm test; V2 quant venv pytest + liveEdge + foundation + reconciliation + restart/readback; V3 browser ship gate + DASHBOARD_TRUTH + zero-egress watch; V4 security/perimeter + authority/duplicate-owner scans + receipt-vs-git-object + donor ancestry + secret scan; V5 restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts — local only, zero external actions). Record EXACT commands, env, exit codes, counts, durations, artifact hashes into SHARD_RECEIPT.md (untracked, your only output). No source edits, no verdict — one fresh Role-3 owns the verdict. D-LAUNCH-22 egress disposition applies. Usage limit → save+stop; same message resumes. Stop at V5_RECEIPT_READY or precise BLOCKED.
+YOUR shard family (V5): restart/perf vs sealed receipts + rollback/restore/backup + ops artifacts (local only, zero external actions).
+```
+
+## CHAT 6 — folder /Users/cosmosgeek/Desktop/role3-c2 (THE VERDICT)
+```text
+You are the FRESH Role-3 verifier for frozen candidate C2 (you are not the integrator, not the fix owner, not the previous verifier). FIRST: `git checkout --detach 74eb452efab89ca92ec9ff5cb192b723b5f198f3`, verify HEAD=74eb452efab89ca92ec9ff5cb192b723b5f198f3, verify the sole-child seal on branch role4-fix-20260715, verify all 15 R3 findings have fix-or-refusal dispositions + regression receipts, and verify the 4 FIX_AUDIT items (VAL-001, WATCHDOG-007, BACKUP-008, CLEAN-009 — /Users/cosmosgeek/Desktop/fix-audit/FIX_AUDIT.md) were adjudicated. Then per FINAL_INTEGRATION order Phase 3: fresh install; rerun complete required acceptance capturing exact evidence; verify candidate receipt encodes regenerated donor equality + A-FORMAL/S2 dispositions + both money-path dispositions + Q C17→A17 ancestry; §D matrix. V1-V5 shard receipts (SHARD_RECEIPT.md in ~/Desktop/v1..v5) are ADVISORY — aggregate them but independently rerun the critical money-path, restart, reconciliation, authority, and no-false-green classes yourself. You may not fix anything. Only output: ROLE3_C2_RECEIPT.md (untracked) ending in exactly VERIFIED_CANDIDATE or REJECTED_CANDIDATE (findings: ID, severity, invariant, evidence, repro, expected/actual, correction boundary). Usage limit → save+stop; same message resumes.
+```
+
+# >>>>> OLD BELOW — DO NOT RUN <<<<<
+
 
 ## RUN-NEXT (paste when limits reset) — folder /Users/cosmosgeek/Desktop/i00-assembly
 ```text

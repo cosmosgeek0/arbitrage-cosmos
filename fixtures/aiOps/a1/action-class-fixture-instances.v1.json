@@ -1,0 +1,167 @@
+{
+  "artifactId": "aiops-action-class-fixture-instances",
+  "contentHash": "f7cef1989022a170f208a8d1aab6347c32158cbc79a15cc0cff3dc8983121f98",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "actionId": "RECONNECT_STREAM",
+      "authorityCreated": false,
+      "credentialMaterialPresent": false,
+      "effectPermitted": false,
+      "expectedDisposition": "SHADOW_CANDIDATE_ONLY",
+      "expectedEffectiveActionClass": "C",
+      "expectedReasonCodes": [
+        "OWNER_SIGNATURE_REQUIRED",
+        "RUNBOOK_EXECUTION_BINDING_NOT_WIRED",
+        "SHADOW_SPECULATIVE_CANNOT_GRANT_AUTHORITY"
+      ],
+      "fixtureId": "AI_OPS_ACTION_FIXTURE_CLASS_A_RECONNECT_STREAM_V1",
+      "fixtureRevision": 1,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RECONNECT_STREAM_V1",
+      "hardDenialIds": [],
+      "isolatedPatchRequired": false,
+      "networkPermitted": false,
+      "operatingMode": "SHADOW",
+      "ownerApprovalRequired": true,
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "providerState": "NOT_CONFIGURED",
+      "requestedActionClass": "A",
+      "requestedParameters": {
+        "expectedGeneration": 7,
+        "maximumDowntimeMs": 5000,
+        "replayCursorRef": "synthetic-cursor-1042",
+        "streamId": "synthetic-public-stream-fixture"
+      },
+      "requestingIdentityId": "aiops-shadow-runtime-diagnostician",
+      "resourceId": "synthetic-public-stream-fixture",
+      "runbookManifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RECONNECT_STREAM_INSTANCE_V1",
+      "schema": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "syntheticOnly": true
+    },
+    {
+      "actionId": "HOST_OR_SYSTEM_SERVICE_RESTART",
+      "authorityCreated": false,
+      "credentialMaterialPresent": false,
+      "effectPermitted": false,
+      "expectedDisposition": "PROPOSAL_ONLY",
+      "expectedEffectiveActionClass": "B",
+      "expectedReasonCodes": [
+        "HUMAN_OWNER_APPROVAL_REQUIRED",
+        "CANONICAL_EFFECT_OWNER_REQUIRED",
+        "EFFECT_NOT_PERMITTED_IN_SHADOW"
+      ],
+      "fixtureId": "AI_OPS_ACTION_FIXTURE_CLASS_B_SERVICE_RESTART_V1",
+      "fixtureRevision": 1,
+      "graduationTargetInstanceId": null,
+      "hardDenialIds": [],
+      "isolatedPatchRequired": false,
+      "networkPermitted": false,
+      "operatingMode": "SHADOW",
+      "ownerApprovalRequired": true,
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "providerState": "NOT_CONFIGURED",
+      "requestedActionClass": "B",
+      "requestedParameters": {
+        "expectedGeneration": 4,
+        "serviceId": "synthetic-stateless-service-fixture"
+      },
+      "requestingIdentityId": "aiops-shadow-runtime-diagnostician",
+      "resourceId": "synthetic-stateless-service-fixture",
+      "runbookManifestInstanceId": null,
+      "schema": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "syntheticOnly": true
+    },
+    {
+      "actionId": "CODE_OR_TEST_MODIFICATION",
+      "authorityCreated": false,
+      "credentialMaterialPresent": false,
+      "effectPermitted": false,
+      "expectedDisposition": "ISOLATED_PATCH_ONLY",
+      "expectedEffectiveActionClass": "C",
+      "expectedReasonCodes": [
+        "ISOLATED_WORKTREE_REQUIRED",
+        "INDEPENDENT_VERIFICATION_REQUIRED",
+        "NO_MAIN_WRITE"
+      ],
+      "fixtureId": "AI_OPS_ACTION_FIXTURE_CLASS_C_CODE_TEST_PATCH_V1",
+      "fixtureRevision": 1,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_PATCH_CATEGORY_CODE_AND_TEST_V1",
+      "hardDenialIds": [],
+      "isolatedPatchRequired": true,
+      "networkPermitted": false,
+      "operatingMode": "SHADOW",
+      "ownerApprovalRequired": true,
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "providerState": "NOT_CONFIGURED",
+      "requestedActionClass": "C",
+      "requestedParameters": {
+        "baseRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+        "patchTaskId": "synthetic-isolated-patch-task"
+      },
+      "requestingIdentityId": "aiops-shadow-runtime-diagnostician",
+      "resourceId": "synthetic-isolated-worktree-fixture",
+      "runbookManifestInstanceId": null,
+      "schema": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "syntheticOnly": true
+    },
+    {
+      "actionId": "SIGN_ORDER",
+      "authorityCreated": false,
+      "credentialMaterialPresent": false,
+      "effectPermitted": false,
+      "expectedDisposition": "PERMANENTLY_DENIED",
+      "expectedEffectiveActionClass": "D",
+      "expectedReasonCodes": [
+        "HARD_DENIAL_MATCH",
+        "OWNER_APPROVAL_CANNOT_OVERRIDE_HARD_DENIAL"
+      ],
+      "fixtureId": "AI_OPS_ACTION_FIXTURE_CLASS_D_SIGN_ORDER_V1",
+      "fixtureRevision": 1,
+      "graduationTargetInstanceId": null,
+      "hardDenialIds": [
+        "AI_OPS_DENY_ORDER_MUTATION"
+      ],
+      "isolatedPatchRequired": false,
+      "networkPermitted": false,
+      "operatingMode": "SHADOW",
+      "ownerApprovalRequired": false,
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "providerState": "NOT_CONFIGURED",
+      "requestedActionClass": "D",
+      "requestedParameters": {
+        "requestId": "synthetic-denied-order-request"
+      },
+      "requestingIdentityId": "aiops-shadow-runtime-diagnostician",
+      "resourceId": "synthetic-denied-order-resource",
+      "runbookManifestInstanceId": null,
+      "schema": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCE_V1",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "syntheticOnly": true
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_ACTION_CLASS_FIXTURE_INSTANCES_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

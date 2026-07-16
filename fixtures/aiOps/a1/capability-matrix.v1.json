@@ -1,0 +1,202 @@
+{
+  "artifactId": "aiops-capability-matrix",
+  "contentHash": "e24696a3c28fab174f8e052ec9b3f43c0a8873dbb04ac5ffe6d3c01c0f3c1670",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "arbitraryToolAccess": "DENIED",
+      "authorityCreated": false,
+      "capabilityIds": [
+        "READ_REDACTED_CANONICAL_EVIDENCE",
+        "EXPLAIN_INCIDENT",
+        "DIAGNOSE_BOUNDED_CASE",
+        "SEARCH_APPROVED_PUBLIC_SOURCES",
+        "REQUEST_BOUNDED_READ_ONLY_QUERY",
+        "REQUEST_REPLAY",
+        "DRAFT_TYPED_REMEDIATION_PROPOSAL",
+        "OWNER_VISIBLE_RECOMMENDATION"
+      ],
+      "crossIdentityInheritance": "DENIED",
+      "hardDenialIds": [
+        "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "AI_OPS_DENY_FUNDS_MUTATION",
+        "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "AI_OPS_DENY_ORDER_MUTATION",
+        "AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+      ],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "moneyAuthority": "NONE",
+      "permissionLevels": [
+        "OBSERVE_EXPLAIN",
+        "BOUNDED_QUERY_REPLAY",
+        "PROPOSE_TYPED_ACTION"
+      ],
+      "productionAuthority": "NONE",
+      "providerStatesRepresented": [
+        "NOT_CONFIGURED",
+        "SUBSCRIPTION_CODEX_WORKER",
+        "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+        "API_CONFIGURED",
+        "DIAGNOSTIC_PLANE_UNAVAILABLE"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN"
+    },
+    {
+      "arbitraryToolAccess": "DENIED",
+      "authorityCreated": false,
+      "capabilityIds": [
+        "READ_ADMITTED_CASE",
+        "WRITE_ISOLATED_APPROVED_PATHS",
+        "RUN_REGISTERED_BUILD_TEST_COMMANDS",
+        "RUN_ISOLATED_REPLAY",
+        "PREPARE_PATCH",
+        "PREPARE_ROLLBACK_PLAN",
+        "PREPARE_OWNER_HANDOFF"
+      ],
+      "crossIdentityInheritance": "DENIED",
+      "hardDenialIds": [
+        "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "AI_OPS_DENY_FUNDS_MUTATION",
+        "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "AI_OPS_DENY_ORDER_MUTATION",
+        "AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+      ],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "moneyAuthority": "NONE",
+      "permissionLevels": [
+        "OBSERVE_EXPLAIN",
+        "BOUNDED_QUERY_REPLAY",
+        "PROPOSE_TYPED_ACTION",
+        "PATCH_ISOLATED_AND_TEST",
+        "OWNER_APPROVED_HANDOFF_FOR_NON_MONEY_MERGE_OR_DEPLOY"
+      ],
+      "productionAuthority": "NONE",
+      "providerStatesRepresented": [
+        "NOT_CONFIGURED",
+        "SUBSCRIPTION_CODEX_WORKER",
+        "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+        "API_CONFIGURED",
+        "DIAGNOSTIC_PLANE_UNAVAILABLE"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER"
+    },
+    {
+      "arbitraryToolAccess": "DENIED",
+      "authorityCreated": false,
+      "capabilityIds": [
+        "READ_FROZEN_REQUIREMENTS",
+        "READ_FROZEN_EVIDENCE",
+        "READ_BASE_AND_CANDIDATE_DIFF",
+        "RUN_REGISTERED_VERIFICATION",
+        "READ_INDEPENDENT_POSTSTATE",
+        "ISSUE_TYPED_VERIFICATION_RECEIPT"
+      ],
+      "crossIdentityInheritance": "DENIED",
+      "hardDenialIds": [
+        "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "AI_OPS_DENY_FUNDS_MUTATION",
+        "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "AI_OPS_DENY_ORDER_MUTATION",
+        "AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+      ],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "moneyAuthority": "NONE",
+      "permissionLevels": [
+        "OBSERVE_EXPLAIN",
+        "BOUNDED_QUERY_REPLAY"
+      ],
+      "productionAuthority": "NONE",
+      "providerStatesRepresented": [
+        "NOT_CONFIGURED",
+        "SUBSCRIPTION_CODEX_WORKER",
+        "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+        "API_CONFIGURED",
+        "DIAGNOSTIC_PLANE_UNAVAILABLE"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER"
+    },
+    {
+      "arbitraryToolAccess": "DENIED",
+      "authorityCreated": false,
+      "capabilityIds": [],
+      "crossIdentityInheritance": "DENIED",
+      "hardDenialIds": [
+        "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "AI_OPS_DENY_FUNDS_MUTATION",
+        "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "AI_OPS_DENY_ORDER_MUTATION",
+        "AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+      ],
+      "identityId": "aiops-shadow-research-trade-context-advisor",
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "moneyAuthority": "NONE",
+      "permissionLevels": [],
+      "productionAuthority": "NONE",
+      "providerStatesRepresented": [
+        "NOT_CONFIGURED"
+      ],
+      "role": "RESEARCH_TRADE_CONTEXT_ADVISOR"
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_CAPABILITY_MATRIX_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

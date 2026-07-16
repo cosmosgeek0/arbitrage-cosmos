@@ -1,18 +1,18 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "packet": "I00_PHASE2_CLOSURE",
-  "generatedAtUtc": "2026-07-14T11:33:45Z",
+  "generatedAtUtc": "2026-07-16T00:00:00Z",
   "proofScope": "PHASE2_SOURCE_CLOSURE",
   "truthLabel": "MIXED_SOURCE_PROVED_AND_PENDING_MEASUREMENT",
   "targetState": "CANDIDATE_SOURCE_FROZEN",
   "productVerdict": "PENDING_MEASUREMENT",
   "candidateState": "NOT_CANDIDATE_READY",
   "base": {
-    "branch": "i00-product-assembly-20260713",
-    "head": "6b50cca34a5615e828e9606cd7201daf81272ec7",
-    "tree": "731dec2404bab0d27a804c634cda1518a6dcef5d",
+    "branch": "truth-campaign-20260716",
+    "head": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
+    "tree": "d1dd03ce4782b8446d4268cbd0103992be422e11",
     "donorEquality": "16/16/16/16",
-    "candidateCommit": "74eb452efab89ca92ec9ff5cb192b723b5f198f3"
+    "candidateCommit": null
   },
   "historicalPacket": {
     "packet": "IP-PROOF",
@@ -211,37 +211,37 @@
     },
     {
       "path": "QL_DIRECTOR_STATE.md",
-      "sha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
-      "anchoredSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
-      "observedSha256": "dabdd37a0f2b0e34568ae4e4874ac0f0ad5fcbad24dd290ba6772856c3e1d3dd",
+      "sha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+      "anchoredSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+      "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
       "evidenceMode": "COMMITTED_FILE",
-      "passed": false,
+      "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
-      "finalRepinPassed": false,
+      "finalRepinPassed": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
-      "acceptedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+      "acceptedSourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedLatestCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedGitBlob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+      "acceptedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
-      "sha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
-      "anchoredSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+      "sha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+      "anchoredSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "evidenceMode": "COMMITTED_FILE",
-      "passed": false,
+      "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
       "historicalPacketPassed": false,
       "historicalPacketPinPreserved": true,
-      "finalRepinPassed": false,
+      "finalRepinPassed": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
-      "acceptedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
-      "acceptedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+      "acceptedSourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedLatestCommit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b",
+      "acceptedGitBlob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+      "acceptedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0"
     },
     {
       "path": "quant/DIRECTIVE_INPUTS.lock",
@@ -353,7 +353,7 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "dabdd37a0f2b0e34568ae4e4874ac0f0ad5fcbad24dd290ba6772856c3e1d3dd",
+      "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -431,14 +431,15 @@
     }
   ],
   "livingDirectorInputAcceptance": {
-    "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
+    "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2",
     "ruling": "D-LAUNCH-7",
     "mode": "LATEST_CURRENT_MAIN_TOUCH",
     "sourceRef": "current-main",
-    "sourceCutoffCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-    "sourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-    "cutoffExists": true,
-    "cutoffReachable": true,
+    "sourceCutoffCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+    "sourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+    "sourceCutoffTree": "3d2b8889e2aaf4a590993467a5bb3ecdf13c119b",
+    "sourceRefDisposition": "HISTORICAL_MOVING_REF_NOT_DEREFERENCED; AUTHORIZED_BYTES_VERIFIED_FROM_CANDIDATE",
+    "ambientCutoffProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
     "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
     "structuralChecks": {
       "schemaVersion": true,
@@ -446,7 +447,10 @@
       "mode": true,
       "sourceRef": true,
       "sourceCutoffCommit": true,
+      "sourceCutoffTree": true,
       "rulingCommit": true,
+      "candidateFreezeAuthorization": true,
+      "historicalDLaunch7Acceptance": true,
       "historicalPacketPinsPreserved": true,
       "finalRealAdapterRepinRequired": true,
       "finalRealAdapterRepinCompleted": true,
@@ -460,24 +464,26 @@
       {
         "path": "QL_DIRECTOR_STATE.md",
         "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-        "latestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-        "observedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
-        "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+        "latestCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+        "observedGitBlob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+        "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+        "authorizedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
         "safePath": true,
         "historicalPinValid": true,
-        "latestCommitReachable": true,
+        "latestCommitReachable": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "observationMatches": true,
         "passed": true
       },
       {
         "path": "QL_PARALLEL_DAG.md",
         "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-        "latestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
-        "observedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
-        "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+        "latestCommit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b",
+        "observedGitBlob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+        "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+        "authorizedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
         "safePath": true,
         "historicalPinValid": true,
-        "latestCommitReachable": true,
+        "latestCommitReachable": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "observationMatches": true,
         "passed": true
       }
@@ -534,8 +540,7 @@
         "passed": true
       }
     ],
-    "passed": true,
-    "liveSourceTipDisposition": "MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED"
+    "passed": true
   },
   "authority": {
     "authorityConcepts": 13,
@@ -13087,7 +13092,7 @@
   ],
   "receiptProvenance": {
     "schemaVersion": 1,
-    "verificationBase": "6b50cca34a5615e828e9606cd7201daf81272ec7",
+    "verificationBase": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
     "items": [
       {
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
@@ -13280,215 +13285,217 @@
       }
     ]
   },
-  "receiptProvenanceVerification": {
-    "verificationBase": "6b50cca34a5615e828e9606cd7201daf81272ec7",
-    "baseExists": true,
+  "receiptProvenanceSeal": {
+    "schemaVersion": 1,
+    "mode": "TRACKED_RECEIPT_BYTES_ONLY",
+    "verificationBase": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
+    "ambientGitObjectProof": "NOT_SEALED; SEPARATE_TRI_STATE_DIAGNOSTIC",
     "results": [
       {
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "c4ae7a9aee51050da2076bf4a454988b1d372bc4",
         "claimType": "NAMED_ADAPTED_PROVENANCE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "963538d3cc9da74b51b70347a70a017b6eab2910",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537",
         "claimType": "NAMED_ACCEPTED_INTEGRATION_BASE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "a0c0c2e5ef3180aa720488463643433cefeb65e5",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "f03ed786a8c5cab50ef27ad33026a74f79f7df87",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "692501587617d4880303fbd747d93e63c376f088",
         "claimType": "RECEIPTED_BYTE_EQUIVALENCE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": false,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "8058ab8febb639839333d4e2c604068a0c7390ea",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "08a0a09780727e2b4ba59017b5701998abe29b77",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "d35674e7f9621320c35e0bc0270efd515cc64dbd",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       }
     ],
@@ -14048,5 +14055,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "4dd378613bcd0909e207af5ab4bbd8290c96386c9bc82ded37424a7db707ee8f"
+  "evidenceSha256": "d1d3926b7e160c060590ecdde67fbb909d430c6413469360dd5a761b107c92f9"
 }

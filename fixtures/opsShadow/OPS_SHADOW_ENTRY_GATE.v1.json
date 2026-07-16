@@ -1,0 +1,459 @@
+{
+  "schema": "PORT_OPS_ENTRY_GATE_V1",
+  "packet": "RUN-16-PORT",
+  "task": "PORT-OPS",
+  "phase": "POST_LANDING_PRESTAGE",
+  "targetTerminalState": "PORT_OPS_PRESTAGE_READY",
+  "laneAcceptanceTarget": "PASS",
+  "prestageOnly": true,
+  "integratedAcceptedClaimed": false,
+  "authorityGranted": false,
+  "deploymentPerformed": false,
+  "networkMutationPerformed": false,
+  "credentialMutationPerformed": false,
+  "moneyMutationPerformed": false,
+  "authorityEffect": "NONE",
+  "launchAuthority": {
+    "decision": "D-LAUNCH-51",
+    "decisionCommit": "e619ff18ef159c27061cfaf318036e18a4fac131",
+    "landedBaseDecision": "D-LAUNCH-50",
+    "landedBase": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "portBase": {
+    "branch": "port-ops-20260716",
+    "sha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+    "opsLiveTree": "d016e6ffb2b805cf52d31728c8635221db56c2f6",
+    "opsTestsTree": "10f102b212dd0a31249723c2d87aaa4aaca1e057",
+    "opsI00Tree": "ddba7c3a4f59c60af5e0f2cae11de2451bf516d9"
+  },
+  "sourceShadow": {
+    "status": "SHADOW_SPECULATIVE",
+    "acceptanceTransferred": false,
+    "baseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+    "implementationCommit": "d5f2fc86acc7367902009cfe01c7bf9a50ecb1f1",
+    "implementationTree": "b104dbddb9ad80a415e085c38b6939c8b83f93ac",
+    "sealCommit": "cdf64b678539a7d63cb406d70b0ca491d40d1a05",
+    "sealTree": "72f370735ff46b83dfa7add38aa55f249a4f20cb",
+    "filteredPatchSha256": "74f611787ff24c934116864ea466b5331c7ba0779df09b8583d5c1ccd2a4b2c3",
+    "receiptPath": "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+    "receiptBlob": "b1ddb6dab6ce267271c2e60a8f77a76897f9f5bf",
+    "receiptSha256": "b717f2a04455367a73aaa2a0fb0fcb2af64ba0266ae52d5b2796c2c9b00f4d85",
+    "receiptUse": "HISTORICAL_PROVENANCE_ONLY"
+  },
+  "operationalOwner": {
+    "immutableDonor": {
+      "acceptedCommit": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
+      "implementationCommit": "9a82d4715c73ebe4156638c2bf5e8a2c02373bbf",
+      "acceptedCommitTree": "e401435d6a650aee8a29c3da4495b4db426be017",
+      "implementationTree": "f6715c9a7b1e26121e3f1a9051bdd5290f9bfb07",
+      "acceptedOpsLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
+      "acceptedOpsTestsTree": "f3348a74ef22d9ca2faee431ea8cc5df63f552af",
+      "acceptedReceiptBlob": "7fc3520d4fede577937c6dd48c191b1e5d212061"
+    },
+    "authorizedAmendments": {
+      "contractPath": "ops/i00/l15-amendment-contract.json",
+      "contractGitBlob": "8ca3277a5cc69d1976e33a5cd2110c638db9f467",
+      "contractSha256": "05e5c817ab638c78b726a18708620dfb850e315779c73a5964db2ecb2f03a4d7",
+      "findingIds": [
+        "R3-D-WATCHDOG-007",
+        "R3-D-BACKUP-008"
+      ],
+      "effectiveOpsLiveTree": "d016e6ffb2b805cf52d31728c8635221db56c2f6",
+      "effectiveRootDigestSha256": "94f7dffc6583b471e8d193f8ec95c3f5dc12a2a0081b8e10a342e9ac5c26e524"
+    },
+    "posture": "IMMUTABLE_DONOR_PLUS_ORDERED_AUTHORIZED_CORRECTIONS",
+    "canonicalVerifier": "ops/i00/bin/verify-donor.mjs"
+  },
+  "classificationVocabulary": [
+    "ADOPT_EXISTING",
+    "ADAPT_EXISTING",
+    "MISSING_BUILD",
+    "REFERENCE_ONLY",
+    "REJECT_DUPLICATE"
+  ],
+  "exclusivePathRoots": [
+    "fixtures/opsShadow",
+    "test/opsShadow"
+  ],
+  "researchBasis": [
+    {
+      "topic": "systemd service credentials and offline unit verification",
+      "reviewedAt": "2026-07-16",
+      "sources": [
+        "https://systemd.io/CREDENTIALS/",
+        "https://www.freedesktop.org/software/systemd/man/latest/systemd-analyze.html"
+      ],
+      "appliedBoundary": "Retain file-backed service credentials, reject sensitive inline environment values, and defer native systemd-analyze execution to an isolated Linux owner."
+    },
+    {
+      "topic": "Cloudflare locally managed tunnel ingress validation",
+      "reviewedAt": "2026-07-16",
+      "sources": [
+        "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/",
+        "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/"
+      ],
+      "appliedBoundary": "Require numeric-loopback origin, terminal catch-all 404, and future native ingress validate/rule evidence without any tunnel or DNS mutation."
+    },
+    {
+      "topic": "AWS Secrets Manager least-privilege retrieval and CLI risk",
+      "reviewedAt": "2026-07-16",
+      "sources": [
+        "https://docs.aws.amazon.com/secretsmanager/latest/userguide/best-practices.html",
+        "https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html"
+      ],
+      "appliedBoundary": "Retain one exact-resource GetSecretValue owner, require AWSCURRENT, refuse static or ambient credentials, and exercise only the injected fake CLI provider."
+    },
+    {
+      "topic": "SQLite consistent online backup and corruption boundaries",
+      "reviewedAt": "2026-07-16",
+      "sources": [
+        "https://www.sqlite.org/backup.html",
+        "https://www.sqlite.org/howtocorrupt.html"
+      ],
+      "appliedBoundary": "Keep the online backup owner and current descriptor-bound restore proof; raw live-database copying stays forbidden."
+    },
+    {
+      "topic": "Node.js 22 native test runner and glob invocation",
+      "reviewedAt": "2026-07-16",
+      "sources": [
+        "https://nodejs.org/docs/latest-v22.x/api/test.html"
+      ],
+      "appliedBoundary": "Pass the quoted glob as a direct spawn argument and require real test counts, pass counts, failures, signals, and exit codes."
+    }
+  ],
+  "dedupEvidence": [
+    {
+      "id": "OPS-PORT-PLAN-DESTINATION",
+      "disposition": "REJECT_DUPLICATE",
+      "evidence": [
+        "/Users/cosmosgeek/Desktop/port-plan/portPlan/ops-port.sh",
+        "D-LAUNCH-51 CHAT 8"
+      ],
+      "ruling": "The planner's A5_PROPOSED relocation is stale. The source paths already match the ratified OPS roots, so no caseRuntime or providerAdapters relocation applies."
+    },
+    {
+      "id": "OPS-WATCHDOG-CORRECTION-OWNER",
+      "disposition": "ADAPT_EXISTING",
+      "evidence": [
+        "ops/i00/l15-amendment-contract.json",
+        "ops/live/bin/common.sh",
+        "ops/live/bin/watchdog.sh",
+        "ops/tests/i00/test-r3-d-watchdog-007.sh"
+      ],
+      "ruling": "Use the generation-fenced lock-family and external-watchdog owners; do not restore the shadow-era directory-presence check or create a second watchdog."
+    },
+    {
+      "id": "OPS-RESTORE-CORRECTION-OWNER",
+      "disposition": "ADAPT_EXISTING",
+      "evidence": [
+        "ops/i00/l15-amendment-contract.json",
+        "ops/live/bin/restore.sh",
+        "ops/live/bin/restore-drill.sh",
+        "ops/tests/i00/test-r3-d-backup-008.sh"
+      ],
+      "ruling": "Use the descriptor-held snapshot, bounded archive, content-proof, reversible per-object publication owner; do not recreate restore logic in fixtures."
+    },
+    {
+      "id": "OPS-SHARED-TRUTH-OWNERS",
+      "disposition": "REFERENCE_ONLY",
+      "evidence": [
+        "server/src/productAssurance/projections/operationalTruth.ts",
+        "server/src/productIntegration/runtime/managedInventory.ts",
+        "server/src/systemIntegration/ops/readback.ts",
+        "server/src/systemIntegration/ops/restartTruth.ts"
+      ],
+      "ruling": "Existing evaluator, inventory, supervisor, and restart-readback owners remain canonical. Unresolved mounting work is represented only by typed AIOPS registry rows."
+    },
+    {
+      "id": "OPS-STATE-DOCUMENT-RECONCILIATION",
+      "disposition": "REFERENCE_ONLY",
+      "evidence": [
+        "STATE.md",
+        "IP_OPS_STATE.md",
+        "AIOPS-IR-DOCS-017"
+      ],
+      "ruling": "The packet does not edit shared state docs. The integrator must reconcile the older IP_OPS_STATE blocker wording with the landed per-object restore truth and its remaining non-atomic-generation limitation."
+    }
+  ],
+  "rows": [
+    {
+      "id": "OPS-SYSTEMD-UNITS",
+      "proposedItem": "testable app, tunnel, watchdog, backup, and restore-drill systemd units and timers",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/systemd/cosmos-app.service",
+        "ops/live/systemd/cloudflared.service",
+        "ops/live/systemd/cosmos-watchdog.service",
+        "ops/live/systemd/cosmos-watchdog.timer",
+        "ops/live/systemd/cosmos-backup.service",
+        "ops/live/systemd/cosmos-backup.timer",
+        "ops/live/systemd/cosmos-restore-drill.service",
+        "ops/live/systemd/cosmos-restore-drill.timer",
+        "ops/live/systemd/journald-cosmos.conf.template"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/systemd/cosmos-app-i00.conf.template",
+        "ops/templates/i00/systemd/cosmos-secrets-provider.service.template"
+      ],
+      "provingTests": [
+        "ops/tests/test-systemd-units.sh",
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The accepted units and credential drop-ins remain canonical. Native Linux verification is a typed deployment request, not a copied service owner."
+    },
+    {
+      "id": "OPS-WATCHDOG",
+      "proposedItem": "generation-fenced external watchdog with bounded restart and loud lock-family failure truth",
+      "classification": "ADAPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/common.sh",
+        "ops/live/bin/watchdog.sh",
+        "ops/live/env/cosmos-watchdog.env.template",
+        "ops/i00/l15-amendment-contract.json"
+      ],
+      "adaptationPaths": [
+        "ops/tests/i00/test-r3-d-watchdog-007.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-watchdog.sh",
+        "ops/tests/i00/test-r3-d-watchdog-007.sh"
+      ],
+      "portBuildPaths": [
+        "test/opsShadow/owner-conformance.test.mjs"
+      ],
+      "rationale": "The landed WATCHDOG-007 correction supersedes the shadow literal check. The port harness adapts its observation only and never implements watchdog behavior."
+    },
+    {
+      "id": "OPS-BACKUP",
+      "proposedItem": "application-consistent SQLite and evidence backup with integrity, retention, and freshness proof",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/backup.sh",
+        "ops/live/env/cosmos-backup.env.template"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/backup-verify.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-backup-restore.sh",
+        "ops/tests/i00/test-backup-and-restore-adapters.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The online SQLite backup and atomic publication owner remains canonical; current I00 verification consumes it without a second store."
+    },
+    {
+      "id": "OPS-RESTORE-ISOLATED",
+      "proposedItem": "descriptor-held guarded restore and isolated restore drill with bounded archive proof",
+      "classification": "ADAPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/restore.sh",
+        "ops/live/bin/restore-drill.sh",
+        "ops/i00/l15-amendment-contract.json"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/restore-drill-verify.sh",
+        "ops/tests/i00/test-r3-d-backup-008.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-backup-restore.sh",
+        "ops/tests/test-restore-drill.sh",
+        "ops/tests/i00/test-r3-d-backup-008.sh"
+      ],
+      "portBuildPaths": [
+        "test/opsShadow/owner-conformance.test.mjs"
+      ],
+      "rationale": "The landed BACKUP-008 correction replaced shadow-era restore assumptions with stable snapshot and reversible per-object publication proofs."
+    },
+    {
+      "id": "OPS-RESTORE-PRODUCTION",
+      "proposedItem": "owner-gated exact-target rehearsal and any future atomic multi-path generation switch",
+      "classification": "REFERENCE_ONLY",
+      "ownerPaths": [
+        "ops/live/bin/restore.sh",
+        "STATE.md"
+      ],
+      "adaptationPaths": [
+        "ops/docs/i00/RELEASE_AND_RECOVERY_RUNBOOK.md"
+      ],
+      "provingTests": [
+        "ops/tests/i00/test-r3-d-backup-008.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The landed owner proves guarded per-object publication, not an atomic multi-path snapshot or ongoing target-integrity claim. Exact target rehearsal and any wider atomicity remain owner-gated shared work."
+    },
+    {
+      "id": "OPS-ROLLBACK",
+      "proposedItem": "schema-floor and exposure-gated atomic rollback",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/bin/rollback.sh",
+        "ops/live/bin/deploy.sh"
+      ],
+      "adaptationPaths": [
+        "ops/i00/bin/rollback-switch.sh",
+        "ops/i00/bin/release-switch.sh"
+      ],
+      "provingTests": [
+        "ops/tests/test-rollback.sh",
+        "ops/tests/test-deploy.sh",
+        "ops/tests/i00/test-static-safety.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The donor owner retains the rollback barrier, exposure gate, and atomic switch; the packet adds no mutation path."
+    },
+    {
+      "id": "OPS-CLOUDFLARE",
+      "proposedItem": "Cloudflare tunnel and Access templates with loopback origin and terminal refusal rule",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/cloudflare/cloudflared-config.yml.template",
+        "ops/live/cloudflare/access-app.json.template",
+        "ops/live/systemd/cloudflared.service"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/cloudflare/origin-access-overlay.yml.template",
+        "ops/i00/bin/verify-cloudflare-readback.mjs"
+      ],
+      "provingTests": [
+        "ops/tests/test-cloudflare-templates.sh",
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "Static templates remain canonical and fail closed. Native vendor validation and management-model choice stay typed owner requests."
+    },
+    {
+      "id": "OPS-SECRETS-IAM",
+      "proposedItem": "least-privilege Secrets Manager IAM template for one exact secret",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/aws/iam-secrets-policy.json.template"
+      ],
+      "adaptationPaths": [
+        "ops/templates/i00/aws/iam-secrets-exact-policy.json.template",
+        "ops/templates/i00/aws/iam-secrets-customer-kms-policy.json.template"
+      ],
+      "provingTests": [
+        "ops/tests/i00/test-templates-and-schemas.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The exact-resource policies remain existing owners; no credential or policy mutation occurs in this packet."
+    },
+    {
+      "id": "OPS-SECRETS-PROVIDER",
+      "proposedItem": "instance-role Secrets Manager provider and systemd credential delivery with fake validation",
+      "classification": "ADOPT_EXISTING",
+      "ownerPaths": [
+        "ops/i00/bin/secrets-provider.mjs",
+        "ops/templates/i00/aws/secrets-provider.json.template",
+        "ops/templates/i00/systemd/cosmos-secrets-provider.service.template",
+        "ops/templates/i00/systemd/cosmos-app-i00.conf.template"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [
+        "ops/tests/i00/test-secrets-provider.sh"
+      ],
+      "portBuildPaths": [],
+      "rationale": "The existing provider owns exact identity, ambient-credential refusal, fake CLI injection, restrictive materialization, and non-disclosure checks."
+    },
+    {
+      "id": "OPS-LOCAL-FAKE-HARNESSES",
+      "proposedItem": "local fake and loopback executable validation of operational templates",
+      "classification": "ADAPT_EXISTING",
+      "ownerPaths": [
+        "ops/tests/run-all.sh",
+        "ops/tests/i00/run-all.sh",
+        "server/test/private-egress-tripwire.mjs"
+      ],
+      "adaptationPaths": [
+        "test/opsShadow/run-focused.mjs"
+      ],
+      "provingTests": [
+        "ops/tests/run-all.sh",
+        "ops/tests/i00/run-all.sh"
+      ],
+      "portBuildPaths": [
+        "test/opsShadow/run-focused.mjs",
+        "test/opsShadow/network-boundary.test.mjs"
+      ],
+      "rationale": "Current aggregates include the landed hostile amendments. Packet and donor tests run under OS deny-all; supporting suites are constrained by an OS loopback-only profile plus exact curl argument allowlisting. macOS runs only the fixed /bin/ps identity inspection outside the inherited sandbox because that trusted setuid binary cannot execute inside sandbox-exec."
+    },
+    {
+      "id": "OPS-RUN16-CONFORMANCE",
+      "proposedItem": "ported donor, amendment, classification, scope, and fail-closed conformance harness",
+      "classification": "ADAPT_EXISTING",
+      "ownerPaths": [
+        "ops/live/RECEIPT.md",
+        "ops/i00/l15-amendment-contract.json",
+        "ops/i00/bin/verify-donor.mjs",
+        "server/test/private-egress-tripwire.mjs"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "portBuildPaths": [
+        "test/opsShadow/contract.mjs",
+        "test/opsShadow/entry-gate.test.mjs",
+        "test/opsShadow/network-boundary.test.mjs",
+        "test/opsShadow/owner-conformance.test.mjs",
+        "test/opsShadow/receipt-binding.test.mjs",
+        "test/opsShadow/run-focused.mjs",
+        "test/opsShadow/validate-receipt.mjs"
+      ],
+      "rationale": "The port harness consumes and tests existing owners; it owns no unit, provider, state, route, startup seam, deployment effect, or shared registry."
+    },
+    {
+      "id": "OPS-RUN16-METADATA",
+      "proposedItem": "real port entry gate, typed registry handoff, historical shadow provenance, and immutable prestage receipt",
+      "classification": "MISSING_BUILD",
+      "ownerPaths": [],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "portBuildPaths": [
+        "fixtures/opsShadow/OPS_SHADOW_ENTRY_GATE.v1.json",
+        "fixtures/opsShadow/OPS_SHADOW_INSERTION_REQUESTS.v1.json",
+        "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+        "fixtures/opsShadow/receipts/PORT_OPS_PRESTAGE_RECEIPT.v1.json"
+      ],
+      "rationale": "The landed base has no real PORT OPS packet metadata. The historical shadow receipt is preserved but cannot satisfy or transfer acceptance."
+    },
+    {
+      "id": "OPS-REAL-ACTIVATION",
+      "proposedItem": "real systemd, AWS, Cloudflare, DNS, tunnel, secret, host, deployment, or service mutation",
+      "classification": "REFERENCE_ONLY",
+      "ownerPaths": [
+        "STATE.md",
+        "ops/docs/i00/ACTIVATION_AND_BOUNDARY_RUNBOOK.md"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "portBuildPaths": [],
+      "rationale": "External activation and vendor readback are owner-gated and excluded from every prestage claim."
+    },
+    {
+      "id": "OPS-NEW-OPERATIONAL-OWNER",
+      "proposedItem": "new packet-owned systemd, watchdog, backup, restore, rollback, tunnel, IAM, secret-provider, evaluator, inventory, or supervisor implementation",
+      "classification": "REJECT_DUPLICATE",
+      "ownerPaths": [
+        "ops/live",
+        "ops/i00",
+        "ops/templates/i00",
+        "server/src/systemIntegration/ops",
+        "server/src/productAssurance/projections/operationalTruth.ts",
+        "server/src/productIntegration/runtime/managedInventory.ts"
+      ],
+      "adaptationPaths": [],
+      "provingTests": [],
+      "portBuildPaths": [],
+      "rationale": "Each concept already has one accepted owner or an explicit missing projection. Creating a fixture-owned duplicate would violate the canonical authority map."
+    }
+  ],
+  "limitations": [
+    "The current host is Darwin arm64 and has no systemd-analyze, cloudflared, AWS CLI, or cfn-guard binary; native vendor validation is not claimed.",
+    "Packet-local Node tests and the donor verifier run under sandbox deny-all. Supporting operational suites intentionally exercise numeric loopback under a kernel-enforced loopback-only profile plus exact curl argument allowlisting and the Node tripwire; only fixed /bin/ps identity inspection uses a documented sandbox inheritance exception.",
+    "The landed restore owner proves exact per-object publication and rollback, not an atomic multi-path snapshot or generation switch and not ongoing same-UID target integrity.",
+    "Cloudflare local-versus-remote management, exact Linux target, filesystem capabilities, safe SQLite version, capacity, paging delivery, and real vendor readback remain owner-gated.",
+    "No composition, routes, persistence, auth, navigation, package, deployment, canonical registry, shared state document, or owner implementation is edited by this lane.",
+    "The separate D-LAUNCH-51 CI hotfix and future AI-Ops serial integration are outside this branch; prestage does not claim root integration or activation.",
+    "The assigned base carries stale shared I00 frozen-input pins for QL_DIRECTOR_STATE.md and QL_PARALLEL_DAG.md. npm test is green, while npm run test:all retains the exact two-test shared-owner block; this lane makes no broader root-green claim and requests owner adjudication through AIOPS-IR-DOCS-017 and AIOPS-IR-TEST-MOUNT-026."
+  ]
+}

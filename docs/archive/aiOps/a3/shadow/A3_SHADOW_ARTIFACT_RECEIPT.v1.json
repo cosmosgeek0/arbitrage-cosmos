@@ -1,0 +1,257 @@
+{
+  "schema": "AI_OPS_A3_SHADOW_ARTIFACT_RECEIPT_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "terminalState": "SHADOW_ARTIFACT_READY",
+  "authorityGranted": false,
+  "prestageReadyClaimed": false,
+  "acceptanceClaimed": false,
+  "integratedAcceptedClaimed": false,
+  "providerActivation": "ZERO_REAL_PROVIDER_ACTIVATION",
+  "deploymentPerformed": false,
+  "mergePerformed": false,
+  "pushPerformed": false,
+  "baseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "implementationCommitSha": "a1eedf81afb7e8fa61b60fd58870bb1cc0f9664f",
+  "implementationTreeSha": "43fc857ed4a9cc0a9153c4901845ca4b48ee61e8",
+  "implementationBranch": "aiops-shadow-a3-20260715",
+  "receiptSealCommit": "ENCLOSING_COMMIT_NOT_SELF_REFERENTIAL",
+  "authorityBindings": {
+    "launchDecision": "D-LAUNCH-29",
+    "launchDecisionCommit": "d309f5c4fef75a71137f09211660c3134c47f5a4",
+    "activationDirectiveSha256": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+    "commandTxtSha256": "4d938de306fb7577d8ff143677e30fb21fc3192da16d554c3a578b59566fb590",
+    "ownerTimeOptimizationAmendmentSha256": "46549feced327d805c6057ecedffc8b65469c6537e5ce64b8c0a4f559eb1da30",
+    "authorityReceiptSha256": "51d9343f747c7f652bbcd53137b06dec2f760268a9799ea57fbe077eaef898f0"
+  },
+  "scope": {
+    "exclusivePathRoots": [
+      "server/src/aiOps/providerAdapters",
+      "fixtures/aiOps/providerAdapters",
+      "test/aiOps/providerAdapters"
+    ],
+    "implementationChangedPathCount": 21,
+    "implementationChangedPaths": [
+      {
+        "path": "fixtures/aiOps/providerAdapters/insertion-requests.v1.json",
+        "gitBlob": "6b10eb45dc9794cc526c1f82d487d668e9cf7df8",
+        "sha256": "c46fe869b6d467c320034dcfddd378f64d866b5bb95b439dc1b571015bae6b9c"
+      },
+      {
+        "path": "fixtures/aiOps/providerAdapters/shadow-configuration.v1.json",
+        "gitBlob": "282076287542a419f11333901fc0f092d71a2a01",
+        "sha256": "12ebd845a64851cb96ca87bfa55f6ee10522f72c01e74ae074f46bfa7367c4c3"
+      },
+      {
+        "path": "fixtures/aiOps/providerAdapters/syntheticPorts.mjs",
+        "gitBlob": "6345c9a2345a10f758bc3538ab82533cfca591c8",
+        "sha256": "b81e7566eb822972b077c449315ca916e0ea7a96c8b0d7a28d58a0d8079eae9a"
+      },
+      {
+        "path": "fixtures/aiOps/providerAdapters/unfinished-interface-dependences.v1.json",
+        "gitBlob": "751115ed4c227ab7e49bfb878769e67f67f58664",
+        "sha256": "273fc236f774be54b96d846ad0c3cf55aa5b14fa7a51537b34a22f99fce0b97e"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/callbacks.ts",
+        "gitBlob": "0db680cc05bfdeea654a933aed0564758156bf9c",
+        "sha256": "925acd669be4046f0a1aeffb8994a6f6b2de7a42fdaf39dc4eb26287463a8eb5"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/cliTemplates.ts",
+        "gitBlob": "2a421a6dd8fa6e23b77fb22cd44b78eba6232ecc",
+        "sha256": "e4c97ae690d5a5597bb79fa5429791615ae01ad9347c83494c2c58710850cf49"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/contracts.ts",
+        "gitBlob": "b08c3b34680be94208a00d2505fffb68674d066f",
+        "sha256": "8483f8519a487b4737cc353f772f60abddfb11615d31e901f0d0b7c9147b9b1c"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/credentialEgress.ts",
+        "gitBlob": "73130943243c74344eda2f8266f1b51bac35cc52",
+        "sha256": "56cf0143235077b6e5e3c8bbd6f71d92b9ca20aadcf94f362bac356cf8ae63ed"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/index.ts",
+        "gitBlob": "10ee3176b0d9a9bb179e20be3a9ccb1f6d5de1a8",
+        "sha256": "e02151ac9ba3fbaa5bfb52112ed73e66d9aac3e243612b6bb802c4ce1da5be8d"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/patchWorker.ts",
+        "gitBlob": "bf91e2b8cc491a56b2606eeafb1f759f9809eac0",
+        "sha256": "dfbf05400f706f1bd53894402fd443c4501a587598a194dbe9c5a618cdb3fd0f"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/providerGateway.ts",
+        "gitBlob": "2727e9e118757e8f5f0e13e26977b794246f57ec",
+        "sha256": "7c6114339446f3c5053bee7c221ac531909bccd41449020e64b4c14e531ba690"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/providerMatrix.ts",
+        "gitBlob": "f1ee7a1c98db7681d68329597e7e9770ee481910",
+        "sha256": "9475d9be07cf6cc93ce96bd6a9527886dfac36947f4f5d0fcbc128210c031204"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/strictSchema.ts",
+        "gitBlob": "86ba3a1ff7f51d5a131d568894c2c6c8da39e781",
+        "sha256": "b00b591e17ddaac1bf40fb21b62b3db16d30473c2c9e8576470c5fb9e5f6b22a"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/toolGateway.ts",
+        "gitBlob": "a277654b167ff7bf3593df4088ea3d0bfa7da2b3",
+        "sha256": "1bed1bab69e899301ecd3e29f3d094ea00a3e258fab0456751203d660be939b0"
+      },
+      {
+        "path": "server/src/aiOps/providerAdapters/toolHooks.ts",
+        "gitBlob": "28b22578233162d0a45ef5823a42489cf6f9ea0b",
+        "sha256": "6f32a9ab08e7fb69fe4adaea0ca7a328876a94c3c5e69b5889b6ac1221bd7e63"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/callbacks.test.mjs",
+        "gitBlob": "b1dbccdaa724a2dd7ded10a94a52e619f5216ce4",
+        "sha256": "e55d36484b6c2d76abf1cdbc28f17bba0b761477739744cd68c284c1f03083d0"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/fixturesPurity.test.mjs",
+        "gitBlob": "9ef1a39ba157c0de37cfde0943e9c3f8345aca01",
+        "sha256": "36c4264e8d854c523717728ae9c78e3887679d18d74265295db93532b2f749f8"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/networkDeny.mjs",
+        "gitBlob": "4f50e7172dea836c2d0c87f8b194dea75b40348f",
+        "sha256": "eca8122154532f4395c9819d120fb954323ac8dab902d75f1b72d44af440d586"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/patchWorker.test.mjs",
+        "gitBlob": "1450a66d17817016cca34bf9b030f3e18a48095e",
+        "sha256": "b9dbab7ffd2a6ac5ed4a8381df04c00cf321b7268e397ad39b3af0df511a5fb8"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/providerCliMatrix.test.mjs",
+        "gitBlob": "44acaf95b774bff301ae96546fde333b1c3d66e2",
+        "sha256": "290cf8bc18d88ed87be5efd3445177a5c58b98cb7710f920e8cfe72badc2e483"
+      },
+      {
+        "path": "test/aiOps/providerAdapters/toolEgress.test.mjs",
+        "gitBlob": "81f167ae25d143dffd053d5a40a86d2d2482fada",
+        "sha256": "b44f2f656bb4d289913dd9855ec20bbf8bd2adb35d9cfc95d9039754371d285b"
+      }
+    ]
+  },
+  "tests": [
+    {
+      "command": "npm run typecheck -w server",
+      "outcome": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run build -w server",
+      "outcome": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/aiOps/providerAdapters/*.test.mjs",
+      "outcome": "PASS_TOTAL_NETWORK_DENY",
+      "exitCode": 0,
+      "tests": 51,
+      "suites": 10,
+      "passed": 51,
+      "failed": 0
+    },
+    {
+      "command": "codex --ask-for-approval never exec --help",
+      "outcome": "PASS_LOCAL_PARSE_ONLY",
+      "exitCode": 0,
+      "localVersion": "codex-cli 0.144.2"
+    },
+    {
+      "command": "command -v claude",
+      "outcome": "NOT_RUN_LOCAL_BINARY_ABSENT",
+      "exitCode": 1,
+      "basis": "Current official Claude Code non-interactive, permissions and hook documentation was reviewed before implementation. No login, token or provider activation was attempted."
+    },
+    {
+      "command": "npm test",
+      "outcome": "EXPECTED_SHARED_INTEGRATION_BLOCK",
+      "exitCode": 1,
+      "failingGate": "LIVE_OPERATION_POLICY",
+      "failureFile": "test/i00/product-assurance-live-operation.test.mjs",
+      "unchangedCanonicalManifest": "fixtures/i00/product-assurance-manifest.v1.json",
+      "expectedFilesScanned": 515,
+      "observedFilesScanned": 526,
+      "expectedDiscovered": 207,
+      "observedDiscovered": 207,
+      "expectedCovered": 207,
+      "observedCovered": 207,
+      "observedUncovered": 0,
+      "disposition": "A3 adds eleven scanned production source files. Canonical manifest edits are forbidden in this shadow worktree; AIOPS-IR-TEST-MOUNT-026 requests the post-acceptance denominator update."
+    },
+    {
+      "command": "npm run test:all",
+      "outcome": "EXPECTED_SHARED_INTEGRATION_BLOCK",
+      "exitCode": 1,
+      "failingGate": "LIVE_OPERATION_POLICY",
+      "failureFile": "test/i00/product-assurance-live-operation.test.mjs",
+      "observedUncovered": 0,
+      "disposition": "Stopped at the same canonical scanned-file denominator mismatch before later test:all groups; no broader green claim is made."
+    },
+    {
+      "command": "git diff --check and git diff --cached --check",
+      "outcome": "PASS",
+      "exitCode": 0
+    }
+  ],
+  "assumptions": [
+    "The accepted I00 composition, policy-verification, workload-identity, credential-broker, egress-proxy, durable-ledger and runner interfaces do not yet exist in this worktree.",
+    "All provider, model, prompt, tool, control, policy, evidence-bundle, resource, budget and approval bindings remain external signed-owner inputs; A3 creates no canonical authority.",
+    "Codex CLI and Claude Code CLI rows are declarative NOT_CONFIGURED templates only. Subscription authentication remains outside the website, application, repository and model context.",
+    "Only obviously synthetic invalid credential references and reserved test domains are valid in fixtures. No real provider endpoint, credential or login was used.",
+    "The Class-C patch worker produces a bounded declarative plan for an owner-created disposable clone only; its runner is NOT_CONFIGURED and Main, current-main and i00-assembly remain protected.",
+    "STATE.md is intentionally unchanged because this artifact is SHADOW_SPECULATIVE, changes no canonical project state, and the exclusive-path directive forbids root-document edits.",
+    "At INTEGRATED_ACCEPTED this diff must be ported into a fresh worktree from the accepted SHA, reconciled against accepted interfaces and subjected to the entire lane acceptance loop before any real receipt."
+  ],
+  "insertionRequestIds": [
+    "AIOPS-IR-COMPOSITION-001",
+    "AIOPS-IR-ROUTES-002",
+    "AIOPS-IR-PERSISTENCE-003",
+    "AIOPS-IR-AUTH-004",
+    "AIOPS-IR-PACKAGE-006",
+    "AIOPS-IR-DEPLOYMENT-007",
+    "AIOPS-IR-REMEDIATION-010",
+    "AIOPS-IR-TELEMETRY-012",
+    "AIOPS-IR-EGRESS-016",
+    "AIOPS-IR-SENTINEL-020",
+    "AIOPS-IR-AUDIT-021",
+    "AIOPS-IR-MANAGED-INVENTORY-022",
+    "AIOPS-IR-APPROVAL-023",
+    "AIOPS-IR-CONFIG-025",
+    "AIOPS-IR-TEST-MOUNT-026"
+  ],
+  "unfinishedInterfaceDependences": [
+    "A1-CANONICAL-CONTRACTS",
+    "A2-CASE-WORKFLOW-EVIDENCE",
+    "LEDGER-ATOMIC-DEDUP-AUDIT",
+    "RAW-WEBHOOK-ROUTE-AUTH",
+    "WORKLOAD-IDENTITY-SANDBOX",
+    "CREDENTIAL-BROKER-EGRESS-PROXY",
+    "CONTROL-APPROVAL-AUTHORITY",
+    "STATE-DIALECT-ADAPTER",
+    "INDEPENDENT-SENTINEL-AUDIT",
+    "CANONICAL-POLICY-VERIFIER",
+    "CALLBACK-VALIDATION-AUDIT",
+    "PROVIDER-ROUTE-QUALIFICATION",
+    "SIGNED-CONTEXT-PROMPT-MANIFEST",
+    "ISOLATED-WORKTREE-RUNNER"
+  ],
+  "prohibitionsVerified": [
+    "NO_MONEY_PATHS",
+    "NO_REAL_PROVIDER_AUTHENTICATION",
+    "NO_REAL_PROVIDER_ACTIVATION",
+    "NO_CONSUMER_AUTH_IN_WEBSITE_APP_OR_REPOSITORY",
+    "NO_NETWORK_IN_FOCUSED_TESTS",
+    "NO_SHARED_COMPOSITION_ROUTE_NAVIGATION_PERSISTENCE_AUTH_PACKAGE_DEPLOYMENT_OR_CANONICAL_REGISTRY_EDIT",
+    "NO_MAIN_CURRENT_MAIN_I00_ASSEMBLY_WRITE",
+    "NO_MERGE_PUSH_OR_DEPLOYMENT"
+  ],
+  "portingLaw": "SHADOW LAW D-LAUNCH-29 with owner time-optimization amendment: this output remains SHADOW_SPECULATIVE and gains no PRESTAGE_READY or acceptance status. At INTEGRATED_ACCEPTED the diff is ported into a fresh accepted-SHA worktree, checked against accepted interfaces and the complete lane acceptance loop reruns before any real acceptance receipt."
+}

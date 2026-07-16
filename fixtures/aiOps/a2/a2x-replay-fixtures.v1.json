@@ -1,0 +1,223 @@
+{
+  "schema": "AI_OPS_A2X_REPLAY_FIXTURES_V1",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "syntheticOnly": true,
+  "operationalAuthority": "NONE",
+  "payloadDigest": "7cf647af840f949b730470e24859a110da56dc5df097e2fb45bbf38f76bacf9f",
+  "intake": {
+    "observedAtMs": 1700000000100,
+    "primaryEvent": {
+      "specversion": "1.0",
+      "id": "synthetic-event-0001",
+      "source": "https://synthetic.invalid/otel/collector-a",
+      "type": "com.cosmos.synthetic.runtime.degraded",
+      "subject": "resource:synthetic-runner-a",
+      "time": "2023-11-14T22:13:20.000Z",
+      "datacontenttype": "application/json",
+      "dataschema": "urn:cosmos:aiops:a2:event-data:v1",
+      "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      "data": {
+        "producerRevision": "otel-collector-v1",
+        "sequence": 41,
+        "resourceId": "synthetic-runner-a",
+        "componentId": "synthetic-runtime",
+        "incidentId": null,
+        "replayClassification": "LIVE",
+        "dataClassification": "INTERNAL",
+        "message": "Synthetic worker heartbeat delayed by 1200 ms",
+        "reasonCodes": [
+          "SYNTHETIC_HEARTBEAT_DELAYED"
+        ],
+        "attributes": {
+          "environment": "synthetic",
+          "queue_depth": 7
+        }
+      }
+    },
+    "secondProviderEvent": {
+      "specversion": "1.0",
+      "id": "synthetic-event-0001",
+      "source": "urn:synthetic:issue-tracker:app-a",
+      "type": "com.cosmos.synthetic.issue.opened",
+      "subject": "resource:synthetic-runner-a",
+      "time": "2023-11-14T22:13:20.050Z",
+      "datacontenttype": "application/json",
+      "dataschema": "urn:cosmos:aiops:a2:event-data:v1",
+      "traceparent": null,
+      "data": {
+        "producerRevision": "issue-adapter-v2",
+        "sequence": 9,
+        "resourceId": "synthetic-runner-a",
+        "componentId": "synthetic-runtime",
+        "incidentId": null,
+        "replayClassification": "REPLAY",
+        "dataClassification": "INTERNAL",
+        "message": "Synthetic operator issue reports delayed heartbeat",
+        "reasonCodes": [
+          "SYNTHETIC_OPERATOR_REPORT"
+        ],
+        "attributes": {
+          "environment": "synthetic",
+          "issue_kind": "runtime-observation"
+        }
+      }
+    },
+    "missingSequenceEvent": {
+      "specversion": "1.0",
+      "id": "synthetic-event-no-sequence",
+      "source": "urn:synthetic:legacy-monitor:a",
+      "type": "com.cosmos.synthetic.runtime.unknown",
+      "subject": "resource:synthetic-runner-b",
+      "time": null,
+      "datacontenttype": "application/json",
+      "dataschema": "urn:cosmos:aiops:a2:event-data:v1",
+      "traceparent": null,
+      "data": {
+        "producerRevision": "legacy-monitor-v1",
+        "sequence": null,
+        "resourceId": "synthetic-runner-b",
+        "componentId": "synthetic-runtime",
+        "incidentId": null,
+        "replayClassification": "REPLAY",
+        "dataClassification": "INTERNAL",
+        "message": "Synthetic legacy monitor omitted its source sequence",
+        "reasonCodes": [
+          "SOURCE_SEQUENCE_UNAVAILABLE"
+        ],
+        "attributes": {
+          "environment": "synthetic"
+        }
+      }
+    }
+  },
+  "usage": {
+    "measured": {
+      "schema": "AI_OPS_A2_PROVIDER_USAGE_MEASUREMENT_V1",
+      "usageId": "synthetic-usage-a2x-1",
+      "caseId": "synthetic-case-a2x-1",
+      "providerId": "synthetic-provider-a2x",
+      "modelId": "synthetic-model-a2x",
+      "occurredAtMs": 1700000000200,
+      "calls": 1,
+      "toolCalls": 0,
+      "webQueries": 0,
+      "inputTokens": 100,
+      "outputTokens": 40,
+      "cachedInputTokens": 20,
+      "cacheWriteInputTokens": 10,
+      "reasoningOutputTokens": 12,
+      "costMicrounits": 2500,
+      "costAuthority": "OWNER_PRICE_TABLE",
+      "pricingRevision": "synthetic-pricing-a2x-v1",
+      "latencyMs": 900,
+      "wallTimeMs": 1000,
+      "sourceDigest": "12e04156779a9ee5b489fa07da2fb1f779c3d59c21aa1cb5a6da0ba22303d7d0",
+      "sourceSignature": {
+        "posture": "SYNTHETIC_ONLY",
+        "algorithm": "SYNTHETIC_SHA256_ATTESTATION",
+        "keyId": "synthetic-a2-key-v1",
+        "signature": "d4fdc43912488cf91350be7a849f75005171c4787dddf7d509d69e5cdf647dc2"
+      }
+    },
+    "unknownCost": {
+      "schema": "AI_OPS_A2_PROVIDER_USAGE_MEASUREMENT_V1",
+      "usageId": "synthetic-usage-a2x-unknown-cost",
+      "caseId": "synthetic-case-a2x-1",
+      "providerId": "synthetic-provider-a2x",
+      "modelId": "synthetic-model-a2x",
+      "occurredAtMs": 1700000000300,
+      "calls": 1,
+      "toolCalls": 0,
+      "webQueries": 0,
+      "inputTokens": 50,
+      "outputTokens": 10,
+      "cachedInputTokens": 0,
+      "cacheWriteInputTokens": 0,
+      "reasoningOutputTokens": 0,
+      "costMicrounits": null,
+      "costAuthority": "UNAVAILABLE",
+      "pricingRevision": null,
+      "latencyMs": 400,
+      "wallTimeMs": 500,
+      "sourceDigest": "560db1e8a1c454f3dee770ff23c7d1667e39104820258010a495e6d29dc5b78f",
+      "sourceSignature": {
+        "posture": "SYNTHETIC_ONLY",
+        "algorithm": "SYNTHETIC_SHA256_ATTESTATION",
+        "keyId": "synthetic-a2-key-v1",
+        "signature": "24f3f37f25faca030b965196b8dd47ef2910733420cf2a6c49436763f61e0395"
+      }
+    },
+    "rateSnapshot": {
+      "schema": "AI_OPS_A2_PROVIDER_RATE_SNAPSHOT_V1",
+      "providerId": "synthetic-provider-a2x",
+      "modelId": "synthetic-model-a2x",
+      "policyRevision": "synthetic-rate-policy-a2x-v1",
+      "observedAtMs": 1700000000000,
+      "expiresAtMs": 1700000060000,
+      "cooldownUntilMs": null,
+      "concurrency": {
+        "active": 1,
+        "maximum": 3
+      },
+      "dimensions": {
+        "requests": {
+          "limit": 100,
+          "remaining": 5,
+          "resetAtMs": 1700000060000
+        },
+        "inputTokens": {
+          "limit": 10000,
+          "remaining": 500,
+          "resetAtMs": 1700000060000
+        },
+        "outputTokens": {
+          "limit": 5000,
+          "remaining": 300,
+          "resetAtMs": 1700000060000
+        },
+        "totalTokens": {
+          "limit": 15000,
+          "remaining": 800,
+          "resetAtMs": 1700000060000
+        }
+      },
+      "authority": "OWNER_PROJECTION",
+      "atomicReservation": false,
+      "ownerFactDigest": "99b9476246db1d1b417bb40bf1721a9839983bc941624063400d5b60d59de2b8",
+      "ownerFactSignature": {
+        "posture": "SYNTHETIC_ONLY",
+        "algorithm": "SYNTHETIC_SHA256_ATTESTATION",
+        "keyId": "synthetic-a2-key-v1",
+        "signature": "d830773a1668ac96882c51ed3e8bf68dc4e306925937fba906fb3818323b1137"
+      }
+    },
+    "rateRequest": {
+      "requests": 1,
+      "inputTokens": 100,
+      "outputTokens": 50,
+      "totalTokens": 150,
+      "concurrencySlots": 1
+    }
+  },
+  "session": {
+    "sessionId": "synthetic-session-a2x-1",
+    "consumerId": "synthetic-consumer-a2x-1",
+    "conflictingConsumerId": "synthetic-consumer-a2x-2",
+    "audience": "synthetic-a2x-runtime",
+    "nextOwner": "synthetic-owner-a2x",
+    "caseId": "synthetic-case-a2x-1",
+    "caseRevision": 7,
+    "generation": 2,
+    "issuedAtMs": 1700000400010,
+    "consumedAtMs": 1700000400020,
+    "expiresAtMs": 1700000401000,
+    "manifestIssuedAtMs": 1700000400000,
+    "manifestExpiresAtMs": 1700000460000,
+    "deadlineAtMs": 1700000450000,
+    "policyRevision": "synthetic-context-policy-a2x-v1",
+    "acceptedAuthoritySha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+    "leaseId": "synthetic-lease-a2x-1",
+    "fenceToken": 11,
+    "stopCondition": "SHADOW_ARTIFACT_READY"
+  }
+}

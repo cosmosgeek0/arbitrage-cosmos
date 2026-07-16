@@ -1,23 +1,17 @@
-# Clean Clone Gate — D-LAUNCH-62
+# Clean Clone Gate — TruthA Pass 0
 
-Status: `PENDING_EXACT_C2`
+Status: `BLOCKED`
 
-Actor: `ACCOUNT_A_BUILDER`; independent acceptance authority: `false`.
+Candidate: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
-## Sustained old-C defect
+Actor: `ACCOUNT_A_CANDIDATE_WRITER`; independent acceptance authority: `false`.
 
-The durable clean-clone receipt for old C records `npm ci` exit `0`, `npm test` exit `0`, and `npm run test:all` exit `1` (`5889/5894`; I00 proof `42/47`). That result rejects old C for handoff.
+The live-remote clone used `--no-hardlinks --single-branch --branch truth-campaign-20260716`, then ran the literal command `git checkout --detach dea2d2a5c2b5e83d3aea75b0e368f0a478596561`. It had one local branch, one remote-tracking branch, no `current-main`, no alternates, zero hardlinked object files, and exact detached C2.
 
-## Implemented C2 correction
+- `npm ci`: exit `0`; output SHA-256 `25bb96b9420d86c25ca0550e62dcd3bf1c4357412875370b5870495c9212aef8`.
+- `npm test`: exit `0`; test-summary count `413`; output SHA-256 `301c769da1f06e700c1f21f1ee56e327a5ca198cd504bbcc1d33a288a9a1ff1c`.
+- `npm run test:all`: exit `1`; test-summary count before failure `1048`; output SHA-256 `08ea52f3afd000d8ca7baa6bcff14f4397a4fa56e829cbf112746cbd30832d4f`.
 
-- Sealed machine evidence contains tracked-byte proof only.
-- Moving refs and optional external Git objects are not written into sealed bytes; ambient provenance is a separate `VERIFIED`/`FAILED`/`UNKNOWN` diagnostic.
-- Report parity compares all six generated artifacts as exact bytes and creates no synthetic `current-main` ref.
-- Product Assurance Git subprocesses use the bounded shared Git-evidence runner.
-- Root `npm test` now mounts `test:i00:proof:built`, so the I00 security scanner cannot remain red behind a green root gate.
+First causal error: `DONOR_EQUALITY_BLOCKED:COLLECTION_FAILED:GIT_COMMAND_FAILED:cat-file:128`. The single-branch clone does not contain dashboard donor object `692501587617d4880303fbd747d93e63c376f088`; `git cat-file -t` exits `128`.
 
-Focused source proof after the correction: I00 proof `47/47`; acceptance contract `44/44`, including a sole-branch refs-absent exact-byte parity regression.
-
-## Remaining exact-C2 gate
-
-After the final source commit is frozen as C2, create a fresh `--no-hardlinks --single-branch --branch truth-campaign-20260716` clone from a local one-branch transport, detach exact C2, and run `npm ci`, `npm test`, and `npm run test:all`. Record real exits/counts and final clean status. Account A records builder evidence only and does not self-issue the independent `CLEAN_CLONE_ACCEPTED` token.
+This is builder-side blocked evidence. No independent `CLEAN_CLONE_ACCEPTED` or later token is issued.

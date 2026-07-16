@@ -12,7 +12,12 @@ const FULL_SHA = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const candidateArg = process.argv.indexOf('--candidate');
 const candidate = candidateArg >= 0 ? process.argv[candidateArg + 1] : null;
+const bundleArg = process.argv.indexOf('--bundle');
+const backupBundle = bundleArg >= 0 ? process.argv[bundleArg + 1] : null;
 if (candidateArg >= 0 && !FULL_SHA.test(candidate ?? '')) throw new Error('CANDIDATE_SHA_REQUIRED');
+if (candidate !== null && (backupBundle === null || !existsSync(backupBundle))) {
+  throw new Error('EXISTING_BACKUP_BUNDLE_REQUIRED_FOR_EXACT_C2_EVIDENCE');
+}
 const candidateToken = candidate ?? UNBOUND;
 
 function run(command, args, { allowFailure = false, encoding = 'utf8' } = {}) {
@@ -48,6 +53,181 @@ function assertExpected(label, actual, expected) {
 if (candidate !== null) {
   run('git', ['cat-file', '-e', `${candidate}^{commit}`]);
 }
+
+function exactRefHead(output, expectedRef, label) {
+  const rows = output.trim().split(/\r?\n/u).filter(Boolean);
+  if (rows.length !== 1) throw new Error(`${label}_ROW_COUNT:${rows.length}`);
+  const [head, ref, ...extra] = rows[0].split(/\s+/u);
+  if (!FULL_SHA.test(head ?? '') || ref !== expectedRef || extra.length !== 0) {
+    throw new Error(`${label}_INVALID:${rows[0]}`);
+  }
+  return head;
+}
+
+function verifyCandidateCustody() {
+  if (candidate === null) return null;
+  const receiptPath = path.join(OUT, 'C2_CUSTODY_RECEIPT.json');
+  if (!existsSync(receiptPath)) throw new Error('C2_CUSTODY_RECEIPT_REQUIRED');
+  const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  const branchRef = 'refs/heads/truth-campaign-20260716';
+  const remoteResult = run('git', ['ls-remote', '--exit-code', '--refs', 'origin', branchRef]);
+  const remoteHead = exactRefHead(remoteResult.stdout, branchRef, 'LIVE_REMOTE_C2');
+  run('git', ['bundle', 'verify', '--quiet', backupBundle]);
+  const bundleResult = run('git', ['bundle', 'list-heads', backupBundle, branchRef]);
+  const bundleHead = exactRefHead(bundleResult.stdout, branchRef, 'BACKUP_BUNDLE_C2');
+  const bundleSha256 = fileSha(backupBundle);
+  const remoteUrl = git('remote', 'get-url', 'origin');
+  const expected = [
+    ['SCHEMA', receipt.schema, 'product-truth-c2-custody-receipt.v1'],
+    ['RECEIPT_CANDIDATE', receipt.candidate_sha, candidate],
+    ['RECEIPT_TREE', receipt.candidate_tree_sha, git('rev-parse', `${candidate}^{tree}`)],
+    ['RECEIPT_SATISFIED', receipt.custody_satisfied, true],
+    ['REMOTE_HEAD', remoteHead, candidate],
+    ['RECEIPT_REMOTE_HEAD', receipt.remote?.observed_head, remoteHead],
+    ['RECEIPT_REMOTE_URL', receipt.remote?.url, remoteUrl],
+    ['BUNDLE_HEAD', bundleHead, candidate],
+    ['RECEIPT_BUNDLE_HEAD', receipt.bundle?.observed_head, bundleHead],
+    ['RECEIPT_BUNDLE_PATH', receipt.bundle?.path, backupBundle],
+    ['RECEIPT_BUNDLE_SHA256', receipt.bundle?.sha256, bundleSha256],
+  ];
+  for (const [label, actual, wanted] of expected) {
+    if (actual !== wanted) throw new Error(`C2_CUSTODY_${label}_DRIFT:${String(actual)}:${String(wanted)}`);
+  }
+  return {
+    status: 'VERIFIED',
+    result: 'VERIFIED_LIVE_REMOTE_BRANCH_AND_BACKUP_BUNDLE_AT_EXACT_C2',
+    receipt_path: 'verification/product-truth-20260716/C2_CUSTODY_RECEIPT.json',
+    receipt_sha256: fileSha(receiptPath),
+    remote_name: 'origin',
+    remote_url: remoteUrl,
+    remote_ref: branchRef,
+    remote_head: remoteHead,
+    bundle_path: backupBundle,
+    bundle_sha256: bundleSha256,
+    bundle_bytes: statSync(backupBundle).size,
+    bundle_head: bundleHead,
+  };
+}
+
+const candidateCustody = verifyCandidateCustody();
+
+function hasIsoTimestamp(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+function validateCommandRecord(row, expectedCommand, { testCommand }) {
+  if (row === undefined || row.command !== expectedCommand || row.exit_code !== 0
+      || !hasIsoTimestamp(row.started_at_utc) || !hasIsoTimestamp(row.ended_at_utc)
+      || !SHA256.test(row.output_sha256 ?? '')
+      || !Number.isInteger(row.test_count) || row.test_count < 0
+      || (testCommand && row.test_count === 0)
+      || (row.unexpected_skip_markers ?? []).length !== 0) {
+    throw new Error(`PASSING_GATE_COMMAND_MISSING_OR_INCOMPLETE:${expectedCommand}`);
+  }
+}
+
+function validateExactPass0Evidence() {
+  if (candidate === null) return null;
+  const gatePath = path.join(OUT, 'C2_GATE_REPORT.json');
+  const censusPath = path.join(OUT, 'WORKTREE_CENSUS.json');
+  if (!existsSync(gatePath)) throw new Error('C2_GATE_REPORT_REQUIRED_FOR_EXACT_EVIDENCE');
+  if (!existsSync(censusPath)) throw new Error('WORKTREE_CENSUS_REQUIRED_FOR_EXACT_EVIDENCE');
+
+  const gate = JSON.parse(readFileSync(gatePath, 'utf8'));
+  const candidateTree = git('rev-parse', `${candidate}^{tree}`);
+  const candidateParent = git('rev-parse', `${candidate}^`);
+  if (gate.schema !== 'product-truth-c2-gate-report.v1'
+      || gate.candidate?.commit !== candidate
+      || gate.candidate?.tree !== candidateTree
+      || gate.candidate?.parent !== candidateParent
+      || gate.candidate?.branch !== 'truth-campaign-20260716') {
+    throw new Error('C2_GATE_REPORT_CANDIDATE_BINDING_INVALID');
+  }
+  if (gate.actor_role !== 'ACCOUNT_A_CANDIDATE_WRITER'
+      || gate.independent !== false
+      || gate.all_required_commands_passed !== true
+      || gate.independent_token_issued !== false
+      || gate.failure !== null) {
+    throw new Error('C2_GATE_REPORT_ROLE_OR_RESULT_INVALID');
+  }
+
+  const localCommands = gate.local_checkout?.commands ?? [];
+  const freshCommands = gate.fresh_single_branch_clone?.commands ?? [];
+  for (const expected of ['npm ci', 'npm test', 'npm run test:all']) {
+    validateCommandRecord(
+      localCommands.find((row) => row.command === expected),
+      expected,
+      { testCommand: expected !== 'npm ci' },
+    );
+    validateCommandRecord(
+      freshCommands.find((row) => row.command === expected),
+      expected,
+      { testCommand: expected !== 'npm ci' },
+    );
+  }
+
+  const fresh = gate.fresh_single_branch_clone;
+  const expectedClonePrefix = `git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 ${candidateCustody.remote_url} `;
+  const currentMainValues = [
+    gate.current_main?.before_local,
+    gate.current_main?.before_origin,
+    gate.current_main?.before_live_origin,
+    gate.current_main?.after_local,
+    gate.current_main?.after_origin,
+    gate.current_main?.after_live_origin,
+  ];
+  if (gate.canonical_gate_result !== 'PASS'
+      || gate.clean_clone_result !== 'BUILDER_PASS_NOT_INDEPENDENT_WAVE1B'
+      || gate.custody?.result !== candidateCustody.result
+      || gate.custody?.remote_head !== candidateCustody.remote_head
+      || gate.custody?.bundle_sha256 !== candidateCustody.bundle_sha256
+      || typeof fresh?.clone_command !== 'string'
+      || !fresh.clone_command.startsWith(expectedClonePrefix)
+      || fresh.checkout_command !== `git checkout --detach ${candidate}`
+      || fresh.transport !== 'LIVE_REMOTE_SINGLE_BRANCH_CLONE_NO_HARDLINKS'
+      || fresh.detached_head !== candidate
+      || fresh.current_main_ref_present !== false
+      || fresh.local_current_main_probe_exit_code !== 1
+      || fresh.remote_current_main_probe_exit_code !== 1
+      || fresh.final_clean !== true
+      || fresh.branch_ref_count !== 1
+      || fresh.remote_tracking_branch_ref_count !== 1
+      || JSON.stringify(fresh.local_branch_refs) !== JSON.stringify(['refs/heads/truth-campaign-20260716'])
+      || JSON.stringify(fresh.remote_tracking_branch_refs) !== JSON.stringify(['refs/remotes/origin/truth-campaign-20260716'])
+      || fresh.fetch_refspec !== '+refs/heads/truth-campaign-20260716:refs/remotes/origin/truth-campaign-20260716'
+      || fresh.hardlink_audit?.requested_clone_flag !== '--no-hardlinks'
+      || fresh.hardlink_audit?.passed !== true
+      || fresh.hardlink_audit?.alternates_present !== false
+      || fresh.hardlink_audit?.hardlinked_object_file_count !== 0
+      || fresh.hardlink_audit?.max_link_count > 1
+      || gate.local_checkout?.detached_head !== candidate
+      || gate.local_checkout?.final_clean !== true
+      || gate.current_main?.touched_by_account_a !== false
+      || currentMainValues.some((value) => !FULL_SHA.test(value ?? ''))
+      || new Set(currentMainValues).size !== 1) {
+    throw new Error('C2_GATE_REPORT_RESULT_TOPOLOGY_CUSTODY_OR_HYGIENE_INVALID');
+  }
+
+  const census = JSON.parse(readFileSync(censusPath, 'utf8'));
+  if (census.candidate_sha !== candidate
+      || census.candidate_tree_sha !== candidateTree
+      || census.unknown_count !== 0) {
+    throw new Error('EXACT_C2_WORKTREE_CENSUS_INVALID');
+  }
+
+  return {
+    gate,
+    census,
+    candidateTree,
+    candidateParent,
+    localCommands,
+    freshCommands,
+    token: `BASELINE_TRUTH_ACCEPTED:${candidate}`,
+  };
+}
+
+const exactPass0 = validateExactPass0Evidence();
+const pass0Token = exactPass0?.token ?? null;
 
 const externalInputs = [
   ['CAMPAIGN', 'CONTROLLING', '/Users/cosmosgeek/Desktop/INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md', 'ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b'],
@@ -191,6 +371,9 @@ const inputLock = {
     bundle_sha256: '775c55d26474578100b03d0cb45575b9cf95cc6ab012c709c963e4dd6b8ffe37',
     c2_custody_effect: 'NONE; OLD_C_CUSTODY_DOES_NOT_TRANSFER_TO_C2',
   },
+  current_c2_custody: candidate === null
+    ? { status: 'PENDING_EXACT_C2', custody_satisfied: false }
+    : { ...candidateCustody, custody_satisfied: true, pass_0_token: pass0Token },
   controlling_external_inputs: externalInputs.map(measuredExternal),
   candidate_tracked_law_and_locks: trackedInputs.map(measuredTracked),
   defect_wave_inputs: waveFiles,
@@ -304,44 +487,52 @@ patchRow('ARC-010', { test_path: 'server/test/i00Acceptance/authority-protocol.t
 patchRow('AUTH-003', {
   runtime_evidence: candidate === null
     ? 'D-LAUNCH-61 custody is historical old-C evidence only; C2 is not yet frozen and has no off-machine custody'
-    : `Exact C2 ${candidate} is frozen locally; D-LAUNCH-61 remote head d2c4f43c… and bundle 775c55d2… cover old C only`,
-  status: candidate === null ? 'BUILDING' : 'BLOCKED',
-  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
-  disposition: 'Only exact C2 may be handed forward after new custody; Wave 1b independently blocks final-verifier handoff',
+    : `Exact C2 ${candidate} is verified at live ${candidateCustody.remote_ref}; backup bundle SHA-256 ${candidateCustody.bundle_sha256} exposes the same exact C2`,
+  status: candidate === null ? 'BUILDING' : 'INTEGRATED',
+  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'WAVE1B_PENDING_FOR_FINAL_VERIFIER_HANDOFF',
+  disposition: candidate === null
+    ? 'Only exact C2 may be handed forward after new custody'
+    : `${pass0Token}; custody and builder gates do not imply independent or final acceptance`,
 });
 patchRow('DEP-004', {
-  runtime_evidence: 'No C2 baseline token, staging deployment, target readback, or rollback has been issued',
+  runtime_evidence: candidate === null
+    ? 'No C2 baseline token, staging deployment, target readback, or rollback has been issued'
+    : `${pass0Token}; no staging deployment, target readback, or rollback has been issued`,
   status: 'DEFERRED_OWNER_GATE',
-  blocker: 'C2 custody, Wave 1b, independent verification, later operational gates, and explicit deployment authority remain absent',
-  disposition: 'No deployment acceptance is implied by a local source/test freeze',
+  blocker: 'Wave 1b, independent verification, later operational gates, and explicit deployment authority remain absent',
+  disposition: 'No deployment acceptance is implied by baseline custody or builder tests',
 });
 patchRow('CAMP-05-CENSUS', {
   runtime_evidence: 'Prior 101-worktree census is historical old-C evidence; exact-C2 post-freeze census is regenerated in the evidence descendant',
-  status: candidate === null ? 'BUILDING' : 'BLOCKED',
-  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'EXACT_C2_POST_FREEZE_CENSUS_PENDING_OR_SEPARATELY_ATTESTED',
+  status: candidate === null ? 'BUILDING' : 'INTEGRATED',
+  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'NONE',
   disposition: 'No old-C census is relabeled as C2 evidence',
 });
 patchRow('CAMP-07-PASS0', {
   runtime_evidence: candidate === null
     ? 'D-LAUNCH-62 Wave 1 source repair in progress; C2 not frozen'
-    : `Exact C2 ${candidate} is locally frozen; off-machine custody is not established`,
-  status: 'BLOCKED',
-  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
-  disposition: 'No BASELINE_TRUTH_ACCEPTED token for C2 without new custody',
+    : `${pass0Token}; exact C2 is verified on the live remote branch and backup bundle`,
+  status: candidate === null ? 'BLOCKED' : 'INTEGRATED',
+  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'WAVE1B_PENDING_FOR_FINAL_VERIFIER_HANDOFF',
+  disposition: candidate === null
+    ? 'No BASELINE_TRUTH_ACCEPTED token without exact C2 custody'
+    : 'Pass 0 only; no independent, final, integration, or deployment acceptance implied',
 });
 patchRow('CAMP-20-LADDER', {
-  runtime_evidence: 'No C2 acceptance token has been issued; later gates are not implied',
-  status: 'BLOCKED',
-  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
-  disposition: 'Stop at exact candidate-local gate report or precise blocker',
+  runtime_evidence: candidate === null
+    ? 'No C2 acceptance token has been issued; later gates are not implied'
+    : `${pass0Token}; later gates are not implied`,
+  status: candidate === null ? 'BLOCKED' : 'INTEGRATED',
+  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'WAVE1B_AND_FINAL_VERIFICATION_PENDING',
+  disposition: 'Stop at BASELINE_TRUTH_ACCEPTED or a precise blocker; never inflate the ladder',
 });
 patchRow('CAMP-21-STOP', {
   runtime_evidence: candidate === null
     ? 'Expected source stop: BLOCKED:C2_NOT_YET_FROZEN'
-    : 'Expected Account-A stop absent custody: BLOCKED:C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
-  status: 'BLOCKED',
-  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
-  disposition: 'Final-verifier handoff additionally remains blocked pending Wave 1b',
+    : `Expected Account-A stop: ${pass0Token}`,
+  status: candidate === null ? 'BLOCKED' : 'INTEGRATED',
+  blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'WAVE1B_PENDING',
+  disposition: 'Stop after the baseline token and Wave-1b handoff; final-verifier work remains pending',
 });
 patchRow('AIO-002', { implementation_path: 'server/src/aiOps/adapters/providerGateway.ts; server/src/aiOps/adapters/providerMatrix.ts; server/src/aiOps/adapters/syntheticProviderAdapters.ts', test_path: 'server/test/aiOps/a3/providerCliMatrix.test.mjs; server/test/aiOps/a3/toolEgress.test.mjs (port-local, excluded from C2 baseline)', runtime_evidence: 'Provider gateway source is inert; provider activation/runtime NOT_CONFIGURED', status: 'NOT_CONFIGURED', blocker: 'AI provider and worker owner mounts NOT_CONFIGURED', disposition: 'Source integrated; root acceptance explicitly excluded' });
 patchRow('AIO-008', { implementation_path: 'NONE_IN_C2: server/src/aiOps/verifier/** and ops/aiOps/sentinel/** absent', test_path: 'server/test/aiOps/a5/ai-off-survival.test.mjs (synthetic port evidence only; excluded from C2 baseline)', runtime_evidence: 'Independent verifier, external sentinel, and paging destination NOT_CONFIGURED', status: 'NOT_CONFIGURED', blocker: 'EXTERNAL_SENTINEL_AND_PAGING_NOT_CONFIGURED', disposition: 'No deployed delivery proof; synthetic AI-off fixtures are reference only' });
@@ -425,10 +616,14 @@ if (candidateSource) {
   Object.assign(candidateSource, {
     scope: candidate === null ? 'D-LAUNCH-62 C2 source repair' : 'exact frozen C2 source',
     implementation_path: candidate === null ? 'candidate worktree; exact SHA not self-nameable' : `Git tree ${git('rev-parse', `${candidate}^{tree}`)}`,
-    runtime_evidence: candidate === null ? 'focused proof and acceptance gates passed; root/full/fresh clone pending' : 'exact local/fresh-clone gate receipt is recorded separately',
-    status: candidate === null ? 'BUILDING' : 'FROZEN_LOCAL',
-    blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED; WAVE1B_PENDING',
-    disposition: 'D-LAUNCH-61 custody covers old C only; evidence descendants cannot alter C2',
+    runtime_evidence: candidate === null
+      ? 'focused proof and acceptance gates passed; root/full/fresh clone pending'
+      : `exact local/fresh-clone gate receipt plus live remote and bundle custody; bundle SHA-256 ${candidateCustody.bundle_sha256}`,
+    status: candidate === null ? 'BUILDING' : 'FROZEN_CUSTODIED',
+    blocker: candidate === null ? 'C2_NOT_YET_FROZEN' : 'WAVE1B_PENDING_FOR_FINAL_VERIFIER_HANDOFF',
+    disposition: candidate === null
+      ? 'D-LAUNCH-61 custody covers old C only; evidence descendants cannot alter C2'
+      : `${pass0Token}; evidence child is not a replacement C2`,
   });
 }
 for (const id of ['ai-ops-product-route', 'ai-provider-runtime', 'ai-worker-runtime', 'ai-paging-sentinel']) {
@@ -477,7 +672,9 @@ const findings = [...prov.findings, ...clean.findings].map((finding) => ({
   disposition: dispositionById[finding.id]?.[1] ?? 'MISSING_ADJUDICATION',
   source_candidate: '41752d6a87dc1cb1b933bb4460c9cabfc15ff694',
   repaired_candidate: candidate,
-  gate_state: candidate === null ? 'PENDING_C2_FREEZE_AND_ROOT_GATES' : 'CANDIDATE_BOUND_PENDING_RECORDED_GATE_RECEIPT',
+  gate_state: candidate === null
+    ? 'PENDING_C2_FREEZE_AND_ROOT_GATES'
+    : 'BASELINE_GATE_PASSED_BUILDER_EVIDENCE; WAVE1B_PENDING',
 }));
 if (findings.length !== 14 || findings.some((finding) => finding.adjudication === 'MISSING_ADJUDICATION')) {
   throw new Error('WAVE1_FINDING_ADJUDICATION_INCOMPLETE');
@@ -569,51 +766,20 @@ const proofBinding = {
 };
 writeFileSync(path.join(OUT, 'C2_PROOF_BINDING.json'), `${JSON.stringify(proofBinding, null, 2)}\n`);
 
-let exactGate = null;
 if (candidate !== null) {
-  const gatePath = path.join(OUT, 'C2_GATE_REPORT.json');
-  if (!existsSync(gatePath)) throw new Error('C2_GATE_REPORT_REQUIRED_FOR_EXACT_EVIDENCE');
-  exactGate = JSON.parse(readFileSync(gatePath, 'utf8'));
-  const candidateTree = git('rev-parse', `${candidate}^{tree}`);
-  const candidateParent = git('rev-parse', `${candidate}^`);
-  if (exactGate.schema !== 'product-truth-c2-gate-report.v1'
-      || exactGate.candidate?.commit !== candidate
-      || exactGate.candidate?.tree !== candidateTree
-      || exactGate.candidate?.parent !== candidateParent
-      || exactGate.candidate?.branch !== 'truth-campaign-20260716') {
-    throw new Error('C2_GATE_REPORT_CANDIDATE_BINDING_INVALID');
-  }
-  if (exactGate.actor_role !== 'ACCOUNT_A_CANDIDATE_WRITER'
-      || exactGate.independent !== false
-      || exactGate.all_required_commands_passed !== true
-      || exactGate.independent_token_issued !== false) {
-    throw new Error('C2_GATE_REPORT_ROLE_OR_RESULT_INVALID');
-  }
-  const localCommands = exactGate.local_checkout?.commands ?? [];
-  const freshCommands = exactGate.fresh_single_branch_clone?.commands ?? [];
-  for (const expected of ['npm test', 'npm run test:all']) {
-    if (!localCommands.some((row) => row.command === expected && row.exit_code === 0)) throw new Error(`LOCAL_GATE_MISSING:${expected}`);
-  }
-  for (const expected of ['npm ci', 'npm test', 'npm run test:all']) {
-    if (!freshCommands.some((row) => row.command === expected && row.exit_code === 0)) throw new Error(`FRESH_GATE_MISSING:${expected}`);
-  }
-  if (exactGate.fresh_single_branch_clone?.detached_head !== candidate
-      || exactGate.fresh_single_branch_clone?.current_main_ref_present !== false
-      || exactGate.fresh_single_branch_clone?.final_clean !== true
-      || exactGate.current_main?.touched_by_account_a !== false) {
-    throw new Error('C2_GATE_REPORT_TOPOLOGY_OR_HYGIENE_INVALID');
-  }
-  const census = JSON.parse(readFileSync(path.join(OUT, 'WORKTREE_CENSUS.json'), 'utf8'));
-  if (census.candidate_sha !== candidate || census.candidate_tree_sha !== candidateTree || census.unknown_count !== 0) {
-    throw new Error('EXACT_C2_WORKTREE_CENSUS_INVALID');
-  }
-
+  const {
+    gate: exactGate,
+    candidateTree,
+    candidateParent,
+    localCommands,
+    freshCommands,
+  } = exactPass0;
   const localSummary = localCommands.map((row) => `- \`${row.command}\`: exit \`${row.exit_code}\`; tests \`${row.test_count ?? 'not-reported'}\`; output SHA-256 \`${row.output_sha256}\``).join('\n');
   const freshSummary = freshCommands.map((row) => `- \`${row.command}\`: exit \`${row.exit_code}\`; tests \`${row.test_count ?? 'not-reported'}\`; output SHA-256 \`${row.output_sha256}\``).join('\n');
-  const exactState = `# Product Truth Campaign State\n\nPass-0 status: \`BLOCKED\`\n\nCandidate source: \`${candidate}\`\n\nCandidate tree: \`${candidateTree}\`\n\nActor: \`ACCOUNT_A_CANDIDATE_WRITER\`\n\nGate: \`BLOCKED:C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED\`\n\nThis file is the sole campaign-status authority. Root \`STATE.md\` owns product state.\n\n## Wave 1 ruling\n\n- Old candidate C \`41752d6a87dc1cb1b933bb4460c9cabfc15ff694\` is rejected for final-verifier handoff.\n- All fourteen durable Wave-1 findings are adjudicated against exact C2.\n- The input lock has ${inputLock.inventory_counts.total_directive_law_lock_and_wave_rows} rows; directive coverage has ${coverage.rows.length} rows including 17 explicit Frontier dispositions; capability truth has ${capabilities.rows.length} rows.\n- I00 proof is 47/47 and the acceptance contract is 44/44. The exact local and fresh single-branch builder gates passed as recorded in \`C2_GATE_REPORT.json\`.\n- AI-Ops root acceptance remains excluded/NOT_CONFIGURED; Product Assurance exact closure artifacts, real soak, browser/runtime proof, provider/paging/sentinel, deployment, private/signed, test-order, and capital gates remain deferred or not configured.\n- Wave 1b \`shard-sec\` and \`v-cockpit\` remains pending and blocks final-verifier handoff.\n\n## Pass-0 reassessment\n\nD-LAUNCH-61 GitHub/bundle custody applies only to old C. No off-machine custody receipt covers C2. Therefore no \`BASELINE_TRUTH_ACCEPTED\` token is issued.\n\nObserved \`current-main\`: before \`${exactGate.current_main.before_local}\`, after \`${exactGate.current_main.after_local}\`; origin before \`${exactGate.current_main.before_origin}\`, after \`${exactGate.current_main.after_origin}\`. Account A touched neither ref.\n\n## Exact next action\n\nDirector grants and completes off-machine custody for exact C2, then Account A may refresh this evidence-only descendant and reassess Pass 0. Final-verifier handoff still waits for Wave 1b.\n`;
-  const exactFinal = `# Candidate Verdict — D-LAUNCH-62 Wave 1\n\nStatus: \`BLOCKED\`\n\nCandidate: \`${candidate}\`\n\nTree: \`${candidateTree}\`\n\nGate: \`BLOCKED:C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED\`\n\nExact C2 is frozen and both the local and fresh single-branch builder batteries pass. All fourteen durable Wave-1 findings are dispositioned; old candidate C is prohibited from final-verifier handoff.\n\nNo independent token is issued. No \`BASELINE_TRUTH_ACCEPTED\`, \`CLEAN_CLONE_ACCEPTED\`, or final-verifier token is claimed. D-LAUNCH-61 custody covers old C only, while Wave 1b security and cockpit findings remain pending.\n`;
-  const exactClean = `# Clean Clone Gate — D-LAUNCH-62\n\nStatus: \`CLEAN_CLONE_BUILDER_PASS\`\n\nCandidate: \`${candidate}\`\n\nActor: \`ACCOUNT_A_CANDIDATE_WRITER\`; independent acceptance authority: \`false\`.\n\n## Local checkout\n\n${localSummary}\n\n## Fresh single-branch checkout\n\nTransport: \`${exactGate.fresh_single_branch_clone.transport}\`; branch refs: \`${exactGate.fresh_single_branch_clone.branch_ref_count}\`; \`current-main\` present: \`${exactGate.fresh_single_branch_clone.current_main_ref_present}\`; detached HEAD: \`${exactGate.fresh_single_branch_clone.detached_head}\`.\n\n${freshSummary}\n\nFinal worktree clean: \`${exactGate.fresh_single_branch_clone.final_clean}\`. This is builder evidence, not the independent \`CLEAN_CLONE_ACCEPTED\` token.\n`;
-  const exactAuthority = `# Authority Resolution — D-LAUNCH-62 C2\n\nExact candidate C2 is \`${candidate}\` with tree \`${candidateTree}\` and parent \`${candidateParent}\`. Old candidate C and its D-LAUNCH-61 baseline are historical only.\n\nAll fourteen Wave-1 findings are adjudicated. Candidate-bound inputs, coverage, capabilities, proof hashes, worktree census, and local/fresh-clone builder gates are sealed by the evidence package. Historical C2R, composed-runtime, staging, cockpit, merge, money-path, and Role-3 artifacts are explicitly non-C2 evidence in \`ARTIFACT_DISPOSITION.json\`.\n\nAI-Ops acceptance remains excluded; absent controls stay \`NOT_CONFIGURED\`; Product Assurance exact closure, browser/runtime proof, real soak, deployment, private/signed, test-order, and capital gates are not upgraded. Wave 1b remains pending.\n\nPass 0 is \`BLOCKED\` because C2 lacks off-machine custody. Account A did not touch \`current-main\`. No baseline or later acceptance token is issued.\n`;
+  const exactState = `# Product Truth Campaign State\n\nPass-0 status: \`BASELINE_TRUTH_ACCEPTED\`\n\nImmutable C2: \`${candidate}\`\n\nCandidate tree: \`${candidateTree}\`\n\nEvidence HEAD: \`ASSIGNED_BY_CONTAINING_EVIDENCE_ONLY_COMMIT\` — the exact evidence-child SHA is the branch HEAD and is recorded separately in the Wave-1b handoff because a commit cannot contain its own SHA.\n\nActor: \`ACCOUNT_A_CANDIDATE_WRITER\`\n\nGate: \`${pass0Token}\`\n\nThis file is the sole campaign-status authority. Root \`STATE.md\` owns product state. The evidence child is not a replacement C2.\n\n## Pass-0 closure results\n\n- Remote custody: \`${candidateCustody.result}\`; live \`${candidateCustody.remote_ref}\` resolved to immutable C2.\n- Backup bundle: \`${candidateCustody.bundle_path}\`; SHA-256 \`${candidateCustody.bundle_sha256}\`; branch head \`${candidateCustody.bundle_head}\`.\n- Canonical exact-C2 gate: \`${exactGate.canonical_gate_result}\`; exact command, exit, timestamp, test-count, and output-digest records are in \`C2_GATE_REPORT.json\`.\n- Clean-clone builder battery: \`${exactGate.clean_clone_result}\`; no hardlinks or alternates, one local branch, one remote-tracking branch, detached exact C2, \`current-main\` absent, \`npm ci\`, \`npm test\`, and \`npm run test:all\` all passed. This is not independent Wave-1b verification.\n- Worktree census: exact C2 \`${candidate}\`; unknown classifications \`0\`.\n- Old candidate C \`41752d6a87dc1cb1b933bb4460c9cabfc15ff694\` remains rejected for final-verifier handoff.\n- All fourteen durable Wave-1 findings remain adjudicated against exact C2.\n- Observed \`current-main\`: local before \`${exactGate.current_main.before_local}\`, after \`${exactGate.current_main.after_local}\`; live origin before \`${exactGate.current_main.before_live_origin}\`, after \`${exactGate.current_main.after_live_origin}\`. Account A touched neither ref.\n\n## Remaining independent-verifier work\n\n- Wave 1b \`shard-sec\` and \`v-cockpit\` remain pending.\n- The final verifier must independently inspect exact immutable C2 and the evidence child selected by \`EVIDENCE_SELECTION.json\`.\n- No \`INTEGRATED_ACCEPTED\`, final acceptance, deployment readiness, private/signed/test-order authority, or capital authority is claimed.\n\n## Exact next action\n\nHand immutable C2 plus the separately recorded evidence-child HEAD to Wave 1b. Stop at the Pass-0 token; do not advance the acceptance ladder.\n`;
+  const exactFinal = `# Candidate Verdict — D-LAUNCH-62 Wave 1\n\nStatus: \`BASELINE_TRUTH_ACCEPTED\`\n\nCandidate C2: \`${candidate}\`\n\nTree: \`${candidateTree}\`\n\nEvidence HEAD: \`ASSIGNED_BY_CONTAINING_EVIDENCE_ONLY_COMMIT\`\n\nGate: \`${pass0Token}\`\n\nExact immutable C2 has verified live-remote and backup-bundle custody. The canonical exact-C2 gate and the literal builder clean-clone battery passed. All fourteen durable Wave-1 findings are dispositioned; old candidate C remains prohibited from final-verifier handoff.\n\nThis is Pass 0 only. No independent \`CLEAN_CLONE_ACCEPTED\`, \`INTEGRATED_ACCEPTED\`, final acceptance, deployment readiness, or money-path authority is issued. Wave 1b security and cockpit verification remain pending.\n`;
+  const exactClean = `# Clean Clone Gate — D-LAUNCH-62\n\nStatus: \`CLEAN_CLONE_BUILDER_PASS\`\n\nCandidate: \`${candidate}\`\n\nActor: \`ACCOUNT_A_CANDIDATE_WRITER\`; independent acceptance authority: \`false\`.\n\n## Canonical exact-C2 checkout\n\n${localSummary}\n\n## Fresh literal single-branch checkout\n\nClone command: \`${exactGate.fresh_single_branch_clone.clone_command}\`.\n\nCheckout command: \`${exactGate.fresh_single_branch_clone.checkout_command}\`.\n\nTransport: \`${exactGate.fresh_single_branch_clone.transport}\`; local branch refs: \`${exactGate.fresh_single_branch_clone.branch_ref_count}\`; remote-tracking branch refs: \`${exactGate.fresh_single_branch_clone.remote_tracking_branch_ref_count}\`; \`current-main\` present: \`${exactGate.fresh_single_branch_clone.current_main_ref_present}\`; detached HEAD: \`${exactGate.fresh_single_branch_clone.detached_head}\`; hardlink audit: \`${exactGate.fresh_single_branch_clone.hardlink_audit.passed}\`.\n\n${freshSummary}\n\nFinal worktree clean: \`${exactGate.fresh_single_branch_clone.final_clean}\`. This is builder evidence, not independent Wave-1b verification or the independent \`CLEAN_CLONE_ACCEPTED\` token.\n`;
+  const exactAuthority = `# Authority Resolution — D-LAUNCH-62 C2\n\nExact immutable candidate C2 is \`${candidate}\` with tree \`${candidateTree}\` and parent \`${candidateParent}\`. The containing evidence-only child is selected separately and never replaces C2. Old candidate C and its D-LAUNCH-61 baseline are historical only.\n\nLive remote branch custody and backup-bundle custody both resolve to exact C2; the bundle SHA-256 is \`${candidateCustody.bundle_sha256}\`. The canonical exact-C2 gate and builder clean-clone battery passed. Account A did not touch \`current-main\`. Therefore Pass 0 closes at \`${pass0Token}\`.\n\nHistorical C2R, composed-runtime, staging, cockpit, merge, money-path, and Role-3 artifacts remain explicitly non-C2 evidence in \`ARTIFACT_DISPOSITION.json\`. AI-Ops acceptance remains excluded; absent controls stay \`NOT_CONFIGURED\`; Product Assurance exact closure, browser/runtime proof, real soak, deployment, private/signed, test-order, and capital gates are not upgraded. Wave 1b remains pending.\n\nNo independent, final, integration, or deployment acceptance is claimed.\n`;
   writeFileSync(path.join(OUT, 'STATE.md'), exactState);
   writeFileSync(path.join(OUT, 'FINAL_VERDICT.md'), exactFinal);
   writeFileSync(path.join(OUT, 'CLEAN_CLONE_ACCEPTANCE.md'), exactClean);
@@ -621,12 +787,13 @@ if (candidate !== null) {
 
   const currentArtifacts = [
     'AI_OPS_C2_DISPOSITION.json', 'ARTIFACT_DISPOSITION.json', 'AUTHORITY_RESOLUTION.md',
-    'C2_EVIDENCE_BINDING.json', 'C2_GATE_REPORT.json', 'C2_PROOF_BINDING.json',
+    'C2_CUSTODY_RECEIPT.json', 'C2_EVIDENCE_BINDING.json', 'C2_GATE_REPORT.json', 'C2_PROOF_BINDING.json',
     'CAPABILITY_TRUTH_MATRIX.csv', 'CLEAN_CLONE_ACCEPTANCE.md', 'DIRECTIVE_COVERAGE_MATRIX.csv',
     'EVIDENCE_SELECTION.json', 'FINAL_VERDICT.md', 'INDEPENDENT_FINDINGS.json', 'INPUTS.lock',
     'MANIFEST.sha256', 'PRODUCT_ASSURANCE_C2_DISPOSITION.json', 'STATE.md',
     'WAVE1_FINDING_ADJUDICATION.json', 'WORKTREE_CENSUS.json',
     'generate-manifest.mjs', 'generate-wave1-evidence.mjs', 'generate-worktree-census.mjs',
+    'run-pass0-closure.mjs',
     'wave1-inputs/ACTIVATION_RUNBOOK_DRAFT.md', 'wave1-inputs/CANARY_PRECHECK.json',
     'wave1-inputs/CLEAN_CLONE_FINDINGS.json', 'wave1-inputs/PROV_FINDINGS.json',
   ];
@@ -653,7 +820,9 @@ if (candidate !== null) {
       relative_path: relativePath, sha256: fileSha(path.join(OUT, relativePath)), byte_length: statSync(path.join(OUT, relativePath)).size,
     })),
     manifest_rule: 'MANIFEST.sha256 is generated last and hashes this binding plus every campaign artifact except itself',
-    pass_0_gate: 'BLOCKED:C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED',
+    custody_receipt_path: candidateCustody.receipt_path,
+    custody_receipt_sha256: candidateCustody.receipt_sha256,
+    pass_0_gate: pass0Token,
     independent_token_issued: false,
   };
   writeFileSync(path.join(OUT, 'C2_EVIDENCE_BINDING.json'), `${JSON.stringify(evidenceBinding, null, 2)}\n`);

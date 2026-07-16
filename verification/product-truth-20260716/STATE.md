@@ -1,43 +1,65 @@
 # Product Truth Campaign State
 
-Pass-0 status: `READY_FOR_C2_FREEZE`
+Pass-0 status: `PRECISE_BLOCKED`
 
-Next-gate status: `BLOCKED` — containing-commit C2 assignment, exact root/full gates, fresh single-branch clone, and C2 custody
+Immutable C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+
+Candidate tree: `5a5486a3b1d50fd22017e22de2378ae9cfd607a0`
+
+Evidence HEAD: `ASSIGNED_BY_CONTAINING_EVIDENCE_ONLY_COMMIT` — the exact child SHA is recorded separately in the handoff because a commit cannot contain its own SHA.
 
 Actor: `ACCOUNT_A_CANDIDATE_WRITER`
 
-Gate: `BLOCKED:C2_EXACT_SHA_AND_GATES_PENDING`
+Gate: `PRECISE_BLOCKED:CLEAN_CLONE_TEST_ALL_DONOR_OBJECT_MISSING`
 
-This file is the sole campaign-status authority. Root `STATE.md` owns product state.
+This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2 remains the immutable source candidate; the evidence child is not a replacement C2.
 
-## Candidate transition
+## Custody result
 
-- Old candidate C `41752d6a87dc1cb1b933bb4460c9cabfc15ff694` is rejected for final-verifier handoff because Wave 1 contains critical provenance findings.
-- C2 cannot self-name inside its source commit. Candidate-embedded matrices use `SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT`; `EVIDENCE_SELECTION.json` defines the only valid exact-C2 selection rule.
-- Source base Main remains `2ae812624f20b9bc93fc4ad66cb568929101110f`. The D-LAUNCH-62 director record at `2a832750…` is a controlling input, not candidate ancestry. `current-main` has not been changed by Account A.
-- The prior D-LAUNCH-61 GitHub custody head `d2c4f43…` and bundle cover old C only. They do not satisfy C2 custody.
+- Live remote branch `refs/heads/truth-campaign-20260716` resolves to exact C2: `VERIFIED`.
+- Backup bundle `/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle` verifies and exposes the same branch at exact C2.
+- Bundle SHA-256: `4c36d73fcef5e065c8b416e9e3f64da3a93981abde0b4d40e0b4daa26b799d1b`.
+- Exact custody command records, timestamps, exits, and output digests are in `C2_CUSTODY_RECEIPT.json` and `C2_GATE_REPORT.json`.
 
-## Wave 1 adjudication
+## Canonical exact-C2 gate
 
-- All durable findings were ingested: PROV `2 CRITICAL + 8 HIGH + 1 MEDIUM` and CLEAN `2 HIGH + 1 MEDIUM`, fourteen total. The abbreviated director prose did not cause PROV-009/010/011 to be dropped.
-- `INPUTS.lock` v3 directly hashes controlling, protected, POST-I00, IP_ASSURANCE, Frontier, composite deployment, superseded, absent-superseded, and Wave-1 inputs.
-- Directive coverage now contains 17 explicit Frontier rows, six missing MISSION laws, three missing ARCHITECTURE laws, honest `NOT_CONFIGURED` rows for `INCIDENT_ACK` and `SOURCE_ISOLATE`, and exact Ledger/quantity-bridge mappings.
-- AI-Ops source remains `INTEGRATED`; route `UNWIRED`; provider, worker, sentinel, paging, and root-test mount `NOT_CONFIGURED`; C2 baseline acceptance `EXCLUDED`. Canonical runners print that exclusion.
-- Product Assurance root gating includes A-FORMAL and S2 action-evidence (`131/131` focused checks). The obsolete generator-era closure artifact set is explicitly `REFERENCE_ONLY_NOT_C2_EVIDENCE`; exact C2 regeneration is a `DEFERRED_OWNER_GATE` disposition.
-- The required-last donor contract preserves `16/16/16/16` equality while admitting the exact authorized post-L merge sequence. A-FORMAL and S2 are integrated reference-only ancestors, PREVERIFY remains a non-ancestor, and the focused command suite passes `28/28`.
-- Sealed I00 proof evidence is now generated from tracked bytes. Ambient Git objects and moving refs are separate tri-state diagnostics. Focused proof passed `47/47`; acceptance contract passed `44/44`, including exact-byte parity from a sole branch with no `current-main` ref.
-- The legacy D-LAUNCH-1 Q-lock verifier follows the same clean-clone law: exact candidate-reachable transition/commit bytes are sealed truth, while `current-main` and the raw owner blob are diagnostic-only; absent raw bytes remain attested-not-rehashed rather than fabricated.
-- D-LAUNCH-7 historical pins remain immutable. The V2 living-input seal binds D-LAUNCH-62-authorized current QL bytes.
+Result: `PASS`.
 
-## Exact boundaries
+- `npm ci`: exit `0`; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
+- `npm test`: exit `0`; emitted test-summary count `413`; output SHA-256 `f70904ab78795cadf4241b701b36f9d9ae6df086621f3e179f712251c895ec5a`.
+- `npm run test:all`: exit `0`; emitted test-summary count `2674`; output SHA-256 `24594935436ea8020824528d2981abc70ba761f969d64703351b5eed50db0063`.
+- No positive skip or todo marker was observed. The detached exact-C2 worktree was clean after the gate.
 
-- Browser/runtime proof: `BLOCKED` — no exact-C2 rendered browser receipt has been produced.
-- Product Assurance real soak and incident corpus: `NOT_RUN` / `UNKNOWN_EMPTY`.
-- Deployment, external sentinel, paging, restore, rollback: `NOT_CONFIGURED`.
-- Private/signed/test-order/capital paths: `DEFERRED_OWNER_GATE`; no authority granted.
-- Wave 1b (`shard-sec` and `v-cockpit`): `PENDING`; final-verifier handoff is blocked.
-- C2 off-machine custody: `PENDING`; old-C custody is historical only.
+## Literal builder clean-clone battery
 
-## Exact next action
+Result: `BLOCKED` — builder evidence only; no independent Wave-1b token.
 
-Commit this source-complete state as provisional C2, run the canonical local and fresh single-branch gates against that exact SHA, generate exact-C2 evidence and manifest, then reassess Pass 0. Issue no baseline token unless C2 itself has valid custody.
+- Clone transport: live remote, `--no-hardlinks`, `--single-branch`, branch `truth-campaign-20260716`.
+- Checkout command: `git checkout --detach dea2d2a5c2b5e83d3aea75b0e368f0a478596561`.
+- Topology: one local branch, one remote-tracking branch, `current-main` absent, detached HEAD exact C2, zero hardlinked object files, no alternates.
+- `npm ci`: exit `0`; output SHA-256 `25bb96b9420d86c25ca0550e62dcd3bf1c4357412875370b5870495c9212aef8`.
+- `npm test`: exit `0`; emitted test-summary count `413`; output SHA-256 `301c769da1f06e700c1f21f1ee56e327a5ca198cd504bbcc1d33a288a9a1ff1c`.
+- `npm run test:all`: exit `1`; emitted test-summary count before failure `1048`; output SHA-256 `08ea52f3afd000d8ca7baa6bcff14f4397a4fa56e829cbf112746cbd30832d4f`.
+- First causal error: `DONOR_EQUALITY_BLOCKED:COLLECTION_FAILED:GIT_COMMAND_FAILED:cat-file:128`.
+- The diagnostic command `node test/i00/donor-equality.mjs --candidate-ref HEAD` exited `1` with output SHA-256 `36ec0a8d2f2ae9859d87aa24ef96e5705227b5cbd76ef3608000ada9aa4f0fca`.
+- The first absent donor object is dashboard donor tip `692501587617d4880303fbd747d93e63c376f088`; direct `git cat-file -t` exits `128` with `fatal: git cat-file: could not get object info` in the single-branch clone.
+
+## Worktree census
+
+Exact-C2 regeneration is `BLOCKED`. Command:
+
+`node verification/product-truth-20260716/generate-worktree-census.mjs dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+
+Start/end UTC: `2026-07-16T19:06:52.430Z` / `2026-07-16T19:06:52.487Z`; exit `1`; test count `0`; output SHA-256 `4f6a30d0d31a75692f43a4ddb1430dcc9e63622a0c570751dadd2cbc1a848e21`; first causal error: `Expected 101 registered worktrees, observed 96`. The older `WORKTREE_CENSUS.json` is not relabeled as C2 evidence.
+
+## Current-main boundary
+
+Local, cached origin, and live origin `current-main` remained `f0c030d37b762198b1e34d6b689112a433efa4c8` before and after this pass. Account A did not touch or push it. No branch was merged or pushed.
+
+## Remaining work
+
+- Restore clone-stable donor proof inputs without weakening `npm run test:all`; then rerun the entire literal clean-clone battery from a new clone.
+- Reconcile the current 96 registered worktrees against the explicit 101-worktree census contract; do not silently drop missing rows.
+- Regenerate the exact-C2 census, exact evidence package, binding, and manifest only after both blockers are resolved.
+- Wave 1b `shard-sec` and `v-cockpit` remain pending, followed by independent final verification.
+- No `BASELINE_TRUTH_ACCEPTED`, `INTEGRATED_ACCEPTED`, final acceptance, deployment readiness, or money-path authority is claimed.

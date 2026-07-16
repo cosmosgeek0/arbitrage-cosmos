@@ -1,13 +1,24 @@
-# Candidate Verdict — D-LAUNCH-62 Wave 1
+# Candidate Verdict — TruthA Pass 0
 
-Status: `BLOCKED`
+Status: `PRECISE_BLOCKED`
 
-Candidate: `SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT`
+Immutable candidate C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
-Gate: `BLOCKED:C2_EXACT_SHA_AND_GATES_PENDING`
+Evidence HEAD: `ASSIGNED_BY_CONTAINING_EVIDENCE_ONLY_COMMIT`
 
-Old candidate C `41752d6a87dc1cb1b933bb4460c9cabfc15ff694` must not be handed to the final verifier. Its D-LAUNCH-61 baseline/custody record remains historical, but Wave 1 sustained critical provenance defects.
+Canonical gate: `PASS`.
 
-All fourteen durable findings are adjudicated in `WAVE1_FINDING_ADJUDICATION.json`. Critical input-lock and Frontier-coverage omissions are corrected; false proving paths and missing permanent-law rows are corrected; absent I00 controls and AI-Ops operational capabilities remain honestly `NOT_CONFIGURED`/`UNWIRED`; obsolete Product Assurance closure artifacts are explicitly deferred; and the clean-clone evidence generator now passes exact-byte refs-absent parity.
+Live-remote and backup-bundle custody: `VERIFIED`; bundle SHA-256 `4c36d73fcef5e065c8b416e9e3f64da3a93981abde0b4d40e0b4daa26b799d1b`.
 
-No independent token is issued. The containing source-complete commit is the provisional C2; Account A may issue only the Pass-0 baseline token after its root/full/fresh-clone gates pass, the exact-C2 evidence package is sealed, every Wave-1 finding remains dispositioned, and C2 custody is valid. Wave 1b remains pending and blocks final-verifier handoff even after a local C2 freeze.
+Literal clean-clone gate: `BLOCKED`.
+
+Failing command: `npm run test:all`
+
+Exit code: `1`
+
+First causal error: `DONOR_EQUALITY_BLOCKED:COLLECTION_FAILED:GIT_COMMAND_FAILED:cat-file:128`
+Affected evidence: `verification/product-truth-20260716/C2_GATE_REPORT.json`
+
+Exact-C2 census regeneration is also blocked: the generator expected 101 registered worktrees and observed 96. The historical census is not accepted as C2 evidence.
+
+C2 remains immutable and is not rewritten. The evidence child is not a replacement C2. No baseline, independent, final, integration, deployment, or money-path acceptance token is issued.

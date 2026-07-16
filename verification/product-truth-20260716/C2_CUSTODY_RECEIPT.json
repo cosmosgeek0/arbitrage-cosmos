@@ -1,0 +1,124 @@
+{
+  "schema": "product-truth-c2-custody-receipt.v1",
+  "generated_at_utc": "2026-07-16T18:47:07.580Z",
+  "actor_role": "ACCOUNT_A_CANDIDATE_WRITER",
+  "candidate_sha": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "candidate_tree_sha": "5a5486a3b1d50fd22017e22de2378ae9cfd607a0",
+  "custody_satisfied": true,
+  "result": "VERIFIED_LIVE_REMOTE_BRANCH_AND_BACKUP_BUNDLE_AT_EXACT_C2",
+  "remote": {
+    "name": "origin",
+    "url": "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+    "branch": "truth-campaign-20260716",
+    "ref": "refs/heads/truth-campaign-20260716",
+    "observed_head": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+    "exact_candidate_match": true,
+    "command": {
+      "command": "git ls-remote --exit-code --refs origin refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "ls-remote",
+        "--exit-code",
+        "--refs",
+        "origin",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "started_at_utc": "2026-07-16T18:47:04.322Z",
+      "ended_at_utc": "2026-07-16T18:47:07.414Z",
+      "exit_code": 0,
+      "signal": null,
+      "stdout_sha256": "57c13fe69a0e96b42a8c76b67d4cd41b100778f746e224ff38731fb545f5942a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "57c13fe69a0e96b42a8c76b67d4cd41b100778f746e224ff38731fb545f5942a",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 76,
+      "stderr_byte_length": 0,
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": [],
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true
+    }
+  },
+  "bundle": {
+    "path": "/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle",
+    "basename": "cosmos-arbitrage-backup-20260716.bundle",
+    "byte_length": 154985114,
+    "modified_at_utc": "2026-07-16T18:05:30.796Z",
+    "sha256": "4c36d73fcef5e065c8b416e9e3f64da3a93981abde0b4d40e0b4daa26b799d1b",
+    "verify_result": "VERIFIED",
+    "branch_ref": "refs/heads/truth-campaign-20260716",
+    "observed_head": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+    "exact_candidate_match": true,
+    "verify_command": {
+      "command": "git bundle verify --quiet /Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle",
+      "argv": [
+        "git",
+        "bundle",
+        "verify",
+        "--quiet",
+        "/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "started_at_utc": "2026-07-16T18:47:07.414Z",
+      "ended_at_utc": "2026-07-16T18:47:07.461Z",
+      "exit_code": 0,
+      "signal": null,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "bc135b79b662b6656d704a9ef7b5cc8cd36425d1b07b10c04b242e4111f2bc8c",
+      "output_sha256": "bc135b79b662b6656d704a9ef7b5cc8cd36425d1b07b10c04b242e4111f2bc8c",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 66,
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": [],
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true
+    },
+    "list_heads_command": {
+      "command": "git bundle list-heads /Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "bundle",
+        "list-heads",
+        "/Users/cosmosgeek/cosmos-arbitrage-backup-20260716.bundle",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "started_at_utc": "2026-07-16T18:47:07.461Z",
+      "ended_at_utc": "2026-07-16T18:47:07.490Z",
+      "exit_code": 0,
+      "signal": null,
+      "stdout_sha256": "a02383228d017a4be259022c50052c167ff427e683cfca82ec40f39956f8803f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "a02383228d017a4be259022c50052c167ff427e683cfca82ec40f39956f8803f",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 76,
+      "stderr_byte_length": 0,
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": [],
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true
+    }
+  },
+  "old_custody_transfer_assumed": false,
+  "deviations_skips_missing_evidence": []
+}

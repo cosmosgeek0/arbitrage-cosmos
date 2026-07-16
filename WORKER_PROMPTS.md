@@ -1,4 +1,18 @@
-# >>>>> TRUTH CAMPAIGN — run BOTH now (different accounts), while a4/egress/ci-hotfix finish. <<<<<
+########################################################################
+#  READ THIS TOP BLOCK ONLY. Everything below the "OLD — IGNORE" line is history.
+#
+#  RUN NOW — 2 chats:
+#     • ACCOUNT-A   → folder truth-a   (block just below)
+#     • ACCOUNT-B   → folder truth-b   (block below A)
+#
+#  ALREADY RUNNING, do not touch: port-a4
+#
+#  DONE — close these chats: egress-patch, port-a1, port-a2, port-a3, port-a5,
+#     port-ops, port-obs, port-replay, port-runbook, ci-hotfix.
+#
+#  CI on GitHub stays RED until Account A lands a clean-clone-verified candidate.
+#     That red is a test-harness/environment issue, NOT product breakage. Expected.
+########################################################################
 
 ## ACCOUNT-A — folder /Users/cosmosgeek/Desktop/truth-a
 ```text
@@ -7,14 +21,18 @@ You are ACCOUNT A (candidate owner / fix integrator) under Desktop INDEPENDENT_P
 
 ## NOTE FOR ACCOUNT-A (D-LAUNCH-55): egress-patch lane is SEALED_WITH_EXTERNAL_BLOCKERS at 6aca80ac (receipt 8db67eee). When merging it: its two I00 proof/command failure sets were moving-pin artifacts (rerun from your candidate where pins match — expect green); and adjudicate its REAL finding as a campaign item: base-identical SI test (blob bc1d8588) spins unbounded at 100% CPU under network-deny — bounded fix in your candidate, regression test, receipt.
 
+## NOTE FOR ACCOUNT-A (D-LAUNCH-56): CI clean-checkout defect is YOURS to fix in the candidate (campaign Pass 3 + P0 item 9). Two director-verified facts: (a) current-main is RED on GitHub and stays red until you land a verified candidate — this is a test-HARNESS environment defect, NOT product breakage (the landed core is independently VERIFIED). (b) Exact defect, reproduced by the director with `git clone --no-hardlinks --single-branch --branch current-main file:///Users/cosmosgeek/Desktop/Main/.git /tmp/x && cd /tmp/x && npm ci && npm test` → FAILS: test "sealed report parity reads the exact revision from clean detached checkouts" (test/i00/performance/acceptance-contract.test.mjs:526 → local-acceptance.mjs verifyReportParityAtRevision:1981) throws SEALED_REPORT_PARITY_CURRENT_MAIN_UNAVAILABLE, and the underlying render-reports.mjs buildMachineEvidence() bakes live-git provenance (git-provenance.mjs: commitExists/passed/finalRepinPassed/observedSha256) computed against branch refs + donor SHAs absent in a single-branch/detached CI checkout. Two prior hotfix attempts (S4 count = landed OK; render-reports parity = FAILED, worker tested dirty not clean). PROPER FIX inside your candidate: make sealed-report parity + provenance derive ONLY from HEAD + tracked content, tolerate absent branch refs/remotes as UNKNOWN (never hard-fail, never flip to false), and byte-regenerate identically in a detached single-branch checkout; keep genuine provenance as a separate non-parity assertion. Gate: your candidate C must pass the exact single-branch-clone command above (CLEAN_CLONE_ACCEPTED, campaign §10). ci-hotfix worktree work (branch ci-hotfix-20260716) is REFERENCE_ONLY — do not merge it blindly; its parity attempt is insufficient.
+
 ## ACCOUNT-B — folder /Users/cosmosgeek/Desktop/truth-b (DIFFERENT account/model family than A)
 ```text
 You are ACCOUNT B (independent verifier) under Desktop INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md (verify sha256 starts ae9638ba0b85; read it COMPLETELY — your law is §§0-6,11-13,17,19-21). Worktree ~/Desktop/truth-b, DETACHED at the currently landed main — read-only toward EVERYTHING: no write to Main/candidate/shared branches/accepted receipts, ever; your outputs are untracked files at your worktree root only. You may reject; you may never fix; only YOU may ever issue VERIFIED_ACCEPTED (later, against Account A's frozen C — not now). EXECUTE NOW (§17-B): (1) YOUR independent directive coverage matrix extracted from the controlling files (MISSION/ARCHITECTURE/I00/IP_*/POST_I00/IP_ASSURANCE/deployment) — do NOT read Account A's matrix or reasoning first; (2) read-only audit of the already-landed core (donor ancestry, receipt-vs-git-object spot checks, duplicate-authority scan); (3) prepare your Pass-4 adversarial shard prompts (§11 shard list) and Pass-5 cockpit binding matrix skeleton; (4) prepare a fresh clean-clone verification environment (single-branch clone practice run). Wait for BASELINE_TRUTH_ACCEPTED:<C> before verifying any candidate; then run Passes 2-5 against exact C only. §3 vocabulary; never clean/prune/delete. Stop at B_PREP_READY (with your matrix + shard pack sealed as untracked artifacts) or precise BLOCKED. Usage limit → save+stop; same message resumes.
 ```
 
-# WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
+########################################################################
+#  OLD — IGNORE EVERYTHING BELOW THIS LINE (history / already done)
+########################################################################
 
-# >>>>> FIRST: run CI-HOTFIX-2 below (turns GitHub green). THEN resume the 6. <<<<<
+# WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
 ## CI-HOTFIX-2 — folder /Users/cosmosgeek/Desktop/ci-hotfix (reuse it; MOST URGENT — this is what keeps CI red)
 ```text

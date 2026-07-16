@@ -223,14 +223,31 @@ export function verifyQDirectiveInputSupersession(document) {
 }
 
 export function verifyLivingDirectorInputAcceptance(document) {
+  const authorizedFreeze = Object.freeze({
+    sourceCutoffCommit: '2a832750f83137a8912c9f70e0b634b856f10aab',
+    sourceCutoffTree: '3d2b8889e2aaf4a590993467a5bb3ecdf13c119b',
+    rulingCommit: 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245',
+    inputs: Object.freeze({
+      'QL_DIRECTOR_STATE.md': Object.freeze({
+        commit: '2a832750f83137a8912c9f70e0b634b856f10aab',
+        blob: '20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5',
+        sha256: '95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd',
+      }),
+      'QL_PARALLEL_DAG.md': Object.freeze({
+        commit: 'e7e5acdc2b52f86e000b1498b5a6c6452db3149b',
+        blob: '6ff4da20b0d0cf9fc375144977acfe94e449dcae',
+        sha256: '89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0',
+      }),
+    }),
+  });
   const structuralChecks = Object.freeze({
     schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2',
     ruling: document?.ruling === 'D-LAUNCH-7',
     mode: document?.mode === 'LATEST_CURRENT_MAIN_TOUCH',
     sourceRef: typeof document?.sourceRef === 'string' && document.sourceRef === 'current-main',
-    sourceCutoffCommit: FULL_SHA.test(document?.sourceCutoffCommit ?? ''),
-    sourceCutoffTree: FULL_SHA.test(document?.sourceCutoffTree ?? ''),
-    rulingCommit: FULL_SHA.test(document?.rulingCommit ?? ''),
+    sourceCutoffCommit: document?.sourceCutoffCommit === authorizedFreeze.sourceCutoffCommit,
+    sourceCutoffTree: document?.sourceCutoffTree === authorizedFreeze.sourceCutoffTree,
+    rulingCommit: document?.rulingCommit === authorizedFreeze.rulingCommit,
     candidateFreezeAuthorization: document?.candidateFreezeAuthorization === 'D-LAUNCH-62',
     historicalDLaunch7Acceptance: document?.historicalDLaunch7Acceptance?.sourceCutoffCommit
         === 'd78be24f4da14632c857ee250b62e3fec33c2743'
@@ -256,8 +273,10 @@ export function verifyLivingDirectorInputAcceptance(document) {
   const livingResults = (Array.isArray(document?.livingDirectorInputs) ? document.livingDirectorInputs : []).map((entry) => {
     const safePath = LIVING_DIRECTOR_PATHS.includes(entry.path) && SAFE_PATH.test(entry.path);
     const historicalPinValid = SHA256.test(entry.historicalPacketSha256 ?? '');
-    const observedFieldsValid = FULL_SHA.test(entry.authorizedLatestCommit ?? '')
-      && FULL_SHA.test(entry.authorizedGitBlob ?? '') && SHA256.test(entry.authorizedSha256 ?? '');
+    const authorized = authorizedFreeze.inputs[entry.path];
+    const observedFieldsValid = entry.authorizedLatestCommit === authorized?.commit
+      && entry.authorizedGitBlob === authorized?.blob
+      && entry.authorizedSha256 === authorized?.sha256;
     const candidateBytes = safePath ? readFileSync(path.join(ROOT, entry.path)) : null;
     const candidateSha256 = candidateBytes === null ? null : digest(candidateBytes);
     const observationMatches = observedFieldsValid && candidateSha256 === entry.authorizedSha256;

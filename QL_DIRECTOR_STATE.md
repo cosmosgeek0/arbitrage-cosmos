@@ -282,3 +282,8 @@ L lane pending merges (serial, only while the L spine worktree /Users/cosmosgeek
 ## External-action boundary (launch §10)
 
 No private reads, signed test orders, AWS/Cloudflare/Secrets mutations, deployment, process restarts, Margin actions, real orders, capital increases, or automated live entries without separate explicit owner authorization. Implement boundaries; never exercise them.
+
+## Active campaign rulings (appended; earlier 1-63 in git history + verification/ artifacts)
+
+### D-LAUNCH-65 (2026-07-16): wave-2 controlling language adopted; archive input authorized for C3
+Reviewer-refined defect-wave-2 block is the controlling order to Account A (census tombstones with removal authority + archive SHA-256; SINGLE_BRANCH_RECEIPT_BOUND donor-verifier mode bound to immutable candidate-tracked authorities in docs/archive/i00-phase2/INTEGRATION_CANDIDATE_READY_RECEIPT.md + I00_PRODUCT_BUILD_STATE.md; C3 = single-parent correction commit; evidence-only child E3; pause token C3_CUSTODY_REQUIRED:<sha> → director custody push + fresh verified bundle → authoritative live-remote clean clone → only then BASELINE_TRUTH_ACCEPTED:<C3>). DIRECTOR AUTHORIZATION: Account A MAY add, as candidate-tracked immutable inputs, byte-exact copies of archive outputs at current-main commit 0e4b364:docs/archive/campaign-detail-20260716/** (tree verified present), each recorded with source commit 0e4b364 + source path + SHA-256; shard-sec and v-cockpit have NO accepted outputs → tombstones record NO_ACCEPTED_OUTPUT (Wave-1b still owed). Input grant, not a merge; current-main untouched by Account A. On C3_CUSTODY_REQUIRED the director pushes campaign branch at exact C3 + returns bundle digest.

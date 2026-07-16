@@ -125,7 +125,7 @@
       "severity": "HIGH",
       "title": "Sealed machine evidence is live-Git-dependent and the root parity contract masks clean-clone drift",
       "adjudication": "FIXED",
-      "disposition": "Sealed proof uses tracked bytes; ambient Git is a separate tri-state diagnostic; exact-byte single-branch parity is tested",
+      "disposition": "Sealed proof uses tracked bytes; ambient Git is a separate tri-state diagnostic; exact-byte single-branch parity and legacy D-LAUNCH-1 refs-absent behavior are tested",
       "source_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
       "repaired_candidate": null,
       "gate_state": "PENDING_C2_FREEZE_AND_ROOT_GATES"

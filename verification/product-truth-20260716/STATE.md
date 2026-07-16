@@ -26,6 +26,7 @@ This file is the sole campaign-status authority. Root `STATE.md` owns product st
 - Product Assurance root gating includes A-FORMAL and S2 action-evidence (`131/131` focused checks). The obsolete generator-era closure artifact set is explicitly `REFERENCE_ONLY_NOT_C2_EVIDENCE`; exact C2 regeneration is a `DEFERRED_OWNER_GATE` disposition.
 - The required-last donor contract preserves `16/16/16/16` equality while admitting the exact authorized post-L merge sequence. A-FORMAL and S2 are integrated reference-only ancestors, PREVERIFY remains a non-ancestor, and the focused command suite passes `28/28`.
 - Sealed I00 proof evidence is now generated from tracked bytes. Ambient Git objects and moving refs are separate tri-state diagnostics. Focused proof passed `47/47`; acceptance contract passed `44/44`, including exact-byte parity from a sole branch with no `current-main` ref.
+- The legacy D-LAUNCH-1 Q-lock verifier follows the same clean-clone law: exact candidate-reachable transition/commit bytes are sealed truth, while `current-main` and the raw owner blob are diagnostic-only; absent raw bytes remain attested-not-rehashed rather than fabricated.
 - D-LAUNCH-7 historical pins remain immutable. The V2 living-input seal binds D-LAUNCH-62-authorized current QL bytes.
 
 ## Exact boundaries

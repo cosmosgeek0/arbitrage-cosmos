@@ -463,7 +463,7 @@ const dispositionById = {
   'PROV-009': ['FIXED', 'Canonical Product Assurance gate mounts 131 A-FORMAL/S2 action-evidence checks'],
   'PROV-010': ['FIXED', 'Ledger CAS/journal and Foundation quantity bridge rows cite exact implementation and tests'],
   'PROV-011': ['FIXED', 'Evidence-selection contract distinguishes source C2 from exact-bound evidence descendants'],
-  'P3-CLEAN-001': ['FIXED', 'Sealed proof uses tracked bytes; ambient Git is a separate tri-state diagnostic; exact-byte single-branch parity is tested'],
+  'P3-CLEAN-001': ['FIXED', 'Sealed proof uses tracked bytes; ambient Git is a separate tri-state diagnostic; exact-byte single-branch parity and legacy D-LAUNCH-1 refs-absent behavior are tested'],
   'P3-CLEAN-002': ['FIXED', 'V2 living-input seal binds D-LAUNCH-62 bytes and preserves D-LAUNCH-7 historical pins'],
   'P3-CLEAN-003': ['FIXED', 'Product Assurance Git runs through bounded runner and root npm test mounts the I00 proof scanner'],
 };

@@ -130,7 +130,9 @@ export function verifyQDirectiveInputSupersession(document) {
       && Number.isSafeInteger(document?.current?.lockBytes) && document.current.lockBytes > 0,
     messageNeedles: Array.isArray(document?.authority?.commitMessageNeedles)
       && document.authority.commitMessageNeedles.length === 3
-      && document.authority.commitMessageNeedles.every((needle) => typeof needle === 'string' && needle.length > 0 && needle.length <= 160),
+      && document.authority.commitMessageNeedles.every((needle) => typeof needle === 'string' && needle.length > 0 && needle.length <= 160)
+      && document.authority.commitMessageNeedles[1] === (document.authority.ownerLaunchGitBlob ?? '').slice(0, 8)
+      && document.authority.commitMessageNeedles[2] === (document.authority.ownerLaunchSha256 ?? '').slice(0, 8),
   });
   const structurePassed = Object.values(structuralChecks).every(Boolean);
   if (!structurePassed) return Object.freeze({
@@ -145,7 +147,13 @@ export function verifyQDirectiveInputSupersession(document) {
   const donorExists = gitExitZero(['cat-file', '-e', `${document.donor.tip}^{commit}`]);
   const authorityExists = gitExitZero(['cat-file', '-e', `${document.authority.commit}^{commit}`]);
   const headReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, 'HEAD']);
-  const sourceReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, document.authority.sourceRef]);
+  const sourceRefExists = gitExitZero(['rev-parse', '--verify', `${document.authority.sourceRef}^{commit}`]);
+  const sourceReachable = sourceRefExists
+    ? authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, document.authority.sourceRef])
+    : null;
+  const sourceRefDisposition = sourceRefExists
+    ? (sourceReachable ? 'VERIFIED_DIAGNOSTIC_ONLY' : 'FAILED_DIAGNOSTIC_ONLY')
+    : 'UNKNOWN_REF_ABSENT_DIAGNOSTIC_ONLY';
   const donorTree = donorExists ? safeGit(['rev-parse', `${document.donor.tip}^{tree}`])?.trim() ?? null : null;
   const donorLockGitBlob = donorExists ? safeGit(['rev-parse', `${document.donor.tip}:${document.donor.lockPath}`])?.trim() ?? null : null;
   const donorBytes = donorExists ? safeGit(['show', `${document.donor.tip}:${document.donor.lockPath}`], null) : null;
@@ -181,7 +189,9 @@ export function verifyQDirectiveInputSupersession(document) {
     donorLockBytes: donorBytes?.length ?? null,
     authorityExists,
     headReachable,
+    sourceRefExists,
     sourceReachable,
+    sourceRefDisposition,
     authorityParentLockGitBlob,
     authorityParentLockSha256: authorityParentBytes === null ? null : digest(authorityParentBytes),
     authorityResultLockGitBlob,
@@ -190,6 +200,9 @@ export function verifyQDirectiveInputSupersession(document) {
       && document.authority.commitMessageNeedles.every((needle) => authorityMessage.includes(needle)),
     ownerLaunchSha256: ownerLaunchBytes === null ? null : digest(ownerLaunchBytes),
     ownerLaunchBytes: ownerLaunchBytes?.length ?? null,
+    ownerLaunchEvidenceMode: ownerLaunchBytes === null
+      ? 'DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED'
+      : 'AMBIENT_BLOB_REHASHED',
     currentLockGitBlob,
     currentLockSha256: currentBytes === null ? null : digest(currentBytes),
     currentLockBytes: currentBytes?.length ?? null,
@@ -198,7 +211,7 @@ export function verifyQDirectiveInputSupersession(document) {
     && donorLockGitBlob === document.donor.lockGitBlob
     && observations.donorLockSha256 === document.donor.lockSha256
     && observations.donorLockBytes === document.donor.lockBytes
-    && headReachable && sourceReachable
+    && headReachable
     && authorityParentLockGitBlob === document.authority.parentLockGitBlob
     && authorityParentLockGitBlob === document.donor.lockGitBlob
     && observations.authorityParentLockSha256 === document.donor.lockSha256
@@ -206,8 +219,10 @@ export function verifyQDirectiveInputSupersession(document) {
     && authorityResultLockGitBlob === document.current.lockGitBlob
     && observations.authorityResultLockSha256 === document.current.lockSha256
     && observations.authorityMessageVerified
-    && observations.ownerLaunchSha256 === document.authority.ownerLaunchSha256
-    && observations.ownerLaunchBytes === document.authority.ownerLaunchBytes
+    && (ownerLaunchBytes === null || (
+      observations.ownerLaunchSha256 === document.authority.ownerLaunchSha256
+      && observations.ownerLaunchBytes === document.authority.ownerLaunchBytes
+    ))
     && currentLockGitBlob === document.current.lockGitBlob
     && observations.currentLockSha256 === document.current.lockSha256
     && observations.currentLockBytes === document.current.lockBytes

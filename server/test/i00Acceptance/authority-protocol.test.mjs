@@ -32,10 +32,18 @@ test('D-LAUNCH-1 authorizes exactly one external Q directive-lock supersession',
   assert.equal(result.transition.headersUnchanged, true);
   assert.equal(result.transition.remainingRowsUnchanged, true);
   assert.equal(result.observations.headReachable, true);
-  assert.equal(result.observations.sourceReachable, true);
+  assert(['VERIFIED_DIAGNOSTIC_ONLY', 'UNKNOWN_REF_ABSENT_DIAGNOSTIC_ONLY']
+    .includes(result.observations.sourceRefDisposition));
   assert.equal(result.observations.authorityParentLockGitBlob, qDirectiveInputSupersession.donor.lockGitBlob);
   assert.equal(result.observations.authorityResultLockGitBlob, qDirectiveInputSupersession.current.lockGitBlob);
-  assert.equal(result.observations.ownerLaunchSha256, qDirectiveInputSupersession.authority.ownerLaunchSha256);
+  assert(['AMBIENT_BLOB_REHASHED', 'DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED']
+    .includes(result.observations.ownerLaunchEvidenceMode));
+  if (result.observations.ownerLaunchEvidenceMode === 'AMBIENT_BLOB_REHASHED') {
+    assert.equal(result.observations.ownerLaunchSha256, qDirectiveInputSupersession.authority.ownerLaunchSha256);
+  } else {
+    assert.equal(result.observations.ownerLaunchSha256, null);
+    assert.equal(result.observations.ownerLaunchBytes, null);
+  }
 });
 
 test('Q directive-lock supersession fails closed on provenance and document mutation', () => {

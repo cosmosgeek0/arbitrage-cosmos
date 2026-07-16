@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "AIOPS_A5_LANDED_INTERFACE_AUDIT_V2",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "sourceShadowBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "targetBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "directiveSha256": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+  "bindingState": "LANDED_TREE_AUDITED_NO_AUTHORITY",
+  "assumptions": [
+    {
+      "assumptionId": "A5-BIND-001",
+      "objectType": "AcceptedBase",
+      "state": "VERIFIED_TARGET_BASE",
+      "landedBinding": "The port is rooted at the director-supplied accepted base; the shadow base is provenance only.",
+      "evidenceRefs": ["git:492e3f69b054c85686bcfc4c09dbff4ababeda3f"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-002",
+      "objectType": "CanonicalFaultHarness",
+      "state": "VERIFIED_PRESENT_DEDUPED",
+      "landedBinding": "Product Assurance owns the 103-scenario canonical fault denominator; A5 keeps a distinct 120-case synthetic hostile corpus and creates no canonical fault owner.",
+      "evidenceRefs": ["server/src/productAssurance/faults/harness.ts"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-003",
+      "objectType": "OperationalFailureAtlas",
+      "state": "VERIFIED_PRESENT_DEDUPED",
+      "landedBinding": "Product Assurance owns failure-atlas projection and validation; A5 creates no atlas, projector, or second failure-record store.",
+      "evidenceRefs": ["server/src/productAssurance/failureAtlas/atlas.ts"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-004",
+      "objectType": "DiagnosticBoundary",
+      "state": "VERIFIED_PRESENT_DEDUPED",
+      "landedBinding": "Product Assurance owns diagnostic proposal evaluation, forbidden capabilities, provider-outage projection, evidence redaction, and validation of injected privacy/retention evidence; Ledger and external retention owners remain authoritative for durable retention.",
+      "evidenceRefs": ["server/src/productAssurance/diagnostics/boundary.ts", "server/src/ledger.ts"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-005",
+      "objectType": "RemediationAndFencing",
+      "state": "VERIFIED_PRESENT_DEDUPED",
+      "landedBinding": "Product Assurance owns deterministic remediation vocabulary, transitions, atomic resource acquisition, and lease fencing; A5 creates no executor.",
+      "evidenceRefs": ["server/src/productAssurance/remediation/campaign.ts", "server/src/productAssurance/projections/operationalTruth.ts"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-006",
+      "objectType": "DurableStorageAdapters",
+      "state": "AI_OPS_ADAPTER_NOT_MOUNTED",
+      "landedBinding": "The existing Ledger remains sole durable-history owner; A5 contains fixtures and tests only and requests any future adapter through AIOPS-IR-PERSISTENCE-003.",
+      "evidenceRefs": ["server/src/ledger.ts", "fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-007",
+      "objectType": "IncidentOwner",
+      "state": "NOT_CONFIGURED",
+      "landedBinding": "The landed Product Integration projection explicitly reports INCIDENT_OWNER_NOT_CONFIGURED; A5 does not synthesize incident authority.",
+      "evidenceRefs": ["server/src/productIntegration"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-008",
+      "objectType": "CanonicalEventKind",
+      "state": "AI_OPS_KIND_NOT_MOUNTED",
+      "landedBinding": "System Integration owns the canonical trace-event-kind denominator and has no AI_OPS kind; Product Integration only validates and projects persisted material-event pages. A5 requests any future addition through AIOPS-IR-EVENTS-009.",
+      "evidenceRefs": ["server/src/systemIntegration/contracts/constants.ts", "server/src/productIntegration/runtime/events.ts", "fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-009",
+      "objectType": "ControlRegistry",
+      "state": "AI_OPS_CONTROL_NOT_MOUNTED",
+      "landedBinding": "SystemControlService remains canonical command authority; Product Integration exposes a narrow adapter and exactly four fail-safe controls. A5 requests any future AI_OPS namespace through AIOPS-IR-CONTROLS-008.",
+      "evidenceRefs": ["server/src/systemIntegration/controls/service.ts", "server/src/productIntegration/runtime/systemControlCommandOwner.ts", "server/src/productIntegration/runtime/controls.ts", "fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-010",
+      "objectType": "ProviderState",
+      "state": "LANDED_DIAGNOSTIC_CONTRACT_BOUND",
+      "landedBinding": "A5 conformance uses the landed READY, NOT_CONFIGURED, and UNAVAILABLE diagnostic-provider contract; synthetic campaign provider labels are not canonical runtime state.",
+      "evidenceRefs": ["server/src/productAssurance/diagnostics/boundary.ts"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-011",
+      "objectType": "ExternalOwners",
+      "state": "NOT_CONFIGURED_OR_UNPROVEN",
+      "landedBinding": "Independent sentinel, notification delivery, WORM export, credential proxy, release canary, rollback, and approval mounts remain outside A5 evidence and are insertion requests only.",
+      "evidenceRefs": ["fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-012",
+      "objectType": "TestMount",
+      "state": "ROOT_SCRIPT_MOUNT_ABSENT",
+      "landedBinding": "Root package scripts do not discover the exclusive A5 roots; AIOPS-IR-TEST-MOUNT-026 is the only requested shared-seam change.",
+      "evidenceRefs": ["package.json", "fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json"],
+      "authorityCreated": false
+    },
+    {
+      "assumptionId": "A5-BIND-013",
+      "objectType": "EvidenceBoundary",
+      "state": "SYNTHETIC_ONLY_WITH_LANDED_OWNER_CONFORMANCE",
+      "landedBinding": "The 120-case corpus is synthetic and non-authoritative; real port evidence is limited to direct landed-owner conformance, deterministic replay, total-network-deny execution, and the immutable port receipt.",
+      "evidenceRefs": ["fixtures/aiOps/a5/campaign.mjs", "server/test/aiOps/a5", "test/aiOps/a5"],
+      "authorityCreated": false
+    }
+  ]
+}

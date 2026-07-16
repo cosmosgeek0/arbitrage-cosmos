@@ -135,6 +135,9 @@ export class MarketEngine {
     private readonly ledger: Ledger,
     private readonly fetchUniverse: () => Promise<ExchangeUniverse> = fetchExchangeUniverse,
     private readonly liquidationProjection?: MarketLiquidationProjectionPort,
+    private readonly startupOptions: Readonly<{
+      publicSourceStartupEgressAdmitted: boolean;
+    }> = Object.freeze({ publicSourceStartupEgressAdmitted: false }),
   ) {}
 
   get pairCount(): number {
@@ -142,6 +145,7 @@ export class MarketEngine {
   }
 
   async init(): Promise<void> {
+    this.assertPublicSourceStartupEgressAdmitted();
     const initGeneration = ++this.initGeneration;
     const { pairs, filters } = await this.fetchUniverse();
     const nextFilters = new Map<string, SymbolFilters>();
@@ -195,6 +199,7 @@ export class MarketEngine {
   }
 
   start(): void {
+    this.assertPublicSourceStartupEgressAdmitted();
     if (this.running) return;
     this.running = true;
     const generation = ++this.generation;
@@ -204,7 +209,14 @@ export class MarketEngine {
       const prev = this.feeds[name];
       this.feeds[name] = status;
       if (prev !== status && status !== 'connecting') {
-        this.safeLog(status === 'open' ? 'ws.open' : 'ws.closed', null, { feed: name });
+        const event = status === 'open'
+          ? 'ws.open'
+          : status === 'cooldown'
+            ? 'ws.cooldown'
+            : status === 'exhausted'
+              ? 'ws.exhausted'
+              : 'ws.closed';
+        this.safeLog(event, null, { feed: name, status });
       }
     };
 
@@ -287,6 +299,12 @@ export class MarketEngine {
     this.sampler = null;
     this.oiTimer = null;
     this.oiBusy = false;
+  }
+
+  private assertPublicSourceStartupEgressAdmitted(): void {
+    if (this.startupOptions.publicSourceStartupEgressAdmitted !== true) {
+      throw new Error('PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED');
+    }
   }
 
   sparkOf(symbol: string, points = 40): number[] {

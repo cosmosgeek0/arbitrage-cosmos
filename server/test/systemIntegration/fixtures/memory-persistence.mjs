@@ -214,7 +214,7 @@ export class InMemoryValidateOnlyPersistence {
     if (record === null || typeof record !== 'object' || Array.isArray(record)) {
       throw new TypeError('validate-only persistence record must be an object');
     }
-    if (record.schema !== 'cosmos.system-integration.validate-only.v1') {
+    if (record.schema !== 'cosmos.system-integration.validate-only.v2') {
       throw new TypeError('validate-only persistence schema is invalid');
     }
     if (typeof record.recordId !== 'string' || record.recordId.length < 1 || record.recordId.length > 160) {

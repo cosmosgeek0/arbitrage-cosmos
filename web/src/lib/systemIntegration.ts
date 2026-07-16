@@ -12,6 +12,7 @@ export type SystemComponentId =
   | 'market-universe'
   | 'intelligence-runtime'
   | 'market-intelligence'
+  | 'q-inference'
   | 'basis-engine'
   | 'volume-engine'
   | 'capital-supervision'

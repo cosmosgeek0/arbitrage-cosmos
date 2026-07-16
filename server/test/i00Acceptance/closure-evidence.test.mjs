@@ -228,7 +228,7 @@ test('page capability and control matrices separate historical fixtures from cur
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-INTAKE').payloadSchema, '{paused:true}');
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-RESTART').payloadSchema, '{componentId:engine-supervisor}');
   assert.deepEqual(catalog.requiredAbsentSurfaces, []);
-  assert.equal(catalog.canonicalRoutes.length, 14);
+  assert.equal(catalog.canonicalRoutes.length, 15);
   assert.deepEqual(
     catalog.canonicalRoutes
       .filter((route) => route.route.startsWith('/api/product-integration'))

@@ -1,6 +1,7 @@
 export const PRODUCT_SUPERVISOR_SCHEMA = 'product-supervisor.v1' as const;
 export const PRODUCT_COMMAND_SCHEMA = 'product-command.v1' as const;
 export const MATERIAL_CURSOR_SCHEMA = 'material-cursor.v1' as const;
+export const PRODUCT_MANAGED_INVENTORY_SCHEMA = 'i00-managed-inventory.v1' as const;
 export const SAFE_LIVE_BACKEND_COMMAND_IDS: readonly string[] = Object.freeze([
   'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
 ]);
@@ -152,6 +153,46 @@ export interface FiveSecondOwnerView {
   readonly revisions: Readonly<ProductRevisionSet>;
 }
 
+export type ProductBootReleaseLifecycleState =
+  | 'ACTIVE' | 'CRASH_PENDING' | 'CLEAN_COMPLETED' | 'UNCLEAN_COMPLETED';
+
+export type ProductBootReleaseIdentityIssue =
+  | 'TESTED_COMMIT_UNKNOWN'
+  | 'DEPLOYED_COMMIT_UNKNOWN'
+  | 'CONFIG_REVISION_UNKNOWN'
+  | 'SCHEMA_REVISION_UNKNOWN'
+  | 'MODEL_REVISION_UNKNOWN';
+
+export interface ProductBootReleaseRecord {
+  readonly operationId: string;
+  readonly operationType: 'APPLICATION_BOOT';
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+  readonly lifecycleState: ProductBootReleaseLifecycleState;
+  readonly identityState: 'AVAILABLE' | 'PARTIAL' | 'UNKNOWN';
+  readonly identityIssues: readonly ProductBootReleaseIdentityIssue[];
+  readonly deploymentMutationAuthority: 'NONE';
+}
+
+export interface ProductBootReleaseReadback {
+  readonly source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE';
+  readonly state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE';
+  readonly latest: Readonly<ProductBootReleaseRecord> | null;
+  readonly history: readonly Readonly<ProductBootReleaseRecord>[];
+  readonly crashPendingOperationIds: readonly string[];
+  readonly reasonCodes: readonly string[];
+}
+
 /** Render the canonical owner verdict; the browser never derives readiness. */
 export function productMachineReadinessTone(
   machineReady: FiveSecondOwnerView['machineReady'],
@@ -180,6 +221,131 @@ export interface ProductComponentProjection {
   readonly correlationId: string | null;
   readonly truthLabel: ProductTruthLabel;
 }
+
+export type ProductManagedInventoryState =
+  | 'EVIDENCE_PRESENT'
+  | 'OWNER_GATED'
+  | 'NOT_CONFIGURED'
+  | 'MISSING';
+
+export interface ProductManagedInventoryEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
+  readonly componentId: string;
+  readonly componentProjectionIndex: number;
+}
+
+export interface ProductManagedInventoryEntry {
+  readonly identity: I00ManagedComponentIdentity;
+  readonly owner: string;
+  readonly canonicalComponentIds: readonly string[];
+  readonly inventoryState: ProductManagedInventoryState;
+  readonly evidence: readonly Readonly<ProductManagedInventoryEvidenceRef>[] | null;
+  readonly reasonCode: string | null;
+}
+
+export interface ProductManagedInventoryProjection {
+  readonly schemaVersion: typeof PRODUCT_MANAGED_INVENTORY_SCHEMA;
+  readonly expectedIdentityCount: 33;
+  readonly mappedIdentityCount: number;
+  readonly evidencePresentCount: number;
+  readonly ownerGatedCount: number;
+  readonly notConfiguredCount: number;
+  readonly missingCount: number;
+  readonly canonicalComponentCount: number;
+  readonly referencedCanonicalComponentCount: number;
+  readonly observedCanonicalComponentCount: number;
+  readonly entries: readonly Readonly<ProductManagedInventoryEntry>[];
+}
+
+type ProductManagedInventoryUnavailableState = Exclude<ProductManagedInventoryState, 'EVIDENCE_PRESENT'>;
+
+interface ProductManagedInventoryContractEntry<TIdentity extends string = string> {
+  readonly identity: TIdentity;
+  readonly owner: string;
+  readonly canonicalComponentIds: readonly string[];
+  readonly unavailableState: ProductManagedInventoryUnavailableState | null;
+  readonly unavailableReason: string | null;
+}
+
+function managedInventoryMappedRole<const TIdentity extends string>(
+  identity: TIdentity,
+  owner: string,
+  ...canonicalComponentIds: string[]
+): Readonly<ProductManagedInventoryContractEntry<TIdentity>> {
+  return Object.freeze({
+    identity,
+    owner,
+    canonicalComponentIds: Object.freeze(canonicalComponentIds),
+    unavailableState: null,
+    unavailableReason: null,
+  });
+}
+
+function managedInventoryUnavailableRole<const TIdentity extends string>(
+  identity: TIdentity,
+  owner: string,
+  unavailableState: ProductManagedInventoryUnavailableState,
+  unavailableReason: string,
+): Readonly<ProductManagedInventoryContractEntry<TIdentity>> {
+  return Object.freeze({
+    identity,
+    owner,
+    canonicalComponentIds: Object.freeze([]),
+    unavailableState,
+    unavailableReason,
+  });
+}
+
+/**
+ * Browser-side v1 wire-decoder expectation. This validates the server-owned
+ * role projection; it is not a second topology, lifecycle, or readiness
+ * owner. Fixture construction reuses it only to emit server-shaped synthetic
+ * envelopes whose evidence indexes bind to their final component array.
+ */
+const PRODUCT_MANAGED_INVENTORY_CONTRACT = Object.freeze([
+  managedInventoryUnavailableRole('operator-auth', 'AUDITED_BACKEND_SECURITY', 'OWNER_GATED', 'REMOTE_OPERATOR_IDENTITY_OWNER_GATED'),
+  managedInventoryUnavailableRole('configuration-authority', 'SYSTEM_CONTROL_CONFIGURATION_OWNER', 'OWNER_GATED', 'CANONICAL_CONFIGURATION_VERSION_OWNER_REQUIRED'),
+  managedInventoryMappedRole('ledger-persistence', 'EXISTING_LEDGER', 'ledger-persistence'),
+  managedInventoryUnavailableRole('database', 'EXISTING_LEDGER_DATABASE', 'OWNER_GATED', 'DATABASE_LIFECYCLE_EVIDENCE_NOT_BOUND'),
+  managedInventoryUnavailableRole('clock-sync', 'CANONICAL_CLOCK_SYNC_OWNER', 'OWNER_GATED', 'CLOCK_SYNCHRONIZATION_OWNER_NOT_BOUND'),
+  managedInventoryMappedRole('spot-public-source', 'AUDITED_APP_PUBLIC_SOURCE', 'public-spot-source'),
+  managedInventoryMappedRole('usdm-public-source', 'AUDITED_APP_PUBLIC_SOURCE', 'public-usdm-source'),
+  managedInventoryUnavailableRole('spot-private-truth', 'LIVE_EDGE_PRIVATE_TRUTH', 'OWNER_GATED', 'PRIVATE_READ_AUTHORIZATION_REQUIRED'),
+  managedInventoryUnavailableRole('usdm-private-truth', 'LIVE_EDGE_PRIVATE_TRUTH', 'OWNER_GATED', 'PRIVATE_READ_AUTHORIZATION_REQUIRED'),
+  managedInventoryUnavailableRole('margin-private-truth', 'LIVE_EDGE_PRIVATE_TRUTH', 'OWNER_GATED', 'PRIVATE_READ_AUTHORIZATION_REQUIRED'),
+  managedInventoryMappedRole('instrument-filter-registry', 'CANONICAL_MARKET_UNIVERSE', 'market-universe'),
+  managedInventoryMappedRole('universe', 'CANONICAL_MARKET_UNIVERSE', 'market-universe'),
+  managedInventoryMappedRole('evidence-attention-runtime', 'INTELLIGENCE_RUNTIME_AND_MARKET_INTELLIGENCE', 'intelligence-runtime', 'market-intelligence'),
+  managedInventoryMappedRole('q-inference', 'Q_INFERENCE', 'q-inference'),
+  managedInventoryMappedRole('basis-engine', 'BASIS_ENGINE', 'basis-engine'),
+  managedInventoryMappedRole('volume-engine', 'VOLUME_ENGINE', 'volume-engine'),
+  managedInventoryUnavailableRole('opportunity-authority', 'FOUNDATION_CANONICAL_OPPORTUNITY', 'OWNER_GATED', 'OPPORTUNITY_AUTHORITY_COMPONENT_EVIDENCE_NOT_BOUND'),
+  managedInventoryMappedRole('capital-supervision', 'CAPITAL_SUPERVISION', 'capital-supervision'),
+  managedInventoryMappedRole('risk-gate', 'BACKEND_FOUNDATION_RISK', 'multileg-risk'),
+  managedInventoryMappedRole('execution-hand', 'BACKEND_FOUNDATION_EXECUTION', 'execution-coordinator-validate-only'),
+  managedInventoryUnavailableRole('normal-basis-coordinator', 'LIVE_EDGE_NORMAL_BASIS_COORDINATOR', 'OWNER_GATED', 'NORMAL_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND'),
+  managedInventoryUnavailableRole('reverse-basis-coordinator', 'LIVE_EDGE_REVERSE_BASIS_COORDINATOR', 'OWNER_GATED', 'REVERSE_BASIS_COORDINATOR_COMPONENT_EVIDENCE_NOT_BOUND'),
+  managedInventoryUnavailableRole('volume-position-lifecycle', 'LIVE_EDGE_VOLUME_POSITION_LIFECYCLE', 'OWNER_GATED', 'VOLUME_POSITION_LIFECYCLE_COMPONENT_EVIDENCE_NOT_BOUND'),
+  managedInventoryMappedRole('reconciliation', 'BACKEND_FOUNDATION_RECONCILIATION', 'reconciliation'),
+  managedInventoryUnavailableRole('exposure-position-recovery', 'LIVE_EDGE_EXPOSURE_RECOVERY', 'OWNER_GATED', 'PRIVATE_ACCOUNT_TRUTH_OWNER_GATED'),
+  managedInventoryUnavailableRole('outcome-feedback', 'Q_OUTCOME_FEEDBACK_OWNER', 'OWNER_GATED', 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED'),
+  managedInventoryMappedRole('machine-supervisor', 'BACKEND_FOUNDATION_CONTROL_AND_SYSTEM_INTEGRATION', 'engine-supervisor'),
+  managedInventoryUnavailableRole('api-read-model', 'PRODUCT_INTEGRATION_READ_MODEL', 'NOT_CONFIGURED', 'API_READ_MODEL_NOT_LIFECYCLE_MANAGED'),
+  managedInventoryUnavailableRole('notification-incident-router', 'NOTIFICATION_INCIDENT_ROUTER', 'NOT_CONFIGURED', 'INCIDENT_OWNER_NOT_CONFIGURED'),
+  managedInventoryUnavailableRole('web-cockpit', 'PRODUCT_CONTROL_WEB', 'NOT_CONFIGURED', 'WEB_COCKPIT_NOT_LIFECYCLE_MANAGED'),
+  managedInventoryUnavailableRole('backup-restore', 'OPS_BACKUP_RESTORE', 'MISSING', 'BACKUP_RESTORE_MANAGED_COMPONENT_MISSING'),
+  managedInventoryUnavailableRole('external-watchdog', 'OPS_EXTERNAL_WATCHDOG', 'MISSING', 'EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING'),
+  managedInventoryUnavailableRole('cloudflare-tunnel-access', 'OPS_CLOUDFLARE_ACCESS', 'MISSING', 'CLOUDFLARE_TUNNEL_ACCESS_MANAGED_COMPONENT_MISSING'),
+]);
+
+export const I00_MANAGED_COMPONENT_IDENTITIES = Object.freeze(
+  PRODUCT_MANAGED_INVENTORY_CONTRACT.map((entry) => entry.identity),
+);
+export type I00ManagedComponentIdentity = (typeof I00_MANAGED_COMPONENT_IDENTITIES)[number];
+
+const PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS = Object.freeze(Array.from(new Set(
+  PRODUCT_MANAGED_INVENTORY_CONTRACT.flatMap((entry) => entry.canonicalComponentIds),
+)));
 
 export interface ProductDependencyEdgeProjection {
   readonly fromComponentId: string;
@@ -210,6 +376,35 @@ export interface ProductControlResult {
   readonly correlationId: string;
   readonly completedAtMs: number;
   readonly synthetic: boolean;
+}
+
+export interface ProductCommandResultIdentity {
+  readonly commandId: string;
+  readonly idempotencyKey: string;
+  readonly controlId: string;
+}
+
+export type ProductCommandResultReadback =
+  | Readonly<{
+      readonly state: 'PENDING' | 'TERMINAL';
+      readonly result: Readonly<ProductControlResult>;
+      readonly reasonCode: null;
+    }>
+  | Readonly<{
+      readonly state: 'AMBIGUOUS';
+      readonly result: Readonly<ProductControlResult>;
+      readonly reasonCode: 'COMMAND_RESULT_FAILED_ATTENTION_REQUIRED';
+    }>;
+
+export function isProductCommandResultIdentity(value: unknown): value is ProductCommandResultIdentity {
+  return isRecord(value)
+    && Object.keys(value).length === 3
+    && typeof value.commandId === 'string'
+    && /^sysctrl_[a-f0-9]{64}$/.test(value.commandId)
+    && typeof value.idempotencyKey === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/.test(value.idempotencyKey)
+    && typeof value.controlId === 'string'
+    && /^[a-z0-9][a-z0-9.-]{0,159}$/.test(value.controlId);
 }
 
 export interface ProductControlRegistryEntry {
@@ -368,9 +563,11 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly persistentSyntheticLabel: boolean;
   readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
+  readonly bootReleaseReadback: Readonly<ProductBootReleaseReadback>;
   readonly ownerView: Readonly<FiveSecondOwnerView>;
   readonly dashboard: TDashboard;
   readonly components: readonly Readonly<ProductComponentProjection>[];
+  readonly managedInventory: Readonly<ProductManagedInventoryProjection>;
   readonly dependencyEdges: readonly Readonly<ProductDependencyEdgeProjection>[];
   readonly controls: readonly Readonly<ProductControlRegistryEntry>[];
   readonly traces: readonly Readonly<ProductCorrelationTrace>[];
@@ -677,6 +874,87 @@ function fixtureControlValue(session: Readonly<ProductFixtureSession>, controlId
   return 'UNAVAILABLE';
 }
 
+export function buildFixtureManagedInventory(
+  components: readonly Readonly<ProductComponentProjection>[],
+): Readonly<ProductManagedInventoryProjection> {
+  const identities = PRODUCT_MANAGED_INVENTORY_CONTRACT.map((entry) => entry.identity);
+  const mappedCount = PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length;
+  if (identities.length !== 33
+    || new Set(identities).size !== identities.length
+    || mappedCount !== 14
+    || PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.length !== 14) {
+    throw new TypeError('managed inventory fixture contract must remain the exact 33-role/14-component wire schema');
+  }
+
+  const evidenceById = new Map<string, Array<{ component: Readonly<ProductComponentProjection>; index: number }>>();
+  for (const [index, component] of components.entries()) {
+    const existing = evidenceById.get(component.componentId) ?? [];
+    existing.push({ component, index });
+    evidenceById.set(component.componentId, existing);
+  }
+
+  const entries = Object.freeze(PRODUCT_MANAGED_INVENTORY_CONTRACT.map((contract) => {
+    const canonicalComponentIds = Object.freeze([...contract.canonicalComponentIds]);
+    if (canonicalComponentIds.length === 0) {
+      return Object.freeze({
+        identity: contract.identity,
+        owner: contract.owner,
+        canonicalComponentIds,
+        inventoryState: contract.unavailableState!,
+        evidence: null,
+        reasonCode: contract.unavailableReason!,
+      });
+    }
+    const observations = canonicalComponentIds.map((componentId) => evidenceById.get(componentId) ?? []);
+    if (observations.some((matches) => matches.length !== 1)) {
+      return Object.freeze({
+        identity: contract.identity,
+        owner: contract.owner,
+        canonicalComponentIds,
+        inventoryState: 'MISSING' as const,
+        evidence: null,
+        reasonCode: observations.some((matches) => matches.length > 1)
+          ? 'CANONICAL_COMPONENT_EVIDENCE_DUPLICATED'
+          : 'CANONICAL_COMPONENT_EVIDENCE_MISSING',
+      });
+    }
+    return Object.freeze({
+      identity: contract.identity,
+      owner: contract.owner,
+      canonicalComponentIds,
+      inventoryState: 'EVIDENCE_PRESENT' as const,
+      evidence: Object.freeze(observations.map((matches) => Object.freeze({
+        source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION' as const,
+        componentId: matches[0]!.component.componentId,
+        componentProjectionIndex: matches[0]!.index,
+      }))),
+      reasonCode: null,
+    });
+  }));
+
+  const count = (state: ProductManagedInventoryState): number => (
+    entries.filter((entry) => entry.inventoryState === state).length
+  );
+  const referencedCanonicalComponentCount = new Set(
+    PRODUCT_MANAGED_INVENTORY_CONTRACT.flatMap((entry) => entry.canonicalComponentIds),
+  ).size;
+  return Object.freeze({
+    schemaVersion: PRODUCT_MANAGED_INVENTORY_SCHEMA,
+    expectedIdentityCount: 33,
+    mappedIdentityCount: mappedCount,
+    evidencePresentCount: count('EVIDENCE_PRESENT'),
+    ownerGatedCount: count('OWNER_GATED'),
+    notConfiguredCount: count('NOT_CONFIGURED'),
+    missingCount: count('MISSING'),
+    canonicalComponentCount: PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.length,
+    referencedCanonicalComponentCount,
+    observedCanonicalComponentCount: PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.filter((componentId) => (
+      (evidenceById.get(componentId)?.length ?? 0) === 1
+    )).length,
+    entries,
+  });
+}
+
 export function buildFixtureBinding<TDashboard>(
   session: Readonly<ProductFixtureSession>,
   dashboard: TDashboard,
@@ -718,10 +996,10 @@ export function buildFixtureBinding<TDashboard>(
     activePosition: scenario.position,
     latestMaterialChange: scenario.materialChange,
     revisions: Object.freeze({
-      testedCommit: '692501587617d4880303fbd747d93e63c376f088',
+      testedCommit: null,
       deployedCommit: null,
-      modelRevision: scenario.modelRevision,
-      configRevision: revision,
+      modelRevision: null,
+      configRevision: null,
       schemaRevision: PRODUCT_SUPERVISOR_SCHEMA,
     }),
   });
@@ -780,9 +1058,18 @@ export function buildFixtureBinding<TDashboard>(
       readbackValidUntilUtc: new Date(Math.floor(session.nowMs / 1_000) * 1_000 + 10 * 60_000).toISOString().replace('.000Z', 'Z'),
       reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
     }),
+    bootReleaseReadback: Object.freeze({
+      source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE',
+      state: 'UNAVAILABLE',
+      latest: null,
+      history: Object.freeze([]),
+      crashPendingOperationIds: Object.freeze([]),
+      reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
+    }),
     ownerView,
     dashboard,
     components: scenario.components,
+    managedInventory: buildFixtureManagedInventory(scenario.components),
     dependencyEdges: buildFixtureDependencyEdges(scenario.components),
     controls,
     traces: Object.freeze([buildFixtureTrace(session, scenario)]),
@@ -890,7 +1177,7 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
 }
 
 function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenarioId): readonly Readonly<ProductComponentProjection>[] {
-  const ids = ['public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime', 'market-intelligence', 'basis-engine', 'volume-engine', 'capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation', 'ledger-persistence', 'engine-supervisor'];
+  const ids = ['public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime', 'market-intelligence', 'q-inference', 'basis-engine', 'volume-engine', 'capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation', 'ledger-persistence', 'engine-supervisor'];
   return Object.freeze(ids.map((componentId, index) => Object.freeze({
     componentId,
     owner: fixtureOwner(componentId),
@@ -915,6 +1202,7 @@ function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenario
 }
 
 function fixtureOwner(componentId: string): string {
+  if (componentId === 'q-inference') return 'quant/src/quant_edge/inference/**';
   if (componentId.includes('basis') || componentId.includes('volume')) return 'server/src/engine/**';
   if (componentId.includes('capital')) return 'server/src/capitalFoundation/**';
   if (componentId.includes('risk') || componentId.includes('execution') || componentId === 'reconciliation') return 'server/src/foundation/**';
@@ -1315,6 +1603,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (!isProductTruthLabel(value.truthLabel)) errors.push('PRODUCT_TRUTH_LABEL_INVALID');
   if (typeof value.persistentSyntheticLabel !== 'boolean') errors.push('SYNTHETIC_LABEL_INVALID');
   errors.push(...validateCanonicalOpsEnvelope(value.opsReadback, value.opsIntakeInterlock, value.evaluatedAtMs));
+  errors.push(...validateProductBootReleaseReadback(value.bootReleaseReadback, value.ownerView));
   const syntheticScan = scanSyntheticTruth(value);
   if (!syntheticScan.complete) errors.push('SYNTHETIC_TRUTH_SCAN_OUT_OF_BOUNDS');
   if (syntheticScan.found && value.persistentSyntheticLabel !== true) errors.push('SYNTHETIC_LABEL_NOT_PERSISTENT');
@@ -1361,6 +1650,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       }
     }
   }
+  errors.push(...validateProductManagedInventory(value.managedInventory, value.components, value.ownerView));
   if (!Array.isArray(value.dependencyEdges)) errors.push('DEPENDENCY_EDGES_MISSING');
   else {
     if (value.dependencyEdges.length > 1_000) errors.push('DEPENDENCY_EDGES_OUT_OF_BOUNDS');
@@ -1547,6 +1837,168 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   return Object.freeze(Array.from(new Set(errors)));
 }
 
+function validateProductManagedInventory(
+  inventoryValue: unknown,
+  componentsValue: unknown,
+  ownerViewValue: unknown,
+): readonly string[] {
+  if (!isRecord(inventoryValue)) return Object.freeze(['MANAGED_INVENTORY_MISSING']);
+  const errors: string[] = [];
+  if (inventoryValue.schemaVersion !== PRODUCT_MANAGED_INVENTORY_SCHEMA) {
+    errors.push('MANAGED_INVENTORY_SCHEMA_UNSUPPORTED');
+  }
+
+  const components = Array.isArray(componentsValue) ? componentsValue : [];
+  const occurrences = new Map<string, number[]>();
+  for (const [index, component] of components.entries()) {
+    if (!isRecord(component) || typeof component.componentId !== 'string') continue;
+    const indexes = occurrences.get(component.componentId) ?? [];
+    indexes.push(index);
+    occurrences.set(component.componentId, indexes);
+    if (!PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.includes(component.componentId)) {
+      errors.push('MANAGED_INVENTORY_COMPONENT_UNKNOWN');
+    }
+  }
+  const observedCanonicalComponentCount = PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.filter((componentId) => (
+    (occurrences.get(componentId)?.length ?? 0) === 1
+  )).length;
+
+  const entries = inventoryValue.entries;
+  const validEntries: Record<string, unknown>[] = [];
+  if (!Array.isArray(entries)) {
+    errors.push('MANAGED_INVENTORY_ENTRIES_MISSING');
+  } else {
+    if (entries.length !== PRODUCT_MANAGED_INVENTORY_CONTRACT.length) {
+      errors.push('MANAGED_INVENTORY_ENTRY_COUNT_INVALID');
+    }
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      const contract = PRODUCT_MANAGED_INVENTORY_CONTRACT[index];
+      if (!isRecord(entry) || !contract) {
+        errors.push('MANAGED_INVENTORY_ENTRY_INVALID');
+        continue;
+      }
+      validEntries.push(entry);
+      if (entry.identity !== contract.identity) errors.push('MANAGED_INVENTORY_IDENTITY_ORDER_INVALID');
+      if (entry.owner !== contract.owner) errors.push('MANAGED_INVENTORY_OWNER_MISMATCH');
+      if (!Array.isArray(entry.canonicalComponentIds)
+        || entry.canonicalComponentIds.length !== contract.canonicalComponentIds.length
+        || entry.canonicalComponentIds.some((componentId, componentIndex) => (
+          componentId !== contract.canonicalComponentIds[componentIndex]
+        ))) {
+        errors.push('MANAGED_INVENTORY_COMPONENT_MAPPING_INVALID');
+      }
+      if (!['EVIDENCE_PRESENT', 'OWNER_GATED', 'NOT_CONFIGURED', 'MISSING'].includes(String(entry.inventoryState))) {
+        errors.push('MANAGED_INVENTORY_STATE_INVALID');
+      }
+
+      if (contract.canonicalComponentIds.length === 0) {
+        if (entry.inventoryState !== contract.unavailableState
+          || entry.evidence !== null
+          || entry.reasonCode !== contract.unavailableReason) {
+          errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+        }
+        continue;
+      }
+
+      const expectedObservations = contract.canonicalComponentIds.map((componentId) => occurrences.get(componentId) ?? []);
+      const exactEvidencePresent = expectedObservations.every((indexes) => indexes.length === 1);
+      if (!exactEvidencePresent) {
+        const expectedReason = expectedObservations.some((indexes) => indexes.length > 1)
+          ? 'CANONICAL_COMPONENT_EVIDENCE_DUPLICATED'
+          : 'CANONICAL_COMPONENT_EVIDENCE_MISSING';
+        if (entry.inventoryState !== 'MISSING'
+          || entry.evidence !== null
+          || entry.reasonCode !== expectedReason) {
+          errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+        }
+        continue;
+      }
+
+      if (entry.inventoryState !== 'EVIDENCE_PRESENT' || entry.reasonCode !== null) {
+        errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+      }
+      if (!Array.isArray(entry.evidence)
+        || entry.evidence.length !== contract.canonicalComponentIds.length) {
+        errors.push('MANAGED_INVENTORY_EVIDENCE_INVALID');
+        continue;
+      }
+      for (const [evidenceIndex, evidence] of entry.evidence.entries()) {
+        const expectedComponentId = contract.canonicalComponentIds[evidenceIndex];
+        if (!isRecord(evidence)) {
+          errors.push('MANAGED_INVENTORY_EVIDENCE_INVALID');
+          continue;
+        }
+        if (evidence.source !== 'PRODUCT_RUNTIME_COMPONENT_PROJECTION') {
+          errors.push('MANAGED_INVENTORY_EVIDENCE_SOURCE_INVALID');
+        }
+        if (evidence.componentId !== expectedComponentId) {
+          errors.push('MANAGED_INVENTORY_EVIDENCE_COMPONENT_INVALID');
+        }
+        if (!Number.isInteger(evidence.componentProjectionIndex)
+          || Number(evidence.componentProjectionIndex) < 0
+          || Number(evidence.componentProjectionIndex) >= components.length) {
+          errors.push('MANAGED_INVENTORY_EVIDENCE_INDEX_INVALID');
+          continue;
+        }
+        const projected = components[Number(evidence.componentProjectionIndex)];
+        if (!isRecord(projected) || projected.componentId !== expectedComponentId) {
+          errors.push('MANAGED_INVENTORY_EVIDENCE_INDEX_INVALID');
+        }
+      }
+    }
+  }
+
+  const stateCount = (state: ProductManagedInventoryState): number => validEntries.filter((entry) => (
+    entry.inventoryState === state
+  )).length;
+  const countExpectations: Readonly<Record<string, number>> = Object.freeze({
+    expectedIdentityCount: 33,
+    mappedIdentityCount: PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length,
+    evidencePresentCount: stateCount('EVIDENCE_PRESENT'),
+    ownerGatedCount: stateCount('OWNER_GATED'),
+    notConfiguredCount: stateCount('NOT_CONFIGURED'),
+    missingCount: stateCount('MISSING'),
+    canonicalComponentCount: PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.length,
+    referencedCanonicalComponentCount: new Set(
+      PRODUCT_MANAGED_INVENTORY_CONTRACT.flatMap((entry) => entry.canonicalComponentIds),
+    ).size,
+    observedCanonicalComponentCount,
+  });
+  for (const [field, expected] of Object.entries(countExpectations)) {
+    const actual = inventoryValue[field];
+    if (!Number.isInteger(actual) || Number(actual) < 0) {
+      errors.push(`MANAGED_INVENTORY_COUNT_INVALID:${field}`);
+    } else if (actual !== expected) {
+      errors.push(`MANAGED_INVENTORY_COUNT_MISMATCH:${field}`);
+    }
+  }
+  if (Number.isInteger(inventoryValue.evidencePresentCount)
+    && Number.isInteger(inventoryValue.ownerGatedCount)
+    && Number.isInteger(inventoryValue.notConfiguredCount)
+    && Number.isInteger(inventoryValue.missingCount)
+    && Number(inventoryValue.evidencePresentCount)
+      + Number(inventoryValue.ownerGatedCount)
+      + Number(inventoryValue.notConfiguredCount)
+      + Number(inventoryValue.missingCount) !== 33) {
+    errors.push('MANAGED_INVENTORY_DENOMINATOR_INVALID');
+  }
+
+  const inventoryEntries = Array.isArray(entries) ? entries : [];
+  const mappedEvidenceComplete = PRODUCT_MANAGED_INVENTORY_CONTRACT.every((contract, index) => {
+    const entry = inventoryEntries[index];
+    return contract.canonicalComponentIds.length === 0
+      || (isRecord(entry) && entry.inventoryState === 'EVIDENCE_PRESENT');
+  });
+  if (isRecord(ownerViewValue)
+    && ownerViewValue.machineReady === 'YES'
+    && (observedCanonicalComponentCount !== PRODUCT_MANAGED_CANONICAL_COMPONENT_IDS.length
+      || !mappedEvidenceComplete)) {
+    errors.push('MANAGED_INVENTORY_GREEN_WITH_MISSING_COMPONENT');
+  }
+  return Object.freeze(Array.from(new Set(errors)));
+}
+
 function validateOwnerView(value: unknown): readonly string[] {
   if (!isRecord(value)) return ['OWNER_VIEW_MISSING'];
   const errors: string[] = [];
@@ -1564,6 +2016,216 @@ function validateOwnerView(value: unknown): readonly string[] {
   }
   if (isRecord(value.revisions) && value.revisions.schemaRevision !== PRODUCT_SUPERVISOR_SCHEMA) errors.push('OWNER_SCHEMA_REVISION_INVALID');
   return errors;
+}
+
+const PRODUCT_BOOT_RELEASE_MAX_HISTORY = 20;
+const PRODUCT_BOOT_RELEASE_MAX_UTC_MS = 4_102_444_800_000;
+const PRODUCT_BOOT_RELEASE_SHA = /^[0-9a-f]{40}$/;
+const PRODUCT_BOOT_RELEASE_REVISION = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const PRODUCT_BOOT_RELEASE_UNRESOLVED = /REPLACE_ME|CHANGEME|example\.com|000000000000|^(?:UNKNOWN|UNAVAILABLE|NOT_CONFIGURED)(?:_|$)/i;
+const PRODUCT_BOOT_RELEASE_SCHEMA_REVISION = /^(?:[1-9][0-9]{0,15}|UNKNOWN)$/;
+const PRODUCT_BOOT_RELEASE_CODE = /^[A-Z][A-Z0-9_]{0,127}$/;
+const PRODUCT_BOOT_RELEASE_RECORD_KEYS = Object.freeze([
+  'operationId', 'operationType', 'generation', 'testedCommit', 'deployedCommit',
+  'configRevision', 'schemaRevision', 'modelRevision', 'startedAtMs',
+  'completedAtMs', 'clean', 'blockerCode', 'correlationId', 'ledgerEventId',
+  'lifecycleState', 'identityState', 'identityIssues',
+  'deploymentMutationAuthority',
+] as const);
+const PRODUCT_BOOT_RELEASE_READBACK_KEYS = Object.freeze([
+  'source', 'state', 'latest', 'history', 'crashPendingOperationIds', 'reasonCodes',
+] as const);
+const PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES = Object.freeze([
+  'TESTED_COMMIT_UNKNOWN',
+  'DEPLOYED_COMMIT_UNKNOWN',
+  'CONFIG_REVISION_UNKNOWN',
+  'SCHEMA_REVISION_UNKNOWN',
+  'MODEL_REVISION_UNKNOWN',
+] as const);
+
+function exactObjectKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
+  const actual = Object.keys(value).sort();
+  const orderedExpected = [...expected].sort();
+  return actual.length === orderedExpected.length
+    && actual.every((key, index) => key === orderedExpected[index]);
+}
+
+function sameStringArray(actual: readonly unknown[], expected: readonly string[]): boolean {
+  return actual.length === expected.length
+    && actual.every((entry, index) => entry === expected[index]);
+}
+
+function validBootReleaseRevision(value: unknown): value is string {
+  return typeof value === 'string'
+    && PRODUCT_BOOT_RELEASE_REVISION.test(value)
+    && !PRODUCT_BOOT_RELEASE_UNRESOLVED.test(value);
+}
+
+function validBootReleaseUtcMs(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && value <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS;
+}
+
+function validProductBootReleaseSchemaRevision(value: unknown): value is string {
+  if (value === 'UNKNOWN') return true;
+  return typeof value === 'string'
+    && PRODUCT_BOOT_RELEASE_SCHEMA_REVISION.test(value)
+    && Number.isSafeInteger(Number(value))
+    && Number(value) > 0;
+}
+
+function expectedBootReleaseIdentityIssues(
+  value: Record<string, unknown>,
+): readonly ProductBootReleaseIdentityIssue[] {
+  const issues: ProductBootReleaseIdentityIssue[] = [];
+  if (value.testedCommit === null) issues.push('TESTED_COMMIT_UNKNOWN');
+  if (value.deployedCommit === null) issues.push('DEPLOYED_COMMIT_UNKNOWN');
+  if (value.configRevision === null) issues.push('CONFIG_REVISION_UNKNOWN');
+  if (value.schemaRevision === 'UNKNOWN') issues.push('SCHEMA_REVISION_UNKNOWN');
+  if (value.modelRevision === null) issues.push('MODEL_REVISION_UNKNOWN');
+  return issues;
+}
+
+function validProductBootReleaseRecord(value: unknown): value is Readonly<ProductBootReleaseRecord> {
+  if (!isRecord(value) || !exactObjectKeys(value, PRODUCT_BOOT_RELEASE_RECORD_KEYS)) return false;
+  if (!Number.isSafeInteger(value.generation) || Number(value.generation) < 1
+    || value.operationId !== `system.application.boot.g${value.generation}`
+    || value.operationType !== 'APPLICATION_BOOT'
+    || value.correlationId !== `system-boot-g${value.generation}`
+    || !Number.isSafeInteger(value.ledgerEventId) || Number(value.ledgerEventId) < 1
+    || !(value.testedCommit === null
+      || (typeof value.testedCommit === 'string' && PRODUCT_BOOT_RELEASE_SHA.test(value.testedCommit)))
+    || !(value.deployedCommit === null
+      || (typeof value.deployedCommit === 'string' && PRODUCT_BOOT_RELEASE_SHA.test(value.deployedCommit)))
+    || !(value.configRevision === null || validBootReleaseRevision(value.configRevision))
+    || !(value.modelRevision === null || validBootReleaseRevision(value.modelRevision))
+    || !validProductBootReleaseSchemaRevision(value.schemaRevision)
+    || !validBootReleaseUtcMs(value.startedAtMs)
+    || !(value.completedAtMs === null || validBootReleaseUtcMs(value.completedAtMs))
+    || !(value.clean === null || typeof value.clean === 'boolean')
+    || !(value.blockerCode === null
+      || (typeof value.blockerCode === 'string' && PRODUCT_BOOT_RELEASE_CODE.test(value.blockerCode)))
+    || !['ACTIVE', 'CRASH_PENDING', 'CLEAN_COMPLETED', 'UNCLEAN_COMPLETED'].includes(String(value.lifecycleState))
+    || !['AVAILABLE', 'PARTIAL', 'UNKNOWN'].includes(String(value.identityState))
+    || !Array.isArray(value.identityIssues)
+    || value.identityIssues.length > PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES.length
+    || value.deploymentMutationAuthority !== 'NONE') return false;
+  const terminal = value.lifecycleState === 'CLEAN_COMPLETED'
+    || value.lifecycleState === 'UNCLEAN_COMPLETED';
+  if (terminal !== (value.completedAtMs !== null)
+    || terminal !== (value.clean !== null)
+    || (value.lifecycleState === 'CLEAN_COMPLETED' && value.clean !== true)
+    || (value.lifecycleState === 'UNCLEAN_COMPLETED' && value.clean !== false)
+    || (value.completedAtMs !== null && value.completedAtMs < value.startedAtMs)) return false;
+  const expectedIssues = expectedBootReleaseIdentityIssues(value);
+  if (value.identityIssues.some((issue) => (
+    typeof issue !== 'string'
+    || !PRODUCT_BOOT_RELEASE_IDENTITY_ISSUES.includes(issue as ProductBootReleaseIdentityIssue)
+  )) || !sameStringArray(value.identityIssues, expectedIssues)) return false;
+  const expectedState = expectedIssues.includes('TESTED_COMMIT_UNKNOWN')
+    || expectedIssues.includes('SCHEMA_REVISION_UNKNOWN')
+    ? 'UNKNOWN'
+    : expectedIssues.length === 0 ? 'AVAILABLE' : 'PARTIAL';
+  return value.identityState === expectedState;
+}
+
+function sameProductBootReleaseRecord(
+  actual: Readonly<ProductBootReleaseRecord>,
+  expected: Readonly<ProductBootReleaseRecord>,
+): boolean {
+  return PRODUCT_BOOT_RELEASE_RECORD_KEYS.every((key) => (
+    key === 'identityIssues'
+      ? sameStringArray(actual.identityIssues, expected.identityIssues)
+      : actual[key] === expected[key]
+  ));
+}
+
+function validateProductBootReleaseReadback(
+  value: unknown,
+  ownerView: unknown,
+): readonly string[] {
+  const errors: string[] = [];
+  if (!isRecord(value) || !exactObjectKeys(value, PRODUCT_BOOT_RELEASE_READBACK_KEYS)
+    || value.source !== 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE'
+    || !['AVAILABLE', 'EMPTY', 'UNAVAILABLE'].includes(String(value.state))
+    || !Array.isArray(value.history)
+    || !Array.isArray(value.crashPendingOperationIds)
+    || !Array.isArray(value.reasonCodes)
+    || value.crashPendingOperationIds.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+    || value.reasonCodes.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+    || value.reasonCodes.some((code) => typeof code !== 'string' || !PRODUCT_BOOT_RELEASE_CODE.test(code))) {
+    return Object.freeze(['BOOT_RELEASE_READBACK_INVALID']);
+  }
+  if (value.state === 'EMPTY') {
+    if (value.latest !== null || value.history.length !== 0
+      || value.crashPendingOperationIds.length !== 0
+      || !sameStringArray(value.reasonCodes, ['BOOT_RELEASE_HISTORY_EMPTY'])) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    }
+  } else if (value.state === 'UNAVAILABLE') {
+    if (value.latest !== null || value.history.length !== 0
+      || value.crashPendingOperationIds.length !== 0 || value.reasonCodes.length < 1) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    }
+  } else {
+    if (value.history.length < 1 || value.history.length > PRODUCT_BOOT_RELEASE_MAX_HISTORY
+      || !validProductBootReleaseRecord(value.latest)
+      || value.history.some((record) => !validProductBootReleaseRecord(record))) {
+      errors.push('BOOT_RELEASE_READBACK_INVALID');
+    } else {
+      const history = value.history as readonly Readonly<ProductBootReleaseRecord>[];
+      const latest = value.latest as Readonly<ProductBootReleaseRecord>;
+      if (!sameProductBootReleaseRecord(latest, history[0]!)) {
+        errors.push('BOOT_RELEASE_READBACK_INVALID');
+      }
+      for (let index = 1; index < history.length; index += 1) {
+        if (history[index]!.generation >= history[index - 1]!.generation
+          || history[index]!.ledgerEventId >= history[index - 1]!.ledgerEventId
+          || history[index]!.startedAtMs > history[index - 1]!.startedAtMs
+          || (history[index]!.completedAtMs !== null
+            && history[index]!.completedAtMs! > history[index - 1]!.startedAtMs)
+          || history[index]!.lifecycleState === 'ACTIVE') {
+          errors.push('BOOT_RELEASE_READBACK_INVALID');
+        }
+      }
+      const expectedCrashIds = history
+        .filter((record) => record.lifecycleState === 'CRASH_PENDING')
+        .map((record) => record.operationId);
+      const expectedReasons = [
+        ...history[0]!.identityIssues,
+        ...(expectedCrashIds.length > 0 ? ['CRASH_PENDING_BOOT_PRESENT'] : []),
+      ];
+      if (value.crashPendingOperationIds.some((id) => typeof id !== 'string')
+        || !sameStringArray(value.crashPendingOperationIds, expectedCrashIds)
+        || !sameStringArray(value.reasonCodes, expectedReasons)) {
+        errors.push('BOOT_RELEASE_READBACK_INVALID');
+      }
+    }
+  }
+
+  if (errors.length === 0 && isRecord(ownerView) && isRecord(ownerView.revisions)) {
+    const revisions = ownerView.revisions as Record<string, unknown>;
+    const latest = value.state === 'AVAILABLE'
+      && validProductBootReleaseRecord(value.latest)
+      && value.latest.lifecycleState === 'ACTIVE'
+      && value.latest.identityState !== 'UNKNOWN'
+      && PRODUCT_BOOT_RELEASE_SHA.test(value.latest.testedCommit ?? '')
+      && value.latest.schemaRevision !== 'UNKNOWN'
+      ? value.latest
+      : null;
+    const expected = {
+      testedCommit: latest?.testedCommit ?? null,
+      deployedCommit: latest?.deployedCommit ?? null,
+      configRevision: latest?.configRevision ?? null,
+      modelRevision: latest?.modelRevision ?? null,
+    };
+    if (Object.entries(expected).some(([field, expectedValue]) => (
+      revisions[field] !== expectedValue
+    ))) errors.push('BOOT_RELEASE_REVISION_MISMATCH');
+  }
+  return Object.freeze([...new Set(errors)]);
 }
 
 function validateDashboardProjection(value: unknown): readonly string[] {

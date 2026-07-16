@@ -36,6 +36,7 @@ const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Obj
   supervisor: '/api/product-integration/v1/supervisor',
   materialEvents: '/api/product-integration/v1/material-events',
   trace: (correlationId: string) => `/api/product-integration/v1/traces/${encodeURIComponent(correlationId)}`,
+  commandResult: (commandId: string) => `/api/product-integration/v1/commands/${encodeURIComponent(commandId)}/result`,
   commandPreview: '/api/product-integration/v1/commands/preview',
   commandSubmit: '/api/product-integration/v1/commands',
 });

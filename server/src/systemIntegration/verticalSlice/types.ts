@@ -20,6 +20,7 @@ import type { CanonicalProposal, RiskVerdict } from '../../foundation/contracts/
 import type {
   ExecutionPlanDefinition,
   ExecutionPlanState,
+  RecoveryRecommendation,
 } from '../../foundation/execution/index.js';
 import type {
   RiskEvaluationInput,
@@ -155,6 +156,7 @@ export interface ValidateOnlyOwnerInvocations {
   readonly coordinatorsCreated: number;
   readonly coordinatorPreflights: number;
   readonly reconciliationEvaluations: number;
+  readonly recoveryEvaluations: number;
   readonly persistenceReads: number;
   readonly persistenceWrites: number;
 }
@@ -171,7 +173,7 @@ export interface ValidateOnlyVenueAudit {
 }
 
 export interface ValidateOnlyRunSnapshot {
-  readonly schema: 'cosmos.system-integration.validate-only.v1';
+  readonly schema: 'cosmos.system-integration.validate-only.v2';
   readonly recordId: string;
   readonly disposition: ValidateOnlyDisposition;
   readonly rootCorrelationId: string;
@@ -197,6 +199,7 @@ export interface ValidateOnlyRunSnapshot {
   readonly executionPlan: Readonly<ExecutionPlanDefinition> | null;
   readonly executionState: Readonly<ExecutionPlanState> | null;
   readonly reconciliation: Readonly<ReconciliationResult> | null;
+  readonly recoveryRecommendations: readonly Readonly<RecoveryRecommendation>[];
   readonly supervision: Readonly<ValidateOnlySupervisionProjection> | null;
   readonly failure: Readonly<StructuredFailure> | null;
   readonly ownerInvocations: Readonly<ValidateOnlyOwnerInvocations>;

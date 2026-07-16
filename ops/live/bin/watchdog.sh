@@ -15,7 +15,7 @@
 #   - the watchdog NEVER takes any trading/exchange action of any kind, and
 #     never auto-liquidates on infrastructure alarms (§23);
 #   - tunnel down -> alert (optional bounded restart via WATCHDOG_RESTART_TUNNEL);
-#   - deploy in progress (deploy lock held) -> skip entirely;
+#   - proven live deploy owner or bounded owner publication -> skip entirely;
 #   - deploy-frozen marker present -> keep alerting until an operator acts;
 #   - newest backup stale/missing -> alert (§23 "backup stale").
 #
@@ -57,8 +57,8 @@ TUNNEL_RESTARTS="$WATCHDOG_STATE_DIR/tunnel-restarts.log"
 ALERTS_LOG="$WATCHDOG_STATE_DIR/alerts.jsonl"
 
 wd_alert() { # severity code message
-  alert "$1" "$2" "$3"
   jsonl_append "$ALERTS_LOG" "ts=$(now_utc)" "severity=$1" "code=$2" "message=$3"
+  alert "$1" "$2" "$3"
 }
 
 count_recent() { # file window_sec
@@ -72,23 +72,43 @@ count_recent() { # file window_sec
   echo "$n"
 }
 
-write_status() { # live ready tunnel skipped frozen backupFresh streak
+write_status() { # live ready tunnel skipped frozen backupFresh streak lockState lockReason
   json_write "$WATCHDOG_STATE_DIR/status.json" "ranAtUtc=$(now_utc)" \
     "live=$1" "ready=$2" "tunnel=$3" "skipped=$4" "deployFrozen=$5" \
-    "backupFresh=$6" "liveFailStreak=$7"
+    "backupFresh=$6" "liveFailStreak=$7" "deployLockState=$8" \
+    "deployLockReason=$9"
 }
 
-# --- deploy in progress: hands off ------------------------------------------------
-if [ -d "$DEPLOY_LOCK" ]; then
-  ops_log "deploy lock held ($DEPLOY_LOCK); skipping this watchdog pass"
-  write_status unknown unknown unknown true false unknown "$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
-  exit 0
-fi
+# --- deploy ownership: skip only a proven owner or bounded publication race -------
+LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
+case "$LOCK_STREAK" in (*[!0-9]*|"") LOCK_STREAK=0 ;; esac
+classify_lock_family "$DEPLOY_LOCK"
+DEPLOY_LOCK_STATE="$LOCK_STATE"
+DEPLOY_LOCK_REASON="$LOCK_REASON"
+case "$DEPLOY_LOCK_STATE" in
+  LIVE|INITIALIZING)
+    ops_log "deploy lock state=$DEPLOY_LOCK_STATE reason=$DEPLOY_LOCK_REASON; skipping this watchdog pass"
+    write_status unknown unknown unknown true unknown unknown "$LOCK_STREAK" \
+      "$DEPLOY_LOCK_STATE" "$DEPLOY_LOCK_REASON"
+    exit 0
+    ;;
+  UNKNOWN)
+    wd_alert critical DEPLOY_LOCK_UNVERIFIED \
+      "deploy lock ownership cannot be proven ($DEPLOY_LOCK_REASON); fail-closed skip; lock left untouched"
+    write_status unknown unknown unknown true unknown unknown "$LOCK_STREAK" \
+      "$DEPLOY_LOCK_STATE" "$DEPLOY_LOCK_REASON"
+    exit 0
+    ;;
+  DEAD|STALE|MALFORMED)
+    wd_alert critical "DEPLOY_LOCK_$DEPLOY_LOCK_STATE" \
+      "deploy lock is $DEPLOY_LOCK_STATE ($DEPLOY_LOCK_REASON); continuing all checks; lock left untouched"
+    ;;
+  ABSENT) : ;;
+esac
 
 # --- app liveness -------------------------------------------------------------------
 LIVE=false READY=false
-STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
-case "$STREAK" in (*[!0-9]*|"") STREAK=0 ;; esac
+STREAK="$LOCK_STREAK"
 
 if http_ok "${HEALTH_BASE}${LIVE_PATH}"; then
   LIVE=true
@@ -160,5 +180,6 @@ if [ -n "$BACKUP_DIR" ]; then
   fi
 fi
 
-write_status "$LIVE" "$READY" "$TUNNEL" false "$FROZEN" "$BACKUP_FRESH" "$STREAK"
+write_status "$LIVE" "$READY" "$TUNNEL" false "$FROZEN" "$BACKUP_FRESH" "$STREAK" \
+  "$DEPLOY_LOCK_STATE" "$DEPLOY_LOCK_REASON"
 exit 0

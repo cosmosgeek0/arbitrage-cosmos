@@ -2,7 +2,8 @@
 import { fail, hasPlaceholder, isFullSha, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
-if (!args.input || !args['max-age-sec']) fail('--input and --max-age-sec are required');
+if (!args.input || !args['max-age-sec'] || !args['expected-sha']) fail('--input, --max-age-sec, and --expected-sha are required');
+if (!isFullSha(args['expected-sha'])) fail('--expected-sha must be a full Git SHA');
 if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only with --simulation-clock');
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
 const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
@@ -13,7 +14,9 @@ requireKeys(value, [
   'rollbackCandidate', 'currentDeploymentBlocker', 'observedAtUtc',
 ], 'deployment readback');
 if (!isFullSha(value.testedSha)) fail('testedSha must be a full Git SHA');
+if (value.testedSha !== args['expected-sha']) fail('testedSha does not match --expected-sha');
 if (value.deployedSha !== null && !isFullSha(value.deployedSha)) fail('deployedSha must be null or a full Git SHA');
+if (value.deployedSha !== null && value.deployedSha !== args['expected-sha']) fail('deployedSha does not match --expected-sha');
 if (!isUtc(value.observedAtUtc)) fail('observedAtUtc must be exact UTC seconds');
 const ageMs = Date.parse(effectiveNow) - Date.parse(value.observedAtUtc);
 const maxAgeMs = Number(args['max-age-sec']) * 1000;
@@ -62,4 +65,12 @@ if (value.deployedSha === null) {
   if (!isFullSha(value.rollbackCandidate)) fail('proved deployment requires a full-SHA rollback candidate');
 }
 
-process.stdout.write(`${JSON.stringify({ status: 'DEPLOYMENT_READBACK_VALID', deployed: value.deployedSha !== null, blocker: value.currentDeploymentBlocker })}\n`);
+process.stdout.write(`${JSON.stringify({
+  status: 'DEPLOYMENT_READBACK_VALID',
+  testedSha: value.testedSha,
+  deployedSha: value.deployedSha,
+  releaseId: value.releaseId,
+  blocker: value.currentDeploymentBlocker,
+  observedAtUtc: value.observedAtUtc,
+  deployed: value.deployedSha !== null,
+})}\n`);

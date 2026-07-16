@@ -412,6 +412,50 @@ export interface ProductRuntimeOwnerView {
   }>;
 }
 
+export type ProductRuntimeBootReleaseLifecycleState =
+  | 'ACTIVE' | 'CRASH_PENDING' | 'CLEAN_COMPLETED' | 'UNCLEAN_COMPLETED';
+
+export type ProductRuntimeBootReleaseIdentityIssue =
+  | 'TESTED_COMMIT_UNKNOWN'
+  | 'DEPLOYED_COMMIT_UNKNOWN'
+  | 'CONFIG_REVISION_UNKNOWN'
+  | 'SCHEMA_REVISION_UNKNOWN'
+  | 'MODEL_REVISION_UNKNOWN';
+
+export interface ProductRuntimeBootReleaseRecord {
+  readonly operationId: string;
+  readonly operationType: 'APPLICATION_BOOT';
+  readonly generation: number;
+  readonly testedCommit: string | null;
+  readonly deployedCommit: string | null;
+  readonly configRevision: string | null;
+  readonly schemaRevision: string;
+  readonly modelRevision: string | null;
+  readonly startedAtMs: number;
+  readonly completedAtMs: number | null;
+  readonly clean: boolean | null;
+  readonly blockerCode: string | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+  readonly lifecycleState: ProductRuntimeBootReleaseLifecycleState;
+  readonly identityState: 'AVAILABLE' | 'PARTIAL' | 'UNKNOWN';
+  readonly identityIssues: readonly ProductRuntimeBootReleaseIdentityIssue[];
+  readonly deploymentMutationAuthority: 'NONE';
+}
+
+/**
+ * Bounded Product projection of canonical Ledger boot/release readback.
+ * This is evidence only and carries no deployment mutation authority.
+ */
+export interface ProductRuntimeBootReleaseReadback {
+  readonly source: 'SYSTEM_INTEGRATION_LEDGER_BOOT_RELEASE';
+  readonly state: 'AVAILABLE' | 'EMPTY' | 'UNAVAILABLE';
+  readonly latest: Readonly<ProductRuntimeBootReleaseRecord> | null;
+  readonly history: readonly Readonly<ProductRuntimeBootReleaseRecord>[];
+  readonly crashPendingOperationIds: readonly string[];
+  readonly reasonCodes: readonly string[];
+}
+
 export interface ProductRuntimeSurfaceDatum {
   readonly fieldId: string;
   readonly label: string;
@@ -444,6 +488,7 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly persistentSyntheticLabel: boolean;
   readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
+  readonly bootReleaseReadback: Readonly<ProductRuntimeBootReleaseReadback>;
   readonly ownerView: Readonly<ProductRuntimeOwnerView>;
   readonly dashboard: Readonly<SystemSupervisorReadModel>;
   readonly components: readonly Readonly<ProductRuntimeComponentProjection>[];

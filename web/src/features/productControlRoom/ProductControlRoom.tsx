@@ -6,6 +6,8 @@ import {
   createFixtureSession,
   productTraceHasSyntheticEvidence,
   type ProductCommandRequest,
+  type ProductCommandResultIdentity,
+  type ProductCommandResultReadback,
   type ProductControlPreview,
   type ProductControlRegistryEntry,
   type ProductControlResult,
@@ -35,6 +37,10 @@ export interface ProductControlRoomProps {
   readonly allowFixtureControls?: boolean;
   readonly onPreview: (control: Readonly<ProductControlRegistryEntry>) => Promise<ProductControlPreview>;
   readonly onSubmit: (request: Readonly<ProductCommandRequest>) => Promise<ProductControlResult>;
+  readonly onReadCommandResult?: (
+    identity: Readonly<ProductCommandResultIdentity>,
+    signal?: AbortSignal,
+  ) => Promise<ProductCommandResultReadback>;
   readonly onReadTrace?: (correlationId: string) => Promise<ProductCorrelationTrace>;
 }
 
@@ -48,6 +54,7 @@ export function ProductControlRoom({
   allowFixtureControls = false,
   onPreview,
   onSubmit,
+  onReadCommandResult,
   onReadTrace,
 }: ProductControlRoomProps) {
   const [liveTrace, setLiveTrace] = useState<ProductCorrelationTrace | null>(null);
@@ -105,7 +112,14 @@ export function ProductControlRoom({
         ) : (
           <>
             <OwnerViewPanel view={snapshot.ownerView} />
-            <ControlRegistryPanel controls={snapshot.controls} busy={busy} allowFixtureControls={allowFixtureControls} onPreview={onPreview} onSubmit={onSubmit} />
+            <ControlRegistryPanel
+              controls={snapshot.controls}
+              busy={busy}
+              allowFixtureControls={allowFixtureControls}
+              onPreview={onPreview}
+              onSubmit={onSubmit}
+              onReadCommandResult={onReadCommandResult}
+            />
             <div className="pcr-donor">
               <SystemDashboard
                 snapshot={snapshot.dashboard}

@@ -69,6 +69,7 @@ function fixture(options = {}) {
   let blockingIdentityReferences = options.blockingIdentityReferences ?? [];
   let localMutationAuthority = options.localMutationAuthority ?? 'PROVEN_ABSENT';
   let ordinaryDrainTruth = options.ordinaryDrainTruth ?? canonicalDrainTruth();
+  let restartTruthRefreshCalls = 0;
   const controlRuntimeEffects = new Map(options.controlRuntimeEffects ?? []);
   let persistenceWriteCalls = 0;
   let persistenceWriteFailureAtCall = options.persistenceWriteFailureAtCall ?? null;
@@ -257,6 +258,20 @@ function fixture(options = {}) {
         return controlRuntimeEffects.get(effectId) ?? 'UNKNOWN';
       },
     },
+    ...(options.refreshRestartTruth !== undefined || options.refreshRestartTruthThrows === true
+      ? {
+          restartTruthRefresh: {
+            refreshRestartTruth: (nowMs) => {
+              restartTruthRefreshCalls += 1;
+              order.push('lifecycle:restart-truth-refresh');
+              if (options.refreshRestartTruthThrows === true) {
+                throw new Error('deterministic restart truth refresh failure');
+              }
+              return options.refreshRestartTruth(nowMs, restartTruthRefreshCalls);
+            },
+          },
+        }
+      : {}),
     readEnvironment: () => ({
       privateKeysAvailable: false,
       killSwitchEngaged: externalKill,
@@ -266,6 +281,9 @@ function fixture(options = {}) {
     defaultGateTimeoutMs: 20,
     defaultComponentTimeoutMs: 20,
     drainTimeoutMs: 40,
+    ...(options.restartTruthRefreshIntervalMs === undefined
+      ? {}
+      : { restartTruthRefreshIntervalMs: options.restartTruthRefreshIntervalMs }),
   });
   readManagedRuntimeForControlEffect = () => app.managedRuntime();
   return {
@@ -284,6 +302,7 @@ function fixture(options = {}) {
     setControlRuntimeEffect(effectId, value) { controlRuntimeEffects.set(effectId, value); },
     setVolumeStopThrows(value) { volume.setStopThrows(value); },
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
+    restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
   };
 }
 
@@ -433,6 +452,177 @@ test('restart-truth persistence failure blocks every runtime before admission', 
     ],
     [0, 0, 0, 0, 0],
   );
+});
+
+test('effectful restart-truth refresh coalesces owner read plus durable commit while passive reads stay mutation-free', async () => {
+  let releaseFirstRefresh;
+  const firstRefresh = new Promise((resolve) => { releaseFirstRefresh = resolve; });
+  const refreshedTruth = (observedAtMs) => Object.freeze({
+    publicSourceTruth: 'FRESH',
+    accountTruth: 'FRESH',
+    reconciliationTruth: 'FRESH',
+    observedAtMs,
+  });
+  const f = fixture({
+    externalKill: false,
+    restartTruthRefreshIntervalMs: 5,
+    refreshRestartTruth: (nowMs, call) => (
+      call === 1 ? firstRefresh : refreshedTruth(nowMs)
+    ),
+  });
+
+  const started = f.app.start();
+  assert.equal(started.ok, true);
+  assert.equal(f.restartTruthRefreshCalls(), 1);
+  const concurrentA = f.app.refreshRestartTruth();
+  const concurrentB = f.app.refreshRestartTruth();
+  assert.strictEqual(concurrentA, concurrentB);
+  assert.equal(f.restartTruthRefreshCalls(), 1);
+
+  await f.app.read.supervisor();
+  await f.app.read.graph();
+  await f.app.read.controls();
+  await f.app.read.events({ limit: 20 });
+  assert.equal(f.restartTruthRefreshCalls(), 1);
+
+  releaseFirstRefresh(refreshedTruth(f.clock.nowMs()));
+  const barrier = await concurrentA;
+  assert.equal(barrier.canOpenOrIncrease, true);
+  let checkpoint = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(checkpoint.ok, true);
+  assert.deepEqual(checkpoint.value.restartTruth, refreshedTruth(T0));
+
+  f.scheduler.advanceAndRun(5);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.restartTruthRefreshCalls(), 2);
+  checkpoint = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(checkpoint.ok, true);
+  assert.deepEqual(checkpoint.value.restartTruth, refreshedTruth(T0 + 5));
+});
+
+test('throwing or malformed refresh is durably unavailable and a transient persistence failure stays fail-closed', async () => {
+  for (const options of [
+    { refreshRestartTruthThrows: true },
+    { refreshRestartTruth: () => ({ publicSourceTruth: 'FRESH' }) },
+  ]) {
+    const f = fixture({ externalKill: false, ...options });
+    assert.equal(f.app.start().ok, true);
+    const barrier = await f.app.refreshRestartTruth();
+    assert.equal(barrier.canOpenOrIncrease, false);
+    assert.equal(barrier.reasonCodes.includes('ACCOUNT_TRUTH_UNAVAILABLE'), true);
+    const checkpoint = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+    assert.equal(checkpoint.ok, true);
+    assert.deepEqual(checkpoint.value.restartTruth, {
+      publicSourceTruth: 'UNKNOWN',
+      accountTruth: 'UNAVAILABLE',
+      reconciliationTruth: 'UNKNOWN',
+      observedAtMs: T0,
+    });
+  }
+
+  const recovered = fixture({
+    externalKill: false,
+    persistenceWriteFailureAtCall: 3,
+    refreshRestartTruth: (nowMs) => ({
+      publicSourceTruth: 'FRESH',
+      accountTruth: 'FRESH',
+      reconciliationTruth: 'FRESH',
+      observedAtMs: nowMs,
+    }),
+  });
+  assert.equal(recovered.app.start().ok, true);
+  let barrier = await recovered.app.refreshRestartTruth();
+  assert.deepEqual(barrier.reasonCodes, ['RESTART_TRUTH_REFRESH_PERSISTENCE_WRITE_FAILED']);
+  assert.equal(recovered.app.supervisor().overallPosture, 'FAILED');
+  barrier = await recovered.app.refreshRestartTruth();
+  assert.equal(barrier.canOpenOrIncrease, true);
+  assert.notEqual(recovered.app.supervisor().overallPosture, 'FAILED');
+});
+
+test('drain cancels a pending restart-truth owner read before it can write after the final checkpoint', async () => {
+  let releaseRefresh;
+  const deferred = new Promise((resolve) => { releaseRefresh = resolve; });
+  const f = fixture({
+    externalKill: false,
+    ordinaryDrainTruth: canonicalDrainTruth({
+      exposureState: 'NONE',
+      ambiguityState: 'NONE',
+      recoveryState: 'NONE',
+    }),
+    refreshRestartTruth: () => deferred,
+  });
+  assert.equal(f.app.start().ok, true);
+  const pending = f.app.refreshRestartTruth();
+  await drive(f, 6);
+  const drained = await drainAndDrive(f);
+  assert.equal(drained.ledgerCloseMayProceed, true);
+  const sealed = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(sealed.ok, true);
+
+  releaseRefresh({
+    publicSourceTruth: 'FRESH',
+    accountTruth: 'FRESH',
+    reconciliationTruth: 'FRESH',
+    observedAtMs: f.clock.nowMs(),
+  });
+  const cancelled = await pending;
+  assert.deepEqual(cancelled.reasonCodes, ['RESTART_TRUTH_REFRESH_CANCELLED']);
+  const afterLateRead = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(afterLateRead.ok, true);
+  assert.equal(afterLateRead.value.revision, sealed.value.revision);
+  assert.deepEqual(afterLateRead.value.restartTruth, sealed.value.restartTruth);
+});
+
+test('drain request fences refresh before async admission and a refusal re-arms a new epoch', async () => {
+  let releaseRefresh;
+  let releaseDrainTruth;
+  const deferredRefresh = new Promise((resolve) => { releaseRefresh = resolve; });
+  const deferredDrainTruth = new Promise((resolve) => { releaseDrainTruth = resolve; });
+  const f = fixture({
+    externalKill: false,
+    ordinaryDrainTruth: deferredDrainTruth,
+    refreshRestartTruth: (nowMs, call) => call === 1
+      ? deferredRefresh
+      : {
+          publicSourceTruth: 'FRESH',
+          accountTruth: 'FRESH',
+          reconciliationTruth: 'FRESH',
+          observedAtMs: nowMs,
+        },
+  });
+  assert.equal(f.app.start().ok, true);
+  const pendingRefresh = f.app.refreshRestartTruth();
+  const beforeDrain = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(beforeDrain.ok, true);
+
+  const draining = f.app.drain();
+  const blockedDuringAdmission = await f.app.refreshRestartTruth();
+  assert.equal(blockedDuringAdmission.canOpenOrIncrease, false);
+  assert.equal(f.restartTruthRefreshCalls(), 1);
+  releaseRefresh({
+    publicSourceTruth: 'FRESH',
+    accountTruth: 'FRESH',
+    reconciliationTruth: 'FRESH',
+    observedAtMs: f.clock.nowMs(),
+  });
+  const cancelled = await pendingRefresh;
+  assert.deepEqual(cancelled.reasonCodes, ['RESTART_TRUTH_REFRESH_CANCELLED']);
+  const duringAdmission = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(duringAdmission.ok, true);
+  assert.equal(duringAdmission.value.revision, beforeDrain.value.revision);
+
+  releaseDrainTruth(canonicalDrainTruth({ exposureState: 'ACTIVE' }));
+  const refused = await draining;
+  assert.equal(refused.disposition, 'REFUSED_RECOVERY_SUPERVISION_REQUIRED');
+  assert.equal(refused.phase, 'RUNNING');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.restartTruthRefreshCalls(), 2);
+  const rearmed = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(rearmed.ok, true);
+  assert.equal(rearmed.value.revision, beforeDrain.value.revision + 1);
+  assert.equal(rearmed.value.restartTruth.observedAtMs, f.clock.nowMs());
 });
 
 test('production facade exposes three passive unavailable-owner events without granting readiness or control', async () => {
@@ -1081,6 +1271,7 @@ test('corrupt persistence leaves a router-mountable fail-closed read/control she
   const router = createSystemIntegrationRouter({
     read: f.app.read,
     controls: f.app.controls,
+    validateOnly: f.app,
     clock: f.clock,
     opsReadback: {
       read: () => Object.freeze({

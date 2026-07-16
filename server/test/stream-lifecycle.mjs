@@ -6,12 +6,33 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { BinanceStream } from '../src/binance/ws.ts';
+import { BinanceStream, PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY } from '../src/binance/ws.ts';
 import { UserStream } from '../src/binance/userStream.ts';
+import { CORE_OPERATION_POLICIES } from '../src/productAssurance/catalog/core.ts';
 import { BookStreamHub } from '../src/services/bookStream.ts';
 import { MarketEngine } from '../src/engine/marketData.ts';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('public WebSocket retry policy pins the production attempt and elapsed ceilings', () => {
+  assert.deepEqual(PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY, {
+    deadlineMs: 30_000,
+    maximumAttempts: 8,
+    backoff: {
+      baseDelayMs: 250,
+      maximumDelayMs: 15_000,
+      jitterRatio: 0.35,
+      totalRetryBudgetMs: 90_000,
+    },
+  });
+  const declared = CORE_OPERATION_POLICIES.find(
+    (policy) => policy.operationId === 'OP_PUBLIC_WEBSOCKET_STREAM',
+  );
+  assert.ok(declared);
+  assert.equal(declared.deadlineMs, PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.deadlineMs);
+  assert.equal(declared.maximumAttempts, PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.maximumAttempts);
+  assert.deepEqual(declared.backoff, PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.backoff);
+});
 
 class FakeSocket extends EventEmitter {
   readyState = 0;
@@ -98,6 +119,32 @@ test('BinanceStream owns retries by generation and cannot resurrect after stop',
   assert.equal(statuses.at(-1), 'closed');
 });
 
+test('BinanceStream never constructs a socket after a synchronous status callback stops its generation', async () => {
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  let stream;
+  stream = new BinanceStream(
+    'synchronous-stop-feed',
+    'wss://example.invalid/synchronous-stop',
+    () => undefined,
+    (_name, status) => {
+      statuses.push(status);
+      if (status === 'connecting') stream.stop();
+    },
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        return new FakeSocket();
+      },
+    },
+  );
+
+  stream.start();
+  await sleep(5);
+  assert.equal(socketFactoryCalls, 0);
+  assert.deepEqual(statuses, ['connecting', 'closed']);
+});
+
 test('BinanceStream terminates a half-open connection with no Binance activity', async () => {
   const sockets = [];
   const stream = new BinanceStream(
@@ -145,6 +192,7 @@ test('BinanceStream preserves exponential backoff until a connection is stable',
       livenessCheckMs: 1_000,
       staleAfterMs: 2_000,
       maxLifetimeMs: 5_000,
+      maximumAttempts: 3,
       random: () => 0.5,
     },
   );
@@ -167,6 +215,154 @@ test('BinanceStream preserves exponential backoff until a connection is stable',
   sockets[2].remoteClose();
   await sleep(25);
   assert.equal(sockets.length, 4, 'a stable session resets the retry delay');
+  stream.stop();
+});
+
+test('BinanceStream latches visible exhaustion before canonical attempt nine and re-arms only on explicit restart', async () => {
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  let resolveExhaustion = null;
+  const waitForExhaustion = () => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for retry exhaustion')), 500);
+    resolveExhaustion = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+  });
+  const stream = new BinanceStream(
+    'bounded-retry-feed',
+    'wss://example.invalid/bounded-retry',
+    () => undefined,
+    (_name, status) => {
+      statuses.push(status);
+      if (status === 'exhausted') {
+        const resolve = resolveExhaustion;
+        resolveExhaustion = null;
+        resolve?.();
+      }
+    },
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        throw new Error('synthetic connect failure');
+      },
+      retryBaseMs: 1,
+      retryMaxMs: 1,
+      maximumAttempts: 99,
+      totalRetryBudgetMs: 999_999,
+      random: () => 0,
+    },
+  );
+
+  const firstExhaustion = waitForExhaustion();
+  stream.start();
+  await firstExhaustion;
+  assert.equal(socketFactoryCalls, 8, 'the initial call is attempt one and attempt nine is never constructed');
+  assert.equal(statuses.at(-1), 'exhausted', 'attempt exhaustion is visible while the lifecycle remains active');
+  assert.ok(statuses.includes('cooldown'), 'scheduled retry backoff is visible');
+  await sleep(10);
+  assert.equal(socketFactoryCalls, 8, 'exhaustion is latched and never self-rearms');
+
+  stream.stop();
+  const secondExhaustion = waitForExhaustion();
+  stream.start();
+  await secondExhaustion;
+  assert.equal(socketFactoryCalls, 16, 'an explicit lifecycle restart owns one fresh bounded campaign');
+  assert.equal(statuses.at(-1), 'exhausted');
+  stream.stop();
+});
+
+test('BinanceStream rechecks elapsed policy after a scheduled cooldown and before socket dispatch', async () => {
+  let nowMs = 10_000;
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  const stream = new BinanceStream(
+    'late-timer-feed',
+    'wss://example.invalid/late-timer',
+    () => undefined,
+    (_name, status) => statuses.push(status),
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        throw new Error('synthetic connect failure');
+      },
+      retryBaseMs: 5,
+      retryMaxMs: 5,
+      nowMs: () => nowMs,
+      random: () => 0.5,
+    },
+  );
+
+  stream.start();
+  assert.equal(socketFactoryCalls, 1);
+  assert.equal(statuses.at(-1), 'cooldown');
+  nowMs += 30_001;
+  await sleep(15);
+  assert.equal(socketFactoryCalls, 1, 'a late timer cannot construct a socket past the deadline');
+  assert.equal(statuses.at(-1), 'exhausted');
+  stream.stop();
+});
+
+test('BinanceStream clamps widening overrides and exhausts the canonical operation deadline before another dispatch', async () => {
+  let nowMs = 10_000;
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  const stream = new BinanceStream(
+    'elapsed-budget-feed',
+    'wss://example.invalid/elapsed-budget',
+    () => undefined,
+    (_name, status) => statuses.push(status),
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        nowMs += 30_001;
+        throw new Error('synthetic slow connect failure');
+      },
+      retryBaseMs: 1,
+      retryMaxMs: 1,
+      maximumAttempts: 99,
+      totalRetryBudgetMs: 999_999,
+      nowMs: () => nowMs,
+      random: () => 0.5,
+    },
+  );
+
+  stream.start();
+  assert.equal(socketFactoryCalls, 1);
+  assert.equal(statuses.at(-1), 'exhausted', 'elapsed budget exhaustion is synchronous and visible');
+  await sleep(5);
+  assert.equal(socketFactoryCalls, 1, 'no timer can dispatch beyond the elapsed budget');
+  stream.stop();
+});
+
+test('BinanceStream enforces a reduced elapsed retry budget independently of the operation deadline', async () => {
+  let nowMs = 10_000;
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  const stream = new BinanceStream(
+    'reduced-budget-feed',
+    'wss://example.invalid/reduced-budget',
+    () => undefined,
+    (_name, status) => statuses.push(status),
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        nowMs += 11;
+        throw new Error('synthetic slow connect failure');
+      },
+      retryBaseMs: 1,
+      retryMaxMs: 1,
+      totalRetryBudgetMs: 10,
+      nowMs: () => nowMs,
+      random: () => 0.5,
+    },
+  );
+
+  stream.start();
+  assert.equal(socketFactoryCalls, 1);
+  assert.equal(statuses.at(-1), 'exhausted');
+  await sleep(5);
+  assert.equal(socketFactoryCalls, 1, 'the elapsed retry budget blocks another dispatch before 30 seconds');
   stream.stop();
 });
 
@@ -459,6 +655,21 @@ test('passive liquidation projection is restart-safe, bounded, and rejects malfo
 });
 
 test('MarketEngine normalizes force-order snapshots once and both liquidation views stay equal', async () => {
+  let deniedUniverseFetchCalls = 0;
+  const deniedEngine = new MarketEngine(
+    { logEvent() {} },
+    async () => {
+      deniedUniverseFetchCalls += 1;
+      return { pairs: [], filters: new Map() };
+    },
+    undefined,
+    { publicSourceStartupEgressAdmitted: false },
+  );
+  await assert.rejects(deniedEngine.init(), /PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED/);
+  assert.equal(deniedUniverseFetchCalls, 0, 'denied startup stops before the REST universe owner');
+  assert.throws(() => deniedEngine.start(), /PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED/);
+  assert.deepEqual(deniedEngine.feeds, {}, 'denied startup cannot activate a WebSocket owner');
+
   const projected = [];
   const engine = new MarketEngine(
     { logEvent() {} },
@@ -473,6 +684,7 @@ test('MarketEngine normalizes force-order snapshots once and both liquidation vi
       start() {}, stop() {}, observeSourceStatus() {},
       ingestPrint(print) { projected.push(print); },
     },
+    { publicSourceStartupEgressAdmitted: true },
   );
   await engine.init();
   const timestamp = Date.now();

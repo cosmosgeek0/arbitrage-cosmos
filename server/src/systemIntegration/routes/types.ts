@@ -7,6 +7,10 @@ import type {
 } from '../contracts/types.js';
 import type { SystemControlService } from '../controls/service.js';
 import type { CanonicalSupervisorOpsReadPort } from '../ops/types.js';
+import type {
+  ValidateOnlyOrchestratorInput,
+  ValidateOnlyRunResult,
+} from '../verticalSlice/types.js';
 
 export interface SystemIntegrationEventQuery {
   readonly limit: number;
@@ -48,9 +52,16 @@ export interface SystemIntegrationRouteClock {
   nowMs(): number;
 }
 
+export interface SystemIntegrationValidateOnlyPort {
+  executeValidateOnly(
+    input: Readonly<ValidateOnlyOrchestratorInput>,
+  ): Promise<Readonly<ValidateOnlyRunResult>>;
+}
+
 export interface SystemIntegrationRouterOptions {
   readonly read: SystemIntegrationReadPort;
   readonly controls: SystemControlService;
+  readonly validateOnly: SystemIntegrationValidateOnlyPort;
   readonly clock: SystemIntegrationRouteClock;
   readonly opsReadback: CanonicalSupervisorOpsReadPort;
 }

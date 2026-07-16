@@ -2,7 +2,7 @@
 set -euo pipefail
 . "$(dirname "$0")/helpers.sh"
 
-materialize_donor "$TEST_TMP/donor"
+materialize_effective_l15 "$TEST_TMP/donor"
 chmod -R a-w "$TEST_TMP/donor/ops/live"
 chmod +x "$TEST_DIR/fixtures/fake-sqlite-safe.sh" "$TEST_DIR/fixtures/fake-systemctl-inactive.sh"
 REAL_TMP="$(node -e 'const fs=require("fs"),os=require("os");process.stdout.write(fs.realpathSync(os.tmpdir()))')"

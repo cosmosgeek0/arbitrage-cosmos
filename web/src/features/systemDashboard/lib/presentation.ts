@@ -27,6 +27,7 @@ export const EXPECTED_COMPONENTS: SystemComponentId[] = [
   'market-universe',
   'intelligence-runtime',
   'market-intelligence',
+  'q-inference',
   'basis-engine',
   'volume-engine',
   'capital-supervision',
@@ -176,25 +177,6 @@ export function truthBadge(label: SystemTruthLabel): TruthBadgeSpec {
 }
 
 // ---------------------------------------------------------------------------
-// Attention ranking — exposed capital first, then severity.
-// ---------------------------------------------------------------------------
-
-const SEVERITY_RANK: Record<'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW', number> = {
-  CRITICAL: 4,
-  HIGH: 3,
-  MEDIUM: 2,
-  LOW: 1,
-};
-
-export function rankAttention(
-  queue: SystemSupervisorSnapshot['attentionQueue'],
-): SystemSupervisorSnapshot['attentionQueue'] {
-  return [...queue].sort((a, b) => {
-    if (a.capitalExposed !== b.capitalExposed) return a.capitalExposed ? -1 : 1;
-    return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
-  });
-}
-
 export function severityTone(severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'): Tone {
   if (severity === 'CRITICAL' || severity === 'HIGH') return 'bad';
   if (severity === 'MEDIUM') return 'warn';
@@ -234,6 +216,7 @@ export function traceStage(componentId: SystemComponentId): TraceStage {
       return 'Evidence';
     case 'intelligence-runtime':
     case 'market-intelligence':
+    case 'q-inference':
       return 'Assessment';
     case 'basis-engine':
     case 'volume-engine':

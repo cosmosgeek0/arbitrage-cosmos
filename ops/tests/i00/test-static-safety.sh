@@ -27,8 +27,8 @@ for forbidden in 'fetch(' 'https.request' 'http.request' 'cloudflare.com/client/
   pass_assertion
 done
 assert_contains "$SOURCE" 'process.env.AWS_CLI'
-assert_contains "$SOURCE" 'accepted donor deploy.sh is unavailable'
-assert_contains "$SOURCE" 'accepted donor rollback.sh is unavailable'
+assert_contains "$SOURCE" 'effective L15 deploy.sh is unavailable'
+assert_contains "$SOURCE" 'effective L15 rollback.sh is unavailable'
 assert_contains "$(cat "$I00_ROOT/bin/release-switch.sh")" 'verify-simulation-command.mjs'
 assert_contains "$(cat "$I00_ROOT/bin/rollback-switch.sh")" 'verify-simulation-command.mjs'
 assert_contains "$(cat "$I00_ROOT/bin/secrets-provider.mjs")" 'verify-simulation-command.mjs'
@@ -43,11 +43,12 @@ assert_contains "$(cat "$NETWORK_CLIENT")" '/api/system-integration/ops/readback
 
 note "accepted donor ancestry and donor-owned bytes remain exact after fan-in"
 INTEGRATED="$(node "$I00_ROOT/bin/verify-donor.mjs" --repo "$REPO_ROOT" --integrated)"
-assert_contains "$INTEGRATED" 'INTEGRATED_ACCEPTED_DONOR_VERIFIED'
+assert_contains "$INTEGRATED" 'INTEGRATED_ACCEPTED_DONOR_WITH_AUTHORIZED_CORRECTIONS_VERIFIED'
 assert_contains "$INTEGRATED" '"acceptedDonorAncestor":true'
 assert_contains "$INTEGRATED" '"workingBytesExact":true'
 assert_eq "$(node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(String(v.integration.integratedDonorTestFiles))' "$INTEGRATED")" 17
-assert_eq "$(git -C "$REPO_ROOT" rev-parse HEAD:ops/live)" 584163858a0333cb1ccb9eff756e91a851b1cb71
+assert_eq "$(git -C "$REPO_ROOT" rev-parse HEAD:ops/live)" \
+  "$(node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.integration.effectiveLiveTree)' "$INTEGRATED")"
 SEALED_OWNER_EVIDENCE="$(node "$REPO_ROOT/test/i00/sealed-owner-evidence.mjs" \
   --root "$REPO_ROOT" \
   --path IP_OPS.md \

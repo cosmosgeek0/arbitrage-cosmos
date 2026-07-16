@@ -95,13 +95,19 @@ export class ProductIntegrationRuntimeService {
       const snapshot = await this.options.read.supervisor();
       const opsReadback = await this.options.read.opsReadback(snapshot);
       let bootReleaseReadback: Readonly<BootReleaseReadback> | null = null;
+      let bootReleaseReadbackUnavailableReason: 'BOOT_RELEASE_READBACK_NOT_CONFIGURED'
+        | 'BOOT_RELEASE_READBACK_UNAVAILABLE'
+        | null = typeof this.options.read.bootReleaseReadback === 'function'
+          ? null
+          : 'BOOT_RELEASE_READBACK_NOT_CONFIGURED';
       if (typeof this.options.read.bootReleaseReadback === 'function') {
         try {
-          bootReleaseReadback = await this.options.read.bootReleaseReadback();
+          bootReleaseReadback = (await this.options.read.bootReleaseReadback()) ?? null;
         } catch {
-          // Release provenance is optional read evidence. Failure withholds all
-          // revision values without hiding the canonical supervisor or ops gate.
+          // Crash/release history remains explicit even when its canonical
+          // owner cannot be read. The projection withholds revision values.
           bootReleaseReadback = null;
+          bootReleaseReadbackUnavailableReason = 'BOOT_RELEASE_READBACK_UNAVAILABLE';
         }
       }
       const materialEvents = await this.readSupervisorMaterialTail();
@@ -141,6 +147,7 @@ export class ProductIntegrationRuntimeService {
         opsReadback,
         opsIntakeInterlock,
         bootReleaseReadback,
+        bootReleaseReadbackUnavailableReason,
         materialEvents,
         traces: Object.freeze(traces),
         nowMs,

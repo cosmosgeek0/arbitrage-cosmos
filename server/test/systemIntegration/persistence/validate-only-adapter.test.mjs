@@ -6,9 +6,14 @@ import test from 'node:test';
 
 import { Ledger } from '../../../dist/ledger.js';
 import {
+  SYSTEM_PERSISTENCE_CONFIG_KEY,
   SYSTEM_PERSISTENCE_EVENT_KIND,
   SystemIntegrationLedgerAdapter,
+  createInitialCheckpointState,
+  encodeSystemCheckpoint,
+  persistenceDigest,
 } from '../../../dist/systemIntegration/persistence/index.js';
+import { buildSystemTraceIndex } from '../../../dist/systemIntegration/supervisor/index.js';
 import { ValidateOnlyOrchestrator } from '../../../dist/systemIntegration/verticalSlice/index.js';
 import { NOW, buildValidateOnlyInput } from '../verticalSlice/fixtures.mjs';
 
@@ -45,6 +50,30 @@ test('production persistence port commits one bounded VALIDATE_ONLY run and repl
     assert.equal(first.snapshot.ownerInvocations.persistenceReads, 1);
     const latestApproval = await persistence.loadValidateOnlyApprovalState(first.snapshot.approvalId);
     assert.deepEqual(latestApproval, first.snapshot.approvalState);
+    const trace = persistence.queryTrace({ correlationId: first.snapshot.rootCorrelationId, limit: 20 });
+    assert.equal(trace.ok, true);
+    assert.deepEqual(
+      trace.value.events.map(({ event }) => [event.kind, event.componentId]),
+      [
+        ['CAPITAL', 'capital-supervision'],
+        ['RISK', 'multileg-risk'],
+        ['EXECUTION', 'execution-coordinator-validate-only'],
+        ['RECONCILIATION', 'reconciliation'],
+        ['EXECUTION', 'execution-coordinator-validate-only'],
+        ['PERSISTENCE', 'ledger-persistence'],
+      ],
+    );
+    assert.equal(first.snapshot.ownerInvocations.recoveryEvaluations, 1);
+    assert.deepEqual(first.snapshot.recoveryRecommendations.map((entry) => entry.action), ['NO_ACTION']);
+    assert.equal(trace.value.events.at(-2).event.domainLifecycle, 'RECOVERY:NO_ACTION');
+    assert.equal(trace.value.events.at(-1).event.truthLabel, 'RECORDED_REPLAY');
+    assert.deepEqual(trace.value.events.at(-1).event.releaseStatuses, ['WIRED']);
+    assert.equal(new Set(trace.value.events.map(({ ledgerEventId }) => ledgerEventId)).size, 6);
+    const atomicAuditRows = ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND)
+      .filter((event) => event.data.correlationId === first.snapshot.rootCorrelationId);
+    assert.equal(atomicAuditRows.length, 6);
+    assert.equal(new Set(atomicAuditRows.map((event) => event.data.checkpointRevision)).size, 1);
+    assert.equal(new Set(atomicAuditRows.map((event) => event.data.checkpointChecksum)).size, 1);
     const eventCount = ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length;
 
     const replayInput = buildValidateOnlyInput();
@@ -104,6 +133,39 @@ test('validate-only persistence rejects any run claiming a reached venue action 
       /out-of-process action seam/i,
     );
     assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, before);
+    assert.equal(persistence.currentState().value.revision, 0);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('validate-only persistence rejects forged recovery output and impossible owner invocation counts without a Ledger write', async () => {
+  const captured = await captureRecord(buildValidateOnlyInput());
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-validate-only-recovery-forgery-'));
+  const ledger = new Ledger(dataDir);
+  try {
+    const persistence = new SystemIntegrationLedgerAdapter(ledger);
+    assert.equal(persistence.load(NOW - 100, 'validate.recovery-forgery.load').ok, true);
+    const forgedRecovery = JSON.parse(JSON.stringify(captured.record));
+    forgedRecovery.executionState.lifecycle = 'RECOVERY_REQUIRED';
+    await assert.rejects(
+      () => persistence.persistValidateOnly(forgedRecovery),
+      /differs from the canonical owner projection/i,
+    );
+    const impossibleCount = JSON.parse(JSON.stringify(captured.record));
+    impossibleCount.ownerInvocations.riskEvaluations = 2;
+    await assert.rejects(
+      () => persistence.persistValidateOnly(impossibleCount),
+      /owner invocation evidence is malformed/i,
+    );
+    const malformedFailure = JSON.parse(JSON.stringify(captured.record));
+    malformedFailure.failure = { stage: 'risk', code: 'FORGED' };
+    await assert.rejects(
+      () => persistence.persistValidateOnly(malformedFailure),
+      /structured failure is invalid/i,
+    );
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
     assert.equal(persistence.currentState().value.revision, 0);
   } finally {
     ledger.close();
@@ -179,7 +241,7 @@ test('final supervision projection persists and replays exactly while unknown fi
   }
 });
 
-test('mode-blocked denial persists unavailable truth without WIRED or dry-run claims', async () => {
+test('mode-blocked denial persists no domain-stage wiring claim while the real Ledger receipt stays explicit', async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-mode-denial-ledger-'));
   const ledger = new Ledger(dataDir);
   try {
@@ -195,8 +257,77 @@ test('mode-blocked denial persists unavailable truth without WIRED or dry-run cl
     assert.equal(result.snapshot.releaseStatuses.includes('WIRED'), false);
     const trace = persistence.queryTrace({ correlationId: result.snapshot.rootCorrelationId });
     assert.equal(trace.ok, true);
-    assert.equal(trace.value.events.at(-1).event.truthLabel, 'UNAVAILABLE');
-    assert.equal(trace.value.events.at(-1).event.releaseStatuses.includes('WIRED'), false);
+    assert.equal(trace.value.events.length, 1);
+    assert.equal(trace.value.events[0].event.kind, 'PERSISTENCE');
+    assert.equal(trace.value.events[0].event.truthLabel, 'RECORDED_REPLAY');
+    assert.equal(trace.value.events[0].event.machinePhase, 'RUNNING');
+    assert.deepEqual(trace.value.events[0].event.releaseStatuses, ['WIRED']);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('maximum bounded correlation keeps every reached trace visible to supervisor and Product operator readback', async () => {
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-validate-only-max-correlation-'));
+  const ledger = new Ledger(dataDir);
+  try {
+    const persistence = new SystemIntegrationLedgerAdapter(ledger);
+    const input = buildValidateOnlyInput();
+    const correlationId = `c${'x'.repeat(127)}`;
+    input.correlationId = correlationId;
+    input.capital.sourceProposal.sourceCorrelationId = correlationId;
+    assert.equal(persistence.load(NOW - 100, 'validate.max-correlation.load').ok, true);
+    const result = await new ValidateOnlyOrchestrator(persistence).execute(input);
+    assert.equal(result.ok, true, result.snapshot.failure?.code);
+    const trace = persistence.queryTrace({ correlationId, limit: 20 });
+    assert.equal(trace.ok, true);
+    assert.equal(trace.value.events.length, 6);
+    assert.equal(trace.value.events.every(({ event }) => event.id.length <= 160), true);
+    const supervisor = buildSystemTraceIndex(trace.value.events.map(({ event }) => event), NOW);
+    assert.equal(supervisor.entries.find((entry) => entry.correlationId === correlationId).snapshot.events.length, 6);
+    const product = ledger.readProductOperatorEventPage('0', 20);
+    assert.equal(product.items.filter((entry) => entry.event.correlationId === correlationId).length, 5);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('v2 recovery evidence never conflicts with a durable legacy v1 validate-only receipt', async () => {
+  const input = buildValidateOnlyInput();
+  const captured = await captureRecord(input);
+  const legacyRecord = JSON.parse(JSON.stringify(captured.record));
+  legacyRecord.schema = 'cosmos.system-integration.validate-only.v1';
+  delete legacyRecord.recoveryRecommendations;
+  delete legacyRecord.ownerInvocations.recoveryEvaluations;
+  const legacyKey = `validate-only:${persistenceDigest(legacyRecord.recordId).slice(0, 64)}`;
+  const initial = createInitialCheckpointState(NOW - 200, 'validate.legacy.initial');
+  const legacyState = {
+    ...initial,
+    revision: 1,
+    idempotencyReceipts: [{
+      idempotencyKey: legacyKey,
+      requestDigest: persistenceDigest(legacyRecord),
+      correlationId: legacyRecord.rootCorrelationId,
+      recordedAtMs: legacyRecord.evaluatedAtMs,
+      checkpointRevision: 1,
+      receipt: { kind: 'VALIDATE_ONLY_RUN', record: legacyRecord },
+    }],
+  };
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-validate-only-v1-upgrade-'));
+  const ledger = new Ledger(dataDir);
+  try {
+    ledger.setConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY, encodeSystemCheckpoint(legacyState));
+    const persistence = new SystemIntegrationLedgerAdapter(ledger);
+    assert.equal(persistence.load(NOW, 'validate.legacy.load').ok, true);
+    const result = await new ValidateOnlyOrchestrator(persistence).execute(buildValidateOnlyInput());
+    assert.equal(result.snapshot.disposition, 'APPROVAL_REJECTED');
+    assert.notEqual(result.snapshot.disposition, 'PERSISTENCE_FAILED');
+    assert.notEqual(result.snapshot.persistenceId, null);
+    const keys = persistence.currentState().value.idempotencyReceipts.map((entry) => entry.idempotencyKey);
+    assert.equal(keys.includes(legacyKey), true);
+    assert.equal(keys.some((key) => key.startsWith('validate-only:v2:')), true);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

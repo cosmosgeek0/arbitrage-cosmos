@@ -6,7 +6,7 @@ const EVENT_KIND_PATTERN = /^[a-z0-9_.-]{1,64}$/;
 const CONFIG_KEY_PATTERN = /^[A-Za-z0-9_.:-]{1,160}$/;
 const CONFIG_CAS_VALUE_MAX_BYTES = 512 * 1024;
 const CONFIG_CAS_EVENT_DATA_MAX_BYTES = 128 * 1024;
-const CONFIG_CAS_EVENT_BATCH_MAX = 2;
+const CONFIG_CAS_EVENT_BATCH_MAX = 8;
 const EVENT_SYMBOL_MAX_CHARS = 64;
 const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
 
@@ -165,7 +165,7 @@ export class BoundedInMemoryLedger extends EventEmitter {
       throw new RangeError('compare-and-set config value exceeds its byte bound');
     }
     if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
-      throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+      throw new RangeError(`compare-and-set event batch must contain between 1 and ${CONFIG_CAS_EVENT_BATCH_MAX} records`);
     }
     if (commitBeforeMs !== undefined
       && (!Number.isSafeInteger(commitBeforeMs) || commitBeforeMs < 0)) {

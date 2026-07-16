@@ -1,20 +1,34 @@
 import {
   PRODUCT_COMMAND_SCHEMA,
   type MaterialEventPage,
+  type ProductCommandResultIdentity,
+  type ProductCommandResultReadback,
   type ProductCommandRequest,
   type ProductControlPreview,
   type ProductControlResult,
   type ProductCorrelationTrace,
   type ProductSupervisorEnvelope,
+  isProductCommandResultIdentity,
   validateMaterialEventPage,
   validateProductCorrelationTrace,
   validateProductSupervisorEnvelope,
 } from './model';
+import { deriveProductCommandResultIdentity } from './commandIdentity';
+import { isCanonicalProductControlResult } from './controlResultValidation';
+
+export interface ProductCommandResultTransportResponse {
+  readonly httpStatus: number;
+  readonly body: unknown;
+}
 
 export interface ProductIntegrationTransport {
   readSupervisor(signal?: AbortSignal): Promise<unknown>;
   readMaterialEvents(afterCursor: string, limit: number, signal?: AbortSignal): Promise<unknown>;
   readTrace(correlationId: string, limit: number, signal?: AbortSignal): Promise<unknown>;
+  readCommandResult(
+    identity: Readonly<ProductCommandResultIdentity>,
+    signal?: AbortSignal,
+  ): Promise<Readonly<ProductCommandResultTransportResponse>>;
   previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal): Promise<unknown>;
   submitCommand(request: Readonly<ProductCommandRequest>, signal?: AbortSignal): Promise<unknown>;
 }
@@ -23,6 +37,7 @@ export interface ProductIntegrationClient {
   readSupervisor<TDashboard = unknown>(signal?: AbortSignal): Promise<ProductSupervisorEnvelope<TDashboard>>;
   readMaterialEvents(afterCursor: string, limit?: number, signal?: AbortSignal): Promise<MaterialEventPage>;
   readTrace(correlationId: string, limit?: number, signal?: AbortSignal): Promise<ProductCorrelationTrace>;
+  readCommandResult(identity: Readonly<ProductCommandResultIdentity>, signal?: AbortSignal): Promise<ProductCommandResultReadback>;
   previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal): Promise<ProductControlPreview>;
   submitCommand(request: Readonly<ProductCommandRequest>, signal?: AbortSignal): Promise<ProductControlResult>;
 }
@@ -67,6 +82,52 @@ export function createProductIntegrationClient(
       return value as unknown as ProductCorrelationTrace;
     },
 
+    async readCommandResult(identity: Readonly<ProductCommandResultIdentity>, signal?: AbortSignal) {
+      if (!isProductCommandResultIdentity(identity)) {
+        throw new ProductBindingError('Command-result identity is invalid.', ['COMMAND_RESULT_IDENTITY_INVALID']);
+      }
+      const expectedIdentity = await deriveProductCommandResultIdentity(identity.idempotencyKey, identity.controlId);
+      if (expectedIdentity.commandId !== identity.commandId) {
+        throw new ProductBindingError('Command-result identity is not canonical.', ['COMMAND_RESULT_IDENTITY_INVALID']);
+      }
+      const response = await transport.readCommandResult(identity, signal);
+      if (!isRecord(response)
+        || Object.keys(response).length !== 2
+        || !Number.isSafeInteger(response.httpStatus)
+        || !Object.hasOwn(response, 'body')) {
+        throw new ProductBindingError('Command-result transport response is invalid.', ['COMMAND_RESULT_TRANSPORT_INVALID']);
+      }
+      const value = response.body;
+      if (response.httpStatus === 503 && isCanonicalCommandResultFailure(value)) {
+        throw new ProductBindingError(value.error, [value.code]);
+      }
+      if (!isRecord(value)
+        || value.commandId !== identity.commandId
+        || value.controlId !== identity.controlId) {
+        throw new ProductBindingError('Command-result identity does not match the durable query.', ['COMMAND_RESULT_IDENTITY_MISMATCH']);
+      }
+      if (!isCanonicalProductControlResult(value, identity, {
+        allowSynthetic: false,
+        allowedStatuses: ['APPLIED', 'ACCEPTED_ASYNC', 'ALREADY_APPLIED', 'FAILED_ATTENTION_REQUIRED'],
+      })) {
+        throw new ProductBindingError('Command-result response is invalid.', ['COMMAND_RESULT_INVALID']);
+      }
+      const state = response.httpStatus === 202 && value.status === 'ACCEPTED_ASYNC'
+        ? 'PENDING' as const
+        : response.httpStatus === 200 && (value.status === 'APPLIED' || value.status === 'ALREADY_APPLIED')
+          ? 'TERMINAL' as const
+          : response.httpStatus === 503 && value.status === 'FAILED_ATTENTION_REQUIRED'
+            ? 'AMBIGUOUS' as const
+            : null;
+      if (state === null) {
+        throw new ProductBindingError('Command-result HTTP status and body disagree.', ['COMMAND_RESULT_HTTP_STATUS_MISMATCH']);
+      }
+      const result = Object.freeze({ ...value }) as unknown as ProductControlResult;
+      return state === 'AMBIGUOUS'
+        ? Object.freeze({ state, result, reasonCode: 'COMMAND_RESULT_FAILED_ATTENTION_REQUIRED' as const })
+        : Object.freeze({ state, result, reasonCode: null });
+    },
+
     async previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal) {
       if (!controlId || !expectedRevision) {
         throw new ProductBindingError('Control preview identity is incomplete.', ['CONTROL_PREVIEW_IDENTITY_INCOMPLETE']);
@@ -99,32 +160,15 @@ export function createProductIntegrationClient(
         || request.expiresAtMs <= Date.now()) {
         throw new ProductBindingError('Command authority fields are invalid or expired.', ['CONTROL_COMMAND_INVALID']);
       }
+      const expectedIdentity = await deriveProductCommandResultIdentity(request.idempotencyKey, request.controlId);
       const value = await transport.submitCommand(request, signal);
-      const durableReceiptRequired = isRecord(value) && ['APPLIED', 'ACCEPTED_ASYNC', 'ALREADY_APPLIED'].includes(String(value.status));
-      if (!isRecord(value)
-        || value.controlId !== request.controlId
-        || !CONTROL_RESULT_STATUSES.has(String(value.status))
-        || typeof value.commandId !== 'string' || value.commandId.length === 0
-        || typeof value.before !== 'string'
-        || typeof value.after !== 'string'
-        || !(value.receiptId === null || typeof value.receiptId === 'string')
-        || (durableReceiptRequired && (typeof value.receiptId !== 'string' || value.receiptId.length === 0))
-        || typeof value.correlationId !== 'string' || value.correlationId.length === 0
-        || typeof value.completedAtMs !== 'number' || !Number.isFinite(value.completedAtMs)
-        || typeof value.synthetic !== 'boolean') {
+      if (!isCanonicalProductControlResult(value, expectedIdentity, { allowSynthetic: true })) {
         throw new ProductBindingError('Control result response is invalid.', ['CONTROL_RESULT_INVALID']);
       }
       return value as unknown as ProductControlResult;
     },
   });
 }
-
-const CONTROL_RESULT_STATUSES = new Set([
-  'APPLIED', 'ACCEPTED_ASYNC', 'REJECTED_SCHEMA', 'REJECTED_BOUNDS', 'REJECTED_AUTHORITY',
-  'REJECTED_STALE_REVISION', 'REJECTED_STATE', 'REJECTED_DEPENDENCY', 'REJECTED_EXPOSURE',
-  'REJECTED_NOT_SUPPORTED', 'EXPIRED', 'ALREADY_APPLIED', 'FAILED_RECOVERABLE',
-  'FAILED_ATTENTION_REQUIRED',
-]);
 
 function boundedQueryLimit(limit: number): number {
   if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
@@ -135,6 +179,19 @@ function boundedQueryLimit(limit: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isCanonicalCommandResultFailure(
+  value: unknown,
+): value is Readonly<{ ok: false; code: string; error: string }> {
+  return isRecord(value)
+    && Object.keys(value).length === 3
+    && value.ok === false
+    && typeof value.code === 'string'
+    && /^[A-Z][A-Z0-9_]{0,127}$/.test(value.code)
+    && typeof value.error === 'string'
+    && value.error.length > 0
+    && value.error.length <= 500;
 }
 
 function isCommandPayload(value: unknown): boolean {

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -31,6 +33,7 @@ import {
   validateQArchiveInventory,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
+  verifyRejectedSealReportParityRegression,
 } from './local-acceptance.mjs';
 import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
 
@@ -507,6 +510,22 @@ test('independent validation requires a clean detached worktree pinned to exact 
 
   const dirty = { ...clean, statusByteLength: 1 };
   assert.ok(validateDetachedCandidateWorktreeDocument(dirty, CANDIDATE, CANDIDATE_TREE).failures.includes('DETACHED_CANDIDATE_DIRTY'));
+});
+
+test('sealed report parity reads the exact revision from clean detached checkouts', async (context) => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-sealed-report-parity-'));
+  context.after(() => rmSync(tempRoot, { recursive: true, force: true }));
+  const result = await verifyRejectedSealReportParityRegression(tempRoot);
+
+  assert.equal(result.revision, '517bd636d799c983ecddc9bda1985d0619b652d7');
+  assert.equal(result.passed, true, JSON.stringify(result.artifacts.filter((artifact) => !artifact.matchesGenerator)));
+  assert.equal(result.regeneration.passed, true);
+  assert.equal(result.artifacts.length, 6);
+  assert.ok(result.artifacts.every((artifact) => artifact.matchesGenerator));
+  assert.deepEqual(result.checkouts, [
+    { checkout: 'sealed-report-parity-untouched', headSha: result.revision, branch: '', statusByteLength: 0 },
+    { checkout: 'sealed-report-parity-generated', headSha: result.revision, branch: '', statusByteLength: 0 },
+  ]);
 });
 
 test('pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S', () => {

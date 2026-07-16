@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   mkdtempSync,
   mkdirSync,
+  lstatSync,
   readFileSync,
   realpathSync,
   readdirSync,
@@ -28,6 +29,11 @@ import {
   PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
   PRODUCT_RUNTIME_CONTROL_IDS,
   PROTECTED_OWNER_DIRECTIVES,
+  PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH,
+  PROTECTED_OWNER_DIRECTIVE_LIVE_STATE,
+  PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH,
+  PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
+  PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS,
   REPORT_SCHEMA_VERSION,
   REQUIRED_LIMITATIONS,
   SAFE_HTTP_ENDPOINTS,
@@ -36,6 +42,7 @@ import {
   canonicalJson,
   evaluateBound,
   parseBoundedInteger,
+  parseProtectedOwnerDirectiveBundle,
   scanSecretText,
   sha256,
   summarize,
@@ -68,6 +75,16 @@ export const BASELINE_LIVE_COMPONENT_IDS = Object.freeze([
   'basis-engine',
   'volume-engine',
 ]);
+export const LIVE_PERFORMANCE_SOURCE_EXPECTATION = Object.freeze({
+  mode: 'INTEGRATION_UNTRACKED',
+  branch: PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH,
+  worktreeState: PROTECTED_OWNER_DIRECTIVE_LIVE_STATE,
+});
+export const PACKAGED_PERFORMANCE_SOURCE_EXPECTATION = Object.freeze({
+  mode: 'CLEAN_DETACHED_PACKAGED',
+  branch: 'DETACHED',
+  worktreeState: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
+});
 
 function optionMap(argv) {
   const result = new Map();
@@ -123,26 +140,155 @@ function git(args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
-function sourceStatus() {
-  const records = execFileSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' })
-    .split('\0')
-    .filter((entry) => entry.length > 0);
-  const parsed = records.map((entry) => Object.freeze({ status: entry.slice(0, 2), path: entry.slice(3) }));
-  const statusByPath = new Map(parsed.map((entry) => [entry.path, entry.status]));
-  const protectedOwnerDirectives = verifyProtectedOwnerDirectives(ROOT, statusByPath);
-  const protectedPaths = new Set(protectedOwnerDirectives.map((entry) => entry.path));
-  const dirtyPaths = parsed
-    .filter((entry) => !protectedPaths.has(entry.path))
-    .filter((entry) => !(entry.status === '??' && entry.path.startsWith('test/i00/performance/evidence/')))
-    .map((entry) => `${entry.status}:${entry.path}`)
-    .toSorted();
-  return Object.freeze({ dirtyPaths, protectedOwnerDirectives });
+function strictGitBytes(root, args, maxBuffer = 256 * 1024, input = undefined) {
+  const env = Object.fromEntries(Object.entries({
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    TMPDIR: process.env.TMPDIR,
+    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_NO_REPLACE_OBJECTS: '1',
+    GIT_OPTIONAL_LOCKS: '0',
+    GIT_ATTR_NOSYSTEM: '1',
+    LC_ALL: 'C',
+    LANG: 'C',
+  }).filter(([, value]) => value !== undefined));
+  return execFileSync('git', [
+    '--no-replace-objects',
+    '-c', 'core.fsmonitor=false',
+    '-c', 'core.untrackedCache=false',
+    '-c', 'core.fileMode=true',
+    '-c', 'core.autocrlf=false',
+    '-c', 'core.eol=lf',
+    '-c', 'core.attributesFile=/dev/null',
+    ...args,
+  ], {
+    cwd: root,
+    encoding: null,
+    env,
+    input,
+    maxBuffer,
+  });
 }
 
-function assertSourceBoundToHead() {
-  const status = sourceStatus();
-  if (status.dirtyPaths.length > 0) throw new Error(`SOURCE_NOT_FROZEN_DIRTY_PATHS:${status.dirtyPaths.length}`);
-  return status.protectedOwnerDirectives;
+function strictGitText(root, args) {
+  return strictGitBytes(root, args, 1024 * 1024).toString('utf8').trim();
+}
+
+function strictGitStatus(root) {
+  return strictGitBytes(root, [
+    '-c', 'status.renames=false',
+    'status', '--porcelain=v1', '-z', '--untracked-files=all',
+  ], 4 * 1024 * 1024)
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean)
+    .map((entry) => Object.freeze({ status: entry.slice(0, 2), path: entry.slice(3) }));
+}
+
+function hiddenIndexEntries(root) {
+  return strictGitBytes(root, ['ls-files', '-v', '-z'], 16 * 1024 * 1024)
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean)
+    .filter((entry) => entry[0] !== 'H');
+}
+
+function assertNoGitAttributeTransforms(root, revision) {
+  const infoAttributesPath = strictGitText(root, ['rev-parse', '--git-path', 'info/attributes']);
+  const absoluteInfoAttributes = path.isAbsolute(infoAttributesPath)
+    ? infoAttributesPath
+    : path.resolve(root, infoAttributesPath);
+  const infoAttributes = lstatSync(absoluteInfoAttributes, { throwIfNoEntry: false });
+  if (infoAttributes && (!infoAttributes.isFile() || infoAttributes.isSymbolicLink() || infoAttributes.size > 0)) {
+    throw new Error('CLEAN_DETACHED_INFO_ATTRIBUTES_FORBIDDEN');
+  }
+  const trackedPaths = strictGitBytes(root, ['ls-files', '-z'], 16 * 1024 * 1024);
+  const attributes = strictGitBytes(root, [
+    'check-attr', '--source', revision, '-z', '--stdin', '--all',
+  ], 16 * 1024 * 1024, trackedPaths);
+  if (attributes.length > 0) throw new Error('CLEAN_DETACHED_GIT_ATTRIBUTES_FORBIDDEN');
+  const worktreeAttributes = strictGitBytes(root, [
+    'check-attr', '-z', '--stdin', '--all',
+  ], 16 * 1024 * 1024, trackedPaths);
+  if (worktreeAttributes.length > 0) throw new Error('CLEAN_DETACHED_WORKTREE_GIT_ATTRIBUTES_FORBIDDEN');
+}
+
+export function resolveProtectedOwnerDirectivesForPerformance({ root, testedSha = null }) {
+  const repositoryRoot = realpathSync(path.resolve(root));
+  const gitRoot = realpathSync(strictGitText(repositoryRoot, ['rev-parse', '--show-toplevel']));
+  if (repositoryRoot !== gitRoot) throw new Error('PROTECTED_OWNER_DIRECTIVE_REPOSITORY_ROOT_INVALID');
+  const branch = strictGitText(repositoryRoot, ['branch', '--show-current']);
+  const headSha = strictGitText(repositoryRoot, ['rev-parse', 'HEAD']);
+  if (strictGitText(repositoryRoot, ['cat-file', '-t', 'HEAD']) !== 'commit') {
+    throw new Error('SOURCE_HEAD_COMMIT_REQUIRED');
+  }
+  const treeSha = strictGitText(repositoryRoot, ['rev-parse', 'HEAD^{tree}']);
+
+  if (branch === PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH) {
+    const status = strictGitStatus(repositoryRoot);
+    const statusByPath = new Map(status.map((entry) => [entry.path, entry.status]));
+    const protectedOwnerDirectives = verifyProtectedOwnerDirectives(repositoryRoot, statusByPath);
+    const protectedPaths = new Set(PROTECTED_OWNER_DIRECTIVES.map((entry) => entry.path));
+    const dirtyPaths = status
+      .filter((entry) => !protectedPaths.has(entry.path))
+      .filter((entry) => !(entry.status === '??' && entry.path.startsWith('test/i00/performance/evidence/')))
+      .map((entry) => `${entry.status}:${entry.path}`)
+      .toSorted();
+    if (dirtyPaths.length > 0) throw new Error(`SOURCE_NOT_FROZEN_DIRTY_PATHS:${dirtyPaths.length}`);
+    if (testedSha !== null && testedSha !== headSha) throw new Error('TESTED_SHA_DOES_NOT_EQUAL_SOURCE_HEAD');
+    return Object.freeze({
+      mode: 'INTEGRATION_UNTRACKED',
+      branch,
+      headSha,
+      treeSha,
+      worktreeState: PROTECTED_OWNER_DIRECTIVE_LIVE_STATE,
+      protectedOwnerDirectives,
+    });
+  }
+
+  if (branch !== '') throw new Error(`INTEGRATION_BRANCH_REQUIRED:${branch}`);
+  if (typeof testedSha !== 'string' || !/^[a-f0-9]{40}$/.test(testedSha)) {
+    throw new Error('CLEAN_DETACHED_TESTED_SHA_REQUIRED');
+  }
+  if (testedSha !== headSha) throw new Error('TESTED_SHA_DOES_NOT_EQUAL_SOURCE_HEAD');
+  const hiddenEntries = hiddenIndexEntries(repositoryRoot);
+  if (hiddenEntries.length > 0) throw new Error(`CLEAN_DETACHED_INDEX_FLAGS_FORBIDDEN:${hiddenEntries.length}`);
+  assertNoGitAttributeTransforms(repositoryRoot, testedSha);
+  const status = strictGitStatus(repositoryRoot);
+  if (status.length > 0) throw new Error(`CLEAN_DETACHED_SOURCE_DIRTY_PATHS:${status.length}`);
+  for (const directive of PROTECTED_OWNER_DIRECTIVES) {
+    if (lstatSync(path.join(repositoryRoot, directive.path), { throwIfNoEntry: false })) {
+      throw new Error(`CLEAN_DETACHED_AMBIENT_OWNER_DIRECTIVE_FORBIDDEN:${directive.path}`);
+    }
+  }
+  const treeEntry = strictGitText(repositoryRoot, ['ls-tree', testedSha, '--', PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH]);
+  const match = /^100644 blob ([a-f0-9]{40})\t(.+)$/.exec(treeEntry);
+  if (!match || match[2] !== PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH) {
+    throw new Error('PROTECTED_OWNER_DIRECTIVE_BUNDLE_GIT_ENTRY_INVALID');
+  }
+  const bundle = parseProtectedOwnerDirectiveBundle(strictGitBytes(repositoryRoot, ['cat-file', 'blob', match[1]]));
+  const protectedOwnerDirectives = Object.freeze(bundle.members.map((member) => Object.freeze({
+    path: member.path,
+    sha256: member.sha256,
+    gitStatus: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS,
+  })));
+  return Object.freeze({
+    mode: 'CLEAN_DETACHED_PACKAGED',
+    branch: 'DETACHED',
+    headSha,
+    treeSha,
+    worktreeState: PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
+    protectedOwnerDirectives,
+  });
+}
+
+function sourceStatus(testedSha = null) {
+  return resolveProtectedOwnerDirectivesForPerformance({ root: ROOT, testedSha });
+}
+
+function assertSourceBoundToHead(testedSha = null) {
+  return sourceStatus(testedSha);
 }
 
 function fileSha256(filename) {
@@ -274,6 +420,7 @@ async function startBuiltApp(dataDir, port, sampleIntervalMs, testedSha) {
       ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
       LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
       SKIP_DOTENV: '1',
+      I00_PUBLIC_SOURCE_STARTUP_EGRESS: '1',
       I00_PERF_PROBE: '1',
       I00_PERF_TELEMETRY_FD: '3',
       I00_PERF_CONTROL_FD: '4',
@@ -1620,20 +1767,18 @@ export function buildSlo(phases, raw, continuity, secretScanPassed) {
 
 export async function runLocalProxySoak(options) {
   assertLoopbackHost(HOST);
-  const protectedOwnerDirectives = assertSourceBoundToHead();
+  const sourceBinding = assertSourceBoundToHead(options.testedSha);
   const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8'));
   const createdAt = new Date();
   const source = {
-    branch: git(['branch', '--show-current']),
-    headSha: git(['rev-parse', 'HEAD']),
-    treeSha: git(['rev-parse', 'HEAD^{tree}']),
-    worktreeState: 'FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE',
-    protectedOwnerDirectives,
+    branch: sourceBinding.branch,
+    headSha: sourceBinding.headSha,
+    treeSha: sourceBinding.treeSha,
+    worktreeState: sourceBinding.worktreeState,
+    protectedOwnerDirectives: sourceBinding.protectedOwnerDirectives,
     serverBundleSha256: fileSha256(SERVER_BUNDLE),
     harnessTreeSha256: harnessTreeSha256(),
   };
-  if (options.testedSha !== null && options.testedSha !== source.headSha) throw new Error('TESTED_SHA_DOES_NOT_EQUAL_SOURCE_HEAD');
-  if (source.branch !== 'i00-product-assembly-20260713') throw new Error(`INTEGRATION_BRANCH_REQUIRED:${source.branch}`);
   const runId = `${createdAt.toISOString().replace(/[^0-9]/g, '').slice(0, 17)}-${process.pid}-${source.headSha.slice(0, 8)}`;
   const requestedOutput = options.output ?? `local-proxy-performance-${runId}.json`;
   const boundaryCore = {
@@ -1862,13 +2007,24 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
   const semanticFailures = [];
   if (expectedSource.headSha && document?.source?.headSha !== expectedSource.headSha) semanticFailures.push('PERFORMANCE_HEAD_SHA_MISMATCH');
   if (expectedSource.treeSha && document?.source?.treeSha !== expectedSource.treeSha) semanticFailures.push('PERFORMANCE_TREE_SHA_MISMATCH');
-  if (document?.source?.worktreeState !== 'FROZEN_WITH_HASH_PINNED_OWNER_DIRECTIVES_AND_EVIDENCE') semanticFailures.push('PERFORMANCE_SOURCE_NOT_FROZEN');
+  if (expectedSource.branch && document?.source?.branch !== expectedSource.branch) semanticFailures.push('PERFORMANCE_SOURCE_MODE_MISMATCH');
+  if (expectedSource.worktreeState && document?.source?.worktreeState !== expectedSource.worktreeState) semanticFailures.push('PERFORMANCE_SOURCE_MODE_MISMATCH');
   const protectedRows = Array.isArray(document?.source?.protectedOwnerDirectives) ? document.source.protectedOwnerDirectives : [];
   const protectedByPath = new Map(protectedRows.map((entry) => [entry.path, entry]));
   if (protectedRows.length !== PROTECTED_OWNER_DIRECTIVES.length
       || new Set(protectedRows.map((entry) => entry.path)).size !== protectedRows.length
       || PROTECTED_OWNER_DIRECTIVES.some((expected) => protectedByPath.get(expected.path)?.sha256 !== expected.sha256)) {
     semanticFailures.push('PERFORMANCE_PROTECTED_OWNER_DIRECTIVES_INVALID');
+  }
+  const liveSource = document?.source?.branch === PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH
+    && document?.source?.worktreeState === PROTECTED_OWNER_DIRECTIVE_LIVE_STATE
+    && protectedRows.every((entry) => entry.gitStatus === 'UNTRACKED_PROTECTED_OWNER_INPUT');
+  const packagedSource = document?.source?.branch === 'DETACHED'
+    && document?.source?.worktreeState === PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE
+    && protectedRows.every((entry) => entry.gitStatus === PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATUS);
+  if ((!liveSource && !packagedSource) || (expectedSource.mode === 'INTEGRATION_UNTRACKED' && !liveSource)
+      || (expectedSource.mode === 'CLEAN_DETACHED_PACKAGED' && !packagedSource)) {
+    semanticFailures.push('PERFORMANCE_SOURCE_NOT_FROZEN');
   }
   if (document?.slo?.overall !== 'PASS') semanticFailures.push('PERFORMANCE_SLO_NOT_PASS');
   if (document?.artifacts?.secretScan?.passed !== true) semanticFailures.push('PERFORMANCE_SECRET_SCAN_FAILED');
@@ -2066,14 +2222,13 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
   });
 }
 
-function validatePerformanceReceipt(requested) {
+function validatePerformanceReceipt(requested, testedSha = null) {
   const resolved = realpathSync(path.resolve(ROOT, requested));
   if (resolved !== ROOT && !resolved.startsWith(`${ROOT}${path.sep}`)) throw new Error('PERFORMANCE_RECEIPT_OUTSIDE_REPOSITORY');
-  assertSourceBoundToHead();
+  const sourceBinding = assertSourceBoundToHead(testedSha);
   const text = readFileSync(resolved, 'utf8');
   const document = JSON.parse(text);
-  const expectedSource = { headSha: git(['rev-parse', 'HEAD']), treeSha: git(['rev-parse', 'HEAD^{tree}']) };
-  const validation = validatePerformanceDocument(document, expectedSource);
+  const validation = validatePerformanceDocument(document, sourceBinding);
   const secretFindings = scanSecretText(text);
   return Object.freeze({
     relativePath: path.relative(ROOT, resolved),
@@ -2101,7 +2256,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     }, null, 2)}\n`);
   } else if (options.mode === 'VALIDATE_ONLY') {
     try {
-      const result = validatePerformanceReceipt(options.validateReceipt);
+      const result = validatePerformanceReceipt(options.validateReceipt, options.testedSha);
       process.stdout.write(`${JSON.stringify(result)}\n`);
       if (!result.passed) process.exitCode = 1;
     } catch (error) {

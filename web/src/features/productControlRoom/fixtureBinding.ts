@@ -1,6 +1,7 @@
 import type { SystemComponentSnapshot, SystemSupervisorSnapshot, SystemSupervisorSummaries, SystemTruthLabel } from '../../lib/systemIntegration';
 import {
   buildFixtureBinding,
+  buildFixtureManagedInventory,
   type ProductComponentProjection,
   type ProductFixtureScenarioId,
   type ProductFixtureSession,
@@ -31,9 +32,11 @@ export function buildProductControlRoomFixture(
   const donor = fixtureById(donorId).build(session.nowMs);
   const dashboard = alignDonorScenario(forceSyntheticDonorSnapshot(donor, session), session, recoveryResolved);
   const binding = buildFixtureBinding(session, dashboard);
+  const components = Object.freeze(dashboard.components.map(projectDonorComponent));
   return Object.freeze({
     ...binding,
-    components: Object.freeze(dashboard.components.map(projectDonorComponent)),
+    components,
+    managedInventory: buildFixtureManagedInventory(components),
     dependencyEdges: Object.freeze(dashboard.edges.map((edge) => Object.freeze({
       fromComponentId: edge.from,
       toComponentId: edge.to,

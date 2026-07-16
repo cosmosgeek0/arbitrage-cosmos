@@ -28,7 +28,10 @@ import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
-import { deterministicOfflinePublicSourcesEnabled } from './binance/publicSourceMode.js';
+import {
+  deterministicOfflinePublicSourcesEnabled,
+  publicSourceStartupEgressAdmitted,
+} from './binance/publicSourceMode.js';
 import {
   ingestLiquidationPrint,
   liquidationSeries,
@@ -46,6 +49,7 @@ import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
   createSystemIntegrationApplication,
   OrdinaryShutdownAdmission,
+  type SystemIntegrationApplicationFacade,
 } from './systemIntegration/application/index.js';
 import { createCanonicalOwnerEvidenceReadPort } from './systemIntegration/adapters/index.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
@@ -70,6 +74,7 @@ import { createProductionSystemIntegrationPorts } from './systemIntegration/prod
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import {
   createCanonicalSupervisorOpsReadback,
+  createCanonicalRestartTruthCoordinator,
   createDeploymentFreezeReader,
   type CanonicalSupervisorOpsReadPort,
 } from './systemIntegration/ops/index.js';
@@ -107,6 +112,11 @@ function loadDotEnv(): void {
   }
 }
 loadDotEnv();
+
+// Source-catalog ownership is not operational egress authority. A normal
+// verifier-style boot stays local unless an effectful public-source campaign
+// supplies the one exact positive admission.
+const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
 
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -148,7 +158,9 @@ const engine = new MarketEngine(ledger, undefined, Object.freeze({
   stop: () => stopLiquidationProjection(),
   observeSourceStatus: (status) => observeLiquidationSourceStatus(status),
   ingestPrint: (print) => ingestLiquidationPrint(print),
-} satisfies MarketLiquidationProjectionPort));
+} satisfies MarketLiquidationProjectionPort), Object.freeze({
+  publicSourceStartupEgressAdmitted: startupPublicSourceEgressAdmitted,
+}));
 const LEGACY_SCANNER_STATE = 'RETIRED' as const;
 const NO_ACTIVE_LEGACY_PROPOSALS: readonly [] = Object.freeze([]);
 
@@ -221,7 +233,13 @@ const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
   read: readCanonicalOps,
 });
 let readManagedRuntimeForControlEffect: (() => Readonly<ManagedCompositionReadSnapshot>) | null = null;
-const systemIntegration = createSystemIntegrationApplication({
+let systemIntegration: SystemIntegrationApplicationFacade;
+const canonicalRestartTruth = createCanonicalRestartTruthCoordinator({
+  clock: systemIntegrationClock,
+  readSupervisor: () => systemIntegration.supervisor(),
+  readOps: (supervisorCut) => readCanonicalOps(supervisorCut),
+});
+systemIntegration = createSystemIntegrationApplication({
   ledger,
   clock: systemIntegrationClock,
   scheduler: systemIntegrationScheduler,
@@ -230,6 +248,7 @@ const systemIntegration = createSystemIntegrationApplication({
   summaries: systemIntegrationProduction.summaries,
   traces: canonicalOwnerEvidence,
   lifecycleTruth: Object.freeze({
+    readRestartTruth: (nowMs: number) => canonicalRestartTruth.readRestartTruth(nowMs),
     readLocalMutationAuthority,
     readOrdinaryDrainTruth: readCanonicalOps,
     readControlRuntimeEffect: (effectId: string, mutation: Readonly<SystemControlMutation>) => {
@@ -241,6 +260,9 @@ const systemIntegration = createSystemIntegrationApplication({
         return 'UNKNOWN';
       }
     },
+  }),
+  restartTruthRefresh: Object.freeze({
+    refreshRestartTruth: (nowMs: number) => canonicalRestartTruth.refreshRestartTruth(nowMs),
   }),
   // Convergence never treats ambient credentials as an execution capability.
   // The audited application kill remains an independent, stricter outer gate.
@@ -737,6 +759,9 @@ app.use('/api', operatorAccess.middleware());
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,
+  validateOnly: {
+    executeValidateOnly: (input) => systemIntegration.executeValidateOnly(input),
+  },
   clock: systemIntegrationClock,
   opsReadback: canonicalOpsReadPort,
 }));

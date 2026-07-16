@@ -68,6 +68,53 @@ export function treeDigest(root) {
   return hash.digest('hex');
 }
 
+function listTypedEntries(root, relative = '') {
+  const absolute = resolve(root, relative);
+  const stat = lstatSync(absolute);
+  if (stat.isSymbolicLink()) fail(`symlink is forbidden in typed tree: ${relative || '.'}`);
+  if (stat.isFile()) return [{ path: relative, type: 'file', stat }];
+  if (!stat.isDirectory()) fail(`unsupported typed-tree entry: ${relative || '.'}`);
+  return readdirSync(absolute).sort().flatMap((name) => {
+    const next = relative ? `${relative}/${name}` : name;
+    const child = lstatSync(resolve(root, next));
+    if (child.isSymbolicLink()) fail(`symlink is forbidden in typed tree: ${next}`);
+    if (child.isFile()) return [{ path: next, type: 'file', stat: child }];
+    if (child.isDirectory()) {
+      return [{ path: next, type: 'directory', stat: child }, ...listTypedEntries(root, next)];
+    }
+    fail(`unsupported typed-tree entry: ${next}`);
+  });
+}
+
+export function typedTreeDigest(root, { excludeTopLevel = [] } = {}) {
+  const excluded = new Set(excludeTopLevel);
+  const hash = createHash('sha256');
+  const entries = listTypedEntries(root).filter((entry) => !excluded.has(entry.path.split('/')[0]));
+  for (const entry of entries) {
+    if (entry.type === 'directory') {
+      hash.update('directory\0');
+      hash.update(entry.path);
+      hash.update('\n');
+      continue;
+    }
+    const { path: file, stat } = entry;
+    const mode = stat.mode & 0o7777;
+    if ((mode & 0o7000) !== 0) fail(`unsafe special mode in typed tree: ${file}`);
+    const executableBits = mode & 0o111;
+    if (executableBits !== 0 && executableBits !== 0o111) {
+      fail(`ambiguous executable mode in typed tree: ${file}`);
+    }
+    const normalizedMode = executableBits === 0o111 ? '100755' : '100644';
+    hash.update(file);
+    hash.update('\0');
+    hash.update(normalizedMode);
+    hash.update('\0');
+    hash.update(sha256File(resolve(root, file)));
+    hash.update('\n');
+  }
+  return hash.digest('hex');
+}
+
 export function requireKeys(value, keys, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${label} must be an object`);
   for (const key of keys) {

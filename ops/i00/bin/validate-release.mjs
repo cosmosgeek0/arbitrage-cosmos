@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, lstatSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys, sha256File,
-  treeDigest,
+  treeDigest, typedTreeDigest,
 } from '../lib.mjs';
 import {
   COMPLETE_ACCEPTANCE_STEP_COUNT, COMPLETE_ACCEPTANCE_TRUTH,
@@ -11,22 +13,33 @@ import {
 } from '../complete-acceptance-receipt.mjs';
 import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-validation.mjs';
 import { assertReleaseMatchesCompiledLedger } from '../ledger-compatibility.mjs';
+import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 import {
   assertTrustedBuildPublicKey, expectedBuildAttestation, verifyBuildAttestation,
 } from './verify-build-attestation.mjs';
 
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '05e5c817ab638c78b726a18708620dfb850e315779c73a5964db2ecb2f03a4d7';
 const args = parseArgs(process.argv.slice(2), new Set(['allow-simulation']));
 if (!args.release) fail('--release is required');
 const root = resolve(args.release);
 const release = readJson(resolve(root, 'release.json'), 'release.json');
-const manifest = readJson(resolve(root, 'artifact-manifest.json'), 'artifact-manifest.json');
+const manifestPath = resolve(root, 'artifact-manifest.json');
+let manifestBytes;
+let manifest;
+try {
+  manifestBytes = readFileSync(manifestPath);
+  manifest = JSON.parse(manifestBytes);
+} catch (error) {
+  fail(`artifact-manifest.json is unreadable or invalid JSON: ${error.message}`);
+}
+const artifactManifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
 const releaseKeys = [
   'releaseId', 'gitSha', 'testedSha', 'builtAtUtc', 'schemaVersion', 'rollbackBarrier',
   'rollbackFloor', 'compatibilitySource', 'compatibilitySourceSha256',
   'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256', 'acceptanceEvidence',
   'activationState', 'sourceTree', 'sourceVerification', 'packageLockSha256',
   'runtimeDepsDigestSha256', 'serverDistDigestSha256', 'webDistDigestSha256',
-  'runtimeDependencies', 'buildAttestation',
+  'runtimeDependencies', 'l15OpsProvenance', 'buildAttestation',
 ];
 requireExactKeys(release, releaseKeys, 'release.json');
 if (!isFullSha(release.gitSha) || release.gitSha !== release.testedSha) fail('release SHA fields must be one identical full Git SHA');
@@ -58,10 +71,50 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
 for (const relative of [
   'server/dist/index.js', 'server/dist/ledger.js', 'web/dist/index.html', 'server/package.json', 'package.json',
   'package-lock.json', 'node_modules', 'ops/live/RECEIPT.md', 'ops/live/bin/deploy.sh',
-  'ops/live/bin/rollback.sh', 'ops/i00/donor-contract.json',
-  'ops/i00/bin/install-ops-bundle.sh',
+  'ops/live/bin/rollback.sh', 'ops/i00/donor-contract.json', 'ops/i00/l15-amendment-contract.json',
+  'ops/i00/l15-amendment.mjs', 'ops/i00/lib.mjs', 'ops/i00/bin/install-ops-bundle.sh',
+  'ops/i00/bin/verify-donor.mjs', 'ops/i00/bin/verify-donor-root.mjs',
 ]) {
   if (!existsSync(resolve(root, relative))) fail(`release payload missing ${relative}`);
+}
+for (const forbidden of ['accepted-ops-live', 'install-receipt.json']) {
+  if (existsSync(resolve(root, 'ops/i00', forbidden))) {
+    fail(`release ops/i00 contains reserved installed-bundle path ${forbidden}`);
+  }
+}
+const trustedI00Root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const trustedI00EnforcementTreeDigestSha256 = typedTreeDigest(trustedI00Root, {
+  excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
+});
+const releaseI00EnforcementTreeDigestSha256 = typedTreeDigest(resolve(root, 'ops/i00'));
+if (releaseI00EnforcementTreeDigestSha256 !== trustedI00EnforcementTreeDigestSha256) {
+  fail('release ops/i00 enforcement cohort differs from the trusted validator cohort');
+}
+const loadedL15Contract = loadL15AmendmentContract(
+  resolve(root, 'ops/i00/l15-amendment-contract.json'),
+  EXPECTED_AMENDMENT_CONTRACT_SHA256,
+);
+const l15Verification = verifyEffectiveL15Root({
+  root: resolve(root, 'ops/live'),
+  loadedContract: loadedL15Contract,
+});
+const expectedL15OpsProvenance = {
+  immutableDonorCommit: l15Verification.immutableDonorCommit,
+  immutableDonorLiveTree: l15Verification.immutableDonorLiveTree,
+  immutableDonorContractSha256: l15Verification.immutableDonorContractSha256,
+  amendmentContractSha256: l15Verification.amendmentContractSha256,
+  effectiveLiveTree: l15Verification.effectiveLiveTree,
+  effectiveRootDigestSha256: l15Verification.effectiveRootDigestSha256,
+  i00EnforcementTreeDigestSha256: releaseI00EnforcementTreeDigestSha256,
+  findingIds: l15Verification.findingIds,
+};
+requireExactKeys(release.l15OpsProvenance, [
+  'immutableDonorCommit', 'immutableDonorLiveTree', 'immutableDonorContractSha256',
+  'amendmentContractSha256', 'effectiveLiveTree', 'effectiveRootDigestSha256',
+  'i00EnforcementTreeDigestSha256', 'findingIds',
+], 'release l15OpsProvenance');
+if (JSON.stringify(release.l15OpsProvenance) !== JSON.stringify(expectedL15OpsProvenance)) {
+  fail('release effective L15 provenance does not match the pinned amendment contract');
 }
 let compiledCompatibility;
 try {
@@ -172,7 +225,7 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
 
 requireExactKeys(manifest, [
   'schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs',
-  'acceptanceEvidence', 'ledgerCompatibility', 'buildAttestation', 'files',
+  'acceptanceEvidence', 'l15OpsProvenance', 'ledgerCompatibility', 'buildAttestation', 'files',
 ], 'artifact manifest');
 requireExactKeys(manifest.testedBuildOutputs, ['serverDistDigestSha256', 'webDistDigestSha256'], 'artifact manifest.testedBuildOutputs');
 requireExactKeys(manifest.ledgerCompatibility, [
@@ -183,6 +236,9 @@ if (manifest.schemaVersion !== 1) fail('artifact manifest schemaVersion must be 
 if (manifest.releaseId !== release.releaseId || manifest.testedSha !== release.testedSha) fail('artifact manifest identity mismatch');
 if (JSON.stringify(manifest.acceptanceEvidence) !== JSON.stringify(release.acceptanceEvidence)) {
   fail('artifact manifest acceptance evidence does not match release provenance');
+}
+if (JSON.stringify(manifest.l15OpsProvenance) !== JSON.stringify(release.l15OpsProvenance)) {
+  fail('artifact manifest effective L15 provenance does not match release provenance');
 }
 for (const key of Object.keys(compiledCompatibility)) {
   if (manifest.ledgerCompatibility[key] !== compiledCompatibility[key]) {
@@ -212,5 +268,14 @@ if (treeDigest(resolve(root, 'server/dist')) !== release.serverDistDigestSha256
     || treeDigest(resolve(root, 'web/dist')) !== release.webDistDigestSha256) {
   fail('release build-output trees do not match tested provenance');
 }
+if (sha256File(manifestPath) !== artifactManifestSha256) {
+  fail('artifact manifest changed during validation');
+}
 
-process.stdout.write(`${JSON.stringify({ status: 'RELEASE_VALID_NOT_DEPLOYED', releaseId: release.releaseId, testedSha: release.testedSha, fileCount: actualFiles.length })}\n`);
+process.stdout.write(`${JSON.stringify({
+  status: 'RELEASE_VALID_NOT_DEPLOYED',
+  releaseId: release.releaseId,
+  testedSha: release.testedSha,
+  artifactManifestSha256,
+  fileCount: actualFiles.length,
+})}\n`);

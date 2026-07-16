@@ -43,7 +43,9 @@ function exactUtcSeconds(value: unknown): value is string {
   return Number.isFinite(parsed) && utcSeconds(parsed) === value;
 }
 
-function readbackShape(value: unknown): value is Readonly<CanonicalSupervisorOpsReadback> {
+export function isCanonicalSupervisorOpsReadback(
+  value: unknown,
+): value is Readonly<CanonicalSupervisorOpsReadback> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
@@ -75,7 +77,7 @@ export function evaluateCanonicalOpsIntakeGate(
   if (!validNow(nowMs)) throw new TypeError('canonical ops intake interlock requires valid UTC milliseconds');
   const reasonCodes: string[] = [];
   let validUntilUtc: string | null = null;
-  if (!readbackShape(readback)) {
+  if (!isCanonicalSupervisorOpsReadback(readback)) {
     reasonCodes.push('CANONICAL_OPS_READBACK_INVALID');
   } else {
     validUntilUtc = readback.validUntilUtc;

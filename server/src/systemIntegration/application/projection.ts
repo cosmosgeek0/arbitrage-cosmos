@@ -137,6 +137,11 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
   }),
 });
 
+/** Canonical component ownership readback for internal System Integration consumers. */
+export function canonicalApplicationComponentOwner(componentId: SystemComponentId): SystemOwnerKind {
+  return COMPONENT_METADATA[componentId].owner;
+}
+
 const PHYSICAL_COMPONENT_IDS = Object.freeze([
   'market-universe',
   'intelligence-runtime',

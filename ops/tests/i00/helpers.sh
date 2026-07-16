@@ -8,8 +8,10 @@ DONOR_SHA=2cec412927fa2f64f05a0b2774b18e45f8ce4fa5
 ASSERTIONS=0
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/ip-ops-i00.XXXXXX")"
 cleanup_test_tmp() {
+  local rc="${1:-$?}"
   chmod -R u+w "$TEST_TMP" 2>/dev/null || true
   rm -rf "$TEST_TMP"
+  return "$rc"
 }
 trap cleanup_test_tmp EXIT
 
@@ -40,6 +42,12 @@ materialize_donor() {
   git -C "$REPO_ROOT" archive "$DONOR_SHA" ops/live ops/tests | tar -x -C "$target"
 }
 
+materialize_effective_l15() {
+  local target="$1"
+  mkdir -p "$target/ops"
+  cp -R "$REPO_ROOT/ops/live" "$target/ops/live"
+}
+
 make_release_inputs() {
   local source="$1" deps="$2" sha="$3" receipt="$4"
   local tree=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -56,7 +64,8 @@ make_release_inputs() {
   printf 'module.exports = function FixtureDatabase() { throw new Error("FIXTURE_DATABASE_NOT_EXECUTABLE"); };\n' > "$deps/better-sqlite3/index.cjs"
   printf '{"name":"ws","version":"0.0.0-fixture","main":"index.cjs"}\n' > "$deps/ws/package.json"
   printf 'module.exports = class FixtureWebSocket {};\n' > "$deps/ws/index.cjs"
-  git -C "$REPO_ROOT" archive "$DONOR_SHA" ops/live | tar -x -C "$source"
+  mkdir -p "$source/ops"
+  cp -R "$REPO_ROOT/ops/live" "$source/ops/live"
   mkdir -p "$source/ops/templates" "$source/ops/docs"
   cp -R "$REPO_ROOT/ops/i00" "$source/ops/i00"
   cp -R "$REPO_ROOT/ops/templates/i00" "$source/ops/templates/i00"
@@ -65,7 +74,7 @@ make_release_inputs() {
   for file in donor-equality.mjs verify-scope.mjs scope-security.mjs; do
     cp "$REPO_ROOT/test/i00/$file" "$source/test/i00/$file"
   done
-  for file in contract.mjs local-acceptance.mjs local-proxy-soak.mjs app-probe.mjs schema.v1.json browser-receipt.schema.v2.json browser-measurement.schema.v1.json browser-capture.schema.v3.json browser-restart-measurement.schema.v1.json; do
+  for file in contract.mjs local-acceptance.mjs local-proxy-soak.mjs app-probe.mjs schema.v1.json protected-owner-directives.bundle.v1.json browser-receipt.schema.v2.json browser-measurement.schema.v1.json browser-capture.schema.v3.json browser-restart-measurement.schema.v1.json; do
     cp "$REPO_ROOT/test/i00/performance/$file" "$source/test/i00/performance/$file"
   done
   node "$TEST_DIR/fixtures/make-complete-acceptance.mjs" "$source" "$receipt" "$sha" "$tree" >/dev/null

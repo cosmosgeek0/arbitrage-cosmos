@@ -13,7 +13,7 @@ import type {
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
 import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
 
-export type ProductionFeedStatus = 'connecting' | 'open' | 'closed';
+export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
 export interface ProductionMarketRow {
   readonly symbol: string;

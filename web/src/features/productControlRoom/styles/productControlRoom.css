@@ -66,6 +66,14 @@
 .pcr-loading, .pcr-empty { padding: 24px 16px; color: var(--muted); font-size: 11.5px; }
 .pcr-working-status { min-height: 1px; padding: 0 16px; color: var(--muted); font-size: 10.5px; }
 .pcr-working-status:not(:empty) { padding-top: 7px; padding-bottom: 7px; border-top: 1px solid var(--line); }
+.pcr-command-reconciliation { min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--tile) 48%, var(--panel)); }
+.pcr-command-reconciliation strong { color: var(--text); font-size: 11px; font-weight: 560; }
+.pcr-command-reconciliation span,
+.pcr-command-reconciliation code { color: var(--text-2); font: 540 9.5px/13px var(--mono); }
+.pcr-command-reconciliation.state-pending span,
+.pcr-command-reconciliation.state-ambiguous span,
+.pcr-command-reconciliation.state-invalid_durable_state span { color: var(--warn); }
+.pcr-command-reconciliation button { margin-left: auto; }
 .pcr-control-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, .6fr) auto; align-items: end; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--line); }
 .pcr-control-filters label { display: grid; gap: 4px; color: var(--muted); font-size: 10px; font-weight: 560; }
 .pcr-control-filters input { min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--panel); color: var(--text); font: 500 11px/1 var(--font); }

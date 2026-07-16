@@ -47,11 +47,12 @@ external authorization described in `IP_OPS_ACTIVATION_REQUEST.md`.
 8. Under the separately authorized host-install class, install the embedded I00
    helper bundle to `/usr/local/lib/cosmos-ops/i00` with
    `install-ops-bundle.sh`. The install contains both the I00 wrappers and the
-   release-embedded, read-only accepted L15 `ops/live` donor at
+   release-embedded, read-only effective L15 `ops/live` root at
    `accepted-ops-live`; it does not need a Git checkout on the host. Each switch
-   verifies the exact embedded donor contract and the critical donor file hashes
-   before delegation. An explicit `DONOR_ROOT` is allowed only for another
-   immutable copy with the same proofs; wrappers never infer a sibling
+   separately verifies the immutable accepted-donor contract, the closed
+   correction contract, and the full effective-root inventory and digest before
+   delegation. An explicit `DONOR_ROOT` is allowed only for another immutable
+   copy with the same proofs; wrappers never infer a sibling
    `/usr/local/lib/ops/live` path. The install performs no unit install or
    restart. Verify its install receipt before installing the I00 systemd
    templates.
@@ -95,7 +96,7 @@ directories `/var/lib/cosmos/{data,evidence,models,ops}` outside releases.
    `NONE` law applies. Otherwise require incident handling and authorization.
 3. Run the rollback preflight against the exact candidate release and current
    rollback floor. Incompatible migrations are absolute blockers.
-4. Delegate the atomic switch to the read-only accepted L15 rollback tooling
+4. Delegate the atomic switch to the read-only effective L15 rollback tooling
    embedded with the installed I00 bundle (or an explicitly supplied immutable
    `DONOR_ROOT` that passes the same exact contract and critical-file proofs).
 5. Reconcile and verify service, origin, tunnel, Access, watchdog, database,
@@ -107,17 +108,21 @@ cannot return a proved success until the hashed semantic receipt validates.
 
 ## Backup and restore
 
-- Backup uses the SQLite online backup API through accepted L15. I00 additionally
+- Backup uses the SQLite online backup API through effective L15. I00 additionally
   requires a WAL-fixed SQLite, `integrity_check=ok`, zero FK violations, hashes,
   and evidence/model policy readback. The installed backup and isolated-restore
-  adapters use the same embedded `accepted-ops-live` donor by default and verify
-  the exact accepted contract plus immutable critical donor paths before use.
+  adapters use the same embedded `accepted-ops-live` root by default and verify
+  both provenance contracts plus the immutable full effective inventory before
+  use.
 - Restore drills always use isolated temporary directories.
-- I00 proves only isolated restore and performs no production swap. Before live
-  activation, the L15 owner must amend its production restore path to stage on
-  the target filesystem, preserve DB/evidence/model payloads, stop every app
-  connection, fully verify the staged set, retain the prior set, and switch
-  atomically under explicit authorization.
+- I00 proves only isolated restore and performs no production swap. The closed
+  `R3-D-BACKUP-008` amendment makes the L15 incident-recovery owner snapshot and
+  verify the complete manifest/database/archive cohort before target creation,
+  stage verified DB/evidence/report bytes on the target filesystem, require the
+  app service to be provably inactive, identity-bind each publication, and
+  restore the prior owned set on failure. Live activation must still rehearse
+  the exact target filesystem and service-manager behavior under separate
+  operator authorization; no activation is claimed here.
 - Never copy a live WAL database file alone, remove an open database, or delete
   the prior database before the new database is verified and switched.
 

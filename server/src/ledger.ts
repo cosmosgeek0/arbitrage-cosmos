@@ -36,7 +36,7 @@ const EPHEMERAL_EVENT_BATCH_MAX = 10_000;
 const CONFIG_CAS_KEY = /^[A-Za-z0-9_.:-]{1,160}$/;
 const CONFIG_CAS_VALUE_MAX_BYTES = 512 * 1_024;
 const CONFIG_CAS_EVENT_DATA_MAX_BYTES = 128 * 1_024;
-const CONFIG_CAS_EVENT_BATCH_MAX = 2;
+const CONFIG_CAS_EVENT_BATCH_MAX = 8;
 const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
 const LEDGER_EVENT_KIND = /^[a-z0-9_.-]{1,64}$/;
 const SYSTEM_INTEGRATION_EVENT_KIND = 'system.integration.trace';
@@ -2367,7 +2367,7 @@ export class Ledger extends EventEmitter {
       throw new RangeError('compare-and-set config value exceeds its byte bound');
     }
     if (!Array.isArray(records) || records.length < 1 || records.length > CONFIG_CAS_EVENT_BATCH_MAX) {
-      throw new RangeError('compare-and-set event batch must contain between 1 and 2 records');
+      throw new RangeError(`compare-and-set event batch must contain between 1 and ${CONFIG_CAS_EVENT_BATCH_MAX} records`);
     }
     if (commitBeforeMs !== undefined
       && (!Number.isSafeInteger(commitBeforeMs) || commitBeforeMs < 0)) {

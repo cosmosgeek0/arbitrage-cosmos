@@ -60,6 +60,7 @@ import type {
   ProductionBasisRuntimePort,
   ProductionMarketEnginePort,
   ProductionMarketRow,
+  ProductionFeedStatus,
   ProductionStrategySnapshot,
   ProductionSystemIntegrationInput,
   ProductionSystemIntegrationPorts,
@@ -90,7 +91,7 @@ interface LifecycleReadState {
 
 interface SourceProjectionEvidence {
   readonly connected: boolean;
-  readonly feedState: 'connecting' | 'open' | 'closed' | 'missing';
+  readonly feedState: ProductionFeedStatus | 'missing';
   readonly timestamp: Readonly<SourcedTimestamp> | null;
   readonly facts: Readonly<MarketFacts>;
 }
@@ -313,7 +314,10 @@ class MarketEvidenceReader {
       : null;
     const feedName = kind === 'SPOT' ? 'spot-miniticker' : 'futures-markprice';
     const feed = this.market.feeds[feedName];
-    const feedState = feed === 'open' || feed === 'connecting' || feed === 'closed' ? feed : 'missing';
+    const feedState = (
+      feed === 'open' || feed === 'connecting' || feed === 'closed' ||
+      feed === 'cooldown' || feed === 'exhausted'
+    ) ? feed : 'missing';
     return Object.freeze({
       connected: this.lifecycle().active && feedState === 'open',
       feedState,
@@ -332,6 +336,8 @@ class MarketEvidenceReader {
     const blockerCodes: string[] = [];
     if (stopped) blockerCodes.push('SOURCE_NOT_STARTED');
     else if (evidence.feedState === 'connecting') blockerCodes.push('SOURCE_TRANSPORT_CONNECTING');
+    else if (evidence.feedState === 'cooldown') blockerCodes.push('SOURCE_TRANSPORT_COOLDOWN');
+    else if (evidence.feedState === 'exhausted') blockerCodes.push('SOURCE_RETRY_BUDGET_EXHAUSTED');
     else if (evidence.feedState !== 'open') blockerCodes.push('SOURCE_TRANSPORT_DISCONNECTED');
     if (evidence.timestamp === null) blockerCodes.push('SOURCE_OBSERVATION_UNAVAILABLE');
     if (freshness?.state === 'STALE') blockerCodes.push('SOURCE_STALE');
@@ -342,31 +348,37 @@ class MarketEvidenceReader {
         ? 'RUNNING'
         : evidence.feedState === 'connecting' || (evidence.feedState === 'open' && evidence.timestamp === null)
           ? 'STARTING'
-          : freshness?.state === 'STALE'
-            ? 'DEGRADED'
-            : 'BLOCKED';
+          : evidence.feedState === 'exhausted'
+            ? 'BLOCKED'
+            : freshness?.state === 'STALE'
+              ? 'DEGRADED'
+              : 'BLOCKED';
     const readiness = stopped
       ? 'STOPPED'
       : ready
         ? 'READY'
         : evidence.feedState === 'connecting' || (evidence.feedState === 'open' && evidence.timestamp === null)
           ? 'WARMING'
-          : freshness?.state === 'STALE'
-            ? 'DEGRADED'
-            : 'BLOCKED';
+          : evidence.feedState === 'exhausted'
+            ? 'BLOCKED'
+            : freshness?.state === 'STALE'
+              ? 'DEGRADED'
+              : 'BLOCKED';
     const sourceLifecycle = stopped
       ? 'STOPPED'
       : ready
         ? 'LIVE'
         : evidence.feedState === 'connecting'
           ? 'CONNECTING'
-          : evidence.feedState === 'open' && evidence.timestamp === null
-            ? 'WARMING'
-            : freshness?.state === 'STALE'
-              ? 'STALE'
-              : evidence.feedState !== 'open'
-                ? 'BACKING_OFF'
-                : 'DEGRADED';
+          : evidence.feedState === 'exhausted'
+            ? 'FAILED'
+            : evidence.feedState === 'open' && evidence.timestamp === null
+              ? 'WARMING'
+              : freshness?.state === 'STALE'
+                ? 'STALE'
+                : evidence.feedState !== 'open'
+                  ? 'BACKING_OFF'
+                  : 'DEGRADED';
     const component: SystemComponentSnapshot = Object.freeze({
       componentId: kind === 'SPOT' ? 'public-spot-source' : 'public-usdm-source',
       owner: 'INTELLIGENCE_RUNTIME',

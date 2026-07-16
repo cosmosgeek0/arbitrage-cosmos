@@ -473,6 +473,7 @@ test('blocked execution modes fail closed without reaching transport, venue subm
         coordinatorsCreated: 0,
         coordinatorPreflights: 0,
         reconciliationEvaluations: 0,
+        recoveryEvaluations: 0,
         persistenceReads: 0,
         persistenceWrites: 1,
       });

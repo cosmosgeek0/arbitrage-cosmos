@@ -154,7 +154,6 @@ test('HTTP and WebSocket perimeter fails closed while preserving local operation
       LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
       SKIP_DOTENV: '1',
       NETWORK_EGRESS_SENTINEL_FILE: networkSentinel,
-      I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -171,6 +170,11 @@ test('HTTP and WebSocket perimeter fails closed while preserving local operation
     assert.equal(local.headers.get('x-content-type-options'), 'nosniff');
     assert.match(local.headers.get('cache-control') ?? '', /private, no-store/);
     assert.equal(local.headers.get('etag'), null);
+    const startupTruth = await localFetch('/health/live');
+    assert.equal(startupTruth.status, 200);
+    const startupBody = await startupTruth.json();
+    assert.equal(startupBody.overallPosture, 'WARMING');
+    assert.equal(startupBody.rootBlockerComponentId, 'public-spot-source');
     const mixedCaseApi = await localFetch('/API/health');
     assert.equal(mixedCaseApi.status, 200);
     assert.match(mixedCaseApi.headers.get('cache-control') ?? '', /private, no-store/);

@@ -2,16 +2,20 @@
 
 Accepted donor: `l15-deploy-infra-20260712` at full commit
 `2cec412927fa2f64f05a0b2774b18e45f8ce4fa5`. Implementation parent:
-`9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`. The donor is read from Git and
-is never rewritten in this packet.
+`9a82d4715c73ebe4156638c2bf5e8a2c02373bbf`. The immutable donor is read from
+Git and is never rewritten in this packet. The separately pinned
+`l15-amendment-contract.json` authorizes only finding-owned post-integration
+corrections and binds their exact before/after blobs, evidence, and complete
+effective `ops/live` root. Runtime delegation uses that verified effective root
+without changing any accepted-donor, disposition, or ancestry receipt.
 
 | Final requirement | Accepted owner | I00 adaptation | Posture |
 |---|---|---|---|
 | Immutable install, atomic current/previous switch | `ops/live/bin/deploy.sh` | `release-switch.sh` validates SHA-keyed package, disk, schema, exposure, ambiguity, and recovery, then delegates | owner-gated |
 | Rollback and migration floor | `ops/live/bin/rollback.sh` | `rollback-switch.sh` adds final canonical preflight, then delegates | owner-gated |
 | Application-consistent SQLite/WAL backup | `ops/live/bin/backup.sh` | `backup-verify.sh` adds safe-version, full integrity, and FK gates | built/tested |
-| Guarded restore and isolated drill | donor restore scripts | `restore-drill-verify.sh` adds safe-version/full-integrity/FK proof without production mutation | built/tested; production restore remains donor-owner gated |
-| External watchdog and bounded restarts | donor watchdog/timer | no duplicate; CloudWatch templates supplement external visibility | built/tested |
+| Guarded restore and isolated drill | donor restore scripts | `R3-D-BACKUP-008` adds the closed immutable archive-snapshot/member-preflight/publication amendment; `restore-drill-verify.sh` adds safe-version/full-integrity/FK proof without production mutation | built/tested; production restore remains explicit incident-recovery owner only |
+| External watchdog and bounded restarts | donor watchdog/timer | no duplicate; `R3-D-WATCHDOG-007` adds a closed owner-identity classifier amendment, while CloudWatch templates supplement external visibility | built/tested |
 | App and cloudflared service owners | donor systemd units | additive app credential drop-in only | owner-gated |
 | Optional Q service | no accepted command yet | honest placeholder template; cannot install unchanged | `NOT_CONFIGURED` |
 | Release build/package | donor recorded as missing | `assemble-release.mjs` requires tested clean SHA, web/server output, prebuilt runtime dependencies, and hashes every file | built/tested |

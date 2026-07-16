@@ -28,10 +28,13 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$RELEASE" ] && [ -n "$ENV_FILE" ] && [ -n "$RUNTIME_ENV" ] && [ -n "$HOST" ] && [ -n "$SUPERVISOR" ] \
   || { printf 'I00_OPS_BLOCKED: --release, --env-file, --runtime-env, --host, and --supervisor are required\n' >&2; exit 1; }
-[ -x "$DONOR_ROOT/bin/deploy.sh" ] || { printf 'I00_OPS_BLOCKED: accepted donor deploy.sh is unavailable\n' >&2; exit 1; }
+[ -x "$DONOR_ROOT/bin/deploy.sh" ] || { printf 'I00_OPS_BLOCKED: effective L15 deploy.sh is unavailable\n' >&2; exit 1; }
 
-node "$SCRIPT_DIR/verify-donor.mjs" --contract "$I00_ROOT/donor-contract.json" --contract-only >/dev/null
-node "$SCRIPT_DIR/verify-donor-root.mjs" --contract "$I00_ROOT/donor-contract.json" --root "$DONOR_ROOT" --require-immutable >/dev/null
+node "$SCRIPT_DIR/verify-donor.mjs" --contract "$I00_ROOT/donor-contract.json" \
+  --amendment-contract "$I00_ROOT/l15-amendment-contract.json" --contract-only >/dev/null
+node "$SCRIPT_DIR/verify-donor-root.mjs" --contract "$I00_ROOT/donor-contract.json" \
+  --amendment-contract "$I00_ROOT/l15-amendment-contract.json" \
+  --root "$DONOR_ROOT" --require-immutable >/dev/null
 CANDIDATE_SHA="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.testedSha)' "$RELEASE/release.json")"
 node "$SCRIPT_DIR/validate-config.mjs" --env "$RUNTIME_ENV" --expected-sha "$CANDIDATE_SHA" >/dev/null
 if [ "$SIMULATION" = 1 ]; then
@@ -94,7 +97,7 @@ RESULT=$?
 set -e
 if [ "$RESULT" = 0 ] && [ "$SIMULATION" != 1 ]; then
   [ -f "$RECONCILIATION_RECEIPT" ] || { printf 'I00_OPS_BLOCKED: post-switch reconciliation receipt is missing\n' >&2; RESULT=1; }
-  if [ "$RESULT" = 0 ]; then node "$SCRIPT_DIR/validate-receipt.mjs" --input "$RESULT_RECEIPT" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" >/dev/null || RESULT=1; fi
+  if [ "$RESULT" = 0 ]; then node "$SCRIPT_DIR/validate-receipt.mjs" --input "$RESULT_RECEIPT" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" --expected-sha "$CANDIDATE_SHA" >/dev/null || RESULT=1; fi
 fi
 cleanup_delegate_env
 trap - EXIT

@@ -37,7 +37,7 @@ import {
   verifyProtectedOwnerDirectives,
   writeImmutableJson,
 } from './contract.mjs';
-import { validatePerformanceDocument } from './local-proxy-soak.mjs';
+import { LIVE_PERFORMANCE_SOURCE_EXPECTATION, validatePerformanceDocument } from './local-proxy-soak.mjs';
 import {
   EXPECTED_DONOR_ROWS,
   EXPECTED_EXCLUSIONS,
@@ -1637,20 +1637,64 @@ async function verifyReportParity() {
   });
 }
 
-async function verifyReportParityAtRevision(environment, revision, tempRoot) {
+export async function verifyReportParityAtRevision(environment, revision, tempRoot) {
   const sealedRoot = path.join(tempRoot, 'sealed-report-parity-untouched');
   const generatedRoot = path.join(tempRoot, 'sealed-report-parity-generated');
+  let currentMainTip = null;
+  for (const ref of ['refs/heads/current-main', 'refs/remotes/origin/current-main']) {
+    try {
+      const observed = (await commandOutput(
+        'git',
+        ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`],
+        ROOT,
+        environment,
+        1_024,
+      )).stdout.toString('utf8').trim();
+      if (/^[0-9a-f]{40}$/u.test(observed)) {
+        currentMainTip = observed;
+        break;
+      }
+    } catch {
+      // A clean clone normally has only origin/current-main; try both exact refs.
+    }
+  }
+  if (currentMainTip === null) throw new Error('SEALED_REPORT_PARITY_CURRENT_MAIN_UNAVAILABLE');
+  const checkouts = [];
   for (const checkoutRoot of [sealedRoot, generatedRoot]) {
     await commandOutput('git', ['clone', '--no-hardlinks', '--no-checkout', '--quiet', ROOT, checkoutRoot], ROOT, environment, 8 * 1024 * 1024);
     await commandOutput('git', ['checkout', '--detach', '--quiet', revision], checkoutRoot, environment, 8 * 1024 * 1024);
+    await commandOutput('git', ['cat-file', '-e', `${currentMainTip}^{commit}`], checkoutRoot, environment, 1_024);
+    await commandOutput('git', ['update-ref', 'refs/heads/current-main', currentMainTip], checkoutRoot, environment, 1_024);
     const observedHead = (await commandOutput(
       'git',
       ['rev-parse', '--verify', 'HEAD^{commit}'],
       checkoutRoot,
       environment,
       1_024,
-    )).toString('utf8').trim();
+    )).stdout.toString('utf8').trim();
     if (observedHead !== revision) throw new Error('SEALED_REPORT_PARITY_CHECKOUT_MISMATCH');
+    const observedBranch = (await commandOutput(
+      'git',
+      ['branch', '--show-current'],
+      checkoutRoot,
+      environment,
+      1_024,
+    )).stdout.toString('utf8').trim();
+    if (observedBranch !== '') throw new Error('SEALED_REPORT_PARITY_CHECKOUT_NOT_DETACHED');
+    const observedStatus = (await commandOutput(
+      'git',
+      ['status', '--porcelain=v1', '--untracked-files=all'],
+      checkoutRoot,
+      environment,
+      8 * 1024 * 1024,
+    )).stdout;
+    if (observedStatus.length !== 0) throw new Error('SEALED_REPORT_PARITY_CHECKOUT_DIRTY');
+    checkouts.push(Object.freeze({
+      checkout: path.basename(checkoutRoot),
+      headSha: observedHead,
+      branch: observedBranch,
+      statusByteLength: observedStatus.length,
+    }));
   }
 
   const regeneration = await runCommand({
@@ -1675,10 +1719,17 @@ async function verifyReportParityAtRevision(environment, revision, tempRoot) {
   return Object.freeze({
     id: 'sealed_generated_report_parity',
     revision,
+    checkouts: Object.freeze(checkouts),
     regeneration,
     artifacts: Object.freeze(artifacts),
     passed: regeneration.passed && artifacts.every((artifact) => artifact.matchesGenerator),
   });
+}
+
+export async function verifyRejectedSealReportParityRegression(tempRoot) {
+  const environment = safeEnvironment(tempRoot);
+  const revision = '517bd636d799c983ecddc9bda1985d0619b652d7';
+  return verifyReportParityAtRevision(environment, revision, tempRoot);
 }
 
 export function validateBrowserDocument(document, expectedHead, expectedTree, schema = JSON.parse(readFileSync(BROWSER_SCHEMA_PATH, 'utf8'))) {
@@ -2736,7 +2787,11 @@ function validatePerformanceReceipt(requested, expectedHead, expectedTree) {
   if (resolved !== ROOT && !resolved.startsWith(`${ROOT}${path.sep}`)) throw new Error('PERFORMANCE_RECEIPT_OUTSIDE_REPOSITORY');
   const text = readFileSync(resolved, 'utf8');
   const document = JSON.parse(text);
-  const validation = validatePerformanceDocument(document, { headSha: expectedHead, treeSha: expectedTree });
+  const validation = validatePerformanceDocument(document, {
+    ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+    headSha: expectedHead,
+    treeSha: expectedTree,
+  });
   const secretFindings = scanSecretText(text);
   const snapshots = Array.isArray(document.phases)
     ? document.phases.flatMap((phase) => Array.isArray(phase?.snapshots) ? phase.snapshots : [])
@@ -2818,7 +2873,11 @@ async function validatePerformanceReceiptAtRevision(environment, revision, reque
   const receipt = await gitPathBytes(environment, revision, requested, 'PERFORMANCE_RECEIPT', 64 * 1024 * 1024);
   const text = receipt.bytes.toString('utf8');
   const document = JSON.parse(text);
-  const validation = validatePerformanceDocument(document, { headSha: expectedHead, treeSha: expectedTree });
+  const validation = validatePerformanceDocument(document, {
+    ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+    headSha: expectedHead,
+    treeSha: expectedTree,
+  });
   const secretFindings = scanSecretText(text);
   const snapshots = Array.isArray(document.phases)
     ? document.phases.flatMap((phase) => Array.isArray(phase?.snapshots) ? phase.snapshots : [])
@@ -3715,7 +3774,11 @@ async function runCompleteAcceptance(options) {
           const performancePath = path.join(EVIDENCE_ROOT, performanceName);
           const performanceText = readFileSync(performancePath, 'utf8');
           const performanceDocument = JSON.parse(performanceText);
-          const validation = validatePerformanceDocument(performanceDocument, { headSha: sourceHead, treeSha: sourceTree });
+          const validation = validatePerformanceDocument(performanceDocument, {
+            ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+            headSha: sourceHead,
+            treeSha: sourceTree,
+          });
           const secretFindings = scanSecretText(performanceText);
           performanceReceipt = {
             relativePath: path.relative(ROOT, performancePath),

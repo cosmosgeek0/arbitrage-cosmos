@@ -1,0 +1,370 @@
+{
+  "artifactId": "aiops-identity-provider-matrix",
+  "contentHash": "227dbcbeca2919a9df3ca0146f8c925cd233070449eaac2be89b3b8d7cc9fac8",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "authorityCreated": false,
+      "billingDomain": "NONE",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "DENIED",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "intendedAuthMode": "NONE",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "NOT_CONFIGURED",
+      "reasonCodes": [
+        "PROVIDER_NOT_CONFIGURED"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "rowId": "aiops-shadow-runtime-diagnostician:NOT_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CHATGPT_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://openai-codex/runtime_diagnostician",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "intendedAuthMode": "CHATGPT_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CODEX_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "rowId": "aiops-shadow-runtime-diagnostician:SUBSCRIPTION_CODEX_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CLAUDE_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://anthropic-claude-code/runtime_diagnostician",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "intendedAuthMode": "CLAUDE_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "rowId": "aiops-shadow-runtime-diagnostician:SUBSCRIPTION_CLAUDE_CODE_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "SYNTHETIC_API_BUDGET",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://fake-api/runtime_diagnostician",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "intendedAuthMode": "API_KEY",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_API_PROVIDER",
+      "providerState": "API_CONFIGURED",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "rowId": "aiops-shadow-runtime-diagnostician:API_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "UNKNOWN",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "UNAVAILABLE",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-runtime-diagnostician",
+      "intendedAuthMode": "UNKNOWN",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "UNKNOWN",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "DIAGNOSTIC_PLANE_UNAVAILABLE",
+      "reasonCodes": [
+        "DIAGNOSTIC_EVIDENCE_UNAVAILABLE",
+        "FAIL_CLOSED"
+      ],
+      "role": "RUNTIME_DIAGNOSTICIAN",
+      "rowId": "aiops-shadow-runtime-diagnostician:DIAGNOSTIC_PLANE_UNAVAILABLE"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "NONE",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "DENIED",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "intendedAuthMode": "NONE",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "NOT_CONFIGURED",
+      "reasonCodes": [
+        "PROVIDER_NOT_CONFIGURED"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "rowId": "aiops-shadow-engineering-repair-worker:NOT_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CHATGPT_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://openai-codex/engineering_repair_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "intendedAuthMode": "CHATGPT_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CODEX_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "rowId": "aiops-shadow-engineering-repair-worker:SUBSCRIPTION_CODEX_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CLAUDE_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://anthropic-claude-code/engineering_repair_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "intendedAuthMode": "CLAUDE_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "rowId": "aiops-shadow-engineering-repair-worker:SUBSCRIPTION_CLAUDE_CODE_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "SYNTHETIC_API_BUDGET",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://fake-api/engineering_repair_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "intendedAuthMode": "API_KEY",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_API_PROVIDER",
+      "providerState": "API_CONFIGURED",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "rowId": "aiops-shadow-engineering-repair-worker:API_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "UNKNOWN",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "UNAVAILABLE",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-engineering-repair-worker",
+      "intendedAuthMode": "UNKNOWN",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "UNKNOWN",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "DIAGNOSTIC_PLANE_UNAVAILABLE",
+      "reasonCodes": [
+        "DIAGNOSTIC_EVIDENCE_UNAVAILABLE",
+        "FAIL_CLOSED"
+      ],
+      "role": "ENGINEERING_REPAIR_WORKER",
+      "rowId": "aiops-shadow-engineering-repair-worker:DIAGNOSTIC_PLANE_UNAVAILABLE"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "NONE",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "DENIED",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "intendedAuthMode": "NONE",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "NOT_CONFIGURED",
+      "reasonCodes": [
+        "PROVIDER_NOT_CONFIGURED"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER",
+      "rowId": "aiops-shadow-independent-verification-worker:NOT_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CHATGPT_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://openai-codex/independent_verification_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "intendedAuthMode": "CHATGPT_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CODEX_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER",
+      "rowId": "aiops-shadow-independent-verification-worker:SUBSCRIPTION_CODEX_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "CLAUDE_SUBSCRIPTION",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://anthropic-claude-code/independent_verification_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "intendedAuthMode": "CLAUDE_SUBSCRIPTION",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_SUBSCRIPTION_PROVIDER",
+      "providerState": "SUBSCRIPTION_CLAUDE_CODE_WORKER",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER",
+      "rowId": "aiops-shadow-independent-verification-worker:SUBSCRIPTION_CLAUDE_CODE_WORKER"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "SYNTHETIC_API_BUDGET",
+      "credentialMaterialPresent": false,
+      "credentialReference": "synthetic-ref://fake-api/independent_verification_worker",
+      "disposition": "SYNTHETIC_FIXTURE_ONLY",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "intendedAuthMode": "API_KEY",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": "SYNTHETIC_API_PROVIDER",
+      "providerState": "API_CONFIGURED",
+      "reasonCodes": [
+        "NO_EXECUTION_CAPABILITY",
+        "NOT_MOUNTED",
+        "SYNTHETIC_FIXTURE_ONLY"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER",
+      "rowId": "aiops-shadow-independent-verification-worker:API_CONFIGURED"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "UNKNOWN",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "UNAVAILABLE",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-independent-verification-worker",
+      "intendedAuthMode": "UNKNOWN",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "UNKNOWN",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "DIAGNOSTIC_PLANE_UNAVAILABLE",
+      "reasonCodes": [
+        "DIAGNOSTIC_EVIDENCE_UNAVAILABLE",
+        "FAIL_CLOSED"
+      ],
+      "role": "INDEPENDENT_VERIFICATION_WORKER",
+      "rowId": "aiops-shadow-independent-verification-worker:DIAGNOSTIC_PLANE_UNAVAILABLE"
+    },
+    {
+      "authorityCreated": false,
+      "billingDomain": "NONE",
+      "credentialMaterialPresent": false,
+      "credentialReference": null,
+      "disposition": "DENIED",
+      "executableCapabilityIds": [],
+      "identityId": "aiops-shadow-research-trade-context-advisor",
+      "intendedAuthMode": "NONE",
+      "maximumCostMicrounits": null,
+      "observedAuthMode": "NONE",
+      "paidFallbackAllowed": false,
+      "providerId": null,
+      "providerState": "NOT_CONFIGURED",
+      "reasonCodes": [
+        "ADVISOR_NOT_CONFIGURED"
+      ],
+      "role": "RESEARCH_TRADE_CONTEXT_ADVISOR",
+      "rowId": "aiops-shadow-research-trade-context-advisor:NOT_CONFIGURED"
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_IDENTITY_PROVIDER_MATRIX_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

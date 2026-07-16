@@ -1,0 +1,270 @@
+{
+  "artifactId": "aiops-insertion-requests",
+  "contentHash": "3bd884f6d33383926b945fbe312c6098220d495fbafd9ff3eaaf4e992a6a6f72",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Add Ledger migrations/adapters for cases, transitions, inbox, outbox, DLQ, attempts, effects, usage, approvals, evidence hashes and retention pointers."
+      ],
+      "expectedBehavior": [
+        "Zero acknowledged authoritative-record loss",
+        "one Ledger",
+        "no second store or file journal."
+      ],
+      "reason": "Durable AI records must use the sole canonical persistence owner.",
+      "requestedOwner": "LEDGER",
+      "rowId": "AIOPS-IR-PERSISTENCE-003",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/ledger.ts::Ledger; server/src/systemIntegration/persistence/ledgerAdapter.ts::SystemLedgerPersistenceAdapter; server/src/productIntegration/contracts/ports.ts::ProductLedgerPersistencePort",
+      "tests": [
+        "Prove backup, restore, restart, replay, compare-and-set conflict and corrupt-record failure behavior."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-PERSISTENCE-003"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Bind separately authenticated human owner and isolated worker principals to explicit role, tool and provider scopes using non-secret references."
+      ],
+      "expectedBehavior": [
+        "No subscription credential reaches application, browser, model, repository or worker context",
+        "no inherited identity or fallback authority."
+      ],
+      "reason": "Human and worker principals require distinct default-deny scopes.",
+      "requestedOwner": "BACKEND_SECURITY_OPERATOR_ACCESS",
+      "rowId": "AIOPS-IR-AUTH-004",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/security/access.ts::OperatorAccess; server/src/index.ts::operatorAccess.middleware()",
+      "tests": [
+        "Prove deny-by-default, role separation, revocation and credential-non-exposure with hostile cross-identity attempts."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-AUTH-004"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Apply only dependency/script deltas named by sealed accepted lane receipts."
+      ],
+      "expectedBehavior": [
+        "Only reviewed necessary packages/scripts land",
+        "lanes remain buildable without hidden network/provider calls."
+      ],
+      "reason": "Lane-local work cannot edit shared scripts, dependencies or lockfiles.",
+      "requestedOwner": "FRESH_POST_ACCEPTANCE_INTEGRATOR",
+      "rowId": "AIOPS-IR-PACKAGE-006",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "package.json; package-lock.json; server/package.json; web/package.json",
+      "tests": [
+        "Run lockfile integrity, offline network-free tests, license/security and dependency-necessity checks."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-PACKAGE-006"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Add ratified AI_OPS-namespaced controls within the immutable server capability ceiling."
+      ],
+      "expectedBehavior": [
+        "UI never becomes authority",
+        "forbidden money/safety actions remain unreachable",
+        "every effect is owner-receipted."
+      ],
+      "reason": "Fail-closed AI controls must live under the canonical command owner.",
+      "requestedOwner": "PRODUCT_RUNTIME_SYSTEM_CONTROL_COMMAND_OWNER",
+      "rowId": "AIOPS-IR-CONTROLS-008",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/productIntegration/runtime/controls.ts::buildProductRuntimeControlRegistry; systemControlCommandOwner.ts::ProductRuntimeSystemControlCommandOwner",
+      "tests": [
+        "Prove preview/hash/TTL/confirmation/receipt/readback, expiry, replay and hard-denial hostile cases."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-CONTROLS-008"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Ratify a typed action-request contract, registered runbooks, durable checkpoint and existing-effect-owner bindings",
+        "never create an AI executor."
+      ],
+      "expectedBehavior": [
+        "OP_LOCAL_REMEDIATION_CAMPAIGN stays unavailable until mounted",
+        "effects run only through existing owners",
+        "money capabilities remain impossible."
+      ],
+      "reason": "Deterministic campaigns exist only as pure vocabulary and cannot silently become an executor.",
+      "requestedOwner": "BACKEND_FOUNDATION_CONTROL",
+      "rowId": "AIOPS-IR-REMEDIATION-010",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/productAssurance/remediation/campaign.ts::REMEDIATION_ACTIONS/transitionRemediationCampaign/acquireResourceSet/buildRepairConflictGraph; server/src/productIntegration/runtime/systemControlCommandOwner.ts::ProductRuntimeSystemControlCommandOwner; server/src/services/awsRunnerControl.ts::AwsRunnerControl is REFERENCE_ONLY/NOT_CONFIGURED",
+      "tests": [
+        "Prove lease, fence, idempotency, precondition, postcondition, quiet period, checkpoint/restart and forbidden-action failure cases."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-REMEDIATION-010"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Bind accepted Atlas catalog/owner and diagnostic-boundary projections through narrow owner adapters."
+      ],
+      "expectedBehavior": [
+        "Synthetic/generated projections never mint live green",
+        "missing owner/catalog stays UNKNOWN/MISSING."
+      ],
+      "reason": "Atlas and diagnostic evidence must remain bound to accepted owners and release identity.",
+      "requestedOwner": "PRODUCT_ASSURANCE",
+      "rowId": "AIOPS-IR-ASSURANCE-011",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/productAssurance/failureAtlas/atlas.ts; diagnostics/boundary.ts; S1/S6 accepted packet paths",
+      "tests": [
+        "Validate owner/release/tested-commit/subject/digest tuples",
+        "run hostile substitution, splice, empty-corpus and fixture-promotion tests."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-ASSURANCE-011"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Director ratifies one owner",
+        "A2 supplies only a typed admission projection after ratification."
+      ],
+      "expectedBehavior": [
+        "INCIDENT_OWNER_NOT_CONFIGURED changes only with owner receipt",
+        "Ledger remains persistence, not policy."
+      ],
+      "reason": "Incident identity, grouping, fingerprint, severity and lifecycle have no canonical owner.",
+      "requestedOwner": "DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "rowId": "AIOPS-IR-INCIDENT-019",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "Owner/path MISSING; evidence at server/src/productIntegration/runtime/projection.ts::buildProductRuntimeSupervisorEnvelope",
+      "tests": [
+        "Prove grouping, split/merge/reopen/close, acknowledgement races, dedupe, persistence and hostile false-green behavior."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-INCIDENT-019"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Ratify audit retention, delivery, readback, chain/hash and restoration contract through the canonical Ledger owner."
+      ],
+      "expectedBehavior": [
+        "Audit loss is visible within the signed interval",
+        "no worker can rewrite/delete evidence or administer its own audit sink."
+      ],
+      "reason": "AI provenance requires independently administered append-only/WORM delivery distinct from sentinel execution.",
+      "requestedOwner": "INDEPENDENT_AUDIT_DELIVERY_OWNER_REQUIRED",
+      "rowId": "AIOPS-IR-AUDIT-021",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "Production owner MISSING; S6 append/retention receipt contracts; canonical Ledger insertion seam",
+      "tests": [
+        "Prove append chain, tamper detection, delivery loss, retention expiry, restore and independent readback."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-AUDIT-021"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Ratify typed approval request/receipt binding artifact, parameters, expiry, principal, reauthentication and execution readback."
+      ],
+      "expectedBehavior": [
+        "Only the authenticated human owner approves",
+        "preview is never approval",
+        "release service executes only exact approved artifact."
+      ],
+      "reason": "Elevated AI proposals require separately authenticated human approval that no AI/service can satisfy.",
+      "requestedOwner": "HUMAN_APPROVAL_OWNER_REQUIRED",
+      "rowId": "AIOPS-IR-APPROVAL-023",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "Production owner/path MISSING; Product command preview/result types are evidence only, not a generic ApprovalRequest/ApprovalReceipt owner",
+      "tests": [
+        "Prove expiry, replay, parameter substitution, AI-as-approver, inherited-chat and credential/role-confusion failures."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-APPROVAL-023"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Add ratified non-secret identity/provider/budget/endpoint bindings",
+        "secrets remain external references."
+      ],
+      "expectedBehavior": [
+        "No provider call from defaults",
+        "no secret in repo/log/fixture",
+        "missing config remains honest and core deterministic."
+      ],
+      "reason": "Provider and worker configuration must be explicit, revocable and separate from secrets.",
+      "requestedOwner": "SERVER_CONFIGURATION_OWNER_AND_I00_OPERATIONS",
+      "rowId": "AIOPS-IR-CONFIG-025",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "server/src/config.ts::DEFAULTS/normalizeConfig/loadConfig/saveConfig; .env.example; ops/templates/i00/env/**",
+      "tests": [
+        "Prove default NOT_CONFIGURED, invalid config rejection, redaction, save/load round-trip, deconfiguration and no-secret scans."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-CONFIG-025"
+    },
+    {
+      "authorityCreated": false,
+      "contract": [
+        "Register sealed lane tests and AI-off/fault gates only after acceptance."
+      ],
+      "expectedBehavior": [
+        "Real failures return nonzero",
+        "no fake success",
+        "accepted counts and commands are recorded in canonical state/receipt."
+      ],
+      "reason": "Accepted lane gates need one canonical root acceptance mount.",
+      "requestedOwner": "ROOT_TEST_ACCEPTANCE_OWNER",
+      "rowId": "AIOPS-IR-TEST-MOUNT-026",
+      "schema": "InsertionRequestRowV1",
+      "status": "DRAFT",
+      "targetSeam": "package.json::test:all:built; test/i00/complete-acceptance.mjs; server/test/i00Acceptance/**",
+      "tests": [
+        "Run focused lane suites, network-free root suite, complete acceptance, hostile false-green and exact exit-code checks."
+      ],
+      "version": 1,
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TEST-MOUNT-026"
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_INSERTION_REQUESTS_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

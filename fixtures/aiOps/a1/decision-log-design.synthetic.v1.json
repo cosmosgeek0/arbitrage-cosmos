@@ -1,0 +1,56 @@
+{
+  "artifactId": "aiops-decision-log-design",
+  "contentHash": "cc352ccb7d56408ab0a68780f0fdb5632ac3ffbea36b3a1685788e205c7eb289",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": {
+    "actionClass": "B",
+    "actorIdentityId": "aiops-shadow-runtime-diagnostician",
+    "actorRole": "RUNTIME_DIAGNOSTICIAN",
+    "assuranceVerified": false,
+    "authorityCreated": false,
+    "capabilityId": "EXPLAIN_INCIDENT",
+    "checkpointReceiptReference": null,
+    "decisionId": "aiops-shadow-decision-fixture-1",
+    "inputDigest": "195527422c8633b72093d741a1f83314dd2c23633d746babbe732ba635e50502",
+    "outcome": "DENY",
+    "policyBundleDigest": "369c8d867654dec1b1a6e0d8af09ae86e9d0ffe57a1d485e8ada9e4abff3c98c",
+    "policyRevision": "shadow-policy-revision-1",
+    "previousRecordDigest": null,
+    "reasonCodes": [
+      "EXISTING_LEDGER_PERSISTENCE_PORT_NOT_MOUNTED",
+      "SHADOW_SPECULATIVE"
+    ],
+    "recordDigest": "d9a8169646c16fde15e1e806f88d91139c0fce546b105307b0c6cd1b59185bbc",
+    "redactionIds": [
+      "AI_OPS_REDACTION_SYNTHETIC_FIXTURE"
+    ],
+    "requestedAssurance": "HASH_CHAIN",
+    "resultDigest": "8f9d50e9a6f46bac97b08131552779fe5b94a7f064a61bcebe175506f9984dab",
+    "schema": "AI_OPS_DECISION_LOG_RECORD_V1",
+    "sequence": 1,
+    "state": "SHADOW_SPECULATIVE",
+    "timestampMs": 1784160000000
+  },
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_DECISION_LOG_DESIGN_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

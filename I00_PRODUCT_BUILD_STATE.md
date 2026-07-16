@@ -2,11 +2,11 @@
 
 Schema version: `I00_PRODUCT_BUILD_STATE_V2`
 
-Updated: `2026-07-15`
+Updated: `2026-07-16`
 
-Phase: `FINAL_INTEGRATION / PHASE_4_CORRECTIONS_COMPLETE`
+Phase: `FINAL_INTEGRATION / C2R_SOURCE_FREEZE`
 
-Status: `CORRECTION_SOURCE_VERIFIED / C2_LIVE_ACCEPTANCE_BLOCKED / NOT_SELF_VERIFIED`
+Status: `PROOF_HARNESS_CORRECTED / C2R_LOCAL_ACCEPTANCE_PENDING / NOT_SELF_VERIFIED`
 
 Candidate state: `NOT_CANDIDATE_READY`
 
@@ -14,18 +14,19 @@ Candidate state: `NOT_CANDIDATE_READY`
 
 | Field | Current truth |
 | --- | --- |
-| Correction repository | `/Users/cosmosgeek/Desktop/role4-fix` |
-| Correction branch | `role4-fix-20260715` |
-| Required live-acceptance branch | `i00-product-assembly-20260713`; the separate integration worktree was not touched |
+| Integration repository | `/Users/cosmosgeek/Desktop/i00-assembly` |
+| Integration branch | `i00-product-assembly-20260713` |
+| Superseded C2 source freeze | `449350d60ab30a385edeccdf4d91716ef8550537`; tree `58904993ee0d73576dc2715a78e7e249d1179fe7`; exact ordered parents `517bd636d799c983ecddc9bda1985d0619b652d7` and `37eeb5b006169ad1362ceaf060df678586738869`. Immutable and not rewritten. |
+| C2R source freeze | This commit. Git commits cannot self-name their SHA/tree; exact C2R identity must be bound by the future sole-child S2 receipt. `docs/archive/i00-phase4/C2R_SOURCE_FREEZE_RECEIPT.md` is committed atomically. |
 | Initial clean restart baseline | Commit `6b50cca34a5615e828e9606cd7201daf81272ec7`; tree `731dec2404bab0d27a804c634cda1518a6dcef5d` |
 | Rejected pre-evidence source-freeze checkpoint | Commit `9bde37bc716194c241fb20bda4fdca4e451b1915`; tree `b7747152c926b688545e6e123ce34b49c1b1198e`; parent `6b50cca34a5615e828e9606cd7201daf81272ec7`. Incomplete PF-001 coverage was found before evidence capture, so this attempted freeze was never sealed and produced no browser, performance, or complete-acceptance receipt. It remains immutable history and is not a Phase 3 `REJECTED_CANDIDATE` verdict. |
 | Correction checkpoint | All `15/15` Role 3 findings and `12/12` FIX_AUDIT rows are closed. `docs/archive/i00-phase4/ROLE4_CORRECTION_CLOSURE_CHECKPOINT_RECEIPT.md` binds the final correction-source gates and live-provenance blocker. This checkpoint is not C2. |
-| Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in a future S2 and immutable candidate receipt after every exact-C2 measurement passes. |
-| Active writer | Role-4 fix owner, limited to the correction branch; no write authority was exercised in another worktree |
+| Candidate readiness | Not claimed. `INTEGRATION_CANDIDATE_READY` may appear only in a future S2 and immutable candidate receipt after every exact-C2R measurement passes. |
+| Active writer | C2 finalization integrator, limited to this integration branch and worktree |
 | Forbidden authority | No `current-main` write, push, Phase 3 self-certification, private read, signed call, AWS/Cloudflare mutation, deployment, or money authority |
 | Final integration order | The requested `/Users/cosmosgeek/Desktop/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md` path was absent at restart. Role 2 consumed the byte-identical sealed copy at `/Users/cosmosgeek/Desktop/preverify/FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md`; SHA-256 `73615984fa0403a4c0d7ea0db9893292d57ea18614714398684cf9a3062fb05c`. |
 | Frozen local Main authority cutoff | `d78be24f4da14632c857ee250b62e3fec33c2743`; tree `ea9113c2bf5fd95d4e39bde214d2ecf1f1e7e995`; parent/prior pin `ac01b5e43830bc681ee7e251749c4d1fab210029` |
-| Main freshness boundary | Local `current-main` and its local remote-tracking ref were observed at descendant `2b32317dbf89907bcf529231247f1f9a63235d49`, tree `4b3b079c9133eeb8649a5ecfd13e83ce5061e7a0`, with the frozen cutoff still its ancestor. No fetch was performed; remote freshness is not claimed. The later board state is outside the frozen input and cannot alter the donor table merely by moving a ref. |
+| Main authority boundary | D-LAUNCH-47 is bound at `723837873c4aef565eb1dea739c760f66252e1b9`; D-LAUNCH-48 is bound at `4f3e10f2f0371278c4c953501c4ca532d6fe2f78`. They authorize C2R proof-harness correction only and are not merged into candidate source. No fetch or remote-freshness claim is made. |
 | Living QL pins | `QL_DIRECTOR_STATE.md`: latest touch `d78be24f4da14632c857ee250b62e3fec33c2743`, blob `8116ec491fc7fc863dbcb4015be4cdb105a5a1bc`, SHA-256 `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc`; `QL_PARALLEL_DAG.md`: latest touch `ac01b5e43830bc681ee7e251749c4d1fab210029`, blob `701b3f263e73bf659ba4319c5839e798c1ce7abb`, SHA-256 `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec` |
 
 ### DIRECTOR_AUTHORITY_ACCEPTED
@@ -44,7 +45,7 @@ The immutable donor is its committed Git object, never a dirty donor worktree. D
 | `IP_OPS.md` | `2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779` |
 | `IP_PROOF.md` | `e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6` |
 
-All five are absent in this correction checkout. They remain protected live owner inputs and must not be reconstructed from the tracked verifier-only package. A future integration/pre-seal run requires them as the exact physical regular `??` inputs on the required integration branch.
+All five are present in this integration checkout as exact physical regular `??` inputs. They remain protected live owner inputs, are not staged or committed, and must not be reconstructed from the tracked verifier-only package.
 
 ## Exact Phase 2 donor table
 
@@ -69,7 +70,7 @@ All five are absent in this correction checkout. They remain protected live owne
 | A-CASE-S4 | `b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c` / `3c773878016f4a56c6b03fe6485a42b002c3f5d2` | Merge ancestry `86ee3b5f81c73c64eccf1d10b14a1f3bdf8a4bf1` | `05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550` | `f721c0a72a36255727555a4ab13e4fab0f1fc829604e8ce8ae8897760dd0925b` |
 | L-LANE | `df6b472993ca9659ce09cf5f72004981c6835f0d` / `1add5ee43fea623509c20d0990ec9efac2543fc4` | **Required-last** merge `ec82bc51d5311dfb3f505216bfb3fa41733f038c` | L17 `f23e078fdd1cf8d64585c01b677817d4d4efa3a08f9c4933acae09b399ce2381`; root `0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2` | `198af74b4f0931123a41d6b0a94b1bbcd6890813986d981bd39e95ba486c296b` |
 
-L is the final donor merge: `ec82bc51d5311dfb3f505216bfb3fa41733f038c` has pre-L spine `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` as first parent and exact L tip as second parent. Its integration cut proved 303/303 donor blobs. Later serial-spine changes are authorized I00 work and are not described as current donor byte equality.
+L is the final donor merge: `ec82bc51d5311dfb3f505216bfb3fa41733f038c` has pre-L spine `139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9` as first parent and exact L tip `df6b472993ca9659ce09cf5f72004981c6835f0d` as second parent. Its integration cut proved 303/303 donor blobs. The exact authorized post-L merge allowlist is `[449350d60ab30a385edeccdf4d91716ef8550537]`; any missing, substituted, appended, or widened merge set fails closed. Later serial-spine non-donor changes are authorized I00 work and are not described as current donor byte equality.
 
 Dashboard equivalence is likewise limited to `d04fdc71ffbd9c8266c969524a56e325ec68b1f8` and 21/21 files. IP-CONTROL mount work intentionally evolved that subtree afterward; no current dashboard byte-equality claim is made.
 
@@ -183,10 +184,12 @@ ledger-persistence, engine-supervisor
 | `npm test` | Exit 0; typecheck, build, deterministic engine/security, Product Assurance, and acceptance-contract gates pass |
 | `npm run test:all` | Exit 0; Product Assurance `518` files and `205/205` operation sites with `802 + 4` proofs; app `82/82`; System Integration `401/401`; Product Integration `111/111`; Product Control `102/102`; I00 proof `47/47`; I00 commands `28/28`; live-edge `1618/1618` |
 | Generated report parity | Exit 0; all five Markdown reports and `integration/reports/i00-proof-evidence.json` were regenerated twice with byte-identical SHA-256 values; machine report raw SHA-256 `d3a67b8658c7ea441a086c11e84e1147633c15ed037c05527154ba4354f05df5` |
-| `npm run test:i00:complete` | Exit 0 only as `PLAN_ONLY`. Effectful `--run` exits 1 before any measured step with `INTEGRATION_BRANCH_REQUIRED:role4-fix-20260715` |
+| C2 donor-equality proof | Exact counts `16/16/16/16`, but blocked by stale `PHASE2_MERGE_SEQUENCE_INVALID` and `POST_L_DONOR_MERGE_DETECTED`; D-LAUNCH-48 adjudicated both as one proof-harness defect. |
+| C2R proof correction | Focused donor proof `PASS` with no failures; exact L topology unchanged; observed post-L merge set exactly equals `[449350d60ab30a385edeccdf4d91716ef8550537]`; I00 commands `28/28`; performance/acceptance contract `43/43`. |
+| `npm run test:i00:complete` | Exact-C2R effectful run not yet performed. |
 | `git diff --check` | Exit 0 at latest source audit |
 
-Root `npm test`, `npm run test:all`, both ops aggregates, and generated-report parity pass on correction source `35bcfe96314f5047957bdff251831ab309c9be19`, tree `82c359b0baaeb1ec5c605340addaa1bb487384fd`. They do not replace exact-C2 Q, browser, performance, source-freeze, complete-receipt, and sole-child validation. The effectful complete runner rejected this branch before those steps, so no C2/S2 evidence is claimed.
+Historical correction-source gates pass on `35bcfe96314f5047957bdff251831ab309c9be19`, tree `82c359b0baaeb1ec5c605340addaa1bb487384fd`. They do not replace exact-C2R Q, browser, performance, source-freeze, complete-receipt, and sole-child validation. C2's exact Browser receipt passed, but its complete run stopped at the stale donor proof before performance; none of those C2 artifacts may substitute for C2R evidence.
 
 The exact-Q acceptance archive preserves the complete accepted donor root, without Git metadata, so Q17's frozen root protocol and schema inputs remain available inside the isolated archive. A `quant/`-only pathspec is regression-tested as forbidden.
 
@@ -196,11 +199,11 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 
 | Evidence class | Current value |
 | --- | --- |
-| Complete local acceptance | `BLOCKED_BY_INTEGRATION_BRANCH_AND_LIVE_OWNER_INPUT_PROVENANCE` |
-| Runtime startup and deterministic scenario receipt | `PENDING_EXACT_C2_MEASUREMENT` |
-| Restart/reconciliation receipt | `PENDING_EXACT_C2_MEASUREMENT` |
-| Six-run browser/no-false-green receipt | `PENDING_EXACT_C2_MEASUREMENT` |
-| Local-proxy performance receipt | `FIX_AUDIT_ONLY_ARTIFACT_PRESENT / PENDING_EXACT_C2_MEASUREMENT` |
+| Complete local acceptance | `PENDING_EXACT_C2R_MEASUREMENT` |
+| Runtime startup and deterministic scenario receipt | `PENDING_EXACT_C2R_MEASUREMENT` |
+| Restart/reconciliation receipt | `PENDING_EXACT_C2R_MEASUREMENT` |
+| Six-run browser/no-false-green receipt | `C2_ARTIFACT_IMMUTABLE / PENDING_FRESH_EXACT_C2R_MEASUREMENT` |
+| Local-proxy performance receipt | `PENDING_EXACT_C2R_MEASUREMENT` |
 | Deployed runtime | `UNKNOWN / NOT_CONFIGURED`; no target or readback |
 | External actions performed | `NONE` |
 | External authorizations present | `NONE` |
@@ -224,13 +227,14 @@ Product Assurance donor equality remains exact at the recorded merge cuts: 193/1
 | PRODUCTION_CAPACITY | `UNKNOWN` | Local bounded acceptance only; production load/capacity not measured |
 | Q_PRODUCTION_TRANSPORT | `NOT_CONFIGURED` | No accepted production Q transport is mounted |
 
-## C2 to S2 transition and resume
+## C2R to S2 transition and resume
 
 Next exact task:
 
-1. Preserve this correction branch as a closed fix checkpoint; do not relabel it C2 and do not rewrite rejected checkpoint `9bde37bc716194c241fb20bda4fdca4e451b1915` or the historical replacement source-freeze receipt.
-2. An authorized integrator must carry the correction source onto `i00-product-assembly-20260713` while preserving the five genuine hash-exact physical untracked owner directives, then commit the new source-freeze C2.
-3. Run `npm run test:i00:complete -- --run ...` from exact C2 with immutable browser/performance evidence. Only if every step passes may the integrator create sole-child S2, run validate-only against exact C2, render `INTEGRATION_CANDIDATE_READY`, and park read-only.
+1. Preserve rejected C, historical S, Role 4, and C2 `449350d60ab30a385edeccdf4d91716ef8550537` as immutable history. Do not rewrite any prior receipt.
+2. From exact C2R, generate fresh exact-SHA Browser evidence and run `npm run test:i00:complete -- --run ...` with immutable Browser/performance receipts while preserving the five genuine hash-exact physical untracked directives.
+3. Only if every step passes, render the canonical candidate receipt, bind exact C2R identity in `STATE.md`, this file, and the proof catalog, then create exactly one sole-child S2 from C2R.
+4. A different fresh session must run validate-only against exact C2R/S2. Only a green result may render `INTEGRATION_CANDIDATE_READY` and park read-only.
 
 Files a replacement integrator must read, in order:
 

@@ -35,7 +35,7 @@ import {
   validateWorkingSealPathSet,
   verifyRejectedSealReportParityRegression,
 } from './local-acceptance.mjs';
-import { EXPECTED_EXCLUSIONS } from '../donor-equality.mjs';
+import { EXPECTED_EXCLUSIONS, PHASE2_GRAPH_BOUNDARY } from '../donor-equality.mjs';
 
 const CANDIDATE = 'a'.repeat(40);
 const CANDIDATE_TREE = 'b'.repeat(40);
@@ -146,9 +146,16 @@ function donorProofFixture() {
       start: '1'.repeat(40),
       observedSequence: Array.from({ length: 16 }, (_, index) => String((index % 8) + 1).repeat(40)),
       permittedNonDonor: {},
-      laterMerges: [],
+      authorizedLaterMerges: [...PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges],
+      laterMerges: [...PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges],
     },
-    requiredLast: { merge: '2'.repeat(40), firstParent: '3'.repeat(40), donor: '4'.repeat(40), noLaterMerge: true },
+    requiredLast: {
+      merge: PHASE2_GRAPH_BOUNDARY.requiredLastMerge,
+      firstParent: PHASE2_GRAPH_BOUNDARY.requiredLastFirstParent,
+      donor: PHASE2_GRAPH_BOUNDARY.requiredLastDonor,
+      authorizedLaterMerges: [...PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges],
+      postLTopologyExact: true,
+    },
     donors: EXPECTED_ACCEPTED_DONORS.map((entry) => ({
       id: entry.id,
       discovered: true,
@@ -678,9 +685,19 @@ test('candidate Markdown receipt strictly binds donor, protocol, measured, manif
   assert.ok(validate(forgedProofOrder).semanticFailures.includes('CANDIDATE_RECEIPT_DONOR_PROOF_INVALID'));
 
   const forgedRequiredLast = structuredClone(fixture.document);
-  forgedRequiredLast.donorProof.requiredLast.noLaterMerge = false;
+  forgedRequiredLast.donorProof.requiredLast.postLTopologyExact = false;
   rehashDonorProof(forgedRequiredLast);
   assert.ok(validate(forgedRequiredLast).semanticFailures.includes('CANDIDATE_RECEIPT_DONOR_PROOF_INVALID'));
+
+  const widenedPostLAllowlist = structuredClone(fixture.document);
+  widenedPostLAllowlist.donorProof.mergeWindow.authorizedLaterMerges.push('f'.repeat(40));
+  rehashDonorProof(widenedPostLAllowlist);
+  assert.ok(validate(widenedPostLAllowlist).semanticFailures.includes('CANDIDATE_RECEIPT_DONOR_PROOF_INVALID'));
+
+  const unlistedPostLMerge = structuredClone(fixture.document);
+  unlistedPostLMerge.donorProof.mergeWindow.laterMerges.push('f'.repeat(40));
+  rehashDonorProof(unlistedPostLMerge);
+  assert.ok(validate(unlistedPostLMerge).semanticFailures.includes('CANDIDATE_RECEIPT_DONOR_PROOF_INVALID'));
 
   const forgedProtocol = structuredClone(fixture.document);
   forgedProtocol.protocolAndConfigHashes[0].hash = DIGEST;

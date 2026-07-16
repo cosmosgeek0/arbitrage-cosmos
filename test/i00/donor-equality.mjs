@@ -39,6 +39,11 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
   requiredLastMerge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
   requiredLastFirstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
   requiredLastDonor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
+  // Director-authorized by exact QL_DIRECTOR_STATE.md objects at D-LAUNCH-47/48:
+  // 723837873c4aef565eb1dea739c760f66252e1b9 / 4f3e10f2f0371278c4c953501c4ca532d6fe2f78.
+  authorizedLaterMerges: deepFreeze([
+    '449350d60ab30a385edeccdf4d91716ef8550537',
+  ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
     commit: 'ce8d79a751c886dff388fa8f3f2fa6fb3f0414ee',
@@ -410,6 +415,11 @@ function validateManifest() {
     'F-BRIDGE', 'SI-RECON', 'Q-LANE', 'DASHBOARD-SHELL', 'L15-INFRASTRUCTURE',
     'A-CORE', 'A-HAZARD', 'A-COCKPIT', 'A-AGENT', 'A-STABILITY', 'A-CASE-S4', 'L-LANE',
   ])) failures.push('STATIC_INTEGRATION_ORDER_INVALID');
+  if (!exactJson(PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges, [
+    '449350d60ab30a385edeccdf4d91716ef8550537',
+  ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
+    failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
+  }
   return failures;
 }
 
@@ -510,7 +520,7 @@ export function collectDonorEqualityEvidence({
 
   const firstParentMergeShas = gitText(absoluteRepoRoot, [
     'rev-list', '--first-parent', '--reverse', '--min-parents=2',
-    `${PHASE2_GRAPH_BOUNDARY.windowStart}..${candidateSha}`,
+    `${PHASE2_GRAPH_BOUNDARY.windowStart}..${PHASE2_GRAPH_BOUNDARY.requiredLastMerge}`,
   ]).split('\n').filter(Boolean);
   const firstParentMerges = firstParentMergeShas.map((commit) => ({
     commit,
@@ -585,6 +595,7 @@ export function collectDonorEqualityEvidence({
       observedSequence: firstParentMergeShas,
       observed: firstParentMerges,
       permittedNonDonor: PHASE2_GRAPH_BOUNDARY.permittedNonDonorMerge,
+      authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
       laterMerges,
     },
     integrationOrder: {
@@ -736,8 +747,12 @@ export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DON
     || !exactJson(permitted.parents, PHASE2_GRAPH_BOUNDARY.permittedNonDonorMerge.parents)) {
     pushFailure(failures, 'PERMITTED_NON_DONOR_MERGE_INVALID');
   }
-  if (!Array.isArray(mergeWindow.laterMerges) || mergeWindow.laterMerges.length !== 0) {
-    pushFailure(failures, 'POST_L_DONOR_MERGE_DETECTED');
+  const postLTopologyExact = Array.isArray(mergeWindow.authorizedLaterMerges)
+    && exactJson(mergeWindow.authorizedLaterMerges, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges)
+    && Array.isArray(mergeWindow.laterMerges)
+    && exactJson(mergeWindow.laterMerges, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges);
+  if (!postLTopologyExact) {
+    pushFailure(failures, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
   }
   const observedMergeByCommit = new Map((mergeWindow.observed ?? []).map((entry) => [entry.commit, entry]));
   for (const expected of EXPECTED_DONOR_MANIFEST.filter((donor) => donor.integrationMethod !== 'RECEIPTED_EQUIVALENCE')) {
@@ -824,13 +839,15 @@ export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DON
       start: mergeWindow.start ?? null,
       observedSequence: mergeWindow.observedSequence ?? [],
       permittedNonDonor: permitted,
+      authorizedLaterMerges: mergeWindow.authorizedLaterMerges ?? [],
       laterMerges: mergeWindow.laterMerges ?? [],
     },
     requiredLast: {
       merge: PHASE2_GRAPH_BOUNDARY.requiredLastMerge,
       firstParent: PHASE2_GRAPH_BOUNDARY.requiredLastFirstParent,
       donor: PHASE2_GRAPH_BOUNDARY.requiredLastDonor,
-      noLaterMerge: Array.isArray(mergeWindow.laterMerges) && mergeWindow.laterMerges.length === 0,
+      authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
+      postLTopologyExact,
     },
     donors: donorProofs,
     exclusions: exclusionProofs,
@@ -854,8 +871,8 @@ export function verifyDonorEquality(options = {}) {
       counts: { expected: 16, discovered: 0, accepted: 0, integrated: 0 },
       exactSets: { expected: EXPECTED_DONOR_MANIFEST.map((donor) => donor.id), discovered: [], accepted: [], integrated: [] },
       integrationOrder: null,
-      mergeWindow: { start: PHASE2_GRAPH_BOUNDARY.windowStart, observedSequence: [], permittedNonDonor: PHASE2_GRAPH_BOUNDARY.permittedNonDonorMerge, laterMerges: [] },
-      requiredLast: { merge: PHASE2_GRAPH_BOUNDARY.requiredLastMerge, firstParent: PHASE2_GRAPH_BOUNDARY.requiredLastFirstParent, donor: PHASE2_GRAPH_BOUNDARY.requiredLastDonor, noLaterMerge: false },
+      mergeWindow: { start: PHASE2_GRAPH_BOUNDARY.windowStart, observedSequence: [], permittedNonDonor: PHASE2_GRAPH_BOUNDARY.permittedNonDonorMerge, authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges, laterMerges: [] },
+      requiredLast: { merge: PHASE2_GRAPH_BOUNDARY.requiredLastMerge, firstParent: PHASE2_GRAPH_BOUNDARY.requiredLastFirstParent, donor: PHASE2_GRAPH_BOUNDARY.requiredLastDonor, authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges, postLTopologyExact: false },
       donors: [],
       exclusions: [],
       failures: [`COLLECTION_FAILED:${error instanceof Error ? error.message : 'UNKNOWN'}`],

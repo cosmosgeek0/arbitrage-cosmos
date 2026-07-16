@@ -41,6 +41,7 @@ import { LIVE_PERFORMANCE_SOURCE_EXPECTATION, validatePerformanceDocument } from
 import {
   EXPECTED_DONOR_ROWS,
   EXPECTED_EXCLUSIONS,
+  PHASE2_GRAPH_BOUNDARY,
   verifyDonorEquality,
 } from '../donor-equality.mjs';
 
@@ -3401,8 +3402,15 @@ function candidateDonorProofShapeValid(proof, candidate) {
       || proof.integrationOrder.pairs.some((pair) => pair?.isAncestor !== true)
       || !isPlainRecord(proof.mergeWindow) || !Array.isArray(proof.mergeWindow.observedSequence)
       || proof.mergeWindow.observedSequence.length !== 16
-      || !Array.isArray(proof.mergeWindow.laterMerges) || proof.mergeWindow.laterMerges.length !== 0
-      || !isPlainRecord(proof.requiredLast) || proof.requiredLast.noLaterMerge !== true
+      || !exactJson(proof.mergeWindow.authorizedLaterMerges, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges)
+      || !exactJson(proof.mergeWindow.laterMerges, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges)
+      || !exactJson(proof.requiredLast, {
+        merge: PHASE2_GRAPH_BOUNDARY.requiredLastMerge,
+        firstParent: PHASE2_GRAPH_BOUNDARY.requiredLastFirstParent,
+        donor: PHASE2_GRAPH_BOUNDARY.requiredLastDonor,
+        authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
+        postLTopologyExact: true,
+      })
       || !Array.isArray(proof.exclusions) || proof.exclusions.length !== 3
       || proof.exclusions.some((entry) => entry?.excluded !== true)) return false;
   const body = structuredClone(proof);

@@ -41,14 +41,19 @@ test('Git-backed donor proof measures exact 16/16/16/16 equality', () => {
   assert.equal(evaluateDonorEquality(OBSERVATION).proofSha256, proof.proofSha256);
 });
 
-test('required-last L proof pins exact merge, first parent, donor, and no later merge', () => {
+test('required-last L proof pins exact merge, parents, and authorized post-L topology', () => {
   const proof = evaluateDonorEquality(OBSERVATION);
   assert.deepEqual(proof.requiredLast, {
     merge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
     firstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
     donor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
-    noLaterMerge: true,
+    authorizedLaterMerges: ['449350d60ab30a385edeccdf4d91716ef8550537'],
+    postLTopologyExact: true,
   });
+  assert.deepEqual(proof.mergeWindow.authorizedLaterMerges, [
+    '449350d60ab30a385edeccdf4d91716ef8550537',
+  ]);
+  assert.deepEqual(proof.mergeWindow.laterMerges, proof.mergeWindow.authorizedLaterMerges);
   const lane = proof.donors.find((donor) => donor.id === 'L-LANE');
   assert.deepEqual(lane.integration.observedParents, [
     proof.requiredLast.firstParent,
@@ -95,7 +100,7 @@ test('wrong donor object, missing ID, and extra donor fail closed', () => {
   assertBlocked(extra, 'DONOR_ID_SET_INVALID');
 });
 
-test('wrong merge parent, extra phase merge, or post-L merge fail closed', () => {
+test('wrong merge parent, extra phase merge, or non-allowlisted post-L topology fails closed', () => {
   const wrongParent = hostile((value) => {
     value.donors.find((donor) => donor.id === 'Q-LANE').integration.observedParents[1] = '0'.repeat(40);
   });
@@ -106,10 +111,25 @@ test('wrong merge parent, extra phase merge, or post-L merge fail closed', () =>
   });
   assertBlocked(extraPhaseMerge, 'PHASE2_MERGE_SEQUENCE_INVALID');
 
-  const postL = hostile((value) => {
+  const missingAuthorizedPostL = hostile((value) => {
+    value.mergeWindow.laterMerges.pop();
+  });
+  assertBlocked(missingAuthorizedPostL, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
+
+  const substitutedPostL = hostile((value) => {
+    value.mergeWindow.laterMerges[0] = '2'.repeat(40);
+  });
+  assertBlocked(substitutedPostL, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
+
+  const unlistedPostL = hostile((value) => {
     value.mergeWindow.laterMerges.push('2'.repeat(40));
   });
-  assertBlocked(postL, 'POST_L_DONOR_MERGE_DETECTED');
+  assertBlocked(unlistedPostL, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
+
+  const widenedAllowlist = hostile((value) => {
+    value.mergeWindow.authorizedLaterMerges.push('2'.repeat(40));
+  });
+  assertBlocked(widenedAllowlist, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
 });
 
 test('altered acceptance or integration receipt hash fails closed', () => {

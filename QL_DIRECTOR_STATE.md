@@ -67,6 +67,12 @@ Both branches descend from PROTOCOL_SHA. Main stays director-owned; neither Code
 4. Owner directives arrive from "commanders" (external ChatGPT) as .md files — verify hashes, correct stale assumptions from git truth (they are navigation hints, not acceptance evidence), register a D-LAUNCH-N acceptance entry here, then cut worktrees + blocks.
 5. External-action boundary (launch §10 / I00 §20) is never delegated and never inferred.
 
+## D-LAUNCH-59 (2026-07-16): commander ROLE CORRECTION — director un-retired; D1-D6 checkpoint protocol
+
+RESPONSE.TXT supersedes the retirement clauses of D-LAUNCH-54/57: this Fable director remains sole high-context controlling authority through final landing (landing = mechanical tree-hash-equal promotion of the independently verified candidate, zero source edits, performed by me). I do only director-critical work (rulings, contradiction resolution, donor inclusion, seam adjudication, freeze authorization, findings review, remediation acceptance, landing, receipts); workers/scripts do everything long-running; I wake only at D1-D6 checkpoints and otherwise record WAITING_FOR_WORKER_RECEIPTS. WORKER_PROMPTS top rebuilt to a single BLOCK 1 paste (amendment + role correction fused) for both running campaign chats.
+
+STATUS: WAITING_FOR_WORKER_RECEIPTS (D1 from Account A, B_PREP/D1 from Account B).
+
 ## D-LAUNCH-58 (2026-07-16): port-a4 SEALED_WITH_EXTERNAL_BLOCKERS (720d2fe7, pushed)
 
 A4 port work complete and committed (a4a0fb5b + blocked receipt 720d2fe7): web typecheck/build/preview exit 0; 120-control permission console, fail-closed intent projection, emergency-kill separation. PORT_A4_READY withheld only because repo-wide test:all fails at the I00 proof protected-directive/pin assertions — pre-existing at the port base, outside A4 namespaces, same MOVING_PIN_ARTIFACT family as egress (D-LAUNCH-55.1/2). Disposition: lane sealed-with-external-blockers, PARKED; Account A merges it into the campaign candidate where pins align and reruns gates (the existing Account-A note covers this class — egress AND a4). ALL post-landing lanes now terminal. Running set: ACCOUNT-A + ACCOUNT-B only.

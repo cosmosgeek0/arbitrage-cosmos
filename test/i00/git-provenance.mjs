@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -494,23 +494,49 @@ function safeWorkspaceBytes(relativePath) {
   }
 }
 
-function listTestFiles(relativeRoot) {
+export function listProductAssuranceTrackedTestFiles(relativeRoot, repositoryRoot = ROOT) {
   if (!SAFE_PATH.test(relativeRoot ?? '')) throw new TypeError('INVALID_TEST_ROOT');
-  const absoluteRoot = path.join(ROOT, relativeRoot);
-  const output = [];
-  const visit = (absoluteDirectory, relativeDirectory) => {
-    for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true }).sort((left, right) => compareAscii(left.name, right.name))) {
-      const absolute = path.join(absoluteDirectory, entry.name);
-      const relative = path.posix.join(relativeDirectory, entry.name);
-      if (entry.isSymbolicLink()) throw new TypeError(`SYMLINK_FORBIDDEN:${relative}`);
-      if (entry.isDirectory()) visit(absolute, relative);
-      else if (entry.isFile() && entry.name.endsWith('.test.mjs')) output.push(relative);
+  let raw;
+  try {
+    raw = execFileSync('git', [
+      'ls-files',
+      '--cached',
+      '--stage',
+      '-z',
+      '--full-name',
+      '--',
+      relativeRoot,
+    ], { cwd: repositoryRoot, encoding: null, stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch {
+    throw new TypeError(`TRACKED_TEST_INVENTORY_UNAVAILABLE:${relativeRoot}`);
+  }
+
+  let records;
+  try {
+    records = new TextDecoder('utf-8', { fatal: true }).decode(raw).split('\0').filter(Boolean);
+  } catch {
+    throw new TypeError(`TRACKED_TEST_INVENTORY_NOT_UTF8:${relativeRoot}`);
+  }
+  const prefix = `${relativeRoot}/`;
+  const files = [];
+  const seen = new Set();
+  for (const record of records) {
+    const match = /^([0-7]{6}) ([0-9a-f]{40,64}) ([0-3])\t(.+)$/u.exec(record);
+    if (match === null) throw new TypeError(`TRACKED_TEST_ENTRY_INVALID:${relativeRoot}`);
+    const [, mode, , stage, relativePath] = match;
+    if (stage !== '0') throw new TypeError(`TRACKED_TEST_UNMERGED:${relativePath}`);
+    if (!SAFE_PATH.test(relativePath) || !relativePath.startsWith(prefix)) {
+      throw new TypeError(`TRACKED_TEST_PATH_INVALID:${relativePath}`);
     }
-  };
-  const info = statSync(absoluteRoot, { throwIfNoEntry: false });
-  if (!info?.isDirectory()) throw new TypeError(`TEST_ROOT_MISSING:${relativeRoot}`);
-  visit(absoluteRoot, relativeRoot);
-  return Object.freeze(output.sort(compareAscii));
+    if (mode !== '100644' && mode !== '100755') {
+      throw new TypeError(`TRACKED_TEST_MODE_INVALID:${relativePath}`);
+    }
+    if (!relativePath.endsWith('.test.mjs')) continue;
+    if (seen.has(relativePath)) throw new TypeError(`TRACKED_TEST_DUPLICATE:${relativePath}`);
+    seen.add(relativePath);
+    files.push(relativePath);
+  }
+  return Object.freeze(files.sort(compareAscii));
 }
 
 export function validateProductAssuranceManifest(document) {
@@ -726,7 +752,7 @@ export function verifyProductAssuranceSuiteInventory(document) {
     let actualFiles = [];
     let scanError = null;
     try {
-      actualFiles = listTestFiles(suite.testRoot);
+      actualFiles = listProductAssuranceTrackedTestFiles(suite.testRoot);
     } catch (error) {
       scanError = error instanceof Error ? error.message : String(error);
     }

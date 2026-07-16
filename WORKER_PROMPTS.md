@@ -1,5 +1,12 @@
 # WORKER_PROMPTS.md — copy-paste blocks for owner chats (director-maintained)
 
+# >>>>> NEXT UP below, then armed sections. <<<<<
+
+## RUN-NEXT (paste when limits reset) — folder /Users/cosmosgeek/Desktop/i00-assembly
+```text
+You are the C2 FINALIZATION INTEGRATOR resuming after an honest BLOCKED (D-LAUNCH-48 adjudication; fresh session; git is truth). State: branch i00-product-assembly-20260713, C2 frozen at 449350d60ab30a385edeccdf4d91716ef8550537 (merge of parked 517bd63 + correction 37eeb5b0 — parents verified correct); complete gate failed ONLY on test/i00/commands/donor-equality.test.mjs: two provenance self-checks assert noLaterMerge-after-L-merge and PASS-equality, which are STALE — they predate the authorized Phase-4 correction process; C2 is itself the authorized correction merge. DIRECTOR RULING: this is a proof-harness defect, not a product defect. FIX EXACTLY: update the donor-equality proof command + test to pin the EXACT authorized post-L topology — L merge ec82bc51d5311dfb3f505216bfb3fa41733f038c (first parent 139d2cf, donor df6b472) unchanged, PLUS an explicit allowlist of director-authorized later merges, exactly [449350d60ab30a385edeccdf4d91716ef8550537 = C2 correction freeze, receipted in QL_DIRECTOR_STATE.md D-LAUNCH-47/48]; any merge NOT in the exact allowlist still fails; equality proof must measure PASS on this tree. No generalization loopholes, exact SHAs only. THEN: commit as a new source-freeze C2R (supersedes C2; record both SHAs; no rewriting of any prior checkpoint), rerun npm run test:i00:complete -- --run ... from exact C2R with immutable browser/performance receipts, and only if fully green: sole-child seal, validate-only, PARK read-only, print INTEGRATION_CANDIDATE_READY with the exact C2R SHA. May not self-verify. No push, no other worktrees, five protected untracked directives untouched. Usage limit → commit+receipt+stop; same message resumes. Stop at INTEGRATION_CANDIDATE_READY or precise BLOCKED.
+```
+
 # >>>>> RUN NOW — RUN-A (running) + FRONTIER: 14 blocks in /Users/cosmosgeek/Desktop/f-coord/frontier/coordinator/FRONTIER_WORKERS.md (BLOCK 1 = F0 → folder f-dock; BLOCKS 2-14 = scouts F1-F13 → folders f1-scout..f13-scout). ARMED sections below fire on triggers. <<<<<
 
 ## ARMED V-SHARDS + VERIFIER — the instant role4 prints INTEGRATION_CANDIDATE_READY with the C2 SHA, replace <C2> in all six blocks and paste into six NEW chats. Worktrees v1..v5 + role3-c2 are ALREADY CUT; each block pins itself to C2 with one command.

@@ -82,6 +82,10 @@ async function startBoot(dataDir, sentinels) {
         NETWORK_EGRESS_SENTINEL_FILE: sentinels.network,
         PRIVATE_EGRESS_SENTINEL_FILE: sentinels.private,
         I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
+        I00_TEST_EGRESS_STRICT: '1',
+        ...(process.env.I00_TEST_EGRESS_REPORT_FILE === undefined
+          ? {}
+          : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
         I00_TESTED_SHA: TESTED_SHA,
         I00_DEPLOYED_SHA: DEPLOYED_SHA,
         I00_CONFIG_REVISION: 'crash-readback-config',
@@ -163,11 +167,10 @@ test('production g1 clean to g2 SIGKILL to g3 restart preserves crash-pending Pr
     assert.equal(crashed.clean, null);
     assert.deepEqual(envelope.bootReleaseReadback.crashPendingOperationIds, ['system.application.boot.g2']);
     assert.deepEqual(envelope.bootReleaseReadback.reasonCodes, ['CRASH_PENDING_BOOT_PRESENT']);
-    assert.equal(existsSync(sentinels.network), false);
-    assert.equal(existsSync(sentinels.private), false);
-
     await terminateBoot(activeBoot, 'SIGTERM', { code: 0, signal: null });
     activeBoot = null;
+    assert.equal(existsSync(sentinels.network), false);
+    assert.equal(existsSync(sentinels.private), false);
   } finally {
     if (activeBoot && !finished(activeBoot.child)) {
       activeBoot.child.kill('SIGKILL');

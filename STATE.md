@@ -52,7 +52,8 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - The accepted current director-owned QL bytes are `QL_DIRECTOR_STATE.md` SHA-256 `95d4c276…` and `QL_PARALLEL_DAG.md` SHA-256 `89a13c8a…`; D-LAUNCH-7 historical pins remain preserved separately.
 - The canonical Product Assurance gate now includes A-FORMAL and S2 action-evidence suites. AI-Ops port/shadow suites remain deliberately root-unmounted and excluded from C2 acceptance because their branch-specific assumptions are not candidate-compatible.
 - All 14 durable Wave-1 findings are adjudicated. The coverage matrix has 153 rows, including 17 explicit Frontier dispositions, the missing permanent-law rows, and honest absent-control/AI-Ops boundaries; the capability matrix has 23 rows.
-- Focused proof is green at `47/47`; the acceptance contract is green at `44/44`, including a sole branch with no `current-main` ref. The five human I00 reports are refreshed; the machine report refresh requires a clean source checkpoint because the protected-owner fallback intentionally rejects a dirty candidate.
+- Focused proof is green at `47/47`; the acceptance contract is green at `44/44`, including a sole branch with no `current-main` ref. The five human I00 reports and machine report are refreshed from a clean tracked-byte source checkpoint.
+- Exact-C2 evidence generation now reads candidate bytes rather than mutable evidence-child seeds, classifies historical active-name artifacts, confines the post-C2 diff to the campaign directory, and requires the exact candidate-bound gate report before generating the manifest.
 - Exact C2 root, full, exact report-parity, and fresh single-branch clone results remain pending the final source freeze. Wave 1b security and cockpit findings are still pending and block final-verifier handoff.
 
 ## Previous source evidence

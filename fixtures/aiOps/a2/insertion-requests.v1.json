@@ -1,0 +1,389 @@
+{
+  "schema": "AI_OPS_A2_PORT_INSERTION_REQUEST_SET_V1",
+  "version": 1,
+  "targetBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "sourceArtifactSha": "ca1fb094e19d0ccc6a8397ee08a65a662d051bd3",
+  "sourceExtensionSha": "9ae6c22012e7c23ebebff827b527d4d64a263884",
+  "registryCommitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+  "registryPath": "AI_OPS_COLLISION_MAP.md",
+  "directEditAllowed": false,
+  "authorityCreated": false,
+  "rows": [
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-COMPOSITION-001",
+      "status": "DRAFT",
+      "requestedOwner": "SYSTEM_INTEGRATION",
+      "targetSeam": "server/src/index.ts; server/src/systemIntegration/composition/graph.ts::createCoreManagedGraph; managedComposition.ts::ManagedRuntimeComposition/createManagedRuntimeComposition; promisePollAdapter.ts::PromisePollManagedComponent; application/facade.ts::SystemIntegrationApplication/createSystemIntegrationApplication",
+      "reason": "AI runtime needs one lifecycle mount without creating a second Control Plane.",
+      "contract": [
+        "Inject one killable non-critical managed port",
+        "Require typed start, stop, probe, bounded resources and AI-off semantics."
+      ],
+      "tests": [
+        "Prove start, stop and probe failure paths",
+        "Prove boot, recovery and shutdown with AI directory, service and provider absent."
+      ],
+      "expectedBehavior": [
+        "Core startup, operation, recovery and shutdown remain unchanged when AI is absent or unavailable",
+        "No second lifecycle owner."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-COMPOSITION-001",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-ROUTES-002",
+      "status": "DRAFT",
+      "requestedOwner": "PRODUCT_INTEGRATION_RUNTIME",
+      "targetSeam": "server/src/productIntegration/runtime/router.ts::createProductIntegrationRuntimeRouter; service.ts::ProductIntegrationRuntimeService; types.ts",
+      "reason": "AI reads and proposals need authenticated Product-plane ingress without a second API authority.",
+      "contract": [
+        "Add bounded AI-Ops read, chat and proposal request and response schemas behind existing operator middleware."
+      ],
+      "tests": [
+        "Run authenticated and unauthenticated route tests",
+        "Reject malformed, oversized and mutation-bearing read or chat payloads."
+      ],
+      "expectedBehavior": [
+        "Strict bounded responses preserve unknown and unavailable truth",
+        "Read and chat routes cannot mutate canonical state."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-ROUTES-002",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-PERSISTENCE-003",
+      "status": "DRAFT",
+      "requestedOwner": "LEDGER",
+      "targetSeam": "server/src/ledger.ts::Ledger; server/src/systemIntegration/persistence/ledgerAdapter.ts::SystemLedgerPersistenceAdapter; server/src/productIntegration/contracts/ports.ts::ProductLedgerPersistencePort",
+      "reason": "Durable AI records must use the sole canonical persistence owner.",
+      "contract": [
+        "Add Ledger migrations and adapters for cases, transitions, inbox, outbox, DLQ, attempts, effects, usage, approvals, evidence hashes and retention pointers."
+      ],
+      "tests": [
+        "Prove backup, restore, restart, replay, compare-and-set conflict and corrupt-record failure behavior."
+      ],
+      "expectedBehavior": [
+        "Zero acknowledged authoritative-record loss",
+        "One Ledger",
+        "No second store or file journal."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-PERSISTENCE-003",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-PACKAGE-006",
+      "status": "DRAFT",
+      "requestedOwner": "FRESH_POST_ACCEPTANCE_INTEGRATOR",
+      "targetSeam": "package.json; package-lock.json; server/package.json; web/package.json",
+      "reason": "Lane-local work cannot edit shared scripts, dependencies or lockfiles.",
+      "contract": [
+        "Apply only dependency and script deltas named by sealed accepted lane receipts."
+      ],
+      "tests": [
+        "Run lockfile integrity, offline network-free tests, license and security checks, and dependency-necessity checks."
+      ],
+      "expectedBehavior": [
+        "Only reviewed necessary packages and scripts land",
+        "Lanes remain buildable without hidden network or provider calls."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-PACKAGE-006",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-EVENTS-009",
+      "status": "DRAFT",
+      "requestedOwner": "PRODUCT_RUNTIME_MATERIAL_DELIVERY_OWNER",
+      "targetSeam": "runtime/events.ts::projectProductMaterialEventPage; materialDelivery.ts; ProductIntegrationRuntimeService.readMaterialEvents; /ws in server/src/index.ts",
+      "reason": "Eligible case transitions need the existing durable material-event channel.",
+      "contract": [
+        "Add ratified AI case-transition kinds and projections to the canonical material stream."
+      ],
+      "tests": [
+        "Prove stable identity, occurrence and observation time, dedupe, bounded page, cursor continuity, reconnect and gap handling."
+      ],
+      "expectedBehavior": [
+        "No new bus, socket or cursor",
+        "Consumers see ordered durable eligible transitions or explicit gaps."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-EVENTS-009",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-REMEDIATION-010",
+      "status": "DRAFT",
+      "requestedOwner": "BACKEND_FOUNDATION_CONTROL",
+      "targetSeam": "server/src/productAssurance/remediation/campaign.ts::REMEDIATION_ACTIONS/transitionRemediationCampaign/acquireResourceSet/buildRepairConflictGraph; server/src/productIntegration/runtime/systemControlCommandOwner.ts::ProductRuntimeSystemControlCommandOwner; server/src/services/awsRunnerControl.ts::AwsRunnerControl is REFERENCE_ONLY/NOT_CONFIGURED",
+      "reason": "Deterministic campaigns exist only as pure vocabulary and cannot silently become an executor.",
+      "contract": [
+        "Ratify a typed action-request contract, registered runbooks, durable checkpoint and existing-effect-owner bindings",
+        "Never create an AI executor."
+      ],
+      "tests": [
+        "Prove lease, fence, idempotency, precondition, postcondition, quiet period, checkpoint, restart and forbidden-action failure cases."
+      ],
+      "expectedBehavior": [
+        "OP_LOCAL_REMEDIATION_CAMPAIGN stays unavailable until mounted",
+        "Effects run only through existing owners",
+        "Money capabilities remain impossible."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-REMEDIATION-010",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-ASSURANCE-011",
+      "status": "DRAFT",
+      "requestedOwner": "PRODUCT_ASSURANCE",
+      "targetSeam": "server/src/productAssurance/failureAtlas/atlas.ts; diagnostics/boundary.ts; S1/S6 accepted packet paths",
+      "reason": "Atlas and diagnostic evidence must remain bound to accepted owners and release identity.",
+      "contract": [
+        "Bind accepted Atlas catalog owner and diagnostic-boundary projections through narrow owner adapters."
+      ],
+      "tests": [
+        "Validate owner, release, tested-commit, subject and digest tuples",
+        "Run hostile substitution, splice, empty-corpus and fixture-promotion tests."
+      ],
+      "expectedBehavior": [
+        "Synthetic and generated projections never mint live green",
+        "Missing owner or catalog stays UNKNOWN or MISSING."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-ASSURANCE-011",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-TELEMETRY-012",
+      "status": "DRAFT",
+      "requestedOwner": "FOUNDATION_OBSERVABILITY_AND_SYSTEM_INTEGRATION_SUPERVISOR",
+      "targetSeam": "server/src/foundation/observability/types.ts::DiagnosticsPolicy/DiagnosticsInput/DiagnosticsSnapshot/DiagnosticsResult; derive.ts::deriveDiagnostics; systemIntegration/supervisor/**; productIntegration/runtime/trace.ts; productAssurance/projections/operationalTruth.ts",
+      "reason": "AI queue, drop, lag, provider, case and resource facts need canonical health projection.",
+      "contract": [
+        "Register bounded observations without a second telemetry or health authority."
+      ],
+      "tests": [
+        "Inject missing, stale, future, dropped, saturated and provider-outage evidence",
+        "Run core non-degradation soak."
+      ],
+      "expectedBehavior": [
+        "Missing telemetry is MISSING or SILENT",
+        "Authority downgrades",
+        "Core service remains within signed overhead budgets."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TELEMETRY-012",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-REFRESH-013",
+      "status": "DRAFT",
+      "requestedOwner": "SERVER_REFRESH_OWNER_AND_REFRESH_DOCK",
+      "targetSeam": "server/src/index.ts::POST /api/refresh; web/src/components/Header.tsx::RefreshDock; web/src/lib/refresh.ts",
+      "reason": "AI reset and reconnect cannot invent a second reset or restart owner.",
+      "contract": [
+        "Reuse only public news, calendar and fx targets",
+        "Add managed or AI actions solely as ratified canonical command projections."
+      ],
+      "tests": [
+        "Prove public target success",
+        "Prove managed all, market and runtime targets are preview-only HTTP 409",
+        "Prove account remains not configured",
+        "Require receipt and readback for any future action."
+      ],
+      "expectedBehavior": [
+        "No second reset API, restart owner or cadence owner",
+        "Unavailable actions remain honest."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-REFRESH-013",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-NOTIFY-014",
+      "status": "DRAFT",
+      "requestedOwner": "CANONICAL_NOTIFICATION_OWNER_REQUIRED",
+      "targetSeam": "server/src/index.ts::notificationRoutingSnapshot; GET /api/notification-routing; web/src/lib/notifications.ts; web/src/pages/NotificationsPage.tsx",
+      "reason": "Current surface is an in-app routing projection only; no canonical incident-linked external delivery owner exists.",
+      "contract": [
+        "After incident-owner ratification, bind page, acknowledgement, escalation and delivery",
+        "External email, Telegram, WhatsApp and SNS remain NOT_CONFIGURED",
+        "AWS intake remains OWNER_GATED."
+      ],
+      "tests": [
+        "Prove destination acceptance and readback, dedupe, expiry, acknowledgement race and delivery-loss alarm using fake endpoints only."
+      ],
+      "expectedBehavior": [
+        "No external notification is claimed without an owner receipt",
+        "Loss and unavailable destinations are operator-visible."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-NOTIFY-014",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-INCIDENT-019",
+      "status": "DRAFT",
+      "requestedOwner": "DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "targetSeam": "Owner and path MISSING; evidence at server/src/productIntegration/runtime/projection.ts::buildProductRuntimeSupervisorEnvelope",
+      "reason": "Incident identity, grouping, fingerprint, severity and lifecycle have no canonical owner.",
+      "contract": [
+        "Director ratifies one owner",
+        "A2 supplies only a typed admission projection after ratification."
+      ],
+      "tests": [
+        "Prove grouping, split, merge, reopen, close, acknowledgement races, dedupe, persistence and hostile false-green behavior."
+      ],
+      "expectedBehavior": [
+        "INCIDENT_OWNER_NOT_CONFIGURED changes only with an owner receipt",
+        "Ledger remains persistence, not policy."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-INCIDENT-019",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-SENTINEL-020",
+      "status": "DRAFT",
+      "requestedOwner": "INDEPENDENT_SENTINEL_OWNER_REQUIRED",
+      "targetSeam": "Production owner MISSING; server/src/productAssurance/projections/operationalTruth.ts::projectIndependentSentinel",
+      "reason": "Evaluator vocabulary exists but no independently deployed sentinel owner is configured.",
+      "contract": [
+        "Bind an external read-only sentinel in a separate failure domain with no trading or patch authority."
+      ],
+      "tests": [
+        "Prove independent liveness and readback, stale or missing delivery, main-app outage and sentinel-outage fault cases."
+      ],
+      "expectedBehavior": [
+        "Sentinel reports independently and fail-closed",
+        "It cannot execute, trade, patch or mint product readiness."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-SENTINEL-020",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-AUDIT-021",
+      "status": "DRAFT",
+      "requestedOwner": "INDEPENDENT_AUDIT_DELIVERY_OWNER_REQUIRED",
+      "targetSeam": "Production owner MISSING; S6 append and retention receipt contracts; canonical Ledger insertion seam",
+      "reason": "AI provenance requires independently administered append-only or WORM delivery distinct from sentinel execution.",
+      "contract": [
+        "Ratify audit retention, delivery, readback, chain or hash and restoration contract through the canonical Ledger owner."
+      ],
+      "tests": [
+        "Prove append chain, tamper detection, delivery loss, retention expiry, restore and independent readback."
+      ],
+      "expectedBehavior": [
+        "Audit loss is visible within the signed interval",
+        "No worker can rewrite or delete evidence or administer its own audit sink."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-AUDIT-021",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-MANAGED-INVENTORY-022",
+      "status": "DRAFT",
+      "requestedOwner": "PRODUCT_INTEGRATION_RUNTIME",
+      "targetSeam": "server/src/productIntegration/runtime/types.ts::I00_MANAGED_COMPONENT_IDENTITIES; managedInventory.ts::buildProductRuntimeManagedInventory; projection.ts::buildProductRuntimeSupervisorEnvelope",
+      "reason": "Mounted AI components need canonical inventory and supervisor truth.",
+      "contract": [
+        "Insert only ratified AI identities, availability, blockers and component posture into Product runtime projections."
+      ],
+      "tests": [
+        "Prove absent, starting, healthy, degraded, unavailable and killed states plus exact blocker propagation."
+      ],
+      "expectedBehavior": [
+        "Cockpit receives canonical server truth",
+        "AI absence cannot degrade or falsify core readiness."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-MANAGED-INVENTORY-022",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-APPROVAL-023",
+      "status": "DRAFT",
+      "requestedOwner": "HUMAN_APPROVAL_OWNER_REQUIRED",
+      "targetSeam": "Production owner and path MISSING; Product command preview and result types are evidence only, not a generic ApprovalRequest or ApprovalReceipt owner",
+      "reason": "Elevated AI proposals require separately authenticated human approval that no AI or service can satisfy.",
+      "contract": [
+        "Ratify typed approval request and receipt binding artifact, parameters, expiry, principal, reauthentication and execution readback."
+      ],
+      "tests": [
+        "Prove expiry, replay, parameter substitution, AI-as-approver, inherited-chat and credential or role confusion failures."
+      ],
+      "expectedBehavior": [
+        "Only the authenticated human owner approves",
+        "Preview is never approval",
+        "Release service executes only the exact approved artifact."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-APPROVAL-023",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-BROWSER-PROBE-024",
+      "status": "DRAFT",
+      "requestedOwner": "I00_OPERATIONS_PROBE_AND_PRODUCT_CONNECTION_WATCHMAN",
+      "targetSeam": "server/src/index.ts::GET /health/live; POST /api/connections/browser-observation; connectionWatchmanSnapshot; web/src/components/Header.tsx::RefreshDock/pingHealthNow; ops/i00/bin/probe.mjs",
+      "reason": "Browser and synthetic evidence must extend existing probe and connection truth, not create a new health authority.",
+      "contract": [
+        "Add AI surface observations and independent synthetic probes through existing authenticated and readback seams."
+      ],
+      "tests": [
+        "Run fake or offline probe, browser-observation schema, stale, future, timeout, restart and visible-unavailable tests."
+      ],
+      "expectedBehavior": [
+        "Browser reports observations only",
+        "Server remains health authority",
+        "Probe failure is explicit and never decorative green."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-BROWSER-PROBE-024",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-TEST-MOUNT-026",
+      "status": "DRAFT",
+      "requestedOwner": "ROOT_TEST_ACCEPTANCE_OWNER",
+      "targetSeam": "package.json::test:all:built; test/i00/complete-acceptance.mjs; server/test/i00Acceptance/**",
+      "reason": "Accepted lane gates need one canonical root acceptance mount.",
+      "contract": [
+        "Register sealed lane tests and AI-off or fault gates only after acceptance."
+      ],
+      "tests": [
+        "Run focused lane suites, network-free root suite, complete acceptance, hostile false-green and exact exit-code checks."
+      ],
+      "expectedBehavior": [
+        "Real failures return nonzero",
+        "No fake success",
+        "Accepted counts and commands are recorded in canonical state and receipt."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TEST-MOUNT-026",
+      "authorityCreated": false
+    }
+  ]
+}

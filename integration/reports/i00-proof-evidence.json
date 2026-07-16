@@ -2,7 +2,7 @@
   "schemaVersion": 3,
   "packet": "I00_PHASE2_CLOSURE",
   "generatedAtUtc": "2026-07-16T00:00:00Z",
-  "proofScope": "PHASE2_SOURCE_CLOSURE",
+  "proofScope": "C2_SOURCE_CLOSURE",
   "truthLabel": "MIXED_SOURCE_PROVED_AND_PENDING_MEASUREMENT",
   "targetState": "CANDIDATE_SOURCE_FROZEN",
   "productVerdict": "PENDING_MEASUREMENT",
@@ -41,9 +41,9 @@
     "receipt": "IP_PROOF_RECEIPT.md"
   },
   "report": {
-    "generatedAtUtc": "2026-07-14T00:00:00Z",
-    "titleSuffix": "Phase 2 source closure — measurement pending",
-    "summary": "Accepted donor equality and source wiring are recorded. Runtime, browser, restart/reconciliation, and local-proxy performance measurements are not yet recorded. This is not an integration-candidate receipt.",
+    "generatedAtUtc": "2026-07-16T00:00:00Z",
+    "titleSuffix": "C2 source closure — exact browser and owner gates deferred",
+    "summary": "Candidate-source wiring and tracked-byte provenance are recorded without dereferencing moving refs or optional external objects. Exact C2 binding is supplied by the campaign evidence descendant. Runtime, rendered-browser, restart/reconciliation, real-soak, provider, paging, and deployment measurements remain pending or not configured. This is not an integration-candidate receipt.",
     "terminalNote": "Only exact source-wired, fail-closed control directions are classified as authenticated controls; unsupported reverse or broader mutations remain NOT_CONFIGURED or OWNER_GATED.",
     "resourceNote": "The deterministic resource fixture remains a synthetic measurement plan. Local-proxy performance results are PENDING_MEASUREMENT and must be added from a measured receipt without relabeling fixture samples as runtime observations.",
     "interfaceNote": "Vendor facts remain dated build inputs. No private read, signed call, cloud mutation, deployment, or live execution was performed.",
@@ -52,7 +52,7 @@
       "runtime": "server/src/productIntegration/runtime; server/src/systemIntegration",
       "control": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
       "ops": "ops/i00; fixtures/i00/baseline-route-migration.json",
-      "proof": "IP_PROOF_RECEIPT.md@23e985c17b9b860fee26be397fa05b26f3daf8f2",
+      "proof": "integration/reports/i00-proof-evidence.json (source-unbound; exact-C2 SHA-256 and Git-blob binding is recorded by verification/product-truth-20260716/C2_PROOF_BINDING.json)",
       "director": "fixtures/i00/living-director-input-acceptance.json",
       "provenance": "fixtures/i00/receipt-provenance.json"
     }
@@ -142,6 +142,93 @@
     {
       "id": "A_FORMAL",
       "status": "NOT_CONFIGURED",
+      "reason": "SOURCE_INTEGRATED; CANONICAL_PRODUCT_ASSURANCE_TEST_GATE_MOUNTED; FORMAL_RUNTIME_REFERENCE_ONLY; TLA_RUNTIME_TOOLING_NOT_CONFIGURED"
+    },
+    {
+      "id": "A_ACTION_EVIDENCE_S2",
+      "status": "NOT_CONFIGURED",
+      "reason": "SOURCE_INTEGRATED; CANONICAL_PRODUCT_ASSURANCE_TEST_GATE_MOUNTED; SUPPORTING_EVIDENCE_ONLY; PRODUCTION_CONSUMER_AND_ACTION_AUTHORITY_NOT_CONFIGURED"
+    },
+    {
+      "id": "AI_OPS_C2_ACCEPTANCE",
+      "status": "NOT_CONFIGURED",
+      "reason": "ROOT_TEST_MOUNT_NOT_CONFIGURED; PRODUCT_ROUTE_UNWIRED; PROVIDER_WORKER_SENTINEL_PAGING_NOT_CONFIGURED; EXCLUDED_FROM_C2_BASELINE"
+    },
+    {
+      "id": "PRODUCT_ASSURANCE_C2_CLOSURE",
+      "status": "OWNER_GATED",
+      "reason": "GENERATOR_ERA_ARTIFACT_SET_REFERENCE_ONLY; EXACT_C2_CLOSURE_AND_ROOT_ATTESTATION_DEFERRED; REAL_SOAK_NOT_RUN"
+    },
+    {
+      "id": "INCIDENT_ACK_COMMAND",
+      "status": "NOT_CONFIGURED",
+      "reason": "INCIDENT_ACK_COMMAND_OWNER_ABSENT"
+    },
+    {
+      "id": "SOURCE_ISOLATE_COMMAND",
+      "status": "NOT_CONFIGURED",
+      "reason": "CANONICAL_SOURCE_ISOLATION_COMMAND_ABSENT; INDIVIDUAL_COMPONENT_CONTROL_NOT_SUPPORTED"
+    }
+  ],
+  "historicalCandidateLimitations": [
+    {
+      "id": "PRIVATE_SIGNED_EXCHANGE",
+      "status": "NOT_CONFIGURED",
+      "reason": "PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "id": "Q_PRODUCTION_TRANSPORT",
+      "status": "NOT_CONFIGURED",
+      "reason": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+    },
+    {
+      "id": "LIVE_EXECUTION",
+      "status": "NOT_CONFIGURED",
+      "reason": "LIVE_EXECUTION_NOT_IMPLEMENTED"
+    },
+    {
+      "id": "DEPLOYMENT_TARGET",
+      "status": "OWNER_GATED",
+      "reason": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
+    },
+    {
+      "id": "L12_ACTIVE_SUBJECT_PRIVATE_TRUTH",
+      "status": "OWNER_GATED",
+      "reason": "CANONICAL_ACTIVE_SUBJECT_AND_PRIVATE_ACCOUNT_TRUTH_NOT_AUTHORIZED; ACCEPTED_PROJECTOR_NOT_INVOKED"
+    },
+    {
+      "id": "L13_ACCEPTED_PROJECTOR",
+      "status": "OWNER_GATED",
+      "reason": "VALIDATED_L12_ACTIVE_SUBJECT_TRUTH_UNAVAILABLE; ACCEPTED_PROJECTOR_NOT_INVOKED"
+    },
+    {
+      "id": "L14_PRODUCTION_ACTIVATION",
+      "status": "OWNER_GATED",
+      "reason": "NUMERIC_CONFIGURATION_CHECKPOINT_AND_RESERVATION_OWNERS_UNAVAILABLE; PRODUCTION_PERSISTENCE_NULL; NO_DISPATCH"
+    },
+    {
+      "id": "FOUNDATION_QUANTITY_PRODUCTION_CONSUMER",
+      "status": "NOT_CONFIGURED",
+      "reason": "CONTRACT_AND_HOSTILE_PROOFS_PRESENT; NO_AUTHORIZED_PRODUCTION_CONSUMER"
+    },
+    {
+      "id": "MANAGED_RESTART_EFFECT",
+      "status": "OWNER_GATED",
+      "reason": "KEYLESS_MANAGED_RESTART_OWNER_GATED; EXTERNAL_PROCESS_MANAGER_EFFECT_NOT_AUTHORIZED_OR_PROVED"
+    },
+    {
+      "id": "PRODUCTION_CAPACITY",
+      "status": "UNKNOWN",
+      "reason": "LOCAL_BOUNDED_ACCEPTANCE_ONLY; PRODUCTION_LOAD_AND_CAPACITY_NOT_MEASURED"
+    },
+    {
+      "id": "PRODUCT_ASSURANCE_PRODUCTION_PROJECTION",
+      "status": "NOT_CONFIGURED",
+      "reason": "PASSIVE_SOURCE_PROJECTION_ONLY; PRODUCTION_ASSURANCE_ACTIVATION_NOT_CONFIGURED"
+    },
+    {
+      "id": "A_FORMAL",
+      "status": "NOT_CONFIGURED",
       "reason": "POST_LANDING_EXCLUDED_BY_L_LAST_ORDERING; ACCEPTED_POST_LANDING_TIP_b491893416006cf529aef02e5dd4a25d6475e7b8"
     },
     {
@@ -155,6 +242,7 @@
       "reason": "NON_DONOR_WORKTREE_EXCLUDED_FROM_PHASE_2_CANDIDATE; TIP_46b2f1e31edf9f75aec7203e952a56f9869a2971; NO_INTEGRATION_DISPOSITION"
     }
   ],
+  "historicalCandidateLimitationsRole": "HISTORICAL_74EB_INTEGRATION_CANDIDATE_RECEIPT_COMPATIBILITY_ONLY",
   "counts": {
     "requirements": 83,
     "autonomyLayers": 20,
@@ -13992,9 +14080,9 @@
       "question": "Is any heavyweight requirement absent?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "All current accepted donors and source-closure seams are named and the living director inputs are re-pinned and accepted. A-FORMAL and S2 are accepted post-landing artifacts intentionally excluded from this candidate; PREVERIFY is non-donor. Q production transport, private/signed truth, live execution, external deployment, and runtime/browser/performance measurements remain explicitly unavailable, owner-gated, or pending.",
-      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; RUNTIME_BROWSER_MEASUREMENT_PENDING; PERFORMANCE_MEASUREMENT_PENDING",
-      "safeNextAction": "complete local measurements without upgrading NOT_CONFIGURED, OWNER_GATED, UNKNOWN, or excluded post-landing truth"
+      "answer": "All current accepted donors and source-closure seams are named and the living director inputs are re-pinned and accepted. A-FORMAL and S2 source plus canonical tests are integrated, but formal runtime and production action authority remain not configured. AI-Ops acceptance is excluded. Q production transport, private/signed truth, live execution, external deployment, exact browser/runtime/performance proof, and real soak remain explicitly unavailable, owner-gated, pending, or not run.",
+      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; AI_OPS_ROOT_TEST_MOUNT_NOT_CONFIGURED; RUNTIME_BROWSER_MEASUREMENT_PENDING; PERFORMANCE_MEASUREMENT_PENDING; REAL_SOAK_NOT_RUN",
+      "safeNextAction": "complete exact owner-gated measurements without upgrading NOT_CONFIGURED, OWNER_GATED, UNKNOWN, excluded, or NOT_RUN truth"
     }
   ],
   "adapterInsertionPoints": [
@@ -14055,5 +14143,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "d1d3926b7e160c060590ecdde67fbb909d430c6413469360dd5a761b107c92f9"
+  "evidenceSha256": "5cfbb05d4ec089c286635f254c7dba71d73a097812fcf75da6a1daef1c98d05b"
 }

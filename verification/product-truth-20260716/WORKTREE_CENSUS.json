@@ -1,20 +1,20 @@
 {
   "schema": "product-truth-worktree-census.v1",
-  "generated_at_utc": "2026-07-16T12:44:49.502Z",
+  "generated_at_utc": "2026-07-16T12:46:43.421Z",
   "actor_role": "ACCOUNT_A",
   "account_b_reasoning_or_artifacts_read": false,
   "account_b_status_scope": "HEAD and Git status metadata only, required by campaign §5",
   "source_command": "git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z",
-  "source_command_sha256": "dd7e71e87c34f74429924b61f152738b9e3771bd2c33852ea7080e76ea7496ba",
+  "source_command_sha256": "28c159606b344b74ce689914d86f3cd7954e7e5db98ce8d0db71047b111eda97",
   "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
   "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
   "current_main_sha": "e9074e79c22da3951f2373e3b264a63608fd2bb2",
   "origin_current_main_sha": "e9074e79c22da3951f2373e3b264a63608fd2bb2",
   "registered_worktree_count": 101,
-  "tracked_dirty_path_count": 13,
+  "tracked_dirty_path_count": 0,
   "unexplained_dirty_source_path_count": 0,
-  "untracked_path_count": 126,
-  "worktrees_with_untracked_paths": 65,
+  "untracked_path_count": 125,
+  "worktrees_with_untracked_paths": 64,
   "classification_counts": {
     "MERGED_RETAINED": 42,
     "SUPERSEDED_SAFE": 33,
@@ -32,8 +32,8 @@
     "command_or_operator_action": "git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z plus per-tree status, ancestry, receipt, and diff probes",
     "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
     "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
-    "start_time_utc": "2026-07-16T12:44:01.442Z",
-    "end_time_utc": "2026-07-16T12:44:49.515Z",
+    "start_time_utc": "2026-07-16T12:45:58.947Z",
+    "end_time_utc": "2026-07-16T12:46:43.433Z",
     "exit_code": 0,
     "test_count": 101,
     "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
@@ -6680,8 +6680,8 @@
       "worktree_name": "truth-a",
       "branch_name": "truth-campaign-20260716",
       "detached": false,
-      "head_sha": "d2c4f43caf9ad7a84cfde8da8760cc9895384538",
-      "tree_sha": "23a5d18890a2ced36df0a8eeceedee4fad32a10a",
+      "head_sha": "0868204ba5209f1fc985fcbfa5023f66f8bb0655",
+      "tree_sha": "c95b2a00f43433c10b25a8106ace4132f19931c8",
       "base_sha": "787b73d108764d628f925ee630bfe2fbef89458e",
       "base_state": "VERIFIED",
       "base_method": "campaign_or_director_cut",
@@ -6696,38 +6696,17 @@
       "remote_tracking_state": "VERIFIED",
       "remote_tracking_comparison": {
         "reference_only": 0,
-        "worktree_only": 0
+        "worktree_only": 1
       },
       "locked": false,
       "locked_reason": null,
       "prunable": false,
       "prunable_reason": null,
-      "dirty_tracked_paths": [
-        "verification/product-truth-20260716/AUTHORITY_RESOLUTION.md",
-        "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
-        "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
-        "verification/product-truth-20260716/FINAL_VERDICT.md",
-        "verification/product-truth-20260716/INPUTS.lock",
-        "verification/product-truth-20260716/MANIFEST.sha256",
-        "verification/product-truth-20260716/MERGE_PROVENANCE.json",
-        "verification/product-truth-20260716/MONEY_PATH_AUTHORITY_EVIDENCE.json",
-        "verification/product-truth-20260716/STATE.md",
-        "verification/product-truth-20260716/UNMERGED_DELTA_REPORT.md",
-        "verification/product-truth-20260716/WORKTREE_CENSUS.json",
-        "verification/product-truth-20260716/generate-final-evidence.mjs",
-        "verification/product-truth-20260716/generate-worktree-census.mjs"
-      ],
+      "dirty_tracked_paths": [],
       "dirty_source_paths": [],
-      "untracked_paths": [
-        "verification/product-truth-20260716/D_LAUNCH_61_CUSTODY_RECEIPT.json"
-      ],
-      "untracked_path_dispositions": [
-        {
-          "path": "verification/product-truth-20260716/D_LAUNCH_61_CUSTODY_RECEIPT.json",
-          "disposition": "AUTHORIZED_CAMPAIGN_EVIDENCE_ONLY_PENDING_COMMIT"
-        }
-      ],
-      "status_porcelain_v2_sha256": "ae4d8b2f0b0cd54de0b97cec9c63ba8e521dc658a8ec43d722361f886ed33937",
+      "untracked_paths": [],
+      "untracked_path_dispositions": [],
+      "status_porcelain_v2_sha256": "a88482897dabb843ad050711c32a5a045bcab64b42d0a26b5a8d834bfae6216a",
       "task": "Account A product-truth candidate assembly and bounded fixes",
       "owner": "ACCOUNT_A_CANDIDATE_OWNER",
       "allowed_write_paths": [
@@ -6754,9 +6733,9 @@
         "sha256": null
       },
       "diff_identity": {
-        "changed_path_count": 362,
-        "binary_diff_sha256": "46b6ebb74432277be77f28998a3567a1a3c0d8223109f5fafa3efcbe698e58a0",
-        "path_blob_manifest_sha256": "18e7e54af0e3af148ea09b457047f436cc316b6ba8764f01fe678267f999bfe8"
+        "changed_path_count": 363,
+        "binary_diff_sha256": "1a077d9fbb13cf361fbae2419a9b06b31c15593e303db535491a3a1e1ba2f668",
+        "path_blob_manifest_sha256": "94328e51c70f6d2fb65022613c7c54f0ff02da2241621b017dddeed6e01ecbc3"
       },
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],

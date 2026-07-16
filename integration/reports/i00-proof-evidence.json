@@ -12,7 +12,7 @@
     "head": "6b50cca34a5615e828e9606cd7201daf81272ec7",
     "tree": "731dec2404bab0d27a804c634cda1518a6dcef5d",
     "donorEquality": "16/16/16/16",
-    "candidateCommit": null
+    "candidateCommit": "74eb452efab89ca92ec9ff5cb192b723b5f198f3"
   },
   "historicalPacket": {
     "packet": "IP-PROOF",
@@ -13940,5 +13940,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "4327c10c04029c1e912cbc404e0a1939658ffc65e0f006e2019e7a1013c61a8e"
+  "evidenceSha256": "4ae96f186fcda8c1d2b4482c871a9d22f5c3c0d6519ad29b0ff0b9ab72d46b22"
 }

@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "i00.browser-measurement.v1",
+  "capturedAtUtc": "2026-07-16T02:08:28.574Z",
+  "source": {
+    "headSha": "74eb452efab89ca92ec9ff5cb192b723b5f198f3",
+    "treeSha": "6930f71f1191394ffaf317279c9e43f15bf672cf",
+    "appOrigin": "http://127.0.0.1:3317",
+    "captureProvenance": "IN_APP_BROWSER_MCP",
+    "captureSessionId": "iab-c2r-20260716T020828574Z",
+    "captureTranscriptPath": "test/i00/performance/evidence/browser/c2r-74eb452efab89ca92ec9ff5cb192b723b5f198f3/iab-c2r-20260716T020828574Z/capture/iab-c2r-20260716T020828574Z.json",
+    "captureTranscriptSha256": "c58f536caf90c2c1a3aaee2446b101df4ddd3a818c66e22a152be80c8aa8f255"
+  },
+  "documentOverflowX": 0,
+  "footerBarCount": 0,
+  "frameRect": {
+    "height": 486,
+    "width": 398,
+    "x": 1177,
+    "y": 64
+  },
+  "kind": "TOPBAR_PANEL",
+  "panelMetrics": {
+    "headerHeightPx": 70,
+    "shellHeightPx": 486,
+    "shellWidthPx": 398
+  },
+  "passed": true,
+  "roles": [
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(11, 13, 16)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 16,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 540,
+        "letterSpacingPx": -0.192,
+        "lineHeightPx": 21,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "header-title",
+      "selector": ".ops-sheet-title > b",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(125, 135, 149)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 11.25,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 400,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 16,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "header-subtitle",
+      "selector": ".ops-sheet-title > em",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(11, 13, 16)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 12.75,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 470,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 18,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "row-primary",
+      "selector": ".ops-row-copy > b",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(125, 135, 149)",
+        "display": "block",
+        "fontFamily": "InterVariable, Inter, \"SF Pro Text\", -apple-system, \"system-ui\", \"SF Pro Display\", \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif",
+        "fontSizePx": 10.5,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 400,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 15,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "row-secondary",
+      "selector": ".ops-row-copy > em",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 0,
+        "borderWidthPx": 0,
+        "color": "rgb(49, 91, 234)",
+        "display": "flex",
+        "fontFamily": "SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontSizePx": 11.5,
+        "fontVariantNumeric": "lining-nums tabular-nums",
+        "fontWeight": 450,
+        "letterSpacingPx": 0,
+        "lineHeightPx": 16,
+        "overflowX": "hidden",
+        "overflowY": "hidden",
+        "textTransform": "none"
+      },
+      "role": "right-value",
+      "selector": ".ops-row-value",
+      "state": "MEASURED"
+    },
+    {
+      "computed": {
+        "borderRadiusPx": 999,
+        "borderWidthPx": 1,
+        "color": "rgb(23, 135, 95)",
+        "display": "flex",
+        "fontFamily": "SFMono-Regular, Consolas, \"Liberation Mono\", monospace",
+        "fontSizePx": 9.75,
+        "fontVariantNumeric": "normal",
+        "fontWeight": 500,
+        "letterSpacingPx": 0.24375,
+        "lineHeightPx": 14,
+        "overflowX": "visible",
+        "overflowY": "visible",
+        "textTransform": "uppercase"
+      },
+      "role": "status",
+      "selector": ".ops-sheet-status",
+      "state": "MEASURED"
+    }
+  ],
+  "subjectId": "currency",
+  "surfaceOverflowX": 0,
+  "theme": "LIGHT",
+  "viewport": {
+    "height": 900,
+    "width": 1600,
+    "zoom": 1
+  }
+}

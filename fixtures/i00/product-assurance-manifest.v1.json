@@ -8,7 +8,7 @@
   "expectedGitObjectContextProofs": 6,
   "expectedLiveContextReplacements": 1,
   "expectedContextReplacementRows": 7,
-  "expectedPostIntegrationReplacementRows": 4,
+  "expectedPostIntegrationReplacementRows": 7,
   "contextProofPolicy": "SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK",
   "integrationReplacement": {
     "id": "LIVE_OPERATION_POLICY",
@@ -54,6 +54,24 @@
       "requiredAncestry": [],
       "requiredObjects": [],
       "postIntegrationReplacements": [
+        {
+          "path": "server/src/productAssurance/catalog/core.ts",
+          "donorBlob": "b777635f1eeb4d92882e86ae0789086425603653",
+          "replacementCommit": "cd0aa64db48a9898192b3d886abb5546933064e9",
+          "replacementBlob": "643578ac1b39e3c9367348de22f74e7806c96f3a"
+        },
+        {
+          "path": "server/src/productAssurance/invariants/evaluator.ts",
+          "donorBlob": "36679b18792ff29fd0a09e481f22cbe3bc5d80f4",
+          "replacementCommit": "cd0aa64db48a9898192b3d886abb5546933064e9",
+          "replacementBlob": "e7a9c3e6d74d905fdec91f50af7dead2a85c9ee7"
+        },
+        {
+          "path": "server/test/productAssurance/core-policy-inventory.test.mjs",
+          "donorBlob": "77811cad3df93bc9cba432dbfee8ef8695470f57",
+          "replacementCommit": "cd0aa64db48a9898192b3d886abb5546933064e9",
+          "replacementBlob": "a89a3225969b4ba887695471ecd10fe4d3de2cd1"
+        },
         {
           "path": "test/productAssurance/production-operation-scan.mjs",
           "donorBlob": "fb702db91b56b68f20c91d94f91666b150e41bec",

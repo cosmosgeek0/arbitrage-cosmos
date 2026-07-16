@@ -136,7 +136,7 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   assert.equal(validation.gitObjectContextProofs, 6);
   assert.equal(validation.liveContextReplacements, 1);
   assert.equal(validation.contextReplacementRows, 7);
-  assert.equal(validation.postIntegrationReplacementRows, 4);
+  assert.equal(validation.postIntegrationReplacementRows, 7);
 
   const core = manifest.suites.find((suite) => suite.id === 'A_CORE_BEHAVIOR');
   assert.equal(core.expectedPasses, 31);
@@ -174,8 +174,8 @@ test('all six accepted assurance donors are exact Git-object ancestors with immu
   const result = verifyProductAssuranceDonors(manifest);
   assert.equal(result.passed, true, JSON.stringify(result.donors.filter((entry) => !entry.passed)));
   assert.equal(result.mergeCutBlobCount, 193);
-  assert.equal(result.donorIdenticalHeadBlobCount, 189);
-  assert.equal(result.postIntegrationReplacementCount, 4);
+  assert.equal(result.donorIdenticalHeadBlobCount, 186);
+  assert.equal(result.postIntegrationReplacementCount, 7);
   assert(result.postIntegrationReplacements.every((entry) => entry.passed));
   assert.deepEqual(result.donors.map((entry) => [entry.id, entry.pathCount, entry.blobMismatches.length]), [
     ['A_CORE', 36, 0],

@@ -440,6 +440,27 @@ const PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENT_KEYS = Object.freeze([
 const EXPECTED_PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENTS = Object.freeze([
   Object.freeze({
     donorId: 'A_CORE',
+    path: 'server/src/productAssurance/catalog/core.ts',
+    donorBlob: 'b777635f1eeb4d92882e86ae0789086425603653',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: '643578ac1b39e3c9367348de22f74e7806c96f3a',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'server/src/productAssurance/invariants/evaluator.ts',
+    donorBlob: '36679b18792ff29fd0a09e481f22cbe3bc5d80f4',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: 'e7a9c3e6d74d905fdec91f50af7dead2a85c9ee7',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'server/test/productAssurance/core-policy-inventory.test.mjs',
+    donorBlob: '77811cad3df93bc9cba432dbfee8ef8695470f57',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: 'a89a3225969b4ba887695471ecd10fe4d3de2cd1',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
     path: 'test/productAssurance/production-operation-scan.mjs',
     donorBlob: 'fb702db91b56b68f20c91d94f91666b150e41bec',
     replacementCommit: '9a6ec938ef45716379d4f4f4972102ef85cb7271',
@@ -558,7 +579,7 @@ export function validateProductAssuranceManifest(document) {
   addError(errors, document?.expectedGitObjectContextProofs === 6, 'GIT_OBJECT_CONTEXT_PROOF_TOTAL');
   addError(errors, document?.expectedLiveContextReplacements === 1, 'LIVE_CONTEXT_REPLACEMENT_TOTAL');
   addError(errors, document?.expectedContextReplacementRows === 7, 'CONTEXT_REPLACEMENT_ROW_TOTAL');
-  addError(errors, document?.expectedPostIntegrationReplacementRows === 4,
+  addError(errors, document?.expectedPostIntegrationReplacementRows === 7,
     'POST_INTEGRATION_REPLACEMENT_TOTAL');
   addError(errors, document?.contextProofPolicy
     === 'SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK',
@@ -1050,8 +1071,8 @@ export function verifyProductAssuranceDonors(document) {
     passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length
       && donors.every((donor) => donor.passed)
       && mergeCutBlobCount === 193
-      && donorIdenticalHeadBlobCount === 189
-      && postIntegrationReplacements.length === 4
+      && donorIdenticalHeadBlobCount === 186
+      && postIntegrationReplacements.length === 7
       && postIntegrationReplacements.every((entry) => entry.passed),
   });
 }

@@ -232,13 +232,13 @@ export const EXPECTED_DIRECTOR_DISPOSITIONS = Object.freeze({
       id: 'A-FORMAL',
       tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8',
       treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056',
-      disposition: 'POSTLANDING_EXCLUDED',
+      disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY',
     }),
     Object.freeze({
       id: 'A-ACTION-EVIDENCE-S2',
       tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b',
       treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3',
-      disposition: 'POSTLANDING_EXCLUDED',
+      disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY',
     }),
   ]),
   qC17ToA17: Object.freeze({

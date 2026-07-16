@@ -24,6 +24,7 @@ This file is the sole campaign-status authority. Root `STATE.md` owns product st
 - Directive coverage now contains 17 explicit Frontier rows, six missing MISSION laws, three missing ARCHITECTURE laws, honest `NOT_CONFIGURED` rows for `INCIDENT_ACK` and `SOURCE_ISOLATE`, and exact Ledger/quantity-bridge mappings.
 - AI-Ops source remains `INTEGRATED`; route `UNWIRED`; provider, worker, sentinel, paging, and root-test mount `NOT_CONFIGURED`; C2 baseline acceptance `EXCLUDED`. Canonical runners print that exclusion.
 - Product Assurance root gating includes A-FORMAL and S2 action-evidence (`131/131` focused checks). The obsolete generator-era closure artifact set is explicitly `REFERENCE_ONLY_NOT_C2_EVIDENCE`; exact C2 regeneration is a `DEFERRED_OWNER_GATE` disposition.
+- The required-last donor contract preserves `16/16/16/16` equality while admitting the exact authorized post-L merge sequence. A-FORMAL and S2 are integrated reference-only ancestors, PREVERIFY remains a non-ancestor, and the focused command suite passes `28/28`.
 - Sealed I00 proof evidence is now generated from tracked bytes. Ambient Git objects and moving refs are separate tri-state diagnostics. Focused proof passed `47/47`; acceptance contract passed `44/44`, including exact-byte parity from a sole branch with no `current-main` ref.
 - D-LAUNCH-7 historical pins remain immutable. The V2 living-input seal binds D-LAUNCH-62-authorized current QL bytes.
 

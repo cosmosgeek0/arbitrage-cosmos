@@ -39,10 +39,26 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
   requiredLastMerge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
   requiredLastFirstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
   requiredLastDonor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
-  // Director-authorized by exact QL_DIRECTOR_STATE.md objects at D-LAUNCH-47/48:
-  // 723837873c4aef565eb1dea739c760f66252e1b9 / 4f3e10f2f0371278c4c953501c4ca532d6fe2f78.
+  // Exact authorized post-L merge topology through the D-LAUNCH-62 candidate.
+  // These merges remain outside the original 16-donor equality count; their
+  // ancestry is admitted only by the exact list below.
   authorizedLaterMerges: deepFreeze([
     '449350d60ab30a385edeccdf4d91716ef8550537',
+    '51efaaa41fbaf85bcbefa9adc6cdbd640d814506',
+    '6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd',
+    'c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6',
+    '4eff62bdd30eceddf39bbbdf417b0eba51c22b7c',
+    '9c7e8b16bc8fbaba0110daa391a6e6160dae5802',
+    'b3f49616e69ee5036386414030b482b5f02e9c13',
+    '2787ebf3665c1efe32af9c426504af6b871898f1',
+    '614e5a8ed20b5c810ee92268a3f3c12c30971519',
+    '9c3bb17638cd8bc5478b813c22c5a7050f046ce3',
+    '955e204964f44246e0c69772578f43180a56b33f',
+    '611df36d12d00c3fbf041fff4af9cccde03afc91',
+    'e3b84307af010b8b1547418f5f6cb5078039413d',
+    '48a89d9f07574868fc6346725781ba954f488a4c',
+    '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
+    '995904ada86e86ef4214bea596331b978a332da0',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -255,9 +271,9 @@ export const EXPECTED_DONOR_MANIFEST = deepFreeze([
 ]);
 
 export const EXPECTED_EXCLUSIONS = deepFreeze([
-  { id: 'A-FORMAL', tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8', treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056', disposition: 'POSTLANDING_EXCLUDED', worktree: { directory: 'ip-assur-formal', branch: 'ip-assur-formal-20260713' } },
-  { id: 'A-ACTION-EVIDENCE-S2', tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b', treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3', disposition: 'POSTLANDING_EXCLUDED', worktree: { directory: 'ip-assur-action', branch: 'ip-assur-action-20260714' } },
-  { id: 'PREVERIFY', tipSha: '46b2f1e31edf9f75aec7203e952a56f9869a2971', treeSha: 'ad11b333ca412093d55c5e26560ce4b3b9792c1b', disposition: 'NON_DONOR_NOT_CONFIGURED', worktree: { directory: 'preverify', branch: 'preverify-20260714' } },
+  { id: 'A-FORMAL', tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8', treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', candidateAncestry: 'REQUIRED', worktree: { directory: 'ip-assur-formal', branch: 'ip-assur-formal-20260713' } },
+  { id: 'A-ACTION-EVIDENCE-S2', tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b', treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', candidateAncestry: 'REQUIRED', worktree: { directory: 'ip-assur-action', branch: 'ip-assur-action-20260714' } },
+  { id: 'PREVERIFY', tipSha: '46b2f1e31edf9f75aec7203e952a56f9869a2971', treeSha: 'ad11b333ca412093d55c5e26560ce4b3b9792c1b', disposition: 'NON_DONOR_NOT_CONFIGURED', candidateAncestry: 'FORBIDDEN', worktree: { directory: 'preverify', branch: 'preverify-20260714' } },
 ]);
 
 export const INTEGRATION_ORDER = deepFreeze([
@@ -417,6 +433,21 @@ function validateManifest() {
   ])) failures.push('STATIC_INTEGRATION_ORDER_INVALID');
   if (!exactJson(PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges, [
     '449350d60ab30a385edeccdf4d91716ef8550537',
+    '51efaaa41fbaf85bcbefa9adc6cdbd640d814506',
+    '6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd',
+    'c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6',
+    '4eff62bdd30eceddf39bbbdf417b0eba51c22b7c',
+    '9c7e8b16bc8fbaba0110daa391a6e6160dae5802',
+    'b3f49616e69ee5036386414030b482b5f02e9c13',
+    '2787ebf3665c1efe32af9c426504af6b871898f1',
+    '614e5a8ed20b5c810ee92268a3f3c12c30971519',
+    '9c3bb17638cd8bc5478b813c22c5a7050f046ce3',
+    '955e204964f44246e0c69772578f43180a56b33f',
+    '611df36d12d00c3fbf041fff4af9cccde03afc91',
+    'e3b84307af010b8b1547418f5f6cb5078039413d',
+    '48a89d9f07574868fc6346725781ba954f488a4c',
+    '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
+    '995904ada86e86ef4214bea596331b978a332da0',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }
@@ -783,12 +814,13 @@ export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DON
   const exclusionProofs = [];
   for (const expected of EXPECTED_EXCLUSIONS) {
     const observed = observedExclusions.find((entry) => entry.id === expected.id);
+    const expectedAncestor = expected.candidateAncestry === 'REQUIRED';
     const valid = observed?.disposition === expected.disposition
       && observed?.tip?.sha === expected.tipSha
       && observed?.tip?.objectType === 'commit'
       && observed?.tip?.expectedTree === expected.treeSha
       && observed?.tip?.observedTree === expected.treeSha
-      && observed?.tip?.ancestorOfCandidate === false
+      && observed?.tip?.ancestorOfCandidate === expectedAncestor
       && observed?.worktree?.observedHead === expected.tipSha
       && observed?.worktree?.observedBranch === `refs/heads/${expected.worktree.branch}`;
     if (!valid) pushFailure(failures, `${expected.id}_EXCLUSION_PROOF_INVALID`);

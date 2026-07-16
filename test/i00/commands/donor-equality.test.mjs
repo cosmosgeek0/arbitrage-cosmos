@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   EXPECTED_DONOR_ROWS,
+  PHASE2_GRAPH_BOUNDARY,
   collectDonorEqualityEvidence,
   evaluateDonorEquality,
   verifyDonorEquality,
@@ -47,12 +48,11 @@ test('required-last L proof pins exact merge, parents, and authorized post-L top
     merge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
     firstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
     donor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
-    authorizedLaterMerges: ['449350d60ab30a385edeccdf4d91716ef8550537'],
+    authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
     postLTopologyExact: true,
   });
-  assert.deepEqual(proof.mergeWindow.authorizedLaterMerges, [
-    '449350d60ab30a385edeccdf4d91716ef8550537',
-  ]);
+  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 16);
+  assert.deepEqual(proof.requiredLast.authorizedLaterMerges, proof.mergeWindow.authorizedLaterMerges);
   assert.deepEqual(proof.mergeWindow.laterMerges, proof.mergeWindow.authorizedLaterMerges);
   const lane = proof.donors.find((donor) => donor.id === 'L-LANE');
   assert.deepEqual(lane.integration.observedParents, [
@@ -161,16 +161,16 @@ test('dirty, partial, or wrong-head donor worktree fails closed', () => {
   assertBlocked(wrongHead, 'SI-RECON_WORKTREE_IDENTITY_INVALID');
 });
 
-test('A-FORMAL, S2, and preverify must remain explicit non-ancestors', () => {
+test('A-FORMAL and S2 remain post-landing reference admissions while preverify remains a non-ancestor', () => {
   const proof = evaluateDonorEquality(OBSERVATION);
   assert.deepEqual(proof.exclusions.map(({ id, disposition, excluded }) => ({ id, disposition, excluded })), [
-    { id: 'A-FORMAL', disposition: 'POSTLANDING_EXCLUDED', excluded: true },
-    { id: 'A-ACTION-EVIDENCE-S2', disposition: 'POSTLANDING_EXCLUDED', excluded: true },
+    { id: 'A-FORMAL', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', excluded: true },
+    { id: 'A-ACTION-EVIDENCE-S2', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', excluded: true },
     { id: 'PREVERIFY', disposition: 'NON_DONOR_NOT_CONFIGURED', excluded: true },
   ]);
 
   const smuggled = hostile((value) => {
-    value.exclusions.find((entry) => entry.id === 'A-FORMAL').tip.ancestorOfCandidate = true;
+    value.exclusions.find((entry) => entry.id === 'A-FORMAL').tip.ancestorOfCandidate = false;
   });
   assertBlocked(smuggled, 'A-FORMAL_EXCLUSION_PROOF_INVALID');
 });

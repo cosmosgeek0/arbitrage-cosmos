@@ -1,0 +1,234 @@
+{
+  "schemaVersion": "OBS_PORT_VIEW_CONTRACT_CATALOG_V1",
+  "packetPosture": "PORT_PRESTAGE",
+  "acceptanceStatus": null,
+  "authorityEffect": "NONE",
+  "baseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "contracts": [
+    {
+      "viewId": "OBS_HISTORY_TRENDS_V1",
+      "itemId": "HISTORICAL_TRENDS",
+      "classification": "ADOPT_EXISTING",
+      "implementation": "REFERENCE_ONLY_CANONICAL_OWNER_OUTPUT_UNMOUNTED",
+      "ownerId": "PRODUCT_ASSURANCE_OBSERVABILITY",
+      "sourceContracts": [
+        "fixtures/productAssurance/systemic/observability/historical-series-evaluator.mjs#evaluateHistoricalSeries",
+        "fixtures/productAssurance/systemic/observability/slo-trend-evaluator.mjs"
+      ],
+      "requiredViewFields": [
+        "contractResult",
+        "historicalResult",
+        "currentResult",
+        "liveGreenEligible",
+        "series[].metricId",
+        "series[].family",
+        "series[].ownerId",
+        "series[].unit",
+        "series[].sourceTruthLabel",
+        "series[].window",
+        "series[].points",
+        "series[].historical",
+        "series[].historicalResult",
+        "series[].currentResult",
+        "series[].coherenceState",
+        "series[].historicalReasonCodes",
+        "series[].currentReasonCodes",
+        "series[].liveGreenEligible"
+      ],
+      "invariants": [
+        "OWNER_EVALUATED_POINTS_ONLY",
+        "NO_PERCENTILE_OR_TREND_RECOMPUTATION",
+        "GAPS_AND_UNKNOWN_VALUES_REMAIN_EXPLICIT",
+        "SYNTHETIC_NEVER_BECOMES_LIVE_PUBLIC"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE",
+      "sourceContractState": "EXACT_OWNER_BLOBS_REVALIDATED"
+    },
+    {
+      "viewId": "OBS_PAGING_RECEIPT_DETAIL_V1",
+      "itemId": "PAGING_RECEIPTS",
+      "classification": "MISSING_BUILD",
+      "implementation": "fixtures/obsShadow/view-adapter.mjs#projectPagingReceiptView",
+      "ownerId": "I08_SUPERVISOR_EVIDENCE_VOCABULARY_ONLY",
+      "sourceContracts": [
+        "fixtures/productAssurance/systemic/observability/slo-catalog-contract.mjs#SLO_SUBOBJECTIVE_CONTRACTS[paging-delivery,paging-acknowledgement]",
+        "fixtures/productAssurance/systemic/cockpit/fixtures/panel-contracts.v1.json#notifications.pagingReceiptState"
+      ],
+      "requiredViewFields": [
+        "receiptId",
+        "incidentId",
+        "correlationId",
+        "routingState",
+        "deliveryEvidence",
+        "acknowledgementEvidence",
+        "evidenceBindingState",
+        "pagingReceiptState",
+        "incidentResolutionState",
+        "actionRequiredCode",
+        "reasonCodes"
+      ],
+      "invariants": [
+        "PROVIDER_ACCEPTANCE_IS_NOT_DELIVERY",
+        "DELIVERY_IS_NOT_ACKNOWLEDGEMENT",
+        "ACKNOWLEDGEMENT_IS_NOT_RESOLUTION_OR_RECOVERY",
+        "UNPROVEN_NEVER_BECOMES_CONFIRMED_LOST",
+        "EVIDENCE_BINDS_EXACT_RECEIPT_INCIDENT_CORRELATION_AND_ATTEMPT",
+        "OWNER_DIGEST_REMAINS_REFERENCE_ONLY_UNTIL_OWNER_VERIFICATION",
+        "ADAPTER_DOES_NOT_OVERRIDE_OWNER_DELIVERY_VERDICT_FROM_RETRY_TEXT",
+        "ROUTE_NOT_CONFIGURED_FORBIDS_PROVED_RECEIPTS",
+        "FIXTURE_REVISION_IS_NOT_AN_I08_OWNER_REVISION",
+        "CANONICAL_NOTIFICATIONS_BOOLEAN_ACTION_REQUIRES_AN_INTEGRATOR_ADAPTER",
+        "DIRECT_MOUNT_FORBIDDEN"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE",
+      "sourceContractState": "VOCABULARY_ONLY_CONCRETE_OWNER_RECORD_SCHEMA_MISSING"
+    },
+    {
+      "viewId": "OBS_INCIDENT_DRILL_RESULT_V1",
+      "itemId": "INCIDENT_DRILL_FIXTURES",
+      "classification": "ADAPT_EXISTING",
+      "implementation": "fixtures/obsShadow/view-adapter.mjs#projectIncidentDrillView",
+      "ownerId": "PRODUCT_ASSURANCE_FAULT_HARNESS",
+      "sourceContracts": [
+        "fixtures/productAssurance/fixtures-root/fault-harness-synthetic.json",
+        "fixtures/productAssurance/systemic/hazard/reference/view-model.mjs#buildHazardAssuranceViewModel",
+        "web/src/features/productControlRoom/components/IncidentCursorPanel.tsx#IncidentCursorPanel"
+      ],
+      "requiredViewFields": [
+        "drillId",
+        "scenarioId",
+        "runId",
+        "shadowIncidentId",
+        "shadowCorrelationId",
+        "ownerIncidentId",
+        "ownerCorrelationId",
+        "identityBindingState",
+        "sourceRunDigest",
+        "sourceContentSha256",
+        "sourceBindingState",
+        "timeline",
+        "expected",
+        "observed",
+        "drillOutcomeState",
+        "recoveryProofState",
+        "actionRequiredCode",
+        "reasonCodes"
+      ],
+      "invariants": [
+        "RECORDED_SYNTHETIC_RUNS_ONLY",
+        "COMPLETE_SOURCE_RUN_IS_CANONICAL_SHA256_BOUND",
+        "SHADOW_IDENTITIES_NEVER_IMPLY_OWNER_INCIDENT_IDENTITIES",
+        "FAULT_INJECTION_AND_REQUIRED_PROOF_MUST_BOTH_BE_VISIBLE",
+        "INDEPENDENT_DETECTOR_FAILURE_DOMAIN_MUST_DIFFER",
+        "DRILL_MATCH_IS_NOT_INCIDENT_RESOLUTION",
+        "NO_NEW_SIMULATOR_OR_INCIDENT_OWNER",
+        "INCIDENT_OWNER_REMAINS_NOT_CONFIGURED",
+        "DECLARED_FAILURE_DOMAIN_INEQUALITY_IS_NOT_EXTERNAL_INDEPENDENCE_PROOF",
+        "DIRECT_MOUNT_FORBIDDEN"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE",
+      "sourceContractState": "RECORDED_SYNTHETIC_RUN_ONLY_INCIDENT_OWNER_NOT_CONFIGURED"
+    },
+    {
+      "viewId": "OBS_EXPECTED_OBSERVED_INVENTORY_V1",
+      "itemId": "EXPECTED_VS_OBSERVED_INVENTORY",
+      "classification": "ADOPT_EXISTING",
+      "implementation": "REFERENCE_ONLY_CANONICAL_OWNER_OUTPUT_UNMOUNTED",
+      "ownerId": "PRODUCT_ASSURANCE_RELEASE_MANIFEST",
+      "sourceContracts": [
+        "fixtures/productAssurance/systemic/observability/release-manifest-evaluator.mjs#evaluateReleaseBoundExpectedManifest",
+        "web/src/features/productControlRoom/components/ComponentAuthorityPanel.tsx#ComponentAuthorityPanel"
+      ],
+      "requiredViewFields": [
+        "denominatorCount",
+        "counts.current",
+        "ids.expected",
+        "ids.discovered",
+        "ids.current",
+        "ids.missing",
+        "ids.unexpectedObserved",
+        "binding.result",
+        "overallResult",
+        "liveGreenEligible"
+      ],
+      "invariants": [
+        "EXPECTED_DENOMINATOR_IS_CANONICAL",
+        "MISSING_AND_UNEXPECTED_IDENTITIES_REMAIN_VISIBLE",
+        "OBSERVED_ITEMS_CANNOT_INFLATE_THE_DENOMINATOR",
+        "PRODUCT_ASSURANCE_DENOMINATOR_IS_NOT_PRODUCT_RUNTIME_33_ROLE_14_COMPONENT_INVENTORY"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE_EXISTING_CANONICAL_SURFACE_PRESENT",
+      "sourceContractState": "EXACT_PRODUCT_ASSURANCE_RELEASE_DENOMINATOR_ONLY"
+    },
+    {
+      "viewId": "OBS_TELEMETRY_LOSS_V1",
+      "itemId": "TELEMETRY_LOSS_DETECTION",
+      "classification": "ADOPT_EXISTING",
+      "implementation": "REFERENCE_ONLY_CANONICAL_OWNER_OUTPUT_UNMOUNTED",
+      "ownerId": "PRODUCT_ASSURANCE_OPERATIONAL_TRUTH",
+      "sourceContracts": [
+        "server/src/productAssurance/projections/operationalTruth.ts#projectTelemetryPipeline",
+        "fixtures/productAssurance/systemic/observability/conservation-evaluator.mjs"
+      ],
+      "requiredViewFields": [
+        "verdict",
+        "exporterHealthy",
+        "ledgerEvidencePreserved",
+        "reasonCodes"
+      ],
+      "invariants": [
+        "NO_NEW_LOSS_DETECTOR",
+        "DROPPED_COALESCED_MISSING_AND_STALE_REMAIN_DISTINCT",
+        "HEARTBEAT_ALONE_CANNOT_PROVE_PROGRESS",
+        "UNKNOWN_INPUT_NEVER_BECOMES_ZERO_OR_PASS",
+        "NO_FOUNDATION_DIAGNOSTICS_OR_SYSTEM_ROOT_CAUSE_DUPLICATE"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE_OWNER_RUNTIME_NOT_CONFIGURED",
+      "sourceContractState": "EXACT_OWNER_BLOBS_REVALIDATED_RUNTIME_EXPORT_NOT_CONFIGURED"
+    },
+    {
+      "viewId": "OBS_COST_BUDGET_V1",
+      "itemId": "COST_BUDGET_PROJECTIONS",
+      "classification": "ADOPT_EXISTING",
+      "implementation": "REFERENCE_ONLY_CANONICAL_OWNER_OUTPUT_UNMOUNTED",
+      "ownerId": "PRODUCT_ASSURANCE_STABILITY",
+      "sourceContracts": [
+        "fixtures/productAssurance/systemic/stability/reference-evaluator.mjs#evaluateResourceEvidence",
+        "fixtures/productAssurance/systemic/stability/view-model.mjs#projectStabilityViewModel"
+      ],
+      "requiredViewFields": [
+        "evaluatedAtMs",
+        "assuranceResult",
+        "rows[].resourceFamily",
+        "rows[].canonicalOwner",
+        "rows[].provenance",
+        "rows[].observedAtMs",
+        "rows[].maxAgeMs",
+        "rows[].assuranceResult",
+        "rows[].currentBurn",
+        "rows[].budgetLimit",
+        "rows[].budgetRemaining",
+        "rows[].forecast",
+        "rows[].forecastHorizonMs",
+        "rows[].unknownReason",
+        "rows[].unknownReasons",
+        "rows[].topConsumers",
+        "rows[].protections",
+        "rows[].throttleDecision",
+        "rows[].commands",
+        "throttleDecision",
+        "commands"
+      ],
+      "invariants": [
+        "EXACT_EIGHT_FAMILY_DENOMINATOR",
+        "NO_FORECAST_OR_EXHAUSTION_RECOMPUTATION",
+        "NULL_FORECAST_REMAINS_UNKNOWN",
+        "NO_UNIT_OR_CURRENCY_INFERENCE_WHEN_OWNER_DOES_NOT_PUBLISH_IT",
+        "OWNER_VALUE_SHAPES_AND_PROVENANCE_PASS_THROUGH_ONLY",
+        "NO_THROTTLE_OR_COMMAND_AUTHORITY"
+      ],
+      "obsShadowMountState": "NOT_MOUNTED_PORT_PRESTAGE",
+      "sourceContractState": "EXACT_OWNER_BLOBS_REVALIDATED"
+    }
+  ]
+}

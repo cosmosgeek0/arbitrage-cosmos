@@ -1,0 +1,160 @@
+{
+  "schema": "product-truth-inputs-lock.v1",
+  "status": "BLOCKED",
+  "reason": "OFF_MACHINE_CANDIDATE_BUNDLE_CUSTODY_NOT_CONFIGURED",
+  "candidate": {
+    "commit": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "tree": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "parent": "f11531e6637979d6e173f6eb25d04c10a76d20c8",
+    "branch": "truth-campaign-20260716",
+    "source_frozen": true,
+    "evidence_descendants_may_change_source": false
+  },
+  "durable_main": {
+    "local": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "origin": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "remote": "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+    "state": "INTEGRATED"
+  },
+  "controlling_inputs": [
+    {
+      "id": "campaign",
+      "path": "/Users/cosmosgeek/Desktop/INDEPENDENT_PRODUCT_TRUTH_AND_LIVE_READINESS_CAMPAIGN_20260716.md",
+      "sha256": "ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b"
+    },
+    {
+      "id": "handoff",
+      "path": "DIRECTOR_HANDOFF_TRUTH_CAMPAIGN.md",
+      "sha256": "49211c1f34a84610e356aa4119d156ca1e30892866e335cd3b407ef5da05c37d"
+    },
+    {
+      "id": "product-state",
+      "path": "STATE.md",
+      "sha256": "9d1e348c65ed95fc3f43c22d469e41071bec473683ed3b68215bfc7bb661584a"
+    },
+    {
+      "id": "mission",
+      "path": "MISSION.md",
+      "sha256": "95e152d76844aa391b7a28bd45548d7fe58f83ed1ced558dbdbeb01797436362"
+    },
+    {
+      "id": "architecture",
+      "path": "ARCHITECTURE.md",
+      "sha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db"
+    },
+    {
+      "id": "design",
+      "path": "DESIGN.md",
+      "sha256": "60a1bc8da092cb737826d6a859b1f0eaa7c7c8df8a416e07654cbb1adf80480e"
+    },
+    {
+      "id": "director",
+      "path": "DIRECTOR.md",
+      "sha256": "6c54e7037d108c0e6a198520740deca13a6d82d677b9aea0137e284ce5752a95"
+    },
+    {
+      "id": "agents",
+      "path": "AGENTS.md",
+      "sha256": "db97a7a59e0d5cb4b1b6fe23b9902c6f5756733678085027412e37062b7d82ec"
+    }
+  ],
+  "dependency_inputs": [
+    {
+      "path": "package.json",
+      "sha256": "3868ab98c8d7c78db4ebf7790c26ffbca02e26255e617ed59d16709a23727da9",
+      "git_blob": "d05433de2f863d8bacb2349fa8f01bcb444818d2"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+      "git_blob": "54efede0fbadd309ca38375349075affc347cb51"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "138aa764f0efdd7c5c94b35fd7dabf0048fcbdbc0cce133f2dbfc3a01bf28142",
+      "git_blob": "b92504abbd2a4fe84930344733e06dc142ba9411"
+    },
+    {
+      "path": ".nvmrc",
+      "sha256": "f14b4987904bcb5814e4459a057ed4d20f58a633152288a761214dcd28780b56",
+      "git_blob": "2bd5a0a98a36cc08ada88b804d3be047e6aa5b8a"
+    },
+    {
+      "path": "quant/uv.lock",
+      "sha256": "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29",
+      "git_blob": "00266d99e77f6eb505053b7c2b9358715ad8a76d"
+    },
+    {
+      "path": "quant/.python-version",
+      "sha256": "f8faecf2505680716c6279bf2cdec3d5a5ba2ba852f0d7df45d51ac1ce8d9ade",
+      "git_blob": "0cf960df58f3c12fadffb149e0ee06bb63111f41"
+    },
+    {
+      "path": "quant/pyproject.toml",
+      "sha256": "a4d68e05b607e60a99fa3856ed8f8cd3addc80998c65ca6d458118745970ca81",
+      "git_blob": "80dc701ec2f28c0ad4ce3b5928b25cb42fc130b7"
+    }
+  ],
+  "environment": {
+    "os": "macOS 26.5.2 build 25F84",
+    "kernel": "Darwin 25.5.0 arm64",
+    "node": "v22.23.1",
+    "npm": "10.9.8",
+    "git": "2.50.1 Apple Git-155",
+    "typescript": "5.9.3",
+    "vite": "6.4.3",
+    "shell": "zsh 5.9",
+    "default_python": "3.9.6 NOT_AUTHORIZED_FOR_QUANT_ACCEPTANCE",
+    "managed_python": "3.13.14",
+    "uv": "0.11.28"
+  },
+  "environment_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
+  "clean_clone": {
+    "path": "/Users/cosmosgeek/Desktop/product-truth-clean-clones-20260716/account-a/41752d6a87dc1cb1b933bb4460c9cabfc15ff694/repo",
+    "source": "file:///Users/cosmosgeek/Desktop/truth-a",
+    "source_state": "REFERENCE_ONLY",
+    "full_history": true,
+    "shallow": false,
+    "detached_at_candidate": true,
+    "current_main_ref_present": false,
+    "object_alternates_present": false,
+    "reachable_commits": 544,
+    "tracked_files": 2574
+  },
+  "bundle": {
+    "path": "/Users/cosmosgeek/cosmos-arbitrage-truth-candidate-41752d6a.bundle",
+    "sha256": "f0641dcbbe7816d55749dd1d2a0fcfbf246c914d9af55f6ad9982f740aa9feab",
+    "bytes": 62976347,
+    "complete_history": true,
+    "candidate_ref": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "main_ref": "2ae812624f20b9bc93fc4ad66cb568929101110f",
+    "local_integrity_state": "SEALED",
+    "off_machine_custody_state": "NOT_CONFIGURED"
+  },
+  "first_pass_account_a_matrix": {
+    "commit": "a1a67b2a9ab2b693b967fc5a0f047036f90cc593",
+    "git_blob": "ac5d274187b590a3a8ea856ba09ab665423c834b",
+    "sha256": "1d2d228b5e088846bf5962d79e6e5b0606937b6f69b24325de962f1cfdc58ff9",
+    "account_b_material_read": false
+  },
+  "receipt": {
+    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "command_or_operator_action": "Account A evidence generation from immutable candidate C; no source mutation",
+    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
+    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+    "start_time_utc": "2026-07-16T11:17:11Z",
+    "end_time_utc": "2026-07-16T11:47:52.009Z",
+    "exit_code": 0,
+    "test_count": 0,
+    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
+    "actor_role": "ACCOUNT_A",
+    "actor_had_candidate_source_write_permission": false,
+    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
+    "deviations_skips_unavailable_evidence": [
+      "Account B artifacts and reasoning were not read",
+      "No independent verification token is issued",
+      "Off-machine custody for the candidate bundle is unavailable"
+    ]
+  }
+}

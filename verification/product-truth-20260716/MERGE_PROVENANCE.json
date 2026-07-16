@@ -1,0 +1,1027 @@
+{
+  "schema": "product-truth-merge-provenance.v1",
+  "status": "INTEGRATED",
+  "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+  "actor_role": "ACCOUNT_A",
+  "account_b_material_read": false,
+  "aggregate": {
+    "admitted_lane_count": 12,
+    "changed_path_occurrences": 326,
+    "unique_changed_paths": 326,
+    "cross_lane_overlap_count": 0,
+    "out_of_grant_path_count": 0,
+    "donor_blob_mismatch_at_candidate_count": 0,
+    "unexplained_edit_count": 0
+  },
+  "admitted_lanes": [
+    {
+      "id": "EGRESS",
+      "status": "INTEGRATED",
+      "tip": "8db67eee261ea4b8964b5b9c64b22fc3a0c7fbc6",
+      "merge": "c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6",
+      "merge_tree": "2abedb1296845c1d40b0049fc886ed4b0925d7b5",
+      "parents": [
+        "7854f6aeb0457e322d6b26daf2fcd20b74b4c9ec",
+        "8db67eee261ea4b8964b5b9c64b22fc3a0c7fbc6"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 8,
+      "changed_path_set_sha256": "184326928a4051704f3b06a6f16ddee4d0c8078bfb9ae05834e243b139e309fc",
+      "grants": [
+        "docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md",
+        "package.json",
+        "server/test/gates.mjs",
+        "server/test/perimeter.mjs",
+        "server/test/private-egress-tripwire.mjs",
+        "server/test/productIntegration/runtime/crash-readback.process.test.mjs",
+        "server/test/run-deterministic-network-free.mjs",
+        "server/test/systemIntegration/production/restart-truth-process.test.mjs"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 8,
+      "donor_blob_matches_at_candidate": 8,
+      "changed_paths": [
+        "docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md",
+        "package.json",
+        "server/test/gates.mjs",
+        "server/test/perimeter.mjs",
+        "server/test/private-egress-tripwire.mjs",
+        "server/test/productIntegration/runtime/crash-readback.process.test.mjs",
+        "server/test/run-deterministic-network-free.mjs",
+        "server/test/systemIntegration/production/restart-truth-process.test.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md",
+        "git_blob": "70a37855632b0aac5e731ba8d88a5a4fd9031b94",
+        "sha256": "94d67d13051645f019ad7bdb2ada8c0a977de3be0efd8472259651fea2cee424",
+        "bytes": 9366,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "historical receipt remains BLOCKED; source admission is INTEGRATED"
+      ]
+    },
+    {
+      "id": "A1",
+      "status": "INTEGRATED",
+      "tip": "8882644db14fbb924c6a8f97bf5c1d1cebb1453c",
+      "merge": "4eff62bdd30eceddf39bbbdf417b0eba51c22b7c",
+      "merge_tree": "a4893b5ee35a818af2eac6ac9776eb15c167895d",
+      "parents": [
+        "c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6",
+        "8882644db14fbb924c6a8f97bf5c1d1cebb1453c"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 45,
+      "changed_path_set_sha256": "6146e59e01b7b3398a134765748a3acdce0cccd475c1d095fc416626127c2796",
+      "grants": [
+        "server/src/aiOps/contracts/",
+        "server/src/aiOps/policy/",
+        "server/src/aiOps/manifests/",
+        "server/src/aiOps/identity/",
+        "server/src/aiOps/reliability/",
+        "server/test/aiOps/a1/",
+        "fixtures/aiOps/a1/",
+        "docs/archive/aiOps/a1/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 45,
+      "donor_blob_matches_at_candidate": 45,
+      "changed_paths": [
+        "docs/archive/aiOps/a1/PORT_A1_PRESTAGE_RECEIPT.md",
+        "docs/archive/aiOps/a1/shadow/A1X_SHADOW_READY_RECEIPT.md",
+        "docs/archive/aiOps/a1/shadow/AI_OPS_REUSE_AND_GAP_RECEIPT.md",
+        "docs/archive/aiOps/a1/shadow/SHADOW_ARTIFACT_READY_RECEIPT.md",
+        "fixtures/aiOps/a1/action-class-fixture-instances.v1.json",
+        "fixtures/aiOps/a1/action-classes.v1.json",
+        "fixtures/aiOps/a1/adapted-schemas.v1.json",
+        "fixtures/aiOps/a1/capability-graduation-target-instances.v1.json",
+        "fixtures/aiOps/a1/capability-matrix.v1.json",
+        "fixtures/aiOps/a1/classification-manifest.v1.json",
+        "fixtures/aiOps/a1/control-insertion-requests.v1.json",
+        "fixtures/aiOps/a1/decision-log-design.synthetic.v1.json",
+        "fixtures/aiOps/a1/entry-inventory.v1.json",
+        "fixtures/aiOps/a1/generate-artifacts.mjs",
+        "fixtures/aiOps/a1/hard-denials.v1.json",
+        "fixtures/aiOps/a1/identity-provider-matrix.v1.json",
+        "fixtures/aiOps/a1/insertion-requests.v1.json",
+        "fixtures/aiOps/a1/mechanical-authority-manifests.v1.json",
+        "fixtures/aiOps/a1/policy-bundle.synthetic.v1.json",
+        "fixtures/aiOps/a1/reliability-targets.v1.json",
+        "fixtures/aiOps/a1/runbook-manifest-instances.v1.json",
+        "fixtures/aiOps/a1/runbook-templates.v1.json",
+        "fixtures/aiOps/a1/schema-reuse-map.v1.json",
+        "fixtures/aiOps/a1/unfinished-interfaces.v1.json",
+        "server/src/aiOps/contracts/controls.ts",
+        "server/src/aiOps/contracts/index.ts",
+        "server/src/aiOps/contracts/insertionRequests.ts",
+        "server/src/aiOps/contracts/schemas.ts",
+        "server/src/aiOps/contracts/shared.ts",
+        "server/src/aiOps/identity/identity.ts",
+        "server/src/aiOps/manifests/artifacts.ts",
+        "server/src/aiOps/manifests/classification.ts",
+        "server/src/aiOps/manifests/instances.ts",
+        "server/src/aiOps/policy/authority.ts",
+        "server/src/aiOps/policy/policy.ts",
+        "server/src/aiOps/reliability/runbooks.ts",
+        "server/test/aiOps/a1/_network-denied-env.mjs",
+        "server/test/aiOps/a1/artifacts-purity.test.mjs",
+        "server/test/aiOps/a1/authority-identity.test.mjs",
+        "server/test/aiOps/a1/classification.test.mjs",
+        "server/test/aiOps/a1/controls-insertion.test.mjs",
+        "server/test/aiOps/a1/instances.test.mjs",
+        "server/test/aiOps/a1/receipt.test.mjs",
+        "server/test/aiOps/a1/runbook-policy.test.mjs",
+        "server/test/aiOps/a1/schema-closure.test.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/aiOps/a1/PORT_A1_PRESTAGE_RECEIPT.md",
+        "git_blob": "b51522ce2e6fc6cd9cb5b8509bf07ae34c88f5a0",
+        "sha256": "0787d14539aa6a4737306cb992bd3d382f502de3d2944d2a9509235053aa1f77",
+        "bytes": 14450,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "A2",
+      "status": "INTEGRATED",
+      "tip": "6e9efe05890174bfe2ebfb9331c0ea9655061b30",
+      "merge": "9c7e8b16bc8fbaba0110daa391a6e6160dae5802",
+      "merge_tree": "76b587da5cb78e0e91cabb589af6132a7b92c93e",
+      "parents": [
+        "4eff62bdd30eceddf39bbbdf417b0eba51c22b7c",
+        "6e9efe05890174bfe2ebfb9331c0ea9655061b30"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 35,
+      "changed_path_set_sha256": "c00a7808e1dda622b7bcd9f9d28161dac01ddc9e06a3ce8cc67bbbe647ca6273",
+      "grants": [
+        "server/src/aiOps/runtime/",
+        "server/test/aiOps/a2/",
+        "fixtures/aiOps/a2/",
+        "docs/archive/aiOps/a2/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 35,
+      "donor_blob_matches_at_candidate": 35,
+      "changed_paths": [
+        "docs/archive/aiOps/a2/PORT_A2_PRESTAGE_RECEIPT.md",
+        "docs/archive/aiOps/a2/shadow/AI_OPS_A2X_SHADOW_RECEIPT.md",
+        "docs/archive/aiOps/a2/shadow/AI_OPS_A2_SHADOW_RECEIPT.md",
+        "fixtures/aiOps/a2/a2x-replay-fixtures.v1.json",
+        "fixtures/aiOps/a2/entry-gate.a2x.v1.json",
+        "fixtures/aiOps/a2/insertion-requests.a2x.v1.json",
+        "fixtures/aiOps/a2/insertion-requests.v1.json",
+        "fixtures/aiOps/a2/synthetic-runtime.mjs",
+        "server/src/aiOps/runtime/budget.ts",
+        "server/src/aiOps/runtime/caseState.ts",
+        "server/src/aiOps/runtime/context.ts",
+        "server/src/aiOps/runtime/diagnostic.ts",
+        "server/src/aiOps/runtime/escalation.ts",
+        "server/src/aiOps/runtime/eventIntake.ts",
+        "server/src/aiOps/runtime/evidence.ts",
+        "server/src/aiOps/runtime/incident.ts",
+        "server/src/aiOps/runtime/index.ts",
+        "server/src/aiOps/runtime/persistence.ts",
+        "server/src/aiOps/runtime/support.ts",
+        "server/src/aiOps/runtime/types.ts",
+        "server/test/aiOps/a2/a2x-entry-gate.test.mjs",
+        "server/test/aiOps/a2/a2x-replay-fixtures.test.mjs",
+        "server/test/aiOps/a2/budget-depth.test.mjs",
+        "server/test/aiOps/a2/budget-outage.test.mjs",
+        "server/test/aiOps/a2/context-handoff.test.mjs",
+        "server/test/aiOps/a2/diagnostic-handoff.test.mjs",
+        "server/test/aiOps/a2/escalation-intent.test.mjs",
+        "server/test/aiOps/a2/event-intake.test.mjs",
+        "server/test/aiOps/a2/evidence-quarantine.test.mjs",
+        "server/test/aiOps/a2/handoff-consumption.test.mjs",
+        "server/test/aiOps/a2/incident-admission.test.mjs",
+        "server/test/aiOps/a2/network-deny.mjs",
+        "server/test/aiOps/a2/persistence-backpressure.test.mjs",
+        "server/test/aiOps/a2/purity-network-deny.test.mjs",
+        "server/test/aiOps/a2/workflow-recovery.test.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/aiOps/a2/PORT_A2_PRESTAGE_RECEIPT.md",
+        "git_blob": "16c22cb6f62a346ce35ff84a5dfdfee133251f59",
+        "sha256": "72ea3083f071e9cbd846df36938d229c637d8de35f29c719c419f24bc6c6b467",
+        "bytes": 13170,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "A3",
+      "status": "INTEGRATED",
+      "tip": "21a0440f32fc28f24c715888e4767632aa9158e4",
+      "merge": "b3f49616e69ee5036386414030b482b5f02e9c13",
+      "merge_tree": "0a25ff9499b7ceeddf32bb15580cb52c343b973a",
+      "parents": [
+        "9c7e8b16bc8fbaba0110daa391a6e6160dae5802",
+        "21a0440f32fc28f24c715888e4767632aa9158e4"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 27,
+      "changed_path_set_sha256": "f45e9eb1dfe82317e2284dc06dc3a938f346698c13a09aa7be7890ba7c0dc940",
+      "grants": [
+        "server/src/aiOps/adapters/",
+        "server/test/aiOps/a3/",
+        "fixtures/aiOps/a3/",
+        "docs/archive/aiOps/a3/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 27,
+      "donor_blob_matches_at_candidate": 27,
+      "changed_paths": [
+        "docs/archive/aiOps/a3/PORT_A3_PRESTAGE_RECEIPT.v1.json",
+        "docs/archive/aiOps/a3/shadow/A3X_SHADOW_ARTIFACT_RECEIPT.v1.json",
+        "docs/archive/aiOps/a3/shadow/A3_SHADOW_ARTIFACT_RECEIPT.v1.json",
+        "fixtures/aiOps/a3/insertion-requests.v1.json",
+        "fixtures/aiOps/a3/integration-dependencies.v1.json",
+        "fixtures/aiOps/a3/port-entry-gate.v1.json",
+        "fixtures/aiOps/a3/prestage-configuration.v1.json",
+        "fixtures/aiOps/a3/syntheticPorts.mjs",
+        "server/src/aiOps/adapters/callbacks.ts",
+        "server/src/aiOps/adapters/cliTemplates.ts",
+        "server/src/aiOps/adapters/contracts.ts",
+        "server/src/aiOps/adapters/credentialEgress.ts",
+        "server/src/aiOps/adapters/index.ts",
+        "server/src/aiOps/adapters/patchWorker.ts",
+        "server/src/aiOps/adapters/providerGateway.ts",
+        "server/src/aiOps/adapters/providerMatrix.ts",
+        "server/src/aiOps/adapters/strictSchema.ts",
+        "server/src/aiOps/adapters/syntheticProviderAdapters.ts",
+        "server/src/aiOps/adapters/syntheticToolAdapters.ts",
+        "server/src/aiOps/adapters/toolGateway.ts",
+        "server/src/aiOps/adapters/toolHooks.ts",
+        "server/test/aiOps/a3/callbacks.test.mjs",
+        "server/test/aiOps/a3/fixturesPurity.test.mjs",
+        "server/test/aiOps/a3/networkDeny.mjs",
+        "server/test/aiOps/a3/patchWorker.test.mjs",
+        "server/test/aiOps/a3/providerCliMatrix.test.mjs",
+        "server/test/aiOps/a3/toolEgress.test.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/aiOps/a3/PORT_A3_PRESTAGE_RECEIPT.v1.json",
+        "git_blob": "687d2a05a60ce052544253a326229ac92644fe30",
+        "sha256": "f8fd70b9c38f13f587b7a4cba8801793b129a8bc9c78eef14fa92a2042535df7",
+        "bytes": 10383,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "A4",
+      "status": "INTEGRATED",
+      "tip": "720d2fe74be83d0d2d83f448637e087c32cafc5b",
+      "merge": "2787ebf3665c1efe32af9c426504af6b871898f1",
+      "merge_tree": "d216455a3de330e63d7762fb6debb312da49e1fe",
+      "parents": [
+        "b3f49616e69ee5036386414030b482b5f02e9c13",
+        "720d2fe74be83d0d2d83f448637e087c32cafc5b"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 26,
+      "changed_path_set_sha256": "ef8f510341d371b45c05df3ac2bb22a5fbb533d69549318fb14f88f3af57cb3a",
+      "grants": [
+        "web/src/aiOps/",
+        "web/test/aiOps/",
+        "fixtures/aiOps/a4/",
+        "docs/archive/aiOps/a4/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 26,
+      "donor_blob_matches_at_candidate": 26,
+      "changed_paths": [
+        "docs/archive/aiOps/a4/PORT_A4_RECEIPT.md",
+        "docs/archive/aiOps/a4/shadow/AI_OPS_A4X_SHADOW_RECEIPT.md",
+        "docs/archive/aiOps/a4/shadow/AI_OPS_A4_SHADOW_RECEIPT.md",
+        "fixtures/aiOps/a4/ai-ops-shadow-fixture.v1.json",
+        "fixtures/aiOps/a4/insertion-requests.v1.json",
+        "web/src/aiOps/AiOpsWorkspace.tsx",
+        "web/src/aiOps/aiOps.css",
+        "web/src/aiOps/components.tsx",
+        "web/src/aiOps/controlProjection.ts",
+        "web/src/aiOps/fixture.ts",
+        "web/src/aiOps/index.ts",
+        "web/src/aiOps/preview/index.html",
+        "web/src/aiOps/preview/main.tsx",
+        "web/src/aiOps/preview/preview.css",
+        "web/src/aiOps/types.ts",
+        "web/src/aiOps/views/GovernanceView.tsx",
+        "web/src/aiOps/views/IncidentWorkspace.tsx",
+        "web/src/aiOps/views/OverviewView.tsx",
+        "web/src/aiOps/views/OwnerChat.tsx",
+        "web/src/aiOps/views/PermissionsConsole.tsx",
+        "web/test/aiOps/contracts.test.mjs",
+        "web/test/aiOps/import-purity.test.mjs",
+        "web/test/aiOps/insertion-requests.test.mjs",
+        "web/test/aiOps/render.test.mjs",
+        "web/test/aiOps/source-boundary.test.mjs",
+        "web/test/aiOps/total-network-deny-preload.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/aiOps/a4/PORT_A4_RECEIPT.md",
+        "git_blob": "caa4049eb59cb77551f15dff77e4d33dc1d2c2b2",
+        "sha256": "b374039188eb1b2a7f016fd88ef0048163812050639c0362590016f32966027c",
+        "bytes": 16260,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "historical receipt remains BLOCKED; source admission is INTEGRATED"
+      ]
+    },
+    {
+      "id": "A5",
+      "status": "INTEGRATED",
+      "tip": "9769d461f694f12519d7a29483c2f78f4381504d",
+      "merge": "614e5a8ed20b5c810ee92268a3f3c12c30971519",
+      "merge_tree": "9324ebf649cc3a8447f5042c352b2e378d9aef69",
+      "parents": [
+        "2787ebf3665c1efe32af9c426504af6b871898f1",
+        "9769d461f694f12519d7a29483c2f78f4381504d"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 28,
+      "changed_path_set_sha256": "21644ce3b5ca2307c857e0dd2bf23a5a2742f3f501619388d504e9880f61e19d",
+      "grants": [
+        "fixtures/aiOps/a5/",
+        "server/test/aiOps/a5/",
+        "test/aiOps/a5/",
+        "docs/archive/aiOps/a5/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 28,
+      "donor_blob_matches_at_candidate": 28,
+      "changed_paths": [
+        "docs/archive/aiOps/a5/PORT_A5_PRESTAGE_RECEIPT.md",
+        "docs/archive/aiOps/a5/shadow/A5X_SHADOW_GAP_RECEIPT.md",
+        "docs/archive/aiOps/a5/shadow/A5_SHADOW_ARTIFACT_RECEIPT.md",
+        "fixtures/aiOps/a5/INSERTION_REQUEST_ROWS.DRAFT.v1.json",
+        "fixtures/aiOps/a5/RESEARCH_BASIS.md",
+        "fixtures/aiOps/a5/campaign-catalog.mjs",
+        "fixtures/aiOps/a5/campaign.mjs",
+        "fixtures/aiOps/a5/exact-record.mjs",
+        "fixtures/aiOps/a5/fixture-factory.mjs",
+        "fixtures/aiOps/a5/hard-denial-categories.mjs",
+        "fixtures/aiOps/a5/interface-assumptions.v1.json",
+        "fixtures/aiOps/a5/oracles.mjs",
+        "fixtures/aiOps/a5/reference-harness.mjs",
+        "fixtures/aiOps/a5/scenario-expectations.mjs",
+        "fixtures/aiOps/a5/scenario-programs.mjs",
+        "fixtures/aiOps/a5/scripted-subject.mjs",
+        "server/test/aiOps/a5/ai-off-survival.test.mjs",
+        "server/test/aiOps/a5/contract-shapes.test.mjs",
+        "server/test/aiOps/a5/fault-families.test.mjs",
+        "server/test/aiOps/a5/hard-denial-boundary.test.mjs",
+        "server/test/aiOps/a5/restart-replay-fencing.test.mjs",
+        "test/aiOps/a5/campaign.test.mjs",
+        "test/aiOps/a5/catalog-coverage.test.mjs",
+        "test/aiOps/a5/network-deny.mjs",
+        "test/aiOps/a5/network-deny.test.mjs",
+        "test/aiOps/a5/oracle-mutation.test.mjs",
+        "test/aiOps/a5/purity-scope.test.mjs",
+        "test/aiOps/a5/scripted-subject.test.mjs"
+      ],
+      "receipt": {
+        "path": "docs/archive/aiOps/a5/PORT_A5_PRESTAGE_RECEIPT.md",
+        "git_blob": "632fb002e66583cf3bb8298f052ea8db39570a21",
+        "sha256": "fa3f994d806e35e4c6a04cc8eb000515a92d421e62d7f4cc6fe7472b4b2ad32a",
+        "bytes": 13828,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "OBS",
+      "status": "INTEGRATED",
+      "tip": "884526c218f46eb39ce7f23278a421b274160525",
+      "merge": "9c3bb17638cd8bc5478b813c22c5a7050f046ce3",
+      "merge_tree": "40a1aca2c10ec3638a111289a14eb3f6fffe9d8d",
+      "parents": [
+        "614e5a8ed20b5c810ee92268a3f3c12c30971519",
+        "884526c218f46eb39ce7f23278a421b274160525"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 11,
+      "changed_path_set_sha256": "83c4e7be8d65beb89d45f789f6b121c7594fa9b1399c9724d293cc7c2c812437",
+      "grants": [
+        "fixtures/obsShadow/",
+        "test/obsShadow/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 11,
+      "donor_blob_matches_at_candidate": 11,
+      "changed_paths": [
+        "fixtures/obsShadow/cases.v1.json",
+        "fixtures/obsShadow/entry-inventory.v1.json",
+        "fixtures/obsShadow/insertion-requests.v1.json",
+        "fixtures/obsShadow/receipts/OBS_SHADOW_RECEIPT.v1.json",
+        "fixtures/obsShadow/receipts/PORT_OBS_RECEIPT.v1.json",
+        "fixtures/obsShadow/view-adapter.mjs",
+        "fixtures/obsShadow/view-contracts.v1.json",
+        "test/obsShadow/network-deny.test.mjs",
+        "test/obsShadow/receipt.test.mjs",
+        "test/obsShadow/scope-security.test.mjs",
+        "test/obsShadow/view-contracts.test.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/obsShadow/receipts/PORT_OBS_RECEIPT.v1.json",
+        "git_blob": "8da69bcee43bc3267eb2d9d65bc11ef35bf6b132",
+        "sha256": "2cb867edbd2f03103119ae39b10ef757951f09fba945089b06302f04e3900123",
+        "bytes": 16284,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "OPS",
+      "status": "INTEGRATED",
+      "tip": "c5c9abb549d9dcfa0ef622e2f6790c9805d358ac",
+      "merge": "955e204964f44246e0c69772578f43180a56b33f",
+      "merge_tree": "deacd3f4742454bae2a264b0ec92d653c66b8d31",
+      "parents": [
+        "9c3bb17638cd8bc5478b813c22c5a7050f046ce3",
+        "c5c9abb549d9dcfa0ef622e2f6790c9805d358ac"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 11,
+      "changed_path_set_sha256": "4ea1a65a7dbb5790fcec8174103e057ebaa8d69b464d728da926aadeeb66f245",
+      "grants": [
+        "fixtures/opsShadow/",
+        "test/opsShadow/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 11,
+      "donor_blob_matches_at_candidate": 11,
+      "changed_paths": [
+        "fixtures/opsShadow/OPS_SHADOW_ENTRY_GATE.v1.json",
+        "fixtures/opsShadow/OPS_SHADOW_INSERTION_REQUESTS.v1.json",
+        "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+        "fixtures/opsShadow/receipts/PORT_OPS_PRESTAGE_RECEIPT.v1.json",
+        "test/opsShadow/contract.mjs",
+        "test/opsShadow/entry-gate.test.mjs",
+        "test/opsShadow/network-boundary.test.mjs",
+        "test/opsShadow/owner-conformance.test.mjs",
+        "test/opsShadow/receipt-binding.test.mjs",
+        "test/opsShadow/run-focused.mjs",
+        "test/opsShadow/validate-receipt.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/opsShadow/receipts/PORT_OPS_PRESTAGE_RECEIPT.v1.json",
+        "git_blob": "babfc775a55db2958121d5950c040cfdc0a7745f",
+        "sha256": "e6c2f75bfb5a93a773fc41cf5ba23120d9a1e38838a22f9c1c34cd63183d3d13",
+        "bytes": 16763,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "REPLAY",
+      "status": "INTEGRATED",
+      "tip": "12f0934efac2620022a72e179091a2ee87e9b828",
+      "merge": "611df36d12d00c3fbf041fff4af9cccde03afc91",
+      "merge_tree": "59d584c8180ca6a0a16f18fc71343141e7d590f9",
+      "parents": [
+        "955e204964f44246e0c69772578f43180a56b33f",
+        "12f0934efac2620022a72e179091a2ee87e9b828"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 9,
+      "changed_path_set_sha256": "8e87a0c28755569aab1af1bbf8648f5535e66a666e88c65995ee479826e58b93",
+      "grants": [
+        "fixtures/replayShadow/",
+        "test/replayShadow/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 9,
+      "donor_blob_matches_at_candidate": 9,
+      "changed_paths": [
+        "fixtures/replayShadow/PORT_REPLAY_RECEIPT.md",
+        "fixtures/replayShadow/RESEARCH_BASIS.md",
+        "fixtures/replayShadow/corpus.v1.json",
+        "fixtures/replayShadow/entry-gate.v1.json",
+        "fixtures/replayShadow/harness.mjs",
+        "fixtures/replayShadow/insertion-requests.v1.json",
+        "test/replayShadow/adversarial.test.mjs",
+        "test/replayShadow/contracts.test.mjs",
+        "test/replayShadow/landed-contracts.test.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/replayShadow/PORT_REPLAY_RECEIPT.md",
+        "git_blob": "4207bf1fc8a7601dda7059b3fbcfb95bd7f65a58",
+        "sha256": "0ca1e61d6fbc91d0d04868d449ce09e7ac1543c1523b43cb7d831892ee0a41c3",
+        "bytes": 13414,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "RUNBOOK",
+      "status": "INTEGRATED",
+      "tip": "05d3a1ff3f5bca5c4347e0b4a6f2879f39b9a0a8",
+      "merge": "e3b84307af010b8b1547418f5f6cb5078039413d",
+      "merge_tree": "6bacb269f01b145b081dad5c029af4c095cbc512",
+      "parents": [
+        "611df36d12d00c3fbf041fff4af9cccde03afc91",
+        "05d3a1ff3f5bca5c4347e0b4a6f2879f39b9a0a8"
+      ],
+      "delta_base": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "changed_path_count": 27,
+      "changed_path_set_sha256": "408ca4391bb2ecca6cb9ead5c9bc7db49fbc3b6fa046ada2e93165fc9ae325f0",
+      "grants": [
+        "fixtures/runbookShadow/",
+        "test/runbookShadow/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 27,
+      "donor_blob_matches_at_candidate": 27,
+      "changed_paths": [
+        "fixtures/runbookShadow/drills.v1.json",
+        "fixtures/runbookShadow/entry-gate.v1.json",
+        "fixtures/runbookShadow/insertion-requests.v1.json",
+        "fixtures/runbookShadow/receipts/PORT_RUNBOOK_PRESTAGE_RECEIPT.v1.json",
+        "test/runbookShadow/cli.test.mjs",
+        "test/runbookShadow/drills.test.mjs",
+        "test/runbookShadow/drills/emergency-stop.mjs",
+        "test/runbookShadow/drills/reconciliation-failure.mjs",
+        "test/runbookShadow/drills/restart-during-ambiguity.mjs",
+        "test/runbookShadow/drills/restore.mjs",
+        "test/runbookShadow/drills/rollback.mjs",
+        "test/runbookShadow/drills/source-loss.mjs",
+        "test/runbookShadow/drills/stale-truth.mjs",
+        "test/runbookShadow/drills/watchdog-failure.mjs",
+        "test/runbookShadow/entry-gate.test.mjs",
+        "test/runbookShadow/hostile.test.mjs",
+        "test/runbookShadow/import-purity.test.mjs",
+        "test/runbookShadow/lib/cli.mjs",
+        "test/runbookShadow/lib/constants.mjs",
+        "test/runbookShadow/lib/native-owner-loader.mjs",
+        "test/runbookShadow/lib/network-deny.mjs",
+        "test/runbookShadow/lib/receipt.mjs",
+        "test/runbookShadow/lib/runner.mjs",
+        "test/runbookShadow/projection-contract.test.mjs",
+        "test/runbookShadow/receipt-seal.test.mjs",
+        "test/runbookShadow/run-all.mjs",
+        "test/runbookShadow/scope.test.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/runbookShadow/receipts/PORT_RUNBOOK_PRESTAGE_RECEIPT.v1.json",
+        "git_blob": "035faf51df00aabc518c0884d09bd0cda446c1c9",
+        "sha256": "57e4279e35ff58fc574bae9fc6adc6867f203366155bba1f8ae0c8b4a27da14f",
+        "bytes": 16148,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "provider, worker lifecycle, product route, and paging are NOT_CONFIGURED or UNWIRED"
+      ]
+    },
+    {
+      "id": "A-FORMAL",
+      "status": "INTEGRATED",
+      "tip": "b491893416006cf529aef02e5dd4a25d6475e7b8",
+      "merge": "48a89d9f07574868fc6346725781ba954f488a4c",
+      "merge_tree": "b0965d138f27727ab7cee4ff0083a2ab9c00f6bc",
+      "parents": [
+        "e3b84307af010b8b1547418f5f6cb5078039413d",
+        "b491893416006cf529aef02e5dd4a25d6475e7b8"
+      ],
+      "delta_base": "9785c93102b00389847b77c2f9348c06abc4344b",
+      "changed_path_count": 73,
+      "changed_path_set_sha256": "5e6edd5816466eb2c40510b5bd635752f62ad19af47eac9ac6f8bfa7c4c23202",
+      "grants": [
+        "fixtures/productAssurance/systemic/formal/",
+        "test/productAssurance/systemic/formal/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 73,
+      "donor_blob_matches_at_candidate": 73,
+      "changed_paths": [
+        "fixtures/productAssurance/systemic/formal/README.md",
+        "fixtures/productAssurance/systemic/formal/contracts/conformance.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/index.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/report.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/schemas/conformance-map.v1.schema.json",
+        "fixtures/productAssurance/systemic/formal/contracts/schemas/counterexample-triage.v1.schema.json",
+        "fixtures/productAssurance/systemic/formal/contracts/schemas/explicit-state-report.v1.schema.json",
+        "fixtures/productAssurance/systemic/formal/contracts/triage.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/validation.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/view-model.mjs",
+        "fixtures/productAssurance/systemic/formal/contracts/vocabularies.mjs",
+        "fixtures/productAssurance/systemic/formal/drafts/ASSURANCE_INSERTION_REQUEST.DRAFT.md",
+        "fixtures/productAssurance/systemic/formal/drafts/D_LAUNCH_20_ROOT_TEST_OFFLINE_PATCH_REQUEST.DRAFT.md",
+        "fixtures/productAssurance/systemic/formal/explicitState/common.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/index.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/kernel.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-01-ambiguous-mutation.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-02-two-leg-recovery.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-03-execution-fencing.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-04-repair-campaign.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-05-borrow-liability.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-06-halt-risk-reduction.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-07-cancellation-boundary.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-08-order-policy.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-09-normal-basis-lifecycle.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-10-reverse-basis-liability.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-11-volume-lifecycle.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-12-exchange-twin-ambiguity.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/model-13-durable-control-revision.mjs",
+        "fixtures/productAssurance/systemic/formal/explicitState/properties.mjs",
+        "fixtures/productAssurance/systemic/formal/fixtures/conformance-fixtures.mjs",
+        "fixtures/productAssurance/systemic/formal/fixtures/formal-view-fixture.mjs",
+        "fixtures/productAssurance/systemic/formal/fixtures/model-manifest.mjs",
+        "fixtures/productAssurance/systemic/formal/fixtures/transition-conformance-fixtures.mjs",
+        "fixtures/productAssurance/systemic/formal/fixtures/triage-fixtures.mjs",
+        "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_10_COMPLIANCE_RESEAL.md",
+        "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_20_REPAIR_BLOCKED_RECEIPT.md",
+        "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_01.md",
+        "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_02.md",
+        "fixtures/productAssurance/systemic/formal/receipts/FORMAL_BLOCKED_RECEIPT.md",
+        "fixtures/productAssurance/systemic/formal/reports/CRITICAL_PROTOCOL_MODEL_CHECK_REPORT.DRAFT.md",
+        "fixtures/productAssurance/systemic/formal/state/FORMAL_PACKET_STATE.md",
+        "fixtures/productAssurance/systemic/formal/tla/S3M01AmbiguousMutation.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M01AmbiguousMutation.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M02TwoLegRecovery.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M02TwoLegRecovery.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M03ExecutionFencing.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M03ExecutionFencing.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M04RepairCampaign.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M04RepairCampaign.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M05BorrowLiability.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M05BorrowLiability.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M06HaltRiskReduction.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M06HaltRiskReduction.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M07CancellationBoundary.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M07CancellationBoundary.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M08OrderPolicy.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M08OrderPolicy.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M09NormalBasisLifecycle.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M09NormalBasisLifecycle.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M10ReverseBasisLiability.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M10ReverseBasisLiability.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M11VolumeLifecycle.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M11VolumeLifecycle.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M12ExchangeTwinAmbiguity.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M12ExchangeTwinAmbiguity.tla",
+        "fixtures/productAssurance/systemic/formal/tla/S3M13DurableControlRevision.cfg",
+        "fixtures/productAssurance/systemic/formal/tla/S3M13DurableControlRevision.tla",
+        "test/productAssurance/systemic/formal/artifacts.test.mjs",
+        "test/productAssurance/systemic/formal/contracts.test.mjs",
+        "test/productAssurance/systemic/formal/contracts/conformance.test.mjs",
+        "test/productAssurance/systemic/formal/explicit-state.test.mjs",
+        "test/productAssurance/systemic/formal/transition-conformance.test.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_02.md",
+        "git_blob": "fbfcb7b7a148c7a7e6a1cfd50a20ad0db1a4ef12",
+        "sha256": "054a31e1ec012506ae5aad31f577369e639957bf9da7a970c3b014f030af84d0",
+        "bytes": 8232,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "runtime claim REFERENCE_ONLY; TLA tool execution NOT_CONFIGURED"
+      ]
+    },
+    {
+      "id": "S2",
+      "status": "INTEGRATED",
+      "tip": "ca30adf5e97b6697afec49f13073024d953b117b",
+      "merge": "55b456e19dbbd97548d9beb601dfc8cc7d3c57b7",
+      "merge_tree": "f7afff5b1309027a6d6069241ee26e77a58c3326",
+      "parents": [
+        "48a89d9f07574868fc6346725781ba954f488a4c",
+        "ca30adf5e97b6697afec49f13073024d953b117b"
+      ],
+      "delta_base": "8c24a4b6ba41fe510913708f6a39557bbe4af0e5",
+      "changed_path_count": 26,
+      "changed_path_set_sha256": "e42b57f03084a0dc933a1ed87c3f31b43ca147db1ad41c14106cb41cc343e5cb",
+      "grants": [
+        "fixtures/productAssurance/systemic/actionEvidence/",
+        "test/productAssurance/systemic/actionEvidence/"
+      ],
+      "out_of_grant_paths": [],
+      "donor_tip_in_candidate_ancestry": true,
+      "merge_in_candidate_ancestry": true,
+      "exact_second_parent": true,
+      "donor_blob_matches_at_merge": 26,
+      "donor_blob_matches_at_candidate": 26,
+      "changed_paths": [
+        "fixtures/productAssurance/systemic/actionEvidence/RESEARCH_BASIS.md",
+        "fixtures/productAssurance/systemic/actionEvidence/contracts/digest.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/contracts/index.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/contracts/internal-binding.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/contracts/schema.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/contracts/validation.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/fixtures/baseline.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/fixtures/counterexamples.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/fixtures/index.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/fixtures/refusals.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/generated/ACTION_SAFETY_EVIDENCE_REPORT.DRAFT.md",
+        "fixtures/productAssurance/systemic/actionEvidence/generated/ASSURANCE_INSERTION_REQUEST.DRAFT.md",
+        "fixtures/productAssurance/systemic/actionEvidence/index.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/receipts/ACTION_EVIDENCE_PRESTAGE_RECEIPT.md",
+        "fixtures/productAssurance/systemic/actionEvidence/reference/evaluator.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/reference/index.mjs",
+        "fixtures/productAssurance/systemic/actionEvidence/state/ACTION_EVIDENCE_STATE.md",
+        "test/productAssurance/systemic/actionEvidence/action-classes.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/authority-refusal.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/contracts.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/counterexamples.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/determinism.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/expiry-invalidation.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/false-green-regressions.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/independence-temporal.test.mjs",
+        "test/productAssurance/systemic/actionEvidence/purity-scope.test.mjs"
+      ],
+      "receipt": {
+        "path": "fixtures/productAssurance/systemic/actionEvidence/receipts/ACTION_EVIDENCE_PRESTAGE_RECEIPT.md",
+        "git_blob": "1d36a0f92f6b3cdfd3426d88fb9a53c80e7f4647",
+        "sha256": "823151a4f9308cf34a45506c1f5ec6da6c764547e7ad194cdaf2ac366e211311",
+        "bytes": 7209,
+        "same_at_candidate": true
+      },
+      "limitations": [
+        "supporting evidence only; production consumer NOT_CONFIGURED"
+      ]
+    }
+  ],
+  "landed_core_anchor": {
+    "status": "INTEGRATED",
+    "donor": "cf3416bed284ffcd596f451a091985755f5e239b",
+    "donor_tree": "0228c9816c368557d58af277d03e69ef5ee7aa22",
+    "merge": "51efaaa41fbaf85bcbefa9adc6cdbd640d814506",
+    "merge_tree": "ce091cc702a09d0a607e78713bbccc61dabd3f9e",
+    "parents": [
+      "5bda21967edae3f800b7162c4449a0e8c1e797c3",
+      "cf3416bed284ffcd596f451a091985755f5e239b"
+    ],
+    "delta_base": "7383fd89477ed0b3e677e53c57c35d76ac34bbd8",
+    "donor_path_count": 1687,
+    "exact_at_landing": 1685,
+    "exact_at_candidate": 1666,
+    "adaptations": [
+      {
+        "path": "QL_DIRECTOR_STATE.md",
+        "donor_blob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
+        "landing_blob": "21b41e274c86eb866a60d06ea11096bab02ee5d4",
+        "candidate_blob": "c24d56dd673c0966203282586534d3c21809a7ed",
+        "latest_candidate_commit": "2ae812624f20b9bc93fc4ad66cb568929101110f"
+      },
+      {
+        "path": "QL_PARALLEL_DAG.md",
+        "donor_blob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
+        "landing_blob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+        "candidate_blob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+        "latest_candidate_commit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b"
+      },
+      {
+        "path": "STATE.md",
+        "donor_blob": "24dd772ad59830be310a09745047514f02baf023",
+        "landing_blob": "24dd772ad59830be310a09745047514f02baf023",
+        "candidate_blob": "9546d70fdc942cd07fd3a04f0a3bebc3927c9120",
+        "latest_candidate_commit": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694"
+      },
+      {
+        "path": "fixtures/i00/product-assurance-manifest.v1.json",
+        "donor_blob": "1a722fe618637841f681bd589de6eaba6c9734d2",
+        "landing_blob": "1a722fe618637841f681bd589de6eaba6c9734d2",
+        "candidate_blob": "a76a29ce8ebd0be8264908e00aa2a97f4a497708",
+        "latest_candidate_commit": "9f882170c4347a378c0a2cd60b69ba8f8d8550c5"
+      },
+      {
+        "path": "integration/reports/i00-proof-evidence.json",
+        "donor_blob": "e877e8a7d522e42d3719efcae3f08f2ef0dece1a",
+        "landing_blob": "e877e8a7d522e42d3719efcae3f08f2ef0dece1a",
+        "candidate_blob": "8991d00ca35856e0f6cced06d6fef5ce7afb47b1",
+        "latest_candidate_commit": "f11531e6637979d6e173f6eb25d04c10a76d20c8"
+      },
+      {
+        "path": "package.json",
+        "donor_blob": "99728adf274e3b150c6aa263d3150726e93bef95",
+        "landing_blob": "99728adf274e3b150c6aa263d3150726e93bef95",
+        "candidate_blob": "d05433de2f863d8bacb2349fa8f01bcb444818d2",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "server/src/productAssurance/catalog/core.ts",
+        "donor_blob": "b777635f1eeb4d92882e86ae0789086425603653",
+        "landing_blob": "b777635f1eeb4d92882e86ae0789086425603653",
+        "candidate_blob": "643578ac1b39e3c9367348de22f74e7806c96f3a",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "server/src/productAssurance/invariants/evaluator.ts",
+        "donor_blob": "36679b18792ff29fd0a09e481f22cbe3bc5d80f4",
+        "landing_blob": "36679b18792ff29fd0a09e481f22cbe3bc5d80f4",
+        "candidate_blob": "e7a9c3e6d74d905fdec91f50af7dead2a85c9ee7",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
+        "donor_blob": "4d6a4aa696cf0465436286ea128b28495bd3baaa",
+        "landing_blob": "4d6a4aa696cf0465436286ea128b28495bd3baaa",
+        "candidate_blob": "730e0260d13b3f5ea81e7d058216419372948317",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "server/test/gates.mjs",
+        "donor_blob": "3bcebdf569723822e17c1f3ff7fd0a71bac71fdb",
+        "landing_blob": "3bcebdf569723822e17c1f3ff7fd0a71bac71fdb",
+        "candidate_blob": "45d5de42cbf57388f866c59bc5b6c86217438941",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "server/test/perimeter.mjs",
+        "donor_blob": "da84cbc6ecd287ce9a30fdd4fca8ba8474cec984",
+        "landing_blob": "da84cbc6ecd287ce9a30fdd4fca8ba8474cec984",
+        "candidate_blob": "eb603b3409283d868decfd10e51b181cf600ddb1",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "server/test/private-egress-tripwire.mjs",
+        "donor_blob": "5f164ba9a0a22ae7a5bd3178ae0469844c9728e7",
+        "landing_blob": "5f164ba9a0a22ae7a5bd3178ae0469844c9728e7",
+        "candidate_blob": "00cc359c1e3e4f83af4907205bbd4ad32c1a1bdf",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "server/test/productAssurance/core-policy-inventory.test.mjs",
+        "donor_blob": "77811cad3df93bc9cba432dbfee8ef8695470f57",
+        "landing_blob": "77811cad3df93bc9cba432dbfee8ef8695470f57",
+        "candidate_blob": "a89a3225969b4ba887695471ecd10fe4d3de2cd1",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "server/test/productIntegration/runtime/crash-readback.process.test.mjs",
+        "donor_blob": "e6d195ae5574b9046dab50b2996b820944a5c02a",
+        "landing_blob": "e6d195ae5574b9046dab50b2996b820944a5c02a",
+        "candidate_blob": "a87bc965b2438caf4e58febd2cf49ab8c8ac1a4f",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "server/test/systemIntegration/persistence/live-edge-mutation-journal-adapter.test.mjs",
+        "donor_blob": "bc1d8588d36087e8fa6fc935678653ce590ae54e",
+        "landing_blob": "bc1d8588d36087e8fa6fc935678653ce590ae54e",
+        "candidate_blob": "7345787f41151ad2976f6ada7d7a572654d2ce11",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "server/test/systemIntegration/production/restart-truth-process.test.mjs",
+        "donor_blob": "a5f653ac636913a1a2561fc078143a923f3921a4",
+        "landing_blob": "a5f653ac636913a1a2561fc078143a923f3921a4",
+        "candidate_blob": "1664396a52c0ce2049908e490e5b20eccd2f4243",
+        "latest_candidate_commit": "6aca80ac6d310f819393607dfdf8d875b59eca9e"
+      },
+      {
+        "path": "test/i00/git-provenance.mjs",
+        "donor_blob": "10712c0ac5f69be63d50bacd3369c658203fba15",
+        "landing_blob": "10712c0ac5f69be63d50bacd3369c658203fba15",
+        "candidate_blob": "1db4a5fd942774b277bd2d32fd94546ff790ef26",
+        "latest_candidate_commit": "9f882170c4347a378c0a2cd60b69ba8f8d8550c5"
+      },
+      {
+        "path": "test/i00/performance/acceptance-contract.test.mjs",
+        "donor_blob": "7446f88a1b3eeb41e032e7c4ae9c870debf25e01",
+        "landing_blob": "7446f88a1b3eeb41e032e7c4ae9c870debf25e01",
+        "candidate_blob": "402786a9b241769b7073da7a16c14365c79deb72",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "test/i00/performance/local-acceptance.mjs",
+        "donor_blob": "5f40587a2a7e4e310beef58a5e877920e305a554",
+        "landing_blob": "5f40587a2a7e4e310beef58a5e877920e305a554",
+        "candidate_blob": "1e775145668c3ab99e7d1c812c25b96c2a7a6127",
+        "latest_candidate_commit": "cd0aa64db48a9898192b3d886abb5546933064e9"
+      },
+      {
+        "path": "test/i00/product-assurance-provenance.test.mjs",
+        "donor_blob": "c13aebb7f6b52dcebb361cde3bc64201d90e3ecc",
+        "landing_blob": "c13aebb7f6b52dcebb361cde3bc64201d90e3ecc",
+        "candidate_blob": "9608b9ecbff36435c5775c39bbae00d076aac2da",
+        "latest_candidate_commit": "9f882170c4347a378c0a2cd60b69ba8f8d8550c5"
+      },
+      {
+        "path": "test/productAssurance/systemic/assuranceCase/s1-provenance.test.mjs",
+        "donor_blob": "cdea2f5a4c5a1517cdd7e16fbb5c1273ac99cdad",
+        "landing_blob": "cdea2f5a4c5a1517cdd7e16fbb5c1273ac99cdad",
+        "candidate_blob": "09d8bedb8b88f901f0ec345381205675be41aa9d",
+        "latest_candidate_commit": "39ec378d4a7584f3c69436ef5c9f105c56bffb16"
+      }
+    ]
+  },
+  "candidate_adaptations": [
+    {
+      "commit": "cd0aa64db48a9898192b3d886abb5546933064e9",
+      "status": "INTEGRATED",
+      "disposition": "candidate truth blockers, CI parity, invariant families, bounded journal readback"
+    },
+    {
+      "commit": "9f882170c4347a378c0a2cd60b69ba8f8d8550c5",
+      "status": "INTEGRATED",
+      "disposition": "Product Assurance provenance manifest adaptation"
+    },
+    {
+      "commit": "f11531e6637979d6e173f6eb25d04c10a76d20c8",
+      "status": "INTEGRATED",
+      "disposition": "candidate authority scan refresh"
+    },
+    {
+      "commit": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "status": "INTEGRATED",
+      "disposition": "atomic current product STATE freeze"
+    }
+  ],
+  "inclusion_rulings": {
+    "ai_ops": {
+      "status": "INTEGRATED",
+      "verification": "BLOCKED",
+      "source_path_count": 161
+    },
+    "a_formal": {
+      "status": "INTEGRATED",
+      "runtime": "REFERENCE_ONLY",
+      "tla_tool": "NOT_CONFIGURED"
+    },
+    "s2_action_evidence": {
+      "status": "INTEGRATED",
+      "production_consumer": "NOT_CONFIGURED"
+    },
+    "frontier": {
+      "status": "REFERENCE_ONLY",
+      "candidate_path_count": 0
+    },
+    "ci_hotfix_2": {
+      "status": "REFERENCE_ONLY",
+      "tip": "53c6da817d92049c7628aa9f94466a0e1882e801"
+    }
+  },
+  "receipt": {
+    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "command_or_operator_action": "Account A evidence generation from immutable candidate C; no source mutation",
+    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
+    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+    "start_time_utc": "2026-07-16T11:17:11Z",
+    "end_time_utc": "2026-07-16T11:47:52.009Z",
+    "exit_code": 0,
+    "test_count": 0,
+    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
+    "actor_role": "ACCOUNT_A",
+    "actor_had_candidate_source_write_permission": false,
+    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
+    "deviations_skips_unavailable_evidence": [
+      "Account B artifacts and reasoning were not read",
+      "No independent verification token is issued",
+      "Off-machine custody for the candidate bundle is unavailable"
+    ]
+  }
+}

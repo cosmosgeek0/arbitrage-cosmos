@@ -1,26 +1,27 @@
 {
   "schema": "product-truth-worktree-census.v1",
-  "generated_at_utc": "2026-07-16T10:42:22.118Z",
+  "generated_at_utc": "2026-07-16T11:46:04.231Z",
   "actor_role": "ACCOUNT_A",
   "account_b_reasoning_or_artifacts_read": false,
   "account_b_status_scope": "HEAD and Git status metadata only, required by campaign §5",
   "source_command": "git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z",
-  "source_command_sha256": "52f50815b5c6aedc6ee74da16643b9d9c475f96946456dc16e56a244faf7454d",
-  "candidate_sha": "995904ada86e86ef4214bea596331b978a332da0",
-  "candidate_tree_sha": "b9e1c4da19b68b907c83ce64e78dff70e672b303",
+  "source_command_sha256": "de680ff2931f862e81729fcdcfc020ebc3307dae03628159c840794d2abf560a",
+  "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
   "current_main_sha": "2ae812624f20b9bc93fc4ad66cb568929101110f",
   "origin_current_main_sha": "2ae812624f20b9bc93fc4ad66cb568929101110f",
   "registered_worktree_count": 96,
-  "tracked_dirty_path_count": 0,
-  "untracked_path_count": 125,
+  "tracked_dirty_path_count": 4,
+  "unexplained_dirty_source_path_count": 0,
+  "untracked_path_count": 136,
   "worktrees_with_untracked_paths": 63,
   "classification_counts": {
-    "MERGED_RETAINED": 41,
+    "MERGED_RETAINED": 42,
     "SUPERSEDED_SAFE": 33,
     "ABANDONED_SAFE": 20,
     "SEALED_UNMERGED": 0,
     "ACTIVE_DIRTY": 0,
-    "BLOCKED": 2,
+    "BLOCKED": 1,
     "DUPLICATE_PATCH": 0,
     "UNKNOWN": 0
   },
@@ -55,7 +56,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "8078d2103f89b8e37d733af4ffe8ef1c252758c206b6ce6cb8795a0a0005ad64",
       "task": "retained lane aiops-prestage",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -63,7 +66,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -118,7 +122,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "701555558d64e1aa8323225777392bed56acc37fffdaf8b2913385481e538485",
       "task": "retained lane aiops-shadow-a1",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -126,7 +132,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -181,7 +188,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "91efb26e13df17aaf2b2237328226ea808c58b1dd346e597b54abeea47cc7b97",
       "task": "retained lane aiops-shadow-a2",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -189,7 +198,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -244,7 +254,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "f1f8e4a5cfac9c4fbd4ec8a7b5c0dc22a61ab81bfc9e9de05a187e4237faed09",
       "task": "retained lane aiops-shadow-a3",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -252,7 +264,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -307,7 +320,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "1d5514fc8253d5c81ae01857f01a20b4ef377b44ec4c6badb0fceb6fca1dce45",
       "task": "retained lane aiops-shadow-a4",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -315,7 +330,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -370,7 +386,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "9ffcd64ff07dc4f8c081c0b62e26563b27dd54a5f66a78430a5ea30ae5b46661",
       "task": "retained lane aiops-shadow-a5",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -378,7 +396,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -430,8 +449,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-1",
@@ -439,12 +465,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "4c10320a11cf80f71bd0c48d119eb80eb8c1b7a3199c229d9e672bed97d25767",
+        "bytes": 11179
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -492,8 +519,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-2",
@@ -501,12 +535,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "ad7a840380ceabaf9ec8fc3c8a14c8c4c27c2b230f55cb944b66ea5370cf65d2",
+        "bytes": 23161
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -554,8 +589,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-3",
@@ -563,12 +605,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "4f9b749470733ed4e9b57cf0a27cc73611ef7e346ef4b6620bebc513ab68993e",
+        "bytes": 28873
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -616,8 +659,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-4",
@@ -625,12 +675,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "b269ac3a1785bee776a8786318c9db77c0f0aed344b3297887787be292949b74",
+        "bytes": 11915
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -678,8 +729,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-5",
@@ -687,12 +745,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "c4112e18bbc1e1a81d984147783f9489c273f88ac0f36a2d3f1338c6a044ab8c",
+        "bytes": 32513
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -740,8 +799,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fcced0b03d6132fd6f2a452fadd9cd71867074811ab866655767ac76b0369d60",
       "task": "retained lane c-shard-6",
@@ -749,12 +815,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "07aac3800a1eaaab40c8a405b94dde46d02fb435f67434032d5d1ea2accf9013",
+        "bytes": 20133
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -802,7 +869,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "6f231f5f21096284263791c0eb2974ef499f8804cb46fa85b6111b2f8fb856ff",
       "task": "retained lane c2r-validate",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -810,7 +879,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -865,7 +935,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "3f521464cc6a8508b398884e47e80680bb2c409697bef0eab998e980913d3344",
       "task": "superseded clean-checkout parity attempt (D-LAUNCH-56)",
       "owner": "NO_ACTIVE_WRITER_REFERENCE_ONLY_LANE",
@@ -877,7 +949,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/CI_HOTFIX2_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "c986efa9876a990b83a0a2ebffb6bf29aff238df",
         "sha256": "f8fbc548c7cb48da915fc034426508ccfdadb8908d240777be2abddf33fe30bd",
@@ -929,7 +1002,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "5f040a586e6136cc3958dc4488299887d825de1463e3763b1c83a1bbd7c5fd3a",
       "task": "retained lane dash-shell",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -937,7 +1012,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "web/src/features/systemDashboard/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "4a7b289d91290cacd44a11ce8f987a4dec5a38a8",
         "sha256": "878cc578d88f38ca3bf8edce554b2cb258b4e9309718854f7ba18c33cb50b968",
@@ -992,7 +1068,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "db1a6bc19e4daa6ac6b747fc442eea79aadd1077c26984fd3558e6987d1dca6f",
       "task": "deterministic offline egress gate with inherited SI hang",
       "owner": "NO_ACTIVE_WRITER_BLOCKED_PATCH_LANE",
@@ -1008,7 +1086,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/egress-patch/EGRESS_PATCH_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "BLOCKED",
         "tracked": true,
         "git_blob": "70a37855632b0aac5e731ba8d88a5a4fd9031b94",
         "sha256": "94d67d13051645f019ad7bdb2ada8c0a977de3be0efd8472259651fea2cee424",
@@ -1063,7 +1142,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "4c44ba0f958fcbf7a7ebce54d62af8e273c8136628929e5669e9ca185ff4dcf1",
       "task": "retained lane f-arena",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1071,7 +1152,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/strategy-arena/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "3c010edc6e2f925177a01f4a2ae2f63cbb5c9e77",
         "sha256": "49b96d9e46469d500b3b5f3644f9e60f10fcb5c3c07f8a3888c712fb24978c1f",
@@ -1123,9 +1205,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "0c3cb6e9a67a015f8620973caee5e1cf31803cfc6e6fa0ed3071e1124a7730d5",
       "task": "retained lane f-bridge",
@@ -1134,7 +1227,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "F_BRIDGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "dc590c7eceaa12d1a84df4149ea02baf45e9148d",
         "sha256": "e01a614d89755553e5e86db657b8f2ed804060b68f8088c3f34b9c27d76bbba4",
@@ -1189,7 +1283,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "ca1116bcf9b06bb6d5a1f924e9208f6aea5eba0c29f56fc7f3d6cdf5ea11de2f",
       "task": "retained lane f-coord",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1197,7 +1293,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1252,7 +1349,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "b6c2c5f31b9dcc071d0ae9a641de741afb1d5b0eeecd7ecd09df398e3374d98c",
       "task": "retained lane f-decide",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1260,7 +1359,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/decision-lab/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "6e18bd5ba87c107a246386849f815ebc855bc055",
         "sha256": "f5b5953e593e69b9a4ebd23d1ce04464ef6a202693f7d1266ac5dd2ded1a80af",
@@ -1315,7 +1415,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "b2e901dbc1d0260534138bf2d6f7a6ae70ed15044277cd213008b6403ccf6876",
       "task": "retained lane f-dock",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1323,7 +1425,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/dock/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "5561f1f0f5ea48bbc2a6fc3f19fbd0d8b9628161",
         "sha256": "466e67f4a845ec89731246b2129725ec914a07b148749ebe85d1801e6c127e60",
@@ -1378,7 +1481,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "75aafef72a6b108dc87db924b95ed2b48c8aabeb03c342473fd935f7ad41fada",
       "task": "retained lane f-edge",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1386,7 +1491,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/edge-meter/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "82b5333181187fcdfbc6afadd7be93a1db56c288",
         "sha256": "bd97e57d1abebc8bf69d9f99dd4d82a5af863e89ea1b6665d851e0c8ab59019e",
@@ -1441,7 +1547,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "4befa58c5b7cb9213811aa63ae3cc1a40234f950ac393b4338317b173d24e0f0",
       "task": "retained lane f-lab",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1449,7 +1557,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/portfolio-lab/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "4ede8aedc01bfea68ba5b48cf8dfb6c4a3e88811",
         "sha256": "2875d3a7875fb74a7e9e59d66f69140f2595f663b0e34062ae759de298c9645e",
@@ -1504,7 +1613,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "198cb5616efa0ad58badc40d8367825cca2547c8331527b531ed0f48546d5842",
       "task": "retained lane f-venue",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -1512,7 +1623,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "frontier/venue-mesh/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "d9baabd6942ce8db9ec66d336dca33d668dfcd46",
         "sha256": "0849fd7fda582902f271be11005ed3e9111c13d59d770d2f3461e4578ec71eca",
@@ -1564,9 +1676,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F1.json",
         "SCOUT_F1.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F1.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F1.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "5326d18849c4c3577d623df7b7c676fb4ef55cc52b758b8cfc515cbf8d6bfdef",
       "task": "retained lane f1-scout",
@@ -1575,7 +1698,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1627,9 +1751,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F10.json",
         "SCOUT_F10.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F10.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F10.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "405665070019351972d147c5f1b2379362655c556addc798c67fb8389eb844d9",
       "task": "retained lane f10-scout",
@@ -1638,7 +1773,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1690,9 +1826,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F11.json",
         "SCOUT_F11.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F11.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F11.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "beff837fb8a0506ee7d40450e77c9c3be70d9843e5bbbf04ae8f9313b965c1f8",
       "task": "retained lane f11-scout",
@@ -1701,7 +1848,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1753,9 +1901,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F11.json",
         "SCOUT_F11.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F11.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F11.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "beff837fb8a0506ee7d40450e77c9c3be70d9843e5bbbf04ae8f9313b965c1f8",
       "task": "retained lane f12-scout",
@@ -1764,7 +1923,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1816,9 +1976,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F13.json",
         "SCOUT_F13.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F13.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F13.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "3cec8076b4366840e744b030a937fc690b9bc48f9a96d1b45f3808d49615ffba",
       "task": "retained lane f13-scout",
@@ -1827,7 +1998,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1879,9 +2051,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F2.json",
         "SCOUT_F2.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F2.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F2.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "d34596466c9f668d69e072223e0fd79e5f657906d2e65bc789d39f5f2bf1db1f",
       "task": "retained lane f2-scout",
@@ -1890,7 +2073,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -1942,9 +2126,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F3.json",
         "SCOUT_F3.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F3.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F3.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "d26b7c6b6a5a55a165f7c92050a3bb730edff9faefb0f85900391799bb089e3d",
       "task": "retained lane f3-scout",
@@ -1953,7 +2148,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2005,9 +2201,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F4.json",
         "SCOUT_F4.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F4.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F4.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "6179faf05100457b9ca4c3fb854e806440e059d9eaf669bebd82ca2e165ad702",
       "task": "retained lane f4-scout",
@@ -2016,7 +2223,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2068,9 +2276,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F5.json",
         "SCOUT_F5.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F5.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F5.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "53366e1451312d61afc24535978869a85abe4ee30e2891cde8d6ae32a96fbafe",
       "task": "retained lane f5-scout",
@@ -2079,7 +2298,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2131,9 +2351,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F6.json",
         "SCOUT_F6.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F6.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F6.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "8a47d9cfff084d4d3ca366e1a9e1ffe2363ed85a32cf801ac9e8198f8ff01ec2",
       "task": "retained lane f6-scout",
@@ -2142,7 +2373,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2194,9 +2426,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F7.json",
         "SCOUT_F7.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F7.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F7.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "529d667f2779dae32a66fd07a299f3da36aff8319f0b13c15a01053266e2418d",
       "task": "retained lane f7-scout",
@@ -2205,7 +2448,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2257,9 +2501,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F8.json",
         "SCOUT_F8.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F8.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F8.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "4248f1ae4a7b2ed948a73e284f058ff310978dea2be9f4d326e5ed43b3158a39",
       "task": "retained lane f8-scout",
@@ -2268,7 +2523,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2320,9 +2576,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SCOUT_F9.json",
         "SCOUT_F9.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SCOUT_F9.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "SCOUT_F9.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "b36587e0eb525aef99ebbf306ba4d6d4a0882ffb64716248ed19e58ebec79d31",
       "task": "retained lane f9-scout",
@@ -2331,7 +2598,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2383,8 +2651,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "FIX_AUDIT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "FIX_AUDIT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "dab89cd1339c403535c943f366a76a02c6df0efb138a268ab694896456553a83",
       "task": "retained lane fix-audit",
@@ -2393,7 +2668,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -2448,12 +2724,35 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "IP_CONTROL.md",
         "IP_OPS.md",
         "IP_PROOF.md",
         "IP_RUNTIME.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_CONTROL.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_OPS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_PROOF.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_RUNTIME.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "a0e605cce529e3bc384031109b7fdd0e8a1cbfcebda4bc12a03f97f3ed25ae62",
       "task": "retained lane i00-assembly",
@@ -2462,7 +2761,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "docs/archive/i00-phase2/INTEGRATION_CANDIDATE_READY_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "49cacfc4c67ec264dd445209d435d0d262cd8542",
         "sha256": "ce1d7d386a017bb1359a17d139e1d126200d85f9d2c0cd674be7f3081c028ecc",
@@ -2517,7 +2817,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "620723ff3321121d8c6cb5b6f2dadfa1ef112643852cdc34c81586f3df5574c5",
       "task": "S2 action-evidence post-landing admission candidate",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -2525,7 +2827,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/actionEvidence/receipts/ACTION_EVIDENCE_PRESTAGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "1d36a0f92f6b3cdfd3426d88fb9a53c80e7f4647",
         "sha256": "823151a4f9308cf34a45506c1f5ec6da6c764547e7ad194cdaf2ac366e211311",
@@ -2549,7 +2852,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: S2 action-evidence sealed tip is in candidate ancestry; evidence is supporting-only and grants no action authority",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -2577,8 +2880,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "e7b8018e82c4d7f2d50217a01bc29388cdf1a2b51f7bac4c0d603389ccc302b7",
       "task": "retained lane ip-assur-agent",
@@ -2587,7 +2897,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/agentBoundary/receipts/AGENT_BOUNDARY_PRESTAGE_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "1c2fb625a3d90ece61a44c56adc9788063badb99",
         "sha256": "c237939f112a41abfb83508ed57e5783a9344cc3cb76e02003ca64487831a92c",
@@ -2639,8 +2950,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "a487754933b58bb14a39d3e211c91f2af4b2b328f34ce6bc745a546e86cd98fb",
       "task": "retained lane ip-assur-case",
@@ -2649,7 +2967,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/assuranceCase/receipts/CASE_ACCEPTANCE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "0a10dd8b21b52b40a392a2fa8b11dc949aea649c",
         "sha256": "05369b8aa403a4fae6b86143ddcb7d61551d5996838c92b9bc4aba79401a3550",
@@ -2701,8 +3020,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "47ec2a71bc3f3d892df7a023756855778fa561a62cf235d7381c21ec3a4daa74",
       "task": "retained lane ip-assur-cockpit",
@@ -2711,7 +3037,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/cockpit/receipts/COCKPIT_PRESTAGE_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "e02c7f40eec4aad271ee47461e1c8a313709b588",
         "sha256": "b75055388f99632f2dc5ebb87d92b6d969f666397014e89a616a6e262f0650dd",
@@ -2766,8 +3093,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "9c0d89d0333be544b9f676b7405ac04a787dcda3c37d1038989e916cbe62a4f4",
       "task": "A-FORMAL post-landing admission candidate",
@@ -2776,7 +3110,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/formal/receipts/D_LAUNCH_22_FORMAL_DEEPENING_BATCH_02.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "fbfcb7b7a148c7a7e6a1cfd50a20ad0db1a4ef12",
         "sha256": "054a31e1ec012506ae5aad31f577369e639957bf9da7a970c3b014f030af84d0",
@@ -2800,7 +3135,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: A-FORMAL sealed tip is in candidate ancestry; source is included while runtime/formal-tool activation remains REFERENCE_ONLY or NOT_CONFIGURED",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -2828,8 +3163,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "99bc8d21d42e28e54ef6cd5efbb25f79f518420deee7ad770ddd5347522b9253",
       "task": "retained lane ip-assur-hazard",
@@ -2838,7 +3180,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/hazard/receipts/HAZARD_D_LAUNCH_10_AUDIT_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "5dc3bd4bafe7eb9a42e9547989cd7f488eb72c74",
         "sha256": "ecfca4e7d60d9dca3b07e4e21d4595ebb234dab421924f14226cf39f8a9c85ea",
@@ -2890,8 +3233,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "1401a38a9fabc4ec847bcb4868088b28a45789c08643a735af5ef48e3c0606d7",
       "task": "retained lane ip-assur-stability",
@@ -2900,7 +3250,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/systemic/stability/receipts/STABILITY_ACCEPTANCE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "d441a5d23bf87178af47b143e4a955d826aeb711",
         "sha256": "b26f902d90fb82633ac8532d5aa82169801ded3ec6d7bcf3477737a64eab2168",
@@ -2952,8 +3303,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "633f6d614e5045882fa389c2fa54abeef718a8900c389d6b13b0fab1949d49ba",
       "task": "retained lane ip-assurance",
@@ -2962,7 +3320,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "fixtures/productAssurance/receipts/IP_ASSURANCE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "ad22f9ab75deffcb62fa2a6986dbed6ac61595b2",
         "sha256": "93b1f6283d48ddeadf9b7205e47f3ccfc698d4f79f98b8e82ecad1d7aa4a302e",
@@ -3014,9 +3373,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "IP_CONTROL.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_CONTROL.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "74ec19f0850f1f974504da04c51598e00a837bfc0999c63837f1cb58de35f366",
       "task": "retained lane ip-control",
@@ -3025,7 +3395,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "IP_CONTROL_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "b746b439430c24176cd52e82eaa3380ea9dcf93a",
         "sha256": "4864f9a7de2a640b5e643e7817b33a0114cd988b29ac20cb2b6f0f77f6bf43f7",
@@ -3077,9 +3448,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "IP_OPS.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_OPS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "e8256f96e79af3cce256fd4458f2cede2506f91602f8abe644dcd4c65fad5e17",
       "task": "retained lane ip-ops",
@@ -3088,7 +3470,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "IP_OPS_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "b5363f10dacd5534d56d511ddc3ec48499667ff0",
         "sha256": "57bc6fd9a6847dde70b1ac2cd81e0116db8e0f34c8e4003fee55b3f09f5bd922",
@@ -3140,9 +3523,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "IP_PROOF.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_PROOF.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "2314aca2ca1beeff0b64e31c86c7d7be285ab3a671e04c780a5346a9e5f945bf",
       "task": "retained lane ip-proof",
@@ -3151,7 +3545,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "IP_PROOF_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "6529ff56033c04dfc9d47646352d11a418771f3a",
         "sha256": "569f09af842f527ca19269a8e66dbdc367145a03ff31aba839defe252d14ad7b",
@@ -3203,9 +3598,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
         "IP_RUNTIME.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_RUNTIME.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "0c8ac118508b78ba4d7094dcea6189228bbd6cdb92883126a557d5038b771f4f",
       "task": "retained lane ip-runtime",
@@ -3214,7 +3620,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "IP_RUNTIME_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "2278409e39302ada6f54e00c76eb9d89144d7538",
         "sha256": "8a16a2e5a869b9356b9b2cbbfd1de68406e64a253479fc6be600e953cd613dcb",
@@ -3266,9 +3673,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "5ea4e8adc07f27df849ed3042c0a7b3351f26d57867d4d2a73fcdc20bf2532d2",
       "task": "retained lane l09-normal-basis",
@@ -3276,12 +3694,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": "live-edge-receipts/RECEIPTS/L09.md",
-        "state": "MISSING",
-        "tracked": false,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "live-edge-receipts/RECEIPTS/L09_DLAUNCH15_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "29101c4b260abd5a3b03ae1dc96558ff4e4cca52",
+        "sha256": "4350e1e0f95ba0997a41a0211f6821cd35a978143631e2b485b65d8f609b43f1",
+        "bytes": 7669
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -3329,9 +3748,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "381e83407c9e9d8103dff799a000862f57795159e1d5cfef998f1f46ccad1be5",
       "task": "retained lane l10-reverse-basis",
@@ -3340,7 +3770,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "live-edge-receipts/RECEIPTS/L10.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "ceee4d7a7093e516c262f62008b1712f9377df34",
         "sha256": "bbc10805dd0d35200e429eec390ac661532413dcad7feab0f2b380725a73c0f1",
@@ -3392,9 +3823,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "6decd353b50f99c87ce5b46e2b91d1d2463a682d6ce54cc033e7f3afe045531f",
       "task": "retained lane l11-volume",
@@ -3403,7 +3845,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "live-edge-receipts/RECEIPTS/L11.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "06d88c7643347b896c98596ae3de30f680ca0dbf",
         "sha256": "d12ed39483d350cc9905474c8ed81b68dd44862c93bdd8bc6000fac6b0528bac",
@@ -3455,9 +3898,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "940b9f803f3e6de4b6da4955e02a7a8fd10be021f04ed27c1d9aae6100f23816",
       "task": "retained lane l14-controls",
@@ -3466,7 +3920,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "live-edge-receipts/RECEIPTS/L14.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "ba0aa3d4ecab78244d2121d5924fc58161296d9c",
         "sha256": "f0b296a5a9c368b29c3793b117b91f8daf41b134b2093ae4b8d9a4425c382037",
@@ -3518,9 +3973,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "0bd4e1bc55893b41697ede57cb368f537f9ed3911e61d19efba656c130faeae5",
       "task": "retained lane l15-infra",
@@ -3529,7 +3995,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "ops/live/RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "7fc3520d4fede577937c6dd48c191b1e5d212061",
         "sha256": "d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293",
@@ -3581,9 +4048,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "f2ef171614963197e5333104137f49e7362c251a6a72d582a77230fc0b40f0fd",
       "task": "retained lane live-execution-proof-20260712",
@@ -3592,7 +4070,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "LIVE_EDGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "befcc4c216baba0460985b37b8085e043b012a97",
         "sha256": "0b95db6e0ae8777d3e3bebb1a510561c7dfc9dcba963bd02fbc91025dd784fe2",
@@ -3647,6 +4126,7 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_FINAL_ASSURANCE_HANDOFF.md",
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
@@ -3658,6 +4138,44 @@
         "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
       ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_FINAL_ASSURANCE_HANDOFF.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_CONTROL.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_OPS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_PROOF.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "IP_RUNTIME.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "LIVE_EXECUTION_REALISM_CONTROL_PROOF_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
+      ],
       "status_porcelain_v2_sha256": "2abb5442b5ef95d785706a27670bc5d7368867e3ef23bde40b5b616210e31028",
       "task": "canonical current-main retained read-only during campaign",
       "owner": "RETIRED_DIRECTOR_READ_ONLY_FOR_CAMPAIGN",
@@ -3665,7 +4183,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -3720,7 +4239,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "39df90ca328a345a8288bc5fe4e7e223f52af9770e25e1e733961583ccbd6b60",
       "task": "retained lane obs-shadow",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -3728,7 +4249,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -3783,7 +4305,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "07d76fd098a139a25b145a36693bfc9d742ba5614fed9d00598f726d1c10ade2",
       "task": "retained lane ops-shadow",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -3791,7 +4315,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -3846,7 +4371,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "2190dc2c29053d8ae02e805882e89a71e1d6841c90e77a8789aa85a1513c935a",
       "task": "retained lane port-a1",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -3859,7 +4386,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/aiOps/a1/PORT_A1_PRESTAGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "b51522ce2e6fc6cd9cb5b8509bf07ae34c88f5a0",
         "sha256": "0787d14539aa6a4737306cb992bd3d382f502de3d2944d2a9509235053aa1f77",
@@ -3883,7 +4411,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -3914,7 +4442,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "fd069a0576ad7a31af0a54951f6e129658a319fe30c4682019b505ece3cba9a8",
       "task": "retained lane port-a2",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -3927,7 +4457,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/aiOps/a2/PORT_A2_PRESTAGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "16c22cb6f62a346ce35ff84a5dfdfee133251f59",
         "sha256": "72ea3083f071e9cbd846df36938d229c637d8de35f29c719c419f24bc6c6b467",
@@ -3951,7 +4482,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -3982,7 +4513,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "1d4b83c54ae0df4d37f377121526cae12fdce90755a54f0e826d42fa8ad963d7",
       "task": "retained lane port-a3",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -3995,7 +4528,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/aiOps/a3/PORT_A3_PRESTAGE_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "687d2a05a60ce052544253a326229ac92644fe30",
         "sha256": "f8fd70b9c38f13f587b7a4cba8801793b129a8bc9c78eef14fa92a2042535df7",
@@ -4019,7 +4553,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4050,7 +4584,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "9bdde2afb3a1fdfdf2be7e611d9585191f560fcc95a07fbedc57b2d86fec79ca",
       "task": "AI-Ops A4 operator-surface port",
       "owner": "NO_ACTIVE_WRITER_SEALED_WITH_EXTERNAL_BLOCKERS",
@@ -4063,7 +4599,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/aiOps/a4/PORT_A4_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "BLOCKED",
         "tracked": true,
         "git_blob": "caa4049eb59cb77551f15dff77e4d33dc1d2c2b2",
         "sha256": "b374039188eb1b2a7f016fd88ef0048163812050639c0362590016f32966027c",
@@ -4118,7 +4655,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "6c8f517e364a217dd6fef3120de1f048450fcf582f00199606db50ae5caee376",
       "task": "retained lane port-a5",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4131,7 +4670,8 @@
       ],
       "terminal_receipt": {
         "path": "docs/archive/aiOps/a5/PORT_A5_PRESTAGE_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "632fb002e66583cf3bb8298f052ea8db39570a21",
         "sha256": "fa3f994d806e35e4c6a04cc8eb000515a92d421e62d7f4cc6fe7472b4b2ad32a",
@@ -4155,7 +4695,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4186,7 +4726,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "f8bb70954c9d3b5c4d43a41074af0f63f20043dd8479198c0fd788d5d55b985d",
       "task": "retained lane port-obs",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4197,7 +4739,8 @@
       ],
       "terminal_receipt": {
         "path": "fixtures/obsShadow/receipts/PORT_OBS_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "8da69bcee43bc3267eb2d9d65bc11ef35bf6b132",
         "sha256": "2cb867edbd2f03103119ae39b10ef757951f09fba945089b06302f04e3900123",
@@ -4221,7 +4764,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4252,7 +4795,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "9bc2b6c2583e659b6fafdcec4eadd466c99171614fc36fb83e60f1b1e89923a4",
       "task": "retained lane port-ops",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4263,7 +4808,8 @@
       ],
       "terminal_receipt": {
         "path": "fixtures/opsShadow/receipts/PORT_OPS_PRESTAGE_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "babfc775a55db2958121d5950c040cfdc0a7745f",
         "sha256": "e6c2f75bfb5a93a773fc41cf5ba23120d9a1e38838a22f9c1c34cd63183d3d13",
@@ -4287,7 +4833,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4315,6 +4861,7 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "PORT_PLAN.md",
         "portPlan/a1-port.sh",
@@ -4327,6 +4874,48 @@
         "portPlan/replay-port.sh",
         "portPlan/runbook-port.sh"
       ],
+      "untracked_path_dispositions": [
+        {
+          "path": "PORT_PLAN.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/a1-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/a2-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/a3-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/a4-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/a5-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/obs-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/ops-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/replay-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "portPlan/runbook-port.sh",
+          "disposition": "PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE"
+        }
+      ],
       "status_porcelain_v2_sha256": "58468614f7d2192788c5cedc105d68a63c3dad14d5167a9f153d71ceb3e75806",
       "task": "retained lane port-plan",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4334,7 +4923,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -4389,7 +4979,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "d82322020c735dcf005caf7ee561b28da8841161949d2d9c8ac09060ed4fd60a",
       "task": "retained lane port-replay",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4400,7 +4992,8 @@
       ],
       "terminal_receipt": {
         "path": "fixtures/replayShadow/PORT_REPLAY_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "4207bf1fc8a7601dda7059b3fbcfb95bd7f65a58",
         "sha256": "0ca1e61d6fbc91d0d04868d449ce09e7ac1543c1523b43cb7d831892ee0a41c3",
@@ -4424,7 +5017,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4455,7 +5048,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "d117f85131e68d7c3f90e5f3a11ce08bb86b5d9a4d32bbff65d795a234ddbcc7",
       "task": "retained lane port-runbook",
       "owner": "NO_ACTIVE_WRITER_SEALED_PORT_LANE",
@@ -4466,7 +5061,8 @@
       ],
       "terminal_receipt": {
         "path": "fixtures/runbookShadow/receipts/PORT_RUNBOOK_PRESTAGE_RECEIPT.v1.json",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "035faf51df00aabc518c0884d09bd0cda446c1c9",
         "sha256": "57e4279e35ff58fc574bae9fc6adc6867f203366155bba1f8ae0c8b4a27da14f",
@@ -4490,7 +5086,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "MERGED_RETAINED",
-      "disposition_reason": "SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred",
+      "disposition_reason": "MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt",
       "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
@@ -4521,10 +5117,25 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "AUDIT_ADDENDUM_FOR_DIRECTOR.md",
         "CURRENT_INTEGRATION_TRUTH_AUDIT.md",
         "FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "AUDIT_ADDENDUM_FOR_DIRECTOR.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "CURRENT_INTEGRATION_TRUTH_AUDIT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "FINAL_INTEGRATION_AND_INDEPENDENT_VERIFICATION_ORDER.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "00c9fe1cc694b4e4325571dd36d8a88340ab508d125d3b20753990a314cf619e",
       "task": "retained lane preverify",
@@ -4533,7 +5144,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -4585,9 +5197,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "a27156a9051836a7dc5bb475dff8fb2cb2c8a8ad0c26535845a0c7d99b45ca9e",
       "task": "retained lane q08-derivatives",
@@ -4595,12 +5218,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q08_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "f17e7c333bec95dec38bc1ecf1e3e2bae7a847a2",
+        "sha256": "ef4582e71cf9060d78e9832c286e1898aaa8bae5134766cbe47bccfe368b7f2e",
+        "bytes": 3882
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4648,9 +5272,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "fc605017765870721efe0329b1fe0bd779d64df01c896db81ac5d39ffbf803aa",
       "task": "retained lane q09-regime",
@@ -4658,12 +5293,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q09_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "a66d45842e22f586b3caa954a0ed89b09304965e",
+        "sha256": "cf18016afb21c3d27797ccd49a6795b6c9e7e9eaa7c3205d16211eed35c4d5aa",
+        "bytes": 4281
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4711,9 +5347,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "eeab684ef3aeb24e4d461cd43ce6ba98f979a746fa1e51238993c948a4498592",
       "task": "retained lane q11-survival",
@@ -4721,12 +5368,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q11_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "464f534944eb1be1cc1652e79b9c031e554620b4",
+        "sha256": "137e4fa4098db7209b5c8c3cb3afd8002b6e24999d7f5316cc8d2a3eec803cc2",
+        "bytes": 4539
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4774,9 +5422,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "d5c9ec789dfec8335c832b147204a8fe5d0ffb57bdd08b390562b83e822b242f",
       "task": "retained lane q13-deep-gate",
@@ -4784,12 +5443,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q13_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "5479165a5958b6d4071ef7488f215be9de4b54f9",
+        "sha256": "2b1afa1e1f51d9b3f6d590a14cb8dd81adf92f594bfada244a7ccad960904761",
+        "bytes": 4624
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4837,9 +5497,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "18c174bd13cfd6be545dcf2fcb4348e670c444fb79033747fc83566437a3a20a",
       "task": "retained lane q14-validation-infra",
@@ -4847,12 +5518,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q14_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "bde6a5f844d7eb15f9d21e1f41e012e2915a454a",
+        "sha256": "362cc25553c9b886f8dda0c4c41a416d97568e15bbe7ef30897a38e1eb5026dc",
+        "bytes": 3715
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4900,9 +5572,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "bd51c692646f65c77a26f51f1d61110b8e789bdf543a61c5f1bc18faeb520c78",
       "task": "retained lane q15-registry",
@@ -4910,12 +5593,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
-        "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "path": "quant/RECEIPTS/Q15_ACCEPTANCE.md",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
+        "tracked": true,
+        "git_blob": "100b0bd1316d936b0ee7be711d8484936d001021",
+        "sha256": "b7ececc6857238f7102e471f722bd219ebe28e77cacee88f0e9bd34675a30cb3",
+        "bytes": 3700
       },
       "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
@@ -4963,9 +5647,20 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
         "QUANT_EDGE_RESEARCH_FACTORY_12H.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "QUANT_EDGE_RESEARCH_FACTORY_12H.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "d624e89666797a90994d2253a77dfaac9409d18386fad2aac6c3117571f06400",
       "task": "retained lane quant-edge-research-20260712",
@@ -4974,7 +5669,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "quant/QUANT_EDGE_BUILD_STATE.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "de04af97b6e0e0fa25bdd2521aa4a6e00a2c5d84",
         "sha256": "4b8ac3f808dbb4be7aa09b1c547f8568b422acc482f62c299d7bfc3ccb918d97",
@@ -5026,8 +5722,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "R9_A_ANALYSIS.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "R9_A_ANALYSIS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "ced6d14bbf3b52043e6f377144f6ed81edb726e76e9484a3e52476631cad72d4",
       "task": "retained lane r9-a",
@@ -5036,7 +5739,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5088,8 +5792,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "R9_B_ANALYSIS.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "R9_B_ANALYSIS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "72b0c0c54375cd04ff31cd0f4cf7cac437f2102b49c16a667f94751a16d74a05",
       "task": "retained lane r9-b",
@@ -5098,7 +5809,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5150,8 +5862,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "R9_C_ANALYSIS.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "R9_C_ANALYSIS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "52f72d3912df364994e2dbf1b4e93517c5d044924231c04452f2c1b1eaca98ac",
       "task": "retained lane r9-c",
@@ -5160,7 +5879,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5212,8 +5932,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "R9_D_ANALYSIS.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "R9_D_ANALYSIS.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "3bdb185607767846fe341541e141cb02fc443dd94f25397ccd4f3a87010ae643",
       "task": "retained lane r9-d",
@@ -5222,7 +5949,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5277,7 +6005,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "ae715cbe306ddcf892168e6eef59e1e980de7d217726ce9df992982bb8172504",
       "task": "retained lane replay-shadow",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -5285,7 +6015,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5337,8 +6068,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "ROLE3_C2_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "ROLE3_C2_RECEIPT.md",
+          "disposition": "PRESERVED_HISTORICAL_C2_RECEIPT_REFERENCE_ONLY"
+        }
       ],
       "status_porcelain_v2_sha256": "e6921ba5f14a53d716844b14bf56b834dbeeb90d8e2325b74e289b4a8e55fbd8",
       "task": "retained lane role3-c2",
@@ -5346,12 +6084,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "ROLE3_C2_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "5d8c0ff9d80d6926a63dd0fac3070c4aabc240844c0ebf686e3ad1b672f79e2d",
+        "bytes": 28079
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -5402,7 +6141,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "5a09d121ec54e6958b41dfc5b57c967ed4bc2e4b1cdfb58e0bcb9aa367a3f3e3",
       "task": "retained lane role3-preflight",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -5410,7 +6151,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5462,8 +6204,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "ROLE3_VERIFICATION_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "ROLE3_VERIFICATION_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "891310bb2fb9c4debf3bbdb68008999fa57aa0fee24e0d85b42162a76dedc8b1",
       "task": "retained lane role3-verify",
@@ -5471,12 +6220,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "ROLE3_VERIFICATION_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "90613c8273e5c866603dbaa74106f2ff436c06e320a95a0cbdbc4c55c0d5ae1d",
+        "bytes": 44187
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -5527,7 +6277,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "a952c32d7adf5f3262556b9a0004fb6530863bf454476878dad1d3e8271d624f",
       "task": "retained lane role4-fix",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -5535,7 +6287,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "docs/archive/i00-phase4/ROLE4_CORRECTION_CLOSURE_CHECKPOINT_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "4f8dd93b65c6911c2640a0c1f44aed4b723e0a8b",
         "sha256": "253dd036f99f8631b06b914a0c4d2a55a8803f3b514e71a7b84a5347ab75eb87",
@@ -5590,7 +6343,9 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [],
+      "untracked_path_dispositions": [],
       "status_porcelain_v2_sha256": "a198ce97b253ab5f41fd35b7da71ed788c82e1deeb182512339db13a2f3e2f32",
       "task": "retained lane runbook-shadow",
       "owner": "NO_ACTIVE_WRITER_RETAINED_HISTORICAL_LANE",
@@ -5598,7 +6353,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5650,8 +6406,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "cc7455ce057eda3cb5cfd0b36a6694c2f8120cdc49f122593a7531a6a343c3b6",
       "task": "retained lane si-recon",
@@ -5660,7 +6423,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": "SI_RECON_RECEIPT.md",
-        "state": "VERIFIED",
+        "integrity_state": "SEALED",
+        "historical_claimed_terminal_state": "SEALED",
         "tracked": true,
         "git_blob": "a8a899b29c9b6adcf1e563d558cdde2a1490e6bd",
         "sha256": "a0ac1bd8da362999e93d0b10094a4791f900e2a245e66b115a78128030574585",
@@ -5692,8 +6456,8 @@
       "worktree_name": "truth-a",
       "branch_name": "truth-campaign-20260716",
       "detached": false,
-      "head_sha": "995904ada86e86ef4214bea596331b978a332da0",
-      "tree_sha": "b9e1c4da19b68b907c83ce64e78dff70e672b303",
+      "head_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+      "tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
       "base_sha": "787b73d108764d628f925ee630bfe2fbef89458e",
       "base_state": "VERIFIED",
       "base_method": "campaign_or_director_cut",
@@ -5711,29 +6475,104 @@
       "locked_reason": null,
       "prunable": false,
       "prunable_reason": null,
-      "dirty_tracked_paths": [],
-      "untracked_paths": [
+      "dirty_tracked_paths": [
         "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
+        "verification/product-truth-20260716/STATE.md",
         "verification/product-truth-20260716/WORKTREE_CENSUS.json",
         "verification/product-truth-20260716/generate-worktree-census.mjs"
       ],
-      "status_porcelain_v2_sha256": "432d89d4715115aaade1703d2211ebb8c5df29c5d3ed5e8cae775eec401c7a4d",
+      "dirty_source_paths": [],
+      "untracked_paths": [
+        "verification/product-truth-20260716/AUTHORITY_RESOLUTION.md",
+        "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+        "verification/product-truth-20260716/CLEAN_CLONE_ACCEPTANCE.md",
+        "verification/product-truth-20260716/COCKPIT_BINDING_MATRIX.csv",
+        "verification/product-truth-20260716/COMPOSED_RUNTIME_RECEIPT.md",
+        "verification/product-truth-20260716/FINAL_VERDICT.md",
+        "verification/product-truth-20260716/INDEPENDENT_FINDINGS.json",
+        "verification/product-truth-20260716/INPUTS.lock",
+        "verification/product-truth-20260716/MERGE_PROVENANCE.json",
+        "verification/product-truth-20260716/MONEY_PATH_AUTHORITY_EVIDENCE.json",
+        "verification/product-truth-20260716/ROLE3_C2_RECEIPT.md",
+        "verification/product-truth-20260716/STAGING_OPERATIONAL_RECEIPT.md",
+        "verification/product-truth-20260716/UNMERGED_DELTA_REPORT.md",
+        "verification/product-truth-20260716/generate-final-evidence.mjs"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "verification/product-truth-20260716/AUTHORITY_RESOLUTION.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/CLEAN_CLONE_ACCEPTANCE.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/COCKPIT_BINDING_MATRIX.csv",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/COMPOSED_RUNTIME_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/FINAL_VERDICT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/INDEPENDENT_FINDINGS.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/INPUTS.lock",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/MERGE_PROVENANCE.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/MONEY_PATH_AUTHORITY_EVIDENCE.json",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/ROLE3_C2_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/STAGING_OPERATIONAL_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/UNMERGED_DELTA_REPORT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        },
+        {
+          "path": "verification/product-truth-20260716/generate-final-evidence.mjs",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
+      ],
+      "status_porcelain_v2_sha256": "0cf61c056eb4ffacd67564b80c89a66350d4f6c1c36377045f06534549a992ce",
       "task": "Account A product-truth candidate assembly and bounded fixes",
       "owner": "ACCOUNT_A_CANDIDATE_OWNER",
       "allowed_write_paths": [
-        "verification/product-truth-20260716/**",
-        "bounded Account-A candidate fixes explicitly assigned by D-LAUNCH-55/56"
+        "verification/product-truth-20260716/**"
       ],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
         "bytes": null
       },
-      "claimed_terminal_state": "BLOCKED",
+      "claimed_terminal_state": "INTEGRATED",
       "sealed_branch_sha": null,
       "accepted_donor_sha": null,
       "donor_in_candidate_ancestry": null,
@@ -5744,15 +6583,15 @@
         "sha256": null
       },
       "diff_identity": {
-        "changed_path_count": 329,
-        "binary_diff_sha256": "f99cab81a4c28731cfd3cff04db2a48436afdadf15003d398042e030758252eb",
-        "path_blob_manifest_sha256": "1ace148c0a5ae49212f344ee869f575a18e5900e4439aad668c72b0b7901bdf1"
+        "changed_path_count": 346,
+        "binary_diff_sha256": "4b97c3e39322c0acecc1116a13f9f7fdb9409e7ad2e6884bafb9c58b844d7d74",
+        "path_blob_manifest_sha256": "0bdcea2f14bc49ec76111f66826e616a28806990832f4835c342129f024a6260"
       },
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
-      "classification": "BLOCKED",
-      "disposition_reason": "BLOCKED: mutable pre-freeze Account A candidate",
-      "disposition_evidence": "QL_DIRECTOR_STATE.md and WORKTREE_LEDGER.md historical lane record"
+      "classification": "MERGED_RETAINED",
+      "disposition_reason": "MERGED_RETAINED: Account A source is frozen at exact candidate C; any descendant or local delta is confined to the campaign evidence directory",
+      "disposition_evidence": "I00_PRODUCT_BUILD_STATE.md exact Phase 2 donor table or candidate ancestry"
     },
     {
       "absolute_path": "/Users/cosmosgeek/Desktop/truth-b",
@@ -5779,6 +6618,7 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "B_CLEAN_CLONE_PRACTICE_RECEIPT.md",
         "B_DIRECTIVE_COVERAGE_MATRIX.csv",
@@ -5787,6 +6627,36 @@
         "B_PASS5_COCKPIT_BINDING_MATRIX.csv",
         "B_PREP_MANIFEST.sha256",
         "B_PREP_STATE.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "B_CLEAN_CLONE_PRACTICE_RECEIPT.md",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_DIRECTIVE_COVERAGE_MATRIX.csv",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_LANDED_CORE_AUDIT.md",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_PASS4_ADVERSARIAL_SHARD_PACK.md",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_PASS5_COCKPIT_BINDING_MATRIX.csv",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_PREP_MANIFEST.sha256",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        },
+        {
+          "path": "B_PREP_STATE.md",
+          "disposition": "PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A"
+        }
       ],
       "status_porcelain_v2_sha256": "f41935c1ed3a5ac1887508c4fed1d577c6927729bc7aacf654613fa673b0e297",
       "task": "Account B independent read-only verification",
@@ -5797,7 +6667,8 @@
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
         "path": null,
-        "state": "NOT_CONFIGURED",
+        "integrity_state": "NOT_CONFIGURED",
+        "historical_claimed_terminal_state": "NOT_CONFIGURED",
         "tracked": null,
         "git_blob": null,
         "sha256": null,
@@ -5821,7 +6692,7 @@
       "patch_duplicated_elsewhere": false,
       "patch_duplicate_peers": [],
       "classification": "BLOCKED",
-      "disposition_reason": "BLOCKED: clean pre-freeze verifier tree awaiting exact C",
+      "disposition_reason": "BLOCKED: verifier tree remains at pre-freeze 787b73d and awaits the exact-C handoff",
       "disposition_evidence": "QL_DIRECTOR_STATE.md and WORKTREE_LEDGER.md historical lane record"
     },
     {
@@ -5849,8 +6720,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "42c9380109ca4b830c6bf380aad87ce884f174b4d029c35bc18294ddfba49c2a",
       "task": "retained lane v1",
@@ -5858,12 +6736,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "88e97dca0ed5b5ad929ef71ebb0fe404899951ceaca230dffffd7b607572c3d7",
+        "bytes": 13193
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -5911,8 +6790,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "42c9380109ca4b830c6bf380aad87ce884f174b4d029c35bc18294ddfba49c2a",
       "task": "retained lane v2",
@@ -5920,12 +6806,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "1225c5f5d9dbc02c6950b3b430960cc3bec7b9e6a74a8e4b4f8eaa2293f5d2d0",
+        "bytes": 25582
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -5973,8 +6860,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "42c9380109ca4b830c6bf380aad87ce884f174b4d029c35bc18294ddfba49c2a",
       "task": "retained lane v3",
@@ -5982,12 +6876,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "7373fbb17f7dd7fabb501f7f9dd961bf5d39534d2fa882e3a119d095f7ffa9a8",
+        "bytes": 21768
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -6035,8 +6930,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "42c9380109ca4b830c6bf380aad87ce884f174b4d029c35bc18294ddfba49c2a",
       "task": "retained lane v4",
@@ -6044,12 +6946,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "82ce50c43bead18552cb75ba21a1fe8f88261a96b1ca56085d983d8e9baf0295",
+        "bytes": 29692
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,
@@ -6097,8 +7000,15 @@
       "prunable": false,
       "prunable_reason": null,
       "dirty_tracked_paths": [],
+      "dirty_source_paths": [],
       "untracked_paths": [
         "SHARD_RECEIPT.md"
+      ],
+      "untracked_path_dispositions": [
+        {
+          "path": "SHARD_RECEIPT.md",
+          "disposition": "PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE"
+        }
       ],
       "status_porcelain_v2_sha256": "42c9380109ca4b830c6bf380aad87ce884f174b4d029c35bc18294ddfba49c2a",
       "task": "retained lane v5",
@@ -6106,12 +7016,13 @@
       "allowed_write_paths": [],
       "historical_allowed_write_paths": [],
       "terminal_receipt": {
-        "path": null,
-        "state": "NOT_CONFIGURED",
-        "tracked": null,
+        "path": "SHARD_RECEIPT.md",
+        "integrity_state": "BRANCH_BUILT",
+        "historical_claimed_terminal_state": "BRANCH_BUILT",
+        "tracked": false,
         "git_blob": null,
-        "sha256": null,
-        "bytes": null
+        "sha256": "436ea50e720069a7add4864b73354efecfc66c149a5423ae6699f43ab8250ab4",
+        "bytes": 21887
       },
       "claimed_terminal_state": "REFERENCE_ONLY",
       "sealed_branch_sha": null,

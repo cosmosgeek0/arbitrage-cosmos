@@ -208,19 +208,43 @@ const RECEIPTS = {
   'ip-ops': 'IP_OPS_RECEIPT.md',
   'ip-proof': 'IP_PROOF_RECEIPT.md',
   'ip-runtime': 'IP_RUNTIME_RECEIPT.md',
-  'l09-normal-basis': 'live-edge-receipts/RECEIPTS/L09.md',
+  'l09-normal-basis': 'live-edge-receipts/RECEIPTS/L09_DLAUNCH15_ACCEPTANCE.md',
   'l10-reverse-basis': 'live-edge-receipts/RECEIPTS/L10.md',
   'l11-volume': 'live-edge-receipts/RECEIPTS/L11.md',
   'l14-controls': 'live-edge-receipts/RECEIPTS/L14.md',
   'l15-infra': 'ops/live/RECEIPT.md',
   'live-execution-proof-20260712': 'LIVE_EDGE_RECEIPT.md',
+  'q08-derivatives': 'quant/RECEIPTS/Q08_ACCEPTANCE.md',
+  'q09-regime': 'quant/RECEIPTS/Q09_ACCEPTANCE.md',
+  'q11-survival': 'quant/RECEIPTS/Q11_ACCEPTANCE.md',
+  'q13-deep-gate': 'quant/RECEIPTS/Q13_ACCEPTANCE.md',
+  'q14-validation-infra': 'quant/RECEIPTS/Q14_ACCEPTANCE.md',
+  'q15-registry': 'quant/RECEIPTS/Q15_ACCEPTANCE.md',
   'quant-edge-research-20260712': 'quant/QUANT_EDGE_BUILD_STATE.md',
   'role4-fix': 'docs/archive/i00-phase4/ROLE4_CORRECTION_CLOSURE_CHECKPOINT_RECEIPT.md',
   'si-recon': 'SI_RECON_RECEIPT.md',
+  'c-shard-1': 'SHARD_RECEIPT.md',
+  'c-shard-2': 'SHARD_RECEIPT.md',
+  'c-shard-3': 'SHARD_RECEIPT.md',
+  'c-shard-4': 'SHARD_RECEIPT.md',
+  'c-shard-5': 'SHARD_RECEIPT.md',
+  'c-shard-6': 'SHARD_RECEIPT.md',
+  'v1': 'SHARD_RECEIPT.md',
+  'v2': 'SHARD_RECEIPT.md',
+  'v3': 'SHARD_RECEIPT.md',
+  'v4': 'SHARD_RECEIPT.md',
+  'v5': 'SHARD_RECEIPT.md',
+  'role3-c2': 'ROLE3_C2_RECEIPT.md',
+  'role3-verify': 'ROLE3_VERIFICATION_RECEIPT.md',
 };
 
 const SELECTIVE_RECEIPTS = {
   'dash-shell': 'docs/archive/i00-phase2/DASHBOARD_EQUIVALENCE_VALIDATION_RECEIPT.md',
+};
+
+const HISTORICAL_RECEIPT_TERMINALS = {
+  'egress-patch': 'BLOCKED',
+  'port-a4': 'BLOCKED',
 };
 
 const HISTORICAL_WRITE_GRANTS = {
@@ -326,6 +350,10 @@ function parseWorktrees(raw) {
 }
 
 function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
+  const unexplainedSourceDirt = dirtyTracked.filter((path) => (
+    name !== 'truth-a' || !path.startsWith('verification/product-truth-20260716/')
+  ));
+  if (unexplainedSourceDirt.length > 0) return 'ACTIVE_DIRTY';
   if (
     CANDIDATE_ADMISSION_LANES.has(name) &&
     run('git', ['-C', MAIN, 'merge-base', '--is-ancestor', head, candidateSha], {
@@ -334,13 +362,23 @@ function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
   ) {
     return 'MERGED_RETAINED';
   }
-  if (
-    name === 'truth-a' &&
-    head === candidateSha &&
-    dirtyTracked.length === 0 &&
-    untracked.length === 0
-  ) {
-    return 'MERGED_RETAINED';
+  if (name === 'truth-a') {
+    const candidateIsAncestor = run(
+      'git',
+      ['-C', MAIN, 'merge-base', '--is-ancestor', candidateSha, head],
+      { allowFailure: true },
+    ).status === 0;
+    const committedDelta = candidateIsAncestor
+      ? nulList(git(MAIN, 'diff', '--name-only', '-z', `${candidateSha}..${head}`).stdout)
+      : [];
+    const evidenceOnly = committedDelta.every((path) => (
+      path.startsWith('verification/product-truth-20260716/')
+    )) && dirtyTracked.every((path) => (
+      path.startsWith('verification/product-truth-20260716/')
+    )) && untracked.every((path) => (
+      path.startsWith('verification/product-truth-20260716/')
+    ));
+    if (candidateIsAncestor && evidenceOnly) return 'MERGED_RETAINED';
   }
   for (const [classification, names] of Object.entries(GROUPS)) {
     if (names.includes(name)) return classification;
@@ -361,10 +399,7 @@ function ownerFor(name) {
 
 function currentWriteGrantFor(name) {
   if (name === 'truth-a') {
-    return [
-      'verification/product-truth-20260716/**',
-      'bounded Account-A candidate fixes explicitly assigned by D-LAUNCH-55/56',
-    ];
+    return ['verification/product-truth-20260716/**'];
   }
   if (name === 'truth-b') return ['ACCOUNT_B_OWN_VERIFICATION_ARTIFACTS_ONLY'];
   return [];
@@ -400,12 +435,21 @@ function dispositionFor(name, classification) {
   }
   if (name === 'truth-a') {
     return classification === 'MERGED_RETAINED'
-      ? 'MERGED_RETAINED: clean Account A worktree is frozen at the exact candidate SHA'
+      ? 'MERGED_RETAINED: Account A source is frozen at exact candidate C; any descendant or local delta is confined to the campaign evidence directory'
       : 'BLOCKED: mutable pre-freeze Account A candidate';
   }
-  if (name === 'truth-b') return 'BLOCKED: clean pre-freeze verifier tree awaiting exact C';
+  if (name === 'truth-b') return 'BLOCKED: verifier tree remains at pre-freeze 787b73d and awaits the exact-C handoff';
   if (SEALED_UNMERGED.includes(name)) {
-    return 'SEALED_UNMERGED: clean terminal receipt exists and the authorized candidate admission has not yet occurred';
+    if (classification === 'MERGED_RETAINED') {
+      if (name === 'ip-assur-formal') {
+        return 'MERGED_RETAINED: A-FORMAL sealed tip is in candidate ancestry; source is included while runtime/formal-tool activation remains REFERENCE_ONLY or NOT_CONFIGURED';
+      }
+      if (name === 'ip-assur-action') {
+        return 'MERGED_RETAINED: S2 action-evidence sealed tip is in candidate ancestry; evidence is supporting-only and grants no action authority';
+      }
+      return 'MERGED_RETAINED: sealed port tip is in candidate ancestry and retains its exact terminal receipt';
+    }
+    return 'SEALED_UNMERGED: clean terminal receipt exists and authorized candidate admission has not occurred';
   }
   if (MERGED_RETAINED.includes(name)) {
     return 'MERGED_RETAINED: exact landed-core ancestry or content-addressed selective-equivalence receipt';
@@ -420,6 +464,7 @@ function dispositionFor(name, classification) {
 }
 
 function claimedStateFor(name, classification) {
+  if (classification === 'ACTIVE_DIRTY') return 'BLOCKED';
   if (classification === 'MERGED_RETAINED') return 'INTEGRATED';
   if (name === 'port-a4') return 'SEALED';
   if (name === 'egress-patch' || name === 'truth-a' || name === 'truth-b') return 'BLOCKED';
@@ -427,6 +472,22 @@ function claimedStateFor(name, classification) {
   if (classification === 'SEALED_UNMERGED') return 'SEALED';
   if (name === 'ip-assur-formal' || name === 'ip-assur-action') return 'SEALED';
   return 'REFERENCE_ONLY';
+}
+
+function untrackedDisposition(name, path) {
+  if (name === 'truth-a' && path.startsWith('verification/product-truth-20260716/')) {
+    return 'AUTHORIZED_CAMPAIGN_EVIDENCE_ONLY_PENDING_COMMIT';
+  }
+  if (name === 'truth-b') {
+    return 'PRESERVED_ACCOUNT_B_PREP_FILENAME_ONLY_NOT_READ_BY_ACCOUNT_A';
+  }
+  if (name === 'role3-c2' && path === 'ROLE3_C2_RECEIPT.md') {
+    return 'PRESERVED_HISTORICAL_C2_RECEIPT_REFERENCE_ONLY';
+  }
+  if (path.endsWith('.sh')) {
+    return 'PRESERVED_SUPERSEDED_HISTORICAL_SCRIPT_NOT_ADMITTED_TO_CANDIDATE';
+  }
+  return 'PRESERVED_OWNER_OR_HISTORICAL_INPUT_NOT_ADMITTED_TO_CANDIDATE';
 }
 
 function firstReflogSha(branch) {
@@ -510,11 +571,12 @@ function branchTracking(branch, head) {
   };
 }
 
-function receiptObject(path, head, receiptPath) {
+function receiptObject(name, path, head, receiptPath) {
   if (!receiptPath) {
     return {
       path: null,
-      state: 'NOT_CONFIGURED',
+      integrity_state: 'NOT_CONFIGURED',
+      historical_claimed_terminal_state: 'NOT_CONFIGURED',
       tracked: null,
       git_blob: null,
       sha256: null,
@@ -528,7 +590,8 @@ function receiptObject(path, head, receiptPath) {
     const bytes = git(MAIN, 'show', `${head}:${receiptPath}`).stdout;
     return {
       path: receiptPath,
-      state: 'VERIFIED',
+      integrity_state: 'SEALED',
+      historical_claimed_terminal_state: HISTORICAL_RECEIPT_TERMINALS[name] ?? 'SEALED',
       tracked: true,
       git_blob: text(MAIN, 'rev-parse', `${head}:${receiptPath}`),
       sha256: sha256(bytes),
@@ -540,7 +603,8 @@ function receiptObject(path, head, receiptPath) {
     const bytes = readFileSync(absolute);
     return {
       path: receiptPath,
-      state: 'BRANCH_BUILT',
+      integrity_state: 'BRANCH_BUILT',
+      historical_claimed_terminal_state: HISTORICAL_RECEIPT_TERMINALS[name] ?? 'BRANCH_BUILT',
       tracked: false,
       git_blob: null,
       sha256: sha256(bytes),
@@ -549,7 +613,8 @@ function receiptObject(path, head, receiptPath) {
   }
   return {
     path: receiptPath,
-    state: 'MISSING',
+    integrity_state: 'MISSING',
+    historical_claimed_terminal_state: 'MISSING',
     tracked: false,
     git_blob: null,
     sha256: null,
@@ -610,6 +675,7 @@ function diffIdentity(base, head) {
 }
 
 const candidateArg = process.argv[2] ?? 'HEAD';
+const censusStartedAt = new Date().toISOString();
 const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`);
 const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);
 const rawWorktrees = git(MAIN, 'worktree', 'list', '--porcelain', '-z').stdout;
@@ -641,7 +707,7 @@ const rows = records.map((record) => {
   const base = resolveBase(name, branch, head);
   const tracking = branchTracking(branch, head);
   const acceptedDonorSha =
-    classification === 'MERGED_RETAINED' && name !== 'Main'
+    classification === 'MERGED_RETAINED' && name !== 'Main' && name !== 'truth-a'
       ? head
       : classification === 'SEALED_UNMERGED'
         ? head
@@ -655,9 +721,9 @@ const rows = records.map((record) => {
   if (classification === 'MERGED_RETAINED' && acceptedDonorSha && !inCandidate && !selective.exists) {
     throw new Error(`${name} claims MERGED_RETAINED without ancestry or a selective receipt`);
   }
-  const receipt = receiptObject(path, head, RECEIPTS[name]);
-  if (name === 'port-a4' && receipt.state !== 'VERIFIED') {
-    throw new Error(`A4 seal drift: expected committed verified receipt, observed ${receipt.state}`);
+  const receipt = receiptObject(name, path, head, RECEIPTS[name]);
+  if (name === 'port-a4' && receipt.integrity_state !== 'SEALED') {
+    throw new Error(`A4 seal drift: expected committed receipt, observed ${receipt.integrity_state}`);
   }
   return {
     absolute_path: path,
@@ -680,7 +746,14 @@ const rows = records.map((record) => {
     prunable: Boolean(record.prunable),
     prunable_reason: typeof record.prunable === 'string' ? record.prunable : null,
     dirty_tracked_paths: dirtyTracked,
+    dirty_source_paths: dirtyTracked.filter((dirtyPath) => (
+      name !== 'truth-a' || !dirtyPath.startsWith('verification/product-truth-20260716/')
+    )),
     untracked_paths: untracked,
+    untracked_path_dispositions: untracked.map((untrackedPath) => ({
+      path: untrackedPath,
+      disposition: untrackedDisposition(name, untrackedPath),
+    })),
     status_porcelain_v2_sha256: sha256(statusRaw),
     task: taskFor(name),
     owner: ownerFor(name),
@@ -763,12 +836,37 @@ const document = {
   origin_current_main_sha: text(MAIN, 'rev-parse', 'refs/remotes/origin/current-main'),
   registered_worktree_count: rows.length,
   tracked_dirty_path_count: rows.reduce((total, row) => total + row.dirty_tracked_paths.length, 0),
+  unexplained_dirty_source_path_count: rows.reduce(
+    (total, row) => total + row.dirty_source_paths.length,
+    0,
+  ),
   untracked_path_count: rows.reduce((total, row) => total + row.untracked_paths.length, 0),
   worktrees_with_untracked_paths: rows.filter((row) => row.untracked_paths.length > 0).length,
   classification_counts: classificationCounts,
   duplicate_method:
     'exact binary diff SHA-256 plus exact sorted path/blob manifest SHA-256; empty deltas are not patches',
   unknown_count: classificationCounts.UNKNOWN,
+  receipt: {
+    exact_candidate_sha: candidateSha,
+    command_or_operator_action:
+      'git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z plus per-tree status, ancestry, receipt, and diff probes',
+    environment_toolchain_digest_sha256:
+      '8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca',
+    dependency_lock_sha256:
+      '3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf',
+    start_time_utc: censusStartedAt,
+    end_time_utc: new Date().toISOString(),
+    exit_code: 0,
+    test_count: rows.length,
+    artifact_hashes:
+      'MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest',
+    actor_role: 'ACCOUNT_A',
+    actor_had_candidate_source_write_permission: false,
+    deviations_skips_unavailable_evidence: [
+      'Account B filenames and Git metadata only; Account B content was not read',
+      'No worktree was cleaned, pruned, reset, or deleted',
+    ],
+  },
   rows: rows.sort((left, right) => left.absolute_path.localeCompare(right.absolute_path)),
 };
 

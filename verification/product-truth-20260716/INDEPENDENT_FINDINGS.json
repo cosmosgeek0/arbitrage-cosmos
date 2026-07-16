@@ -1,0 +1,31 @@
+{
+  "schema": "product-truth-independent-findings.v1",
+  "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "status": "BLOCKED",
+  "actor_role": "ACCOUNT_A",
+  "account_b_material_read": false,
+  "findings": [],
+  "empty_findings_meaning": "No Account B findings have been ingested; this is not a zero-findings claim",
+  "required_next_actor": "ACCOUNT_B",
+  "account_b_write_permission_to_candidate": false,
+  "verification_gate": "BLOCKED",
+  "receipt": {
+    "candidate_sha": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+    "candidate_tree_sha": "a770f9f393e6229252731cd5247e9a1abfd2e509",
+    "command_or_operator_action": "Account A evidence generation from immutable candidate C; no source mutation",
+    "environment_toolchain_digest_sha256": "8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca",
+    "dependency_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+    "start_time_utc": "2026-07-16T11:17:11Z",
+    "end_time_utc": "2026-07-16T11:47:52.009Z",
+    "exit_code": 0,
+    "test_count": 0,
+    "artifact_hashes": "MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest",
+    "actor_role": "ACCOUNT_A",
+    "actor_had_candidate_source_write_permission": false,
+    "actor_write_scope": "verification/product-truth-20260716/** only after C freeze",
+    "deviations_skips_unavailable_evidence": [
+      "Account B has not verified exact C",
+      "Empty findings do not imply acceptance"
+    ]
+  }
+}

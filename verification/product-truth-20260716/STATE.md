@@ -4,44 +4,57 @@ Status: `BLOCKED`
 
 Actor: `ACCOUNT_A`
 
-This file is the sole campaign-status authority. Root `STATE.md` remains the product-state document and is presently `CONFLICTING`; its atomic candidate-bound rewrite is still required by campaign §2.1 item 3 and repository law.
+This file is the sole campaign-status authority. Root `STATE.md` at candidate C is the current product-state authority.
 
-## Exact working cut
+## Frozen source candidate
 
-- Account A integration tip: `995904ada86e86ef4214bea596331b978a332da0`.
-- Integration tree: `b9e1c4da19b68b907c83ce64e78dff70e672b303`.
-- Canonical Main/director tip: `2ae812624f20b9bc93fc4ad66cb568929101110f` (`D-LAUNCH-60`).
+- Candidate C: `41752d6a87dc1cb1b933bb4460c9cabfc15ff694`.
+- Candidate tree: `a770f9f393e6229252731cd5247e9a1abfd2e509`.
+- Candidate parent: `f11531e6637979d6e173f6eb25d04c10a76d20c8`.
 - Branch: `truth-campaign-20260716`.
-- This cut is mutable and is not frozen candidate C.
+- Durable Main and origin/current-main: `2ae812624f20b9bc93fc4ad66cb568929101110f`.
+- Source C is immutable. Every later commit is evidence-only and may change only `verification/product-truth-20260716/**`.
 
-## Integration rulings
+## Pass 0 state
 
-- Egress receipt `8db67eee261ea4b8964b5b9c64b22fc3a0c7fbc6`: source `INTEGRATED`; bounded-capacity correction and regression proof remain `BLOCKED`.
-- CI hotfix #2 `53c6da817d92049c7628aa9f94466a0e1882e801`: `REFERENCE_ONLY`, `SUPERSEDED_SAFE`, not merged. D-LAUNCH-56 candidate-local clean-checkout repair remains `BLOCKED`.
-- AI-Ops A1/A2/A3/A4/A5/OBS/OPS/REPLAY/RUNBOOK: source `INTEGRATED`, including A4 receipt `720d2fe74be83d0d2d83f448637e087c32cafc5b`. The candidate contains 161 exact `aiOps` namespace paths. Provider, production lifecycle, product route, owner signatures, external sentinel/paging, and effective control authority remain `NOT_CONFIGURED` or `UNWIRED`. Account B must verify exact frozen C.
-- A-FORMAL `b491893416006cf529aef02e5dd4a25d6475e7b8`: source `INTEGRATED`; runtime claim `REFERENCE_ONLY`; TLA tooling `NOT_CONFIGURED`.
-- S2 action evidence `ca30adf5e97b6697afec49f13073024d953b117b`: source `INTEGRATED`; semantics `SUPPORTING_EVIDENCE_ONLY`; production consumer `UNWIRED`.
-- Frontier: `ABANDONED_SAFE` for this campaign; no Frontier source is admitted.
+- §2.1 contradictions: `9/9` explicitly dispositioned; none is `UNKNOWN`.
+- Worktrees: 96 registered; `UNKNOWN=0`; `ACTIVE_DIRTY=0`; `SEALED_UNMERGED=0`; unexplained tracked source dirt `0`.
+- Donors: 12 admitted post-Main lanes; 326 unique paths; 326/326 exact donor blobs at C; zero overlaps and zero grant violations.
+- Landed core: 1,687-path denominator; 1,666 donor-identical at C; all 21 adaptations are explicit.
+- AI-Ops: `INTEGRATED` source, 161 exact paths; runtime/product/paging states remain separately `NOT_CONFIGURED` or `UNWIRED`.
+- A-FORMAL: `INTEGRATED`; runtime `REFERENCE_ONLY`; TLA execution `NOT_CONFIGURED`.
+- S2 action evidence: `INTEGRATED`; supporting-only; production consumer `NOT_CONFIGURED`.
+- Ledger CAS/read inventory: `WIRED_LOCAL`; production append producer `NOT_CONFIGURED`; no send authority.
+- Quantity bridge: `INTEGRATED` comparison contract; production consumer `NOT_CONFIGURED`; no action authority.
+- Exact-C clean clone: Account-A `npm ci` and `npm test` exits 0; later independent/full Pass-3 gate `BLOCKED`.
 
-## Current evidence
+## Precise blocker
 
-- Registered worktrees: 96.
-- Census classifications at this cut: `MERGED_RETAINED=41`, `SUPERSEDED_SAFE=33`, `ABANDONED_SAFE=20`, `BLOCKED=2`, all others 0; `UNKNOWN=0`.
-- Tracked dirty paths observed across all registered worktrees: 0.
-- Account A typecheck: exit 0 at integration tip `55b456e19dbbd97548d9beb601dfc8cc7d3c57b7`.
-- Account A production build: exit 0 at the same integration tip; this is builder evidence, not independent verification.
-- Product Assurance execution reached its historical suites but stopped on protected-owner fallback because Account A campaign artifacts were untracked. That run is `BLOCKED`, not candidate evidence.
+Local complete-history bundle `/Users/cosmosgeek/cosmos-arbitrage-truth-candidate-41752d6a.bundle` is `SEALED`, SHA-256 `f0641dcbbe7816d55749dd1d2a0fcfbf246c914d9af55f6ad9982f740aa9feab`, 62,976,347 bytes. It remains on this machine. Campaign §7 requires off-machine bundle custody; that custody receipt is `NOT_CONFIGURED`. Account A may not push without director authority.
 
-## Blocking evidence
+Therefore `BASELINE_TRUTH_ACCEPTED` is `BLOCKED`. No later acceptance token is implied or issued.
 
-1. P0 item 9 is `BLOCKED`: candidate-HEAD, tracked-content-only sealed-report parity and a genuinely fresh single-branch checkout are not yet proved.
-2. The D-LAUNCH-55 CPU finding requires a bounded capacity correction. Read-only isolation disproved the original Worker attribution: the 64-record and 512-KiB journal-capacity cases consume the main thread; Worker message/exit awaits remain a separate latent boundedness defect.
-3. Included AI-Ops tests and the A-FORMAL/S2 suites require one clean-clone-safe canonical root mount. Branch-name/ref-dependent lane assertions cannot be copied into the root denominator unchanged.
-4. Product Assurance production scan must be regenerated for the exact integrated source; provisional measurement is 555 scanned production files, 205 covered operations, 0 uncovered.
-5. D-LAUNCH-60 findings remain to adjudicate: invariant families 15/17; cockpit slots 141/178 `MISSING` or `NOT_CONFIGURED`; tracked Role-3 C2 verdict copy absent from campaign artifacts; money-path no-send fields not yet derived from exact implementation blobs.
-6. Required campaign artifacts are incomplete and `INPUTS.lock` cannot bind a candidate until source C is frozen.
-7. Root `STATE.md` remains `CONFLICTING` and must be rewritten atomically at the source-candidate freeze.
+## Later gates
+
+- Account B exact-C provenance and independent verification: `BLOCKED`.
+- Canonical cockpit independent browser truth: `BLOCKED`.
+- Composed runtime and soak: `BLOCKED`.
+- Staging, sentinel, paging, restore, rollback: `NOT_CONFIGURED`.
+- Private/signed bring-up: `DEFERRED_OWNER_GATE`.
+- Test-order/canary capability: `NOT_CONFIGURED`.
+- Forward economic edge: `ABSTAIN_UNKNOWN`.
 
 ## Exact next action
 
-Implement the two bounded candidate fixes, mount the admitted tests without branch/ref dependence, close or explicitly disposition every D-LAUNCH-60 finding, regenerate Product Assurance denominators from tracked candidate content, commit the source candidate, and run the fresh single-branch clean-clone gate against that immutable SHA. No source change may occur after that source SHA is handed to Account B.
+The owner/director supplies or authorizes an actual off-machine custody destination for the exact bundle without mutating or pushing `current-main`. Record the returned custody digest/receipt, refresh the four candidate-bound campaign verdict files and manifest, then reassess the Pass-0 gate. Until that authority/evidence arrives, stop at this precise `BLOCKED` state.
+
+## Receipt fields
+
+- Command/operator action: Account-A census, Git contradiction reconciliation, donor provenance, independent directive extraction, candidate freeze, and clean-clone preparation/execution.
+- Environment/toolchain digest: `8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca`.
+- Dependency lock SHA-256: `3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf`.
+- Start/end UTC: `2026-07-16T11:17:11Z` / `2026-07-16T11:43:00Z`.
+- Exit code: `0` for evidence construction; clean-clone root test exit `0`; test counts are in `CLEAN_CLONE_ACCEPTANCE.md`.
+- Artifact hashes: `MANIFEST.sha256` is generated last and excludes itself.
+- Actor: `ACCOUNT_A`; source write permission after C freeze: `false`.
+- Deviations/skips/unavailable: off-machine custody absent; Account B material not read; independent/runtime/staging/private/money gates not claimed.

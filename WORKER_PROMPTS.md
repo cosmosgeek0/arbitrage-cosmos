@@ -12,7 +12,16 @@
 #
 #  CI on GitHub stays RED until Account A lands a clean-clone-verified candidate.
 #     That red is a test-harness/environment issue, NOT product breakage. Expected.
+#
+#  NEW (D-LAUNCH-57): paste the AMENDMENT block below into BOTH running
+#     campaign chats (ACCOUNT-A and ACCOUNT-B). One paste each. That's all.
 ########################################################################
+
+## AMENDMENT — paste into BOTH the ACCOUNT-A chat and the ACCOUNT-B chat
+```text
+D-LAUNCH-54 SAFETY AMENDMENT (director-adjudicated D-LAUNCH-57; binding): (1) truth-b is PREPARATION_ONLY — after Account A freezes exact candidate C, the final verification MUST run in a brand-new clean clone or detached worktree created at exact C; only that fresh environment may issue VERIFIED_ACCEPTED. (2) Account A must NOT freeze C until: port-a4/egress/ci-hotfix lanes are each sealed or explicitly excluded with receipts; all 94 worktrees have exactly one evidence-backed disposition (zero UNKNOWN); every P0 contradiction is resolved; both deferred money-path contracts (ledger compare-and-set, Foundation quantity bridge) have explicit cited receipts; and BASELINE_TRUTH_ACCEPTED:C is recorded. (3) The worktree census is NOT a merge queue — "sealed" does not mean "merge"; only explicitly authorized, requirement-backed donors enter C; duplicate/superseded/historical/blocked/parked/Frontier worktrees stay excluded with recorded dispositions. (4) Required artifacts, and any MISSING/CONFLICTING/UNKNOWN/unproven row blocks acceptance: DIRECTIVE_INPUTS.lock (hashes of EVERY supplied directive incl. archived + superseded), AUTHORITY_RESOLUTION.md, DIRECTIVE_COVERAGE_MATRIX.csv, WORKTREE_CENSUS.json, MERGE_PROVENANCE.json. (5) Final landing to current-main will be MECHANICAL promotion of the verified candidate tree with exact tree-hash equality — no source surgery at landing, and not performed by the retired high-context director. Commit all preparation artifacts and receipts before any context compaction. Continue.
+```
+
 
 ## ACCOUNT-A — folder /Users/cosmosgeek/Desktop/truth-a
 ```text

@@ -6,6 +6,8 @@
  */
 import {
   CONTROL_FAILURE_CODES,
+  SUPERVISOR_FAILURE_HISTORY_CAPACITY as FAILURE_HISTORY_CAPACITY,
+  SUPERVISOR_TRANSITION_HISTORY_CAPACITY as TRANSITION_HISTORY_CAPACITY,
   createDeterministicSupervisor,
 } from '../../../dist/foundation/control/index.js';
 import {
@@ -565,6 +567,110 @@ section('20. environment-provider loss stays explicit and fails closed');
   check('provider loss is not misreported as borrow or kill-switch fact', snapshot.lastError?.code === CONTROL_FAILURE_CODES.ENVIRONMENT_UNAVAILABLE);
   check('unavailable private-key fact is passed as null', publicProbePrivateKeyFact === null && safetyStopPrivateKeyFact === null);
   check('public component remains running under explicit degraded posture', snapshot.components.find((component) => component.name === 'publicFeed')?.phase === 'RUNNING');
+}
+
+// =====================================================================
+section('21. persistent probe defects coalesce into bounded first/last evidence');
+{
+  const throwing = managed('throwingProbe', {
+    required: false,
+    probe: () => { throw new Error('hidden repeated probe defect'); },
+  });
+  const malformed = managed('malformedProbe', {
+    required: false,
+    probe: () => ({ heartbeatAt: 'not-a-timestamp', timestamp: null, fatal: null }),
+  });
+  const supervisor = makeSupervisor({ components: [throwing.component, malformed.component] });
+  issue(supervisor, 'START', 1);
+  const tickCount = FAILURE_HISTORY_CAPACITY * 4;
+  for (let index = 1; index <= tickCount; index += 1) supervisor.tick(T0 + index);
+  const occurrenceCount = tickCount + 1; // START performs the first admitted health pass at T0.
+
+  const history = supervisor.failureHistory();
+  const thrownEntries = history.filter((entry) => entry.failure.code === CONTROL_FAILURE_CODES.COMPONENT_PROBE_THREW);
+  const invalidEntries = history.filter((entry) => entry.failure.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+  const thrown = thrownEntries.find((entry) => entry.occurrenceCount === tickCount);
+  const invalid = invalidEntries.find((entry) => entry.occurrenceCount === tickCount);
+  const retention = supervisor.historyRetention();
+  check('failures coalesce within exact command and health correlations', history.length === 4
+    && thrownEntries.some((entry) => entry.occurrenceCount === 1)
+    && invalidEntries.some((entry) => entry.occurrenceCount === 1), String(history.length));
+  check('throwing probe count and exact first/last evidence are retained', thrown?.occurrenceCount === tickCount
+    && thrown.firstFailure?.occurredAt === T0 + 1
+    && thrown.lastFailure?.occurredAt === T0 + tickCount
+    && thrown.failure === thrown.lastFailure);
+  check('malformed probe count and exact first/last evidence are retained', invalid?.occurrenceCount === tickCount
+    && invalid.firstFailure?.occurredAt === T0 + 1
+    && invalid.lastFailure?.occurredAt === T0 + tickCount
+    && invalid.failure === invalid.lastFailure);
+  check('coalescing reports exact retained occurrences without false eviction', retention?.failureCapacity === FAILURE_HISTORY_CAPACITY
+    && retention.totalFailureOccurrences === occurrenceCount * 2
+    && retention.retainedFailureOccurrences === occurrenceCount * 2
+    && retention.evictedFailureRecords === 0
+    && retention.evictedFailureOccurrences === 0);
+  check('latest supervisor failure remains current rather than frozen at first occurrence', supervisor.snapshot().lastError?.occurredAt === T0 + tickCount);
+}
+
+// =====================================================================
+section('22. unique failures and phase flapping retain bounded honest history');
+{
+  let uniqueIndex = 0;
+  const unique = managed('uniqueProbe', {
+    required: false,
+    probe: (ctx) => {
+      uniqueIndex += 1;
+      return {
+        heartbeatAt: ctx.nowMs,
+        timestamp: timestamp(ctx.nowMs),
+        fatal: portFailure('uniqueProbe', 'probe', `UNIQUE_PROBE_${uniqueIndex}`, ctx),
+      };
+    },
+  });
+  const uniqueSupervisor = makeSupervisor({ components: [unique.component] });
+  issue(uniqueSupervisor, 'START', 1);
+  const uniqueTickCount = FAILURE_HISTORY_CAPACITY + 7;
+  for (let index = 1; index <= uniqueTickCount; index += 1) uniqueSupervisor.tick(T0 + index);
+  const uniqueOccurrenceCount = uniqueTickCount + 1;
+  const uniqueRetention = uniqueSupervisor.historyRetention();
+  check('unique failure aggregates never exceed the fixed capacity', uniqueSupervisor.failureHistory().length === FAILURE_HISTORY_CAPACITY);
+  check('failure eviction is counted exactly instead of hidden', uniqueRetention?.totalFailureOccurrences === uniqueOccurrenceCount
+    && uniqueRetention.retainedFailureOccurrences === FAILURE_HISTORY_CAPACITY
+    && uniqueRetention.evictedFailureRecords === uniqueOccurrenceCount - FAILURE_HISTORY_CAPACITY
+    && uniqueRetention.evictedFailureOccurrences === uniqueOccurrenceCount - FAILURE_HISTORY_CAPACITY);
+  check('newest failure survives bounded eviction', uniqueSupervisor.snapshot().lastError?.code === `UNIQUE_PROBE_${uniqueIndex}`
+    && uniqueSupervisor.failureHistory().at(-1)?.failure.code === `UNIQUE_PROBE_${uniqueIndex}`);
+
+  let throwNext = true;
+  const flapping = managed('flappingProbe', {
+    required: false,
+    probe: (ctx) => {
+      if (throwNext) {
+        throwNext = false;
+        throw new Error('hidden flapping defect');
+      }
+      throwNext = true;
+      return { heartbeatAt: ctx.nowMs, timestamp: timestamp(ctx.nowMs), fatal: null };
+    },
+  });
+  const transitionSupervisor = makeSupervisor({ components: [flapping.component] });
+  issue(transitionSupervisor, 'START', 1);
+  const transitionsBefore = transitionSupervisor.historyRetention().totalTransitionRecords;
+  const flapCount = TRANSITION_HISTORY_CAPACITY * 2;
+  for (let index = 1; index <= flapCount; index += 1) transitionSupervisor.tick(T0 + index);
+  const transitions = transitionSupervisor.transitionHistory();
+  const transitionRetention = transitionSupervisor.historyRetention();
+  const lastTransition = transitions.at(-1);
+  const indexedTargets = lastTransition?.correlationId === null
+    ? []
+    : transitionSupervisor.transitionTargetsForCorrelation(lastTransition.correlationId);
+  check('phase-transition history is capped and chronological', transitions.length === TRANSITION_HISTORY_CAPACITY
+    && transitions.every((entry, index, all) => index === 0 || entry.atMs >= all[index - 1].atMs));
+  check('transition retention accounts for every overwritten record', transitionRetention?.transitionCapacity === TRANSITION_HISTORY_CAPACITY
+    && transitionRetention.totalTransitionRecords === transitionsBefore + flapCount
+    && transitionRetention.retainedTransitionRecords === TRANSITION_HISTORY_CAPACITY
+    && transitionRetention.evictedTransitionRecords === transitionsBefore + flapCount - TRANSITION_HISTORY_CAPACITY);
+  check('bounded correlation index retains the newest transition destination', lastTransition !== undefined
+    && indexedTargets.includes(lastTransition.to));
 }
 
 const passed = results.filter((result) => result.pass).length;

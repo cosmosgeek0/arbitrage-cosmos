@@ -46,6 +46,7 @@ import {
   type PersistedCommitReceipt,
   type PersistedControlRuntimePublicationReference,
   type PersistedControlRejectionReceipt,
+  type PersistedIdempotencyReceipt,
   type PersistedRestartTruth,
   type PersistedTraceEventRecord,
   type PersistedTraceQueryResult,
@@ -77,7 +78,28 @@ const DIGEST = /^(?:sha256:)?[a-f0-9]{32,64}$/i;
 const REASON_CODE = /^[A-Z][A-Z0-9_.:-]{0,99}$/;
 const AUDIT_SCHEMA = 'cosmos.system-integration.audit' as const;
 const AUDIT_VERSION = 1 as const;
+const IDEMPOTENCY_AUDIT_SCHEMA = 'cosmos.system-integration.idempotency' as const;
+const IDEMPOTENCY_AUDIT_VERSION = 1 as const;
+const MAX_IDEMPOTENCY_EVENT_READBACK = 8;
+const MAX_ATOMIC_LEDGER_EVENTS = 8;
 const SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
+
+interface DurableIdempotencyAuditEvent {
+  readonly schema: typeof IDEMPOTENCY_AUDIT_SCHEMA;
+  readonly version: typeof IDEMPOTENCY_AUDIT_VERSION;
+  readonly canonicalLedgerEventId: 'SELF' | number | null;
+  readonly receipt: Readonly<PersistedIdempotencyReceipt>;
+}
+
+interface DurableIdempotencyReadback {
+  readonly receipt: Readonly<PersistedIdempotencyReceipt>;
+  readonly ledgerEventId: number | null;
+}
+
+interface DurableIdempotencyWrite {
+  readonly receipt: Readonly<PersistedIdempotencyReceipt>;
+  readonly canonicalLedgerEventId: 'SELF' | number | null;
+}
 
 function failed<T>(code: PersistenceFailureCode, message: string): PersistenceResult<T> {
   return { ok: false, code, message };
@@ -124,6 +146,42 @@ function sameJson(left: unknown, right: unknown): boolean {
 
 function requiresRuntimePublication(command: unknown): boolean {
   return command === 'RESTART_COMPONENT' || command === 'SET_COMPONENT_STATE';
+}
+
+function idempotencyEventKind(idempotencyKey: string): string {
+  // Ledger event kinds are indexed and accept exactly 64 lowercase hex
+  // characters. The payload retains the full key, so any impossible digest
+  // collision is detected and fails closed rather than becoming a false miss.
+  return persistenceDigest(`${IDEMPOTENCY_AUDIT_SCHEMA}:${idempotencyKey}`);
+}
+
+function validPersistedIdempotencyReceipt(value: unknown): value is Readonly<PersistedIdempotencyReceipt> {
+  if (!isRecord(value)
+    || Object.keys(value).length !== 6
+    || !IDEMPOTENCY_KEY.test(String(value.idempotencyKey))
+    || !DIGEST.test(String(value.requestDigest))
+    || !CORRELATION_ID.test(String(value.correlationId))
+    || !validUtcMillis(value.recordedAtMs)
+    || !Number.isSafeInteger(value.checkpointRevision)
+    || Number(value.checkpointRevision) < 1) return false;
+  try {
+    canonicalPersistenceJson(value.receipt);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function terminalControlReceipt(value: Readonly<PersistedIdempotencyReceipt>): boolean {
+  if (!isRecord(value.receipt) || value.receipt.kind !== 'CONTROL_MUTATION') return false;
+  const publication = value.receipt.runtimePublication;
+  return publication === 'NOT_REQUIRED' || publication === 'PUBLISHED';
+}
+
+function unresolvedControlRuntimePublication(value: Readonly<PersistedIdempotencyReceipt>): boolean {
+  if (!isRecord(value.receipt) || value.receipt.kind !== 'CONTROL_MUTATION') return false;
+  const publication = value.receipt.runtimePublication;
+  return publication === 'PENDING' || publication === 'UNKNOWN';
 }
 
 function checkpointChecksum(serialized: string): string {
@@ -939,6 +997,80 @@ export class SystemLedgerPersistenceAdapter {
     }
   }
 
+  private durableIdempotencyReceipt(
+    idempotencyKey: string,
+  ): PersistenceResult<Readonly<DurableIdempotencyReadback> | null> {
+    let rows: LedgerEventRecord[];
+    try {
+      rows = this.ledger.recentEvents(
+        MAX_IDEMPOTENCY_EVENT_READBACK,
+        idempotencyEventKind(idempotencyKey),
+      );
+    } catch (error) {
+      return failed(
+        'PERSISTENCE_READ_FAILED',
+        errorMessage(error, 'durable idempotency readback failed'),
+      );
+    }
+    if (rows.length === 0) return { ok: true, value: null };
+
+    let newest: Readonly<DurableIdempotencyReadback> | null = null;
+    let canonicalIntent: Readonly<PersistedIdempotencyReceipt> | null = null;
+    for (const row of rows) {
+      if (!isRecord(row.data)
+        || Object.keys(row.data).length !== 4
+        || row.data.schema !== IDEMPOTENCY_AUDIT_SCHEMA
+        || row.data.version !== IDEMPOTENCY_AUDIT_VERSION
+        || !validPersistedIdempotencyReceipt(row.data.receipt)
+        || row.data.receipt.idempotencyKey !== idempotencyKey) {
+        return failed(
+          'PERSISTENCE_CORRUPT',
+          'durable idempotency evidence is malformed or conflicts with its indexed key',
+        );
+      }
+      const canonicalLedgerEventId = row.data.canonicalLedgerEventId;
+      if (canonicalLedgerEventId !== 'SELF'
+        && canonicalLedgerEventId !== null
+        && (!Number.isSafeInteger(canonicalLedgerEventId) || Number(canonicalLedgerEventId) < 1)) {
+        return failed('PERSISTENCE_CORRUPT', 'durable idempotency event identity is invalid');
+      }
+      const candidate = row.data.receipt;
+      if (canonicalIntent === null) {
+        canonicalIntent = candidate;
+      } else {
+        const candidateReceipt = isRecord(candidate.receipt) ? candidate.receipt : null;
+        const canonicalReceipt = isRecord(canonicalIntent.receipt) ? canonicalIntent.receipt : null;
+        const candidatePublication = candidateReceipt?.runtimePublication;
+        const canonicalPublication = canonicalReceipt?.runtimePublication;
+        const sameReceipt = candidateReceipt !== null && canonicalReceipt !== null
+          && sameJson(
+            { ...candidateReceipt, runtimePublication: 'TERMINAL_OR_PENDING' },
+            { ...canonicalReceipt, runtimePublication: 'TERMINAL_OR_PENDING' },
+          );
+        if (candidate.requestDigest !== canonicalIntent.requestDigest
+          || candidate.correlationId !== canonicalIntent.correlationId
+          || candidate.recordedAtMs !== canonicalIntent.recordedAtMs
+          || candidate.checkpointRevision !== canonicalIntent.checkpointRevision
+          || !sameReceipt
+          || !['NOT_REQUIRED', 'PENDING', 'PUBLISHED', 'UNKNOWN'].includes(String(candidatePublication))
+          || !['NOT_REQUIRED', 'PENDING', 'PUBLISHED', 'UNKNOWN'].includes(String(canonicalPublication))) {
+          return failed('PERSISTENCE_CORRUPT', 'durable idempotency evidence conflicts across revisions');
+        }
+      }
+      if (newest === null) {
+        newest = Object.freeze({
+          receipt: candidate,
+          ledgerEventId: canonicalLedgerEventId === 'SELF'
+            ? row.id
+            : canonicalLedgerEventId === null
+              ? null
+              : Number(canonicalLedgerEventId),
+        });
+      }
+    }
+    return { ok: true, value: newest };
+  }
+
   private withProductIdentityRestartBarrier(
     base: Readonly<RestartBarrierProjection>,
     state: Readonly<SystemIntegrationCheckpointState>,
@@ -1231,6 +1363,7 @@ export class SystemLedgerPersistenceAdapter {
   private writePrepared(
     nextState: Readonly<SystemIntegrationCheckpointState>,
     audit: Readonly<PersistenceAuditInput>,
+    idempotencyWrites: readonly Readonly<DurableIdempotencyWrite>[] = Object.freeze([]),
   ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
     if (this.sealed) return failed('PERSISTENCE_SEALED', 'final shutdown checkpoint has sealed this adapter');
     let serialized: string;
@@ -1252,11 +1385,29 @@ export class SystemLedgerPersistenceAdapter {
       checkpointChecksum: checksum,
       trace,
     }));
+    const durableIdempotencyEvents: readonly DurableIdempotencyAuditEvent[] = idempotencyWrites.map((entry) => ({
+      schema: IDEMPOTENCY_AUDIT_SCHEMA,
+      version: IDEMPOTENCY_AUDIT_VERSION,
+      canonicalLedgerEventId: entry.canonicalLedgerEventId,
+      receipt: entry.receipt,
+    }));
+    if (data.length + durableIdempotencyEvents.length > MAX_ATOMIC_LEDGER_EVENTS) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'persistence atomic event batch exceeds its bound');
+    }
     try {
       for (const auditEvent of data) {
         const encodedAudit = canonicalPersistenceJson(auditEvent);
         if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
           return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit event exceeds its byte bound');
+        }
+      }
+      for (const durableEvent of durableIdempotencyEvents) {
+        if (!validPersistedIdempotencyReceipt(durableEvent.receipt)) {
+          return failed('INVALID_PERSISTENCE_REQUEST', 'durable idempotency receipt is invalid');
+        }
+        const encodedAudit = canonicalPersistenceJson(durableEvent);
+        if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
+          return failed('INVALID_PERSISTENCE_REQUEST', 'durable idempotency event exceeds its byte bound');
         }
       }
       if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
@@ -1269,11 +1420,18 @@ export class SystemLedgerPersistenceAdapter {
         SYSTEM_PERSISTENCE_CONFIG_KEY,
         this.loadedSerializedValue,
         serialized,
-        data.map((auditEvent) => ({
-          kind: SYSTEM_PERSISTENCE_EVENT_KIND,
-          symbol: null,
-          data: auditEvent,
-        })),
+        [
+          ...data.map((auditEvent) => ({
+            kind: SYSTEM_PERSISTENCE_EVENT_KIND,
+            symbol: null,
+            data: auditEvent,
+          })),
+          ...durableIdempotencyEvents.map((durableEvent) => ({
+            kind: idempotencyEventKind(durableEvent.receipt.idempotencyKey),
+            symbol: null,
+            data: durableEvent,
+          })),
+        ],
       );
       if (!result.committed) {
         this.refreshAfterCompareAndSetConflict(result.currentValue);
@@ -1334,9 +1492,10 @@ export class SystemLedgerPersistenceAdapter {
     }
   }
 
-  commitCheckpoint(
+  private commitCheckpointInternal(
     nextState: Readonly<SystemIntegrationCheckpointState>,
     audit: Readonly<PersistenceAuditInput>,
+    idempotencyWrites: readonly Readonly<DurableIdempotencyWrite>[],
   ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
     const current = this.currentState();
     if (!current.ok) return current;
@@ -1353,7 +1512,14 @@ export class SystemLedgerPersistenceAdapter {
       if (!indexed.ok) return indexed;
       prepared = indexed.value;
     }
-    return this.writePrepared(prepared, audit);
+    return this.writePrepared(prepared, audit, idempotencyWrites);
+  }
+
+  commitCheckpoint(
+    nextState: Readonly<SystemIntegrationCheckpointState>,
+    audit: Readonly<PersistenceAuditInput>,
+  ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
+    return this.commitCheckpointInternal(nextState, audit, Object.freeze([]));
   }
 
   applyIdempotentTransition<T extends SystemJsonValue>(
@@ -1381,21 +1547,90 @@ export class SystemLedgerPersistenceAdapter {
       return failed('INVALID_PERSISTENCE_REQUEST', 'idempotent transition metadata is invalid');
     }
     const existing = current.value.idempotencyReceipts.find((entry) => entry.idempotencyKey === input.idempotencyKey);
+    const durableExisting = this.durableIdempotencyReceipt(input.idempotencyKey);
+    if (!durableExisting.ok) return durableExisting;
     if (existing) {
       if (existing.requestDigest !== input.requestDigest) {
+        return failed('IDEMPOTENCY_KEY_CONFLICT', 'idempotency key was used for different intent');
+      }
+      if (durableExisting.value !== null && (
+        durableExisting.value.receipt.requestDigest !== existing.requestDigest
+        || durableExisting.value.receipt.correlationId !== existing.correlationId
+        || durableExisting.value.receipt.recordedAtMs !== existing.recordedAtMs
+        || durableExisting.value.receipt.checkpointRevision !== existing.checkpointRevision
+        || !sameJson(durableExisting.value.receipt.receipt, existing.receipt)
+      )) {
+        return failed('PERSISTENCE_CORRUPT', 'checkpoint and durable idempotency evidence conflict');
+      }
+      return {
+        ok: true,
+        value: Object.freeze({
+          replayed: true,
+          receipt: jsonClone((durableExisting.value?.receipt.receipt ?? existing.receipt) as T),
+          checkpointRevision: existing.checkpointRevision,
+          ledgerEventId: durableExisting.value?.ledgerEventId
+            ?? this.findAuditEvent(existing.checkpointRevision)?.id
+            ?? null,
+        }),
+      };
+    }
+    if (durableExisting.value !== null) {
+      if (unresolvedControlRuntimePublication(durableExisting.value.receipt)) {
+        return failed(
+          'PERSISTENCE_CORRUPT',
+          'unresolved control publication evidence is missing from the active checkpoint',
+        );
+      }
+      if (durableExisting.value.receipt.requestDigest !== input.requestDigest) {
         return failed('IDEMPOTENCY_KEY_CONFLICT', 'idempotency key was used for different intent');
       }
       return {
         ok: true,
         value: Object.freeze({
           replayed: true,
-          receipt: jsonClone(existing.receipt as T),
-          checkpointRevision: existing.checkpointRevision,
-          ledgerEventId: this.findAuditEvent(existing.checkpointRevision)?.id ?? null,
+          receipt: jsonClone(durableExisting.value.receipt.receipt as T),
+          checkpointRevision: durableExisting.value.receipt.checkpointRevision,
+          ledgerEventId: durableExisting.value.ledgerEventId,
         }),
       };
     }
-    if (current.value.idempotencyReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
+
+    let retainedReceipts = current.value.idempotencyReceipts;
+    const durableWrites: DurableIdempotencyWrite[] = [];
+    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
+      let evicted = false;
+      for (let index = 0; index < retainedReceipts.length; index += 1) {
+        const candidate = retainedReceipts[index];
+        if (!terminalControlReceipt(candidate)) continue;
+        const archived = this.durableIdempotencyReceipt(candidate.idempotencyKey);
+        if (!archived.ok) return archived;
+        if (archived.value !== null && (
+          archived.value.receipt.requestDigest !== candidate.requestDigest
+          || archived.value.receipt.correlationId !== candidate.correlationId
+          || archived.value.receipt.recordedAtMs !== candidate.recordedAtMs
+          || archived.value.receipt.checkpointRevision !== candidate.checkpointRevision
+          || !sameJson(archived.value.receipt.receipt, candidate.receipt)
+        )) {
+          return failed('PERSISTENCE_CORRUPT', 'terminal control receipt conflicts with its durable archive');
+        }
+        if (archived.value === null) {
+          durableWrites.push(Object.freeze({
+            receipt: candidate,
+            canonicalLedgerEventId: this.findAuditEvent(candidate.checkpointRevision)?.id ?? null,
+          }));
+        }
+        retainedReceipts = Object.freeze([
+          ...retainedReceipts.slice(0, index),
+          ...retainedReceipts.slice(index + 1),
+        ]);
+        evicted = true;
+        break;
+      }
+      if (!evicted) {
+        return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted by non-evictable evidence');
+      }
+    }
+    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
       return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted; refusing unsafe eviction');
     }
     let transition;
@@ -1413,32 +1648,42 @@ export class SystemLedgerPersistenceAdapter {
       return failed('CHECKPOINT_REVISION_CONFLICT', 'idempotent transition did not produce the next checkpoint revision');
     }
     const receipt = jsonClone(transition.receipt);
+    const persistedReceipt: Readonly<PersistedIdempotencyReceipt> = Object.freeze({
+      idempotencyKey: input.idempotencyKey,
+      requestDigest: input.requestDigest,
+      correlationId: input.correlationId,
+      recordedAtMs: input.occurredAtMs,
+      checkpointRevision: transition.nextState.revision,
+      receipt,
+    });
     const nextState: SystemIntegrationCheckpointState = {
       ...transition.nextState,
-      idempotencyReceipts: [...transition.nextState.idempotencyReceipts, {
-        idempotencyKey: input.idempotencyKey,
-        requestDigest: input.requestDigest,
-        correlationId: input.correlationId,
-        recordedAtMs: input.occurredAtMs,
-        checkpointRevision: transition.nextState.revision,
-        receipt,
-      }],
+      idempotencyReceipts: [...retainedReceipts, persistedReceipt],
     };
-    const committed = this.commitCheckpoint(nextState, {
+    const isControlReceipt = isRecord(receipt) && receipt.kind === 'CONTROL_MUTATION';
+    if (isControlReceipt) {
+      durableWrites.push(Object.freeze({ receipt: persistedReceipt, canonicalLedgerEventId: 'SELF' }));
+    }
+    const committed = this.commitCheckpointInternal(nextState, {
       auditKind: 'TRANSITION',
       correlationId: input.correlationId,
       occurredAtMs: input.occurredAtMs,
       traceEvent: input.traceEvent,
       traceEvents: input.traceEvents,
-    });
+    }, durableWrites);
     if (!committed.ok) return committed;
+    const durableCommitted = isControlReceipt
+      ? this.durableIdempotencyReceipt(input.idempotencyKey)
+      : { ok: true as const, value: null };
     return {
       ok: true,
       value: Object.freeze({
         replayed: false,
         receipt,
         checkpointRevision: committed.value.checkpointRevision,
-        ledgerEventId: committed.value.ledgerEventId,
+        ledgerEventId: durableCommitted.ok
+          ? durableCommitted.value?.ledgerEventId ?? committed.value.ledgerEventId
+          : committed.value.ledgerEventId,
       }),
     };
   }
@@ -1478,16 +1723,32 @@ export class SystemLedgerPersistenceAdapter {
     };
   }
 
-  queryTrace(query: Readonly<TraceQuery>): PersistenceResult<Readonly<PersistedTraceQueryResult>> {
-    if (!query || !CORRELATION_ID.test(query.correlationId)) {
-      return failed('INVALID_PERSISTENCE_REQUEST', 'trace correlation ID is invalid');
+  queryTraces(
+    queries: readonly Readonly<TraceQuery>[],
+  ): PersistenceResult<readonly Readonly<PersistedTraceQueryResult>[]> {
+    if (!Array.isArray(queries)
+      || queries.length > SYSTEM_PERSISTENCE_LIMITS.maximumTraceIndexEntries) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'trace query batch exceeds its bound');
     }
-    const limit = query.limit ?? 100;
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit
-      || (query.sinceMs !== undefined && !validUtcMillis(query.sinceMs))
-      || (query.untilMs !== undefined && !validUtcMillis(query.untilMs))
-      || (query.sinceMs !== undefined && query.untilMs !== undefined && query.sinceMs >= query.untilMs)) {
-      return failed('INVALID_PERSISTENCE_REQUEST', 'trace query bounds are invalid');
+    if (queries.length === 0) return { ok: true, value: Object.freeze([]) };
+    const correlations = new Set<string>();
+    const normalized: Array<Readonly<{ query: Readonly<TraceQuery>; limit: number }>> = [];
+    for (const query of queries) {
+      if (!query || !CORRELATION_ID.test(query.correlationId)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace correlation ID is invalid');
+      }
+      if (correlations.has(query.correlationId)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace query batch contains a duplicate correlation ID');
+      }
+      correlations.add(query.correlationId);
+      const limit = query.limit ?? 100;
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit
+        || (query.sinceMs !== undefined && !validUtcMillis(query.sinceMs))
+        || (query.untilMs !== undefined && !validUtcMillis(query.untilMs))
+        || (query.sinceMs !== undefined && query.untilMs !== undefined && query.sinceMs >= query.untilMs)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace query bounds are invalid');
+      }
+      normalized.push(Object.freeze({ query, limit }));
     }
     let raw: LedgerEventRecord[];
     try {
@@ -1498,33 +1759,51 @@ export class SystemLedgerPersistenceAdapter {
     } catch (error) {
       return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
     }
-    const matching: PersistedTraceEventRecord[] = [];
+    const grouped = new Map<string, PersistedTraceEventRecord[]>(
+      [...correlations].map((correlationId) => [correlationId, []]),
+    );
     for (const row of raw) {
       if (!isRecord(row.data)) continue;
       if (!isRecord(row.data.trace)) continue;
       const sourceTrace = row.data.trace;
-      if (sourceTrace.correlationId !== query.correlationId) continue;
+      if (typeof sourceTrace.correlationId !== 'string') continue;
+      const matching = grouped.get(sourceTrace.correlationId);
+      if (!matching) continue;
       if (typeof sourceTrace.occurredAtMs !== 'number') continue;
-      if (query.sinceMs !== undefined && sourceTrace.occurredAtMs < query.sinceMs) continue;
-      if (query.untilMs !== undefined && sourceTrace.occurredAtMs >= query.untilMs) continue;
       const event = { ...sourceTrace, persistedAtMs: row.ts } as unknown as SystemTraceEvent;
       if (validateSystemTraceEvent(event).length > 0) continue;
       matching.push(Object.freeze({ ledgerEventId: row.id, persistedAtMs: row.ts, event: Object.freeze(event) }));
     }
-    matching.sort((left, right) => (
-      left.event.sequence - right.event.sequence
-      || left.event.occurredAtMs - right.event.occurredAtMs
-      || left.ledgerEventId - right.ledgerEventId
-    ));
-    const truncated = matching.length > limit || raw.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
-    const events = matching.slice(Math.max(0, matching.length - limit));
-    return {
-      ok: true,
-      value: Object.freeze({
+    for (const matching of grouped.values()) {
+      matching.sort((left, right) => (
+        left.event.sequence - right.event.sequence
+        || left.event.occurredAtMs - right.event.occurredAtMs
+        || left.ledgerEventId - right.ledgerEventId
+      ));
+    }
+    const scanTruncated = raw.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
+    const results = normalized.map(({ query, limit }) => {
+      const matching = (grouped.get(query.correlationId) ?? []).filter((entry) => (
+        (query.sinceMs === undefined || entry.event.occurredAtMs >= query.sinceMs)
+        && (query.untilMs === undefined || entry.event.occurredAtMs < query.untilMs)
+      ));
+      const truncated = matching.length > limit || scanTruncated;
+      const events = matching.slice(Math.max(0, matching.length - limit));
+      return Object.freeze({
         correlationId: query.correlationId,
         events: Object.freeze(events),
         truncated,
-      }),
+      });
+    });
+    return { ok: true, value: Object.freeze(results) };
+  }
+
+  queryTrace(query: Readonly<TraceQuery>): PersistenceResult<Readonly<PersistedTraceQueryResult>> {
+    const queried = this.queryTraces(Object.freeze([query]));
+    if (!queried.ok) return queried;
+    return {
+      ok: true,
+      value: queried.value[0],
     };
   }
 
@@ -1812,13 +2091,16 @@ export class SystemLedgerPersistenceAdapter {
 
   private controlReceiptFromStored(
     stored: Readonly<{ checkpointRevision: number; receipt: SystemJsonValue }>,
+    canonicalLedgerEventId?: number | null,
   ): Readonly<SystemControlMutationReceipt> | null {
     if (!isRecord(stored.receipt) || stored.receipt.kind !== 'CONTROL_MUTATION'
       || typeof stored.receipt.applied !== 'boolean'
       || typeof stored.receipt.code !== 'string'
       || !isRecord(stored.receipt.before)
       || !isRecord(stored.receipt.after)) return null;
-    const eventId = this.findAuditEvent(stored.checkpointRevision)?.id ?? null;
+    const eventId = canonicalLedgerEventId === undefined
+      ? this.findAuditEvent(stored.checkpointRevision)?.id ?? null
+      : canonicalLedgerEventId;
     return Object.freeze({
       applied: stored.receipt.applied,
       code: stored.receipt.code,
@@ -1892,9 +2174,16 @@ export class SystemLedgerPersistenceAdapter {
     if (!IDEMPOTENCY_KEY.test(idempotencyKey)) return null;
     const current = this.currentState();
     if (!current.ok) throw new Error(current.message);
-    const stored = current.value.idempotencyReceipts.find((entry) => entry.idempotencyKey === idempotencyKey);
+    let stored = current.value.idempotencyReceipts.find((entry) => entry.idempotencyKey === idempotencyKey);
+    const durable = this.durableIdempotencyReceipt(idempotencyKey);
+    if (!durable.ok) throw new Error(durable.message);
+    if (!stored && durable.value !== null && unresolvedControlRuntimePublication(durable.value.receipt)) {
+      throw new Error('unresolved control publication evidence is missing from the active checkpoint');
+    }
+    stored ??= durable.value?.receipt;
+    const canonicalLedgerEventId = durable.value?.ledgerEventId;
     if (!stored) return null;
-    const receipt = this.controlReceiptFromStored(stored);
+    const receipt = this.controlReceiptFromStored(stored, canonicalLedgerEventId);
     const runtimePublication = this.controlRuntimePublicationFromStored(stored);
     const mutation = isRecord(stored.receipt)
       && stored.receipt.kind === 'CONTROL_MUTATION'
@@ -1917,14 +2206,21 @@ export class SystemLedgerPersistenceAdapter {
   async commitControlMutation(commit: Readonly<ControlPersistenceCommit>): Promise<ControlPersistenceResult> {
     const current = this.currentState();
     if (!current.ok) throw new Error(current.message);
-    const existing = current.value.idempotencyReceipts.find(
+    let existing = current.value.idempotencyReceipts.find(
       (entry) => entry.idempotencyKey === commit.request.idempotencyKey,
     );
+    const durable = this.durableIdempotencyReceipt(commit.request.idempotencyKey);
+    if (!durable.ok) throw new Error(durable.message);
+    if (!existing && durable.value !== null && unresolvedControlRuntimePublication(durable.value.receipt)) {
+      throw new Error('unresolved control publication evidence is missing from the active checkpoint');
+    }
+    existing ??= durable.value?.receipt;
+    const canonicalLedgerEventId = durable.value?.ledgerEventId;
     if (existing) {
       if (existing.requestDigest !== commit.requestDigest) {
         return { kind: 'IDEMPOTENCY_CONFLICT', requestDigest: existing.requestDigest };
       }
-      const receipt = this.controlReceiptFromStored(existing);
+      const receipt = this.controlReceiptFromStored(existing, canonicalLedgerEventId);
       const runtimePublication = this.controlRuntimePublicationFromStored(existing);
       if (!receipt || !runtimePublication) throw new Error('persisted control receipt is invalid');
       return {
@@ -2065,14 +2361,26 @@ export class SystemLedgerPersistenceAdapter {
       throw new Error('persisted control runtime publication state is invalid');
     }
 
+    const durable = this.durableIdempotencyReceipt(commit.idempotencyKey);
+    if (!durable.ok) throw new Error(durable.message);
+    if (durable.value !== null && (
+      durable.value.receipt.requestDigest !== stored.requestDigest
+      || durable.value.receipt.correlationId !== stored.correlationId
+      || durable.value.receipt.recordedAtMs !== stored.recordedAtMs
+      || durable.value.receipt.checkpointRevision !== stored.checkpointRevision
+    )) {
+      throw new Error('persisted control runtime publication archive conflicts');
+    }
+    const publishedReceipt = Object.freeze({
+      ...(stored.receipt as Readonly<Record<string, SystemJsonValue>>),
+      runtimePublication: 'PUBLISHED' as const,
+    });
+    const publishedStoredReceipt: Readonly<PersistedIdempotencyReceipt> = Object.freeze({
+      ...stored,
+      receipt: publishedReceipt,
+    });
     const nextReceipts = current.value.idempotencyReceipts.map((entry, entryIndex) => entryIndex === index
-      ? Object.freeze({
-          ...entry,
-          receipt: Object.freeze({
-            ...(entry.receipt as Readonly<Record<string, SystemJsonValue>>),
-            runtimePublication: 'PUBLISHED',
-          }),
-        })
+      ? publishedStoredReceipt
       : entry);
     const nextState: SystemIntegrationCheckpointState = {
       ...current.value,
@@ -2090,12 +2398,17 @@ export class SystemLedgerPersistenceAdapter {
       ownerId: null,
       referenceIds: [commit.idempotencyKey],
     });
-    const marked = this.commitCheckpoint(nextState, {
+    const marked = this.commitCheckpointInternal(nextState, {
       auditKind: 'TRANSITION',
       correlationId: commit.correlationId,
       occurredAtMs: commit.occurredAtMs,
       traceEvent: trace,
-    });
+    }, [Object.freeze({
+      receipt: publishedStoredReceipt,
+      canonicalLedgerEventId: durable.value?.ledgerEventId
+        ?? this.findAuditEvent(stored.checkpointRevision)?.id
+        ?? null,
+    })]);
     if (!marked.ok) throw new Error(`${marked.code}: ${marked.message}`);
     return { kind: 'PUBLISHED' };
   }

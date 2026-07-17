@@ -8,6 +8,7 @@ import { Ledger } from '../../../dist/ledger.js';
 import {
   SYSTEM_PERSISTENCE_CONFIG_KEY,
   SYSTEM_PERSISTENCE_EVENT_KIND,
+  SYSTEM_PERSISTENCE_LIMITS,
   SystemLedgerPersistenceAdapter,
   upsertReservationReference,
 } from '../../../dist/systemIntegration/persistence/index.js';
@@ -407,6 +408,68 @@ test('trace queries are exact, deterministic, and strictly bounded', () => {
     const invalid = adapter.queryTrace({ correlationId: 'trace.target', limit: 201 });
     assert.equal(invalid.ok, false);
     assert.equal(invalid.code, 'INVALID_PERSISTENCE_REQUEST');
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('maximum correlation batch parses one bounded Ledger window exactly once', () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  let traceWindowReads = 0;
+  const countedLedger = new Proxy(ledger, {
+    get(target, property) {
+      if (property === 'recentEvents') {
+        return (...args) => {
+          if (args[1] === SYSTEM_PERSISTENCE_EVENT_KIND) traceWindowReads += 1;
+          return target.recentEvents(...args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  try {
+    const adapter = new SystemLedgerPersistenceAdapter(countedLedger);
+    assert.equal(adapter.load(T0, 'trace.batch.empty').ok, true);
+    assert.equal(adapter.persistStartup({ startedAtMs: T0 + 1, correlationId: 'trace.batch.start' }).ok, true);
+    for (let index = 0; index < 5; index += 1) {
+      assert.equal(adapter.appendTraceEvent(trace(
+        `trace.batch.event.${index}`,
+        index + 2,
+        index === 4 ? 'trace.batch.other' : 'trace.batch.target',
+        T0 + 10 + index,
+        'PERSISTENCE',
+      )).ok, true);
+    }
+
+    const queries = Array.from(
+      { length: SYSTEM_PERSISTENCE_LIMITS.maximumTraceIndexEntries },
+      (_, index) => ({
+        correlationId: index === 0 ? 'trace.batch.target' : `trace.batch.missing.${String(index).padStart(4, '0')}`,
+        limit: SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit,
+      }),
+    );
+    const beforeBatch = traceWindowReads;
+    const batch = adapter.queryTraces(queries);
+    assert.equal(batch.ok, true);
+    assert.equal(traceWindowReads, beforeBatch + 1);
+    assert.equal(batch.value.length, SYSTEM_PERSISTENCE_LIMITS.maximumTraceIndexEntries);
+    assert.deepEqual(batch.value[0].events.map((entry) => entry.event.sequence), [2, 3, 4, 5]);
+    assert.equal(batch.value.slice(1).every((entry) => entry.events.length === 0), true);
+
+    const beforeInvalid = traceWindowReads;
+    const overBound = adapter.queryTraces([...queries, { correlationId: 'trace.batch.overflow' }]);
+    assert.equal(overBound.ok, false);
+    assert.equal(overBound.code, 'INVALID_PERSISTENCE_REQUEST');
+    const duplicate = adapter.queryTraces([
+      { correlationId: 'trace.batch.target' },
+      { correlationId: 'trace.batch.target' },
+    ]);
+    assert.equal(duplicate.ok, false);
+    assert.equal(duplicate.code, 'INVALID_PERSISTENCE_REQUEST');
+    assert.equal(traceWindowReads, beforeInvalid);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

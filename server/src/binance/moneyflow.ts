@@ -14,6 +14,7 @@ const WALK_TIMEOUT_MS = 20_000;
 const MAX_PAGE_BYTES = 2 * 1024 * 1024;
 const MAX_CACHE_ENTRIES = 512;
 const NEGATIVE_CACHE_MS = 5_000;
+const MAX_ACTIVE_WALKS = 4;
 
 export interface MoneyFlowBucket {
   buy: number;
@@ -50,8 +51,15 @@ interface AggTrade {
   m: boolean; // buyer is maker → taker sold
 }
 
+interface ActiveWalk {
+  controller: AbortController;
+  promise: Promise<MoneyFlow | null>;
+  subscribers: number;
+  settled: boolean;
+}
+
 const cache = new Map<string, { fetchedAt: number; data: MoneyFlow }>();
-const inFlight = new Map<string, Promise<MoneyFlow | null>>();
+const inFlight = new Map<string, ActiveWalk>();
 const failures = new Map<string, number>();
 const CACHE_MS = 45_000;
 
@@ -66,6 +74,40 @@ function boundedSet<K, V>(map: Map<K, V>, key: K, value: V, max = MAX_CACHE_ENTR
     if (oldest !== undefined) map.delete(oldest);
   }
   map.set(key, value);
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('money flow request aborted', 'AbortError');
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+async function joinActiveWalk(active: ActiveWalk, signal?: AbortSignal): Promise<MoneyFlow | null> {
+  if (signal?.aborted) throw abortReason(signal);
+  active.subscribers++;
+  let callerAborted = false;
+  let onAbort: (() => void) | null = null;
+  try {
+    if (!signal) return await active.promise;
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      onAbort = () => {
+        callerAborted = true;
+        reject(abortReason(signal));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+    return await Promise.race([active.promise, cancellation]);
+  } finally {
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    active.subscribers--;
+    if (callerAborted && active.subscribers === 0 && !active.settled) {
+      active.controller.abort(new DOMException('money flow request abandoned', 'AbortError'));
+    }
+  }
 }
 
 async function readAggTrades(res: Response): Promise<AggTrade[]> {
@@ -123,13 +165,15 @@ async function fetchAggTrades(symbol: string, endTime: number, signal: AbortSign
       throw new Error('money flow unavailable');
     }
     return await readAggTrades(res);
-  } catch {
+  } catch (error) {
+    if (signal.aborted) throw abortReason(signal);
     throw new Error('money flow unavailable');
   }
 }
 
-export async function fetchMoneyFlow(symbol: string, window: string): Promise<MoneyFlow | null> {
+export async function fetchMoneyFlow(symbol: string, window: string, signal?: AbortSignal): Promise<MoneyFlow | null> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('money flow unavailable');
+  if (signal?.aborted) throw abortReason(signal);
   const safeSymbol = canonicalSymbol(symbol);
   const windowMs = FLOW_WINDOWS[window];
   if (!safeSymbol || !windowMs) return null;
@@ -137,16 +181,18 @@ export async function fetchMoneyFlow(symbol: string, window: string): Promise<Mo
   const hit = cache.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_MS) return hit.data;
   if ((failures.get(key) ?? 0) > Date.now()) {
-    if (hit) return hit.data;
     throw new Error('money flow unavailable');
   }
   failures.delete(key);
   const existing = inFlight.get(key);
-  if (existing) return existing;
+  if (existing) return joinActiveWalk(existing, signal);
+  if (inFlight.size >= MAX_ACTIVE_WALKS) throw new Error('money flow capacity reached');
 
-  const work = (async (): Promise<MoneyFlow | null> => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), WALK_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new DOMException('money flow deadline exceeded', 'TimeoutError'));
+  }, WALK_TIMEOUT_MS);
+  const rawWork = (async (): Promise<MoneyFlow | null> => {
     try {
       const now = Date.now();
       const start = now - windowMs;
@@ -171,7 +217,7 @@ export async function fetchMoneyFlow(symbol: string, window: string): Promise<Mo
       let calls = 0;
       while (cursorEnd > start && calls < MAX_CALLS) {
         calls++;
-        const rows = await fetchAggTrades(safeSymbol, cursorEnd, ctrl.signal);
+        const rows = await fetchAggTrades(safeSymbol, cursorEnd, controller.signal);
         if (!rows.length) break;
         for (const tr of rows) {
           if (!tr || !Number.isFinite(tr.T) || tr.T < start || typeof tr.m !== 'boolean') continue;
@@ -211,18 +257,20 @@ export async function fetchMoneyFlow(symbol: string, window: string): Promise<Mo
       boundedSet(cache, key, { fetchedAt: now, data: flow });
       failures.delete(key);
       return flow;
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) throw error;
       boundedSet(failures, key, Date.now() + NEGATIVE_CACHE_MS, MAX_CACHE_ENTRIES);
-      if (hit) return hit.data;
       throw new Error('money flow unavailable');
     } finally {
       clearTimeout(timer);
     }
   })();
-  boundedSet(inFlight, key, work, 256);
-  try {
-    return await work;
-  } finally {
-    inFlight.delete(key);
-  }
+  let active!: ActiveWalk;
+  const work = rawWork.finally(() => {
+    active.settled = true;
+    if (inFlight.get(key) === active) inFlight.delete(key);
+  });
+  active = { controller, promise: work, subscribers: 0, settled: false };
+  inFlight.set(key, active);
+  return joinActiveWalk(active, signal);
 }

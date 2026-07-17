@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3331,
+        "line": 3334,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1316,25 +1316,25 @@
         "concept": "exchange-hand",
         "declaration": "interface SpotExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 149
+        "line": 153
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface FuturesExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 160
+        "line": 164
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface ExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 174
+        "line": 178
       },
       {
         "concept": "exchange-hand",
         "declaration": "function fetchExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 185
+        "line": 189
       },
       {
         "concept": "semantic-source",
@@ -2970,15 +2970,21 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "interface SupervisorHistoryRetention",
+        "file": "server/src/foundation/control/supervisor.ts",
+        "line": 108
+      },
+      {
+        "concept": "control-authority",
         "declaration": "class DeterministicSupervisor",
         "file": "server/src/foundation/control/supervisor.ts",
-        "line": 116
+        "line": 156
       },
       {
         "concept": "control-authority",
         "declaration": "function createDeterministicSupervisor",
         "file": "server/src/foundation/control/supervisor.ts",
-        "line": 1536
+        "line": 1740
       },
       {
         "concept": "control-authority",
@@ -3320,43 +3326,43 @@
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 397
+        "line": 400
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 647
+        "line": 650
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1815
+        "line": 1818
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1824
+        "line": 1827
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2222
+        "line": 2225
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2234
+        "line": 2237
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2244
+        "line": 2247
       },
       {
         "concept": "semantic-source",
@@ -4070,79 +4076,73 @@
         "concept": "ledger-authority",
         "declaration": "type LedgerSchemaCompatibilityReadback",
         "file": "server/src/ledger.ts",
-        "line": 30
+        "line": 25
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 117
+        "line": 95
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 153
+        "line": 122
       },
       {
         "concept": "ledger-authority",
         "declaration": "type LedgerConfigCompareAndSetResult",
         "file": "server/src/ledger.ts",
-        "line": 159
+        "line": 128
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventRecord",
         "file": "server/src/ledger.ts",
-        "line": 170
+        "line": 139
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventPage",
         "file": "server/src/ledger.ts",
-        "line": 180
+        "line": 149
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerSchemaCompatibilityRow",
         "file": "server/src/ledger.ts",
-        "line": 189
+        "line": 158
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 195
+        "line": 164
       },
       {
         "concept": "ledger-authority",
         "declaration": "function readLegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 233
-      },
-      {
-        "concept": "ledger-authority",
-        "declaration": "function upgradeLedgerVersion",
-        "file": "server/src/ledger.ts",
-        "line": 415
+        "line": 202
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 720
+        "line": 449
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 3184
+        "line": 2674
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 3190
+        "line": 2680
       },
       {
         "concept": "semantic-source",
@@ -6684,63 +6684,75 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "function terminalControlReceipt",
+        "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "line": 175
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function unresolvedControlRuntimePublication",
+        "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "line": 181
+      },
+      {
+        "concept": "control-authority",
         "declaration": "interface ControlPersistenceActor",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 434
+        "line": 492
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlPersistenceCommit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 440
+        "line": 498
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRuntimePublicationState",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 450
+        "line": 508
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlRuntimePublicationCommit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 452
+        "line": 510
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRuntimePublicationResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 459
+        "line": 517
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlRejectionAudit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 463
+        "line": 521
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 478
+        "line": 536
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRejectionPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 493
+        "line": 551
       },
       {
         "concept": "control-authority",
         "declaration": "interface StoredControlReceipt",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 497
+        "line": 555
       },
       {
         "concept": "ledger-authority",
         "declaration": "class SystemLedgerPersistenceAdapter",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 926
+        "line": 984
       },
       {
         "concept": "control-authority",
@@ -7377,11 +7389,6 @@
         "target": "./ledger.js"
       },
       {
-        "file": "server/src/ledger.ts",
-        "line": 10,
-        "target": "./capitalFoundation/contracts/decimal.js"
-      },
-      {
         "file": "server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts",
         "line": 10,
         "target": "../../../capitalFoundation/contracts/decimal.js"
@@ -7428,12 +7435,7 @@
       },
       {
         "file": "server/src/services/account.ts",
-        "line": 15,
-        "target": "../capitalFoundation/contracts/decimal.js"
-      },
-      {
-        "file": "server/src/services/account.ts",
-        "line": 16,
+        "line": 3,
         "target": "../ledger.js"
       },
       {
@@ -7453,12 +7455,7 @@
       },
       {
         "file": "server/src/services/orders.ts",
-        "line": 10,
-        "target": "../capitalFoundation/contracts/decimal.js"
-      },
-      {
-        "file": "server/src/services/orders.ts",
-        "line": 12,
+        "line": 5,
         "target": "../ledger.js"
       },
       {
@@ -14164,5 +14161,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "b9f3fd58c864b12bf1a94032924c50e4deacaa0272d790b651322c1e3f39f33a"
+  "evidenceSha256": "fcfe68611f2e563d856713e3cc7e1b23b8a244a2ffe6904fe6604232056d088b"
 }

@@ -34,6 +34,54 @@ const requiredParent = requiredParentArg >= 0
   : REQUIRED_C2_PARENT;
 const selfTest = process.argv.includes('--self-test');
 
+const ABSENT_CANDIDATE_PATH_PREFIXES = Object.freeze([
+  'ops/aiOps/sentinel/',
+  'server/src/aiOps/verifier/',
+  'frontier/',
+]);
+const FRONTIER_REFERENCE_COMMITS = Object.freeze([
+  Object.freeze({
+    sha: 'f0168cb37bd04d21bc90591ab2256770de3b75bc',
+    role: 'ACCEPTED_PRE_FRONTIER_BASE_WITH_ZERO_FRONTIER_PATHS',
+    expected_ancestor_of_candidate: true,
+  }),
+  Object.freeze({
+    sha: '887221418345ad54d7b98881b359fab85a6188e6',
+    role: 'PARKED_FRONTIER_COORDINATOR_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5',
+    role: 'PARKED_FRONTIER_F0_DOCK_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e435c1f0c6850b2c53501d3410dd5ce92b64b286',
+    role: 'PARKED_FRONTIER_F1_VENUE_MESH_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '56a08f4efb3f1b82205c4265c1dd18bbd1a70209',
+    role: 'PARKED_FRONTIER_F2_PORTFOLIO_LAB_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '3c9c794e88513bee340f336c5fc4d2dd8eebf47e',
+    role: 'PARKED_FRONTIER_F3_STRATEGY_ARENA_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '7a658b9850f743b944c35253568ae4a231a768b0',
+    role: 'PARKED_FRONTIER_F8_EDGE_METER_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '2c29de4e4d01e8087c00e79f180b731790943baa',
+    role: 'PARKED_FRONTIER_F13_DECISION_LAB_BLOCKED_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+]);
+
 function fail(message) { throw new Error(message); }
 function assert(condition, message) { if (!condition) fail(message); }
 function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
@@ -264,6 +312,7 @@ const parents = gitText('show', '-s', '--format=%P', candidate).split(/\s+/u).fi
 assert(parents.length === 1, `CANDIDATE_PARENT_COUNT:${parents.length}`);
 assert(parents[0] === requiredParent, `CANDIDATE_DIRECT_PARENT:${parents[0]}`);
 const candidateTree = gitText('rev-parse', `${candidate}^{tree}`);
+const candidateTreeBlobs = treeBlobMap(candidate);
 const candidateRootState = candidateText('STATE.md');
 assert(candidateRootState.includes('| Account A correction candidate C9 |'), 'C9_SOURCE_STATE_MARKER_MISSING');
 
@@ -448,6 +497,45 @@ writeJson('INPUTS.lock', inputLock);
 
 const allInputIds = inputs.map((row) => row.input_id).sort();
 
+const candidateAbsenceAndExclusionProofs = {
+  schema: 'CANDIDATE_ABSENCE_AND_EXCLUSION_PROOFS/v1',
+  candidate_commit: candidate,
+  candidate_tree: candidateTree,
+  absent_path_prefixes: ABSENT_CANDIDATE_PATH_PREFIXES.map((pathPrefix) => {
+    const matchingPaths = [...candidateTreeBlobs.keys()].filter((path) => path.startsWith(pathPrefix));
+    assert(
+      matchingPaths.length === 0,
+      `CANDIDATE_PATH_PREFIX_PRESENT:${pathPrefix}:${matchingPaths.join(';')}`,
+    );
+    return {
+      path_prefix: pathPrefix,
+      matching_path_count: matchingPaths.length,
+      proof_source: 'git ls-tree -r -z exact-candidate',
+    };
+  }),
+  frontier_reference_ancestry: FRONTIER_REFERENCE_COMMITS.map((reference) => {
+    assert(
+      gitText('rev-parse', `${reference.sha}^{commit}`) === reference.sha,
+      `FRONTIER_REFERENCE_COMMIT_MISSING:${reference.sha}`,
+    );
+    const status = run(
+      'git',
+      ['merge-base', '--is-ancestor', reference.sha, candidate],
+      { allowFailure: true },
+    ).status;
+    const ancestorOfCandidate = status === 0;
+    assert(
+      status === (reference.expected_ancestor_of_candidate ? 0 : 1),
+      `FRONTIER_REFERENCE_ANCESTRY:${reference.sha}:expected=${reference.expected_ancestor_of_candidate}:status=${status}`,
+    );
+    return {
+      ...reference,
+      ancestor_of_candidate: ancestorOfCandidate,
+      proof_source: 'git merge-base --is-ancestor reference exact-candidate',
+    };
+  }),
+};
+
 const proofSeed = candidateJson(campaignPath('C2_PROOF_BINDING.json'));
 const proof = {
   ...proofSeed,
@@ -468,6 +556,7 @@ const proof = {
       byte_length: bytes.length,
     };
   }),
+  candidate_absence_and_exclusion_proofs: candidateAbsenceAndExclusionProofs,
   browser_proof: 'HOSTILE_WATCHMAN_REGRESSION_ENFORCED; rendered browser verification is a separate custody gate',
   runtime_proof: 'CANONICAL_AND_CLEAN_CLONE_GATE_REQUIRED',
   real_soak: 'NOT_RUN',
@@ -501,7 +590,6 @@ writeJson('EVIDENCE_SELECTION.json', {
 
 const provenanceSeed = candidateJson(campaignPath('MERGE_PROVENANCE.json'));
 const provenance = replaceExact(provenanceSeed);
-const candidateTreeBlobs = treeBlobMap(candidate);
 provenance.schema = 'product-truth-merge-provenance.v3';
 provenance.candidate_sha = candidate;
 provenance.candidate_tree_sha = candidateTree;
@@ -621,6 +709,11 @@ landedCore.exact_at_candidate = landedDonorPaths.length - landedAdaptations.leng
 landedCore.adaptations = landedAdaptations;
 
 const directiveOverrides = new Map([
+  ['AIO-008', {
+    implementation_path: 'Exact candidate tree proves server/src/aiOps/verifier/ and ops/aiOps/sentinel/ path counts are zero',
+    test_path: `${rootRelative}/generate-exact-candidate-evidence.mjs; ${rootRelative}/verify-exact-candidate-evidence.mjs`,
+    runtime_evidence: 'Candidate-bound absence proof records both prefixes at zero; external verifier, sentinel, and paging remain NOT_CONFIGURED',
+  }],
   ['AUTH-003', {
     runtime_evidence: 'D-LAUNCH-65 governs; exact C9 is frozen and evidence descendants are output-allowlisted',
     status: 'READY_FOR_FRESH_FINAL_VERIFIER',
@@ -659,6 +752,16 @@ const directiveOverrides = new Map([
     status: 'DEFERRED_OWNER_GATE',
     blocker: 'C9 baseline custody token, fresh final-verifier verdict, later operational gates, and explicit deployment authority remain pending',
     disposition: 'No deployment acceptance is implied by the exact C9 source and evidence freeze',
+  }],
+  ['DEP-003', {
+    implementation_path: 'Exact candidate tree proves ops/aiOps/sentinel/ path count is zero; ops/live remains local scaffolding only',
+    test_path: `${rootRelative}/generate-exact-candidate-evidence.mjs; ${rootRelative}/verify-exact-candidate-evidence.mjs`,
+    runtime_evidence: 'Candidate-bound absence proof records no external sentinel path; no deployed paging receipt exists',
+  }],
+  ['FRT-000', {
+    implementation_path: 'Exact candidate tree proves frontier/ path count is zero',
+    test_path: `${rootRelative}/generate-exact-candidate-evidence.mjs; ${rootRelative}/verify-exact-candidate-evidence.mjs`,
+    runtime_evidence: 'Candidate-bound exclusion proof records frontier/ at zero and independently checks every unique Frontier reference commit ancestry disposition',
   }],
 ]);
 const capabilityOverrides = new Map([

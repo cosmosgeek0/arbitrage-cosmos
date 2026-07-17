@@ -52,6 +52,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Signed validation and test-order lifecycle | `DEFERRED_OWNER_GATE` | Separate durable owner authorization is required for each later gate. |
 | Money movement and capital canaries | `DEFERRED_OWNER_GATE` | No authorization is implied by source, local wiring, tests, or a prior gate. |
 | Forward economic edge | `ABSTAIN_UNKNOWN` | No forward runtime evidence establishes repeatable net value after costs. |
+| Product-truth absence and exclusion proofs | `BUILT_AND_TESTED` | The exact-candidate generator binds zero-path proofs for the external verifier, external sentinel, and Frontier source, plus explicit Frontier reference ancestry dispositions; the verifier independently recomputes them from Git. Existing exact-C9 evidence is historical and is not relabeled by this source correction. |
 | Frontier | `REFERENCE_ONLY` | It remains unauthorized and is not counted as accepted candidate source. |
 
 ## D-LAUNCH-65 evidence-input status
@@ -65,6 +66,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - The canonical Product Assurance gate now includes A-FORMAL and S2 action-evidence suites. AI-Ops port/shadow suites remain deliberately root-unmounted and excluded from C2 acceptance because their branch-specific assumptions are not candidate-compatible.
 - The I00 donor/topology contract now admits the exact authorized post-L merge sequence without adding those sources to the original 16-donor equality count. A-FORMAL and S2 are candidate ancestors classified as integrated reference-only; PREVERIFY remains an explicit non-ancestor. Focused command contracts pass `29/29`.
 - The fixed matrix cardinalities remain 153 directive + 23 capability + 178 cockpit = 354. The evidence descendant must regenerate every candidate cell to exact C9; source mode cannot emit placeholders.
+- Matrix rows `AIO-008`, `DEP-003`, and `FRT-000` now cite the executable exact generator/verifier rather than the retired throw-only generator. Regenerating a new exact-candidate evidence descendant remains a separate custody action; this branch does not rewrite or relabel historical C9 evidence.
 - Focused proof is green at `47/47`; the acceptance contract is green at `47/47`, including a sole branch with no `current-main` ref. The five human I00 reports and machine report are refreshed from a clean tracked-byte source checkpoint.
 - The historical D-LAUNCH-1 Q-lock supersession no longer requires a moving `current-main` ref or an ambient raw owner blob for sealed acceptance. Exact candidate-reachable commit/lock bytes and the director attestation are authoritative; ref/blob availability is diagnostic, with absent raw bytes reported as `DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED`.
 - `WORKTREE_LEDGER.md` records the immutable pre-freeze registry of 96 live worktrees, including `truth-a` and `truth-b`, plus five D-LAUNCH-65-authorized `REMOVED_SAFE` tombstones for 101 durable entries.

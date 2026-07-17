@@ -60,6 +60,53 @@ const REJECTED_SELECTION_HISTORY = Object.freeze([
     reason: 'POST_EVIDENCE_GENERATOR_PASS_REWROTE_CUSTODY_HEAD_DERIVED_CENSUS_FIELDS',
   }),
 ]);
+const ABSENT_CANDIDATE_PATH_PREFIXES = Object.freeze([
+  'ops/aiOps/sentinel/',
+  'server/src/aiOps/verifier/',
+  'frontier/',
+]);
+const FRONTIER_REFERENCE_COMMITS = Object.freeze([
+  Object.freeze({
+    sha: 'f0168cb37bd04d21bc90591ab2256770de3b75bc',
+    role: 'ACCEPTED_PRE_FRONTIER_BASE_WITH_ZERO_FRONTIER_PATHS',
+    expected_ancestor_of_candidate: true,
+  }),
+  Object.freeze({
+    sha: '887221418345ad54d7b98881b359fab85a6188e6',
+    role: 'PARKED_FRONTIER_COORDINATOR_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5',
+    role: 'PARKED_FRONTIER_F0_DOCK_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e435c1f0c6850b2c53501d3410dd5ce92b64b286',
+    role: 'PARKED_FRONTIER_F1_VENUE_MESH_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '56a08f4efb3f1b82205c4265c1dd18bbd1a70209',
+    role: 'PARKED_FRONTIER_F2_PORTFOLIO_LAB_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '3c9c794e88513bee340f336c5fc4d2dd8eebf47e',
+    role: 'PARKED_FRONTIER_F3_STRATEGY_ARENA_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '7a658b9850f743b944c35253568ae4a231a768b0',
+    role: 'PARKED_FRONTIER_F8_EDGE_METER_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '2c29de4e4d01e8087c00e79f180b731790943baa',
+    role: 'PARKED_FRONTIER_F13_DECISION_LAB_BLOCKED_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+]);
 const CAMPAIGN_ROOT = 'verification/product-truth-20260716';
 const LOCK_INVENTORY_MATRIX_REQUIREMENT_ID = 'CAMP-09-PROVENANCE';
 const C9_CORRECTION_GRANTS = Object.freeze([
@@ -535,6 +582,65 @@ for (const row of proofBinding.artifacts) {
     `PROOF_ARTIFACT_GIT_BLOB:${path}`,
     firstDefined(row, ['candidate_git_blob', 'git_blob']),
     gitBlobOid(bytes),
+  );
+}
+const absenceProof = proofBinding.candidate_absence_and_exclusion_proofs;
+assert(
+  absenceProof !== null && typeof absenceProof === 'object',
+  'CANDIDATE_ABSENCE_AND_EXCLUSION_PROOFS_MISSING',
+);
+assertEqual(
+  'CANDIDATE_ABSENCE_PROOF_SCHEMA',
+  absenceProof.schema,
+  'CANDIDATE_ABSENCE_AND_EXCLUSION_PROOFS/v1',
+);
+assertEqual('CANDIDATE_ABSENCE_PROOF_COMMIT', absenceProof.candidate_commit, candidate);
+assertEqual('CANDIDATE_ABSENCE_PROOF_TREE', absenceProof.candidate_tree, candidateTree);
+assertEqual(
+  'CANDIDATE_ABSENCE_PROOF_PREFIXES',
+  absenceProof.absent_path_prefixes?.map((row) => row.path_prefix),
+  [...ABSENT_CANDIDATE_PATH_PREFIXES],
+);
+const absenceCandidateTreeBlobs = treeBlobMap(candidate);
+for (const row of absenceProof.absent_path_prefixes ?? []) {
+  const matchingPaths = [...absenceCandidateTreeBlobs.keys()]
+    .filter((path) => path.startsWith(row.path_prefix));
+  assertEqual(`CANDIDATE_ABSENCE_PROOF_COUNT:${row.path_prefix}`, row.matching_path_count, 0);
+  assertEqual(`CANDIDATE_ABSENCE_GIT_COUNT:${row.path_prefix}`, matchingPaths.length, 0);
+  assertEqual(
+    `CANDIDATE_ABSENCE_PROOF_SOURCE:${row.path_prefix}`,
+    row.proof_source,
+    'git ls-tree -r -z exact-candidate',
+  );
+}
+assertEqual(
+  'FRONTIER_EXCLUSION_PROOF_COMMITS',
+  absenceProof.frontier_reference_ancestry?.map((row) => ({
+    sha: row.sha,
+    role: row.role,
+    expected_ancestor_of_candidate: row.expected_ancestor_of_candidate,
+  })),
+  FRONTIER_REFERENCE_COMMITS,
+);
+for (const row of absenceProof.frontier_reference_ancestry ?? []) {
+  assertEqual(
+    `FRONTIER_REFERENCE_OBJECT:${row.sha}`,
+    gitText('rev-parse', `${row.sha}^{commit}`),
+    row.sha,
+  );
+  const status = runGit(
+    ['merge-base', '--is-ancestor', row.sha, candidate],
+    { allowFailure: true },
+  ).status;
+  assertEqual(
+    `FRONTIER_REFERENCE_ANCESTRY_STATUS:${row.sha}`,
+    status,
+    row.expected_ancestor_of_candidate ? 0 : 1,
+  );
+  assertEqual(
+    `FRONTIER_REFERENCE_ANCESTRY:${row.sha}`,
+    row.ancestor_of_candidate,
+    status === 0,
   );
 }
 

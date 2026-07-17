@@ -1126,8 +1126,8 @@ def build_component_manifest(repo_root: Path) -> dict[str, object]:
     lock_spec = _ArtifactSpec(
         "q-lane.directive-input-lock.v1",
         "quant/DIRECTIVE_INPUTS.lock",
-        1_568,
-        "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1",
+        1_757,
+        "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
         "text/markdown",
         "QDirectiveInputsLockV1",
         1,

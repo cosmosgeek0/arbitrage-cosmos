@@ -5,6 +5,7 @@ import test from 'node:test';
 
 const ROOT = resolve(import.meta.dirname, '../../..');
 const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8'));
+const testAllBuilt = readFileSync(resolve(ROOT, 'test/run-test-all-built.mjs'), 'utf8');
 
 test('root exposes the stable I00 command surface without an install lifecycle hook', () => {
   const required = [
@@ -25,7 +26,8 @@ test('public smoke uses the real server workspace build and private paths remain
 });
 
 test('test:all includes focused command contracts exactly once', () => {
-  const occurrences = pkg.scripts['test:all:built'].split('npm run test:i00:commands').length - 1;
+  assert.equal(pkg.scripts['test:all:built'], 'node test/run-test-all-built.mjs');
+  const occurrences = testAllBuilt.split("'test:i00:commands'").length - 1;
   assert.equal(occurrences, 1);
 });
 

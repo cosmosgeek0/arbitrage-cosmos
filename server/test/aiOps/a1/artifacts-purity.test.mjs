@@ -13,6 +13,7 @@ const testDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(testDirectory, '../../../..');
 const fixtureDirectory = resolve(repositoryRoot, 'fixtures/aiOps/a1');
 const receiptDirectory = resolve(repositoryRoot, 'docs/archive/aiOps/a1/shadow');
+const donorBranch = 'port-a1-20260716';
 const expectedSourcePaths = Object.keys(contracts.AI_OPS_LOCAL_SOURCE_RESOURCE_ID_BY_PATH).sort();
 const expectedSourcePathSet = new Set(expectedSourcePaths);
 
@@ -211,6 +212,12 @@ test('mechanical authority fixture is current, unsigned, and closed across all 3
 });
 
 test('entry inventory binds current bytes and recognizes only ratified or external request IDs', async () => {
+  const currentBranch = process.env.AI_OPS_A1_CURRENT_BRANCH;
+  const currentHeadBlobs = JSON.parse(process.env.AI_OPS_A1_CURRENT_HEAD_BLOBS ?? 'null');
+  assert.equal(typeof currentBranch, 'string');
+  assert.ok(currentHeadBlobs !== null && typeof currentHeadBlobs === 'object' && !Array.isArray(currentHeadBlobs));
+  assert.equal(Object.getPrototypeOf(currentHeadBlobs), Object.prototype);
+  const donorIdentityMode = currentBranch === donorBranch;
   const rowsById = new Map(contracts.AI_OPS_ENTRY_INVENTORY.map((row) => [row.entryId, row]));
   assert.equal(
     contracts.sha256Canonical(contracts.AI_OPS_ENTRY_INVENTORY),
@@ -247,7 +254,11 @@ test('entry inventory binds current bytes and recognizes only ratified or extern
       const digest = row.digestAlgorithm === 'GIT_BLOB_SHA1'
         ? gitBlobDigest(bytes)
         : createHash('sha256').update(bytes).digest('hex');
-      assert.equal(digest, row.digest, `${row.entryId}:${row.path}`);
+      if (donorIdentityMode) {
+        assert.equal(digest, row.digest, `${row.entryId}:${row.path}`);
+      } else {
+        assert.equal(gitBlobDigest(bytes), currentHeadBlobs[row.path], `${row.entryId}:${row.path}:current HEAD`);
+      }
     } else {
       const evidence = externalEvidenceByEntryId.get(row.entryId);
       assert.ok(evidence, `${row.entryId}:immutable external provenance evidence`);

@@ -6,6 +6,8 @@ import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
@@ -1361,6 +1363,11 @@ function SharedTopBar() {
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
   const [notifLiveEvents, setNotifLiveEvents] = useState<LedgerEvent[]>([]);
+  const [notificationFeedState, setNotificationFeedState] = useState<{
+    status: 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+    lastSuccessAt: number | null;
+    error: string | null;
+  }>({ status: 'LOADING', lastSuccessAt: null, error: null });
   const notifLiveCursor = useRef(0);
   const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
   const [currencyBusy, setCurrencyBusy] = useState(false);
@@ -1384,63 +1391,65 @@ function SharedTopBar() {
     return () => { alive = false; };
   }, [active]);
   useEffect(() => {
-    let alive = true;
-    let running = false;
     let bootstrapped = false;
-    let controller: AbortController | null = null;
     const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-    const load = async () => {
-      if (running) return;
-      running = true;
-      controller = new AbortController();
-      try {
+    const readEventRows = async (url: string, signal: AbortSignal): Promise<LedgerEvent[]> => {
+      const rows = await fetchJson<LedgerEvent[]>(url, { cache: 'no-store', signal }, 10_000);
+      if (!Array.isArray(rows)) throw new Error('events payload is invalid');
+      return rows;
+    };
+    const notificationPoll = createSettledPoll<LedgerEvent[]>({
+      intervalMs: 5_000,
+      timeoutMs: 15_000,
+      request: async (signal) => {
         let items: LedgerEvent[] = [];
         if (!bootstrapped) {
-          const headResponse = await fetch('/api/events?limit=1', { signal: controller.signal });
-          if (!headResponse.ok) throw new Error(`events HTTP ${headResponse.status}`);
-          const head = await headResponse.json() as LedgerEvent[];
+          const head = await readEventRows('/api/events?limit=1', signal);
           const highWater = head[0]?.id ?? 0;
           const since = Date.now() - 24 * 60 * 60_000;
           const before = highWater > 0 ? `&beforeId=${highWater + 1}` : '';
-          items = (await Promise.all(relevantKinds.map(async (kind) => {
-            const response = await fetch(`/api/events?since=${since}&kind=${encodeURIComponent(kind)}&limit=2000${before}`, { signal: controller!.signal });
-            if (!response.ok) throw new Error(`events HTTP ${response.status}`);
-            const rows = await response.json() as LedgerEvent[];
-            if (!Array.isArray(rows)) throw new Error('events payload is invalid');
-            return rows;
-          }))).flat();
+          const bootstrapReads = await Promise.allSettled(relevantKinds.map((kind) => readEventRows(
+            `/api/events?since=${since}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
+            signal,
+          )));
+          const bootstrapFailure = bootstrapReads.find((result) => result.status === 'rejected');
+          if (bootstrapFailure?.status === 'rejected') throw bootstrapFailure.reason;
+          items = bootstrapReads.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
           notifLiveCursor.current = Math.max(notifLiveCursor.current, highWater);
           bootstrapped = true;
         } else {
           let afterId = notifLiveCursor.current;
           for (let page = 0; page < 5; page += 1) {
-            const response = await fetch(`/api/events?afterId=${afterId}&limit=2000`, { signal: controller.signal });
-            if (!response.ok) throw new Error(`events HTTP ${response.status}`);
-            const rows = await response.json() as LedgerEvent[];
-            if (!Array.isArray(rows)) throw new Error('events payload is invalid');
+            const rows = await readEventRows(`/api/events?afterId=${afterId}&limit=2000`, signal);
             items.push(...rows);
             if (rows.length < 2_000) break;
             afterId = Math.max(afterId, ...rows.map((item) => item.id));
           }
         }
-        if (!alive || items.length === 0) return;
-        notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
-        setNotifLiveEvents((current) => {
-          const merged = new Map<number, LedgerEvent>();
-          for (const item of current) merged.set(item.id, item);
-          for (const item of items) merged.set(item.id, item);
-          return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
-        });
-      } catch {
-        // The next settled interval retries; compact notification state stays intact.
-      } finally {
-        running = false;
-        controller = null;
-      }
-    };
-    void load();
-    const timer = window.setInterval(() => { void load(); }, 5000);
-    return () => { alive = false; controller?.abort(); window.clearInterval(timer); };
+        return items;
+      },
+      onSuccess: (items) => {
+        if (items.length > 0) {
+          notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
+          setNotifLiveEvents((current) => {
+            const merged = new Map<number, LedgerEvent>();
+            for (const item of current) merged.set(item.id, item);
+            for (const item of items) merged.set(item.id, item);
+            return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
+          });
+        }
+        setNotificationFeedState({ status: 'CURRENT', lastSuccessAt: Date.now(), error: null });
+      },
+      onError: (error) => {
+        setNotificationFeedState((current) => ({
+          status: current.lastSuccessAt === null ? 'UNAVAILABLE' : 'STALE',
+          lastSuccessAt: current.lastSuccessAt,
+          error: apiErrorMessage(error, 'Notification feed unavailable'),
+        }));
+      },
+    });
+    notificationPoll.start();
+    return notificationPoll.stop;
   }, []);
 
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
@@ -1708,6 +1717,32 @@ function SharedTopBar() {
   const filteredNotifEvents = filterNotifEvents(notifTab);
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
+  const notificationFeedStatus = notificationFeedState.status === 'CURRENT'
+    ? 'Current'
+    : notificationFeedState.status === 'STALE'
+      ? 'Stale'
+      : notificationFeedState.status === 'UNAVAILABLE'
+        ? 'Unavailable'
+        : 'Loading';
+  const notificationFeedTone: OpsTone = notificationFeedState.status === 'CURRENT'
+    ? unread ? 'accent' : 'ok'
+    : notificationFeedState.status === 'UNAVAILABLE'
+      ? 'bad'
+      : notificationFeedState.status === 'STALE'
+        ? 'warn'
+        : 'idle';
+  const notificationTriggerTruth = notificationFeedState.status === 'CURRENT'
+    ? unread ? `${unread} unread` : 'no unread events'
+    : notificationFeedState.status === 'STALE'
+      ? unread ? `${unread} last-known unread` : 'last-known feed'
+      : notificationFeedState.status === 'UNAVAILABLE'
+        ? 'feed unavailable'
+        : 'feed loading';
+  const notificationFeedDetail = notificationFeedState.status === 'CURRENT'
+    ? `Updated ${timeAgo(notificationFeedState.lastSuccessAt ?? Date.now())}`
+    : notificationFeedState.status === 'LOADING'
+      ? 'Loading the bounded notification history.'
+      : notificationFeedState.error ?? 'Notification feed unavailable';
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
   const advisorOverallPresentation = productSnapshot && productBinding.continuity === 'PROVEN'
     ? productSnapshot.canonicalCockpit.watchmanOverall
@@ -2476,11 +2511,11 @@ function SharedTopBar() {
               icon={<PopupSourceMark tone="#f0a400" brand><img className="notification-source-image" src={NOTIFICATION_MARK} alt="" /></PopupSourceMark>}
               title="Notifications"
               subtitle="Interventions, state changes, and routed alerts"
-              status={unread ? `${unread} new` : compactNotifications.length ? 'Read' : 'Clear'}
-              tone={unread ? 'accent' : 'ok'}
+              status={notificationFeedState.status === 'CURRENT' ? unread ? `${unread} new` : compactNotifications.length ? 'Read' : 'Clear' : notificationFeedStatus}
+              tone={notificationFeedTone}
             />
             <div className="ops-inline-tools" aria-label="Notification actions">
-              <span><b>Recent Alerts</b><em>{unread ? `${unread} Unread` : 'Up To Date'}</em></span>
+              <span><b>Recent Alerts</b><em>{notificationFeedState.status === 'CURRENT' ? unread ? `${unread} Unread` : 'Up To Date' : notificationFeedStatus}</em></span>
               <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark Read</button>
               <button type="button" onClick={openNotificationCenter}><IconMaximize size={13} /> Open Center</button>
             </div>
@@ -2495,7 +2530,15 @@ function SharedTopBar() {
                   tone={item.severity === 'critical' ? 'bad' : item.severity === 'resolved' ? 'ok' : 'idle'}
                   onClick={openNotificationCenter}
                 />
-              )) : (
+              )) : notificationFeedState.status !== 'CURRENT' ? (
+                <OpsRow
+                  icon={<IconBell size={15} />}
+                  title={notificationFeedState.status === 'LOADING' ? 'Feed Loading' : notificationFeedState.status === 'STALE' ? 'Last-Known Feed' : 'Notification Feed Unavailable'}
+                  detail={notificationFeedDetail}
+                  value={notificationFeedStatus}
+                  tone={notificationFeedTone}
+                />
+              ) : (
                 <OpsRow
                   icon={<IconBell size={15} />}
                   title="Inbox Clear"
@@ -2702,7 +2745,7 @@ function SharedTopBar() {
           <img className="notification-trigger-image" src={NOTIFICATION_MARK} alt="" />
           {unread > 0 && <b className="ops-trigger-count">{unread > 99 ? '99+' : unread}</b>}
         </span>
-      </>, { title: `Notifications — ${unread ? `${unread} unread` : 'no unread events'}` })}
+      </>, { title: `Notifications — ${notificationTriggerTruth} · feed ${notificationFeedStatus}` })}
       {trig('power', `hdr-ic power-ghost power-premium-trigger ${convergenceKillOn ? 'm-halted' : 'm-manual'}`, <>
         <span className={`rail-icon-core execution-control-trigger-core ${convergenceTone}`}><ExecutionPowerIdentityMark stopped={convergenceKillOn} size={24} /></span>
       </>, { title: `Execution Control — ${convergenceModeLabel}` })}

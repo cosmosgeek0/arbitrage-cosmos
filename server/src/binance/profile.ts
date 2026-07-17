@@ -20,6 +20,9 @@ const MAX_PROFILE_CACHE_BYTES = 16 * 1024 * 1024;
 const PROFILE_PERSIST_DEBOUNCE_MS = 250;
 const NEGATIVE_ID_TTL_MS = 5 * 60_000;
 const FETCH_FAILURE_TTL_MS = 15_000;
+const PROFILE_REQUEST_QUEUE_CAPACITY = 4;
+const PROFILE_REQUEST_ACTIVE_CAPACITY = 1;
+const MAX_PROFILE_IN_FLIGHT = 512;
 
 // Same drift-prone tickers the icon resolver special-cases, plus the renamed
 // and rebranded Binance bases the 452-walk exposed (each verified against a
@@ -89,6 +92,25 @@ export interface TokenProfile {
   fetchedAt: number;
 }
 
+export type TokenProfileRefreshErrorCode =
+  | 'TOKEN_PROFILE_CAPACITY_REACHED'
+  | 'TOKEN_PROFILE_DEADLINE_EXCEEDED'
+  | 'TOKEN_PROFILE_ID_UNAVAILABLE'
+  | 'TOKEN_PROFILE_SOURCE_UNAVAILABLE';
+
+export interface TokenProfileDelivery {
+  source: 'LIVE' | 'CACHE';
+  freshness: 'FRESH' | 'STALE' | 'UNKNOWN';
+  ageMs: number | null;
+  completeness: 'FULL_ENDPOINT' | 'TRUNCATED_LITE';
+  refreshState: 'NOT_REQUIRED' | 'SUCCEEDED' | 'FAILED';
+  refreshErrorCode: TokenProfileRefreshErrorCode | null;
+}
+
+export interface ServedTokenProfile extends TokenProfile {
+  delivery: Readonly<TokenProfileDelivery>;
+}
+
 interface CacheEntry {
   id: string | null;
   idTs: number;
@@ -96,13 +118,47 @@ interface CacheEntry {
   profileTs: number;
 }
 
+type ProfileRequestFailureCode = 'TOKEN_PROFILE_CAPACITY_REACHED' | 'TOKEN_PROFILE_DEADLINE_EXCEEDED';
+type ProfileRequestState = 'QUEUED' | 'ACTIVE' | 'EXPIRED_ACTIVE' | 'SETTLED';
+
+interface ProfileRequestHandle<T> {
+  readonly result: Promise<T>;
+  readonly transportSettled: Promise<void>;
+}
+
+interface ProfileRequestJob {
+  readonly url: URL;
+  readonly controller: AbortController;
+  readonly deadlineAt: number;
+  state: ProfileRequestState;
+  deadlineTimer: NodeJS.Timeout | null;
+  readonly resolve: (value: unknown) => void;
+  readonly reject: (reason: unknown) => void;
+  readonly resolveTransportSettled: () => void;
+}
+
+class ProfileRequestFailure extends Error {
+  readonly code: ProfileRequestFailureCode;
+
+  constructor(code: ProfileRequestFailureCode, message: string) {
+    super(message);
+    this.name = 'ProfileRequestFailure';
+    this.code = code;
+  }
+}
+
 const cache = new Map<string, CacheEntry>();
 let globalDominance: { ts: number; pct: Record<string, number> } | null = null;
 let lastCall = 0;
-let pacingTail: Promise<void> = Promise.resolve();
+const profileRequestQueue: ProfileRequestJob[] = [];
+let activeProfileRequest: ProfileRequestJob | null = null;
+let profilePaceTimer: NodeJS.Timeout | null = null;
+let profileQueueHighWatermark = 0;
+let profileCapacityRejected = 0;
+let profileDeadlineExceeded = 0;
 const fetchInFlight = new Map<string, Promise<unknown>>();
 const fetchFailures = new Map<string, { until: number; message: string }>();
-const profileInFlight = new Map<string, Promise<TokenProfile | null>>();
+const profileInFlight = new Map<string, Promise<ServedTokenProfile | null>>();
 let persistTimer: NodeJS.Timeout | null = null;
 let persistDirty = false;
 let persistSequence = 0;
@@ -174,15 +230,158 @@ async function readBoundedBody(res: Response): Promise<string> {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
-async function reserveRequestSlot(): Promise<void> {
-  let release!: () => void;
-  const previous = pacingTail;
-  pacingTail = new Promise<void>((resolve) => { release = resolve; });
-  await previous;
-  const wait = lastCall + CALL_GAP_MS - Date.now();
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+function incrementBoundedCounter(value: number): number {
+  return value < Number.MAX_SAFE_INTEGER ? value + 1 : value;
+}
+
+function capacityFailure(): ProfileRequestFailure {
+  return new ProfileRequestFailure('TOKEN_PROFILE_CAPACITY_REACHED', 'token profile capacity reached');
+}
+
+function deadlineFailure(): ProfileRequestFailure {
+  return new ProfileRequestFailure('TOKEN_PROFILE_DEADLINE_EXCEEDED', 'token profile deadline exceeded');
+}
+
+function isProfileRequestFailure(value: unknown): value is ProfileRequestFailure {
+  return value instanceof ProfileRequestFailure;
+}
+
+async function executeProfileRequest(job: ProfileRequestJob): Promise<unknown> {
+  const res = await fetch(job.url, {
+    headers: { Accept: 'application/json' },
+    redirect: 'error',
+    signal: job.controller.signal,
+  });
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => undefined);
+    if (res.status === 429) throw new Error('CoinGecko rate limited');
+    throw new Error(`CoinGecko HTTP ${res.status}`);
+  }
+  const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+  if (!contentType.includes('application/json') && !contentType.includes('+json')) {
+    await res.body?.cancel().catch(() => undefined);
+    throw new Error('CoinGecko invalid content type');
+  }
+  const text = await readBoundedBody(res);
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error('CoinGecko invalid JSON');
+  }
+}
+
+function removeQueuedProfileRequest(job: ProfileRequestJob): void {
+  const index = profileRequestQueue.indexOf(job);
+  if (index >= 0) profileRequestQueue.splice(index, 1);
+}
+
+function clearProfileRequestDeadline(job: ProfileRequestJob): void {
+  if (job.deadlineTimer) clearTimeout(job.deadlineTimer);
+  job.deadlineTimer = null;
+}
+
+function clearProfilePaceTimer(): void {
+  if (!profilePaceTimer) return;
+  clearTimeout(profilePaceTimer);
+  profilePaceTimer = null;
+}
+
+function completeActiveProfileRequest(job: ProfileRequestJob, value: unknown, rejected: boolean): void {
+  if (job.state !== 'ACTIVE' && job.state !== 'EXPIRED_ACTIVE') return;
+  const expired = job.state === 'EXPIRED_ACTIVE';
+  if (activeProfileRequest === job) activeProfileRequest = null;
+  job.state = 'SETTLED';
+  clearProfileRequestDeadline(job);
+  if (!expired) {
+    if (rejected) job.reject(value);
+    else job.resolve(value);
+  }
+  job.resolveTransportSettled();
+  pumpProfileRequestQueue();
+}
+
+function expireProfileRequest(job: ProfileRequestJob): void {
+  if (job.state !== 'QUEUED' && job.state !== 'ACTIVE') return;
+  profileDeadlineExceeded = incrementBoundedCounter(profileDeadlineExceeded);
+  const failure = deadlineFailure();
+  if (job.state === 'ACTIVE') {
+    job.state = 'EXPIRED_ACTIVE';
+    clearProfileRequestDeadline(job);
+    job.reject(failure);
+    job.controller.abort(failure);
+    return;
+  }
+  removeQueuedProfileRequest(job);
+  job.state = 'SETTLED';
+  clearProfileRequestDeadline(job);
+  job.controller.abort(failure);
+  clearProfilePaceTimer();
+  job.reject(failure);
+  job.resolveTransportSettled();
+  pumpProfileRequestQueue();
+}
+
+function startProfileRequest(job: ProfileRequestJob): void {
+  job.state = 'ACTIVE';
+  activeProfileRequest = job;
   lastCall = Date.now();
-  release();
+  void executeProfileRequest(job).then(
+    (value) => completeActiveProfileRequest(job, value, false),
+    (error) => completeActiveProfileRequest(job, error, true),
+  );
+}
+
+function pumpProfileRequestQueue(): void {
+  if (activeProfileRequest || profilePaceTimer) return;
+  const job = profileRequestQueue[0];
+  if (!job) return;
+  const now = Date.now();
+  if (job.deadlineAt <= now) {
+    expireProfileRequest(job);
+    return;
+  }
+  const wait = Math.max(0, lastCall + CALL_GAP_MS - now);
+  if (wait > 0) {
+    profilePaceTimer = setTimeout(() => {
+      profilePaceTimer = null;
+      pumpProfileRequestQueue();
+    }, Math.min(wait, job.deadlineAt - now));
+    return;
+  }
+  profileRequestQueue.shift();
+  startProfileRequest(job);
+}
+
+function enqueueProfileRequest<T>(url: URL): ProfileRequestHandle<T> {
+  if (profileRequestQueue.length >= PROFILE_REQUEST_QUEUE_CAPACITY) {
+    profileCapacityRejected = incrementBoundedCounter(profileCapacityRejected);
+    throw capacityFailure();
+  }
+  let resolve!: (value: unknown) => void;
+  let reject!: (reason: unknown) => void;
+  const result = new Promise<unknown>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  let resolveTransportSettled!: () => void;
+  const transportSettled = new Promise<void>((resolvePromise) => {
+    resolveTransportSettled = resolvePromise;
+  });
+  const job: ProfileRequestJob = {
+    url,
+    controller: new AbortController(),
+    deadlineAt: Date.now() + FETCH_TIMEOUT_MS,
+    state: 'QUEUED',
+    deadlineTimer: null,
+    resolve,
+    reject,
+    resolveTransportSettled,
+  };
+  job.deadlineTimer = setTimeout(() => expireProfileRequest(job), FETCH_TIMEOUT_MS);
+  profileRequestQueue.push(job);
+  profileQueueHighWatermark = Math.max(profileQueueHighWatermark, profileRequestQueue.length);
+  pumpProfileRequestQueue();
+  return { result: result as Promise<T>, transportSettled };
 }
 
 async function politeJson<T>(urlValue: string): Promise<T> {
@@ -198,46 +397,18 @@ async function politeJson<T>(urlValue: string): Promise<T> {
   const existing = fetchInFlight.get(key);
   if (existing) return existing as Promise<T>;
 
-  const work = (async (): Promise<T> => {
-    await reserveRequestSlot();
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-        redirect: 'error',
-        signal: ctrl.signal,
-      });
-      if (!res.ok) {
-        await res.body?.cancel().catch(() => undefined);
-        if (res.status === 429) throw new Error('CoinGecko rate limited');
-        throw new Error(`CoinGecko HTTP ${res.status}`);
-      }
-      const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-      if (!contentType.includes('application/json') && !contentType.includes('+json')) {
-        await res.body?.cancel().catch(() => undefined);
-        throw new Error('CoinGecko invalid content type');
-      }
-      const text = await readBoundedBody(res);
-      try {
-        return JSON.parse(text) as T;
-      } catch {
-        throw new Error('CoinGecko invalid JSON');
-      }
-    } catch (err) {
-      const message = safeFetchMessage(err);
-      boundedSet(fetchFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message }, 512);
-      throw new Error(message);
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
-  boundedSet(fetchInFlight, key, work, 256);
-  try {
-    return await work;
-  } finally {
-    fetchInFlight.delete(key);
-  }
+  const queued = enqueueProfileRequest<T>(url);
+  const work = queued.result.catch((err) => {
+    if (isProfileRequestFailure(err)) throw err;
+    const message = safeFetchMessage(err);
+    boundedSet(fetchFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message }, 512);
+    throw new Error(message);
+  });
+  fetchInFlight.set(key, work);
+  void queued.transportSettled.then(() => {
+    if (fetchInFlight.get(key) === work) fetchInFlight.delete(key);
+  });
+  return work;
 }
 
 function sanitizeProfile(value: unknown, symbol: string): TokenProfile | null {
@@ -457,22 +628,70 @@ async function loadDominance(): Promise<Record<string, number>> {
   }
 }
 
-export async function tokenProfile(base: string, opts?: { forceFull?: boolean }): Promise<TokenProfile | null> {
+function profileAgeMs(profile: TokenProfile, profileTs: number, now: number): number | null {
+  if (!Number.isSafeInteger(profile.fetchedAt) || profile.fetchedAt <= 0 || profile.fetchedAt > now) return null;
+  if (!Number.isSafeInteger(profileTs) || profileTs <= 0 || profileTs > now) return null;
+  return now - Math.min(profile.fetchedAt, profileTs);
+}
+
+function servedProfile(
+  profile: TokenProfile,
+  profileTs: number,
+  source: TokenProfileDelivery['source'],
+  refreshState: TokenProfileDelivery['refreshState'],
+  refreshErrorCode: TokenProfileRefreshErrorCode | null,
+): ServedTokenProfile {
+  const ageMs = profileAgeMs(profile, profileTs, Date.now());
+  const freshness: TokenProfileDelivery['freshness'] = ageMs === null
+    ? 'UNKNOWN'
+    : ageMs < PROFILE_TTL ? 'FRESH' : 'STALE';
+  return {
+    ...profile,
+    delivery: Object.freeze({
+      source,
+      freshness,
+      ageMs,
+      completeness: profile.full ? 'FULL_ENDPOINT' : 'TRUNCATED_LITE',
+      refreshState,
+      refreshErrorCode,
+    }),
+  };
+}
+
+function refreshErrorCode(error: unknown): TokenProfileRefreshErrorCode {
+  if (isProfileRequestFailure(error)) return error.code;
+  return 'TOKEN_PROFILE_SOURCE_UNAVAILABLE';
+}
+
+export async function tokenProfile(base: string, opts?: { forceFull?: boolean }): Promise<ServedTokenProfile | null> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('token profile unavailable');
   const key = canonicalBase(base);
   if (!key) return null;
   const hit = cache.get(key);
   const directId = DIRECT_IDS[key];
   const cachedIdentityIsCanonical = !directId || hit?.profile?.id === directId;
-  if (hit?.profile && cachedIdentityIsCanonical && Date.now() - hit.profileTs < PROFILE_TTL && (hit.profile.full || !opts?.forceFull)) return hit.profile;
+  const cachedAgeMs = hit?.profile ? profileAgeMs(hit.profile, hit.profileTs, Date.now()) : null;
+  if (hit?.profile && cachedIdentityIsCanonical && cachedAgeMs !== null && cachedAgeMs < PROFILE_TTL && (hit.profile.full || !opts?.forceFull)) {
+    return servedProfile(hit.profile, hit.profileTs, 'CACHE', 'NOT_REQUIRED', null);
+  }
 
   const flightKey = `${key}:${opts?.forceFull ? 'full' : 'any'}`;
   const existing = profileInFlight.get(flightKey);
   if (existing) return existing;
-  const work = (async (): Promise<TokenProfile | null> => {
+  if (profileInFlight.size >= MAX_PROFILE_IN_FLIGHT) {
+    profileCapacityRejected = incrementBoundedCounter(profileCapacityRejected);
+    return hit?.profile
+      ? servedProfile(hit.profile, hit.profileTs, 'CACHE', 'FAILED', 'TOKEN_PROFILE_CAPACITY_REACHED')
+      : null;
+  }
+  const work = (async (): Promise<ServedTokenProfile | null> => {
     try {
       const id = await resolveId(key);
-      if (!id) return hit?.profile ?? null;
+      if (!id) {
+        return hit?.profile
+          ? servedProfile(hit.profile, hit.profileTs, 'CACHE', 'FAILED', 'TOKEN_PROFILE_ID_UNAVAILABLE')
+          : null;
+      }
       const c = await politeJson<Record<string, any>>(
         `${CG}/coins/${id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`,
       );
@@ -490,6 +709,7 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
           return network && address ? [{ network, address }] : [];
         });
 
+      const fetchedAt = Date.now();
       const profile: TokenProfile = {
         id: cappedString(id, 128) ?? key.toLowerCase(),
         name: cappedString(c.name, 120) ?? key,
@@ -527,23 +747,25 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
         hashingAlgorithm: cappedString(c.hashing_algorithm, 80),
         sentimentUpPct: num(c.sentiment_votes_up_percentage),
         watchlistUsers: num(c.watchlist_portfolio_users),
-        fetchedAt: Date.now(),
+        fetchedAt,
       };
       const entry: CacheEntry = cache.get(key) ?? { id, idTs: Date.now(), profile: null, profileTs: 0 };
       entry.profile = profile;
-      entry.profileTs = Date.now();
+      entry.profileTs = fetchedAt;
       boundedSet(cache, key, entry);
       persist();
-      return profile;
-    } catch {
-      return hit?.profile ?? null;
+      return servedProfile(profile, entry.profileTs, 'LIVE', 'SUCCEEDED', null);
+    } catch (error) {
+      return hit?.profile
+        ? servedProfile(hit.profile, hit.profileTs, 'CACHE', 'FAILED', refreshErrorCode(error))
+        : null;
     }
   })();
-  boundedSet(profileInFlight, flightKey, work, 512);
+  profileInFlight.set(flightKey, work);
   try {
     return await work;
   } finally {
-    profileInFlight.delete(flightKey);
+    if (profileInFlight.get(flightKey) === work) profileInFlight.delete(flightKey);
   }
 }
 
@@ -564,12 +786,63 @@ export interface WarmStatus {
   suspect: { base: string; reason: string }[];
 }
 
+export interface ProfileOutboundStatus {
+  activeRequests: number;
+  activeCapacity: number;
+  queueDepth: number;
+  queueCapacity: number;
+  queueHighWatermark: number;
+  inFlightKeys: number;
+  capacityRejected: number;
+  deadlineExceeded: number;
+  observedAtMs: number;
+}
+
+export interface ProfileCacheTruth {
+  freshProfiles: number;
+  staleProfiles: number;
+  unknownFreshnessProfiles: number;
+  truncatedLiteProfiles: number;
+}
+
 let warm: WarmStatus = { running: false, phase: 'idle', startedAt: null, finishedAt: null, total: 0, done: 0, ok: 0, na: 0, lite: 0, current: null, failed: [], suspect: [] };
 
-export function profileWarmStatus(): WarmStatus & { cachedProfiles: number } {
+export function profileWarmStatus(): WarmStatus & {
+  cachedProfiles: number;
+  cacheTruth: Readonly<ProfileCacheTruth>;
+  outbound: Readonly<ProfileOutboundStatus>;
+} {
+  const now = Date.now();
   let cached = 0;
-  for (const v of cache.values()) if (v.profile) cached++;
-  return { ...warm, cachedProfiles: cached };
+  let freshProfiles = 0;
+  let staleProfiles = 0;
+  let unknownFreshnessProfiles = 0;
+  let truncatedLiteProfiles = 0;
+  for (const entry of cache.values()) {
+    if (!entry.profile) continue;
+    cached++;
+    if (!entry.profile.full) truncatedLiteProfiles++;
+    const ageMs = profileAgeMs(entry.profile, entry.profileTs, now);
+    if (ageMs === null) unknownFreshnessProfiles++;
+    else if (ageMs < PROFILE_TTL) freshProfiles++;
+    else staleProfiles++;
+  }
+  return {
+    ...warm,
+    cachedProfiles: cached,
+    cacheTruth: Object.freeze({ freshProfiles, staleProfiles, unknownFreshnessProfiles, truncatedLiteProfiles }),
+    outbound: Object.freeze({
+      activeRequests: activeProfileRequest ? 1 : 0,
+      activeCapacity: PROFILE_REQUEST_ACTIVE_CAPACITY,
+      queueDepth: profileRequestQueue.length,
+      queueCapacity: PROFILE_REQUEST_QUEUE_CAPACITY,
+      queueHighWatermark: profileQueueHighWatermark,
+      inFlightKeys: fetchInFlight.size,
+      capacityRejected: profileCapacityRejected,
+      deadlineExceeded: profileDeadlineExceeded,
+      observedAtMs: now,
+    }),
+  };
 }
 
 /** BULK pass: one /coins/list call maps every symbol to candidate ids, then

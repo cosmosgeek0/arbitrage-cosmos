@@ -38,6 +38,41 @@ test('Binance REST canonicalizes cache keys and single-flights identical work', 
   assert.deepEqual(second, first);
 });
 
+test('Binance REST bounds unique active work without evicting single-flight identity', { concurrency: false }, async () => {
+  const capacity = 32;
+  const requests = [];
+  globalThis.fetch = (input) => new Promise((resolve) => {
+    requests.push({ input: String(input), resolve });
+  });
+  const rest = await import(`${modulePath('binance/rest')}?capacity=${Date.now()}`);
+  const active = Array.from({ length: capacity }, (_, index) => (
+    rest.fetchFundingHist(`R${index}USDT`, 10)
+  ));
+  await Promise.resolve();
+  assert.equal(requests.length, capacity);
+
+  const duplicate = rest.fetchFundingHist('R0USDT', 10);
+  await Promise.resolve();
+  assert.equal(requests.length, capacity, 'same-key work must join the retained active request');
+  await assert.rejects(
+    rest.fetchFundingHist('OVERFLOWUSDT', 10),
+    /Binance REST capacity reached/,
+  );
+  assert.equal(requests.length, capacity, 'overflow must fail before fetch admission');
+
+  requests[0].resolve(jsonResponse([{ fundingTime: 1_700_000_000_000, fundingRate: '0.0001' }]));
+  const [first, joined] = await Promise.all([active[0], duplicate]);
+  assert.deepEqual(joined, first);
+
+  const admittedAfterSettlement = rest.fetchFundingHist('OVERFLOWUSDT', 10);
+  await Promise.resolve();
+  assert.equal(requests.length, capacity + 1, 'settlement must release one admission slot');
+  for (const request of requests.slice(1)) {
+    request.resolve(jsonResponse([{ fundingTime: 1_700_000_000_000, fundingRate: '0.0001' }]));
+  }
+  await Promise.all([...active.slice(1), admittedAfterSettlement]);
+});
+
 test('Binance REST rejects redirects, wrong media types, and oversized bodies without exposing URLs', { concurrency: false }, async () => {
   const rest = await import(`${modulePath('binance/rest')}?boundaries=${Date.now()}`);
 

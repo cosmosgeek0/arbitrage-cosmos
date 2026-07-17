@@ -7,6 +7,26 @@ import type { BasisDirection, CostBreakdown, DepthLadder, LadderLevel } from './
 
 // ---------- spreads / gaps ----------
 
+/**
+ * Canonical Basis economic-return contract. The runtime engine is the strategy
+ * authority; research consumers bind to this version and prove parity in their
+ * own exact-number representation.
+ */
+export const EXECUTABLE_BASIS_RETURN_CONTRACT = Object.freeze({
+  schema: 'ExecutableBasisReturnContractV1',
+  version: 'basis-executable-long-leg-notional-v1',
+  returnLaw: 'RETURN_ON_LONG_LEG_ENTRY_NOTIONAL',
+});
+
+/** Return on the capital paid for the long leg, expressed as percent. */
+export function executableBasisReturnPct(
+  sellProceedsPrice: number,
+  longEntryPrice: number,
+): number | null {
+  if (!(sellProceedsPrice > 0) || !(longEntryPrice > 0)) return null;
+  return ((sellProceedsPrice - longEntryPrice) / longEntryPrice) * 100;
+}
+
 export function spreadBps(bid: number, ask: number): number | null {
   if (!(bid > 0) || !(ask > 0) || ask < bid) return null;
   const mid = (bid + ask) / 2;
@@ -18,8 +38,7 @@ export function spreadBps(bid: number, ask: number): number | null {
  * Executable gap = (perpBid − spotAsk) / spotAsk, pct.
  */
 export function gapLongSpotShortPerpPct(spotAsk: number, perpBid: number): number | null {
-  if (!(spotAsk > 0) || !(perpBid > 0)) return null;
-  return ((perpBid - spotAsk) / spotAsk) * 100;
+  return executableBasisReturnPct(perpBid, spotAsk);
 }
 
 /**
@@ -27,8 +46,7 @@ export function gapLongSpotShortPerpPct(spotAsk: number, perpBid: number): numbe
  * Executable gap = (spotBid − perpAsk) / perpAsk, pct.
  */
 export function gapShortSpotLongPerpPct(spotBid: number, perpAsk: number): number | null {
-  if (!(spotBid > 0) || !(perpAsk > 0)) return null;
-  return ((spotBid - perpAsk) / perpAsk) * 100;
+  return executableBasisReturnPct(spotBid, perpAsk);
 }
 
 export function bookMid(t: BookTicker): number | null {
@@ -170,19 +188,32 @@ export function slopePerMinute(samples: Array<{ ts: number; v: number }>): numbe
 // ---------- funding carry ----------
 
 /**
- * Signed funding carry for a direction over an expected hold, pct of notional.
- * Positive funding pays shorts: helps A (short perp), hurts B (long perp).
+ * Signed funding carry from the discrete funding timestamps crossed by a hold,
+ * pct of notional. `knownSettlementRates[0]` belongs to the supplied next
+ * funding timestamp; later entries, when present, belong to subsequent periods.
+ * A crossed timestamp with no known rate stays unknown rather than being
+ * prorated from the current rate.
  */
 export function fundingCarryPctOverHold(
-  fundingRate: number,
+  knownSettlementRates: readonly number[],
   direction: BasisDirection,
   holdMs: number,
   fundingPeriodMs: number,
-): number {
-  const periods = holdMs / fundingPeriodMs;
+  msToNextFunding: number,
+): number | null {
+  if (!Number.isFinite(holdMs) || holdMs < 0
+    || !Number.isFinite(fundingPeriodMs) || fundingPeriodMs <= 0
+    || !Number.isFinite(msToNextFunding) || msToNextFunding <= 0) return null;
+  if (msToNextFunding > holdMs) return 0;
+  const settlementCount = 1 + Math.floor((holdMs - msToNextFunding) / fundingPeriodMs);
+  if (!Number.isSafeInteger(settlementCount)
+    || settlementCount < 1
+    || settlementCount > knownSettlementRates.length) return null;
+  const rates = knownSettlementRates.slice(0, settlementCount);
+  if (rates.some((rate) => !Number.isFinite(rate) || Math.abs(rate) > 0.1)) return null;
   const receivesWhenPositive = direction === 'long_spot_short_perp';
   const sign = receivesWhenPositive ? 1 : -1;
-  return fundingRate * 100 * periods * sign;
+  return rates.reduce((total, rate) => total + rate * 100 * sign, 0);
 }
 
 /** Borrow interest over the hold, pct of notional (reverse basis only). */

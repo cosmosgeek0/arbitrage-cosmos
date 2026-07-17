@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { BinanceApiError, type BinanceClient, type OpenOrder } from '../binance/client.js';
 import { boundedBinanceIdentifier } from '../binance/identifiers.js';
+import {
+  addExactDecimals,
+  compareExactDecimals,
+  multiplyExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  type NonNegativeDecimal,
+} from '../capitalFoundation/contracts/decimal.js';
 import type { SymbolFilters } from '../binance/rest.js';
 import type { Ledger, UnresolvedOrderRequest } from '../ledger.js';
 import type { OrderIntent, RiskDecision } from '../types.js';
@@ -80,6 +87,16 @@ function finiteNonNegative(value: unknown): value is number {
 function parsedNonNegative(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+const EXACT_ZERO = normalizeNonNegativeExactDecimal('0');
+
+function parsedExactNonNegative(value: unknown): NonNegativeDecimal | null {
+  try {
+    return normalizeNonNegativeExactDecimal(value);
+  } catch {
+    return null;
+  }
 }
 
 function errorMessage(error: unknown): string {
@@ -438,8 +455,10 @@ export class OrderService {
       const responseClientOrderId = typeof res?.clientOrderId === 'string' ? res.clientOrderId : '';
       const transactTime = Number(res?.transactTime);
       const status = typeof res?.status === 'string' ? res.status : '';
-      const executedQty = parsedNonNegative(res?.executedQty);
-      const executedQuote = parsedNonNegative(res?.cummulativeQuoteQty);
+      const executedQtyExact = parsedExactNonNegative(res?.executedQty);
+      const executedQuoteExact = parsedExactNonNegative(res?.cummulativeQuoteQty);
+      const executedQty = executedQtyExact === null ? Number.NaN : Number(executedQtyExact);
+      const executedQuote = executedQuoteExact === null ? Number.NaN : Number(executedQuoteExact);
       const now = Date.now();
       if (
         res?.symbol !== intent.symbol ||
@@ -449,13 +468,17 @@ export class OrderService {
         !Number.isSafeInteger(transactTime) ||
         transactTime < now - 5 * 60_000 ||
         transactTime > now + 5 * 60_000 ||
-        executedQty === null ||
-        executedQuote === null
+        executedQtyExact === null ||
+        executedQuoteExact === null ||
+        !finiteNonNegative(executedQty) ||
+        !finiteNonNegative(executedQuote)
       ) {
         return this.unknownOutcome(intent.symbol, reservationId, expectedClientOrderId, risk, 'Binance returned a malformed or mismatched order acknowledgement.');
       }
       const terminalWithExecution =
-        TERMINAL_REJECTION_STATUSES.has(status) && (executedQty > 0 || executedQuote > 0);
+        TERMINAL_REJECTION_STATUSES.has(status)
+        && (compareExactDecimals(executedQtyExact, EXACT_ZERO) > 0
+          || compareExactDecimals(executedQuoteExact, EXACT_ZERO) > 0);
       if (TERMINAL_REJECTION_STATUSES.has(status) && !terminalWithExecution) {
         this.ledger.logEvent('order_response', intent.symbol, {
           reservationId,
@@ -490,21 +513,24 @@ export class OrderService {
       // A terminal acknowledgement with execution is a real fill, never a
       // clean rejection. Reconcile because the inline fill list may be partial.
       let reconciliationRequired = terminalWithExecution;
-      let inlineExecutedQty = 0;
-      let inlineExecutedQuote = 0;
+      let inlineExecutedQty: NonNegativeDecimal = EXACT_ZERO;
+      let inlineExecutedQuote: NonNegativeDecimal = EXACT_ZERO;
       for (const fill of res.fills ?? []) {
-        const price = parsedNonNegative(fill.price);
-        const qty = parsedNonNegative(fill.qty);
-        const commission = parsedNonNegative(fill.commission);
-        const quoteQty = price !== null && qty !== null ? price * qty : Number.NaN;
+        const price = parsedExactNonNegative(fill.price);
+        const qty = parsedExactNonNegative(fill.qty);
+        const commission = parsedExactNonNegative(fill.commission);
+        const quoteQty = price !== null && qty !== null
+          ? normalizeNonNegativeExactDecimal(multiplyExactDecimals(price, qty))
+          : null;
         if (
-          !Number.isInteger(fill.tradeId) ||
+          !Number.isSafeInteger(fill.tradeId) ||
           fill.tradeId < 0 ||
           price === null ||
-          price <= 0 ||
+          compareExactDecimals(price, EXACT_ZERO) <= 0 ||
           qty === null ||
-          qty <= 0 ||
-          !finitePositive(quoteQty) ||
+          compareExactDecimals(qty, EXACT_ZERO) <= 0 ||
+          quoteQty === null ||
+          compareExactDecimals(quoteQty, EXACT_ZERO) <= 0 ||
           commission === null ||
           typeof fill.commissionAsset !== 'string' ||
           !boundedBinanceIdentifier(fill.commissionAsset, 20, 80)
@@ -517,8 +543,8 @@ export class OrderService {
           });
           continue;
         }
-        inlineExecutedQty += qty;
-        inlineExecutedQuote += quoteQty;
+        inlineExecutedQty = normalizeNonNegativeExactDecimal(addExactDecimals(inlineExecutedQty, qty));
+        inlineExecutedQuote = normalizeNonNegativeExactDecimal(addExactDecimals(inlineExecutedQuote, quoteQty));
         this.account.recordFill({
           symbol: intent.symbol,
           tradeId: fill.tradeId,
@@ -533,11 +559,9 @@ export class OrderService {
           source: 'order_response',
         });
       }
-      const quantityTolerance = Math.max(1e-12, executedQty * 1e-8);
-      const quoteTolerance = Math.max(1e-8, executedQuote * 1e-8);
       if (
-        Math.abs(inlineExecutedQty - executedQty) > quantityTolerance ||
-        Math.abs(inlineExecutedQuote - executedQuote) > quoteTolerance
+        compareExactDecimals(inlineExecutedQty, executedQtyExact) !== 0 ||
+        compareExactDecimals(inlineExecutedQuote, executedQuoteExact) !== 0
       ) {
         reconciliationRequired = true;
         this.safeLog('error_event', intent.symbol, {

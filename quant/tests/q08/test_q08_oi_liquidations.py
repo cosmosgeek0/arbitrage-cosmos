@@ -26,11 +26,22 @@ from quant_edge.derivatives.sampled import (
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FP_ONE
 from quant_edge.labels.series import EvidenceSeriesV1, GapIntervalV1, PricePointV1, SeriesKind
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1, QualityState
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+    QualityState,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
 MINUTE_NS = 60 * SECOND_NS
+
+PRICE_INSTRUMENT = InstrumentIdentityV1(
+    instrument_id="test-binance-spot-BNBUSDT",
+    base_size_unit_id="BNB",
+    quote_price_unit_id="USDT",
+)
 
 
 def _oi(offset_min: int, ordinal: int, amount: int) -> OpenInterestObservationV1:
@@ -62,6 +73,7 @@ def _price_series(prices: list[tuple[int, int]]) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id="q08-oi-price",
         symbol="BNBUSDT",
+        instrument=PRICE_INSTRUMENT,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,
@@ -301,6 +313,7 @@ class TestPriceOiQuadrant:
         gapped = EvidenceSeriesV1(
             series_id=series.series_id,
             symbol=series.symbol,
+            instrument=series.instrument,
             kind=series.kind,
             posture=series.posture,
             completeness_start_ns=series.completeness_start_ns,

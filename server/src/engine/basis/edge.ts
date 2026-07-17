@@ -30,7 +30,9 @@ export function estimateEdge(
     direction,
     grossEdgePct: gross,
     costs,
-    netEdgePct: gross === null ? null : netEdgePct(gross, costs, carry),
+    netEdgePct: gross === null || funding.carryPctOverHold === null
+      ? null
+      : netEdgePct(gross, costs, carry),
     fundingAdjPct: funding.carryPctOverHold,
   };
 }

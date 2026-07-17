@@ -14,7 +14,11 @@ from quant_edge.derivatives.leadlag import (
 from quant_edge.errors import ContractValueError
 from quant_edge.labels.rational import make_ratio, ratio_compare
 from quant_edge.labels.series import EvidenceSeriesV1, PricePointV1, QuotePointV1, SeriesKind
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -28,6 +32,14 @@ def _usdt(price: int) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
 
 
+def _market_identity(symbol: str) -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=f"test-{symbol}",
+        base_size_unit_id="BNB",
+        quote_price_unit_id="USDT",
+    )
+
+
 def _series(
     series_id: str,
     symbol: str,
@@ -38,6 +50,7 @@ def _series(
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol=symbol,
+        instrument=_market_identity(symbol),
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,
@@ -179,6 +192,7 @@ class TestLegFeatureSeries:
         quotes = EvidenceSeriesV1(
             series_id="quotes",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             kind=SeriesKind.EXECUTABLE_QUOTES,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS,

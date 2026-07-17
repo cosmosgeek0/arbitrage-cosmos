@@ -111,6 +111,27 @@ class ExactScaledValueV1:
         require_contract_id(self.unit_id, field="unit_id")
 
 
+@dataclass(frozen=True, slots=True)
+class InstrumentIdentityV1:
+    """Explicit instrument and unit identity for exact market arithmetic."""
+
+    instrument_id: str
+    base_size_unit_id: str
+    quote_price_unit_id: str
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.instrument_id, field="instrument_id")
+        require_contract_id(self.base_size_unit_id, field="base_size_unit_id")
+        require_contract_id(self.quote_price_unit_id, field="quote_price_unit_id")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "baseSizeUnitId": self.base_size_unit_id,
+            "instrumentId": self.instrument_id,
+            "quotePriceUnitId": self.quote_price_unit_id,
+        }
+
+
 class TimestampUnit(StrEnum):
     MILLISECOND = "MILLISECOND"
     MICROSECOND = "MICROSECOND"
@@ -443,6 +464,10 @@ class ReferenceMarketEvidenceRowV1:
             value = getattr(self, field_name)
             if value is not None and not isinstance(value, ExactScaledValueV1):
                 raise ContractValueError(f"{field_name} must be ExactScaledValueV1 or null")
+        if self.price is not None and self.price.unit_id != self.quote_asset_id:
+            raise ContractValueError("price unit must match quote_asset_id")
+        if self.quantity is not None and self.quantity.unit_id != self.base_asset_id:
+            raise ContractValueError("quantity unit must match base_asset_id")
         if self.quality.state is QualityState.UNAVAILABLE and (
             self.price is not None or self.quantity is not None
         ):

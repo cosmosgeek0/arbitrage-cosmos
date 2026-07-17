@@ -22,11 +22,21 @@ from quant_edge.labels.stages import (
     StageLabel,
     generate_stage,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
 DAY_NS = 86_400_000_000_000
+
+MARKET_IDENTITY = InstrumentIdentityV1(
+    instrument_id="test-binance-spot-BNBUSDT",
+    base_size_unit_id="BNB",
+    quote_price_unit_id="USDT",
+)
 
 POINT_LISTS = st.lists(
     st.tuples(
@@ -58,6 +68,7 @@ def _series_from(
     return EvidenceSeriesV1(
         series_id="series-1",
         symbol="BNBUSDT",
+        instrument=MARKET_IDENTITY,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,
@@ -196,6 +207,7 @@ def test_post_cutoff_evidence_never_alters_pre_cutoff_truth(
     extended_series = EvidenceSeriesV1(
         series_id="series-1",
         symbol="BNBUSDT",
+        instrument=base_series.instrument,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=base_series.completeness_start_ns,

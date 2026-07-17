@@ -3,6 +3,11 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import {
+  compareExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  type NonNegativeDecimal,
+} from './capitalFoundation/contracts/decimal.js';
 import type { SystemTraceEvent } from './systemIntegration/contracts/types.js';
 import { validateSystemTraceEvent } from './systemIntegration/contracts/validation.js';
 import {
@@ -78,11 +83,11 @@ const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'LIABILITY',
   'RECOVERY_CAMPAIGN',
 ] as const);
-export const LEDGER_SCHEMA_VERSION = 1;
-// The integrated checkpoint writer adds a closed-schema field that the prior
-// exact-key decoder cannot read. Once this runtime owns the Ledger, schema 1
-// is therefore the first honest non-rollback floor.
-export const LEDGER_ROLLBACK_FLOOR = 1;
+export const LEDGER_SCHEMA_VERSION = 2;
+// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. An old
+// writer can silently coerce that truth back through binary64, so rollback is
+// no longer safe after this runtime opens the ledger.
+export const LEDGER_ROLLBACK_FLOOR = 2;
 const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
 const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
 const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
@@ -91,6 +96,23 @@ const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
+const ORDER_MUTATION_OUTCOMES = new Set([
+  'accepted',
+  'accepted_partial_terminal',
+  'accepted_reconciled',
+  'accepted_operator_verified',
+  'not_sent',
+  'not_sent_rejected',
+  'not_sent_reconciled',
+  'not_sent_operator_verified',
+  'unknown',
+]);
+const LOAN_MUTATION_OUTCOMES = new Set([
+  'succeeded',
+  'failed',
+  'reconciled_by_operator',
+  'unknown',
+]);
 
 export interface LedgerEvent {
   id: number;
@@ -117,6 +139,15 @@ export interface UnresolvedOrderRequest {
   recoveryAttempts: number;
   lastRecoveryAt: number | null;
   lastRecoveryDetail: string | null;
+}
+
+export interface DurableMutationAuthorityRead {
+  readonly posture: 'PROVEN_ABSENT' | 'AMBIGUOUS' | 'UNKNOWN';
+  readonly unresolvedOrderCount: number;
+  readonly unresolvedLoanCount: number;
+  readonly malformedOrderRowCount: number;
+  readonly malformedLoanRowCount: number;
+  readonly readErrorCount: number;
 }
 
 export interface LedgerEventInput {
@@ -243,7 +274,239 @@ function readLegacyJournalCompatibility(dataDir: string): LegacyJournalCompatibi
   });
 }
 
-export interface FillRow {
+interface FillColumnInfo {
+  readonly name: string;
+  readonly type: string;
+  readonly notnull: number;
+  readonly pk: number;
+}
+
+interface LegacyFillDbRow {
+  readonly symbol: unknown;
+  readonly trade_id: unknown;
+  readonly order_id: unknown;
+  readonly side: unknown;
+  readonly price: unknown;
+  readonly qty: unknown;
+  readonly quote_qty: unknown;
+  readonly commission: unknown;
+  readonly commission_asset: unknown;
+  readonly ts: unknown;
+  readonly source: unknown;
+}
+
+const EXACT_FILL_COLUMNS = Object.freeze({
+  symbol: 'TEXT',
+  trade_id: 'INTEGER',
+  order_id: 'INTEGER',
+  side: 'TEXT',
+  price: 'TEXT',
+  qty: 'TEXT',
+  quote_qty: 'TEXT',
+  commission: 'TEXT',
+  commission_asset: 'TEXT',
+  ts: 'INTEGER',
+  source: 'TEXT',
+  money_encoding: 'TEXT',
+} as const);
+
+const LEGACY_FILL_COLUMNS = Object.freeze({
+  symbol: 'TEXT',
+  trade_id: 'INTEGER',
+  order_id: 'INTEGER',
+  side: 'TEXT',
+  price: 'REAL',
+  qty: 'REAL',
+  quote_qty: 'REAL',
+  commission: 'REAL',
+  commission_asset: 'TEXT',
+  ts: 'INTEGER',
+  source: 'TEXT',
+} as const);
+
+function exactColumnShape(
+  columns: readonly FillColumnInfo[],
+  expected: Readonly<Record<string, string>>,
+): boolean {
+  if (columns.length !== Object.keys(expected).length) return false;
+  const actual = new Map(columns.map((column) => [column.name, column.type.toUpperCase()]));
+  const nullable = new Set(['order_id', 'commission_asset']);
+  return Object.entries(expected).every(([name, type]) => actual.get(name) === type)
+    && columns.find((column) => column.name === 'symbol')?.pk === 1
+    && columns.find((column) => column.name === 'trade_id')?.pk === 2
+    && columns.every((column) => column.notnull === (nullable.has(column.name) ? 0 : 1))
+    && columns.every((column) => ['symbol', 'trade_id'].includes(column.name) || column.pk === 0);
+}
+
+function createExactFillsTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE fills (
+      symbol TEXT NOT NULL,
+      trade_id INTEGER NOT NULL,
+      order_id INTEGER,
+      side TEXT NOT NULL,
+      price TEXT NOT NULL CHECK(typeof(price) = 'text' AND length(price) BETWEEN 1 AND 98),
+      qty TEXT NOT NULL CHECK(typeof(qty) = 'text' AND length(qty) BETWEEN 1 AND 98),
+      quote_qty TEXT NOT NULL CHECK(typeof(quote_qty) = 'text' AND length(quote_qty) BETWEEN 1 AND 98),
+      commission TEXT NOT NULL CHECK(typeof(commission) = 'text' AND length(commission) BETWEEN 1 AND 98),
+      commission_asset TEXT,
+      ts INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      money_encoding TEXT NOT NULL CHECK(money_encoding IN ('EXACT_DECIMAL', 'LEGACY_BINARY64')),
+      PRIMARY KEY (symbol, trade_id)
+    );
+  `);
+}
+
+function plainBinary64Decimal(value: number): string {
+  if (!Number.isFinite(value) || value < 0) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const text = value.toString();
+  if (!/[eE]/.test(text)) return text;
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text);
+  if (match === null) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const sign = match[1] === '-' ? '-' : '';
+  const whole = match[2];
+  const fraction = match[3] ?? '';
+  const exponent = Number(match[4]);
+  if (!Number.isSafeInteger(exponent)) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const digits = `${whole}${fraction}`;
+  const decimalIndex = whole.length + exponent;
+  if (decimalIndex <= 0) return `${sign}0.${'0'.repeat(-decimalIndex)}${digits}`;
+  if (decimalIndex >= digits.length) return `${sign}${digits}${'0'.repeat(decimalIndex - digits.length)}`;
+  return `${sign}${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+}
+
+function legacyMoney(value: unknown, positive: boolean): NonNegativeDecimal {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (positive && value <= 0)) {
+    throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  }
+  return normalizeNonNegativeExactDecimal(plainBinary64Decimal(value));
+}
+
+function canonicalLegacyFill(row: Readonly<LegacyFillDbRow>): FillRow {
+  if (typeof row.symbol !== 'string' || !/^[A-Z0-9]{1,20}$/.test(row.symbol)
+    || !Number.isSafeInteger(row.trade_id) || (row.trade_id as number) < 0
+    || (row.order_id !== null && (!Number.isSafeInteger(row.order_id) || (row.order_id as number) < 0))
+    || (row.side !== 'BUY' && row.side !== 'SELL')
+    || (row.commission_asset !== null && (typeof row.commission_asset !== 'string'
+      || row.commission_asset.length < 1 || row.commission_asset.length > 80
+      || /[\u0000-\u001f\u007f]/.test(row.commission_asset)))
+    || !Number.isSafeInteger(row.ts) || (row.ts as number) <= 0
+    || typeof row.source !== 'string' || row.source.length < 1 || row.source.length > 64
+    || /[\u0000-\u001f\u007f]/.test(row.source)) {
+    throw new Error('LEDGER_FILL_V1_ROW_MALFORMED');
+  }
+  return Object.freeze({
+    symbol: row.symbol,
+    tradeId: row.trade_id as number,
+    orderId: row.order_id as number | null,
+    side: row.side,
+    price: legacyMoney(row.price, true),
+    qty: legacyMoney(row.qty, true),
+    quoteQty: legacyMoney(row.quote_qty, true),
+    commission: legacyMoney(row.commission, false),
+    commissionAsset: row.commission_asset as string | null,
+    ts: row.ts as number,
+    source: row.source,
+    moneyEncoding: 'LEGACY_BINARY64',
+  });
+}
+
+function upgradeLedgerVersion(db: Database.Database): void {
+  const updated = db.prepare(`
+    UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+    SET current_schema_version = ?, rollback_floor = ?
+    WHERE singleton = 1
+      AND current_schema_version = 1
+      AND typeof(rollback_floor) = 'integer'
+      AND rollback_floor BETWEEN 0 AND 1
+  `).run(LEDGER_SCHEMA_VERSION, LEDGER_ROLLBACK_FLOOR);
+  if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
+  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+}
+
+function migrateFillStorage(db: Database.Database): void {
+  db.transaction(() => {
+    const liveSchemaVersion = db.pragma('user_version', { simple: true }) as unknown;
+    if (!Number.isSafeInteger(liveSchemaVersion)
+      || (liveSchemaVersion as number) < 0
+      || (liveSchemaVersion as number) > LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
+    }
+    const columns = db.prepare('PRAGMA table_info(fills)').all() as FillColumnInfo[];
+    if (exactColumnShape(columns, EXACT_FILL_COLUMNS)) {
+      if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+      return;
+    }
+    if (!exactColumnShape(columns, LEGACY_FILL_COLUMNS) || (liveSchemaVersion as number) >= 2) {
+      throw new Error('LEDGER_FILL_SCHEMA_MALFORMED');
+    }
+    const rows = db.prepare(`
+      SELECT symbol, trade_id, order_id, side, price, qty, quote_qty,
+             commission, commission_asset, ts, source
+      FROM fills
+      ORDER BY symbol COLLATE BINARY ASC, trade_id ASC
+    `).all() as LegacyFillDbRow[];
+    const canonicalRows = rows.map(canonicalLegacyFill);
+    const collision = db.prepare(`
+      SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'table' AND name = 'fills_v1_binary64'
+    `).get() as { count: number };
+    if (collision.count !== 0) throw new Error('LEDGER_FILL_V1_MIGRATION_COLLISION');
+    db.exec(`
+      DROP INDEX IF EXISTS idx_fills_ts;
+      DROP INDEX IF EXISTS idx_fills_total_order;
+      ALTER TABLE fills RENAME TO fills_v1_binary64;
+    `);
+    createExactFillsTable(db);
+    const insert = db.prepare(`
+      INSERT INTO fills
+        (symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+         commission_asset, ts, source, money_encoding)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of canonicalRows) {
+      insert.run(
+        row.symbol, row.tradeId, row.orderId, row.side, row.price, row.qty,
+        row.quoteQty, row.commission, row.commissionAsset, row.ts, row.source,
+        row.moneyEncoding,
+      );
+    }
+    const migratedCount = db.prepare('SELECT COUNT(*) AS count FROM fills').get() as { count: number };
+    if (migratedCount.count !== canonicalRows.length) throw new Error('LEDGER_FILL_V1_MIGRATION_COUNT_MISMATCH');
+    db.exec(`
+      DROP TABLE fills_v1_binary64;
+      CREATE INDEX idx_fills_ts ON fills (ts DESC);
+      CREATE INDEX idx_fills_total_order
+        ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
+    `);
+    if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+  }).immediate();
+}
+
+export type FillMoneyEncoding = 'EXACT_DECIMAL' | 'LEGACY_BINARY64';
+
+/** Canonical durable fill truth used by replay and PnL. */
+export interface FillInput {
+  readonly symbol: string;
+  readonly tradeId: number;
+  readonly orderId: number | null;
+  readonly side: string;
+  readonly price: NonNegativeDecimal;
+  readonly qty: NonNegativeDecimal;
+  readonly quoteQty: NonNegativeDecimal;
+  readonly commission: NonNegativeDecimal;
+  readonly commissionAsset: string | null;
+  readonly ts: number;
+  readonly source: string;
+}
+
+export interface FillRow extends FillInput {
+  readonly moneyEncoding: FillMoneyEncoding;
+}
+
+/** Non-authoritative numeric projection retained for the existing UI API. */
+export interface FillDisplayRow {
   symbol: string;
   tradeId: number;
   orderId: number | null;
@@ -412,13 +675,21 @@ interface FillDbRow {
   trade_id: number;
   order_id: number | null;
   side: string;
-  price: number;
-  qty: number;
-  quote_qty: number;
-  commission: number;
+  price: unknown;
+  qty: unknown;
+  quote_qty: unknown;
+  commission: unknown;
   commission_asset: string | null;
   ts: number;
   source: string;
+  money_encoding: unknown;
+}
+
+interface DurableMutationAuthorityDbRow {
+  unresolved_order_count: unknown;
+  unresolved_loan_count: unknown;
+  malformed_order_row_count: unknown;
+  malformed_loan_row_count: unknown;
 }
 
 interface SignalDbRow {
@@ -466,6 +737,13 @@ export class Ledger extends EventEmitter {
       const legacyCompatibility = startupSchemaVersion === 0
         ? readLegacyJournalCompatibility(dataDir)
         : null;
+      const startupFillTable = this.db.prepare(`
+        SELECT COUNT(*) AS count FROM sqlite_master
+        WHERE type = 'table' AND name = 'fills'
+      `).get() as { count: number };
+      if ((startupSchemaVersion as number) > 0 && startupFillTable.count !== 1) {
+        throw new Error('LEDGER_FILL_SCHEMA_MISSING');
+      }
 
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
@@ -493,13 +771,14 @@ export class Ledger extends EventEmitter {
         trade_id INTEGER NOT NULL,
         order_id INTEGER,
         side TEXT NOT NULL,
-        price REAL NOT NULL,
-        qty REAL NOT NULL,
-        quote_qty REAL NOT NULL,
-        commission REAL NOT NULL DEFAULT 0,
+        price TEXT NOT NULL CHECK(typeof(price) = 'text' AND length(price) BETWEEN 1 AND 98),
+        qty TEXT NOT NULL CHECK(typeof(qty) = 'text' AND length(qty) BETWEEN 1 AND 98),
+        quote_qty TEXT NOT NULL CHECK(typeof(quote_qty) = 'text' AND length(quote_qty) BETWEEN 1 AND 98),
+        commission TEXT NOT NULL CHECK(typeof(commission) = 'text' AND length(commission) BETWEEN 1 AND 98),
         commission_asset TEXT,
         ts INTEGER NOT NULL,
         source TEXT NOT NULL,
+        money_encoding TEXT NOT NULL CHECK(money_encoding IN ('EXACT_DECIMAL', 'LEGACY_BINARY64')),
         PRIMARY KEY (symbol, trade_id)
       );
       CREATE TABLE IF NOT EXISTS signals (
@@ -683,10 +962,16 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_product_incidents_state_severity_last_seen
         ON product_incidents (state, severity, last_seen_at_ms DESC);
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_fills_total_order
+        ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
+      migrateFillStorage(this.db);
       if (startupSchemaVersion === 0) {
         const initializeCompatibility = this.db.transaction(() => {
+          const liveSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
+          if (liveSchemaVersion === LEDGER_SCHEMA_VERSION) return;
+          if (liveSchemaVersion !== 0) throw new Error('LEDGER_SCHEMA_VERSION_MISMATCH');
           const existingRows = this.db.prepare(`
             SELECT singleton, current_schema_version, rollback_floor
             FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
@@ -740,6 +1025,7 @@ export class Ledger extends EventEmitter {
 
   logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
     const ts = Date.now();
+    validateFinancialMutationEvent(kind, symbol ?? null, data);
     const info = this.db
       .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
       .run(ts, kind, symbol ?? null, data === undefined ? null : JSON.stringify(data));
@@ -770,6 +1056,7 @@ export class Ledger extends EventEmitter {
       if (typeof record.kind !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(record.kind)) {
         throw new Error('invalid atomic ledger event kind');
       }
+      validateFinancialMutationEvent(record.kind, record.symbol ?? null, record.data);
       const serialized = record.data === undefined ? null : JSON.stringify(record.data);
       const info = insert.run(ts, record.kind, record.symbol ?? null, serialized);
       return {
@@ -872,11 +1159,167 @@ export class Ledger extends EventEmitter {
   }
 
   /**
+   * Reads the durable local financial-mutation posture without allowing
+   * malformed request/response evidence to disappear behind JSON filters.
+   * Corrupt request rows are ambiguous until repaired; a read failure is
+   * UNKNOWN. Only a complete, readable all-zero scan proves absence.
+   */
+  readDurableMutationAuthority(): Readonly<DurableMutationAuthorityRead> {
+    try {
+      const row = this.db.prepare(`
+        WITH request_fields AS (
+          SELECT
+            request.id,
+            request.kind,
+            request.ts,
+            request.symbol,
+            json_valid(request.data) AS valid_json,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.reservationId') END AS reservation_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.reservationId') END AS reservation_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.params.newClientOrderId') END AS client_order_id_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.params.newClientOrderId') END AS client_order_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.reservedNotionalUsd') END AS reserved_notional_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.reservedNotionalUsd') END AS reserved_notional,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.mutationId') END AS mutation_id_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.mutationId') END AS mutation_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.actionKey') END AS action_key_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.actionKey') END AS action_key,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.riskIncreasing') END AS risk_increasing_type
+          FROM events AS request
+          WHERE request.kind IN ('order_request', 'loan_request')
+        ),
+        classified AS (
+          SELECT
+            fields.*,
+            CASE
+              WHEN fields.kind = 'order_request' THEN COALESCE((
+                fields.valid_json = 1
+                AND typeof(fields.ts) = 'integer'
+                AND fields.ts > 0
+                AND typeof(fields.symbol) = 'text'
+                AND length(fields.symbol) BETWEEN 4 AND 20
+                AND fields.symbol NOT GLOB '*[^A-Z0-9]*'
+                AND fields.reservation_type = 'text'
+                AND length(fields.reservation_id) BETWEEN 16 AND 64
+                AND fields.reservation_id NOT GLOB '*[^0-9A-Fa-f-]*'
+                AND fields.client_order_id_type = 'text'
+                AND length(fields.client_order_id) BETWEEN 1 AND 36
+                AND fields.client_order_id NOT GLOB '*[^A-Za-z0-9_-]*'
+                AND fields.reserved_notional_type IN ('integer', 'real')
+                AND fields.reserved_notional > 0
+              ), 0)
+              WHEN fields.kind = 'loan_request' THEN COALESCE((
+                fields.valid_json = 1
+                AND typeof(fields.ts) = 'integer'
+                AND fields.ts > 0
+                AND fields.symbol IS NULL
+                AND fields.mutation_id_type = 'text'
+                AND length(fields.mutation_id) BETWEEN 1 AND 128
+                AND fields.action_key_type = 'text'
+                AND length(fields.action_key) BETWEEN 1 AND 160
+                AND fields.risk_increasing_type IN ('true', 'false')
+              ), 0)
+              ELSE 0
+            END AS request_valid
+          FROM request_fields AS fields
+        )
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'order_request' AND request.request_valid = 0 THEN 1 ELSE 0 END), 0)
+            AS malformed_order_row_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'loan_request' AND request.request_valid = 0 THEN 1 ELSE 0 END), 0)
+            AS malformed_loan_row_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'order_request'
+              AND request.request_valid = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM events AS response
+                WHERE response.id > request.id
+                  AND response.kind = 'order_response'
+                  AND CASE WHEN json_valid(response.data) THEN
+                    json_type(response.data, '$.reservationId') = 'text'
+                    AND json_extract(response.data, '$.reservationId') = request.reservation_id
+                    AND json_type(response.data, '$.outcome') = 'text'
+                    AND json_extract(response.data, '$.outcome') IN (
+                      'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+                      'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+                      'not_sent_reconciled', 'not_sent_operator_verified'
+                    )
+                  ELSE 0 END
+              )
+            THEN 1 ELSE 0 END), 0) AS unresolved_order_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'loan_request'
+              AND request.request_valid = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM events AS response
+                WHERE response.id > request.id
+                  AND response.kind = 'loan_response'
+                  AND CASE WHEN json_valid(response.data) THEN
+                    json_type(response.data, '$.mutationId') = 'text'
+                    AND json_extract(response.data, '$.mutationId') = request.mutation_id
+                    AND json_type(response.data, '$.outcome') = 'text'
+                    AND json_extract(response.data, '$.outcome') IN (
+                      'succeeded', 'failed', 'reconciled_by_operator'
+                    )
+                  ELSE 0 END
+              )
+            THEN 1 ELSE 0 END), 0) AS unresolved_loan_count
+        FROM classified AS request
+      `).get() as DurableMutationAuthorityDbRow | undefined;
+      const unresolvedOrderCount = strictMutationCount(row?.unresolved_order_count);
+      const unresolvedLoanCount = strictMutationCount(row?.unresolved_loan_count);
+      const malformedOrderRowCount = strictMutationCount(row?.malformed_order_row_count);
+      const malformedLoanRowCount = strictMutationCount(row?.malformed_loan_row_count);
+      const posture = unresolvedOrderCount > 0
+        || unresolvedLoanCount > 0
+        || malformedOrderRowCount > 0
+        || malformedLoanRowCount > 0
+        ? 'AMBIGUOUS'
+        : 'PROVEN_ABSENT';
+      return Object.freeze({
+        posture,
+        unresolvedOrderCount,
+        unresolvedLoanCount,
+        malformedOrderRowCount,
+        malformedLoanRowCount,
+        readErrorCount: 0,
+      });
+    } catch {
+      return Object.freeze({
+        posture: 'UNKNOWN',
+        unresolvedOrderCount: 0,
+        unresolvedLoanCount: 0,
+        malformedOrderRowCount: 0,
+        malformedLoanRowCount: 0,
+        readErrorCount: 1,
+      });
+    }
+  }
+
+  /**
    * Requests from an earlier UTC day that still have no correlated response.
    * They do not belong in today's notional sum, but they must keep live
    * admission fail-closed until exchange reconciliation proves an outcome.
    */
   unresolvedOrderRequestsBefore(ts: number): number {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) return authority.malformedOrderRowCount;
     const row = this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM events AS request
@@ -892,6 +1335,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
     `).get(ts) as { count?: number } | undefined;
     return Number(row?.count) || 0;
@@ -904,6 +1353,9 @@ export class Ledger extends EventEmitter {
    * therefore never starve newer financial requests.
    */
   unresolvedOrderRequests(limit = 100, afterRequestId = 0, wrapAround = true): UnresolvedOrderRequest[] {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) throw new Error('MALFORMED_ORDER_MUTATION_EVIDENCE');
     const safeLimit = boundedInteger(limit, 1, 500, 100);
     const safeCursor = boundedInteger(afterRequestId, 0, Number.MAX_SAFE_INTEGER, 0);
     const cursorClause = wrapAround ? '' : 'AND request.id > ?';
@@ -956,6 +1408,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
       ORDER BY ${orderBy}
       LIMIT ?
@@ -964,6 +1422,9 @@ export class Ledger extends EventEmitter {
   }
 
   unresolvedOrderRequest(reservationId: string, clientOrderId: string): UnresolvedOrderRequest | null {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) throw new Error('MALFORMED_ORDER_MUTATION_EVIDENCE');
     if (!/^[0-9a-f-]{16,64}$/i.test(reservationId) || !/^[A-Za-z0-9_-]{1,36}$/.test(clientOrderId)) return null;
     const row = this.db.prepare(`
       SELECT
@@ -1010,6 +1471,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
       ORDER BY request.id DESC
       LIMIT 1
@@ -1018,6 +1485,9 @@ export class Ledger extends EventEmitter {
   }
 
   unresolvedLoanMutations(): { mutationId: string; actionKey: string; riskIncreasing: boolean }[] {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedLoanRowCount > 0) throw new Error('MALFORMED_LOAN_MUTATION_EVIDENCE');
     const rows = this.db.prepare(`
       SELECT request.data
       FROM events AS request
@@ -1031,7 +1501,10 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'loan_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.mutationId') = json_extract(request.data, '$.mutationId')
-            AND COALESCE(json_extract(response.data, '$.outcome'), 'unknown') != 'unknown'
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'succeeded', 'failed', 'reconciled_by_operator'
+            )
       )
       ORDER BY request.id ASC
     `).all() as { data: string | null }[];
@@ -1054,37 +1527,71 @@ export class Ledger extends EventEmitter {
     return row ? parseEvent(row) : null;
   }
 
-  /** Returns true if the fill was new (not a duplicate). */
-  insertFill(f: FillRow): boolean {
-    const info = this.db
-      .prepare(
-        `INSERT OR IGNORE INTO fills
-         (symbol, trade_id, order_id, side, price, qty, quote_qty, commission, commission_asset, ts, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        f.symbol,
-        f.tradeId,
-        f.orderId,
-        f.side,
-        f.price,
-        f.qty,
-        f.quoteQty,
-        f.commission,
-        f.commissionAsset,
-        f.ts,
-        f.source
-      );
-    return info.changes > 0;
+  /** Returns true if exact durable truth was inserted or upgraded. */
+  insertFill(input: FillInput): boolean {
+    const fill = canonicalExactFillInput(input);
+    return this.db.transaction(() => {
+      const existingRow = this.db.prepare(`
+        SELECT symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+               commission_asset, ts, source, money_encoding
+        FROM fills
+        WHERE symbol = ? AND trade_id = ?
+      `).get(fill.symbol, fill.tradeId) as FillDbRow | undefined;
+      if (existingRow === undefined) {
+        const inserted = this.db.prepare(`
+          INSERT INTO fills
+            (symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+             commission_asset, ts, source, money_encoding)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EXACT_DECIMAL')
+        `).run(
+          fill.symbol, fill.tradeId, fill.orderId, fill.side, fill.price, fill.qty,
+          fill.quoteQty, fill.commission, fill.commissionAsset, fill.ts, fill.source,
+        );
+        if (inserted.changes !== 1) throw new Error('FILL_INSERT_FAILED');
+        return true;
+      }
+
+      const existing = parseFill(existingRow);
+      if (!sameFillIdentityMetadata(existing, fill)) throw new Error('FILL_IDENTITY_CONFLICT');
+      if (existing.moneyEncoding === 'LEGACY_BINARY64') {
+        const upgraded = this.db.prepare(`
+          UPDATE fills
+          SET price = ?, qty = ?, quote_qty = ?, commission = ?, source = ?,
+              money_encoding = 'EXACT_DECIMAL'
+          WHERE symbol = ? AND trade_id = ? AND money_encoding = 'LEGACY_BINARY64'
+        `).run(
+          fill.price, fill.qty, fill.quoteQty, fill.commission, fill.source,
+          fill.symbol, fill.tradeId,
+        );
+        if (upgraded.changes !== 1) throw new Error('FILL_UPGRADE_FAILED');
+        const readback = this.db.prepare(`
+          SELECT symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+                 commission_asset, ts, source, money_encoding
+          FROM fills WHERE symbol = ? AND trade_id = ?
+        `).get(fill.symbol, fill.tradeId) as FillDbRow | undefined;
+        if (readback === undefined || !sameFillTruth(parseFill(readback), fill)) {
+          throw new Error('FILL_UPGRADE_POSTCONDITION_FAILED');
+        }
+        return true;
+      }
+      if (sameFillTruth(existing, fill)) return false;
+      throw new Error('FILL_IDENTITY_CONFLICT');
+    }).immediate();
   }
 
-  listFills(limit = 200, symbol?: string): FillRow[] {
+  listFills(limit = 200, symbol?: string): FillDisplayRow[] {
     const rows = (
       symbol
-        ? this.db.prepare('SELECT * FROM fills WHERE symbol = ? ORDER BY ts DESC LIMIT ?').all(symbol, limit)
-        : this.db.prepare('SELECT * FROM fills ORDER BY ts DESC LIMIT ?').all(limit)
+        ? this.db.prepare(`
+            SELECT * FROM fills WHERE symbol = ?
+            ORDER BY ts DESC, symbol COLLATE BINARY DESC, trade_id DESC LIMIT ?
+          `).all(symbol, limit)
+        : this.db.prepare(`
+            SELECT * FROM fills
+            ORDER BY ts DESC, symbol COLLATE BINARY DESC, trade_id DESC LIMIT ?
+          `).all(limit)
     ) as FillDbRow[];
-    return rows.map(parseFill);
+    return rows.map((row) => displayFill(parseFill(row)));
   }
 
   /**
@@ -1131,7 +1638,10 @@ export class Ledger extends EventEmitter {
   }
 
   allFillsAsc(): FillRow[] {
-    const rows = this.db.prepare('SELECT * FROM fills ORDER BY ts ASC').all() as FillDbRow[];
+    const rows = this.db.prepare(`
+      SELECT * FROM fills
+      ORDER BY ts ASC, symbol COLLATE BINARY ASC, trade_id ASC
+    `).all() as FillDbRow[];
     return rows.map(parseFill);
   }
 
@@ -3098,6 +3608,67 @@ function parseUnresolvedOrderRow(row: UnresolvedOrderDbRow): UnresolvedOrderRequ
   }
 }
 
+function strictMutationCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error('FINANCIAL_MUTATION_COUNT_MALFORMED');
+  }
+  return value;
+}
+
+function financialRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateFinancialMutationEvent(kind: string, symbol: string | null, data: unknown): void {
+  if (!['order_request', 'order_response', 'loan_request', 'loan_response'].includes(kind)) return;
+  if (!financialRecord(data)) throw new Error('FINANCIAL_MUTATION_EVENT_MALFORMED');
+
+  if (kind === 'order_request' || kind === 'order_response') {
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol)) {
+      throw new Error('ORDER_MUTATION_SYMBOL_MALFORMED');
+    }
+    if (typeof data.reservationId !== 'string' || !/^[0-9a-f-]{16,64}$/i.test(data.reservationId)) {
+      throw new Error('ORDER_MUTATION_RESERVATION_ID_MALFORMED');
+    }
+    if (kind === 'order_request') {
+      if (
+        !financialRecord(data.params)
+        || typeof data.params.newClientOrderId !== 'string'
+        || !/^[A-Za-z0-9_-]{1,36}$/.test(data.params.newClientOrderId)
+        || typeof data.reservedNotionalUsd !== 'number'
+        || !Number.isFinite(data.reservedNotionalUsd)
+        || data.reservedNotionalUsd <= 0
+      ) {
+        throw new Error('ORDER_REQUEST_EVIDENCE_MALFORMED');
+      }
+      return;
+    }
+    if (typeof data.outcome !== 'string' || !ORDER_MUTATION_OUTCOMES.has(data.outcome)) {
+      throw new Error('ORDER_RESPONSE_OUTCOME_MALFORMED');
+    }
+    return;
+  }
+
+  if (symbol !== null) throw new Error('LOAN_MUTATION_SYMBOL_MALFORMED');
+  if (typeof data.mutationId !== 'string' || data.mutationId.length < 1 || data.mutationId.length > 128) {
+    throw new Error('LOAN_MUTATION_ID_MALFORMED');
+  }
+  if (kind === 'loan_request') {
+    if (
+      typeof data.actionKey !== 'string'
+      || data.actionKey.length < 1
+      || data.actionKey.length > 160
+      || typeof data.riskIncreasing !== 'boolean'
+    ) {
+      throw new Error('LOAN_REQUEST_EVIDENCE_MALFORMED');
+    }
+    return;
+  }
+  if (typeof data.outcome !== 'string' || !LOAN_MUTATION_OUTCOMES.has(data.outcome)) {
+    throw new Error('LOAN_RESPONSE_OUTCOME_MALFORMED');
+  }
+}
+
 function boundedInteger(value: unknown, minimum: number, maximum: number, fallback: number): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum && value <= maximum
     ? value
@@ -3120,18 +3691,113 @@ function eventSearchPattern(value: string): string | null {
   return `%${escaped}%`;
 }
 
+const EXACT_ZERO = normalizeNonNegativeExactDecimal('0');
+
+function canonicalExactFillInput(input: FillInput): Readonly<FillInput> {
+  if (typeof input.symbol !== 'string' || !/^[A-Z0-9]{1,20}$/.test(input.symbol)) {
+    throw new TypeError('fill symbol is invalid');
+  }
+  if (!Number.isSafeInteger(input.tradeId) || input.tradeId < 0) {
+    throw new TypeError('fill trade id is invalid');
+  }
+  if (input.orderId !== null && (!Number.isSafeInteger(input.orderId) || input.orderId < 0)) {
+    throw new TypeError('fill order id is invalid');
+  }
+  if (input.side !== 'BUY' && input.side !== 'SELL') throw new TypeError('fill side is invalid');
+  if (input.commissionAsset !== null && (typeof input.commissionAsset !== 'string'
+    || input.commissionAsset.length < 1 || input.commissionAsset.length > 80
+    || /[\u0000-\u001f\u007f]/.test(input.commissionAsset))) {
+    throw new TypeError('fill commission asset is invalid');
+  }
+  if (!Number.isSafeInteger(input.ts) || input.ts <= 0) throw new TypeError('fill timestamp is invalid');
+  if (typeof input.source !== 'string' || input.source.length < 1 || input.source.length > 64
+    || /[\u0000-\u001f\u007f]/.test(input.source)) {
+    throw new TypeError('fill source is invalid');
+  }
+  const price = normalizeNonNegativeExactDecimal(input.price);
+  const qty = normalizeNonNegativeExactDecimal(input.qty);
+  const quoteQty = normalizeNonNegativeExactDecimal(input.quoteQty);
+  const commission = normalizeNonNegativeExactDecimal(input.commission);
+  if (compareExactDecimals(price, EXACT_ZERO) <= 0
+    || compareExactDecimals(qty, EXACT_ZERO) <= 0
+    || compareExactDecimals(quoteQty, EXACT_ZERO) <= 0) {
+    throw new TypeError('fill price and quantities must be positive');
+  }
+  return Object.freeze({
+    symbol: input.symbol,
+    tradeId: input.tradeId,
+    orderId: input.orderId,
+    side: input.side,
+    price,
+    qty,
+    quoteQty,
+    commission,
+    commissionAsset: input.commissionAsset,
+    ts: input.ts,
+    source: input.source,
+  });
+}
+
+function sameFillTruth(existing: Readonly<FillRow>, incoming: Readonly<FillInput>): boolean {
+  return sameFillIdentityMetadata(existing, incoming)
+    && existing.price === incoming.price
+    && existing.qty === incoming.qty
+    && existing.quoteQty === incoming.quoteQty
+    && existing.commission === incoming.commission;
+}
+
+function sameFillIdentityMetadata(existing: Readonly<FillRow>, incoming: Readonly<FillInput>): boolean {
+  return existing.symbol === incoming.symbol
+    && existing.tradeId === incoming.tradeId
+    && existing.orderId === incoming.orderId
+    && existing.side === incoming.side
+    && existing.commissionAsset === incoming.commissionAsset
+    && existing.ts === incoming.ts;
+}
+
 function parseFill(r: FillDbRow): FillRow {
-  return {
+  if (r.money_encoding !== 'EXACT_DECIMAL' && r.money_encoding !== 'LEGACY_BINARY64') {
+    throw new Error('LEDGER_FILL_ENCODING_MALFORMED');
+  }
+  const canonical = canonicalExactFillInput({
     symbol: r.symbol,
     tradeId: r.trade_id,
     orderId: r.order_id,
     side: r.side,
-    price: r.price,
-    qty: r.qty,
-    quoteQty: r.quote_qty,
-    commission: r.commission,
+    price: r.price as NonNegativeDecimal,
+    qty: r.qty as NonNegativeDecimal,
+    quoteQty: r.quote_qty as NonNegativeDecimal,
+    commission: r.commission as NonNegativeDecimal,
     commissionAsset: r.commission_asset,
     ts: r.ts,
     source: r.source,
+  });
+  if (canonical.price !== r.price || canonical.qty !== r.qty
+    || canonical.quoteQty !== r.quote_qty || canonical.commission !== r.commission) {
+    throw new Error('LEDGER_FILL_DECIMAL_NON_CANONICAL');
+  }
+  return Object.freeze({ ...canonical, moneyEncoding: r.money_encoding });
+}
+
+function displayFill(fill: Readonly<FillRow>): FillDisplayRow {
+  const price = Number(fill.price);
+  const qty = Number(fill.qty);
+  const quoteQty = Number(fill.quoteQty);
+  const commission = Number(fill.commission);
+  if (![price, qty, quoteQty, commission].every(Number.isFinite)) {
+    throw new Error('LEDGER_FILL_DISPLAY_PROJECTION_UNAVAILABLE');
+  }
+  return {
+    symbol: fill.symbol,
+    tradeId: fill.tradeId,
+    orderId: fill.orderId,
+    side: fill.side,
+    price,
+    qty,
+    quoteQty,
+    commission,
+    commissionAsset: fill.commissionAsset,
+    ts: fill.ts,
+    source: fill.source,
   };
 }

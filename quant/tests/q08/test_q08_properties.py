@@ -35,10 +35,26 @@ from quant_edge.labels.rational import (
     scaled_to_aligned,
 )
 from quant_edge.labels.series import EvidenceSeriesV1, PricePointV1, SeriesKind
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1, QualityState
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+    QualityState,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
+
+SPOT_INSTRUMENT = InstrumentIdentityV1(
+    instrument_id="test-binance-spot-BNBUSDT",
+    base_size_unit_id="BNB",
+    quote_price_unit_id="USDT",
+)
+PERP_INSTRUMENT = InstrumentIdentityV1(
+    instrument_id="test-binance-usdm-BNBUSDT",
+    base_size_unit_id="BNB",
+    quote_price_unit_id="USDT",
+)
 
 DUAL_LEG_WALKS = st.lists(
     st.tuples(
@@ -79,6 +95,7 @@ def _legs(moves: list[tuple[int, int, int]]) -> tuple[EvidenceSeriesV1, Evidence
     spot_series = EvidenceSeriesV1(
         series_id="prop-spot",
         symbol="BNBUSDT",
+        instrument=SPOT_INSTRUMENT,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,
@@ -90,6 +107,7 @@ def _legs(moves: list[tuple[int, int, int]]) -> tuple[EvidenceSeriesV1, Evidence
     perp_series = EvidenceSeriesV1(
         series_id="prop-perp",
         symbol="BNBUSDT-PERP",
+        instrument=PERP_INSTRUMENT,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,
@@ -215,6 +233,7 @@ def test_price_oi_quadrant_is_total(
     price_series = EvidenceSeriesV1(
         series_id="prop-price",
         symbol="BNBUSDT",
+        instrument=SPOT_INSTRUMENT,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,

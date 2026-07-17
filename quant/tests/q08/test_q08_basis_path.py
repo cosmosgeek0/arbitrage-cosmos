@@ -23,7 +23,11 @@ from quant_edge.labels.series import (
     QuotePointV1,
     SeriesKind,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -32,6 +36,14 @@ STALENESS = 5 * SECOND_NS
 
 def _usdt(price: int) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
+
+
+def _market_identity(symbol: str) -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=f"test-{symbol}",
+        base_size_unit_id="BNB",
+        quote_price_unit_id="USDT",
+    )
 
 
 def _series(
@@ -47,6 +59,7 @@ def _series(
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol=symbol,
+        instrument=_market_identity(symbol),
         kind=kind,
         posture=posture,
         completeness_start_ns=BASE_NS,
@@ -228,6 +241,7 @@ class TestBuildBasisPath:
         quotes = EvidenceSeriesV1(
             series_id="quotes",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             kind=SeriesKind.EXECUTABLE_QUOTES,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS,
@@ -268,6 +282,7 @@ class TestBuildBasisPath:
         late = EvidenceSeriesV1(
             series_id="perp",
             symbol="BNBUSDT-PERP",
+            instrument=_market_identity("BNBUSDT-PERP"),
             kind=SeriesKind.TRADE_MID_PROXY,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS + 20 * SECOND_NS,

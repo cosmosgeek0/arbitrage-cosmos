@@ -104,11 +104,9 @@ def _row(
             )
         ),
         price=(
-            None
-            if price is None
-            else ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
+            None if price is None else ExactScaledValueV1(coefficient=price, scale=2, unit_id=quote)
         ),
-        quantity=ExactScaledValueV1(coefficient=100, scale=3, unit_id="BNB"),
+        quantity=ExactScaledValueV1(coefficient=100, scale=3, unit_id=base),
     )
 
 
@@ -688,12 +686,11 @@ def test_price_metric_missingness_and_exact_relative_max_are_explicit() -> None:
     no_price = _atlas((_row(1, price=None),), rules=(absolute,))
     assert no_price.controls[0].unevaluable_rule_ids == (absolute.rule_id,)
 
-    mixed_unit_row = replace(
-        _row(2, offset_ms=1),
-        price=ExactScaledValueV1(coefficient=10_100, scale=2, unit_id="EUR"),
-    )
-    mixed = _atlas((_row(1), mixed_unit_row), rules=(absolute,))
-    assert mixed.controls[0].unevaluable_rule_ids == (absolute.rule_id,)
+    with pytest.raises(ContractValueError, match="price unit"):
+        replace(
+            _row(2, offset_ms=1),
+            price=ExactScaledValueV1(coefficient=10_100, scale=2, unit_id="EUR"),
+        )
 
     nonpositive = _atlas(
         (_row(1, price=0), _row(2, offset_ms=1, price=100)),

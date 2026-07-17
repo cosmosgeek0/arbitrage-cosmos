@@ -81,6 +81,7 @@ from quant_edge.labels.series import EvidenceSeriesV1, PricePointV1, SeriesKind
 from quant_edge.lake.contracts import (
     EvidencePosture,
     ExactScaledValueV1,
+    InstrumentIdentityV1,
     QualityState,
 )
 from quant_edge.randomness import DeterministicRandom
@@ -115,6 +116,11 @@ def _price_series(
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol=symbol,
+        instrument=InstrumentIdentityV1(
+            instrument_id=f"synthetic-{series_id}",
+            base_size_unit_id="BNB",
+            quote_price_unit_id="USDT",
+        ),
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS,
@@ -166,6 +172,11 @@ def _golden_executable() -> dict[str, object]:
     as_of = BASE_NS + 10 * SECOND_NS
     spot_quote = SizedQuoteV1(
         leg=LegKind.SPOT,
+        instrument=InstrumentIdentityV1(
+            instrument_id="synthetic-binance-spot-BNBUSDT",
+            base_size_unit_id="BNB",
+            quote_price_unit_id="USDT",
+        ),
         event_time_ns=as_of - SECOND_NS,
         ordinal=1,
         bid=_usdt(10_000),
@@ -175,6 +186,11 @@ def _golden_executable() -> dict[str, object]:
     )
     perp_quote = SizedQuoteV1(
         leg=LegKind.USDM_PERP,
+        instrument=InstrumentIdentityV1(
+            instrument_id="synthetic-binance-usdm-BNBUSDT",
+            base_size_unit_id="BNB",
+            quote_price_unit_id="USDT",
+        ),
         event_time_ns=as_of - SECOND_NS,
         ordinal=1,
         bid=_usdt(10_060),

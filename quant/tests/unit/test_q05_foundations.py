@@ -27,7 +27,11 @@ from quant_edge.labels.series import (
     QuotePointV1,
     SeriesKind,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -35,6 +39,19 @@ SECOND_NS = 1_000_000_000
 
 def _scaled(coefficient: int, scale: int = 2) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=coefficient, scale=scale, unit_id="USDT")
+
+
+def _market_instrument(
+    instrument_id: str = "binance-spot-BNBUSDT",
+    *,
+    base_unit: str = "BNB",
+    quote_unit: str = "USDT",
+) -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=instrument_id,
+        base_size_unit_id=base_unit,
+        quote_price_unit_id=quote_unit,
+    )
 
 
 def _price_point(offset_s: int, coefficient: int, ordinal: int) -> PricePointV1:
@@ -53,10 +70,12 @@ def _series(
     gaps: tuple[GapIntervalV1, ...] = (),
     kind: SeriesKind = SeriesKind.TRADE_MID_PROXY,
     posture: EvidencePosture = EvidencePosture.SYNTHETIC,
+    instrument: InstrumentIdentityV1 | None = None,
 ) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id="series-1",
         symbol="BNBUSDT",
+        instrument=instrument or _market_instrument(),
         kind=kind,
         posture=posture,
         completeness_start_ns=BASE_NS + start_s * SECOND_NS,
@@ -119,6 +138,11 @@ class TestExactRatio:
             price_return(_scaled(0), _scaled(1))
         with pytest.raises(ContractValueError):
             price_return(_scaled(100), _scaled(-1))
+        with pytest.raises(ContractValueError, match="matching units"):
+            price_return(
+                _scaled(100),
+                ExactScaledValueV1(coefficient=101, scale=0, unit_id="USDC"),
+            )
 
     def test_spread_ratio(self) -> None:
         assert price_spread_ratio(_scaled(9_900), _scaled(10_100)) == make_ratio(2, 100)
@@ -128,6 +152,11 @@ class TestExactRatio:
             price_spread_ratio(_scaled(100), _scaled(0))
         with pytest.raises(ContractValueError):
             price_spread_ratio(_scaled(101), _scaled(100))
+        with pytest.raises(ContractValueError, match="matching units"):
+            price_spread_ratio(
+                _scaled(100),
+                ExactScaledValueV1(coefficient=101, scale=0, unit_id="USDC"),
+            )
 
 
 class TestEvidenceSeries:
@@ -157,6 +186,31 @@ class TestEvidenceSeries:
         with pytest.raises(ContractValueError):
             _series(early).pre_cutoff_digest(-5)
 
+    def test_series_identity_and_quote_units_are_digest_bound(self) -> None:
+        points = (_price_point(0, 10_000, 1),)
+        original = _series(points)
+        other_identity = _series(
+            points,
+            instrument=_market_instrument("binance-spot-BNBUSDT-v2"),
+        )
+
+        assert original.evidence_digest() != other_identity.evidence_digest()
+        assert original.pre_cutoff_digest(BASE_NS) != other_identity.pre_cutoff_digest(BASE_NS)
+        with pytest.raises(ContractValueError, match="quote_price_unit_id"):
+            _series(
+                (
+                    PricePointV1(
+                        event_time_ns=BASE_NS,
+                        ordinal=1,
+                        price=ExactScaledValueV1(
+                            coefficient=10_000,
+                            scale=2,
+                            unit_id="USDC",
+                        ),
+                    ),
+                )
+            )
+
     def test_gap_contracts(self) -> None:
         gap = GapIntervalV1(start_ns=BASE_NS + 5 * SECOND_NS, end_ns=BASE_NS + 6 * SECOND_NS)
 
@@ -185,6 +239,7 @@ class TestEvidenceSeries:
             EvidenceSeriesV1(
                 series_id="series-1",
                 symbol="BNBUSDT",
+                instrument=_market_instrument(),
                 kind=SeriesKind.EXECUTABLE_QUOTES,
                 posture=EvidencePosture.SYNTHETIC,
                 completeness_start_ns=BASE_NS,
@@ -197,6 +252,7 @@ class TestEvidenceSeries:
             EvidenceSeriesV1(
                 series_id="series-1",
                 symbol="BNBUSDT",
+                instrument=_market_instrument(),
                 kind=SeriesKind.MID,
                 posture=EvidencePosture.SYNTHETIC,
                 completeness_start_ns=BASE_NS,
@@ -253,6 +309,7 @@ class TestEvidenceSeries:
         series = EvidenceSeriesV1(
             series_id="series-q",
             symbol="BNBUSDT",
+            instrument=_market_instrument(),
             kind=SeriesKind.EXECUTABLE_QUOTES,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS - SECOND_NS,
@@ -270,6 +327,13 @@ class TestEvidenceSeries:
                 ordinal=1,
                 bid=_scaled(10_100),
                 ask=_scaled(9_900),
+            )
+        with pytest.raises(ContractValueError, match="matching units"):
+            QuotePointV1(
+                event_time_ns=BASE_NS,
+                ordinal=1,
+                bid=_scaled(9_900),
+                ask=ExactScaledValueV1(coefficient=10_100, scale=2, unit_id="USDC"),
             )
         with pytest.raises(ContractValueError):
             QuotePointV1(event_time_ns=BASE_NS, ordinal=-1, bid=_scaled(1), ask=_scaled(2))

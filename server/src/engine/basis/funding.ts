@@ -71,7 +71,9 @@ export function buildFundingContext(
       mark.ts > 0 &&
       markStalenessMs !== null &&
       markStalenessMs >= -cfg.maxFutureSkewMs &&
-      markStalenessMs <= cfg.fundingStaleMs,
+      markStalenessMs <= cfg.fundingStaleMs &&
+      Number.isSafeInteger(mark.nextFundingTs) &&
+      (mark.nextFundingTs ?? 0) > nowTs,
   );
   if (!mark || !fresh) {
     return {
@@ -87,17 +89,25 @@ export function buildFundingContext(
     };
   }
 
-  const msToFunding = mark.nextFundingTs === null ? null : Math.max(0, mark.nextFundingTs - nowTs);
-  const rawCarry = fundingCarryPctOverHold(mark.fundingRate, direction, holdMs, cfg.fundingPeriodMs);
+  const msToFunding = (mark.nextFundingTs as number) - nowTs;
+  const rawCarry = fundingCarryPctOverHold(
+    [mark.fundingRate],
+    direction,
+    holdMs,
+    cfg.fundingPeriodMs,
+    msToFunding,
+  );
   const flipRisk = fundingFlipRisk(history, mark.fundingRate);
   // discount positive carry by flip risk — an unreliable bonus is not a bonus;
   // negative carry is NOT discounted (be pessimistic about drag)
-  const carry = rawCarry > 0 && flipRisk !== null ? rawCarry * (1 - flipRisk) : rawCarry;
+  const carry = rawCarry !== null && rawCarry > 0 && flipRisk !== null
+    ? rawCarry * (1 - flipRisk)
+    : rawCarry;
 
   // capture factor: a paying funding event landing inside the hold is worth a
   // priority bump; an imminent paying event even more so
   let captureFactor = 0;
-  if (rawCarry > 0 && msToFunding !== null && msToFunding <= holdMs) {
+  if (rawCarry !== null && rawCarry > 0 && msToFunding <= holdMs) {
     captureFactor = clamp(1 - msToFunding / cfg.fundingPeriodMs, 0, 1);
   }
 
@@ -105,7 +115,7 @@ export function buildFundingContext(
     fundingRate: mark.fundingRate,
     stalenessMs: reportedStalenessMs,
     fresh: true,
-    nextFundingTs: mark.nextFundingTs,
+    nextFundingTs: mark.nextFundingTs as number,
     msToFunding,
     carryPctOverHold: carry,
     expectedHoldMs: holdMs,

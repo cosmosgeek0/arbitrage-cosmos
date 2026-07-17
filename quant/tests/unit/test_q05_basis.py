@@ -23,7 +23,11 @@ from quant_edge.labels.series import (
     QuotePointV1,
     SeriesKind,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -31,6 +35,19 @@ SECOND_NS = 1_000_000_000
 
 def _scaled(coefficient: int, scale: int = 2) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=coefficient, scale=scale, unit_id="USDT")
+
+
+def _instrument(
+    instrument_id: str,
+    *,
+    base_unit: str = "BNB",
+    quote_unit: str = "USDT",
+) -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=instrument_id,
+        base_size_unit_id=base_unit,
+        quote_price_unit_id=quote_unit,
+    )
 
 
 def _point(offset_s: int, coefficient: int, ordinal: int) -> PricePointV1:
@@ -47,10 +64,12 @@ def _series(
     series_id: str,
     end_s: int = 7_200,
     gaps: tuple[GapIntervalV1, ...] = (),
+    instrument: InstrumentIdentityV1 | None = None,
 ) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol="BNBUSDT",
+        instrument=instrument or _instrument(f"test-{series_id}"),
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,
@@ -137,6 +156,34 @@ class TestBasisComputation:
         assert label.full_convergence_time_ns == BASE_NS + 900 * SECOND_NS
         assert label.convergence_censor_time_ns is None
         assert label.feasibility is ConstructionFeasibility.FEASIBLE
+
+    @pytest.mark.parametrize(
+        ("perp_price", "construction", "expected_negative"),
+        [
+            (10_400, BasisConstruction.NORMAL, False),
+            (10_400, BasisConstruction.REVERSE, True),
+            (9_600, BasisConstruction.NORMAL, True),
+            (9_600, BasisConstruction.REVERSE, False),
+        ],
+    )
+    def test_net_entry_edge_is_signed_for_each_trade_direction(
+        self,
+        perp_price: int,
+        construction: BasisConstruction,
+        expected_negative: bool,
+    ) -> None:
+        spot = _series((_point(-5, 10_000, 1),), series_id="spot-direction")
+        perp = _series((_point(-3, perp_price, 1),), series_id="perp-direction")
+        label = _compute(
+            construction=construction,
+            spot=spot,
+            perp=perp,
+            borrow=_borrow(BorrowKnownness.KNOWN_AVAILABLE),
+        )
+
+        assert label.status is OutcomeStatus.AVAILABLE
+        assert label.net_entry_edge is not None
+        assert label.net_entry_edge.is_negative is expected_negative
 
     def test_non_convergence_is_right_censored(self) -> None:
         perp = _series(
@@ -232,6 +279,43 @@ class TestBasisComputation:
 
 
 class TestBasisContracts:
+    def test_basis_pair_requires_distinct_compatible_instruments(self) -> None:
+        shared = _instrument("test-shared-BNBUSDT")
+        with pytest.raises(ContractValueError, match="distinct instruments"):
+            _compute(
+                spot=_series(SPOT_POINTS, series_id="spot-shared", instrument=shared),
+                perp=_series(PERP_POINTS, series_id="perp-shared", instrument=shared),
+            )
+
+        with pytest.raises(ContractValueError, match="matching base-size units"):
+            _compute(
+                perp=_series(
+                    PERP_POINTS,
+                    series_id="perp-eth",
+                    instrument=_instrument("test-perp-ETHUSDT", base_unit="ETH"),
+                )
+            )
+
+        usdc_points = (
+            PricePointV1(
+                event_time_ns=BASE_NS - 3 * SECOND_NS,
+                ordinal=1,
+                price=ExactScaledValueV1(
+                    coefficient=10_400,
+                    scale=2,
+                    unit_id="USDC",
+                ),
+            ),
+        )
+        with pytest.raises(ContractValueError, match="matching quote-price units"):
+            _compute(
+                perp=_series(
+                    usdc_points,
+                    series_id="perp-usdc",
+                    instrument=_instrument("test-perp-BNBUSDC", quote_unit="USDC"),
+                )
+            )
+
     def test_compute_input_rejections(self) -> None:
         spot = _series(SPOT_POINTS, series_id="spot-1")
         with pytest.raises(ContractValueError):
@@ -252,6 +336,7 @@ class TestBasisContracts:
         quote_series = EvidenceSeriesV1(
             series_id="quotes-1",
             symbol="BNBUSDT",
+            instrument=_instrument("test-quotes-1"),
             kind=SeriesKind.EXECUTABLE_QUOTES,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS - SECOND_NS,

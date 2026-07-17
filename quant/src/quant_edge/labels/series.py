@@ -7,13 +7,14 @@ from typing import Final
 
 from quant_edge.canonical import canonical_json_bytes
 from quant_edge.errors import ContractValueError
-from quant_edge.labels.rational import scaled_to_aligned
+from quant_edge.labels.rational import require_matching_units, scaled_to_aligned
 from quant_edge.lake.contracts import (
     UTC_NS_MAX,
     UTC_NS_MIN,
     DigestV1,
     EvidencePosture,
     ExactScaledValueV1,
+    InstrumentIdentityV1,
     require_contract_id,
     require_strict_int,
 )
@@ -85,6 +86,7 @@ class QuotePointV1:
         require_strict_int(self.ordinal, field="ordinal", minimum=0)
         bid = _require_price(self.bid, field="bid")
         ask = _require_price(self.ask, field="ask")
+        require_matching_units(bid, ask, field="quote bid and ask")
         if scaled_to_aligned(bid) > scaled_to_aligned(ask):
             raise ContractValueError("quote points cannot be crossed")
 
@@ -130,6 +132,7 @@ def _validate_points(
     *,
     field: str,
     point_type: type[PricePointV1] | type[QuotePointV1],
+    quote_price_unit_id: str,
 ) -> None:
     if not isinstance(points, tuple) or not points or len(points) > MAX_SERIES_POINTS:
         raise ContractValueError(
@@ -140,6 +143,11 @@ def _validate_points(
     for index, point in enumerate(points):
         if not isinstance(point, PricePointV1 | QuotePointV1) or not isinstance(point, point_type):
             raise ContractValueError(f"{field}[{index}] must be {point_type.__name__}")
+        values = (point.price,) if isinstance(point, PricePointV1) else (point.bid, point.ask)
+        if any(value.unit_id != quote_price_unit_id for value in values):
+            raise ContractValueError(
+                f"{field}[{index}] price unit must match instrument quote_price_unit_id"
+            )
         time_ns = point.event_time_ns
         ordinal = point.ordinal
         if previous_time is not None and previous_ordinal is not None:
@@ -169,6 +177,7 @@ class EvidenceSeriesV1:
 
     series_id: str
     symbol: str
+    instrument: InstrumentIdentityV1
     kind: SeriesKind
     posture: EvidencePosture
     completeness_start_ns: int
@@ -180,6 +189,8 @@ class EvidenceSeriesV1:
     def __post_init__(self) -> None:
         require_contract_id(self.series_id, field="series_id")
         require_contract_id(self.symbol, field="symbol")
+        if not isinstance(self.instrument, InstrumentIdentityV1):
+            raise ContractValueError("instrument must be InstrumentIdentityV1")
         if not isinstance(self.kind, SeriesKind):
             raise ContractValueError("kind must be SeriesKind")
         _require_posture(self.posture, field="posture")
@@ -190,12 +201,22 @@ class EvidenceSeriesV1:
         if self.kind is SeriesKind.EXECUTABLE_QUOTES:
             if self.price_points or not self.quote_points:
                 raise ContractValueError("quote series carry quote points only")
-            _validate_points(self.quote_points, field="quote_points", point_type=QuotePointV1)
+            _validate_points(
+                self.quote_points,
+                field="quote_points",
+                point_type=QuotePointV1,
+                quote_price_unit_id=self.instrument.quote_price_unit_id,
+            )
             points_times = [point.event_time_ns for point in self.quote_points]
         else:
             if self.quote_points or not self.price_points:
                 raise ContractValueError("price series carry price points only")
-            _validate_points(self.price_points, field="price_points", point_type=PricePointV1)
+            _validate_points(
+                self.price_points,
+                field="price_points",
+                point_type=PricePointV1,
+                quote_price_unit_id=self.instrument.quote_price_unit_id,
+            )
             points_times = [point.event_time_ns for point in self.price_points]
         if points_times[0] < start or points_times[-1] > end:
             raise ContractValueError("points must lie inside the completeness interval")
@@ -208,6 +229,7 @@ class EvidenceSeriesV1:
         return {
             "completenessEndNs": str(self.completeness_end_ns),
             "completenessStartNs": str(self.completeness_start_ns),
+            "instrument": self.instrument.as_mapping(),
             "kind": self.kind.value,
             "knownGaps": [gap.as_mapping() for gap in self.known_gaps],
             "posture": self.posture.value,
@@ -230,6 +252,7 @@ class EvidenceSeriesV1:
         _require_ns(cutoff_ns, field="cutoff_ns")
         mapping = {
             "cutoffNs": str(cutoff_ns),
+            "instrument": self.instrument.as_mapping(),
             "kind": self.kind.value,
             "pricePoints": [
                 point.as_mapping()

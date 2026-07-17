@@ -5,7 +5,16 @@
  * Run after `npm run build -w server`:  node server/test/engine-basis.mjs
  * Prints ✓/✗ per case and exits non-zero on any failure.
  */
-import { createReplayHarness, buildSnapshots } from '../dist/engine/basis/index.js';
+import {
+  BASIS_DEFAULTS,
+  EXECUTABLE_BASIS_RETURN_CONTRACT,
+  buildFundingContext,
+  buildSnapshots,
+  createReplayHarness,
+  executableBasisReturnPct,
+  estimateEdge,
+  fundingCarryPctOverHold,
+} from '../dist/engine/basis/index.js';
 import { BasisRuntime } from '../dist/services/basisRuntime.js';
 
 const results = [];
@@ -96,6 +105,25 @@ function gapSeries(gapsPct, o = {}, startTick = 1) {
 const CFG = { persistTicks: 3 }; // default proof config: propose on the 3rd persisting tick
 
 // =====================================================================
+section('0. one versioned executable-return law owns both constructions');
+{
+  const reverse = executableBasisReturnPct(100, 100.62);
+  check(
+    'canonical return contract is versioned on long-leg entry notional',
+    EXECUTABLE_BASIS_RETURN_CONTRACT.version === 'basis-executable-long-leg-notional-v1'
+      && EXECUTABLE_BASIS_RETURN_CONTRACT.returnLaw === 'RETURN_ON_LONG_LEG_ENTRY_NOTIONAL',
+  );
+  check(
+    'reverse basis divides by the perp long-entry ask',
+    approx(reverse, ((100 - 100.62) / 100.62) * 100, 1e-12)
+      && !approx(reverse, ((100 - 100.62) / 100) * 100, 1e-12),
+    `return=${reverse}`,
+  );
+  check('equal prices have zero return', executableBasisReturnPct(100, 100) === 0);
+  check('profitable reverse basis stays positive', executableBasisReturnPct(101, 100) === 1);
+}
+
+// =====================================================================
 section('1. perp expensive ⇒ proposal (executable gap, itemised costs)');
 {
   const h = createReplayHarness(CFG, T0);
@@ -173,6 +201,54 @@ section('5. funding against the trade ⇒ funding_against_trade');
   check('reject funding_against_trade', d?.kind === 'reject' && d?.rejectCode === 'funding_against_trade', d?.humanReason);
   check('evidence carries funding drag over expected hold', typeof d?.evidence.fundingCarryPctOverHold === 'number' && d.evidence.fundingCarryPctOverHold < -0.15);
   check('no proposal', h.engine.proposals.all().length === 0);
+}
+
+// =====================================================================
+section('5b. funding is charged only at known discrete settlements');
+{
+  const period = 8 * 60 * 60_000;
+  const hold = 4 * 60 * 60_000;
+  const noSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', hold, period, hold + 1,
+  );
+  const oneSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', hold, period, 60_000,
+  );
+  const unknownSecondSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', 17 * 60 * 60_000, period, 60_000,
+  );
+  check('hold ending before funding has zero carry', noSettlement === 0, `carry=${noSettlement}`);
+  check('one crossed funding timestamp charges the full known rate', approx(oneSettlement, 0.1), `carry=${oneSettlement}`);
+  check('a crossed settlement without a known future rate stays unknown', unknownSecondSettlement === null, `carry=${unknownSecondSettlement}`);
+
+  const staleSchedule = buildFundingContext(
+    { symbol: SYM, markPrice: 100, fundingRate: 0.001, nextFundingTs: T0 - 1, ts: T0 },
+    [],
+    'long_spot_short_perp',
+    { gapPct: 1, slopePctPerMin: 0, samples: 1 },
+    T0,
+    BASIS_DEFAULTS,
+    0,
+  );
+  check(
+    'past next-funding metadata cannot manufacture a current settlement',
+    !staleSchedule.fresh && staleSchedule.carryPctOverHold === null,
+  );
+
+  const unknownFunding = {
+    fundingRate: 0.001, stalenessMs: 0, fresh: true, nextFundingTs: T0 + 60_000,
+    msToFunding: 60_000, carryPctOverHold: null, expectedHoldMs: hold,
+    flipRisk: 0, captureFactor: 0,
+  };
+  const edge = estimateEdge(
+    'long_spot_short_perp',
+    { gapPct: 1, slopePctPerMin: 0, samples: 1 },
+    unknownFunding,
+    { slippagePct: 0.01, depthScore: 1, sufficient: true, source: 'ladder' },
+    0,
+    BASIS_DEFAULTS,
+  );
+  check('unknown crossed-settlement carry keeps net edge unknown', edge.netEdgePct === null, `net=${edge.netEdgePct}`);
 }
 
 // =====================================================================

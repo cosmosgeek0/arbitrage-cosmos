@@ -39,7 +39,11 @@ from quant_edge.labels.stages import (
     StageEvidenceV1,
     generate_stage,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 from quant_edge.lake.governance import (
     OutcomeVisibility,
     OwnerAnnotationCohort,
@@ -51,6 +55,12 @@ from quant_edge.lake.governance import (
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
+
+MARKET_IDENTITY = InstrumentIdentityV1(
+    instrument_id="test-binance-spot-BNBUSDT",
+    base_size_unit_id="BNB",
+    quote_price_unit_id="USDT",
+)
 DAY_NS = 86_400_000_000_000
 
 
@@ -312,6 +322,7 @@ def _series() -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id="series-1",
         symbol="BNBUSDT",
+        instrument=MARKET_IDENTITY,
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,

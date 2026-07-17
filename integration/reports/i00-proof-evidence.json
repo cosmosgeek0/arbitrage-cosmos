@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3334,
+        "line": 3331,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -3320,43 +3320,43 @@
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 400
+        "line": 397
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 650
+        "line": 647
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1818
+        "line": 1815
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1827
+        "line": 1824
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2225
+        "line": 2222
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2237
+        "line": 2234
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2247
+        "line": 2244
       },
       {
         "concept": "semantic-source",
@@ -4070,73 +4070,79 @@
         "concept": "ledger-authority",
         "declaration": "type LedgerSchemaCompatibilityReadback",
         "file": "server/src/ledger.ts",
-        "line": 25
+        "line": 30
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 95
+        "line": 117
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 122
+        "line": 153
       },
       {
         "concept": "ledger-authority",
         "declaration": "type LedgerConfigCompareAndSetResult",
         "file": "server/src/ledger.ts",
-        "line": 128
+        "line": 159
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventRecord",
         "file": "server/src/ledger.ts",
-        "line": 139
+        "line": 170
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventPage",
         "file": "server/src/ledger.ts",
-        "line": 149
+        "line": 180
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerSchemaCompatibilityRow",
         "file": "server/src/ledger.ts",
-        "line": 158
+        "line": 189
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 164
+        "line": 195
       },
       {
         "concept": "ledger-authority",
         "declaration": "function readLegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 202
+        "line": 233
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function upgradeLedgerVersion",
+        "file": "server/src/ledger.ts",
+        "line": 415
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 449
+        "line": 720
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 2674
+        "line": 3184
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 2680
+        "line": 3190
       },
       {
         "concept": "semantic-source",
@@ -7371,6 +7377,11 @@
         "target": "./ledger.js"
       },
       {
+        "file": "server/src/ledger.ts",
+        "line": 10,
+        "target": "./capitalFoundation/contracts/decimal.js"
+      },
+      {
         "file": "server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts",
         "line": 10,
         "target": "../../../capitalFoundation/contracts/decimal.js"
@@ -7417,7 +7428,12 @@
       },
       {
         "file": "server/src/services/account.ts",
-        "line": 3,
+        "line": 15,
+        "target": "../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/services/account.ts",
+        "line": 16,
         "target": "../ledger.js"
       },
       {
@@ -7437,7 +7453,12 @@
       },
       {
         "file": "server/src/services/orders.ts",
-        "line": 5,
+        "line": 10,
+        "target": "../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/services/orders.ts",
+        "line": 12,
         "target": "../ledger.js"
       },
       {
@@ -14143,5 +14164,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "9757618ec30093cba461b1fceb8181ba570e8bbfea1023fd8cdad067ca9b635d"
+  "evidenceSha256": "b9f3fd58c864b12bf1a94032924c50e4deacaa0272d790b651322c1e3f39f33a"
 }

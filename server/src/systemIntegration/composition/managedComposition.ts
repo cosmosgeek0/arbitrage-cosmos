@@ -228,16 +228,15 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
     }
     if (snapshot.generation !== identity.targetGeneration) return 'UNKNOWN';
 
-    const transitions = this.supervisor.transitionHistory()
-      .filter((entry) => entry.correlationId === identity.correlationId);
-    if (transitions.length === 0) return 'UNKNOWN';
+    const transitionTargets = this.supervisor.transitionTargetsForCorrelation(identity.correlationId);
+    if (transitionTargets.length === 0) return 'UNKNOWN';
     if (snapshot.desiredState === 'RUNNING'
       && (snapshot.phase === 'RUNNING' || snapshot.phase === 'DEGRADED')
-      && transitions.some((entry) => entry.to === 'RUNNING' || entry.to === 'DEGRADED')) {
+      && transitionTargets.some((target) => target === 'RUNNING' || target === 'DEGRADED')) {
       return 'APPLIED';
     }
     if ((snapshot.phase === 'FAILED' || snapshot.phase === 'BLOCKED')
-      && transitions.some((entry) => entry.to === snapshot.phase)) {
+      && transitionTargets.includes(snapshot.phase)) {
       return 'FAILED';
     }
     return 'UNKNOWN';

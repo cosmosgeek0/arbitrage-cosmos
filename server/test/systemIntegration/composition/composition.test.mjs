@@ -5,6 +5,9 @@ import {
   createStructuredFailure,
 } from '../../../dist/foundation/contracts/index.js';
 import {
+  SUPERVISOR_TRANSITION_HISTORY_CAPACITY as TRANSITION_HISTORY_CAPACITY,
+} from '../../../dist/foundation/control/index.js';
+import {
   createManagedRuntimeComposition,
 } from '../../../dist/systemIntegration/composition/index.js';
 import { MarketEngine } from '../../../dist/engine/marketData.js';
@@ -74,6 +77,8 @@ function fixture(options = {}) {
     const state = {
       running: false,
       fatalCode: null,
+      healthMode: 'normal',
+      flapThrowsNext: true,
       startCalls: 0,
       stopCalls: 0,
       validateCalls: 0,
@@ -103,6 +108,12 @@ function fixture(options = {}) {
         state.running = false;
       },
       health(ctx) {
+        if (state.healthMode === 'throw') throw new Error(`hidden ${name} health defect`);
+        if (state.healthMode === 'flap') {
+          const shouldThrow = state.flapThrowsNext;
+          state.flapThrowsNext = !state.flapThrowsNext;
+          if (shouldThrow) throw new Error(`hidden ${name} flapping defect`);
+        }
         const fatal = state.fatalCode === null
           ? null
           : createStructuredFailure({
@@ -660,4 +671,33 @@ test('driver, START, and drain are idempotent at their established state', async
   assert.equal(f.states.marketIntelligence.stopCalls, 1);
   assert.equal(f.states.basis.stopCalls, 1);
   assert.equal(f.states.volume.stopCalls, 1);
+});
+
+test('bounded transition retention preserves exact restart completion after prolonged probe flapping', async () => {
+  const f = fixture();
+  await startReady(f);
+  const targetGeneration = f.composition.read().supervisor.generation + 1;
+  const restarted = f.composition.restart();
+  assert.equal(restarted.ok, true);
+  assert.equal(restarted.value.applied, true);
+  const identity = Object.freeze({
+    correlationId: restarted.value.correlationId,
+    revision: restarted.value.revision,
+    targetGeneration,
+  });
+  await flushAndDrive(f, 8);
+  assert.equal(f.composition.read().supervisor.generation, targetGeneration);
+  assert.ok(['RUNNING', 'DEGRADED'].includes(f.composition.read().supervisor.phase));
+
+  f.states.basis.healthMode = 'flap';
+  await flushAndDrive(f, TRANSITION_HISTORY_CAPACITY * 2 + 8);
+  assert.equal(f.composition.readRestartCompletion(identity), 'APPLIED');
+  assert.equal(f.composition.readRestartCompletion({
+    ...identity,
+    correlationId: `${identity.correlationId}-forged`,
+  }), 'UNKNOWN');
+
+  const paused = f.composition.issue('PAUSE');
+  assert.equal(paused.ok, true);
+  assert.equal(f.composition.readRestartCompletion(identity), 'UNKNOWN');
 });

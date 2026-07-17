@@ -94,6 +94,37 @@ type EnvironmentReadResult =
   | { readonly ok: true; readonly value: ControlEnvironment }
   | { readonly ok: false; readonly code: string; readonly message: string };
 
+export const SUPERVISOR_FAILURE_HISTORY_CAPACITY = 256;
+export const SUPERVISOR_TRANSITION_HISTORY_CAPACITY = 512;
+
+export type CoalescedFailureEvidence = Readonly<FailureEvidence & {
+  readonly occurrenceCount: number;
+  readonly firstOccurredAtMs: number;
+  readonly lastOccurredAtMs: number;
+  readonly firstFailure: StructuredFailure;
+  readonly lastFailure: StructuredFailure;
+}>;
+
+export interface SupervisorHistoryRetention {
+  readonly failureCapacity: number;
+  readonly retainedFailureRecords: number;
+  readonly retainedFailureOccurrences: number;
+  readonly evictedFailureRecords: number;
+  readonly evictedFailureOccurrences: number;
+  readonly totalFailureOccurrences: number;
+  readonly transitionCapacity: number;
+  readonly retainedTransitionRecords: number;
+  readonly evictedTransitionRecords: number;
+  readonly totalTransitionRecords: number;
+}
+
+interface MutableCoalescedFailureEvidence {
+  generation: number;
+  occurrenceCount: number;
+  firstFailure: StructuredFailure;
+  lastFailure: StructuredFailure;
+}
+
 function positiveSafeInteger(name: string, value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
     throw new TypeError(`${name} must be a positive safe integer`);
@@ -106,6 +137,15 @@ function nonEmptyLabel(name: string, value: unknown): string {
     throw new TypeError(`${name} must be a non-empty string (<=200 chars)`);
   }
   return value;
+}
+
+function checkedCount(name: string, current: number, amount = 1): number {
+  if (!Number.isSafeInteger(current) || current < 0
+    || !Number.isSafeInteger(amount) || amount < 0
+    || current > Number.MAX_SAFE_INTEGER - amount) {
+    throw new RangeError(`${name} exceeded the safe-integer range`);
+  }
+  return current + amount;
 }
 
 function freezeReceipt(receipt: CommandReceipt): Readonly<CommandReceipt> {
@@ -142,8 +182,21 @@ export class DeterministicSupervisor {
   private readonly safetyStoppedNames = new Set<string>();
   private readonly prerequisiteStopDeadlines = new Map<string, number>();
   private readonly startedNames = new Set<string>();
-  private readonly failures: FailureEvidence[] = [];
-  private readonly transitions: PhaseTransitionRecord[] = [];
+  private readonly failures = new Map<string, MutableCoalescedFailureEvidence>();
+  private readonly transitions = new Array<PhaseTransitionRecord | undefined>(
+    SUPERVISOR_TRANSITION_HISTORY_CAPACITY,
+  );
+  private transitionHead = 0;
+  private transitionSize = 0;
+  private readonly transitionTargetCountsByCorrelation = new Map<string, Map<RuntimePhase, number>>();
+  /** Exact latest-command readback survives raw transition-ring eviction. */
+  private latestCommandTransitionCorrelationId: string | null = null;
+  private readonly latestCommandTransitionTargets = new Set<RuntimePhase>();
+  private totalFailureOccurrences = 0;
+  private evictedFailureRecords = 0;
+  private evictedFailureOccurrences = 0;
+  private totalTransitionRecords = 0;
+  private evictedTransitionRecords = 0;
 
   constructor(config: SupervisorConfig, deps: SupervisorDeps) {
     const scope = nonEmptyLabel('SupervisorConfig.scope', config?.scope);
@@ -357,13 +410,55 @@ export class DeterministicSupervisor {
     });
   }
 
-  /** Append-only evidence survives successful restart and recovery. */
-  failureHistory(): readonly Readonly<FailureEvidence>[] {
-    return Object.freeze(this.failures.map((entry) => Object.freeze({ ...entry })));
+  /** Bounded, coalesced evidence survives restart until explicit oldest-first eviction. */
+  failureHistory(): readonly CoalescedFailureEvidence[] {
+    return Object.freeze([...this.failures.values()].map((entry) => Object.freeze({
+      generation: entry.generation,
+      failure: entry.lastFailure,
+      occurrenceCount: entry.occurrenceCount,
+      firstOccurredAtMs: entry.firstFailure.occurredAt,
+      lastOccurredAtMs: entry.lastFailure.occurredAt,
+      firstFailure: entry.firstFailure,
+      lastFailure: entry.lastFailure,
+    })));
   }
 
   transitionHistory(): readonly Readonly<PhaseTransitionRecord>[] {
-    return Object.freeze(this.transitions.map((entry) => Object.freeze({ ...entry })));
+    const history: Readonly<PhaseTransitionRecord>[] = [];
+    for (let index = 0; index < this.transitionSize; index += 1) {
+      const entry = this.transitions[
+        (this.transitionHead + index) % SUPERVISOR_TRANSITION_HISTORY_CAPACITY
+      ] as PhaseTransitionRecord;
+      history.push(Object.freeze({ ...entry }));
+    }
+    return Object.freeze(history);
+  }
+
+  /** Bounded correlation lookup; latest accepted command evidence is protected separately. */
+  transitionTargetsForCorrelation(correlationId: string): readonly RuntimePhase[] {
+    if (typeof correlationId !== 'string' || correlationId.length === 0 || correlationId.length > 128) {
+      return Object.freeze([]);
+    }
+    if (correlationId === this.latestCommandTransitionCorrelationId) {
+      return Object.freeze([...this.latestCommandTransitionTargets]);
+    }
+    const counts = this.transitionTargetCountsByCorrelation.get(correlationId);
+    return Object.freeze(counts === undefined ? [] : [...counts.keys()]);
+  }
+
+  historyRetention(): Readonly<SupervisorHistoryRetention> {
+    return Object.freeze({
+      failureCapacity: SUPERVISOR_FAILURE_HISTORY_CAPACITY,
+      retainedFailureRecords: this.failures.size,
+      retainedFailureOccurrences: this.totalFailureOccurrences - this.evictedFailureOccurrences,
+      evictedFailureRecords: this.evictedFailureRecords,
+      evictedFailureOccurrences: this.evictedFailureOccurrences,
+      totalFailureOccurrences: this.totalFailureOccurrences,
+      transitionCapacity: SUPERVISOR_TRANSITION_HISTORY_CAPACITY,
+      retainedTransitionRecords: this.transitionSize,
+      evictedTransitionRecords: this.evictedTransitionRecords,
+      totalTransitionRecords: this.totalTransitionRecords,
+    });
   }
 
   excludedComponents(): ReadonlyMap<string, string> {
@@ -403,6 +498,8 @@ export class DeterministicSupervisor {
     this.revision = request.revision;
     this.hasAcceptedRevision = true;
     this.lastAccepted = { command: request.command, revision: request.revision, receipt };
+    this.latestCommandTransitionCorrelationId = receipt.correlationId;
+    this.latestCommandTransitionTargets.clear();
   }
 
   private applyDesiredState(command: ControlCommandRequest['command']): void {
@@ -1380,14 +1477,121 @@ export class DeterministicSupervisor {
     const from = this.phase;
     this.phase = to;
     this.lastTransitionAt = atMs;
-    this.transitions.push({ from, to, atMs, correlationId });
+    this.retainTransition({ from, to, atMs, correlationId });
   }
 
   private recordFailure(failure: StructuredFailure, safeCurrentState: RuntimePhase = this.phase): StructuredFailure {
     const recorded = this.withSafeCurrentState(failure, safeCurrentState);
+    this.retainFailure(recorded);
     this.lastError = recorded;
-    this.failures.push({ generation: this.generation, failure: recorded });
     return recorded;
+  }
+
+  private failureRetentionKey(failure: StructuredFailure): string {
+    return JSON.stringify([
+      this.generation,
+      failure.component,
+      failure.stage,
+      failure.code,
+      failure.message,
+      failure.retryable,
+      failure.safeCurrentState,
+      failure.recommendedOperatorAction,
+      failure.correlationId,
+    ]);
+  }
+
+  private retainFailure(failure: StructuredFailure): void {
+    const key = this.failureRetentionKey(failure);
+    const existing = this.failures.get(key);
+    const nextTotal = checkedCount('supervisor totalFailureOccurrences', this.totalFailureOccurrences);
+    if (existing !== undefined) {
+      const nextOccurrenceCount = checkedCount(
+        'supervisor coalesced failure occurrenceCount',
+        existing.occurrenceCount,
+      );
+      existing.occurrenceCount = nextOccurrenceCount;
+      existing.lastFailure = failure;
+      // Map iteration is the recency order used for oldest-first bounded eviction.
+      this.failures.delete(key);
+      this.failures.set(key, existing);
+      this.totalFailureOccurrences = nextTotal;
+      return;
+    }
+
+    let evicted: MutableCoalescedFailureEvidence | null = null;
+    let evictedKey: string | null = null;
+    if (this.failures.size === SUPERVISOR_FAILURE_HISTORY_CAPACITY) {
+      const oldest = this.failures.entries().next().value as
+        | [string, MutableCoalescedFailureEvidence]
+        | undefined;
+      if (oldest === undefined) throw new TypeError('control invariant: failure retention is empty at capacity');
+      [evictedKey, evicted] = oldest;
+    }
+    const nextEvictedRecords = evicted === null
+      ? this.evictedFailureRecords
+      : checkedCount('supervisor evictedFailureRecords', this.evictedFailureRecords);
+    const nextEvictedOccurrences = evicted === null
+      ? this.evictedFailureOccurrences
+      : checkedCount(
+          'supervisor evictedFailureOccurrences',
+          this.evictedFailureOccurrences,
+          evicted.occurrenceCount,
+        );
+    if (evictedKey !== null) this.failures.delete(evictedKey);
+    this.failures.set(key, {
+      generation: this.generation,
+      occurrenceCount: 1,
+      firstFailure: failure,
+      lastFailure: failure,
+    });
+    this.totalFailureOccurrences = nextTotal;
+    this.evictedFailureRecords = nextEvictedRecords;
+    this.evictedFailureOccurrences = nextEvictedOccurrences;
+  }
+
+  private retainTransition(entry: PhaseTransitionRecord): void {
+    const nextTotal = checkedCount('supervisor totalTransitionRecords', this.totalTransitionRecords);
+    let nextEvicted = this.evictedTransitionRecords;
+    if (this.transitionSize === SUPERVISOR_TRANSITION_HISTORY_CAPACITY) {
+      const evicted = this.transitions[this.transitionHead] as PhaseTransitionRecord;
+      this.removeTransitionTarget(evicted);
+      this.transitions[this.transitionHead] = entry;
+      this.transitionHead = (this.transitionHead + 1) % SUPERVISOR_TRANSITION_HISTORY_CAPACITY;
+      nextEvicted = checkedCount('supervisor evictedTransitionRecords', this.evictedTransitionRecords);
+    } else {
+      const writeIndex = (
+        this.transitionHead + this.transitionSize
+      ) % SUPERVISOR_TRANSITION_HISTORY_CAPACITY;
+      this.transitions[writeIndex] = entry;
+      this.transitionSize += 1;
+    }
+    this.addTransitionTarget(entry);
+    if (entry.correlationId === this.latestCommandTransitionCorrelationId) {
+      this.latestCommandTransitionTargets.add(entry.to);
+    }
+    this.totalTransitionRecords = nextTotal;
+    this.evictedTransitionRecords = nextEvicted;
+  }
+
+  private addTransitionTarget(entry: PhaseTransitionRecord): void {
+    if (entry.correlationId === null) return;
+    const targets = this.transitionTargetCountsByCorrelation.get(entry.correlationId) ?? new Map();
+    targets.set(entry.to, (targets.get(entry.to) ?? 0) + 1);
+    this.transitionTargetCountsByCorrelation.set(entry.correlationId, targets);
+  }
+
+  private removeTransitionTarget(entry: PhaseTransitionRecord): void {
+    if (entry.correlationId === null) return;
+    const targets = this.transitionTargetCountsByCorrelation.get(entry.correlationId);
+    if (targets === undefined) throw new TypeError('control invariant: transition index entry is missing');
+    const count = targets.get(entry.to);
+    if (count === undefined || count < 1) {
+      throw new TypeError('control invariant: transition index target is missing');
+    }
+    if (count === 1) targets.delete(entry.to);
+    else targets.set(entry.to, count - 1);
+    if (targets.size === 0) this.transitionTargetCountsByCorrelation.delete(entry.correlationId);
   }
 
   private withSafeCurrentState(failure: StructuredFailure, safeCurrentState: RuntimePhase): StructuredFailure {

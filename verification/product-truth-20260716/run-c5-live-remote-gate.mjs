@@ -22,6 +22,8 @@ const C3 = '78f708d6cdb9d1618c53d3f08f71097b4320a63b';
 const C4 = '4c9143a0bcc331aa170e9e26b741240b39df8b9e';
 const C5 = '959a5f9900e25f53414710bbfb3464c3ccb67a5d';
 const PRIOR_REMOTE_EVIDENCE = 'fd6a277057fb5b360bd297cfcbdffcaaa915ba64';
+const CUSTODY_BRIDGE = 'f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6';
+const ATTEMPT_1_EVIDENCE = '9e4005535691bb1ddb8a51c3d95394e0920832bc';
 const BUNDLE_PATH = resolve(homedir(), 'cosmos-arbitrage-C5-20260717.bundle');
 const BUNDLE_TEMP_PATH = `${BUNDLE_PATH}.tmp-${String(process.pid)}`;
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -118,6 +120,12 @@ const report = {
   actor_role: 'ACCOUNT_A_CANDIDATE_CUSTODIAN',
   actor_write_permission: 'CAMPAIGN_EVIDENCE_AND_AUTHORIZED_CAMPAIGN_BRANCH_CUSTODY_ONLY',
   final_independent_verifier: false,
+  attempt: 2,
+  prior_attempt: {
+    evidence_commit: ATTEMPT_1_EVIDENCE,
+    report_sha256: '32b5fcd13c53c04e5708b63459b3ce4cd026fad436968ccfb28348c3d5a30edf',
+    result: 'BLOCKED_RECORDER_PROBE_C4_OBJECT_ABSENT',
+  },
   candidate: {
     c5: C5,
     immutable_c2: C2,
@@ -127,12 +135,14 @@ const report = {
     tree: null,
   },
   evidence_bridge: {
-    tip: null,
+    commit: CUSTODY_BRIDGE,
     expected_first_parent: C5,
     expected_second_parent: PRIOR_REMOTE_EVIDENCE,
     observed_parents: [],
     source_diff_scope: 'verification/product-truth-20260716/**',
   },
+  campaign_tip: null,
+  campaign_tip_parents: [],
   constraints: {
     current_main_write_authorized: false,
     current_main_push_authorized: false,
@@ -389,6 +399,8 @@ async function verifyClone(clonePath, label, expectedRemoteUrl = null) {
   const initialHead = addCommand(bucket, await capture('git', ['rev-parse', 'HEAD'], { cwd: clonePath }));
   const initialBranch = addCommand(bucket, await capture('git', ['branch', '--show-current'], { cwd: clonePath }));
   const initialParents = addCommand(bucket, await capture('git', ['show', '-s', '--format=%P', 'HEAD'], { cwd: clonePath }));
+  const bridgeParents = addCommand(bucket, await capture('git', ['show', '-s', '--format=%P', CUSTODY_BRIDGE], { cwd: clonePath }));
+  const bridgeReachable = addCommand(bucket, await capture('git', ['merge-base', '--is-ancestor', CUSTODY_BRIDGE, `refs/heads/${BRANCH}`], { cwd: clonePath }));
   const detach = addCommand(bucket, await capture('git', ['checkout', '--detach', C5], { cwd: clonePath }));
   const head = addCommand(bucket, await capture('git', ['rev-parse', 'HEAD'], { cwd: clonePath }));
   const symbolic = addCommand(bucket, await capture('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: clonePath, expectedExitCodes: [1] }));
@@ -397,7 +409,7 @@ async function verifyClone(clonePath, label, expectedRemoteUrl = null) {
   const candidateParents = addCommand(bucket, await capture('git', ['show', '-s', '--format=%P', C5], { cwd: clonePath }));
   const candidateReachable = addCommand(bucket, await capture('git', ['merge-base', '--is-ancestor', C5, `refs/heads/${BRANCH}`], { cwd: clonePath }));
   const c3Ancestor = addCommand(bucket, await capture('git', ['merge-base', '--is-ancestor', C3, C5], { cwd: clonePath, expectedExitCodes: [1] }));
-  const c4Ancestor = addCommand(bucket, await capture('git', ['merge-base', '--is-ancestor', C4, C5], { cwd: clonePath, expectedExitCodes: [1] }));
+  const c4Object = addCommand(bucket, await capture('git', ['cat-file', '-e', `${C4}^{commit}`], { cwd: clonePath, expectedExitCodes: [128] }));
   const localRefs = addCommand(bucket, await capture('git', ['for-each-ref', '--format=%(refname)', 'refs/heads'], { cwd: clonePath }));
   const remoteRefs = addCommand(bucket, await capture('git', ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'], { cwd: clonePath }));
   const allRefs = addCommand(bucket, await capture('git', ['for-each-ref', '--format=%(refname)', 'refs'], { cwd: clonePath }));
@@ -409,10 +421,10 @@ async function verifyClone(clonePath, label, expectedRemoteUrl = null) {
   const remoteCurrentMain = addCommand(bucket, await capture('git', ['show-ref', '--verify', '--quiet', 'refs/remotes/origin/current-main'], { cwd: clonePath, expectedExitCodes: [1] }));
   const fsck = addCommand(bucket, await capture('git', ['fsck', '--full', '--strict'], { cwd: clonePath }));
   const clean = addCommand(bucket, await capture('git', ['status', '--porcelain=v1', '--untracked-files=all'], { cwd: clonePath }));
-  const results = [initialHead, initialBranch, initialParents, detach, head, symbolic, candidateType,
-    candidateTree, candidateParents, candidateReachable, c3Ancestor, c4Ancestor, localRefs,
-    remoteRefs, allRefs, fetchRefspec, cloneRemote, worktrees, shallow, localCurrentMain,
-    remoteCurrentMain, fsck, clean];
+  const results = [initialHead, initialBranch, initialParents, bridgeParents, bridgeReachable,
+    detach, head, symbolic, candidateType, candidateTree, candidateParents, candidateReachable,
+    c3Ancestor, c4Object, localRefs, remoteRefs, allRefs, fetchRefspec, cloneRemote, worktrees,
+    shallow, localCurrentMain, remoteCurrentMain, fsck, clean];
   for (const result of results) requirePassing(result);
 
   const localRefList = localRefs.stdout.trim().split(/\r?\n/u).filter(Boolean);
@@ -421,19 +433,21 @@ async function verifyClone(clonePath, label, expectedRemoteUrl = null) {
   const currentMainPresent = allRefs.stdout.split(/\r?\n/u).some((ref) => (
     ref === 'refs/heads/current-main' || ref === 'refs/remotes/origin/current-main'
   ));
-  const bridgeParents = initialParents.stdout.trim().split(/\s+/u).filter(Boolean);
+  const tipParentList = initialParents.stdout.trim().split(/\s+/u).filter(Boolean);
+  const bridgeParentList = bridgeParents.stdout.trim().split(/\s+/u).filter(Boolean);
   const candidateParentList = candidateParents.stdout.trim().split(/\s+/u).filter(Boolean);
   const hardlinks = hardlinkAudit(clonePath, label);
-  const valid = initialHead.stdout.trim() === report.evidence_bridge.tip
+  const valid = initialHead.stdout.trim() === report.campaign_tip
     && initialBranch.stdout.trim() === BRANCH
-    && JSON.stringify(bridgeParents) === JSON.stringify([C5, PRIOR_REMOTE_EVIDENCE])
+    && tipParentList.length > 0
+    && JSON.stringify(bridgeParentList) === JSON.stringify([C5, PRIOR_REMOTE_EVIDENCE])
     && head.stdout.trim() === C5
     && symbolic.record.exit_code === 1
     && candidateType.stdout.trim() === 'commit'
     && candidateTree.stdout.trim() === report.candidate.tree
     && JSON.stringify(candidateParentList) === JSON.stringify([C2])
     && c3Ancestor.record.exit_code === 1
-    && c4Ancestor.record.exit_code === 1
+    && c4Object.record.exit_code === 128
     && JSON.stringify(localRefList) === JSON.stringify([`refs/heads/${BRANCH}`])
     && JSON.stringify(remoteRefList) === JSON.stringify([`refs/remotes/origin/${BRANCH}`])
     && fetchRefspec.stdout.trim() === `+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}`
@@ -449,10 +463,13 @@ async function verifyClone(clonePath, label, expectedRemoteUrl = null) {
   return {
     initial_head: initialHead.stdout.trim(),
     initial_branch: initialBranch.stdout.trim(),
-    initial_parents: bridgeParents,
+    initial_parents: tipParentList,
+    custody_bridge: CUSTODY_BRIDGE,
+    custody_bridge_parents: bridgeParentList,
     detached_head: head.stdout.trim(),
     candidate_tree: candidateTree.stdout.trim(),
     candidate_parents: candidateParentList,
+    rejected_c4_object_present: false,
     local_branch_refs: localRefList,
     remote_tracking_branch_refs: remoteRefList,
     fetch_refspec: fetchRefspec.stdout.trim(),
@@ -471,7 +488,9 @@ async function main() {
   try {
     const branch = addCommand(report.preflight.command_ids, await capture('git', ['branch', '--show-current']));
     const head = addCommand(report.preflight.command_ids, await capture('git', ['rev-parse', 'HEAD']));
-    const bridgeParents = addCommand(report.preflight.command_ids, await capture('git', ['show', '-s', '--format=%P', 'HEAD']));
+    const headParents = addCommand(report.preflight.command_ids, await capture('git', ['show', '-s', '--format=%P', 'HEAD']));
+    const bridgeParents = addCommand(report.preflight.command_ids, await capture('git', ['show', '-s', '--format=%P', CUSTODY_BRIDGE]));
+    const bridgeAncestor = addCommand(report.preflight.command_ids, await capture('git', ['merge-base', '--is-ancestor', CUSTODY_BRIDGE, 'HEAD']));
     const campaignRef = addCommand(report.preflight.command_ids, await capture('git', ['rev-parse', `refs/heads/${BRANCH}`]));
     const candidateType = addCommand(report.preflight.command_ids, await capture('git', ['cat-file', '-t', C5]));
     const candidateTree = addCommand(report.preflight.command_ids, await capture('git', ['rev-parse', `${C5}^{tree}`]));
@@ -483,22 +502,25 @@ async function main() {
     const evidencePaths = addCommand(report.preflight.command_ids, await capture('git', ['diff', '--name-only', C5, 'HEAD']));
     const status = addCommand(report.preflight.command_ids, await capture('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all']));
     const remoteUrlResult = addCommand(report.preflight.command_ids, await capture('git', ['remote', 'get-url', 'origin']));
-    for (const result of [branch, head, bridgeParents, campaignRef, candidateType, candidateTree,
-      candidateParents, c2Ancestor, c3Ancestor, c4Ancestor, priorAncestor, evidencePaths,
-      status, remoteUrlResult]) requirePassing(result);
+    for (const result of [branch, head, headParents, bridgeParents, bridgeAncestor, campaignRef,
+      candidateType, candidateTree, candidateParents, c2Ancestor, c3Ancestor, c4Ancestor,
+      priorAncestor, evidencePaths, status, remoteUrlResult]) requirePassing(result);
 
-    const bridgeTip = parseSingleSha(head.stdout, 'EVIDENCE_BRIDGE_TIP');
+    const campaignTip = parseSingleSha(head.stdout, 'CAMPAIGN_TIP');
+    const observedHeadParents = headParents.stdout.trim().split(/\s+/u).filter(Boolean);
     const observedBridgeParents = bridgeParents.stdout.trim().split(/\s+/u).filter(Boolean);
     const observedCandidateParents = candidateParents.stdout.trim().split(/\s+/u).filter(Boolean);
     const evidenceOnlyPaths = evidencePaths.stdout.trim().split(/\r?\n/u).filter(Boolean);
     const dirtyPaths = parseStatusPaths(status.stdout);
     const remoteUrl = remoteUrlResult.stdout.trim();
-    report.evidence_bridge.tip = bridgeTip;
     report.evidence_bridge.observed_parents = observedBridgeParents;
     report.evidence_bridge.paths = evidenceOnlyPaths;
+    report.campaign_tip = campaignTip;
+    report.campaign_tip_parents = observedHeadParents;
     report.candidate.tree = parseSingleSha(candidateTree.stdout, 'C5_TREE');
     const preflightValid = branch.stdout.trim() === BRANCH
-      && campaignRef.stdout.trim() === bridgeTip
+      && campaignRef.stdout.trim() === campaignTip
+      && observedHeadParents.length > 0
       && candidateType.stdout.trim() === 'commit'
       && JSON.stringify(observedCandidateParents) === JSON.stringify([C2])
       && JSON.stringify(observedBridgeParents) === JSON.stringify([C5, PRIOR_REMOTE_EVIDENCE])
@@ -536,10 +558,13 @@ async function main() {
 
     const liveBefore = await liveRemoteSnapshot(remoteUrl, report.live_remote.before_command_ids);
     report.live_remote.before = liveBefore;
-    if (liveBefore.campaign !== PRIOR_REMOTE_EVIDENCE
-      || liveBefore.current_main !== report.current_main.before.local) {
+    if (liveBefore.current_main !== report.current_main.before.local) {
       failClosed(null, 'LIVE_REMOTE_REF_MISMATCH_BEFORE_AUTHORIZED_PUSH');
     }
+    const remoteBeforeAncestor = addCommand(report.campaign_push.command_ids, await capture('git', [
+      'merge-base', '--is-ancestor', liveBefore.campaign, campaignTip,
+    ]));
+    requirePassing(remoteBeforeAncestor);
 
     const push = addCommand(report.campaign_push.command_ids, await capture('git', [
       'push', '--porcelain', 'origin',
@@ -551,13 +576,13 @@ async function main() {
       failClosed(push.record, 'FORBIDDEN_PUSH_FORM_DETECTED');
     }
     const livePushed = await liveRemoteSnapshot(remoteUrl, report.campaign_push.command_ids);
-    if (livePushed.campaign !== bridgeTip || livePushed.current_main !== liveBefore.current_main) {
+    if (livePushed.campaign !== campaignTip || livePushed.current_main !== liveBefore.current_main) {
       failClosed(null, 'LIVE_REMOTE_REF_NOT_EXACT_LOCAL_TIP_AFTER_PUSH');
     }
     report.campaign_push.before = liveBefore.campaign;
     report.campaign_push.after = livePushed.campaign;
-    report.campaign_push.local_tip = bridgeTip;
-    report.campaign_push.fast_forward_from = PRIOR_REMOTE_EVIDENCE;
+    report.campaign_push.local_tip = campaignTip;
+    report.campaign_push.fast_forward_from = liveBefore.campaign;
     report.campaign_push.origin_equals_local_tip = true;
     report.campaign_push.result = 'PASS_AUTHORIZED_NON_FORCE_CAMPAIGN_ONLY_FAST_FORWARD';
     flushReport();
@@ -577,7 +602,7 @@ async function main() {
     for (const result of [bundleCreate, tempVerify, tempHeads]) requirePassing(result);
     const tempCampaign = parseLsRemote(tempHeads.stdout, `refs/heads/${BRANCH}`, 'TEMP_BUNDLE_CAMPAIGN');
     const tempCurrentMain = parseLsRemote(tempHeads.stdout, 'refs/heads/current-main', 'TEMP_BUNDLE_CURRENT_MAIN');
-    if (tempCampaign !== bridgeTip
+    if (tempCampaign !== campaignTip
       || tempCurrentMain !== report.current_main.before.local
       || !/records a complete history/iu.test(tempVerify.combinedText)) {
       failClosed(tempVerify.record, 'TEMP_BUNDLE_REF_OR_COMPLETENESS_INVALID');
@@ -597,7 +622,7 @@ async function main() {
     const bundleCampaign = parseLsRemote(bundleHeads.stdout, `refs/heads/${BRANCH}`, 'BUNDLE_CAMPAIGN');
     const bundleCurrentMain = parseLsRemote(bundleHeads.stdout, 'refs/heads/current-main', 'BUNDLE_CURRENT_MAIN');
     if (!SHA256.test(observedBundleSha)
-      || bundleCampaign !== bridgeTip
+      || bundleCampaign !== campaignTip
       || bundleCurrentMain !== report.current_main.before.local
       || !/records a complete history/iu.test(bundleVerify.combinedText)) {
       failClosed(bundleDigest.record, 'FINAL_BUNDLE_DIGEST_REF_OR_COMPLETENESS_INVALID');
@@ -675,7 +700,7 @@ async function main() {
 
     const liveAfter = await liveRemoteSnapshot(remoteUrl, report.live_remote.after_command_ids);
     report.live_remote.after = liveAfter;
-    if (liveAfter.campaign !== bridgeTip || liveAfter.current_main !== liveBefore.current_main) {
+    if (liveAfter.campaign !== campaignTip || liveAfter.current_main !== liveBefore.current_main) {
       failClosed(null, 'LIVE_REMOTE_REFS_CHANGED_DURING_GATE');
     }
     report.live_remote.result = 'PASS_LIVE_REF_STABLE_EXACT_C5_REACHABLE_THROUGH_EVIDENCE_BRIDGE';
@@ -690,7 +715,7 @@ async function main() {
     const finalSourceStatus = addCommand(report.preflight.command_ids, await capture('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all']));
     requirePassing(finalSourceHead);
     requirePassing(finalSourceStatus);
-    if (finalSourceHead.stdout.trim() !== bridgeTip
+    if (finalSourceHead.stdout.trim() !== campaignTip
       || JSON.stringify(parseStatusPaths(finalSourceStatus.stdout)) !== JSON.stringify([REPORT_RELATIVE])) {
       failClosed(finalSourceStatus.record, 'SOURCE_WORKTREE_CHANGED_OUTSIDE_EVIDENCE_REPORT');
     }
@@ -737,7 +762,8 @@ async function main() {
     .map((commandId) => report.commands.find((row) => row.command_id === commandId));
   process.stdout.write(`${JSON.stringify({
     c5: C5,
-    evidence_bridge: report.evidence_bridge.tip,
+    evidence_bridge: CUSTODY_BRIDGE,
+    campaign_tip: report.campaign_tip,
     origin_ref: report.live_remote.after.campaign,
     bundle_sha256: report.bundle.sha256,
     npm_ci_exit: battery[0]?.exit_code ?? null,

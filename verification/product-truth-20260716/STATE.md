@@ -1,6 +1,6 @@
 # Product Truth Campaign State
 
-Campaign status: `C5_LIVE_REMOTE_GATE_ATTEMPT_1_BLOCKED_RECORDER_PROBE`
+Campaign status: `C5_LIVE_REMOTE_GATE_ATTEMPT_2_STAGED`
 
 Immutable rejected C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
@@ -14,11 +14,13 @@ C5 source tree: `BOUND_BY_C5_LIVE_REMOTE_GATE_REPORT`
 
 Custody bridge: `f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6`
 
-Evidence HEAD: `ATTEMPT_1_CONTAINING_EVIDENCE_ONLY_CHILD` — the exact containing SHA is measured after this receipt is committed.
+Attempt 1 evidence child: `9e4005535691bb1ddb8a51c3d95394e0920832bc`
+
+Evidence HEAD: `ATTEMPT_2_RECORDER_CONTAINING_EVIDENCE_ONLY_CHILD` — the exact containing SHA is measured after the corrected recorder is committed.
 
 Actor: `ACCOUNT_A_CANDIDATE_CUSTODIAN`
 
-Gate: `PRECISE_BLOCKED:CLONE_C4_OBJECT_ABSENT_NOT_ADJUDICATED`
+Gate: `ATTEMPT_2_NOT_RUN`
 
 Custody: `C5_REACHABLE_ON_LIVE_CAMPAIGN_BRANCH; FULL_LIVE_REMOTE_BATTERY_NOT_RUN`
 
@@ -69,9 +71,15 @@ The measured output belongs in `C5_LIVE_REMOTE_GATE_REPORT.json` as a later camp
 - The bundle clone reached exact detached C5 and proved C3 is not a C5 ancestor. It then encountered `git merge-base --is-ancestor <C4> <C5>` exit `128` because the rejected C4 object is absent from the single-branch clone. The recorder expected only exit `1`, so it failed closed before any live-remote clone or npm command.
 - The absence of the rejected C4 object is compatible with and stronger than the required non-ancestry boundary; the defect is in the evidence probe, not in C5 source. The failed report is preserved immutably before the recorder is corrected.
 
+## Attempt 2 correction
+
+- Attempt 1 is immutable in evidence commit `9e4005535691bb1ddb8a51c3d95394e0920832bc`; its report is not rewritten out of history.
+- The corrected single-branch probe now requires `git cat-file -e 4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}` to exit exactly `128`, proving rejected C4 is absent at the clone boundary. Local full-repository preflight separately retains the exact `merge-base --is-ancestor C4 C5` exit-`1` proof.
+- The recorder now distinguishes immutable custody bridge `f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6` from the later campaign evidence tip. It accepts only a campaign tip that contains the bridge, differs from C5 solely under the campaign directory, and is a normal fast-forward of the live remote ref.
+
 ## Exact boundaries
 
-- Exact-C5 live-remote custody gate: `ATTEMPT_1_BLOCKED_BEFORE_NPM`.
+- Exact-C5 live-remote custody gate: `ATTEMPT_1_BLOCKED_BEFORE_NPM; ATTEMPT_2_PENDING`.
 - C5 off-machine custody: `LIVE_CAMPAIGN_BRANCH_REACHABLE_AT_BRIDGE`; authoritative live-remote battery remains pending.
 - Independent final verification: `BLOCKED` until Account A emits the exact baseline token, then reserved for a different fresh session.
 - Deployment, external sentinel, paging, restore, rollback: `NOT_CONFIGURED`.
@@ -79,4 +87,4 @@ The measured output belongs in `C5_LIVE_REMOTE_GATE_REPORT.json` as a later camp
 
 ## Exact next action
 
-Commit the complete Attempt 1 report without rewriting the pushed custody bridge. In a new evidence child, make the clone probe accept exact exit `128` only when the rejected C4 object is absent, restage the retry, and rerun `node verification/product-truth-20260716/run-c5-live-remote-gate.mjs`. Emit `BASELINE_TRUTH_ACCEPTED:959a5f9900e25f53414710bbfb3464c3ccb67a5d` and stop only if every recorded gate is green.
+Commit the corrected recorder as a new evidence child without rewriting the custody bridge or Attempt 1, then rerun `node verification/product-truth-20260716/run-c5-live-remote-gate.mjs`. Emit `BASELINE_TRUTH_ACCEPTED:959a5f9900e25f53414710bbfb3464c3ccb67a5d` and stop only if every recorded gate is green.

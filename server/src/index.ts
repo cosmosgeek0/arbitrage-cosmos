@@ -358,10 +358,7 @@ function readLocalMutationAuthority(): 'PROVEN_ABSENT' | 'PRESENT' | 'AMBIGUOUS'
     // external account is flat; canonical ops readback carries that separate
     // UNKNOWN/NONE/ACTIVE posture.
     if (client !== null) return 'PRESENT';
-    if (ledger.unresolvedOrderRequests(1).length > 0 || ledger.unresolvedLoanMutations().length > 0) {
-      return 'AMBIGUOUS';
-    }
-    return 'PROVEN_ABSENT';
+    return ledger.readDurableMutationAuthority().posture;
   } catch {
     return 'UNKNOWN';
   }

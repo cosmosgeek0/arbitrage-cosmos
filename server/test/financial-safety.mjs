@@ -941,6 +941,72 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
   }
 }
 
+// Corrupt durable financial evidence must never be projected as proof that
+// local mutation authority is absent. Direct SQL simulates legacy/on-disk
+// corruption that bypasses current write-boundary validation.
+{
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-mutation-authority-'));
+  const store = new Ledger(dataDir);
+  try {
+    const clean = store.readDurableMutationAuthority();
+    check(
+      'clean financial evidence can prove local mutation authority absent',
+      clean.posture === 'PROVEN_ABSENT'
+        && clean.unresolvedOrderCount === 0
+        && clean.unresolvedLoanCount === 0
+        && clean.malformedOrderRowCount === 0
+        && clean.malformedLoanRowCount === 0
+        && clean.readErrorCount === 0,
+    );
+
+    let malformedOrderRejected = false;
+    let malformedLoanRejected = false;
+    try {
+      store.logEvent('order_request', 'BTCUSDT', { reservationId: 'missing-required-fields' });
+    } catch {
+      malformedOrderRejected = true;
+    }
+    try {
+      store.logEvent('loan_request', null, { mutationId: 'missing-required-fields' });
+    } catch {
+      malformedLoanRejected = true;
+    }
+    check(
+      'financial mutation writes reject malformed requests before commit',
+      malformedOrderRejected && malformedLoanRejected,
+    );
+
+    const insertRaw = store.db.prepare(
+      'INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)',
+    );
+    insertRaw.run(Date.now(), 'order_request', 'BTCUSDT', '{broken');
+    insertRaw.run(Date.now(), 'loan_request', null, JSON.stringify({
+      mutationId: 'legacy-corrupt-loan',
+      riskIncreasing: true,
+    }));
+
+    const corrupt = store.readDurableMutationAuthority();
+    check(
+      'corrupt order and loan rows fail closed instead of proving absence',
+      corrupt.posture === 'AMBIGUOUS'
+        && corrupt.malformedOrderRowCount === 1
+        && corrupt.malformedLoanRowCount === 1
+        && corrupt.readErrorCount === 0,
+      JSON.stringify(corrupt),
+    );
+
+    store.close();
+    const unreadable = store.readDurableMutationAuthority();
+    check(
+      'financial mutation read failures remain unknown',
+      unreadable.posture === 'UNKNOWN' && unreadable.readErrorCount === 1,
+    );
+  } finally {
+    store.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
 const failed = results.filter((result) => !result.pass);
 console.log(`\n${results.length - failed.length}/${results.length} financial safety checks passed.`);
 if (failed.length > 0) process.exitCode = 1;

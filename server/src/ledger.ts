@@ -91,6 +91,23 @@ const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
+const ORDER_MUTATION_OUTCOMES = new Set([
+  'accepted',
+  'accepted_partial_terminal',
+  'accepted_reconciled',
+  'accepted_operator_verified',
+  'not_sent',
+  'not_sent_rejected',
+  'not_sent_reconciled',
+  'not_sent_operator_verified',
+  'unknown',
+]);
+const LOAN_MUTATION_OUTCOMES = new Set([
+  'succeeded',
+  'failed',
+  'reconciled_by_operator',
+  'unknown',
+]);
 
 export interface LedgerEvent {
   id: number;
@@ -117,6 +134,15 @@ export interface UnresolvedOrderRequest {
   recoveryAttempts: number;
   lastRecoveryAt: number | null;
   lastRecoveryDetail: string | null;
+}
+
+export interface DurableMutationAuthorityRead {
+  readonly posture: 'PROVEN_ABSENT' | 'AMBIGUOUS' | 'UNKNOWN';
+  readonly unresolvedOrderCount: number;
+  readonly unresolvedLoanCount: number;
+  readonly malformedOrderRowCount: number;
+  readonly malformedLoanRowCount: number;
+  readonly readErrorCount: number;
 }
 
 export interface LedgerEventInput {
@@ -419,6 +445,13 @@ interface FillDbRow {
   commission_asset: string | null;
   ts: number;
   source: string;
+}
+
+interface DurableMutationAuthorityDbRow {
+  unresolved_order_count: unknown;
+  unresolved_loan_count: unknown;
+  malformed_order_row_count: unknown;
+  malformed_loan_row_count: unknown;
 }
 
 interface SignalDbRow {
@@ -740,6 +773,7 @@ export class Ledger extends EventEmitter {
 
   logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
     const ts = Date.now();
+    validateFinancialMutationEvent(kind, symbol ?? null, data);
     const info = this.db
       .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
       .run(ts, kind, symbol ?? null, data === undefined ? null : JSON.stringify(data));
@@ -770,6 +804,7 @@ export class Ledger extends EventEmitter {
       if (typeof record.kind !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(record.kind)) {
         throw new Error('invalid atomic ledger event kind');
       }
+      validateFinancialMutationEvent(record.kind, record.symbol ?? null, record.data);
       const serialized = record.data === undefined ? null : JSON.stringify(record.data);
       const info = insert.run(ts, record.kind, record.symbol ?? null, serialized);
       return {
@@ -872,11 +907,167 @@ export class Ledger extends EventEmitter {
   }
 
   /**
+   * Reads the durable local financial-mutation posture without allowing
+   * malformed request/response evidence to disappear behind JSON filters.
+   * Corrupt request rows are ambiguous until repaired; a read failure is
+   * UNKNOWN. Only a complete, readable all-zero scan proves absence.
+   */
+  readDurableMutationAuthority(): Readonly<DurableMutationAuthorityRead> {
+    try {
+      const row = this.db.prepare(`
+        WITH request_fields AS (
+          SELECT
+            request.id,
+            request.kind,
+            request.ts,
+            request.symbol,
+            json_valid(request.data) AS valid_json,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.reservationId') END AS reservation_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.reservationId') END AS reservation_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.params.newClientOrderId') END AS client_order_id_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.params.newClientOrderId') END AS client_order_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.reservedNotionalUsd') END AS reserved_notional_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.reservedNotionalUsd') END AS reserved_notional,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.mutationId') END AS mutation_id_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.mutationId') END AS mutation_id,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.actionKey') END AS action_key_type,
+            CASE WHEN json_valid(request.data)
+              THEN json_extract(request.data, '$.actionKey') END AS action_key,
+            CASE WHEN json_valid(request.data)
+              THEN json_type(request.data, '$.riskIncreasing') END AS risk_increasing_type
+          FROM events AS request
+          WHERE request.kind IN ('order_request', 'loan_request')
+        ),
+        classified AS (
+          SELECT
+            fields.*,
+            CASE
+              WHEN fields.kind = 'order_request' THEN COALESCE((
+                fields.valid_json = 1
+                AND typeof(fields.ts) = 'integer'
+                AND fields.ts > 0
+                AND typeof(fields.symbol) = 'text'
+                AND length(fields.symbol) BETWEEN 4 AND 20
+                AND fields.symbol NOT GLOB '*[^A-Z0-9]*'
+                AND fields.reservation_type = 'text'
+                AND length(fields.reservation_id) BETWEEN 16 AND 64
+                AND fields.reservation_id NOT GLOB '*[^0-9A-Fa-f-]*'
+                AND fields.client_order_id_type = 'text'
+                AND length(fields.client_order_id) BETWEEN 1 AND 36
+                AND fields.client_order_id NOT GLOB '*[^A-Za-z0-9_-]*'
+                AND fields.reserved_notional_type IN ('integer', 'real')
+                AND fields.reserved_notional > 0
+              ), 0)
+              WHEN fields.kind = 'loan_request' THEN COALESCE((
+                fields.valid_json = 1
+                AND typeof(fields.ts) = 'integer'
+                AND fields.ts > 0
+                AND fields.symbol IS NULL
+                AND fields.mutation_id_type = 'text'
+                AND length(fields.mutation_id) BETWEEN 1 AND 128
+                AND fields.action_key_type = 'text'
+                AND length(fields.action_key) BETWEEN 1 AND 160
+                AND fields.risk_increasing_type IN ('true', 'false')
+              ), 0)
+              ELSE 0
+            END AS request_valid
+          FROM request_fields AS fields
+        )
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'order_request' AND request.request_valid = 0 THEN 1 ELSE 0 END), 0)
+            AS malformed_order_row_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'loan_request' AND request.request_valid = 0 THEN 1 ELSE 0 END), 0)
+            AS malformed_loan_row_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'order_request'
+              AND request.request_valid = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM events AS response
+                WHERE response.id > request.id
+                  AND response.kind = 'order_response'
+                  AND CASE WHEN json_valid(response.data) THEN
+                    json_type(response.data, '$.reservationId') = 'text'
+                    AND json_extract(response.data, '$.reservationId') = request.reservation_id
+                    AND json_type(response.data, '$.outcome') = 'text'
+                    AND json_extract(response.data, '$.outcome') IN (
+                      'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+                      'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+                      'not_sent_reconciled', 'not_sent_operator_verified'
+                    )
+                  ELSE 0 END
+              )
+            THEN 1 ELSE 0 END), 0) AS unresolved_order_count,
+          COALESCE(SUM(CASE
+            WHEN request.kind = 'loan_request'
+              AND request.request_valid = 1
+              AND NOT EXISTS (
+                SELECT 1
+                FROM events AS response
+                WHERE response.id > request.id
+                  AND response.kind = 'loan_response'
+                  AND CASE WHEN json_valid(response.data) THEN
+                    json_type(response.data, '$.mutationId') = 'text'
+                    AND json_extract(response.data, '$.mutationId') = request.mutation_id
+                    AND json_type(response.data, '$.outcome') = 'text'
+                    AND json_extract(response.data, '$.outcome') IN (
+                      'succeeded', 'failed', 'reconciled_by_operator'
+                    )
+                  ELSE 0 END
+              )
+            THEN 1 ELSE 0 END), 0) AS unresolved_loan_count
+        FROM classified AS request
+      `).get() as DurableMutationAuthorityDbRow | undefined;
+      const unresolvedOrderCount = strictMutationCount(row?.unresolved_order_count);
+      const unresolvedLoanCount = strictMutationCount(row?.unresolved_loan_count);
+      const malformedOrderRowCount = strictMutationCount(row?.malformed_order_row_count);
+      const malformedLoanRowCount = strictMutationCount(row?.malformed_loan_row_count);
+      const posture = unresolvedOrderCount > 0
+        || unresolvedLoanCount > 0
+        || malformedOrderRowCount > 0
+        || malformedLoanRowCount > 0
+        ? 'AMBIGUOUS'
+        : 'PROVEN_ABSENT';
+      return Object.freeze({
+        posture,
+        unresolvedOrderCount,
+        unresolvedLoanCount,
+        malformedOrderRowCount,
+        malformedLoanRowCount,
+        readErrorCount: 0,
+      });
+    } catch {
+      return Object.freeze({
+        posture: 'UNKNOWN',
+        unresolvedOrderCount: 0,
+        unresolvedLoanCount: 0,
+        malformedOrderRowCount: 0,
+        malformedLoanRowCount: 0,
+        readErrorCount: 1,
+      });
+    }
+  }
+
+  /**
    * Requests from an earlier UTC day that still have no correlated response.
    * They do not belong in today's notional sum, but they must keep live
    * admission fail-closed until exchange reconciliation proves an outcome.
    */
   unresolvedOrderRequestsBefore(ts: number): number {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) return authority.malformedOrderRowCount;
     const row = this.db.prepare(`
       SELECT COUNT(*) AS count
       FROM events AS request
@@ -892,6 +1083,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
     `).get(ts) as { count?: number } | undefined;
     return Number(row?.count) || 0;
@@ -904,6 +1101,9 @@ export class Ledger extends EventEmitter {
    * therefore never starve newer financial requests.
    */
   unresolvedOrderRequests(limit = 100, afterRequestId = 0, wrapAround = true): UnresolvedOrderRequest[] {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) throw new Error('MALFORMED_ORDER_MUTATION_EVIDENCE');
     const safeLimit = boundedInteger(limit, 1, 500, 100);
     const safeCursor = boundedInteger(afterRequestId, 0, Number.MAX_SAFE_INTEGER, 0);
     const cursorClause = wrapAround ? '' : 'AND request.id > ?';
@@ -956,6 +1156,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
       ORDER BY ${orderBy}
       LIMIT ?
@@ -964,6 +1170,9 @@ export class Ledger extends EventEmitter {
   }
 
   unresolvedOrderRequest(reservationId: string, clientOrderId: string): UnresolvedOrderRequest | null {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedOrderRowCount > 0) throw new Error('MALFORMED_ORDER_MUTATION_EVIDENCE');
     if (!/^[0-9a-f-]{16,64}$/i.test(reservationId) || !/^[A-Za-z0-9_-]{1,36}$/.test(clientOrderId)) return null;
     const row = this.db.prepare(`
       SELECT
@@ -1010,6 +1219,12 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'order_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.reservationId') = json_extract(request.data, '$.reservationId')
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'accepted', 'accepted_partial_terminal', 'accepted_reconciled',
+              'accepted_operator_verified', 'not_sent', 'not_sent_rejected',
+              'not_sent_reconciled', 'not_sent_operator_verified'
+            )
         )
       ORDER BY request.id DESC
       LIMIT 1
@@ -1018,6 +1233,9 @@ export class Ledger extends EventEmitter {
   }
 
   unresolvedLoanMutations(): { mutationId: string; actionKey: string; riskIncreasing: boolean }[] {
+    const authority = this.readDurableMutationAuthority();
+    if (authority.readErrorCount > 0) throw new Error('FINANCIAL_MUTATION_AUTHORITY_READ_FAILED');
+    if (authority.malformedLoanRowCount > 0) throw new Error('MALFORMED_LOAN_MUTATION_EVIDENCE');
     const rows = this.db.prepare(`
       SELECT request.data
       FROM events AS request
@@ -1031,7 +1249,10 @@ export class Ledger extends EventEmitter {
             AND response.kind = 'loan_response'
             AND json_valid(response.data)
             AND json_extract(response.data, '$.mutationId') = json_extract(request.data, '$.mutationId')
-            AND COALESCE(json_extract(response.data, '$.outcome'), 'unknown') != 'unknown'
+            AND json_type(response.data, '$.outcome') = 'text'
+            AND json_extract(response.data, '$.outcome') IN (
+              'succeeded', 'failed', 'reconciled_by_operator'
+            )
       )
       ORDER BY request.id ASC
     `).all() as { data: string | null }[];
@@ -3095,6 +3316,67 @@ function parseUnresolvedOrderRow(row: UnresolvedOrderDbRow): UnresolvedOrderRequ
     }];
   } catch {
     return [];
+  }
+}
+
+function strictMutationCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error('FINANCIAL_MUTATION_COUNT_MALFORMED');
+  }
+  return value;
+}
+
+function financialRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validateFinancialMutationEvent(kind: string, symbol: string | null, data: unknown): void {
+  if (!['order_request', 'order_response', 'loan_request', 'loan_response'].includes(kind)) return;
+  if (!financialRecord(data)) throw new Error('FINANCIAL_MUTATION_EVENT_MALFORMED');
+
+  if (kind === 'order_request' || kind === 'order_response') {
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol)) {
+      throw new Error('ORDER_MUTATION_SYMBOL_MALFORMED');
+    }
+    if (typeof data.reservationId !== 'string' || !/^[0-9a-f-]{16,64}$/i.test(data.reservationId)) {
+      throw new Error('ORDER_MUTATION_RESERVATION_ID_MALFORMED');
+    }
+    if (kind === 'order_request') {
+      if (
+        !financialRecord(data.params)
+        || typeof data.params.newClientOrderId !== 'string'
+        || !/^[A-Za-z0-9_-]{1,36}$/.test(data.params.newClientOrderId)
+        || typeof data.reservedNotionalUsd !== 'number'
+        || !Number.isFinite(data.reservedNotionalUsd)
+        || data.reservedNotionalUsd <= 0
+      ) {
+        throw new Error('ORDER_REQUEST_EVIDENCE_MALFORMED');
+      }
+      return;
+    }
+    if (typeof data.outcome !== 'string' || !ORDER_MUTATION_OUTCOMES.has(data.outcome)) {
+      throw new Error('ORDER_RESPONSE_OUTCOME_MALFORMED');
+    }
+    return;
+  }
+
+  if (symbol !== null) throw new Error('LOAN_MUTATION_SYMBOL_MALFORMED');
+  if (typeof data.mutationId !== 'string' || data.mutationId.length < 1 || data.mutationId.length > 128) {
+    throw new Error('LOAN_MUTATION_ID_MALFORMED');
+  }
+  if (kind === 'loan_request') {
+    if (
+      typeof data.actionKey !== 'string'
+      || data.actionKey.length < 1
+      || data.actionKey.length > 160
+      || typeof data.riskIncreasing !== 'boolean'
+    ) {
+      throw new Error('LOAN_REQUEST_EVIDENCE_MALFORMED');
+    }
+    return;
+  }
+  if (typeof data.outcome !== 'string' || !LOAN_MUTATION_OUTCOMES.has(data.outcome)) {
+    throw new Error('LOAN_RESPONSE_OUTCOME_MALFORMED');
   }
 }
 

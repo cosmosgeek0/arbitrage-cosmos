@@ -128,11 +128,40 @@
           "sha256": "6e7d4bce36049579713e8a97871e38b7175710a5542346102f13c7df2c91a305"
         }
       ]
+    },
+    {
+      "findingId": "RB-27",
+      "baseLiveTree": "095e05ae25033b30aab050e94b0ffb947ad8ca67",
+      "effectiveLiveTree": "25157a5e45e74b3f5cb785ae77b74ff0fd3daaf3",
+      "baseRootDigestSha256": "f8dc6e2f40e939350bd9980719ff7d213c75a08291cbcc8f35a7b9c7980738f6",
+      "effectiveRootDigestSha256": "243eb2f4b1c3fa1ee991295f7dca1a60717cb6b25e5fc4d31d150263fe1a9a43",
+      "changedFiles": [
+        {
+          "path": "ops/live/bin/latency-bench.mjs",
+          "mode": "100755",
+          "beforeGitBlob": "bb706160113d4a8f92fec05504c7ac477bd841e9",
+          "beforeSha256": "74536bab23908d0ba6b975edb83cfd99668343704f261db4b07588bd6c2e75ff",
+          "afterGitBlob": "f91bcf417658fa581b6ff29db3fe7594a3483031",
+          "afterSha256": "0cc163d0fdc2b5ff61dbe44348bb94fa85c056bebf3667be3a5bbcd6a0648f6d"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/RB-27_CORRECTION_RECEIPT.md",
+        "gitBlob": "d7f80f6981cb655515deec641424c794771c5b16",
+        "sha256": "1202a1c2a8cba52fdacc84982d7511adf8c7928a647816e0027c91c88c73c380"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-rb-27-latency-deadlines.sh",
+          "gitBlob": "41adec9423f29ec74487354cd2439d1728cab870",
+          "sha256": "99947891d2673a6d04ebad8cc5edea325fac6e8857ae18832d299485720ab9a2"
+        }
+      ]
     }
   ],
   "effectiveLive": {
-    "tree": "095e05ae25033b30aab050e94b0ffb947ad8ca67",
-    "rootDigestSha256": "f8dc6e2f40e939350bd9980719ff7d213c75a08291cbcc8f35a7b9c7980738f6",
+    "tree": "25157a5e45e74b3f5cb785ae77b74ff0fd3daaf3",
+    "rootDigestSha256": "243eb2f4b1c3fa1ee991295f7dca1a60717cb6b25e5fc4d31d150263fe1a9a43",
     "fileCount": 31,
     "files": [
       {
@@ -198,8 +227,8 @@
       {
         "path": "bin/latency-bench.mjs",
         "mode": "100755",
-        "gitBlob": "bb706160113d4a8f92fec05504c7ac477bd841e9",
-        "sha256": "74536bab23908d0ba6b975edb83cfd99668343704f261db4b07588bd6c2e75ff"
+        "gitBlob": "f91bcf417658fa581b6ff29db3fe7594a3483031",
+        "sha256": "0cc163d0fdc2b5ff61dbe44348bb94fa85c056bebf3667be3a5bbcd6a0648f6d"
       },
       {
         "path": "bin/restore-drill.sh",

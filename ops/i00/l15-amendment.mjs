@@ -26,7 +26,7 @@ const IMMUTABLE_DONOR = Object.freeze({
   acceptedAssertions: 347,
 });
 
-const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03']);
+const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27']);
 const FINDING_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': Object.freeze([
     'ops/live/bin/common.sh',
@@ -40,11 +40,15 @@ const FINDING_PATHS = Object.freeze({
     'ops/live/bin/deploy.sh',
     'ops/live/env/cosmos-app.env.template',
   ]),
+  'RB-27': Object.freeze([
+    'ops/live/bin/latency-bench.mjs',
+  ]),
 });
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
   'R3-D-BACKUP-008': 'ops/tests/i00/test-r3-d-backup-008.sh',
   'CS-03': 'ops/tests/i00/test-cs-03-public-source-admission.sh',
+  'RB-27': 'ops/tests/i00/test-rb-27-latency-deadlines.sh',
 });
 
 function assertSafePath(value, label, prefix = '') {

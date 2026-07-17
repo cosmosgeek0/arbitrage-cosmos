@@ -107,10 +107,23 @@ function deepFreeze(value, seen = new Set()) {
 }
 
 export class ManualClock {
-  constructor(nowMs = VENUE_ARRIVAL_MS) { this.value = nowMs; }
+  constructor(nowMs = VENUE_ARRIVAL_MS) { this.value = nowMs; this.deadlines = []; }
   nowMs() { return this.value; }
-  set(nowMs) { this.value = nowMs; }
-  advance(deltaMs) { this.value += deltaMs; }
+  schedule(delayMs, task) {
+    const deadline = { dueAtMs: this.value + delayMs, task, cancelled: false, fired: false };
+    this.deadlines.push(deadline);
+    return { cancel: () => { deadline.cancelled = true; } };
+  }
+  drain() {
+    for (const deadline of this.deadlines) {
+      if (!deadline.cancelled && !deadline.fired && deadline.dueAtMs <= this.value) {
+        deadline.fired = true;
+        deadline.task();
+      }
+    }
+  }
+  set(nowMs) { this.value = nowMs; this.drain(); }
+  advance(deltaMs) { this.value += deltaMs; this.drain(); }
 }
 
 function spotPolicyLeg(capability) {

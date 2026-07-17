@@ -348,8 +348,13 @@ class BaselineBudget {
 function baselineFixture(clock, rows) {
   const calls = [];
   const batches = [];
+  const deadlines = new Map();
   const scheduler = new BaselineBootstrapScheduler({
     clock,
+    deadlineScheduler: {
+      schedule(id, delayMs, task) { deadlines.set(id, { delayMs, task }); },
+      cancel(id) { deadlines.delete(id); },
+    },
     history: {
       async fetch(request) {
         calls.push(structuredClone(request));

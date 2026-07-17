@@ -22,6 +22,29 @@ class ManualClock {
   set(now) { this.now = now; }
 }
 
+class ManualDeadlineScheduler {
+  constructor(clock) {
+    this.clock = clock;
+    this.tasks = new Map();
+  }
+  schedule(id, delayMs, task) {
+    assert.equal(this.tasks.has(id), false, `duplicate deadline id: ${id}`);
+    this.tasks.set(id, { delayMs, task });
+  }
+  cancel(id) {
+    this.tasks.delete(id);
+  }
+  fireNext() {
+    const next = this.tasks.entries().next();
+    if (next.done) return false;
+    const [id, entry] = next.value;
+    this.tasks.delete(id);
+    this.clock.set(this.clock.nowMs() + entry.delayMs);
+    entry.task();
+    return true;
+  }
+}
+
 class MemoryCheckpoint {
   constructor() {
     this.values = new Map();
@@ -56,13 +79,15 @@ class FailOnSaveCheckpoint extends MemoryCheckpoint {
 class QueueHistory {
   constructor() {
     this.calls = [];
+    this.contexts = [];
     this.queue = [];
     this.handler = null;
   }
   enqueue(result) { this.queue.push(result); }
-  async fetch(request) {
+  async fetch(request, context) {
     this.calls.push(structuredClone(request));
-    if (this.handler) return this.handler(request);
+    this.contexts.push(context);
+    if (this.handler) return this.handler(request, context);
     if (this.queue.length === 0) throw new Error('no history result queued');
     const result = this.queue.shift();
     if (result instanceof Error) throw result;
@@ -156,15 +181,17 @@ function fixture(overrides = {}) {
   const budget = overrides.budget ?? new FixtureBudget();
   const checkpoint = overrides.checkpoint ?? new MemoryCheckpoint();
   const sink = overrides.sink ?? new CollectSink();
+  const deadlineScheduler = overrides.deadlineScheduler ?? new ManualDeadlineScheduler(clock);
   const scheduler = new BaselineBootstrapScheduler({
     clock,
     history,
     weightBudget: budget,
     checkpoint,
     sink,
+    deadlineScheduler,
     config: overrides.config,
   });
-  return { scheduler, clock, history, budget, checkpoint, sink };
+  return { scheduler, clock, history, budget, checkpoint, sink, deadlineScheduler };
 }
 
 function bySymbol(snapshot, symbol) {
@@ -318,6 +345,62 @@ test('transient source failures use deterministic injected-clock backoff and bou
   const recovered = await f.scheduler.tick();
   assert.equal(recovered.items[0].state, 'COMPLETE');
   assert.equal(recovered.items[0].retryCount, 0);
+});
+
+test('never-settling history fetch times out, aborts, releases the tick, and retries', async () => {
+  const f = fixture({ config: { retryBaseDelayMs: 10, retryMaximumDelayMs: 100 } });
+  f.history.handler = () => new Promise(() => {});
+  await f.scheduler.initialize(plan());
+  const pendingTick = f.scheduler.tick();
+  for (let index = 0; index < 20 && f.deadlineScheduler.tasks.size === 0; index += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(f.deadlineScheduler.tasks.size, 1, 'history fetch must install an injected deadline');
+  assert.equal(f.deadlineScheduler.fireNext(), true);
+  const timedOut = await pendingTick;
+  assert.equal(f.history.contexts[0].signal.aborted, true);
+  assert.equal(timedOut.activeFetchCount, 0);
+  assert.equal(timedOut.items[0].state, 'RETRY_WAIT');
+  assert.equal(timedOut.items[0].lastReasonCode, 'HISTORY_FETCH_TIMEOUT');
+  assert.equal(f.budget.settlements[0].outcome, 'TIMEOUT');
+  assert.equal(f.budget.settlements[0].actualWeight, 0);
+  assert.equal(f.deadlineScheduler.tasks.size, 0);
+
+  f.history.handler = null;
+  f.clock.set(timedOut.items[0].retryAtMs);
+  f.history.enqueue(success([
+    kline(T0),
+    kline(T0 + MINUTE),
+    kline(T0 + 2 * MINUTE),
+  ], { receiveTimeMs: f.clock.nowMs() }));
+  const recovered = await f.scheduler.tick();
+  assert.equal(recovered.items[0].state, 'COMPLETE');
+  assert.equal(recovered.activeFetchCount, 0);
+  assert.equal(f.deadlineScheduler.tasks.size, 0);
+});
+
+test('history deadline is anchored to actual dispatch after prefetch port delay', async () => {
+  const f = fixture({ config: { historyRequestTimeoutMs: 25, retryBaseDelayMs: 10, retryMaximumDelayMs: 100 } });
+  const reserve = f.budget.reserve.bind(f.budget);
+  f.budget.reserve = async (request) => {
+    const reservation = await reserve(request);
+    f.clock.set(NOW + 100);
+    return reservation;
+  };
+  f.history.handler = () => new Promise(() => {});
+  await f.scheduler.initialize(plan());
+  const pendingTick = f.scheduler.tick();
+  for (let index = 0; index < 20 && f.deadlineScheduler.tasks.size === 0; index += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(f.history.contexts.length, 1);
+  assert.equal(f.history.contexts[0].method, 'GET');
+  assert.equal(f.history.contexts[0].deadlineAtMs, NOW + 125);
+  assert.equal([...f.deadlineScheduler.tasks.values()][0]?.delayMs, 25);
+  assert.equal(f.deadlineScheduler.fireNext(), true);
+  const timedOut = await pendingTick;
+  assert.equal(timedOut.items[0].lastReasonCode, 'HISTORY_FETCH_TIMEOUT');
+  assert.equal(f.clock.nowMs(), f.history.contexts[0].deadlineAtMs);
 });
 
 test('focused burst priority forces universe coverage before a focus symbol can starve it', async () => {

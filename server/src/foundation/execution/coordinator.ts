@@ -11,11 +11,15 @@ import { createExecutionEvent } from './events.js';
 import { createExecutionPlanDefinition } from './plan.js';
 import { hasActiveWorkingLeg, hasAmbiguousLeg, hasKnownOpenExposure, reduceExecutionEvent } from './reducer.js';
 import {
+  DEFAULT_EXECUTION_PORT_TIMEOUT_MS,
   EXECUTION_LEG_KEYS,
+  MAXIMUM_EXECUTION_PORT_TIMEOUT_MS,
   type CoordinatorResult,
   type CreateExecutionPlanInput,
   type ExecutionClock,
+  type ExecutionCoordinatorDeadlineOptions,
   type ExecutionCoordinatorPorts,
+  type ExecutionDeadlineScheduler,
   type ExecutionEvent,
   type ExecutionEventType,
   type ExecutionLegKey,
@@ -24,10 +28,36 @@ import {
   type LegOperationRequest,
   type LookupOutcome,
   type PortFailure,
+  type ExecutionPortCallContext,
   type SubmissionOutcome,
 } from './types.js';
 
 type EventDetails = Omit<ExecutionEvent, 'eventId' | 'planId' | 'sequence' | 'occurredAtMs' | 'type'>;
+
+type PortCallResult<T> =
+  | { readonly kind: 'COMPLETED'; readonly value: T }
+  | { readonly kind: 'THREW' }
+  | { readonly kind: 'TIMED_OUT' };
+
+interface ResolvedExecutionDeadlineOptions {
+  readonly portTimeoutMs: number;
+  readonly scheduler: ExecutionDeadlineScheduler;
+}
+
+function resolveExecutionDeadlineOptions(
+  options: ExecutionCoordinatorDeadlineOptions | undefined,
+  clock: ExecutionClock,
+): Readonly<ResolvedExecutionDeadlineOptions> {
+  const portTimeoutMs = options?.portTimeoutMs ?? DEFAULT_EXECUTION_PORT_TIMEOUT_MS;
+  if (!Number.isSafeInteger(portTimeoutMs) || portTimeoutMs < 1 || portTimeoutMs > MAXIMUM_EXECUTION_PORT_TIMEOUT_MS) {
+    throw new RangeError(`portTimeoutMs must be a safe integer in [1, ${MAXIMUM_EXECUTION_PORT_TIMEOUT_MS}]`);
+  }
+  const scheduler = options?.scheduler ?? clock;
+  if (typeof scheduler?.schedule !== 'function') {
+    throw new TypeError('Execution deadline scheduler.schedule is required');
+  }
+  return Object.freeze({ portTimeoutMs, scheduler });
+}
 
 export type CoordinatorRestoreResult =
   | { readonly ok: true; readonly coordinator: ExecutionCoordinator }
@@ -140,6 +170,7 @@ export class ExecutionCoordinator {
     state: ExecutionPlanState,
     private readonly clock: ExecutionClock,
     private readonly ports: ExecutionCoordinatorPorts,
+    private readonly deadlineOptions: Readonly<ResolvedExecutionDeadlineOptions>,
     restoredFromCheckpoint = false,
   ) {
     this.stateValue = state;
@@ -167,6 +198,61 @@ export class ExecutionCoordinator {
     const value = this.clock.nowMs();
     if (!isValidUtcMillis(value)) throw new TypeError('ExecutionClock.nowMs() must return valid UTC ms');
     return value;
+  }
+
+  private callPortWithDeadline<T>(
+    invoke: (context: Readonly<ExecutionPortCallContext>) => Promise<T>,
+  ): Promise<PortCallResult<T>> {
+    const startedAtMs = this.now();
+    const deadlineAtMs = startedAtMs + this.deadlineOptions.portTimeoutMs;
+    if (!isValidUtcMillis(deadlineAtMs)) {
+      return Promise.resolve(Object.freeze({ kind: 'THREW' as const }));
+    }
+    const controller = new AbortController();
+    const context = Object.freeze({
+      signal: controller.signal,
+      timeoutMs: this.deadlineOptions.portTimeoutMs,
+      deadlineAtMs,
+    });
+    return new Promise((resolve) => {
+      let settled = false;
+      let handle: { cancel(): void } | null = null;
+      const settle = (result: PortCallResult<T>): void => {
+        if (settled) return;
+        settled = true;
+        try { handle?.cancel(); } catch { /* deadline cancellation is best effort after settlement */ }
+        resolve(Object.freeze(result));
+      };
+      const expire = (): void => {
+        if (settled) return;
+        settled = true;
+        try { handle?.cancel(); } catch { /* the timeout result remains authoritative */ }
+        controller.abort('EXECUTION_PORT_DEADLINE_EXCEEDED');
+        resolve(Object.freeze({ kind: 'TIMED_OUT' as const }));
+      };
+      try {
+        handle = this.deadlineOptions.scheduler.schedule(this.deadlineOptions.portTimeoutMs, expire);
+      } catch {
+        controller.abort('EXECUTION_DEADLINE_SCHEDULER_FAILED');
+        settle({ kind: 'THREW' });
+        return;
+      }
+      if (settled) {
+        try { handle.cancel(); } catch { /* synchronous timeout remains authoritative */ }
+        return;
+      }
+      let operation: Promise<T>;
+      try {
+        operation = invoke(context);
+      } catch {
+        settle({ kind: 'THREW' });
+        return;
+      }
+      Promise.resolve(operation).then(
+        (value) => settle({ kind: 'COMPLETED', value }),
+        () => settle({ kind: 'THREW' }),
+      );
+    });
   }
 
   private success(): CoordinatorResult {
@@ -407,14 +493,24 @@ export class ExecutionCoordinator {
 
     const started = this.emitAt(nowMs, 'PREFLIGHT_STARTED');
     if (!started.ok) return started;
-    let portResult;
-    try {
-      portResult = await this.ports.preflight(this.stateValue.plan);
-    } catch {
-      const failure = this.portThrew('preflight', nowMs, false, 'FAILED');
-      const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
+    const preflightCall = await this.callPortWithDeadline((context) => this.ports.preflight(this.stateValue.plan, context));
+    if (preflightCall.kind !== 'COMPLETED') {
+      const failureAtMs = this.now();
+      const failure = preflightCall.kind === 'TIMED_OUT'
+        ? this.failure(
+            'preflight',
+            'PREFLIGHT_PORT_TIMEOUT',
+            'The injected preflight port exceeded its deterministic deadline.',
+            failureAtMs,
+            true,
+            'Inspect preflight dependencies and retry only after their state is understood.',
+            'FAILED',
+          )
+        : this.portThrew('preflight', failureAtMs, false, 'FAILED');
+      const failed = this.emitAt(failureAtMs, 'PREFLIGHT_FAILED', { failure });
       return failed.ok ? this.failureResult(failure) : failed;
     }
+    const portResult = preflightCall.value;
     if (!portResult.ok) {
       const failure = this.fromPortFailure('preflight', portResult.failure, nowMs, 'FAILED');
       const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
@@ -423,22 +519,26 @@ export class ExecutionCoordinator {
 
     for (const key of this.stateValue.plan.openingOrder) {
       const request = this.requestFor('OPEN', key);
-      let validation;
-      try {
-        validation = await this.ports.validateLeg(request);
-      } catch {
-        validation = { ok: false as const, failure: {
+      const validationCall = await this.callPortWithDeadline((context) => this.ports.validateLeg(request, context));
+      const validation = validationCall.kind === 'COMPLETED'
+        ? validationCall.value
+        : { ok: false as const, failure: validationCall.kind === 'TIMED_OUT' ? {
+          code: 'LEG_VALIDATION_PORT_TIMEOUT',
+          message: 'The injected opening-leg validation port exceeded its deterministic deadline.',
+          retryable: true,
+          recommendedOperatorAction: 'Inspect validation dependencies before creating fresh entry authority.',
+        } : {
           code: 'INJECTED_PORT_THREW',
           message: 'The injected validation port threw before returning a typed result.',
           retryable: false,
           recommendedOperatorAction: 'Inspect the validation port before retrying.',
         } };
-      }
       if (!validation.ok) {
-        const failure = this.fromPortFailure(`preflight:${key}`, validation.failure, nowMs, 'FAILED');
-        const rejected = this.emitAt(nowMs, 'LEG_REJECTED', { phase: 'OPEN', legKey: key, failure });
+        const validationAtMs = this.now();
+        const failure = this.fromPortFailure(`preflight:${key}`, validation.failure, validationAtMs, 'FAILED');
+        const rejected = this.emitAt(validationAtMs, 'LEG_REJECTED', { phase: 'OPEN', legKey: key, failure });
         if (!rejected.ok) return rejected;
-        const failed = this.emitAt(nowMs, 'PREFLIGHT_FAILED', { failure });
+        const failed = this.emitAt(validationAtMs, 'PREFLIGHT_FAILED', { failure });
         return failed.ok ? this.failureResult(failure) : failed;
       }
       const validated = this.emitAt(nowMs, 'LEG_VALIDATED', { phase: 'OPEN', legKey: key });
@@ -665,12 +765,19 @@ export class ExecutionCoordinator {
       submittedQuantity: request.leg.quantity,
     });
     if (!started.ok) return started;
-    let outcome: SubmissionOutcome;
-    try {
-      outcome = await this.ports.submitPaper(request);
-    } catch {
+    const submissionCall = await this.callPortWithDeadline((context) => this.ports.submitPaper(request, context));
+    if (submissionCall.kind !== 'COMPLETED') {
       const outcomeAtMs = this.now();
-      const failure = this.portThrew(`submit:${request.phase}:${request.leg.key}`, outcomeAtMs, true);
+      const failure = submissionCall.kind === 'TIMED_OUT'
+        ? this.failure(
+            `submit:${request.phase}:${request.leg.key}`,
+            'SUBMISSION_PORT_TIMEOUT',
+            'The PAPER submission port exceeded its deterministic deadline; remote acceptance is unknown.',
+            outcomeAtMs,
+            false,
+            'Query only by deterministic client-order ID; never resubmit or infer absence.',
+          )
+        : this.portThrew(`submit:${request.phase}:${request.leg.key}`, outcomeAtMs, true);
       const ambiguous = this.emitAt(outcomeAtMs, 'LEG_RESPONSE_AMBIGUOUS', {
         phase: request.phase,
         legKey: request.leg.key,
@@ -679,6 +786,7 @@ export class ExecutionCoordinator {
       if (!ambiguous.ok) return ambiguous;
       return this.resolveAmbiguity(request, failure);
     }
+    const outcome: SubmissionOutcome = submissionCall.value;
     return this.applySubmissionOutcome(request, outcome, this.now());
   }
 
@@ -755,20 +863,20 @@ export class ExecutionCoordinator {
     request: LegOperationRequest,
     originalFailure: StructuredFailure,
   ): Promise<CoordinatorResult> {
-    let lookup: unknown;
-    try {
-      lookup = await this.ports.lookupByClientOrderId(request);
-    } catch {
-      lookup = {
+    const lookupCall = await this.callPortWithDeadline((context) => this.ports.lookupByClientOrderId(request, context));
+    const lookup: unknown = lookupCall.kind === 'COMPLETED'
+      ? lookupCall.value
+      : {
         kind: 'UNRESOLVED',
         failure: {
-          code: 'AMBIGUITY_LOOKUP_FAILED',
-          message: 'The injected lookup port threw; order existence remains unknown.',
+          code: lookupCall.kind === 'TIMED_OUT' ? 'LOOKUP_PORT_TIMEOUT' : 'AMBIGUITY_LOOKUP_FAILED',
+          message: lookupCall.kind === 'TIMED_OUT'
+            ? 'The read-only ambiguity lookup exceeded its deterministic deadline; order existence remains unknown.'
+            : 'The injected lookup port threw; order existence remains unknown.',
           retryable: true,
           recommendedOperatorAction: 'Retry read-only lookup by client-order ID; do not resubmit.',
         },
       };
-    }
     const nowMs = this.now();
     const details = { phase: request.phase, legKey: request.leg.key } as const;
     if (!lookupEvidenceIsValid(request, lookup)) {
@@ -897,18 +1005,18 @@ export class ExecutionCoordinator {
   ): Promise<CoordinatorResult> {
     const leg = phase === 'OPEN' ? this.stateValue.openingLegs[key] : this.stateValue.closingLegs[key];
     const request = this.requestFor(phase, key, leg.submittedQuantity);
-    let lookup: unknown;
-    try {
-      lookup = await this.ports.lookupByClientOrderId(request);
-    } catch {
+    const lookupCall = await this.callPortWithDeadline((context) => this.ports.lookupByClientOrderId(request, context));
+    if (lookupCall.kind !== 'COMPLETED') {
       const nowMs = this.now();
       return this.recordRestartRecoveryFailure(
         phase,
         key,
         this.failure(
           `restart-lookup:${phase}:${key}`,
-          'RESTART_LOOKUP_PORT_THREW',
-          'The cold-restart lookup port threw before terminal checkpoint truth could be verified.',
+          lookupCall.kind === 'TIMED_OUT' ? 'LOOKUP_PORT_TIMEOUT' : 'RESTART_LOOKUP_PORT_THREW',
+          lookupCall.kind === 'TIMED_OUT'
+            ? 'The cold-restart lookup exceeded its deterministic deadline before checkpoint truth could be verified.'
+            : 'The cold-restart lookup port threw before terminal checkpoint truth could be verified.',
           nowMs,
           true,
           'Restore read-only owner lookup and retry recovery; do not progress the plan.',
@@ -917,6 +1025,7 @@ export class ExecutionCoordinator {
         nowMs,
       );
     }
+    const lookup: unknown = lookupCall.value;
     if (!lookupEvidenceIsValid(request, lookup)) {
       const nowMs = this.now();
       return this.recordRestartRecoveryFailure(
@@ -1073,20 +1182,20 @@ export class ExecutionCoordinator {
       leg.lifecycle !== 'CANCEL_PENDING'
     ) return this.success();
     const request = this.requestFor(phase, key, leg.submittedQuantity);
-    let lookup: unknown;
-    try {
-      lookup = await this.ports.lookupByClientOrderId(request);
-    } catch {
-      lookup = {
+    const lookupCall = await this.callPortWithDeadline((context) => this.ports.lookupByClientOrderId(request, context));
+    const lookup: unknown = lookupCall.kind === 'COMPLETED'
+      ? lookupCall.value
+      : {
         kind: 'UNRESOLVED',
         failure: {
-          code: 'WORKING_ORDER_LOOKUP_FAILED',
-          message: 'The read-only working-order lookup threw.',
+          code: lookupCall.kind === 'TIMED_OUT' ? 'LOOKUP_PORT_TIMEOUT' : 'WORKING_ORDER_LOOKUP_FAILED',
+          message: lookupCall.kind === 'TIMED_OUT'
+            ? 'The read-only working-order lookup exceeded its deterministic deadline.'
+            : 'The read-only working-order lookup threw.',
           retryable: true,
           recommendedOperatorAction: 'Retry lookup by deterministic client-order ID; do not submit another order.',
         },
       };
-    }
     const nowMs = this.now();
     const details = { phase, legKey: key } as const;
     if (!lookupEvidenceIsValid(request, lookup)) {
@@ -1317,25 +1426,29 @@ export class ExecutionCoordinator {
       if (quantity <= 1e-12) continue;
       if (this.stateValue.closingLegs[key].lifecycle !== 'PLANNED') continue;
       const request = this.requestFor('CLOSE', key, quantity);
-      let validation;
-      try {
-        validation = await this.ports.validateLeg(request);
-      } catch {
-        validation = { ok: false as const, failure: {
+      const validationCall = await this.callPortWithDeadline((context) => this.ports.validateLeg(request, context));
+      const validation = validationCall.kind === 'COMPLETED'
+        ? validationCall.value
+        : { ok: false as const, failure: validationCall.kind === 'TIMED_OUT' ? {
+          code: 'LEG_VALIDATION_PORT_TIMEOUT',
+          message: 'The injected close-leg validation port exceeded its deterministic deadline.',
+          retryable: true,
+          recommendedOperatorAction: 'Restore validation truth before retrying any risk-reducing close.',
+        } : {
           code: 'INJECTED_PORT_THREW',
           message: 'The injected close validation port threw.',
           retryable: false,
           recommendedOperatorAction: 'Inspect close validation before retrying.',
         } };
-      }
       if (!validation.ok) {
+        const validationAtMs = this.now();
         const failure = this.fromPortFailure(
           `close-validate:${key}`,
           validation.failure,
-          nowMs,
+          validationAtMs,
           'RECOVERY_REQUIRED',
         );
-        const rejected = this.emitAt(nowMs, 'LEG_REJECTED', { phase: 'CLOSE', legKey: key, failure });
+        const rejected = this.emitAt(validationAtMs, 'LEG_REJECTED', { phase: 'CLOSE', legKey: key, failure });
         return rejected.ok ? this.failureResult(failure) : rejected;
       }
       const validated = this.emitAt(nowMs, 'LEG_VALIDATED', { phase: 'CLOSE', legKey: key });
@@ -1387,29 +1500,30 @@ export class ExecutionCoordinator {
       const started = this.emitAt(nowMs, 'RECONCILIATION_STARTED');
       if (!started.ok) return started;
     }
-    let outcome;
-    try {
-      outcome = await this.ports.reconcile(this.stateValue);
-    } catch {
-      outcome = {
+    const reconciliationCall = await this.callPortWithDeadline((context) => this.ports.reconcile(this.stateValue, context));
+    const outcome = reconciliationCall.kind === 'COMPLETED'
+      ? reconciliationCall.value
+      : {
         kind: 'UNRESOLVED' as const,
         failure: {
-          code: 'RECONCILIATION_PORT_THREW',
-          message: 'The injected reconciliation port threw.',
+          code: reconciliationCall.kind === 'TIMED_OUT' ? 'RECONCILIATION_PORT_TIMEOUT' : 'RECONCILIATION_PORT_THREW',
+          message: reconciliationCall.kind === 'TIMED_OUT'
+            ? 'The injected reconciliation port exceeded its deterministic deadline.'
+            : 'The injected reconciliation port threw.',
           retryable: true,
           recommendedOperatorAction: 'Refresh read-only evidence and retry reconciliation.',
         },
       };
-    }
+    const outcomeAtMs = this.now();
     if (outcome.kind === 'UNRESOLVED') {
-      const failure = this.fromPortFailure('reconcile', outcome.failure, nowMs, 'RECOVERY_REQUIRED');
-      const resolved = this.emitAt(nowMs, 'RECONCILIATION_RESOLVED', {
+      const failure = this.fromPortFailure('reconcile', outcome.failure, outcomeAtMs, 'RECOVERY_REQUIRED');
+      const resolved = this.emitAt(outcomeAtMs, 'RECONCILIATION_RESOLVED', {
         reconciliationOutcome: 'RECOVERY_REQUIRED',
         failure,
       });
       return resolved.ok ? this.failureResult(failure) : resolved;
     }
-    return this.emitAt(nowMs, 'RECONCILIATION_RESOLVED', { reconciliationOutcome: outcome.kind });
+    return this.emitAt(outcomeAtMs, 'RECONCILIATION_RESOLVED', { reconciliationOutcome: outcome.kind });
   }
 
   async reconcile(): Promise<CoordinatorResult> {
@@ -1462,6 +1576,7 @@ export function createExecutionCoordinator(
   input: CreateExecutionPlanInput,
   clock: ExecutionClock,
   ports: ExecutionCoordinatorPorts,
+  deadlineOptions?: ExecutionCoordinatorDeadlineOptions,
 ): ExecutionCoordinator {
   const plan = createExecutionPlanDefinition(input);
   const nowMs = clock.nowMs();
@@ -1471,20 +1586,27 @@ export function createExecutionCoordinator(
     createExecutionEvent(plan.planId, 1, nowMs, 'PLAN_CREATED', { plan }),
   );
   if (!created.applied) throw new TypeError(`Unable to create execution aggregate (${created.reason})`);
-  return new ExecutionCoordinator(created.state, clock, ports);
+  return new ExecutionCoordinator(created.state, clock, ports, resolveExecutionDeadlineOptions(deadlineOptions, clock));
 }
 
 export function restoreExecutionCoordinator(
   checkpoint: string,
   clock: ExecutionClock,
   ports: ExecutionCoordinatorPorts,
+  deadlineOptions?: ExecutionCoordinatorDeadlineOptions,
 ): CoordinatorRestoreResult {
   const restored = restoreExecutionCheckpoint(checkpoint);
   if (!restored.ok) return Object.freeze({ ok: false as const, code: restored.code, message: restored.message });
   try {
     return Object.freeze({
       ok: true as const,
-      coordinator: new ExecutionCoordinator(restored.state, clock, ports, true),
+      coordinator: new ExecutionCoordinator(
+        restored.state,
+        clock,
+        ports,
+        resolveExecutionDeadlineOptions(deadlineOptions, clock),
+        true,
+      ),
     });
   } catch (error) {
     if (error instanceof PlanTermsConflictError) {

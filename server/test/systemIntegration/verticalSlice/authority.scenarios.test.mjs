@@ -6,6 +6,7 @@ import {
   LIVE_EXECUTION_NOT_IMPLEMENTED,
 } from '../../../dist/systemIntegration/contracts/constants.js';
 import {
+  createSystemExecutionClock,
   ValidateOnlyOrchestrator,
 } from '../../../dist/systemIntegration/verticalSlice/index.js';
 import {
@@ -31,6 +32,37 @@ async function run(input = buildValidateOnlyInput()) {
   const result = await new ValidateOnlyOrchestrator(persistence).execute(input);
   return { result, persistence };
 }
+
+test('system execution deadline clock records timeout evidence at its declared deadline', async () => {
+  let scheduled = null;
+  const timer = {
+    schedule(delayMs, task) {
+      scheduled = { delayMs, task, cancelled: false };
+      return { cancel: () => { scheduled.cancelled = true; } };
+    },
+  };
+  const clock = createSystemExecutionClock(NOW, timer);
+  const ports = paperPorts();
+  let declaredDeadline = null;
+  ports.preflight = async (_plan, context) => {
+    declaredDeadline = context.deadlineAtMs;
+    return new Promise(() => {});
+  };
+  const coordinator = createExecutionCoordinator({
+    strategy: 'BASIS', direction: 'LONG_SPOT_SHORT_PERP', symbol: SYMBOL,
+    proposal: { canonicalProposalId: 'cprop-system-clock-timeout', observedAtMs: NOW - 100, maxAgeMs: 10_000, expiresAtMs: NOW + 60_000 },
+    attempt: 0, mode: 'PAPER', requiresApproval: false, maxNakedDurationMs: 5_000,
+    spotQuantity: 1, perpQuantity: 1,
+  }, clock, ports, { portTimeoutMs: 25 });
+  const pending = coordinator.preflight();
+  assert.equal(scheduled?.delayMs, 25);
+  scheduled.task();
+  const timedOut = await pending;
+  assert.equal(timedOut.ok, false);
+  assert.equal(timedOut.failure.code, 'PREFLIGHT_PORT_TIMEOUT');
+  assert.equal(declaredDeadline, NOW + 25);
+  assert.ok(timedOut.failure.occurredAt >= declaredDeadline);
+});
 
 test('[SC-11] stale account truth blocks before coordinator and never mutates owner reservation', async () => {
   const input = buildValidateOnlyInput();
@@ -465,7 +497,13 @@ async function paperState(overrides = {}) {
     proposal: { canonicalProposalId: `cprop-paper-${Object.keys(overrides).join('-') || 'exact'}`, observedAtMs: NOW - 100, maxAgeMs: 10_000, expiresAtMs: NOW + 60_000 },
     attempt: 0, mode: 'PAPER', requiresApproval: false, maxNakedDurationMs: 5_000,
     spotQuantity: 1, perpQuantity: 1,
-  }, { nowMs: () => NOW }, ports);
+  }, {
+    nowMs: () => NOW,
+    schedule: (delayMs, task) => {
+      const deadline = { delayMs, task, cancelled: false };
+      return { cancel: () => { deadline.cancelled = true; } };
+    },
+  }, ports);
   assert.equal((await coordinator.preflight()).ok, true);
   await coordinator.open();
   return coordinator.snapshot();

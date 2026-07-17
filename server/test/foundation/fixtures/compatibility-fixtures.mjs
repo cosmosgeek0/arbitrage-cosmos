@@ -18,10 +18,23 @@ export const SYMBOL = 'BTCUSDT';
 export const ACCOUNT_ID = 'synthetic-binance-primary';
 
 export class ManualClock {
-  constructor(nowMs = T0) { this.value = nowMs; }
+  constructor(nowMs = T0) { this.value = nowMs; this.deadlines = []; }
   nowMs() { return this.value; }
-  set(nowMs) { this.value = nowMs; }
-  advance(deltaMs) { this.value += deltaMs; }
+  schedule(delayMs, task) {
+    const deadline = { dueAtMs: this.value + delayMs, task, cancelled: false, fired: false };
+    this.deadlines.push(deadline);
+    return { cancel: () => { deadline.cancelled = true; } };
+  }
+  drain() {
+    for (const deadline of this.deadlines) {
+      if (!deadline.cancelled && !deadline.fired && deadline.dueAtMs <= this.value) {
+        deadline.fired = true;
+        deadline.task();
+      }
+    }
+  }
+  set(nowMs) { this.value = nowMs; this.drain(); }
+  advance(deltaMs) { this.value += deltaMs; this.drain(); }
 }
 
 export function clone(value) {

@@ -13,7 +13,7 @@ note "fan-in proof accepts additive integration paths but rejects donor-byte dri
 INTEGRATED="$(node "$I00_ROOT/bin/verify-donor.mjs" --repo "$REPO_ROOT" --integrated)"
 assert_contains "$INTEGRATED" 'INTEGRATED_ACCEPTED_DONOR_WITH_AUTHORIZED_CORRECTIONS_VERIFIED'
 assert_contains "$INTEGRATED" '"integratedDonorTestFiles":17'
-assert_contains "$INTEGRATED" '"authorizedCorrectionFindingIds":["R3-D-WATCHDOG-007","R3-D-BACKUP-008","CS-03"]'
+assert_contains "$INTEGRATED" '"authorizedCorrectionFindingIds":["R3-D-WATCHDOG-007","R3-D-BACKUP-008","CS-03","RB-27"]'
 git clone -q --shared "$REPO_ROOT" "$TEST_TMP/integrated-repo"
 mkdir -p "$TEST_TMP/integrated-repo/ops/tests/i00" "$TEST_TMP/integrated-repo/server"
 printf 'accepted fan-in additive proof\n' > "$TEST_TMP/integrated-repo/ops/tests/i00/additive-proof.txt"

@@ -117,6 +117,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - `BLOCKED`: C9 independent final verification, composed-runtime proof, and any acceptance beyond Account-A baseline evidence.
 - `NOT_CONFIGURED`: AI provider execution, production AI routing, external paging, staging deployment, private account truth, signed exchange calls, test orders, and production consumers for the deferred bridges.
 - Deployment remains `NOT_CONFIGURED`; canonical activation templates and the isolated probe now carry exact public-source startup admission while rejecting deterministic-offline conflicts.
+- Owner-gated AWS control and the latency benchmark remain `NOT_CONFIGURED`; AWS provider calls, Foundation execution ports, baseline history fetches, and benchmark DNS/HTTP work now have bounded abortable deadlines with hostile never-settling regressions.
 - `UNWIRED`: AI-Ops composed production runtime.
 - `ABSTAIN_UNKNOWN`: production capacity and economic edge.
 - `DEFERRED_OWNER_GATE`: private-read, signed-test, test-order, deployment, and every capital rung.

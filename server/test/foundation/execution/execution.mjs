@@ -35,10 +35,54 @@ function section(title) {
 const T0 = 1_800_000_000_000;
 
 class ManualClock {
-  constructor(nowMs = T0) { this.value = nowMs; }
+  constructor(nowMs = T0) { this.value = nowMs; this.deadlines = []; }
   nowMs() { return this.value; }
-  set(nowMs) { this.value = nowMs; }
-  advance(ms) { this.value += ms; }
+  schedule(delayMs, task) {
+    const deadline = { dueAtMs: this.value + delayMs, task, cancelled: false, fired: false };
+    this.deadlines.push(deadline);
+    return { cancel: () => { deadline.cancelled = true; } };
+  }
+  drain() {
+    for (const deadline of this.deadlines) {
+      if (!deadline.cancelled && !deadline.fired && deadline.dueAtMs <= this.value) {
+        deadline.fired = true;
+        deadline.task();
+      }
+    }
+  }
+  set(nowMs) { this.value = nowMs; this.drain(); }
+  advance(ms) { this.value += ms; this.drain(); }
+}
+
+class ManualDeadlineScheduler {
+  constructor(clock) {
+    this.clock = clock;
+    this.tasks = [];
+  }
+  schedule(delayMs, task) {
+    const entry = { delayMs, task, cancelled: false, fired: false };
+    this.tasks.push(entry);
+    return { cancel: () => { entry.cancelled = true; } };
+  }
+  pendingCount() {
+    return this.tasks.filter((entry) => !entry.cancelled && !entry.fired).length;
+  }
+  fireNext() {
+    const entry = this.tasks.find((candidate) => !candidate.cancelled && !candidate.fired);
+    if (!entry) return false;
+    entry.fired = true;
+    this.clock.advance(entry.delayMs);
+    entry.task();
+    return true;
+  }
+}
+
+async function waitForPendingDeadline(scheduler, attempts = 20) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (scheduler.pendingCount() > 0) return true;
+    await Promise.resolve();
+  }
+  return scheduler.pendingCount() > 0;
 }
 
 const okPort = Object.freeze({ ok: true });
@@ -85,21 +129,21 @@ class FakePorts {
     this.validationResults.set(key, { ok: false, failure: portFailure(code) });
     return this;
   }
-  async preflight(plan) {
-    this.calls.push({ method: 'preflight', planId: plan.planId });
+  async preflight(plan, context) {
+    this.calls.push({ method: 'preflight', planId: plan.planId, context });
     return this.preflightResult;
   }
-  async validateLeg(request) {
-    this.calls.push({ method: 'validateLeg', request });
+  async validateLeg(request, context) {
+    this.calls.push({ method: 'validateLeg', request, context });
     return this.validationResults.get(this.key(request)) ?? okPort;
   }
-  async submitPaper(request) {
-    this.calls.push({ method: 'submitPaper', request });
+  async submitPaper(request, context) {
+    this.calls.push({ method: 'submitPaper', request, context });
     const queue = this.submissions.get(this.key(request));
     if (queue?.length) {
       const next = queue.shift();
       if (next === 'THROW') throw new Error('synthetic response loss');
-      if (typeof next === 'function') return next(request);
+      if (typeof next === 'function') return next(request, context);
       return next;
     }
     return {
@@ -108,18 +152,19 @@ class FakePorts {
       cumulativeFilledQuantity: request.leg.quantity,
     };
   }
-  async lookupByClientOrderId(request) {
-    this.calls.push({ method: 'lookupByClientOrderId', request });
+  async lookupByClientOrderId(request, context) {
+    this.calls.push({ method: 'lookupByClientOrderId', request, context });
     const queue = this.lookups.get(this.key(request));
     if (queue?.length) {
       const next = queue.shift();
       if (next === 'THROW') throw new Error('synthetic lookup loss');
+      if (typeof next === 'function') return next(request, context);
       return next;
     }
     return { kind: 'UNRESOLVED', failure: portFailure('LOOKUP_UNRESOLVED') };
   }
-  async reconcile(state) {
-    this.calls.push({ method: 'reconcile', planId: state.plan.planId });
+  async reconcile(state, context) {
+    this.calls.push({ method: 'reconcile', planId: state.plan.planId, context });
     if (this.reconciliations.length) return this.reconciliations.shift();
     const spot = Math.max(0, state.openingLegs.SPOT.cumulativeFilledQuantity - state.closingLegs.SPOT.cumulativeFilledQuantity);
     const perp = Math.max(0, state.openingLegs.PERP.cumulativeFilledQuantity - state.closingLegs.PERP.cumulativeFilledQuantity);
@@ -155,8 +200,8 @@ function planInput(over = {}) {
   };
 }
 
-async function readyCoordinator(over = {}, ports = new FakePorts(), clock = new ManualClock()) {
-  const coordinator = createExecutionCoordinator(planInput(over), clock, ports);
+async function readyCoordinator(over = {}, ports = new FakePorts(), clock = new ManualClock(), deadlineOptions = undefined) {
+  const coordinator = createExecutionCoordinator(planInput(over), clock, ports, deadlineOptions);
   if (coordinator.snapshot().plan.requiresApproval) {
     coordinator.requestApproval(5_000);
     coordinator.approve();
@@ -383,6 +428,134 @@ try {
     const preflightRejected = await preflightCoordinator.preflight();
     check('preflight rejection reaches FAILED', !preflightRejected.ok && preflightCoordinator.snapshot().lifecycle === 'FAILED');
     check('preflight failure names post-transition FAILED state', !preflightRejected.ok && preflightRejected.failure.safeCurrentState === preflightCoordinator.snapshot().lifecycle);
+  }
+
+  section('6d. Injected port deadlines settle hostile never-resolving adapters');
+  {
+    const synchronousPorts = new FakePorts();
+    const synchronousCoordinator = createExecutionCoordinator(
+      planInput(),
+      new ManualClock(),
+      synchronousPorts,
+      {
+        portTimeoutMs: 25,
+        scheduler: {
+          schedule(_delayMs, task) {
+            task();
+            return { cancel() {} };
+          },
+        },
+      },
+    );
+    const synchronousTimeout = await synchronousCoordinator.preflight();
+    check('synchronously firing deadline settles as timeout', !synchronousTimeout.ok
+      && synchronousTimeout.failure.code === 'PREFLIGHT_PORT_TIMEOUT');
+    check('synchronously firing deadline invokes no port', synchronousPorts.calls.length === 0);
+
+    const preflightClock = new ManualClock();
+    const preflightScheduler = new ManualDeadlineScheduler(preflightClock);
+    const preflightPorts = new FakePorts();
+    let preflightContext = null;
+    preflightPorts.preflight = (_plan, context) => {
+      preflightContext = context;
+      return new Promise(() => {});
+    };
+    const preflightCoordinator = createExecutionCoordinator(
+      planInput(),
+      preflightClock,
+      preflightPorts,
+      { portTimeoutMs: 25, scheduler: preflightScheduler },
+    );
+    const pendingPreflight = preflightCoordinator.preflight();
+    const preflightScheduled = await waitForPendingDeadline(preflightScheduler);
+    check('never-settling preflight installs an injected deadline', preflightScheduled);
+    if (preflightScheduled) {
+      preflightScheduler.fireNext();
+      const preflightTimedOut = await pendingPreflight;
+      check('preflight timeout aborts the port and fails closed', !preflightTimedOut.ok
+        && preflightTimedOut.failure.code === 'PREFLIGHT_PORT_TIMEOUT'
+        && preflightTimedOut.failure.safeCurrentState === 'FAILED'
+        && preflightCoordinator.snapshot().lifecycle === 'FAILED'
+        && preflightContext?.signal?.aborted === true);
+      check('preflight deadline handle is cleared after settlement', preflightScheduler.pendingCount() === 0);
+    }
+
+    const submissionClock = new ManualClock();
+    const submissionScheduler = new ManualDeadlineScheduler(submissionClock);
+    const submissionResponse = deferred();
+    const lookupResponse = deferred();
+    let submissionContext = null;
+    let lookupContext = null;
+    const submissionPorts = new FakePorts()
+      .queueSubmission('OPEN:SPOT', (_request, context) => {
+        submissionContext = context;
+        return submissionResponse.promise;
+      })
+      .queueLookup('OPEN:SPOT', (_request, context) => {
+        lookupContext = context;
+        return lookupResponse.promise;
+      });
+    const deadlineOptions = { portTimeoutMs: 25, scheduler: submissionScheduler };
+    const { coordinator: submissionCoordinator } = await readyCoordinator(
+      {},
+      submissionPorts,
+      submissionClock,
+      deadlineOptions,
+    );
+    const pendingOpen = submissionCoordinator.open();
+    const submissionScheduled = await waitForPendingDeadline(submissionScheduler);
+    check('never-settling PAPER submission installs an injected deadline', submissionScheduled);
+    if (submissionScheduled) submissionScheduler.fireNext();
+    const lookupScheduled = await waitForPendingDeadline(submissionScheduler);
+    check('timed-out submission proceeds only to bounded read-only lookup', lookupScheduled);
+    if (lookupScheduled) submissionScheduler.fireNext();
+    if (submissionScheduled && lookupScheduled) {
+      const timedOutOpen = await pendingOpen;
+      const frozenAfterTimeout = submissionCoordinator.checkpoint();
+      check('submission timeout stays ambiguous and lookup timeout requires recovery', !timedOutOpen.ok
+        && timedOutOpen.failure.code === 'LOOKUP_PORT_TIMEOUT'
+        && submissionCoordinator.snapshot().lifecycle === 'RECOVERY_REQUIRED'
+        && submissionContext?.signal?.aborted === true
+        && lookupContext?.signal?.aborted === true);
+      check('submission timeout evidence is durable and dependent leg is never sent',
+        submissionCoordinator.snapshot().eventLog.some((event) => event.type === 'LEG_RESPONSE_AMBIGUOUS'
+          && event.failure?.code === 'SUBMISSION_PORT_TIMEOUT')
+        && !submissionPorts.calls.some((call) => call.method === 'submitPaper' && call.request.leg.key === 'PERP'));
+      submissionResponse.resolve({ kind: 'FILLED', venueOrderId: 'late-old-submit', cumulativeFilledQuantity: 1 });
+      lookupResponse.resolve({ kind: 'FOUND', status: 'FILLED', venueOrderId: 'late-old-submit', cumulativeFilledQuantity: 1 });
+      await Promise.resolve();
+      await Promise.resolve();
+      check('late hostile port settlements are observed but cannot mutate durable state', submissionCoordinator.checkpoint() === frozenAfterTimeout);
+      check('all submission/lookup deadline handles are cleared', submissionScheduler.pendingCount() === 0);
+    }
+
+    const reconciliationClock = new ManualClock();
+    const reconciliationScheduler = new ManualDeadlineScheduler(reconciliationClock);
+    const reconciliationPorts = new FakePorts();
+    let reconciliationContext = null;
+    reconciliationPorts.reconcile = (_state, context) => {
+      reconciliationContext = context;
+      return new Promise(() => {});
+    };
+    const { coordinator: reconciliationCoordinator } = await readyCoordinator(
+      {},
+      reconciliationPorts,
+      reconciliationClock,
+      { portTimeoutMs: 25, scheduler: reconciliationScheduler },
+    );
+    assert.equal((await reconciliationCoordinator.open()).ok, true);
+    const pendingReconciliation = reconciliationCoordinator.reconcile();
+    const reconciliationScheduled = await waitForPendingDeadline(reconciliationScheduler);
+    check('never-settling reconciliation installs an injected deadline', reconciliationScheduled);
+    if (reconciliationScheduled) {
+      reconciliationScheduler.fireNext();
+      const reconciliationTimedOut = await pendingReconciliation;
+      check('reconciliation timeout aborts and preserves RECOVERY_REQUIRED truth', !reconciliationTimedOut.ok
+        && reconciliationTimedOut.failure.code === 'RECONCILIATION_PORT_TIMEOUT'
+        && reconciliationCoordinator.snapshot().lifecycle === 'RECOVERY_REQUIRED'
+        && reconciliationContext?.signal?.aborted === true);
+      check('reconciliation deadline handle is cleared after settlement', reconciliationScheduler.pendingCount() === 0);
+    }
   }
 
   section('7. First-leg rejection stops the sequence');

@@ -276,6 +276,28 @@ export interface LegOperationRequest {
   leg: ExecutionLegDefinition;
 }
 
+export const DEFAULT_EXECUTION_PORT_TIMEOUT_MS = 15_000;
+export const MAXIMUM_EXECUTION_PORT_TIMEOUT_MS = 120_000;
+
+export interface ExecutionPortCallContext {
+  readonly signal: AbortSignal;
+  readonly timeoutMs: number;
+  readonly deadlineAtMs: number;
+}
+
+export interface ExecutionDeadlineHandle {
+  cancel(): void;
+}
+
+export interface ExecutionDeadlineScheduler {
+  schedule(delayMs: number, task: () => void): ExecutionDeadlineHandle;
+}
+
+export interface ExecutionCoordinatorDeadlineOptions {
+  readonly portTimeoutMs?: number;
+  readonly scheduler?: ExecutionDeadlineScheduler;
+}
+
 export interface ExecutionCoordinatorPorts {
   /**
    * Durable/injected identity claim. CONFLICT means the same frozen PlanId
@@ -285,15 +307,15 @@ export interface ExecutionCoordinatorPorts {
     planId: PlanId,
     termsFingerprint: string,
   ): 'CLAIMED' | 'EXISTING_SAME' | 'CONFLICT';
-  preflight(plan: ExecutionPlanDefinition): Promise<PreflightPortResult>;
-  validateLeg(request: LegOperationRequest): Promise<PreflightPortResult>;
+  preflight(plan: ExecutionPlanDefinition, context: Readonly<ExecutionPortCallContext>): Promise<PreflightPortResult>;
+  validateLeg(request: LegOperationRequest, context: Readonly<ExecutionPortCallContext>): Promise<PreflightPortResult>;
   /** Dormant abstract port. Implementations supplied to this sprint are fakes only. */
-  submitPaper(request: LegOperationRequest): Promise<SubmissionOutcome>;
-  lookupByClientOrderId(request: LegOperationRequest): Promise<LookupOutcome>;
-  reconcile(state: ExecutionPlanState): Promise<ReconciliationOutcome>;
+  submitPaper(request: LegOperationRequest, context: Readonly<ExecutionPortCallContext>): Promise<SubmissionOutcome>;
+  lookupByClientOrderId(request: LegOperationRequest, context: Readonly<ExecutionPortCallContext>): Promise<LookupOutcome>;
+  reconcile(state: ExecutionPlanState, context: Readonly<ExecutionPortCallContext>): Promise<ReconciliationOutcome>;
 }
 
-export interface ExecutionClock {
+export interface ExecutionClock extends ExecutionDeadlineScheduler {
   nowMs(): number;
 }
 

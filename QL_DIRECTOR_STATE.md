@@ -1,10 +1,6 @@
 # QL_DIRECTOR_STATE.md — director-owned durable state for the Q/L two-lane program
 
-Updated: 2026-07-17 (C9 integrated acceptance). This file is sprint state, not product truth; it folds into STATE.md/docs/archive at integration.
-
-## D-LAUNCH-66 (2026-07-17): INTEGRATED_ACCEPTED — verified C9 landed and pushed
-
-`current-main` landing commit is `dae131726ddb3bb69c75c8a3e5f4259119b84350`. Its tree `1da28eb2dcc03a0545fc2bc51e2a735e88826014` is byte-identical to verified C9 `d8a86f722689ed82ad40f9ec44bbbc19c2347646`; its parents are prior `current-main` `68c7d1c9547803417781fdab5a06bad2e314b503` and C9, in that order. Independent receipt `/private/tmp/vfinal9/VFINAL9_RECEIPT.md` (SHA-256 `631c85daa61daef3fc7d52b1b2572af261f7d59bf28597fda7e359a53c1cc01d`) ended exactly `VERIFIED_ACCEPTED:d8a86f722689ed82ad40f9ec44bbbc19c2347646`. A new clean checkout of the landed commit ran `npm ci` and `npm test`, both exit 0, before push; Product Assurance passed with 802 behavior checks, 4 provenance checks, and 205/205 operation sites covered, I00 acceptance and proof passed 47/47 each, and deterministic forbidden egress attempts were 0. `origin/current-main` received the landing without force. C9 and the campaign branch were not rewritten or touched; no product-source edit, money action, private or signed call, or deployment occurred.
+Updated: 2026-07-12 (launch gate). This file is sprint state, not product truth; it folds into STATE.md/docs/archive at integration.
 
 ## Canonical base (verified from Git, not chat)
 

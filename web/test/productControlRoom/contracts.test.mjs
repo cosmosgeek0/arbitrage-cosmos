@@ -12,6 +12,7 @@ import {
   createFixtureSession,
   isFunctionalWiringState,
   productMachineReadinessTone,
+  productSurfaceReadinessBlocker,
   productTraceHasSyntheticEvidence,
   validateMaterialEventPage,
   validateProductCorrelationTrace,
@@ -92,11 +93,41 @@ for (const scenarioId of REQUIRED_FIXTURE_SCENARIOS) {
     assert.equal(snapshot.traces[0].stages.length, 12);
     assert.equal(Object.keys(snapshot.surfaces).length, REQUIRED_SURFACE_IDS.length);
     for (const surfaceId of REQUIRED_SURFACE_IDS) {
-      assert.equal(snapshot.surfaces[surfaceId].surfaceId, surfaceId);
-      assert.equal(snapshot.surfaces[surfaceId].truthLabel, 'SYNTHETIC_ONLY');
+      const surface = snapshot.surfaces[surfaceId];
+      assert.equal(surface.surfaceId, surfaceId);
+      const blocker = productSurfaceReadinessBlocker(surface);
+      if (blocker !== null) {
+        assert.equal(surface.bindingState, 'BLOCKED_BACKEND');
+        assert.ok(['BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN'].includes(surface.truthLabel));
+        assert.equal(surface.blocker, blocker);
+      }
     }
   });
 }
+
+test('a shape-valid surface cannot claim LIVE_PUBLIC or BINDING_READY with required MISSING evidence', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'surface-false-green', NOW));
+  const dashboard = snapshot.surfaces.dashboard;
+  const relationalBlocker = productSurfaceReadinessBlocker(dashboard);
+  assert.match(relationalBlocker ?? '', /^REQUIRED_EVIDENCE_MISSING:/);
+
+  const hostile = {
+    ...snapshot,
+    surfaces: {
+      ...snapshot.surfaces,
+      dashboard: {
+        ...dashboard,
+        bindingState: 'BINDING_READY',
+        truthLabel: 'LIVE_PUBLIC',
+        blocker: null,
+      },
+    },
+  };
+  const errors = validateProductSupervisorEnvelope(hostile);
+  assert.ok(errors.includes(`SURFACE_REQUIRED_EVIDENCE_FALSE_GREEN:dashboard:${relationalBlocker}`));
+  assert.ok(errors.includes(`SURFACE_REQUIRED_EVIDENCE_TRUTH_CONTRADICTION:dashboard:${relationalBlocker}`));
+  assert.ok(errors.includes(`SURFACE_REQUIRED_EVIDENCE_BLOCKER_MISSING:dashboard:${relationalBlocker}`));
+});
 
 test('fixture kill switch mirrors server asymmetry and does not auto-resume intake', () => {
   const initial = createFixtureSession('HEALTHY_OBSERVE', 'kill', NOW);

@@ -61,6 +61,16 @@ export type ProductCapability =
   | 'UNAVAILABLE'
   | 'UNKNOWN';
 
+export type ProductPresentationTone = 'ok' | 'warn' | 'bad' | 'idle';
+export type ProductWatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
+
+export interface ProductComponentPresentation {
+  readonly status: ProductWatchmanStatus;
+  readonly tone: ProductPresentationTone;
+  readonly statusLabel: string;
+  readonly stateLabel: string;
+}
+
 export type ProductSafeMode = 'READ_ONLY' | 'ADVISORY' | 'VALIDATE_ONLY';
 export type ControlWiringState =
   | 'WIRED_LIVE'
@@ -220,6 +230,27 @@ export interface ProductComponentProjection {
   readonly supportedControlIds: readonly string[];
   readonly correlationId: string | null;
   readonly truthLabel: ProductTruthLabel;
+  readonly canonicalPresentation: Readonly<ProductComponentPresentation>;
+}
+
+/** Fixture-only posture. Mounted runtime truth must use the server-supplied field. */
+export function buildSyntheticComponentPresentation(input: Readonly<{
+  observedLifecycle: ProductLifecycle;
+  capability: ProductCapability;
+}>): Readonly<ProductComponentPresentation> {
+  const outage = ['FAILED', 'BLOCKED', 'RECOVERY_REQUIRED'].includes(input.observedLifecycle);
+  const planned = input.capability === 'NOT_CONFIGURED';
+  const status = outage ? 'outage' : planned ? 'planned' : 'degraded';
+  const tone = outage ? 'bad' : 'warn';
+  const statusLabel = outage ? 'Unavailable'
+    : planned ? 'Not Configured'
+      : input.capability === 'DRY_RUN' ? 'Validate Only' : 'Synthetic';
+  return Object.freeze({
+    status,
+    tone,
+    statusLabel,
+    stateLabel: `${input.observedLifecycle.replaceAll('_', ' ')} · ${input.capability.replaceAll('_', ' ')} · SYNTHETIC ONLY`,
+  });
 }
 
 export type ProductManagedInventoryState =
@@ -532,6 +563,24 @@ export interface ProductSurfaceDatum {
   readonly unavailableReason: string | null;
 }
 
+export interface ProductCanonicalCockpitTruth {
+  readonly source: 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION' | 'SYNTHETIC_FIXTURE';
+  readonly marketFeedReadiness: Readonly<{
+    readonly proven: boolean;
+    readonly label: 'Market Feed Readiness Proven' | 'Market Feed Readiness Unproven';
+    readonly detail: string;
+  }>;
+  readonly strategyRuntime: Readonly<{
+    readonly tone: ProductPresentationTone;
+    readonly label: string;
+    readonly livePublicCount: number;
+  }>;
+  readonly watchmanOverall: Readonly<{
+    readonly status: ProductWatchmanStatus;
+    readonly label: string;
+  }>;
+}
+
 export interface CanonicalSupervisorOpsReadback {
   readonly source: 'CANONICAL_SUPERVISOR_READBACK';
   readonly observedAtUtc: string;
@@ -565,6 +614,7 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly bootReleaseReadback: Readonly<ProductBootReleaseReadback>;
   readonly ownerView: Readonly<FiveSecondOwnerView>;
+  readonly canonicalCockpit: Readonly<ProductCanonicalCockpitTruth>;
   readonly dashboard: TDashboard;
   readonly components: readonly Readonly<ProductComponentProjection>[];
   readonly managedInventory: Readonly<ProductManagedInventoryProjection>;
@@ -686,6 +736,28 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   'logs-ledger': Object.freeze(['event-class-severity', 'component-strategy-symbol', 'correlation', 'fingerprint', 'bounded-pagination', 'saved-filters', 'trace', 'redaction', 'retention', 'raw-debug']),
   notifications: Object.freeze(['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof']),
 });
+
+const PRODUCT_SURFACE_BLOCKING_TRUTH = new Set<ProductTruthLabel>([
+  'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
+]);
+
+/**
+ * Cross-field readiness law. Shape-valid fields are not enough: every required
+ * datum must be present and non-blocking before a surface may render ready.
+ */
+export function productSurfaceReadinessBlocker(
+  surface: Readonly<Pick<ProductSurfaceProjection, 'surfaceId' | 'evidence'>>,
+): string | null {
+  for (const fieldId of REQUIRED_SURFACE_EVIDENCE[surface.surfaceId]) {
+    const matches = surface.evidence.filter((datum) => datum.fieldId === fieldId);
+    if (matches.length !== 1) return `REQUIRED_EVIDENCE_CARDINALITY:${fieldId}`;
+    const datum = matches[0]!;
+    if (datum.value === null || PRODUCT_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)) {
+      return `REQUIRED_EVIDENCE_${datum.truthLabel}:${fieldId}`;
+    }
+  }
+  return null;
+}
 
 export function isFunctionalWiringState(state: ControlWiringState): boolean {
   return state === 'WIRED_LIVE' || state === 'WIRED_FIXTURE';
@@ -962,22 +1034,28 @@ export function buildFixtureBinding<TDashboard>(
   const scenario = fixtureScenarioFacts(session);
   const revision = `fixture-rev-${session.controlRevision}`;
   const controls = buildFixtureControls(session, revision);
-  const surfaces = Object.fromEntries(REQUIRED_SURFACE_IDS.map((surfaceId) => [
-    surfaceId,
-    Object.freeze({
+  const surfaces = Object.fromEntries(REQUIRED_SURFACE_IDS.map((surfaceId) => {
+    const evidence = buildFixtureSurfaceEvidence(surfaceId, session, scenario, controls.length);
+    const relationalBlocker = productSurfaceReadinessBlocker({ surfaceId, evidence });
+    return [
+      surfaceId,
+      Object.freeze({
       surfaceId,
       label: SURFACE_LABELS[surfaceId],
-      bindingState: 'BINDING_READY',
-      truthLabel: 'SYNTHETIC_ONLY',
+      bindingState: relationalBlocker === null ? 'BINDING_READY' : 'BLOCKED_BACKEND',
+      truthLabel: relationalBlocker === null ? 'SYNTHETIC_ONLY' : 'MISSING',
       canonicalSource: SURFACE_SOURCES[surfaceId],
       evaluatedAtMs: session.nowMs,
-      summary: `${SURFACE_LABELS[surfaceId]} fixture binding · ${scenario.summary}`,
-      blocker: scenario.blocker,
+      summary: relationalBlocker === null
+        ? `${SURFACE_LABELS[surfaceId]} fixture binding · ${scenario.summary}`
+        : `${SURFACE_LABELS[surfaceId]} fixture required evidence is incomplete.`,
+      blocker: relationalBlocker ?? scenario.blocker,
       controlIds: controls.filter((control) => control.group === surfaceControlGroup(surfaceId)).map((control) => control.controlId),
       correlationId: `fixture-correlation-${session.sessionId}`,
-      evidence: buildFixtureSurfaceEvidence(surfaceId, session, scenario, controls.length),
+      evidence,
     } satisfies ProductSurfaceProjection),
-  ])) as unknown as Record<SurfaceId, ProductSurfaceProjection>;
+    ];
+  })) as unknown as Record<SurfaceId, ProductSurfaceProjection>;
 
   const eventCursor = String(session.materialCursor);
   const previousCursor = String(session.materialCursor - 1);
@@ -1067,6 +1145,23 @@ export function buildFixtureBinding<TDashboard>(
       reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
     }),
     ownerView,
+    canonicalCockpit: Object.freeze({
+      source: 'SYNTHETIC_FIXTURE',
+      marketFeedReadiness: Object.freeze({
+        proven: false,
+        label: 'Market Feed Readiness Unproven',
+        detail: 'Synthetic fixture truth cannot prove live market-feed readiness.',
+      }),
+      strategyRuntime: Object.freeze({
+        tone: 'warn',
+        label: 'Synthetic Fixture',
+        livePublicCount: 0,
+      }),
+      watchmanOverall: Object.freeze({
+        status: scenario.machineReady === 'NO' ? 'outage' : 'degraded',
+        label: scenario.machineReady === 'NO' ? 'Not Ready' : 'Synthetic Fixture',
+      }),
+    }),
     dashboard,
     components: scenario.components,
     managedInventory: buildFixtureManagedInventory(scenario.components),
@@ -1114,7 +1209,9 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
       opportunity: null, ticket: null, position: null,
       materialChange: tickPhase < 2 ? 'USD-M source entered backoff' : 'Resubscription remains pending',
       modelRevision: 'fixture-model-stale', eventComponent: 'public-usdm-source', eventKind: 'source-stale',
-      components: base.map((component) => component.componentId === 'public-usdm-source' ? Object.freeze({ ...component, observedLifecycle: 'DEGRADED', blockerCode: 'SOURCE_STALE', sourceAgeMs: 35_000 + tickPhase * 5_000 }) : component),
+      components: base.map((component) => component.componentId === 'public-usdm-source'
+        ? updateSyntheticComponent(component, { observedLifecycle: 'DEGRADED', blockerCode: 'SOURCE_STALE', sourceAgeMs: 35_000 + tickPhase * 5_000 })
+        : component),
       incidents: Object.freeze([fixtureIncident(session, 'HIGH', 'public-usdm-source', 'SOURCE_STALE', false)]),
     };
   }
@@ -1150,7 +1247,9 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
       opportunity: 'fixture-opportunity-recovery-01', ticket: 'fixture-ticket-recovery-01', position: 'fixture-position-leg-a',
       materialChange: tickPhase < 2 ? 'Leg A fixture fill observed' : 'Recovery fixture awaiting owner action',
       modelRevision: 'fixture-model-recovery', eventComponent: 'reconciliation', eventKind: 'recovery-required',
-      components: base.map((component) => component.componentId === 'reconciliation' ? Object.freeze({ ...component, observedLifecycle: 'RECOVERY_REQUIRED', capitalRelevance: 'RECOVERY', blockerCode: 'ONE_LEG_EXPOSED' }) : component),
+      components: base.map((component) => component.componentId === 'reconciliation'
+        ? updateSyntheticComponent(component, { observedLifecycle: 'RECOVERY_REQUIRED', capitalRelevance: 'RECOVERY', blockerCode: 'ONE_LEG_EXPOSED' })
+        : component),
       incidents: Object.freeze([fixtureIncident(session, 'CRITICAL', 'reconciliation', 'ONE_LEG_EXPOSED', true)]),
     };
   }
@@ -1178,27 +1277,50 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
 
 function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenarioId): readonly Readonly<ProductComponentProjection>[] {
   const ids = ['public-spot-source', 'public-usdm-source', 'market-universe', 'intelligence-runtime', 'market-intelligence', 'q-inference', 'basis-engine', 'volume-engine', 'capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation', 'ledger-persistence', 'engine-supervisor'];
-  return Object.freeze(ids.map((componentId, index) => Object.freeze({
-    componentId,
-    owner: fixtureOwner(componentId),
-    desiredLifecycle: 'READY',
-    observedLifecycle: 'READY',
-    capability: componentId.includes('execution') || componentId === 'multileg-risk' || componentId === 'reconciliation' ? 'DRY_RUN' : 'SYNTHETIC',
-    heartbeatAtMs: nowMs - 1_000 - index * 20,
-    lastAdvanceAtMs: nowMs - 800 - index * 20,
-    sourceAgeMs: componentId.includes('source') ? 1_000 : null,
-    eventAgeMs: 1_000 + index * 10,
-    processingAgeMs: 200 + index * 5,
-    queueDepth: index % 3,
-    queueCapacity: 100,
-    droppedCount: 0,
-    blockerCode: null,
-    rootCauseComponentId: null,
-    capitalRelevance: scenarioId === 'RECOVERY_REQUIRED_ONE_LEG' && componentId === 'reconciliation' ? 'RECOVERY' : 'NONE',
-    supportedControlIds: ['component.restart'],
-    correlationId: null,
-    truthLabel: 'SYNTHETIC_ONLY',
-  } satisfies ProductComponentProjection)));
+  return Object.freeze(ids.map((componentId, index) => {
+    const projectedCapability: ProductCapability = componentId.includes('execution')
+      || componentId === 'multileg-risk'
+      || componentId === 'reconciliation' ? 'DRY_RUN' : 'SYNTHETIC';
+    return Object.freeze({
+      componentId,
+      owner: fixtureOwner(componentId),
+      desiredLifecycle: 'READY',
+      observedLifecycle: 'READY',
+      capability: projectedCapability,
+      heartbeatAtMs: nowMs - 1_000 - index * 20,
+      lastAdvanceAtMs: nowMs - 800 - index * 20,
+      sourceAgeMs: componentId.includes('source') ? 1_000 : null,
+      eventAgeMs: 1_000 + index * 10,
+      processingAgeMs: 200 + index * 5,
+      queueDepth: index % 3,
+      queueCapacity: 100,
+      droppedCount: 0,
+      blockerCode: null,
+      rootCauseComponentId: null,
+      capitalRelevance: scenarioId === 'RECOVERY_REQUIRED_ONE_LEG' && componentId === 'reconciliation' ? 'RECOVERY' : 'NONE',
+      supportedControlIds: ['component.restart'],
+      correlationId: null,
+      truthLabel: 'SYNTHETIC_ONLY',
+      canonicalPresentation: buildSyntheticComponentPresentation({
+        observedLifecycle: 'READY',
+        capability: projectedCapability,
+      }),
+    } satisfies ProductComponentProjection);
+  }));
+}
+
+function updateSyntheticComponent(
+  component: Readonly<ProductComponentProjection>,
+  overrides: Partial<ProductComponentProjection>,
+): Readonly<ProductComponentProjection> {
+  const updated = { ...component, ...overrides } satisfies ProductComponentProjection;
+  return Object.freeze({
+    ...updated,
+    canonicalPresentation: buildSyntheticComponentPresentation({
+      observedLifecycle: updated.observedLifecycle,
+      capability: updated.capability,
+    }),
+  });
 }
 
 function fixtureOwner(componentId: string): string {
@@ -1627,6 +1749,25 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       if (!PRODUCT_CAPABILITIES.has(String(component.capability))) errors.push('COMPONENT_FIELD_INVALID:capability');
       if (!['NONE', 'POTENTIAL', 'EXPOSED', 'RECOVERY'].includes(String(component.capitalRelevance))) errors.push('COMPONENT_FIELD_INVALID:capitalRelevance');
       if (!isProductTruthLabel(component.truthLabel)) errors.push('COMPONENT_FIELD_INVALID:truthLabel');
+      const presentation = component.canonicalPresentation;
+      if (!isRecord(presentation)
+        || !['operational', 'degraded', 'outage', 'planned'].includes(String(presentation.status))
+        || !['ok', 'warn', 'bad', 'idle'].includes(String(presentation.tone))
+        || typeof presentation.statusLabel !== 'string' || presentation.statusLabel.length === 0
+        || typeof presentation.stateLabel !== 'string' || presentation.stateLabel.length === 0) {
+        errors.push('COMPONENT_CANONICAL_PRESENTATION_INVALID');
+      } else {
+        const toneMatchesStatus = (presentation.status === 'operational' && presentation.tone === 'ok')
+          || (presentation.status === 'outage' && presentation.tone === 'bad')
+          || ((presentation.status === 'degraded' || presentation.status === 'planned') && presentation.tone === 'warn');
+        if (!toneMatchesStatus) errors.push(`COMPONENT_CANONICAL_PRESENTATION_TONE_MISMATCH:${component.componentId}`);
+        if (presentation.status === 'operational'
+          && (component.observedLifecycle !== 'READY'
+            || component.capability !== 'LIVE_PUBLIC'
+            || component.truthLabel !== 'LIVE_PUBLIC')) {
+          errors.push(`COMPONENT_CANONICAL_PRESENTATION_FALSE_GREEN:${component.componentId}`);
+        }
+      }
       for (const field of ['heartbeatAtMs', 'lastAdvanceAtMs', 'sourceAgeMs', 'eventAgeMs', 'processingAgeMs', 'queueDepth', 'queueCapacity', 'droppedCount']) {
         if (!isNonnegativeNumberOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
       }
@@ -1650,6 +1791,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       }
     }
   }
+  errors.push(...validateCanonicalCockpitTruth(value.canonicalCockpit, value.components, value.ownerView));
   errors.push(...validateProductManagedInventory(value.managedInventory, value.components, value.ownerView));
   if (!Array.isArray(value.dependencyEdges)) errors.push('DEPENDENCY_EDGES_MISSING');
   else {
@@ -1775,6 +1917,24 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
             || typeof datum.canonicalSource !== 'string' || datum.canonicalSource.length === 0
             || !isStringOrNull(datum.unavailableReason)) errors.push(`SURFACE_EVIDENCE_INVALID:${surfaceId}`);
         }
+        if (surface.evidence.every(isRecord)) {
+          const relationalBlocker = productSurfaceReadinessBlocker({
+            surfaceId,
+            evidence: surface.evidence as unknown as readonly Readonly<ProductSurfaceDatum>[],
+          });
+          if (relationalBlocker !== null) {
+            if (surface.bindingState !== 'BLOCKED_BACKEND') {
+              errors.push(`SURFACE_REQUIRED_EVIDENCE_FALSE_GREEN:${surfaceId}:${relationalBlocker}`);
+            }
+            if (!isProductTruthLabel(surface.truthLabel)
+              || !PRODUCT_SURFACE_BLOCKING_TRUTH.has(surface.truthLabel)) {
+              errors.push(`SURFACE_REQUIRED_EVIDENCE_TRUTH_CONTRADICTION:${surfaceId}:${relationalBlocker}`);
+            }
+            if (typeof surface.blocker !== 'string' || surface.blocker.length === 0) {
+              errors.push(`SURFACE_REQUIRED_EVIDENCE_BLOCKER_MISSING:${surfaceId}:${relationalBlocker}`);
+            }
+          }
+        }
       }
     }
   }
@@ -1834,6 +1994,71 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       errors.push('OWNER_DASHBOARD_READINESS_MISMATCH');
     }
   }
+  return Object.freeze(Array.from(new Set(errors)));
+}
+
+function validateCanonicalCockpitTruth(
+  value: unknown,
+  componentsValue: unknown,
+  ownerViewValue: unknown,
+): readonly string[] {
+  if (!isRecord(value)) return Object.freeze(['CANONICAL_COCKPIT_TRUTH_MISSING']);
+  const errors: string[] = [];
+  if (!['CANONICAL_SUPERVISOR_PRODUCT_PROJECTION', 'SYNTHETIC_FIXTURE'].includes(String(value.source))) {
+    errors.push('CANONICAL_COCKPIT_SOURCE_INVALID');
+  }
+
+  const components = Array.isArray(componentsValue) ? componentsValue.filter(isRecord) : [];
+  const exactPresentation = (componentId: string): Record<string, unknown> | null => {
+    const matches = components.filter((component) => component.componentId === componentId);
+    return matches.length === 1 && isRecord(matches[0]!.canonicalPresentation)
+      ? matches[0]!.canonicalPresentation as Record<string, unknown>
+      : null;
+  };
+
+  const feeds = value.marketFeedReadiness;
+  if (!isRecord(feeds)
+    || typeof feeds.proven !== 'boolean'
+    || !['Market Feed Readiness Proven', 'Market Feed Readiness Unproven'].includes(String(feeds.label))
+    || typeof feeds.detail !== 'string' || feeds.detail.length === 0
+    || (feeds.proven === true) !== (feeds.label === 'Market Feed Readiness Proven')) {
+    errors.push('CANONICAL_MARKET_FEED_READINESS_INVALID');
+  } else if (feeds.proven === true) {
+    const ownerReady = isRecord(ownerViewValue) && ownerViewValue.machineReady === 'YES';
+    const ownerFresh = isRecord(ownerViewValue)
+      && typeof ownerViewValue.dataFreshness === 'string'
+      && ownerViewValue.dataFreshness.length > 0;
+    const sourcesOperational = ['public-spot-source', 'public-usdm-source']
+      .every((componentId) => exactPresentation(componentId)?.status === 'operational');
+    if (!ownerReady || !ownerFresh || !sourcesOperational) errors.push('CANONICAL_MARKET_FEED_FALSE_GREEN');
+  }
+
+  const strategy = value.strategyRuntime;
+  if (!isRecord(strategy)
+    || !['ok', 'warn', 'bad', 'idle'].includes(String(strategy.tone))
+    || typeof strategy.label !== 'string' || strategy.label.length === 0
+    || !Number.isInteger(strategy.livePublicCount)
+    || Number(strategy.livePublicCount) < 0
+    || Number(strategy.livePublicCount) > 2) {
+    errors.push('CANONICAL_STRATEGY_RUNTIME_INVALID');
+  } else if (strategy.tone === 'ok') {
+    const exactLiveCount = ['basis-engine', 'volume-engine']
+      .filter((componentId) => exactPresentation(componentId)?.status === 'operational').length;
+    if (strategy.livePublicCount !== 2 || exactLiveCount !== 2) errors.push('CANONICAL_STRATEGY_RUNTIME_FALSE_GREEN');
+  }
+
+  const watchman = value.watchmanOverall;
+  if (!isRecord(watchman)
+    || !['operational', 'degraded', 'outage', 'planned'].includes(String(watchman.status))
+    || typeof watchman.label !== 'string' || watchman.label.length === 0) {
+    errors.push('CANONICAL_WATCHMAN_OVERALL_INVALID');
+  } else if (watchman.status === 'operational') {
+    // The current supervisor contract exposes only blocked, validate-only,
+    // read-only, advisory, or unknown modes. None authorizes an operational
+    // Watchman posture; a future live mode requires an explicit schema change.
+    errors.push('CANONICAL_WATCHMAN_FALSE_GREEN');
+  }
+
   return Object.freeze(Array.from(new Set(errors)));
 }
 

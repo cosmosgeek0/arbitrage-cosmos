@@ -17,6 +17,54 @@ const D_LAUNCH_61_READ_ONLY_SHARDS = new Set([
   'v-clean',
   'v-cockpit',
 ]);
+const D_LAUNCH_65_ARCHIVE_SOURCE = '0e4b364849075a454d7dd624ca068c238f4196c2';
+const REMOVED_SAFE_TOMBSTONE_INPUTS = [
+  {
+    worktree: 'prep-act',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/ACTIVATION_RUNBOOK_DRAFT.md',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/ACTIVATION_RUNBOOK_DRAFT.md',
+        sha256: '81b516dc6b69fe482bdaded03f6ce424de9a89b080bd03c2287d87a9176d1b00',
+        git_blob: 'a7b50c724659891834ed05e0198a209ac8b841a9',
+        bytes: 32859,
+      },
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/CANARY_PRECHECK.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/CANARY_PRECHECK.json',
+        sha256: '02c4181f49385a2f8d9620babeead4a4a94506e7586dae1e6613ae944d623f92',
+        git_blob: '6dc2b74e408742c93a068ec7d1e669d4ce0f94bd',
+        bytes: 10577,
+      },
+    ],
+  },
+  {
+    worktree: 'shard-prov',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/PROV_FINDINGS.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/PROV_FINDINGS.json',
+        sha256: 'b0e06ead6b8280545c36ab7b8d5f58de75819dfa653c51dde7c09f720efe71fc',
+        git_blob: '25db7293f197f771c9aca5c5d16551c0d15709e0',
+        bytes: 39646,
+      },
+    ],
+  },
+  { worktree: 'shard-sec', outputs: [] },
+  {
+    worktree: 'v-clean',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/CLEAN_CLONE_FINDINGS.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/CLEAN_CLONE_FINDINGS.json',
+        sha256: '0c8c59354486db404334107470865d4255ce0049dfcd38701fe0eb163c23250c',
+        git_blob: 'e00120964c3fdb89d9d6999a676a1e89d830455d',
+        bytes: 26371,
+      },
+    ],
+  },
+  { worktree: 'v-cockpit', outputs: [] },
+];
 
 const MERGED_RETAINED = [
   'Main',
@@ -128,7 +176,6 @@ const BLOCKED = [
   'egress-patch',
   'truth-a',
   'truth-b',
-  ...D_LAUNCH_61_READ_ONLY_SHARDS,
 ];
 
 const CANDIDATE_ADMISSION_LANES = new Set([
@@ -160,7 +207,7 @@ const GROUPS = {
   BLOCKED,
 };
 
-const EXPECTED_NAMES = new Set(Object.values(GROUPS).flat());
+const LIVE_POLICY_NAMES = new Set(Object.values(GROUPS).flat());
 
 const BASE_OVERRIDES = {
   'truth-a': '787b73d108764d628f925ee630bfe2fbef89458e',
@@ -312,7 +359,7 @@ const HISTORICAL_WRITE_GRANTS = {
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    encoding: options.encoding ?? 'utf8',
+    encoding: options.encoding === undefined ? 'utf8' : options.encoding,
     env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C', TZ: 'UTC' },
     maxBuffer: 256 * 1024 * 1024,
   });
@@ -701,6 +748,80 @@ function diffIdentity(base, head) {
   };
 }
 
+function verifiedArchivedOutput(candidateSha, output) {
+  const sourceSpec = `${D_LAUNCH_65_ARCHIVE_SOURCE}:${output.source_path}`;
+  const candidateSpec = `${candidateSha}:${output.candidate_path}`;
+  const sourceBytes = run('git', ['-C', MAIN, 'show', sourceSpec], { encoding: null }).stdout;
+  const candidateBytes = run(
+    'git',
+    ['-C', process.cwd(), 'show', candidateSpec],
+    { encoding: null },
+  ).stdout;
+  const sourceBlob = text(MAIN, 'rev-parse', sourceSpec);
+  const candidateBlob = text(process.cwd(), 'rev-parse', candidateSpec);
+  const sourceType = text(MAIN, 'cat-file', '-t', sourceSpec);
+  const candidateType = text(process.cwd(), 'cat-file', '-t', candidateSpec);
+  const sourceSha256 = sha256(sourceBytes);
+  const candidateSha256 = sha256(candidateBytes);
+  const sourceBytesLength = Buffer.byteLength(sourceBytes);
+  const candidateBytesLength = Buffer.byteLength(candidateBytes);
+  if (sourceType !== 'blob' || candidateType !== 'blob') {
+    throw new Error(`D-LAUNCH-65 archive input is not a blob: ${output.source_path}`);
+  }
+  if (sourceBlob !== output.git_blob || candidateBlob !== output.git_blob) {
+    throw new Error(`D-LAUNCH-65 archive blob mismatch: ${output.source_path}`);
+  }
+  if (sourceSha256 !== output.sha256 || candidateSha256 !== output.sha256) {
+    throw new Error(`D-LAUNCH-65 archive SHA-256 mismatch: ${output.source_path}`);
+  }
+  if (sourceBytesLength !== output.bytes || candidateBytesLength !== output.bytes) {
+    throw new Error(`D-LAUNCH-65 archive byte-length mismatch: ${output.source_path}`);
+  }
+  return {
+    source_commit: D_LAUNCH_65_ARCHIVE_SOURCE,
+    source_path: output.source_path,
+    source_git_blob: sourceBlob,
+    source_sha256: sourceSha256,
+    source_bytes: sourceBytesLength,
+    candidate_commit: candidateSha,
+    candidate_path: output.candidate_path,
+    candidate_git_blob: candidateBlob,
+    candidate_sha256: candidateSha256,
+    candidate_bytes: candidateBytesLength,
+    byte_exact: sourceBytes.equals(candidateBytes),
+  };
+}
+
+function removedSafeTombstones(candidateSha) {
+  const configuredNames = REMOVED_SAFE_TOMBSTONE_INPUTS.map((entry) => entry.worktree).sort();
+  const authorizedNames = [...D_LAUNCH_61_READ_ONLY_SHARDS].sort();
+  if (new Set(configuredNames).size !== configuredNames.length
+      || JSON.stringify(configuredNames) !== JSON.stringify(authorizedNames)) {
+    throw new Error('D-LAUNCH-65 removed-safe tombstone set is not exact');
+  }
+  return REMOVED_SAFE_TOMBSTONE_INPUTS.map((entry) => {
+    const outputs = entry.outputs.map((output) => verifiedArchivedOutput(candidateSha, output));
+    if (outputs.some((output) => output.byte_exact !== true)) {
+      throw new Error(`D-LAUNCH-65 candidate copy is not byte exact: ${entry.worktree}`);
+    }
+    return {
+      former_absolute_path: `/Users/cosmosgeek/Desktop/${entry.worktree}`,
+      worktree_name: entry.worktree,
+      live_registration_state: 'REMOVED',
+      classification: 'REMOVED_SAFE',
+      disposition: 'REMOVED_SAFE',
+      disposition_reason:
+        'Director-authorized removal of a read-only D-LAUNCH-61 helper worktree; no candidate source was owned by this lane',
+      disposition_evidence: 'D-LAUNCH-65',
+      archive_source_commit: D_LAUNCH_65_ARCHIVE_SOURCE,
+      accepted_output_state: outputs.length === 0
+        ? 'NO_ACCEPTED_OUTPUT'
+        : 'CANDIDATE_TRACKED_BYTE_EXACT_ARCHIVE_COPY',
+      outputs,
+    };
+  });
+}
+
 const candidateArg = process.argv[2];
 if (!/^[a-f0-9]{40}$/u.test(candidateArg ?? '')) {
   throw new Error('EXACT_FULL_CANDIDATE_SHA_REQUIRED');
@@ -710,17 +831,21 @@ const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`
 const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);
 const rawWorktrees = git(MAIN, 'worktree', 'list', '--porcelain', '-z').stdout;
 const records = parseWorktrees(rawWorktrees);
-
-if (records.length !== EXPECTED_NAMES.size) {
-  throw new Error(`Expected ${EXPECTED_NAMES.size} registered worktrees, observed ${records.length}`);
-}
 const observedNames = new Set(records.map((record) => basename(record.worktree)));
-for (const name of EXPECTED_NAMES) {
-  if (!observedNames.has(name)) throw new Error(`Expected registered worktree missing: ${name}`);
+if (observedNames.size !== records.length) {
+  throw new Error('Live Git worktree inventory contains duplicate terminal directory names');
+}
+for (const name of D_LAUNCH_61_READ_ONLY_SHARDS) {
+  if (observedNames.has(name)) throw new Error(`REMOVED_SAFE worktree is still registered: ${name}`);
+}
+for (const name of LIVE_POLICY_NAMES) {
+  if (!observedNames.has(name)) throw new Error(`Live policy worktree missing from Git: ${name}`);
 }
 for (const name of observedNames) {
-  if (!EXPECTED_NAMES.has(name)) throw new Error(`Registered worktree has no explicit policy: ${name}`);
+  if (!LIVE_POLICY_NAMES.has(name)) throw new Error(`Registered worktree has no explicit policy: ${name}`);
 }
+const liveGitDerivedExpectedCount = observedNames.size;
+const removedTombstones = removedSafeTombstones(candidateSha);
 
 const rows = records.map((record) => {
   const path = record.worktree;
@@ -862,6 +987,10 @@ const document = {
   account_b_status_scope: 'HEAD and Git status metadata only, required by campaign §5',
   source_command: 'git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z',
   source_command_sha256: sha256(rawWorktrees),
+  expected_registered_worktree_count: liveGitDerivedExpectedCount,
+  expected_count_basis:
+    'LIVE_GIT_WORKTREE_INVENTORY_WITH_EXACT_NAME_POLICY_RECONCILIATION; NO_NUMERIC_COUNT_CONSTANT',
+  live_policy_name_count: LIVE_POLICY_NAMES.size,
   candidate_sha: candidateSha,
   candidate_tree_sha: candidateTree,
   current_main_sha: text(MAIN, 'rev-parse', 'refs/heads/current-main'),
@@ -878,6 +1007,8 @@ const document = {
   duplicate_method:
     'exact binary diff SHA-256 plus exact sorted path/blob manifest SHA-256; empty deltas are not patches',
   unknown_count: classificationCounts.UNKNOWN,
+  removed_safe_tombstone_count: removedTombstones.length,
+  removed_safe_tombstones: removedTombstones,
   receipt: {
     exact_candidate_sha: candidateSha,
     command_or_operator_action:
@@ -897,6 +1028,7 @@ const document = {
     deviations_skips_unavailable_evidence: [
       'Account B filenames and Git metadata only; Account B content was not read',
       'No worktree was cleaned, pruned, reset, or deleted',
+      'D-LAUNCH-65 authorizes five REMOVED_SAFE helper tombstones; four accepted outputs are verified from exact commit 0e4b364849075a454d7dd624ca068c238f4196c2 and two lanes have NO_ACCEPTED_OUTPUT',
     ],
   },
   rows: rows.sort((left, right) => left.absolute_path.localeCompare(right.absolute_path)),

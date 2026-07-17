@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from quant_edge.derivatives.borrow import BorrowObservationV1
@@ -10,6 +12,9 @@ from quant_edge.derivatives.costs import (
     unknown_component,
 )
 from quant_edge.derivatives.executable import (
+    EXECUTABLE_BASIS_RETURN_AUTHORITY,
+    EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION,
+    EXECUTABLE_BASIS_RETURN_LAW,
     ExecutableBasisV1,
     ExecutableStatus,
     LegKind,
@@ -151,6 +156,20 @@ class TestSizedQuote:
 
 
 class TestExecutableBasisConstructionDistinctness:
+    def test_quant_projection_is_version_locked_to_the_runtime_basis_owner(self) -> None:
+        repo_root = Path(__file__).resolve().parents[3]
+        runtime_authority = (repo_root / "server/src/engine/basis/math.ts").read_text(
+            encoding="utf-8"
+        )
+        assert EXECUTABLE_BASIS_RETURN_AUTHORITY == (
+            "server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT"
+        )
+        assert (
+            f"version: '{EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION}'"
+            in runtime_authority
+        )
+        assert f"returnLaw: '{EXECUTABLE_BASIS_RETURN_LAW}'" in runtime_authority
+
     def test_normal_uses_spot_ask_and_perp_bid(self) -> None:
         observed = _basis(BasisConstruction.NORMAL)
         assert observed.status is ExecutableStatus.AVAILABLE
@@ -159,13 +178,14 @@ class TestExecutableBasisConstructionDistinctness:
         assert observed.entry_basis.numerator == 29
         assert observed.entry_basis.denominator == 5_001
 
-    def test_reverse_uses_spot_bid_and_perp_ask(self) -> None:
+    def test_reverse_uses_perp_ask_as_the_canonical_long_leg_denominator(self) -> None:
         observed = _basis(BasisConstruction.REVERSE)
         assert observed.status is ExecutableStatus.AVAILABLE
         assert observed.entry_basis is not None
-        # (spot_bid - perp_ask) / spot_bid = (10000 - 10062) / 10000 = -31/5000.
+        # The runtime Basis owner defines return on long-leg entry notional:
+        # (spot_bid - perp_ask) / perp_ask = (10000 - 10062) / 10062 = -31/5031.
         assert observed.entry_basis.numerator == -31
-        assert observed.entry_basis.denominator == 5_000
+        assert observed.entry_basis.denominator == 5_031
 
     def test_the_two_constructions_never_coincide_on_spread_quotes(self) -> None:
         normal = _basis(BasisConstruction.NORMAL)
@@ -316,8 +336,9 @@ class TestNetExecutableEdge:
         )
         assert edge.status is ExecutableStatus.AVAILABLE
         assert edge.value is not None
-        assert edge.value.numerator == -111
-        assert edge.value.denominator == 10_000
+        # -31/5031 - 49/10000 = -556519/50310000 exactly.
+        assert edge.value.numerator == -556_519
+        assert edge.value.denominator == 50_310_000
 
     def test_unknown_borrow_makes_the_reverse_edge_unknown_never_zero(self) -> None:
         edge = net_executable_edge(

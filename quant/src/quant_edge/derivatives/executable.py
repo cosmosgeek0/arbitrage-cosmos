@@ -14,7 +14,7 @@ from quant_edge.errors import ContractValueError
 from quant_edge.labels.basis import BasisConstruction, BorrowKnownness, ConstructionFeasibility
 from quant_edge.labels.rational import (
     ExactRatioV1,
-    make_ratio,
+    price_return,
     ratio_subtract,
     scaled_to_aligned,
 )
@@ -28,6 +28,18 @@ from quant_edge.lake.contracts import (
 
 MAX_QUOTE_STALENESS_NS: Final = 3_600_000_000_000
 MAX_REASONS: Final = 16
+
+# Version-locked consumer projection of the canonical Basis runtime contract at
+# server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT. Production
+# quant code performs no runtime source reads or subprocess calls; the Q08 drift
+# guard and parity vectors bind this projection to the strategy owner.
+EXECUTABLE_BASIS_RETURN_AUTHORITY: Final = (
+    "server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT"
+)
+EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION: Final = (
+    "basis-executable-long-leg-notional-v1"
+)
+EXECUTABLE_BASIS_RETURN_LAW: Final = "RETURN_ON_LONG_LEG_ENTRY_NOTIONAL"
 
 REASON_SPOT_QUOTE_MISSING: Final = "SPOT_QUOTE_MISSING"
 REASON_PERP_QUOTE_MISSING: Final = "PERP_QUOTE_MISSING"
@@ -251,11 +263,12 @@ def compute_executable_basis(
     """Executable entry basis from the crossed sides of both legs.
 
     NORMAL (buy Spot, sell perp): ``(perp_bid - spot_ask) / spot_ask``.
-    REVERSE (sell Spot, buy perp): ``(spot_bid - perp_ask) / spot_bid``.
+    REVERSE (sell Spot, buy perp): ``(spot_bid - perp_ask) / perp_ask``.
 
-    The two constructions use different crossed sides and different denominators and
-    are never interchangeable. Missing or stale legs yield no basis; unknown sizes
-    yield UNKNOWN feasibility, never assumed depth.
+    Both constructions consume the runtime owner's versioned return-on-long-leg
+    contract. The crossed sides differ, but the denominator is always the price paid
+    for the long leg. Missing or stale legs yield no basis; unknown sizes yield
+    UNKNOWN feasibility, never assumed depth.
     """
 
     if not isinstance(construction, BasisConstruction):
@@ -300,13 +313,12 @@ def compute_executable_basis(
         else:
             status = ExecutableStatus.AVAILABLE
             if construction is BasisConstruction.NORMAL:
-                spot_ask = scaled_to_aligned(spot_quote.ask)
-                perp_bid = scaled_to_aligned(perp_quote.bid)
-                entry_basis = make_ratio(perp_bid - spot_ask, spot_ask)
+                long_entry = spot_quote.ask
+                sell_proceeds = perp_quote.bid
             else:
-                spot_bid = scaled_to_aligned(spot_quote.bid)
-                perp_ask = scaled_to_aligned(perp_quote.ask)
-                entry_basis = make_ratio(spot_bid - perp_ask, spot_bid)
+                long_entry = perp_quote.ask
+                sell_proceeds = spot_quote.bid
+            entry_basis = price_return(long_entry, sell_proceeds)
 
     # NORMAL consumes the Spot ask and perp bid; REVERSE consumes the Spot bid and
     # perp ask. Feasibility inspects exactly the consumed sides.

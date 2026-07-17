@@ -7,9 +7,11 @@
  */
 import {
   BASIS_DEFAULTS,
+  EXECUTABLE_BASIS_RETURN_CONTRACT,
   buildFundingContext,
   buildSnapshots,
   createReplayHarness,
+  executableBasisReturnPct,
   estimateEdge,
   fundingCarryPctOverHold,
 } from '../dist/engine/basis/index.js';
@@ -101,6 +103,25 @@ function gapSeries(gapsPct, o = {}, startTick = 1) {
 }
 
 const CFG = { persistTicks: 3 }; // default proof config: propose on the 3rd persisting tick
+
+// =====================================================================
+section('0. one versioned executable-return law owns both constructions');
+{
+  const reverse = executableBasisReturnPct(100, 100.62);
+  check(
+    'canonical return contract is versioned on long-leg entry notional',
+    EXECUTABLE_BASIS_RETURN_CONTRACT.version === 'basis-executable-long-leg-notional-v1'
+      && EXECUTABLE_BASIS_RETURN_CONTRACT.returnLaw === 'RETURN_ON_LONG_LEG_ENTRY_NOTIONAL',
+  );
+  check(
+    'reverse basis divides by the perp long-entry ask',
+    approx(reverse, ((100 - 100.62) / 100.62) * 100, 1e-12)
+      && !approx(reverse, ((100 - 100.62) / 100) * 100, 1e-12),
+    `return=${reverse}`,
+  );
+  check('equal prices have zero return', executableBasisReturnPct(100, 100) === 0);
+  check('profitable reverse basis stays positive', executableBasisReturnPct(101, 100) === 1);
+}
 
 // =====================================================================
 section('1. perp expensive ⇒ proposal (executable gap, itemised costs)');

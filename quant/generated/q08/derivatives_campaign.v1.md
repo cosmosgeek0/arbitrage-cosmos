@@ -17,7 +17,7 @@ valuable; cards are machinery contracts with streaming/batch equivalence law.
 ## Campaign evidence (synthetic only)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `8820d4d54d17a54a0959dae0e96ccd5e95b610b25f6c593bf7b74130d3737eb5`
+- Golden fixture SHA-256: `a6575447fbe547a1afc861ee04b9a139da4d18ab453f9e62fdfcdf6d9e1eaf2e`
 - Seeded pairs: 12, all equivalence reports passed
 - Max ulp deviation by feature: `basis_converging_fraction:v1`=0, `basis_gap_acceleration:v1`=0, `basis_gap_velocity:v1`=0, `basis_sign_persistence:v1`=0
 - Normal and reverse executable constructions remain distinct; unknown

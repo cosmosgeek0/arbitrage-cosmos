@@ -62,8 +62,9 @@ MEASUREMENT_ORDER = (
 PERCENTILE_LAW = "NEAREST_RANK_CEILING"
 ACTUAL_CAPTURE_MODE = "ACTUAL_RUNTIME"
 INJECTED_CAPTURE_MODE = "INJECTED_TEST_SEAM"
-DIRECT_HANDLE_SCOPE = "IN_PROCESS_DIRECT_HANDLE_NO_JSON_OR_SOCKET"
-COLD_CONSTRUCTION_SCOPE = "LOCAL_INFERENCE_SERVICE_OBJECT_ONLY_CONTEXT_PRELOADED_NO_PROCESS"
+DIRECT_HANDLE_SCOPE = "PARENT_DIRECT_HANDLE_SPAWNED_ONE_SHOT_WORKER_NO_JSON_OR_SOCKET"
+COLD_CONSTRUCTION_SCOPE = "SERVICE_CONSTRUCTION_ONLY_SPAWN_CONTEXT_SELECTED_NO_WORKER_STARTED"
+SERVICE_CLOSE_SCOPE = "PARENT_CLOSE_SIGNAL_AND_IDLE_WORKER_GUARD_ONLY_NO_TRANSPORT"
 POST_KILL_REAP_TIMEOUT_MS = 1_000
 
 
@@ -979,7 +980,7 @@ def _capture_q17_benchmark(
     }
     measurements["serviceCloseCall"] = {
         **summarize_samples((close_ns,), items_per_sample=1),
-        "scope": "IN_PROCESS_CLOSE_FLAG_ONLY",
+        "scope": SERVICE_CLOSE_SCOPE,
         "transportGracefulShutdownProven": False,
     }
     queue_probe = _queue_saturation_probe(
@@ -1357,7 +1358,7 @@ def validate_q17_benchmark(
     }
     _validate_summary(close_summary, items_per_sample=1, samples=1)
     if (
-        close["scope"] != "IN_PROCESS_CLOSE_FLAG_ONLY"
+        close["scope"] != SERVICE_CLOSE_SCOPE
         or close["transportGracefulShutdownProven"] is not False
     ):
         raise BenchmarkError("service close call overstates graceful shutdown evidence")

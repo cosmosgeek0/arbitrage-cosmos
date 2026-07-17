@@ -30,6 +30,12 @@ MAX_EVIDENCE_BYTES: Final = 1_048_576
 MAX_SOURCE_BYTES: Final = 1_048_576
 _SHA256_LENGTH: Final = 64
 
+_Q16_RB13_CORRECTION_ID: Final = "RB13_QUANT_INFERENCE_WORKER_ISOLATION"
+_Q16_RB13_IMPLEMENTATION_STATE: Final = "CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
+_Q16_HISTORICAL_SERVICE_SHA256: Final = (
+    "9531d45a513d28c08945adffbb51f149dc3e27afbc897f09bf66d660bf43f59f"
+)
+
 CANONICAL_BASE: Final = "7010499170e24b31c9c0be2c9d73a536e680c6fe"
 FROZEN_PROTOCOL_COMMIT: Final = "73e1a1ff7daa48df8dac45713fc5f106842edafc"
 Q17_ACTIVATION_COMMIT: Final = "ba7323e0ac1f5013d9309b5b73998b84bdffbae5"
@@ -343,6 +349,27 @@ _SOURCE_SPECS: Final[tuple[_SourceSpec, ...]] = (
         8,
         "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a",
     ),
+)
+
+# C16/A16 accepted the source seal above.  RB-13 changes those bytes after that
+# acceptance, so its live source and service bytes are verified separately and
+# stay explicitly pending independent commit verification.  These pins are
+# regenerated with the post-acceptance correction; they are never projected as
+# evidence for the immutable C16/A16 identities or receipts.
+_Q16_RB13_SOURCE_SPEC: Final = _SourceSpec(
+    "quant/src/quant_edge/inference",
+    "src/quant_edge/inference",
+    8,
+    "2a2203a1e5a9e652d1bcc87b92b5983dc14aaa879ea9596dc4b7e49a7481a202",
+)
+_Q16_RB13_SERVICE_SPEC: Final = _ArtifactSpec(
+    "q16.rb13-inference-service-source.v1",
+    "quant/src/quant_edge/inference/service.py",
+    35_877,
+    "763e08352e201ce7173c16a6a72cd413c7feac58ca7e624a3d94dab4eb70fb68",
+    "text/x-python",
+    "Q16RB13InferenceServiceSourceV1",
+    1,
 )
 
 # C/A/tree values are copied from the immutable acceptance receipts and verified
@@ -827,6 +854,53 @@ def _pinned_artifact_mapping(spec: _ArtifactSpec) -> dict[str, object]:
     }
 
 
+def _pinned_source_mapping(spec: _SourceSpec) -> dict[str, object]:
+    """Project an accepted historical source seal without relabeling live bytes."""
+
+    _safe_parts(spec.relative_path)
+    _safe_parts(spec.manifest_path_prefix)
+    if (
+        type(spec.file_count) is not int
+        or spec.file_count < 1
+        or len(spec.seal_sha256) != _SHA256_LENGTH
+        or spec.seal_sha256.lower() != spec.seal_sha256
+    ):
+        raise ComponentManifestError("pinned historical source metadata is malformed")
+    return {
+        "fileCount": spec.file_count,
+        "path": spec.relative_path,
+        "sealSchema": "Q17SourceTreeSealV1",
+        "sha256": spec.seal_sha256,
+    }
+
+
+def _verified_python_source_mapping(
+    repo_root: Path,
+    root_before: os.stat_result,
+    spec: _ArtifactSpec,
+) -> dict[str, object]:
+    """Verify a current Python source pin without treating it as accepted evidence."""
+
+    if spec.media_type != "text/x-python" or spec.schema_version != 1:
+        raise ComponentManifestError("current correction source metadata is malformed")
+    raw = _read_regular(
+        repo_root,
+        root_before,
+        spec.relative_path,
+        expected_bytes=spec.byte_length,
+        maximum_bytes=MAX_SOURCE_BYTES,
+    )
+    if hashlib.sha256(raw).hexdigest() != spec.sha256:
+        raise ComponentManifestError(
+            f"current correction source digest changed: {spec.artifact_id}"
+        )
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ComponentManifestError("current correction source is not valid UTF-8") from error
+    return _pinned_artifact_mapping(spec)
+
+
 def _current_q17_task_mapping(
     repo_root: Path,
     root_before: os.stat_result,
@@ -1018,7 +1092,12 @@ def _phase_specs() -> tuple[_PhaseSpec, ...]:
         if phase == "Q15":
             limitations.append("MODEL_PAYLOAD_UNAVAILABLE_NONLOADABLE")
         if phase == "Q16":
-            limitations.append("SAFE_ABSTAIN_ONLY")
+            limitations.extend(
+                (
+                    "SAFE_ABSTAIN_ONLY",
+                    "POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_Q16_RECEIPTS",
+                )
+            )
         result.append(
             _PhaseSpec(
                 phase,
@@ -1074,18 +1153,66 @@ def _phase_mapping(
         {"commit": correction.commit, "role": correction.role, "tree": correction.tree}
         for correction in spec.corrections
     ]
-    source = None if spec.source is None else _source_mapping(repo_root, root_before, spec.source)
+    is_q16_post_acceptance_correction = spec.phase == "Q16"
+    post_acceptance_correction: dict[str, object] | None = None
+    source: dict[str, object] | None
+    if is_q16_post_acceptance_correction:
+        if spec.source is None:
+            raise ComponentManifestError("Q16 historical source metadata is unavailable")
+        source = _pinned_source_mapping(spec.source)
+        current_source = _source_mapping(repo_root, root_before, _Q16_RB13_SOURCE_SPEC)
+        current_service = _verified_python_source_mapping(
+            repo_root,
+            root_before,
+            _Q16_RB13_SERVICE_SPEC,
+        )
+        post_acceptance_correction = {
+            "acceptanceState": "NOT_ACCEPTED",
+            "correctionId": _Q16_RB13_CORRECTION_ID,
+            "currentServiceSource": current_service,
+            "currentSourceRoot": current_source,
+            "historicalAcceptedServiceSha256": _Q16_HISTORICAL_SERVICE_SHA256,
+            "historicalReceipts": "DOES_NOT_ATTEST_CORRECTED_BYTES",
+            "implementationCommit": PENDING,
+            "implementationState": _Q16_RB13_IMPLEMENTATION_STATE,
+            "implementationTree": PENDING,
+            "verificationState": "PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION",
+        }
+    else:
+        source = (
+            None if spec.source is None else _source_mapping(repo_root, root_before, spec.source)
+        )
+    dispositions = (
+        [
+            "HISTORICAL_IMPLEMENTATION_ACCEPTED",
+            "HISTORICAL_EXACT_COMMIT_ACCEPTED",
+            "RB13_CORRECTION_IMPLEMENTED",
+            "RB13_CORRECTION_PENDING_INDEPENDENT_VERIFICATION",
+            "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
+            "NOT_ACCEPTED",
+        ]
+        if is_q16_post_acceptance_correction
+        else list(spec.dispositions)
+    )
     return (
         {
             "corrections": corrections,
             "directorIntegrationCommits": list(spec.director_integration_commits),
-            "dispositions": list(spec.dispositions),
-            "evidencePosture": spec.evidence_posture,
+            "dispositions": dispositions,
+            "evidencePosture": (
+                "HISTORICAL_ACCEPTANCE_WITH_POST_ACCEPTANCE_CORRECTION_PENDING"
+                if is_q16_post_acceptance_correction
+                else spec.evidence_posture
+            ),
             "evidenceRefs": [implementation_ref, acceptance_ref, primary_ref],
             "evidenceSeal": {
                 "acceptanceReceiptSha256": spec.acceptance_receipt_sha256,
                 "implementationReceiptSha256": spec.implementation_receipt_sha256,
-                "status": "EXACT_CURRENT_BYTES",
+                "status": (
+                    "HISTORICAL_RECEIPT_BYTES_VERIFIED_CORRECTION_NOT_ATTESTED"
+                    if is_q16_post_acceptance_correction
+                    else "EXACT_CURRENT_BYTES"
+                ),
             },
             "identities": {
                 "acceptanceCommit": spec.acceptance_commit,
@@ -1093,11 +1220,14 @@ def _phase_mapping(
                 "implementationCommit": spec.implementation_commit,
                 "implementationTree": spec.implementation_tree,
             },
-            "implementationState": "ACCEPTED",
+            "implementationState": (
+                _Q16_RB13_IMPLEMENTATION_STATE if is_q16_post_acceptance_correction else "ACCEPTED"
+            ),
             "integrationState": spec.integration_state,
             "limitations": list(spec.limitations),
             "owner": spec.owner,
             "phase": spec.phase,
+            "postAcceptanceCorrection": post_acceptance_correction,
             "sourceRoot": source,
         },
         parsed_primary,
@@ -1126,8 +1256,8 @@ def build_component_manifest(repo_root: Path) -> dict[str, object]:
     lock_spec = _ArtifactSpec(
         "q-lane.directive-input-lock.v1",
         "quant/DIRECTIVE_INPUTS.lock",
-        1_568,
-        "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1",
+        1_757,
+        "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
         "text/markdown",
         "QDirectiveInputsLockV1",
         1,
@@ -1195,6 +1325,7 @@ def build_component_manifest(repo_root: Path) -> dict[str, object]:
             ],
             "owner": "quant_edge.final_proof",
             "phase": "Q17",
+            "postAcceptanceCorrection": None,
             "sourceRoot": None,
         }
     )
@@ -1298,6 +1429,7 @@ def _require_manifest_structure(manifest: object) -> dict[str, object]:
         "limitations",
         "owner",
         "phase",
+        "postAcceptanceCorrection",
         "sourceRoot",
     }
     for row in components:

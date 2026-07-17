@@ -32,6 +32,14 @@ class SecurityPolicyError(ValueError):
 MAX_SOURCE_BYTES: Final = 2_097_152
 MAX_FROZEN_BYTES: Final = 2_097_152
 _SHA256_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
+DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256: Final = (
+    "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1"
+)
+DIRECTIVE_INPUT_LOCK_ACCEPTED_BYTE_LENGTH: Final = 1_568
+DIRECTIVE_INPUT_LOCK_CURRENT_SHA256: Final = (
+    "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24"
+)
+DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH: Final = 1_757
 
 FROZEN_Q_LANE_FILES_SHA256: Final[tuple[tuple[str, str], ...]] = (
     (
@@ -52,7 +60,7 @@ FROZEN_Q_LANE_FILES_SHA256: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "quant/DIRECTIVE_INPUTS.lock",
-        "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1",
+        DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256,
     ),
     (
         "quant/EDGE_HYPOTHESIS_MAP.md",
@@ -109,6 +117,7 @@ _NETWORK_MODULES: Final = (
 )
 _LOCAL_TRANSPORT_MODULES: Final = ("socket", "socketserver")
 _SUBPROCESS_MODULES: Final = ("subprocess",)
+_PROCESS_MODULES: Final = ("multiprocessing",)
 _UNSAFE_IMPORT_MODULES: Final = (
     "cloudpickle",
     "dill",
@@ -138,6 +147,8 @@ _SHELL_CALLS: Final = (
     "os.execve",
     "os.execvp",
     "os.execvpe",
+    "os.fork",
+    "os.forkpty",
     "os.popen",
     "os.posix_spawn",
     "os.posix_spawnp",
@@ -174,6 +185,7 @@ _UNSAFE_DESERIALIZATION_CALLS: Final = (
     "yaml.unsafe_load",
 )
 _Q16_TRANSPORT_PATH: Final = "inference/transport.py"
+_Q16_INFERENCE_PATH: Final = "inference/service.py"
 _CLI_PATH: Final = "cli.py"
 _Q17_BENCHMARK_PATH: Final = "final_proof/benchmark.py"
 _VERIFIED_REPORT_SEAL: Final = object()
@@ -1012,6 +1024,139 @@ def _benchmark_subprocess_is_safe(tree: ast.Module) -> bool:
     return saw_subprocess
 
 
+def _single_function(
+    tree: ast.Module,
+    name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    matches = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _owner_method_calls(
+    root: ast.AST,
+    *,
+    owner: str,
+    method: str,
+) -> tuple[ast.Call, ...]:
+    return tuple(
+        node
+        for node in ast.walk(root)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == owner
+        and node.func.attr == method
+    )
+
+
+def _q16_worker_process_is_safe(tree: ast.Module) -> bool:
+    """Recognize the exact bounded, disposable Q16 spawn-worker lifecycle."""
+
+    module_nodes = _LexicalScopeCollector(tree).collect()
+    aliases = _scope_aliases(module_nodes)
+    context_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and _resolve_expression(node.func, aliases, {}) == "multiprocessing.get_context"
+    ]
+    if not (
+        len(context_calls) == 1
+        and len(context_calls[0].args) == 1
+        and isinstance(context_calls[0].args[0], ast.Constant)
+        and context_calls[0].args[0].value == "spawn"
+    ):
+        return False
+
+    run_worker = _single_function(tree, "_run_inference_worker")
+    reap_worker = _single_function(tree, "_reap_worker")
+    run_assessment = _single_function(tree, "_run_assessment_worker")
+    if run_worker is None or reap_worker is None or run_assessment is None:
+        return False
+
+    pipe_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and _resolve_expression(node.func, aliases, {}) == "self._worker_context.Pipe"
+    ]
+    process_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and _resolve_expression(node.func, aliases, {}) == "self._worker_context.Process"
+    ]
+    if len(pipe_calls) != 1 or len(process_calls) != 1:
+        return False
+    pipe_call = pipe_calls[0]
+    process_call = process_calls[0]
+    if pipe_call not in tuple(ast.walk(run_assessment)) or process_call not in tuple(
+        ast.walk(run_assessment)
+    ):
+        return False
+    duplex = _keyword(pipe_call, "duplex")
+    target = _keyword(process_call, "target")
+    if not (
+        isinstance(duplex, ast.Constant)
+        and duplex.value is False
+        and isinstance(target, ast.Name)
+        and target.id == "_run_inference_worker"
+        and _is_true(_keyword(process_call, "daemon"))
+    ):
+        return False
+
+    if len(_owner_method_calls(run_assessment, owner="process", method="start")) != 1:
+        return False
+    reap_calls = [
+        node
+        for node in ast.walk(run_assessment)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_reap_worker"
+        and node.args
+        and isinstance(node.args[0], ast.Name)
+        and node.args[0].id == "process"
+        and _keyword(node, "terminate") is not None
+    ]
+    if len(reap_calls) < 2:
+        return False
+
+    reap_requirements = {
+        "close": 1,
+        "join": 3,
+        "kill": 1,
+        "terminate": 1,
+    }
+    if any(
+        len(_owner_method_calls(reap_worker, owner="process", method=method)) < count
+        for method, count in reap_requirements.items()
+    ):
+        return False
+    positive_timeouts = _positive_number_names(module_nodes)
+    join_calls = _owner_method_calls(reap_worker, owner="process", method="join")
+    if any(
+        (timeout := _keyword(call, "timeout")) is None
+        or not _positive_cleanup_timeout(timeout, positive_timeouts)
+        for call in join_calls
+    ):
+        return False
+    close_in_finally = any(
+        any(
+            _owner_method_calls(statement, owner="connection", method="close")
+            for statement in node.finalbody
+        )
+        for node in ast.walk(run_worker)
+        if isinstance(node, ast.Try) and node.finalbody
+    )
+    return close_in_finally
+
+
 class _SecurityVisitor(ast.NodeVisitor):
     def __init__(
         self,
@@ -1019,12 +1164,14 @@ class _SecurityVisitor(ast.NodeVisitor):
         relative_path: str,
         source_sha256: str,
         trusted: bool,
+        trusted_process_semantics: bool,
         trusted_subprocess_semantics: bool,
     ) -> None:
         self.relative_path = relative_path
         self.policy_path = _policy_path(relative_path)
         self.source_sha256 = source_sha256
         self.trusted = trusted
+        self.trusted_process_semantics = trusted_process_semantics
         self.trusted_subprocess_semantics = trusted_subprocess_semantics
         self.aliases: dict[str, str] = {}
         self.literals: dict[str, str] = {}
@@ -1041,6 +1188,14 @@ class _SecurityVisitor(ast.NodeVisitor):
         return self.trusted and (
             self.policy_path == _CLI_PATH
             or (self.policy_path == _Q17_BENCHMARK_PATH and self.trusted_subprocess_semantics)
+        )
+
+    @property
+    def allow_process(self) -> bool:
+        return (
+            self.trusted
+            and self.policy_path == _Q16_INFERENCE_PATH
+            and self.trusted_process_semantics
         )
 
     def _record(self, node: ast.AST, kind: str, symbol: str) -> None:
@@ -1070,6 +1225,9 @@ class _SecurityVisitor(ast.NodeVisitor):
         elif _module_matches(symbol, _SUBPROCESS_MODULES):
             if not self.allow_subprocess:
                 self._record(node, "SUBPROCESS_IMPORT", symbol)
+        elif _module_matches(symbol, _PROCESS_MODULES):
+            if not self.allow_process:
+                self._record(node, "PROCESS_CONTROL_IMPORT", symbol)
         elif _module_matches(symbol, _UNSAFE_IMPORT_MODULES):
             self._record(node, "UNSAFE_DESERIALIZATION_IMPORT", symbol)
         elif _module_matches(symbol, _ENV_IMPORT_MODULES):
@@ -1131,6 +1289,8 @@ class _SecurityVisitor(ast.NodeVisitor):
             and symbol not in _Q17_SUBPROCESS_DATA_ATTRIBUTES
         ):
             self._record(node, "UNAPPROVED_SUBPROCESS_SYMBOL", symbol)
+        if _module_matches(symbol, _PROCESS_MODULES) and not self.allow_process:
+            self._record(node, "PROCESS_CONTROL_CALL", symbol)
         if _module_matches(symbol, _NETWORK_MODULES):
             self._record(node, "EXTERNAL_NETWORK_CALL", symbol)
         if symbol in _NETWORK_CALLS:
@@ -1266,10 +1426,16 @@ def scan_python_bytes(
         and _policy_path(relative) == _Q17_BENCHMARK_PATH
         and _benchmark_subprocess_is_safe(tree)
     )
+    process_safe = (
+        trusted
+        and _policy_path(relative) == _Q16_INFERENCE_PATH
+        and _q16_worker_process_is_safe(tree)
+    )
     visitor = _SecurityVisitor(
         relative_path=relative,
         source_sha256=source_sha256,
         trusted=trusted,
+        trusted_process_semantics=process_safe,
         trusted_subprocess_semantics=benchmark_safe,
     )
     visitor.visit(tree)
@@ -1564,6 +1730,26 @@ class FrozenVerificationV1:
             "schema": "Q17FrozenVerificationV1",
             "version": 1,
         }
+
+
+def require_only_post_acceptance_directive_lock_drift(
+    report: FrozenVerificationV1,
+) -> None:
+    """Allow only the exact, declared post-acceptance directive-lock mismatch."""
+
+    if not isinstance(report, FrozenVerificationV1):
+        raise SecurityPolicyError("frozen verification report is required")
+    drifted = tuple(item for item in report.files if not item.matches)
+    if len(drifted) != 1:
+        raise SecurityPolicyError("frozen files differ beyond the declared directive-lock drift")
+    lock = drifted[0]
+    if (
+        lock.relative_path != "quant/DIRECTIVE_INPUTS.lock"
+        or lock.expected_sha256 != DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256
+        or lock.observed_sha256 != DIRECTIVE_INPUT_LOCK_CURRENT_SHA256
+        or lock.byte_length != DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH
+    ):
+        raise SecurityPolicyError("directive-lock drift differs from declared current truth")
 
 
 def verify_frozen_files(

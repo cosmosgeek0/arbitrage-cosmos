@@ -1,6 +1,6 @@
 # Q16-001 — bounded local inference over verified accepted truth
 
-Status: `DECIDED`
+Status: `HISTORICAL C16/A16 DECISION — RB-13 CORRECTION PENDING INDEPENDENT VERIFICATION`
 
 Date: 2026-07-13
 
@@ -33,10 +33,10 @@ abstention reasons.
    request generation and trusted evaluation time cannot rewrite those timestamps.
    Every consumed event precedes receive, cutoff and generation; stale or expired
    consumption remains a valid `ABSTAIN_UNKNOWN` result.
-5. The service is one-process, concurrency-one and request-correlated. Threaded local
-   handlers exercise an application-level bounded wait queue; saturation, timeout
-   and shutdown have distinct errors and counters. A trusted clock is injected and
-   resolved per request.
+5. At C16/A16 the service was one-process, concurrency-one and request-correlated.
+   Threaded local handlers exercised an application-level bounded wait queue;
+   saturation, timeout and shutdown had distinct errors and counters. A trusted
+   clock was injected and resolved per request.
 6. Unix-domain sockets are the default transport. The parent is owner-only `0700`,
    the socket is `0600`, collisions are rejected, and cleanup occurs only when the
    captured device/inode still identifies the socket this process created. Optional
@@ -49,6 +49,18 @@ abstention reasons.
    enforce time and frame bounds, reject duplicate/non-finite/unsafe/forbidden
    content, embed the frozen schema, recursively validate the complete returned
    envelope, and apply Q16's fail-closed advisory invariant.
+
+## Post-acceptance RB-13 correction
+
+RB-13 does not rewrite or inherit C16/A16 acceptance. It moves each assessment into
+an explicit disposable `spawn` child while the parent retains admission, trusted
+time, health, metrics, queue state and all authority. IPC is a request-correlated,
+length- and SHA-256-bound raw pipe frame: the parent performs bounded nonblocking
+reads, watches the child sentinel and accepts only an exact frame followed by EOF
+and a clean reaped exit. Timeout, close, partial/malformed/trailing bytes or child
+failure terminates and reaps the disposable child before releasing the sole work
+slot. The correction is implemented but remains `NOT_ACCEPTED` pending independent
+exact-commit verification; immutable Q16/Q17 receipts do not attest these bytes.
 
 ## Consequences
 

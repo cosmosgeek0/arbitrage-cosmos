@@ -26,6 +26,7 @@ from quant_edge.final_proof.replay import (
     run_replay_fault_campaign,
 )
 from quant_edge.final_proof.security import (
+    require_only_post_acceptance_directive_lock_drift,
     scan_python_files,
     scan_python_tree,
     verify_changed_path_scope,
@@ -47,7 +48,7 @@ def _security_scope(repo_root: Path) -> dict[str, object]:
     scope = verify_changed_path_scope(EXPECTED_C17_PATHS)
     source.require_clean()
     campaign.require_clean()
-    frozen.require_clean()
+    require_only_post_acceptance_directive_lock_drift(frozen)
     scope.require_clean()
     return {
         "actualStagedCommitScope": "NOT_MEASURED_RESERVED_FOR_Q17_RECEIPT",

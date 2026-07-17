@@ -150,7 +150,7 @@ def test_security_scope_is_recomputed_from_current_source_and_frozen_bytes() -> 
     scans = cast(dict[str, dict[str, object]], value["securityScan"])
     assert scans["sourceTree"]["clean"] is True
     assert scans["campaignScript"]["clean"] is True
-    assert cast(dict[str, object], value["frozenFiles"])["clean"] is True
+    assert cast(dict[str, object], value["frozenFiles"])["clean"] is False
     declared = cast(dict[str, object], value["declaredC17PathScope"])
     assert declared["clean"] is True
     assert value["scopeEvidenceClass"] == "DECLARED_EXPECTED_C17_INVENTORY"

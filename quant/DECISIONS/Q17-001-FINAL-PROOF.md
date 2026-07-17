@@ -1,6 +1,6 @@
 # Q17-001 — final proof, benchmark and lane-seal architecture
 
-Status: accepted for Q17 implementation on 2026-07-13.
+Status: historical C17/A17 acceptance; RB-13 projection pending independent verification.
 
 ## Context
 
@@ -49,15 +49,23 @@ does not demand byte equality from wall-clock measurements.
 The benchmark uses `time.perf_counter_ns()` deltas, consistent with Python 3.13's
 monotonic performance-counter guidance. It records cold construction, warm single,
 deep-focus 10, focus 25, candidate 128 and universe 452 shapes, chunking every
-service request within Q16's batch bound. Repeated fixture rows are explicitly
-`SYNTHETIC_LOAD_SHAPE`, never described as distinct symbols or event-rate evidence.
-Queue saturation/overflow and shutdown are measured separately.
+service request within Q16's batch bound. Assessment measurements call the parent
+service directly and include explicit `spawn` worker startup, one-shot IPC,
+inference, parent validation and bounded reap; they exclude JSON and socket cost.
+Repeated fixture rows are explicitly `SYNTHETIC_LOAD_SHAPE`, never described as
+distinct symbols or event-rate evidence. Queue saturation/overflow and idle-service
+shutdown are measured separately.
 
 Peak child RSS is measured in a bounded child process, with platform-specific
 units retained and normalized bytes checked against the Q00 provisional 8 GiB
 ceiling. Child execution uses fixed argv, no shell, a timeout and kill/communicate
 cleanup. Host metadata excludes hostname, serial number, hardware UUID, credentials
 and environment values. No numeric latency acceptance SLO is invented.
+
+RB-13 is a post-A17 correction, not accepted Q17 history. Its current benchmark and
+generated proof-kit projection include the disposable-worker correction and are
+recorded as pending evidence. They do not replace the historical C17/A17
+measurements or inherit those commits' acceptance.
 
 ## Decision 3 — syntax-aware security proof with pinned exceptions
 
@@ -69,12 +77,19 @@ execution, subprocess/shell use, and exchange/account/order/money/risk authority
 Exceptions are exact-path, exact-source-digest and behavior-specific:
 
 - Q16's permissioned UDS/literal-loopback transport;
+- Q16's per-request `spawn` inference worker, allowed only with one-shot IPC,
+  bounded join/terminate/kill/reap cleanup and an exact reviewed source digest;
 - the frozen protocol-verification CLI's argv-only Node subprocess;
 - Q17's argv-only benchmark child used solely for RSS measurement.
 
 No generic module or self-computed digest is trusted. The generator pins expected
 digests after the reviewed sources are frozen. A changed exception source fails the
 scan until explicitly reviewed and repinned.
+
+The historical directive-input lock pin remains `410010ef…` / 1,568 bytes. RB-13
+does not repin it to the current 1,757-byte file: security evidence records the
+exact `d4bf318…` mismatch, remains non-clean, and accepts only that declared
+post-acceptance drift while rejecting any additional frozen-file change.
 
 ## Decision 4 — exact artifacts outrank stale receipt prose, without rewriting history
 

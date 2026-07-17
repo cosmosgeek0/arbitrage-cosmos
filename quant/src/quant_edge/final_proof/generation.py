@@ -21,6 +21,7 @@ from quant_edge.final_proof.evidence import (
 from quant_edge.final_proof.replay import validate_replay_fault_proof
 from quant_edge.final_proof.security import (
     FROZEN_Q_LANE_FILES_SHA256,
+    require_only_post_acceptance_directive_lock_drift,
     scan_python_files,
     scan_python_tree,
     verify_changed_path_scope,
@@ -107,8 +108,9 @@ FROZEN_FILE_SHA256: Final = FROZEN_Q_LANE_FILES_SHA256
 TRUSTED_SOURCE_SHA256: Final = {
     "cli.py": "56e110936b16370ca1e7cf1e0b9fd6668dce203f910f42d4370e12e0a716812f",
     "final_proof/benchmark.py": (
-        "0f216c5de272ec1756b5b5cfd06aae73682aa7701529bb74ed7437cb6ea7f797"
+        "5979dc6003301ba65df262e0de85f6a85ac9c8233a08fd072fc38b3e561153f4"
     ),
+    "inference/service.py": "763e08352e201ce7173c16a6a72cd413c7feac58ca7e624a3d94dab4eb70fb68",
     "inference/transport.py": ("f3ab8e8a9a6cd29776c153ddd52cc673f627c9dcdd9fa9c01078c55cf8e44769"),
 }
 
@@ -242,7 +244,7 @@ def validate_security_scope(repo_root: Path, value: object) -> dict[str, object]
     )
     expected_campaign.require_clean()
     expected_frozen = verify_frozen_files(repo_root, FROZEN_FILE_SHA256)
-    expected_frozen.require_clean()
+    require_only_post_acceptance_directive_lock_drift(expected_frozen)
     expected_scope = verify_changed_path_scope(EXPECTED_C17_PATHS)
     expected_scope.require_clean()
     expected = {

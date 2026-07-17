@@ -94,7 +94,57 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
     rows = cast(list[dict[str, object]], manifest["components"])
 
     assert [row["phase"] for row in rows] == [f"Q{index:02}" for index in range(18)]
-    assert all(row["implementationState"] == "ACCEPTED" for row in rows[:17])
+    assert all(row["implementationState"] == "ACCEPTED" for row in rows[:16])
+    assert rows[16]["implementationState"] == (
+        "CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
+    )
+    assert rows[16]["identities"] == {
+        "acceptanceCommit": "4ac05802244a194639865a4b615ee2af13dce4e2",
+        "acceptanceTree": "eb367affe1952093be09d8ec2d1d1344ae905453",
+        "implementationCommit": "b3d8cedece8cf3a9f546c60016beae442f85f160",
+        "implementationTree": "a35b888041cbdd4ea56accd29a490a8ce043cef0",
+    }
+    assert rows[16]["sourceRoot"] == {
+        "fileCount": 8,
+        "path": "quant/src/quant_edge/inference",
+        "sealSchema": "Q17SourceTreeSealV1",
+        "sha256": "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a",
+    }
+    q16_correction = cast(dict[str, object], rows[16]["postAcceptanceCorrection"])
+    assert q16_correction["acceptanceState"] == "NOT_ACCEPTED"
+    assert q16_correction["correctionId"] == "RB13_QUANT_INFERENCE_WORKER_ISOLATION"
+    assert q16_correction["historicalAcceptedServiceSha256"] == (
+        "9531d45a513d28c08945adffbb51f149dc3e27afbc897f09bf66d660bf43f59f"
+    )
+    assert q16_correction["historicalReceipts"] == "DOES_NOT_ATTEST_CORRECTED_BYTES"
+    assert q16_correction["implementationCommit"] == components.PENDING
+    assert q16_correction["implementationTree"] == components.PENDING
+    assert q16_correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
+    current_source = cast(dict[str, object], q16_correction["currentSourceRoot"])
+    current_service = cast(dict[str, object], q16_correction["currentServiceSource"])
+    assert current_source["sha256"] == components._Q16_RB13_SOURCE_SPEC.seal_sha256
+    service_raw = (REPO_ROOT / "quant/src/quant_edge/inference/service.py").read_bytes()
+    assert current_service["bytes"] == len(service_raw)
+    assert current_service["sha256"] == hashlib.sha256(service_raw).hexdigest()
+    q16_dispositions = cast(list[str], rows[16]["dispositions"])
+    assert "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED" in q16_dispositions
+    assert "NOT_ACCEPTED" in q16_dispositions
+    assert "EXACT_COMMIT_ACCEPTED" not in q16_dispositions
+    assert "CURRENT_BYTES_VERIFIED" not in q16_dispositions
+    assert "POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_Q16_RECEIPTS" in cast(
+        list[str], rows[16]["limitations"]
+    )
+    assert rows[16]["evidenceSeal"] == {
+        "acceptanceReceiptSha256": (
+            "e2283973e496cd592e56df9d95a79d79dc197122f1937b89707c22a86d490828"
+        ),
+        "implementationReceiptSha256": (
+            "b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6"
+        ),
+        "status": "HISTORICAL_RECEIPT_BYTES_VERIFIED_CORRECTION_NOT_ATTESTED",
+    }
+    assert all(row["postAcceptanceCorrection"] is None for row in rows[:16])
+    assert rows[17]["postAcceptanceCorrection"] is None
     current_task = cast(dict[str, object], manifest["q17CurrentTask"])
     current_status = current_task["semanticStatus"]
     assert current_status in {
@@ -276,6 +326,7 @@ def test_manifest_is_deterministic_and_strictly_validates() -> None:
         ("status", "accepted truth"),
         ("hash", "accepted truth"),
         ("path", "accepted truth"),
+        ("correction-acceptance", "accepted truth"),
         ("posture", "accepted truth"),
     ],
 )
@@ -295,6 +346,9 @@ def test_validator_rejects_duplicates_forgery_hash_and_traversal(
     elif mutation == "path":
         refs = cast(list[dict[str, object]], rows[3]["evidenceRefs"])
         refs[0]["path"] = "../escape"
+    elif mutation == "correction-acceptance":
+        correction = cast(dict[str, object], rows[16]["postAcceptanceCorrection"])
+        correction["acceptanceState"] = "ACCEPTED"
     else:
         posture = cast(dict[str, object], manifest["finalPosture"])
         posture["edge"] = "AVAILABLE"
@@ -310,6 +364,7 @@ def test_validator_rejects_duplicates_forgery_hash_and_traversal(
         ("quant/generated/q10/model_campaign.v1.json", "tamper"),
         ("quant/RECEIPTS/Q15_ACCEPTANCE.md", "symlink"),
         ("quant/src/quant_edge/lake/store.py", "source-tamper"),
+        ("quant/src/quant_edge/inference/service.py", "source-tamper"),
         ("quant/src/quant_edge/book/injected.py", "source-addition"),
         ("quant/src/quant_edge/book/native.so", "source-unexpected-file"),
         ("quant/src/quant_edge/book/nested", "source-directory"),
@@ -339,6 +394,38 @@ def test_current_byte_tamper_symlink_and_source_inventory_fail_closed(
         target.write_bytes(target.read_bytes() + b"\n")
 
     with pytest.raises(ComponentManifestError):
+        build_component_manifest(mirror)
+
+
+def test_q16_service_pin_rejects_tamper_even_when_current_tree_is_resealed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mirror = _component_mirror(tmp_path)
+    service = mirror / "quant/src/quant_edge/inference/service.py"
+    original = service.read_bytes()
+    service.write_bytes(original[:-1] + b" ")
+
+    source_spec = components._Q16_RB13_SOURCE_SPEC
+    source_root = mirror / source_spec.relative_path
+    files: list[dict[str, object]] = []
+    for path in sorted(source_root.glob("*.py"), key=lambda child: child.name):
+        raw = path.read_bytes()
+        files.append(
+            {
+                "bytes": len(raw),
+                "path": f"{source_spec.manifest_path_prefix}/{path.name}",
+                "sha256": hashlib.sha256(raw).hexdigest(),
+            }
+        )
+    resealed = hashlib.sha256(canonical_json_bytes({"files": files})).hexdigest()
+    monkeypatch.setattr(
+        components,
+        "_Q16_RB13_SOURCE_SPEC",
+        replace(source_spec, seal_sha256=resealed),
+    )
+
+    with pytest.raises(ComponentManifestError, match="current correction source digest changed"):
         build_component_manifest(mirror)
 
 

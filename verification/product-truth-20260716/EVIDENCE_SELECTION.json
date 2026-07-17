@@ -1,15 +1,82 @@
 {
-  "schema": "product-truth-c2-evidence-selection.v1",
-  "source_candidate": null,
-  "source_candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
-  "candidate_embedded_package": "SOURCE_UNBOUND",
-  "selection_rule": "The candidate source commit cannot self-name. Select only a campaign evidence descendant whose manifest hashes C2_EVIDENCE_BINDING.json, whose ancestry contains exact C2, and whose post-C2 diff is confined to verification/product-truth-20260716/**. Reject old-C acceptance identifiers and ambiguous descendants.",
-  "valid_chain": "C2 -> campaign evidence child",
-  "post_c2_path_allowlist": [
-    "verification/product-truth-20260716/**"
+  "schema": "product-truth-c9-evidence-selection.v2",
+  "source_candidate": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+  "source_candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+  "source_candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "source_candidate_branch": "truth-campaign-20260716",
+  "candidate_embedded_package": "verification/product-truth-20260716/LOCKED_INPUT_PAYLOADS.json",
+  "selection_rule": "Select only this exact C9 candidate and an evidence descendant whose post-C9 diff equals the exact generated-output allowlist and whose manifest verifies byte-for-byte.",
+  "valid_chain": "C2 -> C9; custody bridge/evidence descendants may follow but cannot alter C9",
+  "post_candidate_path_allowlist": [
+    "verification/product-truth-20260716/AI_OPS_C2_DISPOSITION.json",
+    "verification/product-truth-20260716/C2_PROOF_BINDING.json",
+    "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+    "verification/product-truth-20260716/COCKPIT_BINDING_MATRIX.csv",
+    "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
+    "verification/product-truth-20260716/EVIDENCE_SELECTION.json",
+    "verification/product-truth-20260716/INDEPENDENT_FINDINGS.json",
+    "verification/product-truth-20260716/INPUTS.lock",
+    "verification/product-truth-20260716/LOCKED_INPUT_PAYLOADS.json",
+    "verification/product-truth-20260716/MANIFEST.json",
+    "verification/product-truth-20260716/MANIFEST.sha256",
+    "verification/product-truth-20260716/MERGE_PROVENANCE.json",
+    "verification/product-truth-20260716/PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+    "verification/product-truth-20260716/STATE.md",
+    "verification/product-truth-20260716/WORKTREE_CENSUS.json"
   ],
-  "required_binding": "C2_EVIDENCE_BINDING.json hashed by MANIFEST.sha256",
-  "final_verifier_handoff": "BLOCKED_PENDING_WAVE1B",
-  "old_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-  "old_candidate_disposition": "REJECTED_FOR_FINAL_HANDOFF_CRITICAL_FINDINGS"
+  "required_binding": "MANIFEST.json plus MANIFEST.sha256",
+  "final_verifier_handoff": "READY_FOR_FRESH_FINAL_VERIFIER_AFTER_BASELINE_GATE",
+  "rejected_candidate_history": [
+    {
+      "label": "C3",
+      "sha": "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+      "tree": "9e54ae92bd3cc4d30d3114590d7da6d81e019f16",
+      "disposition": "REJECTED_FINAL_VERIFICATION",
+      "reason": "SIX_FINAL_VERIFIER_FINDINGS_AND_INELIGIBLE_ANCESTRY"
+    },
+    {
+      "label": "C4",
+      "sha": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+      "tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+      "disposition": "REJECTED_REPORT_PARITY",
+      "reason": "CANONICAL_AND_SINGLE_BRANCH_REPORT_PARITY_42_OF_44_STALE_MACHINE_REPORT"
+    },
+    {
+      "label": "C5",
+      "sha": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "tree": "28d3d9922cc1201333775a458919afe9158e6dc2",
+      "disposition": "REJECTED_FINAL_VERIFICATION",
+      "reason": "VFINAL5_UNBOUND_GENERATOR_INCOMPLETE_INPUT_MAP_STALE_CENSUS_LEDGER_WATCHMAN_FALSE_GREEN"
+    },
+    {
+      "label": "C6",
+      "sha": "89cd7e066b97f2f33d730d1e0adf291ebe7c4f64",
+      "tree": "2dd6399ff0aa2fb21c3b4632815333cf015c053a",
+      "disposition": "REJECTED_CANONICAL_SECURITY_GATE",
+      "reason": "CAMPAIGN_CONTRACT_TEST_USED_FORBIDDEN_CHILD_PROCESS_AND_ENVIRONMENT_ACCESS"
+    },
+    {
+      "label": "C7",
+      "sha": "a283eb859ec1142aadecbd64e0b84959535f6216",
+      "tree": "ffe2be1f1c4504fbb17228d2a905fe8b763af5e6",
+      "disposition": "REJECTED_EXACT_EVIDENCE_INTEGRITY",
+      "reason": "STALE_PAYLOAD_INVENTORY_CHECKSUM_AND_FALSE_PROVENANCE_BLOB_COUNT"
+    },
+    {
+      "label": "C8",
+      "sha": "6ab02a82931ae8234456c0710cca41b94fdc12c9",
+      "tree": "4dbb427b357b87b9c58bfe97d06a584bd5c973ef",
+      "disposition": "REJECTED_EXACT_CENSUS_NON_IDEMPOTENT",
+      "reason": "POST_EVIDENCE_GENERATOR_PASS_REWROTE_CUSTODY_HEAD_DERIVED_CENSUS_FIELDS"
+    }
+  ],
+  "prior_candidate_sha": "6ab02a82931ae8234456c0710cca41b94fdc12c9",
+  "prior_candidate_tree": "4dbb427b357b87b9c58bfe97d06a584bd5c973ef",
+  "prior_candidate_disposition": "C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT",
+  "c7_candidate_sha": "a283eb859ec1142aadecbd64e0b84959535f6216",
+  "c7_candidate_disposition": "C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT",
+  "c6_candidate_sha": "89cd7e066b97f2f33d730d1e0adf291ebe7c4f64",
+  "c6_candidate_disposition": "C6_REJECTED_BY_CANONICAL_SECURITY_GATE",
+  "vfinal5_candidate_sha": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+  "vfinal5_candidate_disposition": "C5_REJECTED_BY_VFINAL5"
 }

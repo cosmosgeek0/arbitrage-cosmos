@@ -12,6 +12,7 @@ import { DEFAULTS, loadConfig, normalizeConfig, saveConfig } from '../dist/confi
 import { Ledger } from '../dist/ledger.js';
 import { AccountService } from '../dist/services/account.js';
 import { AwsRunnerControl, AwsRunnerControlError } from '../dist/services/awsRunnerControl.js';
+import Database from 'better-sqlite3';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -172,6 +173,73 @@ try {
   check('ephemeral retention removes only expired recomputable telemetry', pruned === 3 && oldEphemeral === 0 && recentStrategy === 1);
   check('ephemeral retention never removes financial audit events', financialAudit === 1);
 
+  const fillColumns = Object.fromEntries(
+    ledger.db.prepare('PRAGMA table_info(fills)').all().map((column) => [column.name, column.type]),
+  );
+  check(
+    'fill money is stored as canonical decimal text with explicit provenance',
+    fillColumns.price === 'TEXT'
+      && fillColumns.qty === 'TEXT'
+      && fillColumns.quote_qty === 'TEXT'
+      && fillColumns.commission === 'TEXT'
+      && fillColumns.money_encoding === 'TEXT',
+  );
+
+  const sameFillTs = Date.now() - 2 * 24 * 60 * 60_000;
+  for (const fill of [
+    { symbol: 'BTCUSDT', tradeId: 12, price: '9007199254740993.00000001' },
+    { symbol: 'BTCUSDT', tradeId: 10, price: '0.10000000000000001' },
+    { symbol: 'AAAUSDT', tradeId: 11, price: '1.00000000000000001' },
+  ]) {
+    ledger.insertFill({
+      ...fill,
+      orderId: fill.tradeId,
+      side: 'BUY',
+      qty: '0.00000000000000001',
+      quoteQty: '0.0000000000000000100000000000000001',
+      commission: '0.000000000000000001',
+      commissionAsset: 'USDT',
+      ts: sameFillTs,
+      source: 'exact-regression',
+    });
+  }
+  const exactReplay = ledger.allFillsAsc().filter((fill) => fill.source === 'exact-regression');
+  check(
+    'fill replay preserves exact decimals and has a total equal-millisecond order',
+    exactReplay[1]?.price === '0.10000000000000001'
+      && exactReplay[1]?.quoteQty === '0.0000000000000000100000000000000001'
+      && exactReplay.every((fill) => fill.moneyEncoding === 'EXACT_DECIMAL')
+      && exactReplay.map((fill) => `${fill.symbol}:${fill.tradeId}`).join('|')
+        === 'AAAUSDT:11|BTCUSDT:10|BTCUSDT:12',
+  );
+  const exactDuplicate = {
+    symbol: 'BTCUSDT', tradeId: 10, orderId: 10, side: 'BUY',
+    price: '0.10000000000000001', qty: '0.00000000000000001',
+    quoteQty: '0.0000000000000000100000000000000001',
+    commission: '0.000000000000000001', commissionAsset: 'USDT',
+    ts: sameFillTs, source: 'second-observer',
+  };
+  const duplicateWasNew = ledger.insertFill(exactDuplicate);
+  let conflictRejected = false;
+  try {
+    ledger.insertFill({ ...exactDuplicate, price: '0.2' });
+  } catch (error) {
+    conflictRejected = error instanceof Error && error.message === 'FILL_IDENTITY_CONFLICT';
+  }
+  check(
+    'exact fill identity is idempotent and conflicting money fails closed',
+    duplicateWasNew === false && conflictRejected,
+  );
+  const displayFill = ledger.listFills(10, 'BTCUSDT').find((fill) => fill.tradeId === 10);
+  check(
+    'fill API retains a finite numeric display projection without weakening replay truth',
+    displayFill !== undefined
+      && Number.isFinite(displayFill.price)
+      && Number.isFinite(displayFill.qty)
+      && Number.isFinite(displayFill.quoteQty)
+      && Number.isFinite(displayFill.commission),
+  );
+
   const fillDayStart = Date.UTC(
     new Date().getUTCFullYear(),
     new Date().getUTCMonth(),
@@ -179,8 +247,9 @@ try {
   );
   const insertFill = ledger.db.prepare(`
     INSERT INTO fills
-      (symbol, trade_id, order_id, side, price, qty, quote_qty, commission, commission_asset, ts, source)
-    VALUES (?, ?, ?, 'BUY', 100, 1, 100, 0, 'USDT', ?, 'test')
+      (symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+       commission_asset, ts, source, money_encoding)
+    VALUES (?, ?, ?, 'BUY', '100', '1', '100', '0', 'USDT', ?, 'test', 'EXACT_DECIMAL')
   `);
   ledger.db.transaction(() => {
     for (let index = 0; index < 10_000; index += 1) {
@@ -241,6 +310,133 @@ try {
   ledger.close();
   check('ledger close is idempotent and health fails closed afterward', ledger.probeWritable() === false);
   rmSync(dataDir, { recursive: true, force: true });
+}
+
+// Schema v1 persisted binary64 fills. Migration must preserve those rows,
+// identify their limited provenance, and allow authoritative decimal evidence
+// for the same exchange trade identity to replace the legacy approximation.
+{
+  const legacyDir = mkdtempSync(path.join(tmpdir(), 'cosmos-fill-v1-migration-'));
+  const legacyDb = new Database(path.join(legacyDir, 'cosmos.db'));
+  legacyDb.exec(`
+    CREATE TABLE ledger_schema_compatibility (
+      singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+      current_schema_version INTEGER NOT NULL,
+      rollback_floor INTEGER NOT NULL
+    );
+    INSERT INTO ledger_schema_compatibility VALUES (1, 1, 1);
+    CREATE TABLE fills (
+      symbol TEXT NOT NULL,
+      trade_id INTEGER NOT NULL,
+      order_id INTEGER,
+      side TEXT NOT NULL,
+      price REAL NOT NULL,
+      qty REAL NOT NULL,
+      quote_qty REAL NOT NULL,
+      commission REAL NOT NULL DEFAULT 0,
+      commission_asset TEXT,
+      ts INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      PRIMARY KEY (symbol, trade_id)
+    );
+    INSERT INTO fills VALUES ('BTCUSDT', 77, 88, 'BUY', 0.1, 0.2, 0.02, 0.001, 'USDT', 1700000000000, 'legacy-v1');
+    PRAGMA user_version = 1;
+  `);
+  legacyDb.close();
+  const migrated = new Ledger(legacyDir);
+  try {
+    const legacyFill = migrated.allFillsAsc()[0];
+    check(
+      'v1 binary64 fill migration preserves the stored value and marks it non-authoritative',
+      migrated.db.pragma('user_version', { simple: true }) === 2
+        && legacyFill?.price === '0.1'
+        && legacyFill?.moneyEncoding === 'LEGACY_BINARY64',
+    );
+    migrated.insertFill({
+      symbol: 'BTCUSDT', tradeId: 77, orderId: 88, side: 'BUY',
+      price: '0.10000000000000001', qty: '0.2', quoteQty: '0.020000000000000002',
+      commission: '0.001', commissionAsset: 'USDT', ts: 1700000000000,
+      source: 'rest_reconciliation',
+    });
+    const reconciled = migrated.allFillsAsc()[0];
+    check(
+      'authoritative decimal reconciliation upgrades the same legacy fill identity',
+      reconciled?.price === '0.10000000000000001'
+        && reconciled?.quoteQty === '0.020000000000000002'
+        && reconciled?.moneyEncoding === 'EXACT_DECIMAL',
+    );
+  } finally {
+    migrated.close();
+    rmSync(legacyDir, { recursive: true, force: true });
+  }
+}
+
+// Any malformed v1 financial row must roll the whole fill migration back. A
+// versioned database missing the fills table is corruption, not an empty book.
+{
+  const corruptDir = mkdtempSync(path.join(tmpdir(), 'cosmos-fill-v1-corrupt-'));
+  const corruptDb = new Database(path.join(corruptDir, 'cosmos.db'));
+  corruptDb.exec(`
+    CREATE TABLE ledger_schema_compatibility (
+      singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+      current_schema_version INTEGER NOT NULL,
+      rollback_floor INTEGER NOT NULL
+    );
+    INSERT INTO ledger_schema_compatibility VALUES (1, 1, 1);
+    CREATE TABLE fills (
+      symbol TEXT NOT NULL, trade_id INTEGER NOT NULL, order_id INTEGER,
+      side TEXT NOT NULL, price REAL NOT NULL, qty REAL NOT NULL,
+      quote_qty REAL NOT NULL, commission REAL NOT NULL DEFAULT 0,
+      commission_asset TEXT, ts INTEGER NOT NULL, source TEXT NOT NULL,
+      PRIMARY KEY (symbol, trade_id)
+    );
+    INSERT INTO fills VALUES ('BTCUSDT', 1, 1, 'BUY', -1, 1, 1, 0, 'USDT', 1700000000000, 'corrupt-v1');
+    PRAGMA user_version = 1;
+  `);
+  corruptDb.close();
+  let corruptRejected = false;
+  try { new Ledger(corruptDir); } catch (error) {
+    corruptRejected = error instanceof Error && /LEDGER_FILL_V1_MONEY_MALFORMED/.test(error.message);
+  }
+  const corruptReadback = new Database(path.join(corruptDir, 'cosmos.db'));
+  const corruptPriceType = corruptReadback.prepare('PRAGMA table_info(fills)').all()
+    .find((column) => column.name === 'price')?.type;
+  check(
+    'malformed v1 fill rolls migration back without erasing financial truth',
+    corruptRejected
+      && corruptReadback.pragma('user_version', { simple: true }) === 1
+      && corruptPriceType === 'REAL'
+      && corruptReadback.prepare('SELECT COUNT(*) AS count FROM fills').get().count === 1
+      && corruptReadback.prepare('SELECT current_schema_version AS version FROM ledger_schema_compatibility').get().version === 1,
+  );
+  corruptReadback.close();
+  rmSync(corruptDir, { recursive: true, force: true });
+
+  const missingDir = mkdtempSync(path.join(tmpdir(), 'cosmos-fill-v1-missing-'));
+  const missingDb = new Database(path.join(missingDir, 'cosmos.db'));
+  missingDb.exec(`
+    CREATE TABLE ledger_schema_compatibility (
+      singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
+      current_schema_version INTEGER NOT NULL,
+      rollback_floor INTEGER NOT NULL
+    );
+    INSERT INTO ledger_schema_compatibility VALUES (1, 1, 1);
+    PRAGMA user_version = 1;
+  `);
+  missingDb.close();
+  let missingRejected = false;
+  try { new Ledger(missingDir); } catch (error) {
+    missingRejected = error instanceof Error && error.message === 'LEDGER_FILL_SCHEMA_MISSING';
+  }
+  const missingReadback = new Database(path.join(missingDir, 'cosmos.db'));
+  check(
+    'versioned ledger missing its fills table fails closed without creating an empty replacement',
+    missingRejected
+      && missingReadback.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'fills'").get().count === 0
+      && missingReadback.pragma('user_version', { simple: true }) === 1,
+  );
+  missingReadback.close();
+  rmSync(missingDir, { recursive: true, force: true });
 }
 
 const ENV_KEYS = [

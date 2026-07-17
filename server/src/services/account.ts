@@ -1,6 +1,17 @@
 import type { BinanceClient, ApiRestrictions } from '../binance/client.js';
 import { boundedBinanceIdentifier } from '../binance/identifiers.js';
-import type { Ledger, FillRow } from '../ledger.js';
+import {
+  addExactDecimals,
+  compareExactDecimals,
+  divideExactDecimals,
+  minimumExactDecimal,
+  multiplyExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  subtractExactDecimals,
+  type ExactDecimal,
+  type NonNegativeDecimal,
+} from '../capitalFoundation/contracts/decimal.js';
+import type { Ledger, FillInput, FillRow } from '../ledger.js';
 import type { BalanceEntry, PositionEntry } from '../types.js';
 
 const SNAPSHOT_INTERVAL_MS = 15 * 60 * 1000;
@@ -36,23 +47,56 @@ function fillDay(ts: number): string | null {
   }
 }
 
-function validateFill(fill: FillRow): string | null {
+const EXACT_ZERO = normalizeNonNegativeExactDecimal('0');
+
+function exactPositive(value: unknown): value is NonNegativeDecimal {
+  try {
+    const normalized = normalizeNonNegativeExactDecimal(value);
+    return normalized === value && compareExactDecimals(normalized, EXACT_ZERO) > 0;
+  } catch {
+    return false;
+  }
+}
+
+function exactNonNegative(value: unknown): value is NonNegativeDecimal {
+  try {
+    return normalizeNonNegativeExactDecimal(value) === value;
+  } catch {
+    return false;
+  }
+}
+
+function validateFill(fill: FillInput | FillRow): string | null {
   // PnL and equity in this service are explicitly denominated in USDT. A
   // non-USDT fill cannot safely share the same cost-basis calculation.
   if (!/^[A-Z0-9]{1,16}USDT$/.test(fill.symbol)) return 'invalid USDT symbol';
-  if (!Number.isInteger(fill.tradeId) || fill.tradeId < 0) return 'invalid trade id';
-  if (fill.orderId !== null && (!Number.isInteger(fill.orderId) || fill.orderId < 0)) return 'invalid order id';
+  if (!Number.isSafeInteger(fill.tradeId) || fill.tradeId < 0) return 'invalid trade id';
+  if (fill.orderId !== null && (!Number.isSafeInteger(fill.orderId) || fill.orderId < 0)) return 'invalid order id';
   if (fill.side !== 'BUY' && fill.side !== 'SELL') return 'invalid side';
-  if (!finite(fill.price) || fill.price <= 0) return 'invalid price';
-  if (!finite(fill.qty) || fill.qty <= 0) return 'invalid quantity';
-  if (!finite(fill.quoteQty) || fill.quoteQty <= 0) return 'invalid quote quantity';
-  if (!finiteNonNegative(fill.commission)) return 'invalid commission';
+  if (!exactPositive(fill.price)) return 'invalid price';
+  if (!exactPositive(fill.qty)) return 'invalid quantity';
+  if (!exactPositive(fill.quoteQty)) return 'invalid quote quantity';
+  if (!exactNonNegative(fill.commission)) return 'invalid commission';
   if (fill.commissionAsset !== null && !boundedBinanceIdentifier(fill.commissionAsset, 20, 80)) return 'invalid commission asset';
   if (!Number.isInteger(fill.ts) || fill.ts <= 0 || fillDay(fill.ts) === null || fill.ts > Date.now() + 5 * 60_000) {
     return 'invalid timestamp';
   }
   if (typeof fill.source !== 'string' || fill.source.length === 0 || fill.source.length > 64) return 'invalid source';
   return null;
+}
+
+function exactMapAdd<K>(map: Map<K, ExactDecimal>, key: K, amount: ExactDecimal): void {
+  map.set(key, addExactDecimals(map.get(key) ?? EXACT_ZERO, amount));
+}
+
+function exactNumber(value: ExactDecimal): number {
+  const projected = Number(value);
+  if (!Number.isFinite(projected)) throw new Error('PNL_NUMERIC_PROJECTION_UNAVAILABLE');
+  return projected;
+}
+
+function numberMap<K>(map: ReadonlyMap<K, ExactDecimal>): Map<K, number> {
+  return new Map([...map].map(([key, value]) => [key, exactNumber(value)]));
 }
 
 function utcDayStart(ts = Date.now()): number {
@@ -147,6 +191,8 @@ export class AccountService {
   lastFillReconcileTs: number | null = null;
   lastFillReconcileError: string | null = null;
   private pnlCacheDirty = true;
+  private pnlCostBasisIncomplete = new Set<string>();
+  private pnlDailyPolicyExact = new Map<string, ExactDecimal>();
   private pnlCache: {
     realizedByDay: Map<string, number>;
     realizedBySymbol: Map<string, number>;
@@ -426,15 +472,15 @@ export class AccountService {
             ) {
               throw new Error(`Binance returned malformed trade history for ${symbol}`);
             }
-            const fill: FillRow = {
+            const fill: FillInput = {
               symbol,
               tradeId: trade.id,
               orderId: trade.orderId,
               side: trade.isBuyer ? 'BUY' : 'SELL',
-              price: Number(trade.price),
-              qty: Number(trade.qty),
-              quoteQty: Number(trade.quoteQty),
-              commission: Number(trade.commission),
+              price: normalizeNonNegativeExactDecimal(trade.price),
+              qty: normalizeNonNegativeExactDecimal(trade.qty),
+              quoteQty: normalizeNonNegativeExactDecimal(trade.quoteQty),
+              commission: normalizeNonNegativeExactDecimal(trade.commission),
               commissionAsset: trade.commissionAsset,
               ts: trade.time,
               source: 'rest_reconciliation',
@@ -591,7 +637,7 @@ export class AccountService {
     this.lastSyncTs = Date.now();
   }
 
-  recordFill(fill: FillRow): boolean {
+  recordFill(fill: FillInput): boolean {
     const invalid = validateFill(fill);
     if (invalid) {
       this.safeLog('error_event', /^[A-Z0-9]{4,20}$/.test(fill.symbol) ? fill.symbol : null, {
@@ -670,7 +716,10 @@ export class AccountService {
       .map((e) => {
         const base = e.asset;
         const cost = avgCost.get(base);
-        const hasCost = cost !== undefined && cost.qty > 0 && e.priceUsdt !== null;
+        const hasCost = cost !== undefined
+          && cost.qty > 0
+          && e.priceUsdt !== null
+          && !this.pnlCostBasisIncomplete.has(base);
         return {
           ...e,
           avgCost: hasCost ? cost.avgCost : null,
@@ -690,11 +739,15 @@ export class AccountService {
   } {
     if (!this.pnlCacheDirty) return this.pnlCache;
     const fills = this.ledger.allFillsAsc();
-    const realizedByDay = new Map<string, number>();
-    const realizedBySymbol = new Map<string, number>();
-    const feesByAsset = new Map<string, number>();
-    const avgCost = new Map<string, { qty: number; avgCost: number }>();
-    const feeUsdByDay = new Map<string, number>();
+    const realizedByDayExact = new Map<string, ExactDecimal>();
+    const realizedBySymbolExact = new Map<string, ExactDecimal>();
+    const feesByAssetExact = new Map<string, ExactDecimal>();
+    const positionsExact = new Map<string, {
+      qty: ExactDecimal;
+      totalCost: ExactDecimal;
+      legacyTainted: boolean;
+    }>();
+    const feeUsdByDayExact = new Map<string, ExactDecimal>();
     const incompleteByDay = new Map<string, string[]>();
     const markIncomplete = (day: string, reason: string) => {
       const reasons = incompleteByDay.get(day) ?? [];
@@ -709,31 +762,86 @@ export class AccountService {
         continue;
       }
       const base = f.symbol.replace(/USDT$/, '');
-      const pos = avgCost.get(base) ?? { qty: 0, avgCost: 0 };
-      if (f.commission > 0 && f.commissionAsset) {
-        feesByAsset.set(f.commissionAsset, (feesByAsset.get(f.commissionAsset) ?? 0) + f.commission);
+      const pos = positionsExact.get(base) ?? {
+        qty: EXACT_ZERO,
+        totalCost: EXACT_ZERO,
+        legacyTainted: false,
+      };
+      if (f.moneyEncoding === 'LEGACY_BINARY64') {
+        markIncomplete(day, `legacy binary64 fill requires authoritative reconciliation for ${f.symbol}`);
+        pos.legacyTainted = true;
+      }
+      if (compareExactDecimals(f.commission, EXACT_ZERO) > 0 && f.commissionAsset) {
+        exactMapAdd(feesByAssetExact, f.commissionAsset, f.commission);
         const feeUsd = this.fillFeeUsd(f, base);
         if (feeUsd === null) markIncomplete(day, `fee basis unavailable for ${f.commissionAsset}`);
-        else feeUsdByDay.set(day, (feeUsdByDay.get(day) ?? 0) + feeUsd);
-      } else if (f.commission > 0) {
+        else exactMapAdd(feeUsdByDayExact, day, feeUsd);
+      } else if (compareExactDecimals(f.commission, EXACT_ZERO) > 0) {
         markIncomplete(day, 'fee asset unavailable');
       }
       if (f.side === 'BUY') {
-        const newQty = pos.qty + f.qty;
-        pos.avgCost = newQty > 0 ? (pos.avgCost * pos.qty + f.price * f.qty) / newQty : 0;
-        pos.qty = newQty;
+        pos.qty = addExactDecimals(pos.qty, f.qty);
+        pos.totalCost = addExactDecimals(pos.totalCost, f.quoteQty);
       } else {
-        const matched = Math.min(f.qty, pos.qty);
-        if (matched > 0) {
-          const gain = (f.price - pos.avgCost) * matched;
-          realizedByDay.set(day, (realizedByDay.get(day) ?? 0) + gain);
-          realizedBySymbol.set(f.symbol, (realizedBySymbol.get(f.symbol) ?? 0) + gain);
+        if (pos.legacyTainted) {
+          markIncomplete(day, `cost basis depends on legacy binary64 fill for ${f.symbol}`);
         }
-        if (matched < f.qty) markIncomplete(day, `cost basis unavailable for ${f.symbol} sell`);
-        pos.qty = Math.max(0, pos.qty - f.qty);
+        const matched = minimumExactDecimal(f.qty, pos.qty);
+        let matchedCost: ExactDecimal = EXACT_ZERO;
+        if (compareExactDecimals(matched, EXACT_ZERO) > 0) {
+          matchedCost = compareExactDecimals(matched, pos.qty) === 0
+            ? pos.totalCost
+            : divideExactDecimals(multiplyExactDecimals(pos.totalCost, matched), pos.qty, 24);
+          const matchedProceeds = compareExactDecimals(matched, f.qty) === 0
+            ? f.quoteQty
+            : divideExactDecimals(multiplyExactDecimals(f.quoteQty, matched), f.qty, 24);
+          const gain = subtractExactDecimals(matchedProceeds, matchedCost);
+          exactMapAdd(realizedByDayExact, day, gain);
+          exactMapAdd(realizedBySymbolExact, f.symbol, gain);
+        }
+        if (compareExactDecimals(matched, f.qty) < 0) {
+          markIncomplete(day, `cost basis unavailable for ${f.symbol} sell`);
+        }
+        if (compareExactDecimals(matched, pos.qty) === 0) {
+          pos.qty = EXACT_ZERO;
+          pos.totalCost = EXACT_ZERO;
+          pos.legacyTainted = false;
+        } else if (compareExactDecimals(matched, EXACT_ZERO) > 0) {
+          pos.qty = normalizeNonNegativeExactDecimal(subtractExactDecimals(pos.qty, matched));
+          pos.totalCost = normalizeNonNegativeExactDecimal(subtractExactDecimals(
+            pos.totalCost,
+            matchedCost,
+          ));
+        }
       }
-      avgCost.set(base, pos);
+      positionsExact.set(base, pos);
     }
+    const avgCost = new Map<string, { qty: number; avgCost: number }>();
+    this.pnlCostBasisIncomplete = new Set();
+    for (const [base, pos] of positionsExact) {
+      const qty = exactNumber(pos.qty);
+      const averageCost = compareExactDecimals(pos.qty, EXACT_ZERO) > 0
+        ? exactNumber(divideExactDecimals(pos.totalCost, pos.qty, 24))
+        : 0;
+      avgCost.set(base, { qty, avgCost: averageCost });
+      if (pos.legacyTainted && compareExactDecimals(pos.qty, EXACT_ZERO) > 0) {
+        this.pnlCostBasisIncomplete.add(base);
+      }
+    }
+    const realizedByDay = numberMap(realizedByDayExact);
+    const realizedBySymbol = numberMap(realizedBySymbolExact);
+    const feesByAsset = numberMap(feesByAssetExact);
+    const feeUsdByDay = numberMap(feeUsdByDayExact);
+    this.pnlDailyPolicyExact = new Map(
+      [...new Set([...realizedByDayExact.keys(), ...feeUsdByDayExact.keys()])]
+        .map((day) => [
+          day,
+          subtractExactDecimals(
+            realizedByDayExact.get(day) ?? EXACT_ZERO,
+            feeUsdByDayExact.get(day) ?? EXACT_ZERO,
+          ),
+        ]),
+    );
     this.pnlCache = { realizedByDay, realizedBySymbol, feesByAsset, avgCost, feeUsdByDay, incompleteByDay };
     this.pnlCacheDirty = false;
     return this.pnlCache;
@@ -754,7 +862,7 @@ export class AccountService {
     const day = new Date().toISOString().slice(0, 10);
     this.pnl();
     const pnl = this.pnlCache;
-    const valueUsd = (pnl.realizedByDay.get(day) ?? 0) - (pnl.feeUsdByDay.get(day) ?? 0);
+    const valueUsd = exactNumber(this.pnlDailyPolicyExact.get(day) ?? EXACT_ZERO);
     const reasons = [...(pnl.incompleteByDay.get(day) ?? [])];
     const coverage = this.fillReconciliationStatus();
     if (!coverage.scopeComplete) {
@@ -802,10 +910,10 @@ export class AccountService {
     }) ?? null;
   }
 
-  private fillFeeUsd(fill: FillRow, base: string): number | null {
-    if (fill.commission === 0) return 0;
+  private fillFeeUsd(fill: FillRow, base: string): ExactDecimal | null {
+    if (compareExactDecimals(fill.commission, EXACT_ZERO) === 0) return EXACT_ZERO;
     if (fill.commissionAsset === 'USDT') return fill.commission;
-    if (fill.commissionAsset === base) return fill.commission * fill.price;
+    if (fill.commissionAsset === base) return multiplyExactDecimals(fill.commission, fill.price);
     // A current BNB/USDT (or other third-asset) quote is not the historical
     // fill-time fee value. Until that value is persisted with the fill, mark
     // the day incomplete instead of rewriting past PnL with today's price.

@@ -3,6 +3,11 @@ import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import {
+  compareExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  type NonNegativeDecimal,
+} from './capitalFoundation/contracts/decimal.js';
 import type { SystemTraceEvent } from './systemIntegration/contracts/types.js';
 import { validateSystemTraceEvent } from './systemIntegration/contracts/validation.js';
 import {
@@ -78,11 +83,11 @@ const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'LIABILITY',
   'RECOVERY_CAMPAIGN',
 ] as const);
-export const LEDGER_SCHEMA_VERSION = 1;
-// The integrated checkpoint writer adds a closed-schema field that the prior
-// exact-key decoder cannot read. Once this runtime owns the Ledger, schema 1
-// is therefore the first honest non-rollback floor.
-export const LEDGER_ROLLBACK_FLOOR = 1;
+export const LEDGER_SCHEMA_VERSION = 2;
+// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. An old
+// writer can silently coerce that truth back through binary64, so rollback is
+// no longer safe after this runtime opens the ledger.
+export const LEDGER_ROLLBACK_FLOOR = 2;
 const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
 const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
 const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
@@ -269,7 +274,239 @@ function readLegacyJournalCompatibility(dataDir: string): LegacyJournalCompatibi
   });
 }
 
-export interface FillRow {
+interface FillColumnInfo {
+  readonly name: string;
+  readonly type: string;
+  readonly notnull: number;
+  readonly pk: number;
+}
+
+interface LegacyFillDbRow {
+  readonly symbol: unknown;
+  readonly trade_id: unknown;
+  readonly order_id: unknown;
+  readonly side: unknown;
+  readonly price: unknown;
+  readonly qty: unknown;
+  readonly quote_qty: unknown;
+  readonly commission: unknown;
+  readonly commission_asset: unknown;
+  readonly ts: unknown;
+  readonly source: unknown;
+}
+
+const EXACT_FILL_COLUMNS = Object.freeze({
+  symbol: 'TEXT',
+  trade_id: 'INTEGER',
+  order_id: 'INTEGER',
+  side: 'TEXT',
+  price: 'TEXT',
+  qty: 'TEXT',
+  quote_qty: 'TEXT',
+  commission: 'TEXT',
+  commission_asset: 'TEXT',
+  ts: 'INTEGER',
+  source: 'TEXT',
+  money_encoding: 'TEXT',
+} as const);
+
+const LEGACY_FILL_COLUMNS = Object.freeze({
+  symbol: 'TEXT',
+  trade_id: 'INTEGER',
+  order_id: 'INTEGER',
+  side: 'TEXT',
+  price: 'REAL',
+  qty: 'REAL',
+  quote_qty: 'REAL',
+  commission: 'REAL',
+  commission_asset: 'TEXT',
+  ts: 'INTEGER',
+  source: 'TEXT',
+} as const);
+
+function exactColumnShape(
+  columns: readonly FillColumnInfo[],
+  expected: Readonly<Record<string, string>>,
+): boolean {
+  if (columns.length !== Object.keys(expected).length) return false;
+  const actual = new Map(columns.map((column) => [column.name, column.type.toUpperCase()]));
+  const nullable = new Set(['order_id', 'commission_asset']);
+  return Object.entries(expected).every(([name, type]) => actual.get(name) === type)
+    && columns.find((column) => column.name === 'symbol')?.pk === 1
+    && columns.find((column) => column.name === 'trade_id')?.pk === 2
+    && columns.every((column) => column.notnull === (nullable.has(column.name) ? 0 : 1))
+    && columns.every((column) => ['symbol', 'trade_id'].includes(column.name) || column.pk === 0);
+}
+
+function createExactFillsTable(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE fills (
+      symbol TEXT NOT NULL,
+      trade_id INTEGER NOT NULL,
+      order_id INTEGER,
+      side TEXT NOT NULL,
+      price TEXT NOT NULL CHECK(typeof(price) = 'text' AND length(price) BETWEEN 1 AND 98),
+      qty TEXT NOT NULL CHECK(typeof(qty) = 'text' AND length(qty) BETWEEN 1 AND 98),
+      quote_qty TEXT NOT NULL CHECK(typeof(quote_qty) = 'text' AND length(quote_qty) BETWEEN 1 AND 98),
+      commission TEXT NOT NULL CHECK(typeof(commission) = 'text' AND length(commission) BETWEEN 1 AND 98),
+      commission_asset TEXT,
+      ts INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      money_encoding TEXT NOT NULL CHECK(money_encoding IN ('EXACT_DECIMAL', 'LEGACY_BINARY64')),
+      PRIMARY KEY (symbol, trade_id)
+    );
+  `);
+}
+
+function plainBinary64Decimal(value: number): string {
+  if (!Number.isFinite(value) || value < 0) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const text = value.toString();
+  if (!/[eE]/.test(text)) return text;
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/.exec(text);
+  if (match === null) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const sign = match[1] === '-' ? '-' : '';
+  const whole = match[2];
+  const fraction = match[3] ?? '';
+  const exponent = Number(match[4]);
+  if (!Number.isSafeInteger(exponent)) throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  const digits = `${whole}${fraction}`;
+  const decimalIndex = whole.length + exponent;
+  if (decimalIndex <= 0) return `${sign}0.${'0'.repeat(-decimalIndex)}${digits}`;
+  if (decimalIndex >= digits.length) return `${sign}${digits}${'0'.repeat(decimalIndex - digits.length)}`;
+  return `${sign}${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+}
+
+function legacyMoney(value: unknown, positive: boolean): NonNegativeDecimal {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (positive && value <= 0)) {
+    throw new Error('LEDGER_FILL_V1_MONEY_MALFORMED');
+  }
+  return normalizeNonNegativeExactDecimal(plainBinary64Decimal(value));
+}
+
+function canonicalLegacyFill(row: Readonly<LegacyFillDbRow>): FillRow {
+  if (typeof row.symbol !== 'string' || !/^[A-Z0-9]{1,20}$/.test(row.symbol)
+    || !Number.isSafeInteger(row.trade_id) || (row.trade_id as number) < 0
+    || (row.order_id !== null && (!Number.isSafeInteger(row.order_id) || (row.order_id as number) < 0))
+    || (row.side !== 'BUY' && row.side !== 'SELL')
+    || (row.commission_asset !== null && (typeof row.commission_asset !== 'string'
+      || row.commission_asset.length < 1 || row.commission_asset.length > 80
+      || /[\u0000-\u001f\u007f]/.test(row.commission_asset)))
+    || !Number.isSafeInteger(row.ts) || (row.ts as number) <= 0
+    || typeof row.source !== 'string' || row.source.length < 1 || row.source.length > 64
+    || /[\u0000-\u001f\u007f]/.test(row.source)) {
+    throw new Error('LEDGER_FILL_V1_ROW_MALFORMED');
+  }
+  return Object.freeze({
+    symbol: row.symbol,
+    tradeId: row.trade_id as number,
+    orderId: row.order_id as number | null,
+    side: row.side,
+    price: legacyMoney(row.price, true),
+    qty: legacyMoney(row.qty, true),
+    quoteQty: legacyMoney(row.quote_qty, true),
+    commission: legacyMoney(row.commission, false),
+    commissionAsset: row.commission_asset as string | null,
+    ts: row.ts as number,
+    source: row.source,
+    moneyEncoding: 'LEGACY_BINARY64',
+  });
+}
+
+function upgradeLedgerVersion(db: Database.Database): void {
+  const updated = db.prepare(`
+    UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+    SET current_schema_version = ?, rollback_floor = ?
+    WHERE singleton = 1
+      AND current_schema_version = 1
+      AND typeof(rollback_floor) = 'integer'
+      AND rollback_floor BETWEEN 0 AND 1
+  `).run(LEDGER_SCHEMA_VERSION, LEDGER_ROLLBACK_FLOOR);
+  if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
+  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+}
+
+function migrateFillStorage(db: Database.Database): void {
+  db.transaction(() => {
+    const liveSchemaVersion = db.pragma('user_version', { simple: true }) as unknown;
+    if (!Number.isSafeInteger(liveSchemaVersion)
+      || (liveSchemaVersion as number) < 0
+      || (liveSchemaVersion as number) > LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
+    }
+    const columns = db.prepare('PRAGMA table_info(fills)').all() as FillColumnInfo[];
+    if (exactColumnShape(columns, EXACT_FILL_COLUMNS)) {
+      if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+      return;
+    }
+    if (!exactColumnShape(columns, LEGACY_FILL_COLUMNS) || (liveSchemaVersion as number) >= 2) {
+      throw new Error('LEDGER_FILL_SCHEMA_MALFORMED');
+    }
+    const rows = db.prepare(`
+      SELECT symbol, trade_id, order_id, side, price, qty, quote_qty,
+             commission, commission_asset, ts, source
+      FROM fills
+      ORDER BY symbol COLLATE BINARY ASC, trade_id ASC
+    `).all() as LegacyFillDbRow[];
+    const canonicalRows = rows.map(canonicalLegacyFill);
+    const collision = db.prepare(`
+      SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'table' AND name = 'fills_v1_binary64'
+    `).get() as { count: number };
+    if (collision.count !== 0) throw new Error('LEDGER_FILL_V1_MIGRATION_COLLISION');
+    db.exec(`
+      DROP INDEX IF EXISTS idx_fills_ts;
+      DROP INDEX IF EXISTS idx_fills_total_order;
+      ALTER TABLE fills RENAME TO fills_v1_binary64;
+    `);
+    createExactFillsTable(db);
+    const insert = db.prepare(`
+      INSERT INTO fills
+        (symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+         commission_asset, ts, source, money_encoding)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of canonicalRows) {
+      insert.run(
+        row.symbol, row.tradeId, row.orderId, row.side, row.price, row.qty,
+        row.quoteQty, row.commission, row.commissionAsset, row.ts, row.source,
+        row.moneyEncoding,
+      );
+    }
+    const migratedCount = db.prepare('SELECT COUNT(*) AS count FROM fills').get() as { count: number };
+    if (migratedCount.count !== canonicalRows.length) throw new Error('LEDGER_FILL_V1_MIGRATION_COUNT_MISMATCH');
+    db.exec(`
+      DROP TABLE fills_v1_binary64;
+      CREATE INDEX idx_fills_ts ON fills (ts DESC);
+      CREATE INDEX idx_fills_total_order
+        ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
+    `);
+    if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+  }).immediate();
+}
+
+export type FillMoneyEncoding = 'EXACT_DECIMAL' | 'LEGACY_BINARY64';
+
+/** Canonical durable fill truth used by replay and PnL. */
+export interface FillInput {
+  readonly symbol: string;
+  readonly tradeId: number;
+  readonly orderId: number | null;
+  readonly side: string;
+  readonly price: NonNegativeDecimal;
+  readonly qty: NonNegativeDecimal;
+  readonly quoteQty: NonNegativeDecimal;
+  readonly commission: NonNegativeDecimal;
+  readonly commissionAsset: string | null;
+  readonly ts: number;
+  readonly source: string;
+}
+
+export interface FillRow extends FillInput {
+  readonly moneyEncoding: FillMoneyEncoding;
+}
+
+/** Non-authoritative numeric projection retained for the existing UI API. */
+export interface FillDisplayRow {
   symbol: string;
   tradeId: number;
   orderId: number | null;
@@ -438,13 +675,14 @@ interface FillDbRow {
   trade_id: number;
   order_id: number | null;
   side: string;
-  price: number;
-  qty: number;
-  quote_qty: number;
-  commission: number;
+  price: unknown;
+  qty: unknown;
+  quote_qty: unknown;
+  commission: unknown;
   commission_asset: string | null;
   ts: number;
   source: string;
+  money_encoding: unknown;
 }
 
 interface DurableMutationAuthorityDbRow {
@@ -499,6 +737,13 @@ export class Ledger extends EventEmitter {
       const legacyCompatibility = startupSchemaVersion === 0
         ? readLegacyJournalCompatibility(dataDir)
         : null;
+      const startupFillTable = this.db.prepare(`
+        SELECT COUNT(*) AS count FROM sqlite_master
+        WHERE type = 'table' AND name = 'fills'
+      `).get() as { count: number };
+      if ((startupSchemaVersion as number) > 0 && startupFillTable.count !== 1) {
+        throw new Error('LEDGER_FILL_SCHEMA_MISSING');
+      }
 
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
@@ -526,13 +771,14 @@ export class Ledger extends EventEmitter {
         trade_id INTEGER NOT NULL,
         order_id INTEGER,
         side TEXT NOT NULL,
-        price REAL NOT NULL,
-        qty REAL NOT NULL,
-        quote_qty REAL NOT NULL,
-        commission REAL NOT NULL DEFAULT 0,
+        price TEXT NOT NULL CHECK(typeof(price) = 'text' AND length(price) BETWEEN 1 AND 98),
+        qty TEXT NOT NULL CHECK(typeof(qty) = 'text' AND length(qty) BETWEEN 1 AND 98),
+        quote_qty TEXT NOT NULL CHECK(typeof(quote_qty) = 'text' AND length(quote_qty) BETWEEN 1 AND 98),
+        commission TEXT NOT NULL CHECK(typeof(commission) = 'text' AND length(commission) BETWEEN 1 AND 98),
         commission_asset TEXT,
         ts INTEGER NOT NULL,
         source TEXT NOT NULL,
+        money_encoding TEXT NOT NULL CHECK(money_encoding IN ('EXACT_DECIMAL', 'LEGACY_BINARY64')),
         PRIMARY KEY (symbol, trade_id)
       );
       CREATE TABLE IF NOT EXISTS signals (
@@ -716,10 +962,16 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_product_incidents_state_severity_last_seen
         ON product_incidents (state, severity, last_seen_at_ms DESC);
       CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills (ts DESC);
+      CREATE INDEX IF NOT EXISTS idx_fills_total_order
+        ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
+      migrateFillStorage(this.db);
       if (startupSchemaVersion === 0) {
         const initializeCompatibility = this.db.transaction(() => {
+          const liveSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
+          if (liveSchemaVersion === LEDGER_SCHEMA_VERSION) return;
+          if (liveSchemaVersion !== 0) throw new Error('LEDGER_SCHEMA_VERSION_MISMATCH');
           const existingRows = this.db.prepare(`
             SELECT singleton, current_schema_version, rollback_floor
             FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
@@ -1275,37 +1527,71 @@ export class Ledger extends EventEmitter {
     return row ? parseEvent(row) : null;
   }
 
-  /** Returns true if the fill was new (not a duplicate). */
-  insertFill(f: FillRow): boolean {
-    const info = this.db
-      .prepare(
-        `INSERT OR IGNORE INTO fills
-         (symbol, trade_id, order_id, side, price, qty, quote_qty, commission, commission_asset, ts, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        f.symbol,
-        f.tradeId,
-        f.orderId,
-        f.side,
-        f.price,
-        f.qty,
-        f.quoteQty,
-        f.commission,
-        f.commissionAsset,
-        f.ts,
-        f.source
-      );
-    return info.changes > 0;
+  /** Returns true if exact durable truth was inserted or upgraded. */
+  insertFill(input: FillInput): boolean {
+    const fill = canonicalExactFillInput(input);
+    return this.db.transaction(() => {
+      const existingRow = this.db.prepare(`
+        SELECT symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+               commission_asset, ts, source, money_encoding
+        FROM fills
+        WHERE symbol = ? AND trade_id = ?
+      `).get(fill.symbol, fill.tradeId) as FillDbRow | undefined;
+      if (existingRow === undefined) {
+        const inserted = this.db.prepare(`
+          INSERT INTO fills
+            (symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+             commission_asset, ts, source, money_encoding)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'EXACT_DECIMAL')
+        `).run(
+          fill.symbol, fill.tradeId, fill.orderId, fill.side, fill.price, fill.qty,
+          fill.quoteQty, fill.commission, fill.commissionAsset, fill.ts, fill.source,
+        );
+        if (inserted.changes !== 1) throw new Error('FILL_INSERT_FAILED');
+        return true;
+      }
+
+      const existing = parseFill(existingRow);
+      if (!sameFillIdentityMetadata(existing, fill)) throw new Error('FILL_IDENTITY_CONFLICT');
+      if (existing.moneyEncoding === 'LEGACY_BINARY64') {
+        const upgraded = this.db.prepare(`
+          UPDATE fills
+          SET price = ?, qty = ?, quote_qty = ?, commission = ?, source = ?,
+              money_encoding = 'EXACT_DECIMAL'
+          WHERE symbol = ? AND trade_id = ? AND money_encoding = 'LEGACY_BINARY64'
+        `).run(
+          fill.price, fill.qty, fill.quoteQty, fill.commission, fill.source,
+          fill.symbol, fill.tradeId,
+        );
+        if (upgraded.changes !== 1) throw new Error('FILL_UPGRADE_FAILED');
+        const readback = this.db.prepare(`
+          SELECT symbol, trade_id, order_id, side, price, qty, quote_qty, commission,
+                 commission_asset, ts, source, money_encoding
+          FROM fills WHERE symbol = ? AND trade_id = ?
+        `).get(fill.symbol, fill.tradeId) as FillDbRow | undefined;
+        if (readback === undefined || !sameFillTruth(parseFill(readback), fill)) {
+          throw new Error('FILL_UPGRADE_POSTCONDITION_FAILED');
+        }
+        return true;
+      }
+      if (sameFillTruth(existing, fill)) return false;
+      throw new Error('FILL_IDENTITY_CONFLICT');
+    }).immediate();
   }
 
-  listFills(limit = 200, symbol?: string): FillRow[] {
+  listFills(limit = 200, symbol?: string): FillDisplayRow[] {
     const rows = (
       symbol
-        ? this.db.prepare('SELECT * FROM fills WHERE symbol = ? ORDER BY ts DESC LIMIT ?').all(symbol, limit)
-        : this.db.prepare('SELECT * FROM fills ORDER BY ts DESC LIMIT ?').all(limit)
+        ? this.db.prepare(`
+            SELECT * FROM fills WHERE symbol = ?
+            ORDER BY ts DESC, symbol COLLATE BINARY DESC, trade_id DESC LIMIT ?
+          `).all(symbol, limit)
+        : this.db.prepare(`
+            SELECT * FROM fills
+            ORDER BY ts DESC, symbol COLLATE BINARY DESC, trade_id DESC LIMIT ?
+          `).all(limit)
     ) as FillDbRow[];
-    return rows.map(parseFill);
+    return rows.map((row) => displayFill(parseFill(row)));
   }
 
   /**
@@ -1352,7 +1638,10 @@ export class Ledger extends EventEmitter {
   }
 
   allFillsAsc(): FillRow[] {
-    const rows = this.db.prepare('SELECT * FROM fills ORDER BY ts ASC').all() as FillDbRow[];
+    const rows = this.db.prepare(`
+      SELECT * FROM fills
+      ORDER BY ts ASC, symbol COLLATE BINARY ASC, trade_id ASC
+    `).all() as FillDbRow[];
     return rows.map(parseFill);
   }
 
@@ -3402,18 +3691,113 @@ function eventSearchPattern(value: string): string | null {
   return `%${escaped}%`;
 }
 
+const EXACT_ZERO = normalizeNonNegativeExactDecimal('0');
+
+function canonicalExactFillInput(input: FillInput): Readonly<FillInput> {
+  if (typeof input.symbol !== 'string' || !/^[A-Z0-9]{1,20}$/.test(input.symbol)) {
+    throw new TypeError('fill symbol is invalid');
+  }
+  if (!Number.isSafeInteger(input.tradeId) || input.tradeId < 0) {
+    throw new TypeError('fill trade id is invalid');
+  }
+  if (input.orderId !== null && (!Number.isSafeInteger(input.orderId) || input.orderId < 0)) {
+    throw new TypeError('fill order id is invalid');
+  }
+  if (input.side !== 'BUY' && input.side !== 'SELL') throw new TypeError('fill side is invalid');
+  if (input.commissionAsset !== null && (typeof input.commissionAsset !== 'string'
+    || input.commissionAsset.length < 1 || input.commissionAsset.length > 80
+    || /[\u0000-\u001f\u007f]/.test(input.commissionAsset))) {
+    throw new TypeError('fill commission asset is invalid');
+  }
+  if (!Number.isSafeInteger(input.ts) || input.ts <= 0) throw new TypeError('fill timestamp is invalid');
+  if (typeof input.source !== 'string' || input.source.length < 1 || input.source.length > 64
+    || /[\u0000-\u001f\u007f]/.test(input.source)) {
+    throw new TypeError('fill source is invalid');
+  }
+  const price = normalizeNonNegativeExactDecimal(input.price);
+  const qty = normalizeNonNegativeExactDecimal(input.qty);
+  const quoteQty = normalizeNonNegativeExactDecimal(input.quoteQty);
+  const commission = normalizeNonNegativeExactDecimal(input.commission);
+  if (compareExactDecimals(price, EXACT_ZERO) <= 0
+    || compareExactDecimals(qty, EXACT_ZERO) <= 0
+    || compareExactDecimals(quoteQty, EXACT_ZERO) <= 0) {
+    throw new TypeError('fill price and quantities must be positive');
+  }
+  return Object.freeze({
+    symbol: input.symbol,
+    tradeId: input.tradeId,
+    orderId: input.orderId,
+    side: input.side,
+    price,
+    qty,
+    quoteQty,
+    commission,
+    commissionAsset: input.commissionAsset,
+    ts: input.ts,
+    source: input.source,
+  });
+}
+
+function sameFillTruth(existing: Readonly<FillRow>, incoming: Readonly<FillInput>): boolean {
+  return sameFillIdentityMetadata(existing, incoming)
+    && existing.price === incoming.price
+    && existing.qty === incoming.qty
+    && existing.quoteQty === incoming.quoteQty
+    && existing.commission === incoming.commission;
+}
+
+function sameFillIdentityMetadata(existing: Readonly<FillRow>, incoming: Readonly<FillInput>): boolean {
+  return existing.symbol === incoming.symbol
+    && existing.tradeId === incoming.tradeId
+    && existing.orderId === incoming.orderId
+    && existing.side === incoming.side
+    && existing.commissionAsset === incoming.commissionAsset
+    && existing.ts === incoming.ts;
+}
+
 function parseFill(r: FillDbRow): FillRow {
-  return {
+  if (r.money_encoding !== 'EXACT_DECIMAL' && r.money_encoding !== 'LEGACY_BINARY64') {
+    throw new Error('LEDGER_FILL_ENCODING_MALFORMED');
+  }
+  const canonical = canonicalExactFillInput({
     symbol: r.symbol,
     tradeId: r.trade_id,
     orderId: r.order_id,
     side: r.side,
-    price: r.price,
-    qty: r.qty,
-    quoteQty: r.quote_qty,
-    commission: r.commission,
+    price: r.price as NonNegativeDecimal,
+    qty: r.qty as NonNegativeDecimal,
+    quoteQty: r.quote_qty as NonNegativeDecimal,
+    commission: r.commission as NonNegativeDecimal,
     commissionAsset: r.commission_asset,
     ts: r.ts,
     source: r.source,
+  });
+  if (canonical.price !== r.price || canonical.qty !== r.qty
+    || canonical.quoteQty !== r.quote_qty || canonical.commission !== r.commission) {
+    throw new Error('LEDGER_FILL_DECIMAL_NON_CANONICAL');
+  }
+  return Object.freeze({ ...canonical, moneyEncoding: r.money_encoding });
+}
+
+function displayFill(fill: Readonly<FillRow>): FillDisplayRow {
+  const price = Number(fill.price);
+  const qty = Number(fill.qty);
+  const quoteQty = Number(fill.quoteQty);
+  const commission = Number(fill.commission);
+  if (![price, qty, quoteQty, commission].every(Number.isFinite)) {
+    throw new Error('LEDGER_FILL_DISPLAY_PROJECTION_UNAVAILABLE');
+  }
+  return {
+    symbol: fill.symbol,
+    tradeId: fill.tradeId,
+    orderId: fill.orderId,
+    side: fill.side,
+    price,
+    qty,
+    quoteQty,
+    commission,
+    commissionAsset: fill.commissionAsset,
+    ts: fill.ts,
+    source: fill.source,
   };
 }

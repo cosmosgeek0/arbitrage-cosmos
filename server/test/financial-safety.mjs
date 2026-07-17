@@ -63,12 +63,16 @@ class FakeLedger extends EventEmitter {
 
   insertFill(fill) {
     if (this.fills.some((row) => row.symbol === fill.symbol && row.tradeId === fill.tradeId)) return false;
-    this.fills.push({ ...fill });
+    this.fills.push({ ...fill, moneyEncoding: 'EXACT_DECIMAL' });
     return true;
   }
 
   allFillsAsc() {
-    return [...this.fills].sort((left, right) => left.ts - right.ts);
+    return [...this.fills].sort((left, right) => (
+      left.ts - right.ts
+      || (left.symbol < right.symbol ? -1 : left.symbol > right.symbol ? 1 : 0)
+      || left.tradeId - right.tradeId
+    ));
   }
 
   distinctFillSymbolsBetween(startTs, endTs, limit = 501) {
@@ -372,12 +376,60 @@ console.log('\nFinancial safety regressions:');
   const ledger = new FakeLedger();
   const account = new AccountService(null, ledger, () => 300);
   const now = Date.now();
-  account.recordFill({ symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY', price: 100, qty: 1, quoteQty: 100, commission: 0, commissionAsset: 'USDT', ts: now - 1_000, source: 'test' });
+  account.recordFill({ symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY', price: '100', qty: '1', quoteQty: '100', commission: '0', commissionAsset: 'USDT', ts: now - 1_000, source: 'test' });
   account.pnl();
-  account.recordFill({ symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL', price: 90, qty: 1, quoteQty: 90, commission: 1, commissionAsset: 'USDT', ts: now, source: 'import' });
+  account.recordFill({ symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL', price: '90', qty: '1', quoteQty: '90', commission: '1', commissionAsset: 'USDT', ts: now, source: 'import' });
   check('fill import invalidates an already-built PnL cache', account.realizedTodayUsd() === -10);
   const policy = account.dailyLossPolicy();
   check('daily-loss policy deducts valued fees', policy.complete && policy.valueUsd === -11);
+}
+
+// Exact quote truth and the total fill order must survive values that collapse
+// to the same binary64 number. The higher-id SELL is inserted first on purpose.
+{
+  const ledger = new FakeLedger();
+  const account = new AccountService(null, ledger, () => 1);
+  const ts = Date.now();
+  account.recordFill({
+    symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL',
+    price: '9007199254740993.02', qty: '1', quoteQty: '9007199254740993.02',
+    commission: '0', commissionAsset: 'USDT', ts, source: 'test',
+  });
+  account.recordFill({
+    symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY',
+    price: '9007199254740993.01', qty: '1', quoteQty: '9007199254740993.01',
+    commission: '0', commissionAsset: 'USDT', ts, source: 'test',
+  });
+  check(
+    'equal-millisecond PnL replays by total order with exact decimal cancellation',
+    account.realizedTodayUsd() === 0.01,
+  );
+}
+
+// A migrated binary64 acquisition cannot prove later cost basis merely because
+// the later SELL itself is exact. The taint persists until inventory resets or
+// authoritative reconciliation upgrades that fill identity.
+{
+  const ledger = new FakeLedger();
+  const ts = Date.now() - 1_000;
+  ledger.fills.push({
+    symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY', price: '100', qty: '2',
+    quoteQty: '200', commission: '0', commissionAsset: 'USDT', ts,
+    source: 'legacy-v1', moneyEncoding: 'LEGACY_BINARY64',
+  });
+  ledger.fills.push({
+    symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL', price: '110', qty: '1',
+    quoteQty: '110', commission: '0', commissionAsset: 'USDT', ts: ts + 1,
+    source: 'rest_reconciliation', moneyEncoding: 'EXACT_DECIMAL',
+  });
+  const account = new AccountService(null, ledger, () => 110);
+  const policy = account.dailyLossPolicy();
+  check(
+    'legacy binary64 cost basis taints downstream PnL until inventory truth resets',
+    !policy.complete
+      && policy.reasons.some((reason) => /legacy binary64 fill/.test(reason))
+      && policy.reasons.some((reason) => /cost basis depends/.test(reason)),
+  );
 }
 
 // Selling inventory with no ledgered acquisition basis must not be interpreted
@@ -385,7 +437,7 @@ console.log('\nFinancial safety regressions:');
 {
   const ledger = new FakeLedger();
   const account = new AccountService(null, ledger, () => 100);
-  account.recordFill({ symbol: 'BTCUSDT', tradeId: 3, orderId: 3, side: 'SELL', price: 100, qty: 1, quoteQty: 100, commission: 0, commissionAsset: 'USDT', ts: Date.now(), source: 'test' });
+  account.recordFill({ symbol: 'BTCUSDT', tradeId: 3, orderId: 3, side: 'SELL', price: '100', qty: '1', quoteQty: '100', commission: '0', commissionAsset: 'USDT', ts: Date.now(), source: 'test' });
   const policy = account.dailyLossPolicy();
   check('unknown sell basis makes daily-loss policy incomplete', !policy.complete && policy.reasons.some((reason) => /cost basis unavailable/.test(reason)));
 }
@@ -462,6 +514,38 @@ console.log('\nFinancial safety regressions:');
   const response = ledger.events.find((event) => event.kind === 'order_response' && event.data?.orderId === 33);
   check('partially executed terminal order is accepted', result.sent && result.outcome === 'accepted');
   check('partially executed terminal order requires reconciliation', result.reconciliationRequired === true && response?.data?.reservationReleased === false);
+}
+
+// Inline execution evidence is multiplied and compared to the acknowledgement
+// in base 10, without an intermediate Number conversion.
+{
+  const recorded = [];
+  const client = {
+    openOrders: async () => [],
+    placeOrder: async (params) => ({
+      symbol: 'BTCUSDT', orderId: 34, clientOrderId: params.newClientOrderId,
+      transactTime: Date.now(), status: 'FILLED', executedQty: '0.00000000000000001',
+      cummulativeQuoteQty: '0.0000000000000000010000000000000001',
+      fills: [{
+        tradeId: 10, price: '0.10000000000000001', qty: '0.00000000000000001',
+        commission: '0.000000000000000001', commissionAsset: 'USDT',
+      }],
+    }),
+  };
+  const account = accountStub({ recordFill: (fill) => { recorded.push(fill); return true; } });
+  const { service } = orderService({ client, account });
+  const result = await service.send(
+    { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quoteQty: 10, source: 'manual' },
+    'BTCUSDT',
+  );
+  check(
+    'inline fill money remains exact through multiplication and completeness proof',
+    result.sent
+      && result.reconciliationRequired === false
+      && recorded[0]?.price === '0.10000000000000001'
+      && recorded[0]?.qty === '0.00000000000000001'
+      && recorded[0]?.quoteQty === '0.0000000000000000010000000000000001',
+  );
 }
 
 // Concurrent callers share one authoritative open-order request and the
@@ -558,8 +642,8 @@ console.log('\nFinancial safety regressions:');
   await account.sync();
   check('first complete snapshot becomes the daily baseline', account.equity().complete && account.dayOpenEquity() === 100);
   const rejected = account.recordFill({
-    symbol: 'BTCUSDC', tradeId: 99, orderId: 99, side: 'BUY', price: 100, qty: 1,
-    quoteQty: 100, commission: 0, commissionAsset: 'USDC', ts: Date.now(), source: 'test',
+    symbol: 'BTCUSDC', tradeId: 99, orderId: 99, side: 'BUY', price: '100', qty: '1',
+    quoteQty: '100', commission: '0', commissionAsset: 'USDC', ts: Date.now(), source: 'test',
   });
   check('non-USDT fills are rejected from USDT PnL', rejected === false && ledger.fills.every((fill) => fill.symbol !== 'BTCUSDC'));
 }
@@ -605,8 +689,9 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
       optionsSeen.push(options);
       calls += 1;
       return calls === 1 ? [{
-        symbol: 'BTCUSDT', id: 10, orderId: 20, price: '100', qty: '0.1', quoteQty: '10',
-        commission: '0', commissionAsset: 'USDT', time: Date.now(), isBuyer: true,
+        symbol: 'BTCUSDT', id: 10, orderId: 20, price: '9007199254740993.00000001',
+        qty: '0.00000001', quoteQty: '90071992.5474099300000001',
+        commission: '0.000000000000000001', commissionAsset: 'USDT', time: Date.now(), isBuyer: true,
       }] : [];
     },
   };
@@ -627,7 +712,14 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
       && account.dailyLossPolicy().reasons.some((reason) => /account-wide fill coverage/.test(reason)),
   );
   check('fill reconciliation persists and advances a per-symbol cursor', optionsSeen[0]?.startTime > 0 && optionsSeen[1]?.fromId === 11);
-  check('REST reconciliation records authoritative fills exactly once', ledger.fills.length === 1 && ledger.fills[0].source === 'rest_reconciliation');
+  check(
+    'REST reconciliation records authoritative decimal strings exactly once',
+    ledger.fills.length === 1
+      && ledger.fills[0].source === 'rest_reconciliation'
+      && ledger.fills[0].price === '9007199254740993.00000001'
+      && ledger.fills[0].quoteQty === '90071992.5474099300000001'
+      && ledger.fills[0].commission === '0.000000000000000001',
+  );
 }
 
 // A requested symbol must survive process restart even after it disappears
@@ -710,8 +802,8 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
   const ledger = new FakeLedger();
   const source = new AccountService(null, ledger, () => 1);
   source.recordFill({
-    symbol: 'ETHUSDT', tradeId: 1, orderId: 2, side: 'BUY', price: 100, qty: 1,
-    quoteQty: 100, commission: 0, commissionAsset: 'USDT', ts: Date.now(), source: 'user_stream',
+    symbol: 'ETHUSDT', tradeId: 1, orderId: 2, side: 'BUY', price: '100', qty: '1',
+    quoteQty: '100', commission: '0', commissionAsset: 'USDT', ts: Date.now(), source: 'user_stream',
   });
   ledger.config.delete('fill_reconcile:symbol_universe:v1');
   const recovered = new AccountService({ myTrades: async () => [] }, ledger, () => 1);

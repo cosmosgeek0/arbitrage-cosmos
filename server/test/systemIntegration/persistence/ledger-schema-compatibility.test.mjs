@@ -61,17 +61,17 @@ test('new Ledger persists the exact owned schema and non-rollback floor', () => 
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
   try {
-    assert.equal(LEDGER_SCHEMA_VERSION, 1);
-    assert.equal(LEDGER_ROLLBACK_FLOOR, 1);
-    assert.equal(ledger.db.pragma('user_version', { simple: true }), 1);
+    assert.equal(LEDGER_SCHEMA_VERSION, 2);
+    assert.equal(LEDGER_ROLLBACK_FLOOR, 2);
+    assert.equal(ledger.db.pragma('user_version', { simple: true }), 2);
     assert.deepEqual(
       ledger.db.prepare('SELECT singleton, current_schema_version, rollback_floor FROM ledger_schema_compatibility').get(),
-      { singleton: 1, current_schema_version: 1, rollback_floor: 1 },
+      { singleton: 1, current_schema_version: 2, rollback_floor: 2 },
     );
     assert.deepEqual(ledger.readSchemaCompatibility(), {
       state: 'AVAILABLE',
-      currentSchemaVersion: 1,
-      rollbackFloor: 1,
+      currentSchemaVersion: 2,
+      rollbackFloor: 2,
       reasonCode: null,
     });
     assert.equal(Object.isFrozen(ledger.readSchemaCompatibility()), true);
@@ -99,7 +99,7 @@ test('legacy DB rows survive one-time marker import while the unsafe legacy floo
     assert.equal(migrated.getConfigValue('legacy.config'), 'preserved');
     assert.equal(migrated.countEvents('legacy.audit'), 1);
     assert.deepEqual(migrated.readSchemaCompatibility(), {
-      state: 'AVAILABLE', currentSchemaVersion: 1, rollbackFloor: 1, reasonCode: null,
+      state: 'AVAILABLE', currentSchemaVersion: 2, rollbackFloor: 2, reasonCode: null,
     });
     assert.equal(JSON.parse(readFileSync(path.join(dataDir, 'journal-compat.json'), 'utf8')).rollbackFloor, 0);
 
@@ -108,7 +108,7 @@ test('legacy DB rows survive one-time marker import while the unsafe legacy floo
       === LEGACY_CHECKPOINT_KEYS.join('|');
     assert.equal(Object.hasOwn(currentCheckpoint, 'liveEdgeControlEvents'), true);
     assert.equal(oldExactKeyReaderAccepts, false, 'the prior exact-key reader cannot consume the new checkpoint shape');
-    assert.equal(migrated.readSchemaCompatibility().rollbackFloor, 1, 'rollback floor must reflect the old-reader incompatibility');
+    assert.equal(migrated.readSchemaCompatibility().rollbackFloor, 2, 'rollback floor must reflect the old-reader incompatibility');
   } finally {
     migrated.close();
     rmSync(dataDir, { recursive: true, force: true });
@@ -119,21 +119,21 @@ test('Ledger readback withholds both numbers for malformed, mismatched, and unav
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
   try {
-    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 2').run();
+    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 3').run();
     assertNullFailure(ledger.readSchemaCompatibility(), 'MISMATCH', 'LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER');
-    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 1').run();
+    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 2').run();
 
     ledger.db.pragma('ignore_check_constraints = ON');
-    ledger.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 2').run();
+    ledger.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 3').run();
     ledger.db.pragma('ignore_check_constraints = OFF');
     assertNullFailure(ledger.readSchemaCompatibility(), 'MISMATCH', 'LEDGER_ROLLBACK_FLOOR_EXCEEDS_CURRENT_SCHEMA');
     ledger.db.pragma('ignore_check_constraints = ON');
-    ledger.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 1').run();
+    ledger.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 2').run();
     ledger.db.prepare("UPDATE ledger_schema_compatibility SET current_schema_version = 'broken'").run();
     ledger.db.pragma('ignore_check_constraints = OFF');
     assertNullFailure(ledger.readSchemaCompatibility(), 'MALFORMED', 'LEDGER_SCHEMA_COMPATIBILITY_ROW_MALFORMED');
     ledger.db.pragma('ignore_check_constraints = ON');
-    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 1').run();
+    ledger.db.prepare('UPDATE ledger_schema_compatibility SET current_schema_version = 2').run();
     ledger.db.pragma('ignore_check_constraints = OFF');
 
     ledger.db.prepare('DELETE FROM ledger_schema_compatibility').run();
@@ -148,7 +148,7 @@ test('Ledger readback withholds both numbers for malformed, mismatched, and unav
 test('ordinary startup rejects unsupported newer schema and rollback-floor mismatch', () => {
   const newerDir = tempDataDir();
   const newerDb = new Database(path.join(newerDir, 'cosmos.db'));
-  newerDb.pragma('user_version = 2');
+  newerDb.pragma('user_version = 3');
   newerDb.close();
   assert.throws(() => new Ledger(newerDir), /LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER/);
   const newerReadback = new Database(path.join(newerDir, 'cosmos.db'));
@@ -159,7 +159,7 @@ test('ordinary startup rejects unsupported newer schema and rollback-floor misma
   const floorDir = tempDataDir();
   const seeded = new Ledger(floorDir);
   seeded.db.pragma('ignore_check_constraints = ON');
-  seeded.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 2').run();
+  seeded.db.prepare('UPDATE ledger_schema_compatibility SET rollback_floor = 3').run();
   seeded.close();
   assert.throws(() => new Ledger(floorDir), /LEDGER_ROLLBACK_FLOOR_EXCEEDS_CURRENT_SCHEMA/);
   rmSync(floorDir, { recursive: true, force: true });
@@ -170,7 +170,7 @@ test('legacy marker import is closed-schema and refuses extras, malformed values
     [{ extra: 'not-allowed' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
     [{ updatedAtUtc: 'not-utc' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
     [{ updatedAtUtc: '2026-02-31T00:00:00Z' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
-    [{ dataSchema: 2, rollbackFloor: 1 }, /LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER/],
+    [{ dataSchema: 3, rollbackFloor: 2 }, /LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER/],
   ];
   for (const [overrides, expected] of cases) {
     const dataDir = tempDataDir();

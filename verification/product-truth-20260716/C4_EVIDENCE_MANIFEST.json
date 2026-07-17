@@ -1,0 +1,103 @@
+{
+  "schema": "product-truth-c4-evidence-manifest.v1",
+  "source_candidate": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+  "source_candidate_tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+  "expected_direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "observed_parents": [
+    "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+  ],
+  "direct_parent_equality": true,
+  "post_c4_path_allowlist": [
+    "verification/product-truth-20260716/**"
+  ],
+  "post_c4_out_of_scope_paths": [],
+  "evidence_disposition": "REJECTED_LOCAL_GATE",
+  "all_local_required_commands_passed": false,
+  "custody": "WITHHELD_C4_LOCAL_GATE_REJECTED",
+  "custody_token_issued": false,
+  "input_count": 61,
+  "mapped_input_count": 61,
+  "candidate_backed_byte_audit_count": 34,
+  "artifacts": [
+    {
+      "path": "verification/product-truth-20260716/C4_FINDING_DISPOSITION.json",
+      "sha256": "04206854e619b51317ac60964b1907e6809d97767a538ab3fa261fe4201ad34b",
+      "byte_length": 2889
+    },
+    {
+      "path": "verification/product-truth-20260716/C4_INPUT_COVERAGE.json",
+      "sha256": "1bb248c71f2ea0da8094233fb73a03e669b75bf4cb9a23c1b2ae9cfb4ce96848",
+      "byte_length": 51279
+    },
+    {
+      "path": "verification/product-truth-20260716/C4_LOCAL_GATE_REPORT.json",
+      "sha256": "8ab82de0a9c148634cb9f283979f66cfcb74805c3dc7e5a11b11596e7bce3e8d",
+      "byte_length": 120770
+    },
+    {
+      "path": "verification/product-truth-20260716/C4_TOPOLOGY.json",
+      "sha256": "a30cfdddfec20795a4d9290b6a550ed90b0758371eb327bf929e217b857d198b",
+      "byte_length": 726
+    },
+    {
+      "path": "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+      "sha256": "5c70b022e9d8d6772eb067f1caaecd5df8eb374ece0aa0003b2beac33c2c04fd",
+      "byte_length": 5939
+    },
+    {
+      "path": "verification/product-truth-20260716/CLEAN_CLONE_ACCEPTANCE.md",
+      "sha256": "d0026d7aca5a1114f76796d6ba4caed9afd3cf2be44dd32ebe770a692549b94a",
+      "byte_length": 1602
+    },
+    {
+      "path": "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
+      "sha256": "af8d1d9b3cb73cf4f8ed304c1868fe6dfe28c81f449e20b1dacf833ab4d73625",
+      "byte_length": 140397
+    },
+    {
+      "path": "verification/product-truth-20260716/EVIDENCE_SELECTION.json",
+      "sha256": "c83c051f7cbca2424a9a0797096dfcd2ae254f0bce2bf29cb80caac3a14db913",
+      "byte_length": 1060
+    },
+    {
+      "path": "verification/product-truth-20260716/FINAL_VERDICT.md",
+      "sha256": "62ed107d64d4897c86b6b8be18edc918569b2a00c4e62386db0ed87f35d4d751",
+      "byte_length": 1165
+    },
+    {
+      "path": "verification/product-truth-20260716/INPUTS.lock",
+      "sha256": "4170a15ab960a851a6851d7c9a891dbe6d05be70e205ddd30970ba19e426a49f",
+      "byte_length": 28682
+    },
+    {
+      "path": "verification/product-truth-20260716/STATE.md",
+      "sha256": "36cbbf1527853f8ea3d60eb790dc0cce114f13702f4edba00870bb783c7e56da",
+      "byte_length": 4598
+    },
+    {
+      "path": "verification/product-truth-20260716/WORKTREE_CENSUS.json",
+      "sha256": "a9527d53a893e776ef2885f08ab1e4db7551679fed718e8afab4d3db410807af",
+      "byte_length": 280366
+    },
+    {
+      "path": "verification/product-truth-20260716/generate-c4-evidence.mjs",
+      "sha256": "9ce30c336da54817ce9068c2545c6a1bb8c8456f9a8c499d406ed441ee460dc8",
+      "byte_length": 15328
+    },
+    {
+      "path": "verification/product-truth-20260716/generate-c4-manifest.mjs",
+      "sha256": "6f78a41c3e410687d88b65842da93c7f452896458890538964f545040e22d3fe",
+      "byte_length": 3539
+    },
+    {
+      "path": "verification/product-truth-20260716/run-c4-local-gates.mjs",
+      "sha256": "7a1a3e0df05d977f73076c784683074c75dfa8506afcdc3a890007e095495339",
+      "byte_length": 20394
+    },
+    {
+      "path": "verification/product-truth-20260716/verify-c4-evidence.mjs",
+      "sha256": "0c9859baf2e60f00f119fac8639545ce8acb8f51dc26893e681df4ee5338d7e3",
+      "byte_length": 14127
+    }
+  ]
+}

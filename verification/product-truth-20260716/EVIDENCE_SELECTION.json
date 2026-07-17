@@ -1,15 +1,19 @@
 {
-  "schema": "product-truth-c2-evidence-selection.v1",
-  "source_candidate": null,
-  "source_candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
-  "candidate_embedded_package": "SOURCE_UNBOUND",
-  "selection_rule": "The candidate source commit cannot self-name. Select only a campaign evidence descendant whose manifest hashes C2_EVIDENCE_BINDING.json, whose ancestry contains exact C2, and whose post-C2 diff is confined to verification/product-truth-20260716/**. Reject old-C acceptance identifiers and ambiguous descendants.",
-  "valid_chain": "C2 -> campaign evidence child",
-  "post_c2_path_allowlist": [
+  "schema": "product-truth-c4-evidence-selection.v1",
+  "source_candidate": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+  "source_candidate_tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+  "expected_direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "direct_parent_count": 1,
+  "direct_parent_equality": true,
+  "selection_rule": "Select only an evidence descendant whose ancestry contains exact C4 and whose post-C4 diff is confined to verification/product-truth-20260716/**. Evidence may bind or reject C4 but may not alter candidate source.",
+  "valid_chain": "C2 -> C4 -> campaign evidence child",
+  "post_c4_path_allowlist": [
     "verification/product-truth-20260716/**"
   ],
-  "required_binding": "C2_EVIDENCE_BINDING.json hashed by MANIFEST.sha256",
-  "final_verifier_handoff": "BLOCKED_PENDING_WAVE1B",
-  "old_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-  "old_candidate_disposition": "REJECTED_FOR_FINAL_HANDOFF_CRITICAL_FINDINGS"
+  "required_binding": "INPUTS.lock v4 plus C4_TOPOLOGY.json plus C4_INPUT_COVERAGE.json plus C4_LOCAL_GATE_REPORT.json",
+  "evidence_disposition": "REJECTED_LOCAL_GATE",
+  "custody": "WITHHELD_C4_LOCAL_GATE_REJECTED",
+  "custody_token_issued": false,
+  "c2_or_c3_custody_transfers_to_c4": false,
+  "later_source_repair": "C5_REQUIRED; C4_MUST_NOT_BE_AMENDED"
 }

@@ -1,0 +1,18 @@
+{
+  "schema": "product-truth-c4-direct-parent-proof.v1",
+  "source_candidate": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+  "candidate_tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+  "expected_direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "observed_parents": [
+    "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+  ],
+  "parent_count": 1,
+  "direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "direct_parent_equality": true,
+  "merge_base_ancestry_substitution_allowed": false,
+  "c2_evidence_commit": "4ec9e8640a22661f7e1649204348a212d94163e1",
+  "c2_evidence_commit_in_ancestry": false,
+  "rejected_c3": "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+  "c3_in_ancestry": false,
+  "status": "PASS"
+}

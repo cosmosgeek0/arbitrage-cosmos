@@ -1,0 +1,2011 @@
+{
+  "schema": "product-truth-c4-pre-custody-local-gate.v1",
+  "generated_at_utc": "2026-07-17T02:34:07.083Z",
+  "actor_role": "ACCOUNT_A_CANDIDATE_WRITER",
+  "independent": false,
+  "independent_token_issued": false,
+  "source_candidate": {
+    "c4": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+    "c4_tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+    "immutable_c2": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+    "expected_direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+    "observed_parents": [
+      "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+    ],
+    "parent_count": 1,
+    "direct_parent_equality": true,
+    "source_branch": "codex/truth-campaign-c4-20260717",
+    "source_branch_exact": true
+  },
+  "preflight": {
+    "commands": [
+      {
+        "command": "git rev-parse '4c9143a0bcc331aa170e9e26b741240b39df8b9e^{tree}'",
+        "argv": [
+          "git",
+          "rev-parse",
+          "4c9143a0bcc331aa170e9e26b741240b39df8b9e^{tree}"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:07.084Z",
+        "ended_at_utc": "2026-07-17T02:34:07.096Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "9b3bafa393347670b53d4ece9621cc8faeffd0c496efa60cafb5695575ecbf03",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "9b3bafa393347670b53d4ece9621cc8faeffd0c496efa60cafb5695575ecbf03",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 41,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git show -s --format=%P 4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "argv": [
+          "git",
+          "show",
+          "-s",
+          "--format=%P",
+          "4c9143a0bcc331aa170e9e26b741240b39df8b9e"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:07.096Z",
+        "ended_at_utc": "2026-07-17T02:34:07.107Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 41,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git rev-parse refs/heads/codex/truth-campaign-c4-20260717",
+        "argv": [
+          "git",
+          "rev-parse",
+          "refs/heads/codex/truth-campaign-c4-20260717"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:07.107Z",
+        "ended_at_utc": "2026-07-17T02:34:07.116Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 41,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git status --porcelain=v1 -z --untracked-files=all",
+        "argv": [
+          "git",
+          "status",
+          "--porcelain=v1",
+          "-z",
+          "--untracked-files=all"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:07.116Z",
+        "ended_at_utc": "2026-07-17T02:34:07.136Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "be327893279580705d3513537c0fb8cb37a3fde0ab5d9127475d8afdfc86110b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "be327893279580705d3513537c0fb8cb37a3fde0ab5d9127475d8afdfc86110b",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 556,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "result": "PASS",
+    "dirty_paths": [
+      "verification/product-truth-20260716/C4_INPUT_COVERAGE.json",
+      "verification/product-truth-20260716/C4_LOCAL_GATE_REPORT.json",
+      "verification/product-truth-20260716/C4_TOPOLOGY.json",
+      "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+      "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
+      "verification/product-truth-20260716/INPUTS.lock",
+      "verification/product-truth-20260716/WORKTREE_CENSUS.json",
+      "verification/product-truth-20260716/generate-c4-evidence.mjs",
+      "verification/product-truth-20260716/run-c4-local-gates.mjs"
+    ],
+    "out_of_scope_dirty_paths": []
+  },
+  "census": {
+    "commands": [
+      {
+        "command": "node verification/product-truth-20260716/generate-worktree-census.mjs 4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "argv": [
+          "node",
+          "verification/product-truth-20260716/generate-worktree-census.mjs",
+          "4c9143a0bcc331aa170e9e26b741240b39df8b9e"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:07.155Z",
+        "ended_at_utc": "2026-07-17T02:34:56.985Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "fbe580e371cc5c92ec02f316e7ef4cecf9490bd529e0053ec9b3beb72e88a23b",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "fbe580e371cc5c92ec02f316e7ef4cecf9490bd529e0053ec9b3beb72e88a23b",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 398,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "result": "PASS_LIVE_GIT_DERIVED",
+    "artifact": {
+      "path": "verification/product-truth-20260716/WORKTREE_CENSUS.json",
+      "sha256": "a9527d53a893e776ef2885f08ab1e4db7551679fed718e8afab4d3db410807af",
+      "byte_length": 280366,
+      "candidate_sha": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+      "candidate_tree_sha": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+      "registered_worktree_count": 96,
+      "expected_registered_worktree_count": 96,
+      "unknown_count": 0,
+      "classification_counts": {
+        "MERGED_RETAINED": 42,
+        "SUPERSEDED_SAFE": 33,
+        "ABANDONED_SAFE": 20,
+        "SEALED_UNMERGED": 0,
+        "ACTIVE_DIRTY": 0,
+        "BLOCKED": 1,
+        "DUPLICATE_PATCH": 0,
+        "UNKNOWN": 0
+      }
+    }
+  },
+  "canonical_gate": {
+    "setup_commands": [
+      {
+        "command": "git worktree add --detach /Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW 4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "argv": [
+          "git",
+          "worktree",
+          "add",
+          "--detach",
+          "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+          "4c9143a0bcc331aa170e9e26b741240b39df8b9e"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:56.986Z",
+        "ended_at_utc": "2026-07-17T02:34:57.325Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "8d84ad833b23193e65d5effe87340994a5413a72bfa076a381c2157110a09e55",
+        "stderr_sha256": "e1d2b58204fa3d03769f72f72a2c9bd454c5af25dfa93d42ed40073e833d9802",
+        "output_sha256": "0a016d18f3e442ba30d26260b5a4b96a146c3a52e26868871b2adbdf138aac58",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 76,
+        "stderr_byte_length": 44,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git rev-parse HEAD",
+        "argv": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:57.325Z",
+        "ended_at_utc": "2026-07-17T02:34:57.334Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 41,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git status --porcelain=v1",
+        "argv": [
+          "git",
+          "status",
+          "--porcelain=v1"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:34:57.334Z",
+        "ended_at_utc": "2026-07-17T02:34:57.548Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git status --porcelain=v1",
+        "argv": [
+          "git",
+          "status",
+          "--porcelain=v1"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:56.132Z",
+        "ended_at_utc": "2026-07-17T02:37:56.359Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "commands": [
+      {
+        "command": "npm ci",
+        "argv": [
+          "npm",
+          "ci"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "install",
+        "started_at_utc": "2026-07-17T02:34:57.548Z",
+        "ended_at_utc": "2026-07-17T02:35:00.232Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "f917fb5d113652e5f93cc288e33b126daab632c9aeee6768e36abda3f9045c57",
+        "stderr_sha256": "fe49a93af7f6a5072c3a3ef65019009ce521808d6b5a32810ad9a6a433f4524d",
+        "output_sha256": "29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 143,
+        "stderr_byte_length": 150,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run typecheck",
+        "argv": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "check",
+        "started_at_utc": "2026-07-17T02:35:00.232Z",
+        "ended_at_utc": "2026-07-17T02:35:09.700Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "d99ca99dd026c35c82aeabf927e70652619878f078165520b5f9563c0b501bad",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "d99ca99dd026c35c82aeabf927e70652619878f078165520b5f9563c0b501bad",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 226,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run build",
+        "argv": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "check",
+        "started_at_utc": "2026-07-17T02:35:09.700Z",
+        "ended_at_utc": "2026-07-17T02:35:18.503Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "a2542f68dec4a5a6c7e65668d2e13ed0ff9b2f6a7cdf74c751dcc3efe43b7312",
+        "stderr_sha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+        "output_sha256": "3f9dcc8ad0b62207e0e8a1762fe8f9ea394d22b8498553e5bb3b6a965d7e74e2",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 639,
+        "stderr_byte_length": 332,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:product-integration:built",
+        "argv": [
+          "npm",
+          "run",
+          "test:product-integration:built"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:35:18.504Z",
+        "ended_at_utc": "2026-07-17T02:35:21.554Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "f7ffd7c74b55c6fe8c0838e2569a56982112da87d83b4a2d997a6d702334a792",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "f7ffd7c74b55c6fe8c0838e2569a56982112da87d83b4a2d997a6d702334a792",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 10685,
+        "stderr_byte_length": 0,
+        "test_count": 111,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 111",
+            "count": 111
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:product-control:built",
+        "argv": [
+          "npm",
+          "run",
+          "test:product-control:built"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:35:21.554Z",
+        "ended_at_utc": "2026-07-17T02:35:22.903Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "c3f01035a41748285aa3bbd4c8c73b2b10f2d59ed93b07f46132ffbf622e3548",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "c3f01035a41748285aa3bbd4c8c73b2b10f2d59ed93b07f46132ffbf622e3548",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 10179,
+        "stderr_byte_length": 0,
+        "test_count": 101,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 101",
+            "count": 101
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:i00:commands",
+        "argv": [
+          "npm",
+          "run",
+          "test:i00:commands"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:35:22.903Z",
+        "ended_at_utc": "2026-07-17T02:35:32.000Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "164379f948624dddb196775b2f3aa7aeaf05ee9e7e1cdbc010d88eb8240f1155",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "164379f948624dddb196775b2f3aa7aeaf05ee9e7e1cdbc010d88eb8240f1155",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 2852,
+        "stderr_byte_length": 0,
+        "test_count": 29,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 29",
+            "count": 29
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm test",
+        "argv": [
+          "npm",
+          "test"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:35:32.000Z",
+        "ended_at_utc": "2026-07-17T02:36:43.692Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": false,
+        "stdout_sha256": "4d9d433ebb1c5d37717f2c2cb98249f6406ba9b425abaf520a26fca823b510d8",
+        "stderr_sha256": "75d5f3fe3bf965d893c2e19d286404717ba61a2d713e6a67bd4b3970bc6d8db6",
+        "output_sha256": "411d4d3277246e2adc99a64cd697c55deb1fa758f31ff58c066f271f6fb97745",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 63436,
+        "stderr_byte_length": 420,
+        "test_count": 242,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "# tests 51",
+            "count": 51
+          },
+          {
+            "line": "# tests 14",
+            "count": 14
+          },
+          {
+            "line": "# tests 2",
+            "count": 2
+          },
+          {
+            "line": "ℹ tests 131",
+            "count": 131
+          },
+          {
+            "line": "ℹ tests 44",
+            "count": 44
+          }
+        ],
+        "unexpected_skip_markers": [],
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4338.438167ms)",
+        "stdout_tail": [
+          "✔ manifest IDs and hashes cover exactly the canonical model reports (42.671208ms)",
+          "✔ conformance evaluation rejects an alternating mismatches getter without invoking it (0.725625ms)",
+          "✔ conformance evaluation rejects nested accessors before schema validation (0.321875ms)",
+          "✔ ordinary mutable conformance data is evaluated from a private snapshot (0.747125ms)",
+          "✔ an accessor-bearing verification context cannot suppress an authenticated mismatch (0.22675ms)",
+          "✔ thirteen canonical models exhaust their pinned bounded graphs and cover the full property catalog (116.922667ms)",
+          "✔ canonical exploration is byte-for-byte deterministic across repeated runs (83.379458ms)",
+          "✔ every hostile negative control is detected with a counterexample (100.1795ms)",
+          "✔ cancel, crash, and late fill must pass through authoritative two-leg accounting (0.149666ms)",
+          "✔ unresolved liability becomes terminal only after its explicit durable record (0.110666ms)",
+          "✔ approval binding rejects hostile identity, scope, version, use identity, reuse, and expiry variations (6.023125ms)",
+          "✔ attempt-two crash rollback reacquires a compensation fence before compensation effects (0.225625ms)",
+          "✔ local cancellation has no stopping authority before the child observes it (0.083167ms)",
+          "✔ safety counterexample selection follows the shortest BFS path (0.417916ms)",
+          "✔ liveness monitor preserves an obligation after the antecedent becomes false (0.433875ms)",
+          "✔ liveness counterexample uses the shortest outstanding obligation witness (0.225ms)",
+          "✔ global weak progress fairness excludes pure stuttering while discharge remains enabled (0.104209ms)",
+          "✔ truncation downgrades unfailed properties to UNKNOWN (0.650334ms)",
+          "✔ accessor-backed model fields and property descriptors fail closed without invoking getters (0.197041ms)",
+          "✔ caller mutations during evaluation cannot replace captured metadata, functions, arrays, or property descriptors (0.221541ms)",
+          "✔ invalid or throwing models return diagnostics instead of formal reports or thrown false greens (0.174291ms)",
+          "✔ M08-M13 frozen-L transition manifest accounts for every reachable canonical action exactly once (29.892792ms)",
+          "ℹ tests 131",
+          "ℹ suites 0",
+          "ℹ pass 131",
+          "ℹ fail 0",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 2650.042542",
+          "> arbitrage-cosmos@0.1.0 test:i00:acceptance-contract",
+          "> node --test --test-concurrency=1 --test-reporter=spec \"test/i00/performance/*.test.mjs\"",
+          "✔ exact Q donor archive preserves the complete accepted repository root (0.775167ms)",
+          "✔ validate-only requires an explicit exact candidate SHA (0.273ms)",
+          "✔ candidate seal topology accepts one evidence-only child and rejects source or topology drift (0.289542ms)",
+          "✔ independent validation requires a clean detached worktree pinned to exact candidate C (0.06275ms)",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4338.438167ms)",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6158.533916ms)",
+          "✔ pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S (10.382541ms)",
+          "✔ proof catalog is unbound in C, bound to exact C only in the sole-child seal, and otherwise immutable (1.88625ms)",
+          "✔ complete receipt binds all exact steps, candidate source, source freeze, Q, browser and performance evidence (2.297333ms)",
+          "✔ candidate Markdown receipt strictly binds donor, protocol, measured, manifest, limitation and terminal truth (77.7565ms)",
+          "✔ candidate Markdown receipt refuses malformed, duplicate, secret-bearing, oversized, or non-terminal envelopes (7.326791ms)",
+          "✔ protected owner directives resolve from immutable package in clean detached verifier (3391.914208ms)",
+          "✔ bounded performance CLI defaults to plan and refuses ambiguous or unsafe values (0.32475ms)",
+          "✔ performance measurement starts only from exact hydrated canonical truth (0.158042ms)",
+          "✔ performance measurement refuses an invalid baseline when the bounded poll expires (0.15125ms)",
+          "✔ hourly RSS slope refuses short startup windows and measures long stable windows (0.185666ms)",
+          "✔ phase event-loop report uses the direct cumulative histogram and rejects interval substitutes (0.164125ms)",
+          "✔ app probe phase histogram requires one reset and returns one direct bounded snapshot (0.117667ms)",
+          "✔ local proxy event-loop SLO uses the worst of the three direct phase p99s (0.405458ms)",
+          "✔ complete acceptance exposes explicit modes and each required layer exactly once (0.313666ms)",
+          "✔ metric summaries and local proxy bounds use deterministic fail-closed classifications (0.263ms)",
+          "✔ performance schema and semantics accept complete runtime evidence and reject false green (15.914ms)",
+          "✔ performance semantics reject managed inventory omission and same-shape field forgeries (9.819416ms)",
+          "✔ performance semantics reject canonical component omission, identity forgery, and owner forgery (3.790458ms)",
+          "✔ performance canonical component owners bind exact authority and owner path (0.048375ms)",
+          "✔ performance semantics reject product-control omission and exact-row forgeries including authority (5.653875ms)",
+          "✔ performance semantics reject stale source, fabricated deployment and broken ops interlock (1.912041ms)",
+          "✔ performance semantics reject a fabricated accepted restart receipt or effect generation (1.886584ms)",
+          "✔ performance semantics reject SIGKILL recovery without WAL continuity and a preserved crash-pending boot row (1.994333ms)",
+          "✔ browser schema requires six runs, all 21 route mappings, DESIGN audits, BTC detail and no false green (9.925792ms)",
+          "✔ browser claims require decoded, dimension-bound PNG and exact computed-style artifact bytes (484.411542ms)",
+          "✔ browser PNG validation rejects signature-only, bad CRC, corrupt zlib and wrong capture dimensions after hashes are rebound (291.857042ms)",
+          "✔ browser PNG validation rejects visually blank captures and cross-subject all-routes-same evidence (116.160292ms)",
+          "✔ browser capture transcript is hash-bound and enumerates the exact IN_APP_BROWSER_MCP screenshot set (98.424ms)",
+          "✔ browser v3 recomputes canonical API, visible DOM and bounded console truth from raw route observations (606.194458ms)",
+          "✔ browser v3 enforces exact 126 route observations, 146 captures and 194 immutable artifacts (194.051ms)",
+          "✔ browser restart proof requires one exact hash-bound DOM observation, never a boolean or synthetic status (599.060083ms)",
+          "✔ browser computed evidence rejects DESIGN role drift and measurement provenance forgery with valid artifact hashes (98.238625ms)",
+          "✔ immutable evidence writer refuses traversal and overwrite (11.04675ms)",
+          "✔ concurrent immutable evidence writers publish exactly one winner without overwrite or temporary debris (102.912375ms)",
+          "✔ secret scan detects constructed credential material without retaining it (0.114417ms)",
+          "✔ exact accepted Q donor identities remain pinned in the harness contract (0.029625ms)",
+          "✔ exact Q donor inventory rejects a hostile partial archive before pytest (0.137708ms)",
+          "✔ Q venv manifest rejects interpreter, distribution, and plugin-environment drift (0.156166ms)",
+          "ℹ tests 44",
+          "ℹ suites 0",
+          "ℹ pass 42",
+          "ℹ fail 2",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 16773.616542",
+          "✖ failing tests:",
+          "test at test/i00/performance/acceptance-contract.test.mjs:523:1",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4338.438167ms)",
+          "  AssertionError [ERR_ASSERTION]: [{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}]",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW/test/i00/performance/acceptance-contract.test.mjs:529:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "test at test/i00/performance/acceptance-contract.test.mjs:546:1",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6158.533916ms)",
+          "  AssertionError [ERR_ASSERTION]: {\"id\":\"candidate_head_generated_report_parity\",\"revision\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"sourceRepository\":\"/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-j20CVr/candidate-parity-source\",\"legacySourceAlias\":null,\"checkouts\":[{\"checkout\":\"candidate-report-parity-untouched\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0},{\"checkout\":\"candidate-report-parity-generated\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0}],\"regeneration\":{\"id\":\"candidate_report_regeneration\",\"command\":[\"/Users/cosmosgeek/.local/node22/bin/node\",\"test/i00/render-reports.mjs\",\"--write\"],\"cwdRelative\":\"../../../../var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-j20CVr/candidate-report-parity-generated\",\"startedAtUtc\":\"2026-07-17T02:36:35.784Z\",\"endedAtUtc\":\"2026-07-17T02:36:36.912Z\",\"durationMs\":1128.403,\"exitCode\":0,\"exitSignal\":null,\"timedOut\":false,\"stdoutBytes\":0,\"stderrBytes\":0,\"stdoutSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"stderrSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"parsedCounts\":{},\"secretFindings\":[],\"outputOverflow\":false,\"passed\":true},\"artifacts\":[{\"relativePath\":\"MISSION_COVERAGE_MATRIX.md\",\"sha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"byteLength\":104025,\"generatedSha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"generatedByteLength\":104025,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"AUTONOMY_CLOSURE_REPORT.md\",\"sha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"byteLength\":11585,\"generatedSha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"generatedByteLength\":11585,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"NO_TERMINAL_DEPENDENCY_REPORT.md\",\"sha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"byteLength\":11471,\"generatedSha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"generatedByteLength\":11471,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"RESOURCE_AND_BACKPRESSURE_REPORT.md\",\"sha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"byteLength\":14709,\"generatedSha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"generatedByteLength\":14709,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"OFFICIAL_INTERFACE_MATRIX.md\",\"sha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"byteLength\":18431,\"generatedSha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"generatedByteLength\":18431,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}],\"liveGitDiagnostic\":{\"status\":\"UNKNOWN\",\"passed\":null,\"receiptProvenance\":{\"verificationBase\":\"59361e5459eeed674d71f7c8ba8c8adb0a41b2ba\",\"unavailableShas\":[\"692501587617d4880303fbd747d93e63c376f088\"],\"status\":\"UNKNOWN\",\"passed\":null,\"failures\":[],\"unknownReasons\":[\"RECEIPT_b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c_COMMITTED_CLAIM_UNKNOWN\",\"COMMIT_692501587617d4880303fbd747d93e63c376f088_UNAVAILABLE\",\"RECEIPT_8058ab8febb639839333d4e2c604068a0c7390ea_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_56c47dad398c485b6653036c8b90c53f11061b1e_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_6bfd543afb693ea18f4baf08e962e6d698f140fb_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_23e985c17b9b860fee26be397fa05b26f3daf8f2_COMMITTED_CLAIM_UNKNOWN\"]}},\"passed\":false,\"restrictedSource\":{\"mode\":\"FILE_TRANSPORT_SINGLE_BRANCH_CANDIDATE\",\"branch\":\"candidate-parity\",\"refNames\":[\"refs/heads/candidate-parity\",\"refs/remotes/origin/candidate-parity\"]}}",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW/test/i00/performance/acceptance-contract.test.mjs:551:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "Deterministic egress audit: PASS; mode=ROOT; forbidden attempts=0; installs=127; processes=115; execution contexts=127"
+        ],
+        "stderr_tail": [
+          "(!) Some chunks are larger than 500 kB after minification. Consider:",
+          "- Using dynamic import() to code-split the application",
+          "- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks",
+          "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.",
+          "Deterministic test child failed: script=test:i00:acceptance-contract code=1 signal=null"
+        ]
+      },
+      {
+        "command": "npm run test:all",
+        "argv": [
+          "npm",
+          "run",
+          "test:all"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:36:43.693Z",
+        "ended_at_utc": "2026-07-17T02:37:56.131Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": false,
+        "stdout_sha256": "1bce743055d037aadba42f6806718d3589e1eee86e2c65ef352736cd1b7e3d89",
+        "stderr_sha256": "75d5f3fe3bf965d893c2e19d286404717ba61a2d713e6a67bd4b3970bc6d8db6",
+        "output_sha256": "1e333d1654d44db43ca6b843f1087af74f9a87bd22c47ffe6f551d3b2707a259",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 64044,
+        "stderr_byte_length": 420,
+        "test_count": 242,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "# tests 51",
+            "count": 51
+          },
+          {
+            "line": "# tests 14",
+            "count": 14
+          },
+          {
+            "line": "# tests 2",
+            "count": 2
+          },
+          {
+            "line": "ℹ tests 131",
+            "count": 131
+          },
+          {
+            "line": "ℹ tests 44",
+            "count": 44
+          }
+        ],
+        "unexpected_skip_markers": [],
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4520.404833ms)",
+        "stdout_tail": [
+          "✔ manifest IDs and hashes cover exactly the canonical model reports (44.099625ms)",
+          "✔ conformance evaluation rejects an alternating mismatches getter without invoking it (0.8175ms)",
+          "✔ conformance evaluation rejects nested accessors before schema validation (0.325667ms)",
+          "✔ ordinary mutable conformance data is evaluated from a private snapshot (0.768208ms)",
+          "✔ an accessor-bearing verification context cannot suppress an authenticated mismatch (0.197958ms)",
+          "✔ thirteen canonical models exhaust their pinned bounded graphs and cover the full property catalog (116.773375ms)",
+          "✔ canonical exploration is byte-for-byte deterministic across repeated runs (85.116584ms)",
+          "✔ every hostile negative control is detected with a counterexample (102.295625ms)",
+          "✔ cancel, crash, and late fill must pass through authoritative two-leg accounting (0.145167ms)",
+          "✔ unresolved liability becomes terminal only after its explicit durable record (0.109625ms)",
+          "✔ approval binding rejects hostile identity, scope, version, use identity, reuse, and expiry variations (6.317209ms)",
+          "✔ attempt-two crash rollback reacquires a compensation fence before compensation effects (0.224875ms)",
+          "✔ local cancellation has no stopping authority before the child observes it (0.083625ms)",
+          "✔ safety counterexample selection follows the shortest BFS path (0.32075ms)",
+          "✔ liveness monitor preserves an obligation after the antecedent becomes false (0.335792ms)",
+          "✔ liveness counterexample uses the shortest outstanding obligation witness (0.171375ms)",
+          "✔ global weak progress fairness excludes pure stuttering while discharge remains enabled (0.090916ms)",
+          "✔ truncation downgrades unfailed properties to UNKNOWN (0.552458ms)",
+          "✔ accessor-backed model fields and property descriptors fail closed without invoking getters (0.170875ms)",
+          "✔ caller mutations during evaluation cannot replace captured metadata, functions, arrays, or property descriptors (0.198833ms)",
+          "✔ invalid or throwing models return diagnostics instead of formal reports or thrown false greens (0.156583ms)",
+          "✔ M08-M13 frozen-L transition manifest accounts for every reachable canonical action exactly once (29.548834ms)",
+          "ℹ tests 131",
+          "ℹ suites 0",
+          "ℹ pass 131",
+          "ℹ fail 0",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 2644.026625",
+          "> arbitrage-cosmos@0.1.0 test:i00:acceptance-contract",
+          "> node --test --test-concurrency=1 --test-reporter=spec \"test/i00/performance/*.test.mjs\"",
+          "✔ exact Q donor archive preserves the complete accepted repository root (0.703042ms)",
+          "✔ validate-only requires an explicit exact candidate SHA (0.318416ms)",
+          "✔ candidate seal topology accepts one evidence-only child and rejects source or topology drift (0.333958ms)",
+          "✔ independent validation requires a clean detached worktree pinned to exact candidate C (0.0775ms)",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4520.404833ms)",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6033.631083ms)",
+          "✔ pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S (10.634459ms)",
+          "✔ proof catalog is unbound in C, bound to exact C only in the sole-child seal, and otherwise immutable (1.934625ms)",
+          "✔ complete receipt binds all exact steps, candidate source, source freeze, Q, browser and performance evidence (2.276333ms)",
+          "✔ candidate Markdown receipt strictly binds donor, protocol, measured, manifest, limitation and terminal truth (76.950625ms)",
+          "✔ candidate Markdown receipt refuses malformed, duplicate, secret-bearing, oversized, or non-terminal envelopes (7.354583ms)",
+          "✔ protected owner directives resolve from immutable package in clean detached verifier (2640.661542ms)",
+          "✔ bounded performance CLI defaults to plan and refuses ambiguous or unsafe values (0.382417ms)",
+          "✔ performance measurement starts only from exact hydrated canonical truth (0.148334ms)",
+          "✔ performance measurement refuses an invalid baseline when the bounded poll expires (0.170292ms)",
+          "✔ hourly RSS slope refuses short startup windows and measures long stable windows (0.183708ms)",
+          "✔ phase event-loop report uses the direct cumulative histogram and rejects interval substitutes (0.164958ms)",
+          "✔ app probe phase histogram requires one reset and returns one direct bounded snapshot (0.118416ms)",
+          "✔ local proxy event-loop SLO uses the worst of the three direct phase p99s (0.406792ms)",
+          "✔ complete acceptance exposes explicit modes and each required layer exactly once (0.2895ms)",
+          "✔ metric summaries and local proxy bounds use deterministic fail-closed classifications (0.239208ms)",
+          "✔ performance schema and semantics accept complete runtime evidence and reject false green (16.094083ms)",
+          "✔ performance semantics reject managed inventory omission and same-shape field forgeries (9.796292ms)",
+          "✔ performance semantics reject canonical component omission, identity forgery, and owner forgery (3.634166ms)",
+          "✔ performance canonical component owners bind exact authority and owner path (0.060917ms)",
+          "✔ performance semantics reject product-control omission and exact-row forgeries including authority (5.753958ms)",
+          "✔ performance semantics reject stale source, fabricated deployment and broken ops interlock (1.624458ms)",
+          "✔ performance semantics reject a fabricated accepted restart receipt or effect generation (1.981458ms)",
+          "✔ performance semantics reject SIGKILL recovery without WAL continuity and a preserved crash-pending boot row (1.7955ms)",
+          "✔ browser schema requires six runs, all 21 route mappings, DESIGN audits, BTC detail and no false green (9.935166ms)",
+          "✔ browser claims require decoded, dimension-bound PNG and exact computed-style artifact bytes (483.70675ms)",
+          "✔ browser PNG validation rejects signature-only, bad CRC, corrupt zlib and wrong capture dimensions after hashes are rebound (297.402ms)",
+          "✔ browser PNG validation rejects visually blank captures and cross-subject all-routes-same evidence (112.402833ms)",
+          "✔ browser capture transcript is hash-bound and enumerates the exact IN_APP_BROWSER_MCP screenshot set (101.017292ms)",
+          "✔ browser v3 recomputes canonical API, visible DOM and bounded console truth from raw route observations (607.849375ms)",
+          "✔ browser v3 enforces exact 126 route observations, 146 captures and 194 immutable artifacts (192.190541ms)",
+          "✔ browser restart proof requires one exact hash-bound DOM observation, never a boolean or synthetic status (601.515917ms)",
+          "✔ browser computed evidence rejects DESIGN role drift and measurement provenance forgery with valid artifact hashes (93.529875ms)",
+          "✔ immutable evidence writer refuses traversal and overwrite (14.53175ms)",
+          "✔ concurrent immutable evidence writers publish exactly one winner without overwrite or temporary debris (99.972167ms)",
+          "✔ secret scan detects constructed credential material without retaining it (0.1055ms)",
+          "✔ exact accepted Q donor identities remain pinned in the harness contract (0.029916ms)",
+          "✔ exact Q donor inventory rejects a hostile partial archive before pytest (0.140833ms)",
+          "✔ Q venv manifest rejects interpreter, distribution, and plugin-environment drift (0.169541ms)",
+          "ℹ tests 44",
+          "ℹ suites 0",
+          "ℹ pass 42",
+          "ℹ fail 2",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 16081.270916",
+          "✖ failing tests:",
+          "test at test/i00/performance/acceptance-contract.test.mjs:523:1",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4520.404833ms)",
+          "  AssertionError [ERR_ASSERTION]: [{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}]",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW/test/i00/performance/acceptance-contract.test.mjs:529:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "test at test/i00/performance/acceptance-contract.test.mjs:546:1",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6033.631083ms)",
+          "  AssertionError [ERR_ASSERTION]: {\"id\":\"candidate_head_generated_report_parity\",\"revision\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"sourceRepository\":\"/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-l86B6b/candidate-parity-source\",\"legacySourceAlias\":null,\"checkouts\":[{\"checkout\":\"candidate-report-parity-untouched\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0},{\"checkout\":\"candidate-report-parity-generated\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0}],\"regeneration\":{\"id\":\"candidate_report_regeneration\",\"command\":[\"/Users/cosmosgeek/.local/node22/bin/node\",\"test/i00/render-reports.mjs\",\"--write\"],\"cwdRelative\":\"../../../../var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-l86B6b/candidate-report-parity-generated\",\"startedAtUtc\":\"2026-07-17T02:37:49.070Z\",\"endedAtUtc\":\"2026-07-17T02:37:50.057Z\",\"durationMs\":987.258,\"exitCode\":0,\"exitSignal\":null,\"timedOut\":false,\"stdoutBytes\":0,\"stderrBytes\":0,\"stdoutSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"stderrSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"parsedCounts\":{},\"secretFindings\":[],\"outputOverflow\":false,\"passed\":true},\"artifacts\":[{\"relativePath\":\"MISSION_COVERAGE_MATRIX.md\",\"sha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"byteLength\":104025,\"generatedSha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"generatedByteLength\":104025,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"AUTONOMY_CLOSURE_REPORT.md\",\"sha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"byteLength\":11585,\"generatedSha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"generatedByteLength\":11585,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"NO_TERMINAL_DEPENDENCY_REPORT.md\",\"sha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"byteLength\":11471,\"generatedSha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"generatedByteLength\":11471,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"RESOURCE_AND_BACKPRESSURE_REPORT.md\",\"sha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"byteLength\":14709,\"generatedSha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"generatedByteLength\":14709,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"OFFICIAL_INTERFACE_MATRIX.md\",\"sha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"byteLength\":18431,\"generatedSha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"generatedByteLength\":18431,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}],\"liveGitDiagnostic\":{\"status\":\"UNKNOWN\",\"passed\":null,\"receiptProvenance\":{\"verificationBase\":\"59361e5459eeed674d71f7c8ba8c8adb0a41b2ba\",\"unavailableShas\":[\"692501587617d4880303fbd747d93e63c376f088\"],\"status\":\"UNKNOWN\",\"passed\":null,\"failures\":[],\"unknownReasons\":[\"RECEIPT_b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c_COMMITTED_CLAIM_UNKNOWN\",\"COMMIT_692501587617d4880303fbd747d93e63c376f088_UNAVAILABLE\",\"RECEIPT_8058ab8febb639839333d4e2c604068a0c7390ea_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_56c47dad398c485b6653036c8b90c53f11061b1e_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_6bfd543afb693ea18f4baf08e962e6d698f140fb_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_23e985c17b9b860fee26be397fa05b26f3daf8f2_COMMITTED_CLAIM_UNKNOWN\"]}},\"passed\":false,\"restrictedSource\":{\"mode\":\"FILE_TRANSPORT_SINGLE_BRANCH_CANDIDATE\",\"branch\":\"candidate-parity\",\"refNames\":[\"refs/heads/candidate-parity\",\"refs/remotes/origin/candidate-parity\"]}}",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW/test/i00/performance/acceptance-contract.test.mjs:551:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "Deterministic egress audit: PASS; mode=DETERMINISTIC; forbidden attempts=0; installs=115; processes=103; execution contexts=115"
+        ],
+        "stderr_tail": [
+          "(!) Some chunks are larger than 500 kB after minification. Consider:",
+          "- Using dynamic import() to code-split the application",
+          "- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks",
+          "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.",
+          "Deterministic test child failed: script=test:i00:acceptance-contract code=1 signal=null"
+        ]
+      }
+    ],
+    "cleanup_commands": [
+      {
+        "command": "git worktree remove --force /Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW",
+        "argv": [
+          "git",
+          "worktree",
+          "remove",
+          "--force",
+          "/Users/cosmosgeek/Desktop/.truth-a-c4-canonical-qHnNSW"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:56.359Z",
+        "ended_at_utc": "2026-07-17T02:37:57.714Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "result": "FAIL",
+    "detached_head": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+    "initial_clean": true,
+    "command_count": 8,
+    "passed_command_count": 6,
+    "failed_commands": [
+      {
+        "command": "npm test",
+        "exit_code": 1,
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4338.438167ms)",
+        "output_sha256": "411d4d3277246e2adc99a64cd697c55deb1fa758f31ff58c066f271f6fb97745"
+      },
+      {
+        "command": "npm run test:all",
+        "exit_code": 1,
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4520.404833ms)",
+        "output_sha256": "1e333d1654d44db43ca6b843f1087af74f9a87bd22c47ffe6f551d3b2707a259"
+      }
+    ],
+    "final_clean": true
+  },
+  "literal_local_single_branch": {
+    "setup_commands": [
+      {
+        "command": "git clone --no-local --no-hardlinks --single-branch --branch codex/truth-campaign-c4-20260717 /Users/cosmosgeek/Desktop/truth-a /var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "argv": [
+          "git",
+          "clone",
+          "--no-local",
+          "--no-hardlinks",
+          "--single-branch",
+          "--branch",
+          "codex/truth-campaign-c4-20260717",
+          "/Users/cosmosgeek/Desktop/truth-a",
+          "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone"
+        ],
+        "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:57.714Z",
+        "ended_at_utc": "2026-07-17T02:37:58.831Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "3d212ffc63d82e059a366913c233f20a32c1521fca9005f51233d03313f607fa",
+        "output_sha256": "3d212ffc63d82e059a366913c233f20a32c1521fca9005f51233d03313f607fa",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 111,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git checkout --detach 4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "argv": [
+          "git",
+          "checkout",
+          "--detach",
+          "4c9143a0bcc331aa170e9e26b741240b39df8b9e"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:58.831Z",
+        "ended_at_utc": "2026-07-17T02:37:59.048Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "30c7022b728b7c4db7aa9a215b511d66880ef46e36b846eca2d30c84b1c2cb79",
+        "output_sha256": "30c7022b728b7c4db7aa9a215b511d66880ef46e36b846eca2d30c84b1c2cb79",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 75,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "topology_commands": [
+      {
+        "command": "git rev-parse HEAD",
+        "argv": [
+          "git",
+          "rev-parse",
+          "HEAD"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.048Z",
+        "ended_at_utc": "2026-07-17T02:37:59.056Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "099dd96370376dc6f658fe6fa7223ae8d879076687b252ea0714b13c31428cde",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 41,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git symbolic-ref -q HEAD",
+        "argv": [
+          "git",
+          "symbolic-ref",
+          "-q",
+          "HEAD"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.056Z",
+        "ended_at_utc": "2026-07-17T02:37:59.064Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          1
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git for-each-ref '--format=%(refname)' refs/heads",
+        "argv": [
+          "git",
+          "for-each-ref",
+          "--format=%(refname)",
+          "refs/heads"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.064Z",
+        "ended_at_utc": "2026-07-17T02:37:59.072Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "9bb358b2ab844becda2885a9b5f8cad481776479be6bab2c5d70331cc5223a14",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "9bb358b2ab844becda2885a9b5f8cad481776479be6bab2c5d70331cc5223a14",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 44,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git for-each-ref '--format=%(refname)' refs/remotes/origin",
+        "argv": [
+          "git",
+          "for-each-ref",
+          "--format=%(refname)",
+          "refs/remotes/origin"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.072Z",
+        "ended_at_utc": "2026-07-17T02:37:59.082Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "995cc703d77e040bdf7bd16fdc6b0a11e97e006dd185c8f5f8e2f156190d61a1",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "995cc703d77e040bdf7bd16fdc6b0a11e97e006dd185c8f5f8e2f156190d61a1",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 53,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git config --get-all remote.origin.fetch",
+        "argv": [
+          "git",
+          "config",
+          "--get-all",
+          "remote.origin.fetch"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.082Z",
+        "ended_at_utc": "2026-07-17T02:37:59.091Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "fead3dcd273624bd6bf659d42f42043e33a7a0ec2bc9b3bd58e775541b6b8288",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "fead3dcd273624bd6bf659d42f42043e33a7a0ec2bc9b3bd58e775541b6b8288",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 98,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git rev-parse --is-shallow-repository",
+        "argv": [
+          "git",
+          "rev-parse",
+          "--is-shallow-repository"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.091Z",
+        "ended_at_utc": "2026-07-17T02:37:59.099Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "2ed27c1421e6928dbe13dbfdb5c59e1045b30341fe7ebe05700006bc5ac572c0",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "2ed27c1421e6928dbe13dbfdb5c59e1045b30341fe7ebe05700006bc5ac572c0",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 6,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git show-ref --verify --quiet refs/heads/current-main",
+        "argv": [
+          "git",
+          "show-ref",
+          "--verify",
+          "--quiet",
+          "refs/heads/current-main"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.099Z",
+        "ended_at_utc": "2026-07-17T02:37:59.109Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          1
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git show-ref --verify --quiet refs/remotes/origin/current-main",
+        "argv": [
+          "git",
+          "show-ref",
+          "--verify",
+          "--quiet",
+          "refs/remotes/origin/current-main"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:37:59.109Z",
+        "ended_at_utc": "2026-07-17T02:37:59.119Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          1
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "git status --porcelain=v1",
+        "argv": [
+          "git",
+          "status",
+          "--porcelain=v1"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "probe",
+        "started_at_utc": "2026-07-17T02:40:53.419Z",
+        "ended_at_utc": "2026-07-17T02:40:53.447Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 0,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      }
+    ],
+    "commands": [
+      {
+        "command": "npm ci",
+        "argv": [
+          "npm",
+          "ci"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "install",
+        "started_at_utc": "2026-07-17T02:37:59.119Z",
+        "ended_at_utc": "2026-07-17T02:38:01.555Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "75a3a885d6c509b86a98df0884d1e94458b06a6c59bc7d174fbf6b4e310094b1",
+        "stderr_sha256": "fe49a93af7f6a5072c3a3ef65019009ce521808d6b5a32810ad9a6a433f4524d",
+        "output_sha256": "25bb96b9420d86c25ca0550e62dcd3bf1c4357412875370b5870495c9212aef8",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 143,
+        "stderr_byte_length": 150,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run typecheck",
+        "argv": [
+          "npm",
+          "run",
+          "typecheck"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "check",
+        "started_at_utc": "2026-07-17T02:38:01.555Z",
+        "ended_at_utc": "2026-07-17T02:38:11.110Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "d99ca99dd026c35c82aeabf927e70652619878f078165520b5f9563c0b501bad",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "d99ca99dd026c35c82aeabf927e70652619878f078165520b5f9563c0b501bad",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 226,
+        "stderr_byte_length": 0,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run build",
+        "argv": [
+          "npm",
+          "run",
+          "build"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "check",
+        "started_at_utc": "2026-07-17T02:38:11.111Z",
+        "ended_at_utc": "2026-07-17T02:38:20.027Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "b3ae51bf91bc39b23f64343b0f31aa8be96d4a96779d0c61a5170528c89388f8",
+        "stderr_sha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+        "output_sha256": "ec062424909a0a6e3a16141de90e5c94846c00a860bea02dd5ce647955525b9a",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 639,
+        "stderr_byte_length": 332,
+        "test_count": 0,
+        "test_count_basis": "NOT_A_TEST_COMMAND",
+        "explicit_test_summaries": [],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:product-integration:built",
+        "argv": [
+          "npm",
+          "run",
+          "test:product-integration:built"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:38:20.027Z",
+        "ended_at_utc": "2026-07-17T02:38:23.110Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "448a2931f2fef78cfaee09f6b666ccf9b551c153fff6811aa0f35d205ce3151a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "448a2931f2fef78cfaee09f6b666ccf9b551c153fff6811aa0f35d205ce3151a",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 10692,
+        "stderr_byte_length": 0,
+        "test_count": 111,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 111",
+            "count": 111
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:product-control:built",
+        "argv": [
+          "npm",
+          "run",
+          "test:product-control:built"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:38:23.110Z",
+        "ended_at_utc": "2026-07-17T02:38:24.485Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "5f07c11cd6c17450bb6b734ef9087b0f65eeb2ce56d45f37ce71f2e1d971b4fc",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "5f07c11cd6c17450bb6b734ef9087b0f65eeb2ce56d45f37ce71f2e1d971b4fc",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 10170,
+        "stderr_byte_length": 0,
+        "test_count": 101,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 101",
+            "count": 101
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm run test:i00:commands",
+        "argv": [
+          "npm",
+          "run",
+          "test:i00:commands"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:38:24.485Z",
+        "ended_at_utc": "2026-07-17T02:38:30.051Z",
+        "exit_code": 0,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": true,
+        "stdout_sha256": "a8e115237bedb46e34bc5163342a1da048cbb4c6e279a0b6aa64667b11b3530c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output_sha256": "a8e115237bedb46e34bc5163342a1da048cbb4c6e279a0b6aa64667b11b3530c",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 2851,
+        "stderr_byte_length": 0,
+        "test_count": 29,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "ℹ tests 29",
+            "count": 29
+          }
+        ],
+        "unexpected_skip_markers": []
+      },
+      {
+        "command": "npm test",
+        "argv": [
+          "npm",
+          "test"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:38:30.052Z",
+        "ended_at_utc": "2026-07-17T02:39:40.730Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": false,
+        "stdout_sha256": "3feb5758dc62641d8e5ae2eb05724f9e001a77ab7bcde07232f256c765cabfa3",
+        "stderr_sha256": "75d5f3fe3bf965d893c2e19d286404717ba61a2d713e6a67bd4b3970bc6d8db6",
+        "output_sha256": "1c2560970ad62801c00cb684bddd2e9bf2e4edc923c2746f730f001c48e931bd",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 63540,
+        "stderr_byte_length": 420,
+        "test_count": 242,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "# tests 51",
+            "count": 51
+          },
+          {
+            "line": "# tests 14",
+            "count": 14
+          },
+          {
+            "line": "# tests 2",
+            "count": 2
+          },
+          {
+            "line": "ℹ tests 131",
+            "count": 131
+          },
+          {
+            "line": "ℹ tests 44",
+            "count": 44
+          }
+        ],
+        "unexpected_skip_markers": [],
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4144.080584ms)",
+        "stdout_tail": [
+          "✔ manifest IDs and hashes cover exactly the canonical model reports (41.709792ms)",
+          "✔ conformance evaluation rejects an alternating mismatches getter without invoking it (0.861542ms)",
+          "✔ conformance evaluation rejects nested accessors before schema validation (0.344042ms)",
+          "✔ ordinary mutable conformance data is evaluated from a private snapshot (0.718792ms)",
+          "✔ an accessor-bearing verification context cannot suppress an authenticated mismatch (0.195542ms)",
+          "✔ thirteen canonical models exhaust their pinned bounded graphs and cover the full property catalog (116.41125ms)",
+          "✔ canonical exploration is byte-for-byte deterministic across repeated runs (83.033542ms)",
+          "✔ every hostile negative control is detected with a counterexample (99.643333ms)",
+          "✔ cancel, crash, and late fill must pass through authoritative two-leg accounting (0.153875ms)",
+          "✔ unresolved liability becomes terminal only after its explicit durable record (0.122416ms)",
+          "✔ approval binding rejects hostile identity, scope, version, use identity, reuse, and expiry variations (6.027667ms)",
+          "✔ attempt-two crash rollback reacquires a compensation fence before compensation effects (0.223916ms)",
+          "✔ local cancellation has no stopping authority before the child observes it (0.07075ms)",
+          "✔ safety counterexample selection follows the shortest BFS path (0.382792ms)",
+          "✔ liveness monitor preserves an obligation after the antecedent becomes false (0.381958ms)",
+          "✔ liveness counterexample uses the shortest outstanding obligation witness (0.182875ms)",
+          "✔ global weak progress fairness excludes pure stuttering while discharge remains enabled (0.092958ms)",
+          "✔ truncation downgrades unfailed properties to UNKNOWN (0.578708ms)",
+          "✔ accessor-backed model fields and property descriptors fail closed without invoking getters (0.188166ms)",
+          "✔ caller mutations during evaluation cannot replace captured metadata, functions, arrays, or property descriptors (0.217792ms)",
+          "✔ invalid or throwing models return diagnostics instead of formal reports or thrown false greens (0.159416ms)",
+          "✔ M08-M13 frozen-L transition manifest accounts for every reachable canonical action exactly once (29.5515ms)",
+          "ℹ tests 131",
+          "ℹ suites 0",
+          "ℹ pass 131",
+          "ℹ fail 0",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 2646.7535",
+          "> arbitrage-cosmos@0.1.0 test:i00:acceptance-contract",
+          "> node --test --test-concurrency=1 --test-reporter=spec \"test/i00/performance/*.test.mjs\"",
+          "✔ exact Q donor archive preserves the complete accepted repository root (0.70825ms)",
+          "✔ validate-only requires an explicit exact candidate SHA (0.488334ms)",
+          "✔ candidate seal topology accepts one evidence-only child and rejects source or topology drift (0.394542ms)",
+          "✔ independent validation requires a clean detached worktree pinned to exact candidate C (0.071834ms)",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4144.080584ms)",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6060.286667ms)",
+          "✔ pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S (10.473333ms)",
+          "✔ proof catalog is unbound in C, bound to exact C only in the sole-child seal, and otherwise immutable (2.487167ms)",
+          "✔ complete receipt binds all exact steps, candidate source, source freeze, Q, browser and performance evidence (2.325167ms)",
+          "✔ candidate Markdown receipt strictly binds donor, protocol, measured, manifest, limitation and terminal truth (79.2305ms)",
+          "✔ candidate Markdown receipt refuses malformed, duplicate, secret-bearing, oversized, or non-terminal envelopes (7.262291ms)",
+          "✔ protected owner directives resolve from immutable package in clean detached verifier (2589.106083ms)",
+          "✔ bounded performance CLI defaults to plan and refuses ambiguous or unsafe values (0.347084ms)",
+          "✔ performance measurement starts only from exact hydrated canonical truth (0.196291ms)",
+          "✔ performance measurement refuses an invalid baseline when the bounded poll expires (0.171834ms)",
+          "✔ hourly RSS slope refuses short startup windows and measures long stable windows (0.199334ms)",
+          "✔ phase event-loop report uses the direct cumulative histogram and rejects interval substitutes (0.168709ms)",
+          "✔ app probe phase histogram requires one reset and returns one direct bounded snapshot (0.121667ms)",
+          "✔ local proxy event-loop SLO uses the worst of the three direct phase p99s (0.408458ms)",
+          "✔ complete acceptance exposes explicit modes and each required layer exactly once (0.373333ms)",
+          "✔ metric summaries and local proxy bounds use deterministic fail-closed classifications (0.251709ms)",
+          "✔ performance schema and semantics accept complete runtime evidence and reject false green (16.380208ms)",
+          "✔ performance semantics reject managed inventory omission and same-shape field forgeries (9.504667ms)",
+          "✔ performance semantics reject canonical component omission, identity forgery, and owner forgery (3.920667ms)",
+          "✔ performance canonical component owners bind exact authority and owner path (0.060958ms)",
+          "✔ performance semantics reject product-control omission and exact-row forgeries including authority (5.940458ms)",
+          "✔ performance semantics reject stale source, fabricated deployment and broken ops interlock (1.577458ms)",
+          "✔ performance semantics reject a fabricated accepted restart receipt or effect generation (2.009625ms)",
+          "✔ performance semantics reject SIGKILL recovery without WAL continuity and a preserved crash-pending boot row (2.046125ms)",
+          "✔ browser schema requires six runs, all 21 route mappings, DESIGN audits, BTC detail and no false green (10.000583ms)",
+          "✔ browser claims require decoded, dimension-bound PNG and exact computed-style artifact bytes (486.617917ms)",
+          "✔ browser PNG validation rejects signature-only, bad CRC, corrupt zlib and wrong capture dimensions after hashes are rebound (296.029792ms)",
+          "✔ browser PNG validation rejects visually blank captures and cross-subject all-routes-same evidence (112.6635ms)",
+          "✔ browser capture transcript is hash-bound and enumerates the exact IN_APP_BROWSER_MCP screenshot set (102.837208ms)",
+          "✔ browser v3 recomputes canonical API, visible DOM and bounded console truth from raw route observations (609.534333ms)",
+          "✔ browser v3 enforces exact 126 route observations, 146 captures and 194 immutable artifacts (197.281417ms)",
+          "✔ browser restart proof requires one exact hash-bound DOM observation, never a boolean or synthetic status (603.2215ms)",
+          "✔ browser computed evidence rejects DESIGN role drift and measurement provenance forgery with valid artifact hashes (91.53325ms)",
+          "✔ immutable evidence writer refuses traversal and overwrite (12.697875ms)",
+          "✔ concurrent immutable evidence writers publish exactly one winner without overwrite or temporary debris (89.572292ms)",
+          "✔ secret scan detects constructed credential material without retaining it (0.092167ms)",
+          "✔ exact accepted Q donor identities remain pinned in the harness contract (0.030458ms)",
+          "✔ exact Q donor inventory rejects a hostile partial archive before pytest (0.128958ms)",
+          "✔ Q venv manifest rejects interpreter, distribution, and plugin-environment drift (0.141416ms)",
+          "ℹ tests 44",
+          "ℹ suites 0",
+          "ℹ pass 42",
+          "ℹ fail 2",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 15682.17975",
+          "✖ failing tests:",
+          "test at test/i00/performance/acceptance-contract.test.mjs:523:1",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4144.080584ms)",
+          "  AssertionError [ERR_ASSERTION]: [{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}]",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///private/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone/test/i00/performance/acceptance-contract.test.mjs:529:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "test at test/i00/performance/acceptance-contract.test.mjs:546:1",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6060.286667ms)",
+          "  AssertionError [ERR_ASSERTION]: {\"id\":\"candidate_head_generated_report_parity\",\"revision\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"sourceRepository\":\"/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-a42Ejx/candidate-parity-source\",\"legacySourceAlias\":null,\"checkouts\":[{\"checkout\":\"candidate-report-parity-untouched\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0},{\"checkout\":\"candidate-report-parity-generated\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0}],\"regeneration\":{\"id\":\"candidate_report_regeneration\",\"command\":[\"/Users/cosmosgeek/.local/node22/bin/node\",\"test/i00/render-reports.mjs\",\"--write\"],\"cwdRelative\":\"../../../../../../../../var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-a42Ejx/candidate-report-parity-generated\",\"startedAtUtc\":\"2026-07-17T02:39:33.574Z\",\"endedAtUtc\":\"2026-07-17T02:39:34.721Z\",\"durationMs\":1146.421,\"exitCode\":0,\"exitSignal\":null,\"timedOut\":false,\"stdoutBytes\":0,\"stderrBytes\":0,\"stdoutSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"stderrSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"parsedCounts\":{},\"secretFindings\":[],\"outputOverflow\":false,\"passed\":true},\"artifacts\":[{\"relativePath\":\"MISSION_COVERAGE_MATRIX.md\",\"sha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"byteLength\":104025,\"generatedSha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"generatedByteLength\":104025,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"AUTONOMY_CLOSURE_REPORT.md\",\"sha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"byteLength\":11585,\"generatedSha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"generatedByteLength\":11585,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"NO_TERMINAL_DEPENDENCY_REPORT.md\",\"sha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"byteLength\":11471,\"generatedSha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"generatedByteLength\":11471,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"RESOURCE_AND_BACKPRESSURE_REPORT.md\",\"sha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"byteLength\":14709,\"generatedSha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"generatedByteLength\":14709,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"OFFICIAL_INTERFACE_MATRIX.md\",\"sha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"byteLength\":18431,\"generatedSha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"generatedByteLength\":18431,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}],\"liveGitDiagnostic\":{\"status\":\"UNKNOWN\",\"passed\":null,\"receiptProvenance\":{\"verificationBase\":\"59361e5459eeed674d71f7c8ba8c8adb0a41b2ba\",\"unavailableShas\":[\"692501587617d4880303fbd747d93e63c376f088\"],\"status\":\"UNKNOWN\",\"passed\":null,\"failures\":[],\"unknownReasons\":[\"RECEIPT_b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c_COMMITTED_CLAIM_UNKNOWN\",\"COMMIT_692501587617d4880303fbd747d93e63c376f088_UNAVAILABLE\",\"RECEIPT_8058ab8febb639839333d4e2c604068a0c7390ea_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_56c47dad398c485b6653036c8b90c53f11061b1e_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_6bfd543afb693ea18f4baf08e962e6d698f140fb_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_23e985c17b9b860fee26be397fa05b26f3daf8f2_COMMITTED_CLAIM_UNKNOWN\"]}},\"passed\":false,\"restrictedSource\":{\"mode\":\"FILE_TRANSPORT_SINGLE_BRANCH_CANDIDATE\",\"branch\":\"candidate-parity\",\"refNames\":[\"refs/heads/candidate-parity\",\"refs/remotes/origin/candidate-parity\"]}}",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///private/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone/test/i00/performance/acceptance-contract.test.mjs:551:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "Deterministic egress audit: PASS; mode=ROOT; forbidden attempts=0; installs=127; processes=115; execution contexts=127"
+        ],
+        "stderr_tail": [
+          "(!) Some chunks are larger than 500 kB after minification. Consider:",
+          "- Using dynamic import() to code-split the application",
+          "- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks",
+          "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.",
+          "Deterministic test child failed: script=test:i00:acceptance-contract code=1 signal=null"
+        ]
+      },
+      {
+        "command": "npm run test:all",
+        "argv": [
+          "npm",
+          "run",
+          "test:all"
+        ],
+        "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone",
+        "kind": "test",
+        "started_at_utc": "2026-07-17T02:39:40.730Z",
+        "ended_at_utc": "2026-07-17T02:40:53.418Z",
+        "exit_code": 1,
+        "signal": null,
+        "expected_exit_codes": [
+          0
+        ],
+        "exit_code_expected": false,
+        "stdout_sha256": "fdf8556a9b2745dc70a15ce64c2872eb2ef59fc2723308ce8895cbb4dacfa800",
+        "stderr_sha256": "75d5f3fe3bf965d893c2e19d286404717ba61a2d713e6a67bd4b3970bc6d8db6",
+        "output_sha256": "8d9134fb3626c15e395ceda6cff2938dbb76324b471faed97e687eeb4439d829",
+        "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+        "stdout_byte_length": 64164,
+        "stderr_byte_length": 420,
+        "test_count": 242,
+        "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+        "explicit_test_summaries": [
+          {
+            "line": "# tests 51",
+            "count": 51
+          },
+          {
+            "line": "# tests 14",
+            "count": 14
+          },
+          {
+            "line": "# tests 2",
+            "count": 2
+          },
+          {
+            "line": "ℹ tests 131",
+            "count": 131
+          },
+          {
+            "line": "ℹ tests 44",
+            "count": 44
+          }
+        ],
+        "unexpected_skip_markers": [],
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4189.843959ms)",
+        "stdout_tail": [
+          "✔ manifest IDs and hashes cover exactly the canonical model reports (42.1805ms)",
+          "✔ conformance evaluation rejects an alternating mismatches getter without invoking it (0.697333ms)",
+          "✔ conformance evaluation rejects nested accessors before schema validation (0.310333ms)",
+          "✔ ordinary mutable conformance data is evaluated from a private snapshot (0.698875ms)",
+          "✔ an accessor-bearing verification context cannot suppress an authenticated mismatch (0.211166ms)",
+          "✔ thirteen canonical models exhaust their pinned bounded graphs and cover the full property catalog (120.124959ms)",
+          "✔ canonical exploration is byte-for-byte deterministic across repeated runs (87.326375ms)",
+          "✔ every hostile negative control is detected with a counterexample (105.017583ms)",
+          "✔ cancel, crash, and late fill must pass through authoritative two-leg accounting (0.148625ms)",
+          "✔ unresolved liability becomes terminal only after its explicit durable record (0.130917ms)",
+          "✔ approval binding rejects hostile identity, scope, version, use identity, reuse, and expiry variations (6.308625ms)",
+          "✔ attempt-two crash rollback reacquires a compensation fence before compensation effects (0.194916ms)",
+          "✔ local cancellation has no stopping authority before the child observes it (0.065667ms)",
+          "✔ safety counterexample selection follows the shortest BFS path (0.367959ms)",
+          "✔ liveness monitor preserves an obligation after the antecedent becomes false (0.364292ms)",
+          "✔ liveness counterexample uses the shortest outstanding obligation witness (0.17825ms)",
+          "✔ global weak progress fairness excludes pure stuttering while discharge remains enabled (0.094083ms)",
+          "✔ truncation downgrades unfailed properties to UNKNOWN (0.615458ms)",
+          "✔ accessor-backed model fields and property descriptors fail closed without invoking getters (0.196125ms)",
+          "✔ caller mutations during evaluation cannot replace captured metadata, functions, arrays, or property descriptors (0.203792ms)",
+          "✔ invalid or throwing models return diagnostics instead of formal reports or thrown false greens (0.174167ms)",
+          "✔ M08-M13 frozen-L transition manifest accounts for every reachable canonical action exactly once (29.868042ms)",
+          "ℹ tests 131",
+          "ℹ suites 0",
+          "ℹ pass 131",
+          "ℹ fail 0",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 2673.127375",
+          "> arbitrage-cosmos@0.1.0 test:i00:acceptance-contract",
+          "> node --test --test-concurrency=1 --test-reporter=spec \"test/i00/performance/*.test.mjs\"",
+          "✔ exact Q donor archive preserves the complete accepted repository root (0.644708ms)",
+          "✔ validate-only requires an explicit exact candidate SHA (0.308916ms)",
+          "✔ candidate seal topology accepts one evidence-only child and rejects source or topology drift (0.350083ms)",
+          "✔ independent validation requires a clean detached worktree pinned to exact candidate C (0.067042ms)",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4189.843959ms)",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6173.636458ms)",
+          "✔ pre-S receipt creation accepts only bounded working seal inputs, then yields one final sole-child S (10.505125ms)",
+          "✔ proof catalog is unbound in C, bound to exact C only in the sole-child seal, and otherwise immutable (2.127291ms)",
+          "✔ complete receipt binds all exact steps, candidate source, source freeze, Q, browser and performance evidence (2.315625ms)",
+          "✔ candidate Markdown receipt strictly binds donor, protocol, measured, manifest, limitation and terminal truth (77.324833ms)",
+          "✔ candidate Markdown receipt refuses malformed, duplicate, secret-bearing, oversized, or non-terminal envelopes (7.285833ms)",
+          "✔ protected owner directives resolve from immutable package in clean detached verifier (2787.731625ms)",
+          "✔ bounded performance CLI defaults to plan and refuses ambiguous or unsafe values (0.331292ms)",
+          "✔ performance measurement starts only from exact hydrated canonical truth (0.160459ms)",
+          "✔ performance measurement refuses an invalid baseline when the bounded poll expires (0.161666ms)",
+          "✔ hourly RSS slope refuses short startup windows and measures long stable windows (0.197833ms)",
+          "✔ phase event-loop report uses the direct cumulative histogram and rejects interval substitutes (0.180666ms)",
+          "✔ app probe phase histogram requires one reset and returns one direct bounded snapshot (0.121417ms)",
+          "✔ local proxy event-loop SLO uses the worst of the three direct phase p99s (0.406333ms)",
+          "✔ complete acceptance exposes explicit modes and each required layer exactly once (0.311292ms)",
+          "✔ metric summaries and local proxy bounds use deterministic fail-closed classifications (0.247583ms)",
+          "✔ performance schema and semantics accept complete runtime evidence and reject false green (15.91025ms)",
+          "✔ performance semantics reject managed inventory omission and same-shape field forgeries (9.998292ms)",
+          "✔ performance semantics reject canonical component omission, identity forgery, and owner forgery (3.668958ms)",
+          "✔ performance canonical component owners bind exact authority and owner path (0.057167ms)",
+          "✔ performance semantics reject product-control omission and exact-row forgeries including authority (5.909625ms)",
+          "✔ performance semantics reject stale source, fabricated deployment and broken ops interlock (1.737292ms)",
+          "✔ performance semantics reject a fabricated accepted restart receipt or effect generation (1.820167ms)",
+          "✔ performance semantics reject SIGKILL recovery without WAL continuity and a preserved crash-pending boot row (1.893292ms)",
+          "✔ browser schema requires six runs, all 21 route mappings, DESIGN audits, BTC detail and no false green (10.382916ms)",
+          "✔ browser claims require decoded, dimension-bound PNG and exact computed-style artifact bytes (487.481792ms)",
+          "✔ browser PNG validation rejects signature-only, bad CRC, corrupt zlib and wrong capture dimensions after hashes are rebound (294.034334ms)",
+          "✔ browser PNG validation rejects visually blank captures and cross-subject all-routes-same evidence (112.559667ms)",
+          "✔ browser capture transcript is hash-bound and enumerates the exact IN_APP_BROWSER_MCP screenshot set (101.863167ms)",
+          "✔ browser v3 recomputes canonical API, visible DOM and bounded console truth from raw route observations (614.726583ms)",
+          "✔ browser v3 enforces exact 126 route observations, 146 captures and 194 immutable artifacts (196.381792ms)",
+          "✔ browser restart proof requires one exact hash-bound DOM observation, never a boolean or synthetic status (599.640708ms)",
+          "✔ browser computed evidence rejects DESIGN role drift and measurement provenance forgery with valid artifact hashes (90.825166ms)",
+          "✔ immutable evidence writer refuses traversal and overwrite (16.72175ms)",
+          "✔ concurrent immutable evidence writers publish exactly one winner without overwrite or temporary debris (105.282291ms)",
+          "✔ secret scan detects constructed credential material without retaining it (0.115291ms)",
+          "✔ exact accepted Q donor identities remain pinned in the harness contract (0.030917ms)",
+          "✔ exact Q donor inventory rejects a hostile partial archive before pytest (0.134417ms)",
+          "✔ Q venv manifest rejects interpreter, distribution, and plugin-environment drift (0.159584ms)",
+          "ℹ tests 44",
+          "ℹ suites 0",
+          "ℹ pass 42",
+          "ℹ fail 2",
+          "ℹ cancelled 0",
+          "ℹ skipped 0",
+          "ℹ todo 0",
+          "ℹ duration_ms 16056.595",
+          "✖ failing tests:",
+          "test at test/i00/performance/acceptance-contract.test.mjs:523:1",
+          "✖ candidate report parity reads exact HEAD from clean detached checkouts (4189.843959ms)",
+          "  AssertionError [ERR_ASSERTION]: [{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}]",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///private/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone/test/i00/performance/acceptance-contract.test.mjs:529:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "test at test/i00/performance/acceptance-contract.test.mjs:546:1",
+          "✖ candidate report parity survives a sole branch not named current-main and preserves tri-state failures (6173.636458ms)",
+          "  AssertionError [ERR_ASSERTION]: {\"id\":\"candidate_head_generated_report_parity\",\"revision\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"sourceRepository\":\"/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-NRu2Kk/candidate-parity-source\",\"legacySourceAlias\":null,\"checkouts\":[{\"checkout\":\"candidate-report-parity-untouched\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0},{\"checkout\":\"candidate-report-parity-generated\",\"headSha\":\"4c9143a0bcc331aa170e9e26b741240b39df8b9e\",\"branch\":\"\",\"statusByteLength\":0}],\"regeneration\":{\"id\":\"candidate_report_regeneration\",\"command\":[\"/Users/cosmosgeek/.local/node22/bin/node\",\"test/i00/render-reports.mjs\",\"--write\"],\"cwdRelative\":\"../../../../../../../../var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/i00-candidate-single-branch-NRu2Kk/candidate-report-parity-generated\",\"startedAtUtc\":\"2026-07-17T02:40:46.087Z\",\"endedAtUtc\":\"2026-07-17T02:40:47.133Z\",\"durationMs\":1046.268,\"exitCode\":0,\"exitSignal\":null,\"timedOut\":false,\"stdoutBytes\":0,\"stderrBytes\":0,\"stdoutSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"stderrSha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"parsedCounts\":{},\"secretFindings\":[],\"outputOverflow\":false,\"passed\":true},\"artifacts\":[{\"relativePath\":\"MISSION_COVERAGE_MATRIX.md\",\"sha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"byteLength\":104025,\"generatedSha256\":\"0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae\",\"generatedByteLength\":104025,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"AUTONOMY_CLOSURE_REPORT.md\",\"sha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"byteLength\":11585,\"generatedSha256\":\"946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9\",\"generatedByteLength\":11585,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"NO_TERMINAL_DEPENDENCY_REPORT.md\",\"sha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"byteLength\":11471,\"generatedSha256\":\"eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad\",\"generatedByteLength\":11471,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"RESOURCE_AND_BACKPRESSURE_REPORT.md\",\"sha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"byteLength\":14709,\"generatedSha256\":\"c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c\",\"generatedByteLength\":14709,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"OFFICIAL_INTERFACE_MATRIX.md\",\"sha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"byteLength\":18431,\"generatedSha256\":\"15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb\",\"generatedByteLength\":18431,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":true,\"matchesGenerator\":true},{\"relativePath\":\"integration/reports/i00-proof-evidence.json\",\"sha256\":\"8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7\",\"byteLength\":529097,\"generatedSha256\":\"8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8\",\"generatedByteLength\":529097,\"comparisonMode\":\"EXACT_BYTES\",\"rawMatchesGenerator\":false,\"matchesGenerator\":false}],\"liveGitDiagnostic\":{\"status\":\"UNKNOWN\",\"passed\":null,\"receiptProvenance\":{\"verificationBase\":\"59361e5459eeed674d71f7c8ba8c8adb0a41b2ba\",\"unavailableShas\":[\"692501587617d4880303fbd747d93e63c376f088\"],\"status\":\"UNKNOWN\",\"passed\":null,\"failures\":[],\"unknownReasons\":[\"RECEIPT_b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c_COMMITTED_CLAIM_UNKNOWN\",\"COMMIT_692501587617d4880303fbd747d93e63c376f088_UNAVAILABLE\",\"RECEIPT_8058ab8febb639839333d4e2c604068a0c7390ea_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_56c47dad398c485b6653036c8b90c53f11061b1e_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_6bfd543afb693ea18f4baf08e962e6d698f140fb_COMMITTED_CLAIM_UNKNOWN\",\"RECEIPT_23e985c17b9b860fee26be397fa05b26f3daf8f2_COMMITTED_CLAIM_UNKNOWN\"]}},\"passed\":false,\"restrictedSource\":{\"mode\":\"FILE_TRANSPORT_SINGLE_BRANCH_CANDIDATE\",\"branch\":\"candidate-parity\",\"refNames\":[\"refs/heads/candidate-parity\",\"refs/remotes/origin/candidate-parity\"]}}",
+          "  ",
+          "  false !== true",
+          "  ",
+          "      at TestContext.<anonymous> (file:///private/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm/clone/test/i00/performance/acceptance-contract.test.mjs:551:10)",
+          "      at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+          "      at async Test.run (node:internal/test_runner/test:1054:7)",
+          "      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {",
+          "    generatedMessage: false,",
+          "    code: 'ERR_ASSERTION',",
+          "    actual: false,",
+          "    expected: true,",
+          "    operator: 'strictEqual',",
+          "    diff: 'simple'",
+          "  }",
+          "Deterministic egress audit: PASS; mode=DETERMINISTIC; forbidden attempts=0; installs=115; processes=103; execution contexts=115"
+        ],
+        "stderr_tail": [
+          "(!) Some chunks are larger than 500 kB after minification. Consider:",
+          "- Using dynamic import() to code-split the application",
+          "- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks",
+          "- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.",
+          "Deterministic test child failed: script=test:i00:acceptance-contract code=1 signal=null"
+        ]
+      }
+    ],
+    "cleanup_actions": [
+      {
+        "action": "REMOVE_CONTROLLED_TEMP_CLONE",
+        "path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c4-local-single-branch-YCFkGm",
+        "started_at_utc": "2026-07-17T02:40:53.447Z",
+        "ended_at_utc": "2026-07-17T02:40:54.713Z",
+        "exit_code": 0
+      }
+    ],
+    "result": "FAIL",
+    "transport": "LOCAL_SOURCE_NO_LOCAL_NO_HARDLINKS_SINGLE_BRANCH",
+    "source_repository": "/Users/cosmosgeek/Desktop/truth-a",
+    "detached_head": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+    "detached_symbolic_ref_probe_exit_code": 1,
+    "local_branch_refs": [
+      "refs/heads/codex/truth-campaign-c4-20260717"
+    ],
+    "remote_tracking_branch_refs": [
+      "refs/remotes/origin/codex/truth-campaign-c4-20260717"
+    ],
+    "fetch_refspec": "+refs/heads/codex/truth-campaign-c4-20260717:refs/remotes/origin/codex/truth-campaign-c4-20260717",
+    "shallow": false,
+    "current_main_ref_present": false,
+    "hardlink_audit": {
+      "clone_flags": [
+        "--no-local",
+        "--no-hardlinks",
+        "--single-branch"
+      ],
+      "object_files_checked": 3,
+      "max_link_count": 1,
+      "hardlinked_object_file_count": 0,
+      "alternates_present": false,
+      "passed": true
+    },
+    "topology_passed": true,
+    "command_count": 8,
+    "passed_command_count": 6,
+    "failed_commands": [
+      {
+        "command": "npm test",
+        "exit_code": 1,
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4144.080584ms)",
+        "output_sha256": "1c2560970ad62801c00cb684bddd2e9bf2e4edc923c2746f730f001c48e931bd"
+      },
+      {
+        "command": "npm run test:all",
+        "exit_code": 1,
+        "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4189.843959ms)",
+        "output_sha256": "8d9134fb3626c15e395ceda6cff2938dbb76324b471faed97e687eeb4439d829"
+      }
+    ],
+    "final_clean": true
+  },
+  "current_main": {
+    "before": {
+      "local": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+      "cached_origin": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+      "commands": [
+        {
+          "command": "git rev-parse refs/heads/current-main",
+          "argv": [
+            "git",
+            "rev-parse",
+            "refs/heads/current-main"
+          ],
+          "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+          "kind": "probe",
+          "started_at_utc": "2026-07-17T02:34:07.136Z",
+          "ended_at_utc": "2026-07-17T02:34:07.146Z",
+          "exit_code": 0,
+          "signal": null,
+          "expected_exit_codes": [
+            0,
+            128
+          ],
+          "exit_code_expected": true,
+          "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+          "stdout_byte_length": 41,
+          "stderr_byte_length": 0,
+          "test_count": 0,
+          "test_count_basis": "NOT_A_TEST_COMMAND",
+          "explicit_test_summaries": [],
+          "unexpected_skip_markers": []
+        },
+        {
+          "command": "git rev-parse refs/remotes/origin/current-main",
+          "argv": [
+            "git",
+            "rev-parse",
+            "refs/remotes/origin/current-main"
+          ],
+          "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+          "kind": "probe",
+          "started_at_utc": "2026-07-17T02:34:07.146Z",
+          "ended_at_utc": "2026-07-17T02:34:07.155Z",
+          "exit_code": 0,
+          "signal": null,
+          "expected_exit_codes": [
+            0,
+            128
+          ],
+          "exit_code_expected": true,
+          "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+          "stdout_byte_length": 41,
+          "stderr_byte_length": 0,
+          "test_count": 0,
+          "test_count_basis": "NOT_A_TEST_COMMAND",
+          "explicit_test_summaries": [],
+          "unexpected_skip_markers": []
+        }
+      ]
+    },
+    "after": {
+      "local": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+      "cached_origin": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+      "commands": [
+        {
+          "command": "git rev-parse refs/heads/current-main",
+          "argv": [
+            "git",
+            "rev-parse",
+            "refs/heads/current-main"
+          ],
+          "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+          "kind": "probe",
+          "started_at_utc": "2026-07-17T02:40:54.713Z",
+          "ended_at_utc": "2026-07-17T02:40:54.722Z",
+          "exit_code": 0,
+          "signal": null,
+          "expected_exit_codes": [
+            0,
+            128
+          ],
+          "exit_code_expected": true,
+          "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+          "stdout_byte_length": 41,
+          "stderr_byte_length": 0,
+          "test_count": 0,
+          "test_count_basis": "NOT_A_TEST_COMMAND",
+          "explicit_test_summaries": [],
+          "unexpected_skip_markers": []
+        },
+        {
+          "command": "git rev-parse refs/remotes/origin/current-main",
+          "argv": [
+            "git",
+            "rev-parse",
+            "refs/remotes/origin/current-main"
+          ],
+          "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+          "kind": "probe",
+          "started_at_utc": "2026-07-17T02:40:54.722Z",
+          "ended_at_utc": "2026-07-17T02:40:54.729Z",
+          "exit_code": 0,
+          "signal": null,
+          "expected_exit_codes": [
+            0,
+            128
+          ],
+          "exit_code_expected": true,
+          "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+          "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+          "stdout_byte_length": 41,
+          "stderr_byte_length": 0,
+          "test_count": 0,
+          "test_count_basis": "NOT_A_TEST_COMMAND",
+          "explicit_test_summaries": [],
+          "unexpected_skip_markers": []
+        }
+      ]
+    },
+    "changed_during_gate": false
+  },
+  "all_local_required_commands_passed": false,
+  "custody": {
+    "status": "WITHHELD_C4_LOCAL_GATE_REJECTED",
+    "token_issued": false,
+    "c2_or_c3_custody_transfers_to_c4": false,
+    "live_remote_clean_clone_run": false,
+    "bundle_receipt_recorded": false
+  },
+  "blockers": [
+    {
+      "phase": "CANONICAL",
+      "command": "npm test",
+      "exit_code": 1,
+      "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4338.438167ms)",
+      "output_sha256": "411d4d3277246e2adc99a64cd697c55deb1fa758f31ff58c066f271f6fb97745"
+    },
+    {
+      "phase": "CANONICAL",
+      "command": "npm run test:all",
+      "exit_code": 1,
+      "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4520.404833ms)",
+      "output_sha256": "1e333d1654d44db43ca6b843f1087af74f9a87bd22c47ffe6f551d3b2707a259"
+    },
+    {
+      "phase": "LOCAL_SINGLE_BRANCH",
+      "command": "npm test",
+      "exit_code": 1,
+      "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4144.080584ms)",
+      "output_sha256": "1c2560970ad62801c00cb684bddd2e9bf2e4edc923c2746f730f001c48e931bd"
+    },
+    {
+      "phase": "LOCAL_SINGLE_BRANCH",
+      "command": "npm run test:all",
+      "exit_code": 1,
+      "first_causal_error": "✖ candidate report parity reads exact HEAD from clean detached checkouts (4189.843959ms)",
+      "output_sha256": "8d9134fb3626c15e395ceda6cff2938dbb76324b471faed97e687eeb4439d829"
+    }
+  ],
+  "completed_at_utc": "2026-07-17T02:40:54.729Z"
+}

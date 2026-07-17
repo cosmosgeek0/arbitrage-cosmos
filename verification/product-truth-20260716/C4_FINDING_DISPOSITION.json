@@ -1,0 +1,78 @@
+{
+  "schema": "product-truth-c4-vfinal3-finding-disposition.v1",
+  "source_candidate": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+  "expected_direct_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "findings": [
+    {
+      "id": "VFINAL-PROV-001",
+      "severity": "CRITICAL",
+      "status": "FIXED",
+      "proof": [
+        "C4_TOPOLOGY.json",
+        "C4_LOCAL_GATE_REPORT.json",
+        "DIRECTIVE_COVERAGE_MATRIX.csv#PROV-C4-DIRECT-PARENT"
+      ],
+      "disposition": "C4 has one parent and it equals immutable C2; merge-base ancestry is not substituted"
+    },
+    {
+      "id": "VFINAL-COCKPIT-001",
+      "severity": "CRITICAL",
+      "status": "FIXED_IN_C4_SOURCE",
+      "proof": [
+        "server/src/productIntegration/runtime/projection.ts",
+        "web/src/lib/productIntegration/model.ts",
+        "web/src/features/productControlRoom/SurfaceBindingPanel.tsx",
+        "web/src/styles/productControlRoom.css",
+        "web/test/productControlRoom/contracts.test.mjs"
+      ],
+      "disposition": "Missing or blocking required data forces blocked backend readiness and non-green rendering"
+    },
+    {
+      "id": "VFINAL-AUTH-001",
+      "severity": "HIGH",
+      "status": "FIXED_IN_C4_SOURCE",
+      "proof": [
+        "server/src/productIntegration/runtime/types.ts",
+        "server/src/productIntegration/runtime/projection.ts",
+        "web/test/productControlRoom/canonical-presentation.test.mjs"
+      ],
+      "disposition": "Canonical server supervisor owns posture, feed, strategy, Watchman, and component presentation truth; client derivation is retired"
+    },
+    {
+      "id": "VFINAL-DIR-001",
+      "severity": "CRITICAL",
+      "status": "FIXED_IN_C4_EVIDENCE",
+      "proof": [
+        "INPUTS.lock",
+        "C4_INPUT_COVERAGE.json",
+        "verify-c4-evidence.mjs"
+      ],
+      "disposition": "All 34 candidate-backed lock entries are recomputed from exact C4 blobs, bytes, lengths, and SHA-256 values"
+    },
+    {
+      "id": "VFINAL-DIR-002",
+      "severity": "HIGH",
+      "status": "FIXED_IN_C4_EVIDENCE",
+      "proof": [
+        "DIRECTIVE_COVERAGE_MATRIX.csv#LOCK-001..LOCK-061",
+        "C4_INPUT_COVERAGE.json"
+      ],
+      "disposition": "Every one of 61 locked inputs has an explicit locked source and disposition, including defect-wave and superseded inputs"
+    },
+    {
+      "id": "VFINAL-DIR-003",
+      "severity": "HIGH",
+      "status": "FIXED_IN_C4_EVIDENCE",
+      "proof": [
+        "DIRECTIVE_COVERAGE_MATRIX.csv",
+        "CAPABILITY_TRUTH_MATRIX.csv",
+        "verify-c4-evidence.mjs"
+      ],
+      "disposition": "All coverage candidate_sha cells bind exact C4 and both rejected placeholders are absent"
+    }
+  ],
+  "all_six_findings_dispositioned": true,
+  "separate_local_gate_disposition": "REJECTED_CANDIDATE_REPORT_PARITY",
+  "custody_token_issued": false,
+  "later_source_repair": "C5_REQUIRED"
+}

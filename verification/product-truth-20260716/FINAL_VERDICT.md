@@ -1,13 +1,15 @@
-# Candidate Verdict — D-LAUNCH-62 Wave 1
+# Candidate Verdict — Defect Wave 3 C4
 
-Status: `BLOCKED`
+Status: `REJECTED_LOCAL_GATE`
 
-Candidate: `SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT`
+Candidate: `4c9143a0bcc331aa170e9e26b741240b39df8b9e`
 
-Gate: `BLOCKED:C2_EXACT_SHA_AND_GATES_PENDING`
+Direct parent: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561` (`1/1`, exact equality)
 
-Old candidate C `41752d6a87dc1cb1b933bb4460c9cabfc15ff694` must not be handed to the final verifier. Its D-LAUNCH-61 baseline/custody record remains historical, but Wave 1 sustained critical provenance defects.
+Custody: `WITHHELD_C4_LOCAL_GATE_REJECTED`
 
-All fourteen durable findings are adjudicated in `WAVE1_FINDING_ADJUDICATION.json`. Critical input-lock and Frontier-coverage omissions are corrected; false proving paths and missing permanent-law rows are corrected; absent I00 controls and AI-Ops operational capabilities remain honestly `NOT_CONFIGURED`/`UNWIRED`; obsolete Product Assurance closure artifacts are explicitly deferred; and the clean-clone evidence generator now passes exact-byte refs-absent parity.
+The six VFINAL3 findings are corrected in C4 source or its bounded evidence descendant. Focused typecheck, build, Product Integration `111/111`, Product Control `101/101`, I00 commands `29/29`, topology, census, lock-byte, and 61/61 coverage checks pass.
 
-No independent token is issued. The containing source-complete commit is the provisional C2; Account A may issue only the Pass-0 baseline token after its root/full/fresh-clone gates pass, the exact-C2 evidence package is sealed, every Wave-1 finding remains dispositioned, and C2 custody is valid. Wave 1b remains pending and blocks final-verifier handoff even after a local C2 freeze.
+The required canonical and literal local single-branch batteries are not green. In both contexts, `npm test` and `npm run test:all` exit 1 because the exact-HEAD and sole-branch report-parity tests reject stale `integration/reports/i00-proof-evidence.json` bytes. The acceptance-contract result is `42/44`; the recorded artifact SHA-256 is `8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7`, while deterministic regeneration yields `8968726acf2edd47326da3c61b9ba983ac74d28c4d92fda5cb82018b5f3f71f8`.
+
+C4 remains immutable. No custody token is issued, and no evidence-only child may repair this source artifact. Any correction must be C5.

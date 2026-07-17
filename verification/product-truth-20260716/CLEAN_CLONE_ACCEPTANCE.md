@@ -1,23 +1,34 @@
-# Clean Clone Gate — D-LAUNCH-62
+# Exact-C4 Local Single-Branch Gate
 
-Status: `PENDING_EXACT_C2`
+Status: `REJECTED_LOCAL_GATE`
 
-Actor: `ACCOUNT_A_BUILDER`; independent acceptance authority: `false`.
+Candidate: `4c9143a0bcc331aa170e9e26b741240b39df8b9e`
 
-## Sustained old-C defect
+Actor: `ACCOUNT_A_CANDIDATE_WRITER`; independent acceptance authority: `false`.
 
-The durable clean-clone receipt for old C records `npm ci` exit `0`, `npm test` exit `0`, and `npm run test:all` exit `1` (`5889/5894`; I00 proof `42/47`). That result rejects old C for handoff.
+## Topology and isolation
 
-## Implemented C2 correction
+- Source clone flags: `--no-local --no-hardlinks --single-branch`.
+- Exact detached HEAD: C4.
+- Local branch refs: exactly `refs/heads/codex/truth-campaign-c4-20260717`.
+- Remote-tracking refs: exactly `refs/remotes/origin/codex/truth-campaign-c4-20260717`.
+- `current-main`: absent from the clone.
+- Repository: non-shallow; alternates absent; hardlinked object files 0; maximum object link count 1.
+- Final tracked status: clean.
 
-- Sealed machine evidence contains tracked-byte proof only.
-- Moving refs and optional external Git objects are not written into sealed bytes; ambient provenance is a separate `VERIFIED`/`FAILED`/`UNKNOWN` diagnostic.
-- Report parity compares all six generated artifacts as exact bytes and creates no synthetic `current-main` ref.
-- Product Assurance Git subprocesses use the bounded shared Git-evidence runner.
-- Root `npm test` now mounts `test:i00:proof:built`, so the I00 security scanner cannot remain red behind a green root gate.
+## Commands
 
-Focused source proof after the correction: I00 proof `47/47`; acceptance contract `44/44`, including a sole-branch refs-absent exact-byte parity regression.
+| Command | Exit | Exact result |
+| --- | ---: | --- |
+| `npm ci` | 0 | dependency install completed |
+| `npm run typecheck` | 0 | pass |
+| `npm run build` | 0 | pass |
+| `npm run test:product-integration:built` | 0 | 111/111 |
+| `npm run test:product-control:built` | 0 | 101/101 |
+| `npm run test:i00:commands` | 0 | 29/29 |
+| `npm test` | 1 | candidate report parity rejected; acceptance contract 42/44 |
+| `npm run test:all` | 1 | same candidate report parity rejection; acceptance contract 42/44 |
 
-## Remaining exact-C2 gate
+The detached canonical worktree produced the same exits and failure. Exact per-command output digests, causal tails, timestamps, cleanup, and unchanged `current-main` snapshots are recorded in `C4_LOCAL_GATE_REPORT.json`.
 
-After the final source commit is frozen as C2, create a fresh `--no-hardlinks --single-branch --branch truth-campaign-20260716` clone from a local one-branch transport, detach exact C2, and run `npm ci`, `npm test`, and `npm run test:all`. Record real exits/counts and final clean status. Account A records builder evidence only and does not self-issue the independent `CLEAN_CLONE_ACCEPTED` token.
+No `C4_CUSTODY_REQUIRED` token is issued. Repairing the stale tracked generated report would change candidate source and therefore requires C5; it cannot be placed in this evidence-only descendant.

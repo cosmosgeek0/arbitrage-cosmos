@@ -47,6 +47,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Foundation quantity comparison bridge | `VERIFIED` | It is a closed evidence-only comparison contract. Its production consumer remains `NOT_CONFIGURED`; it exposes no action schema. |
 | A4 cockpit source | `INTEGRATED_FAIL_CLOSED` | Surface readiness is relational: any required `MISSING`, `UNKNOWN`, `UNAVAILABLE`, `NOT_CONFIGURED`, or `BLOCKED` datum forces `BLOCKED_BACKEND` and non-green rendering. Component, feed, strategy, and Watchman presentation truth is projected by the canonical server supervisor. A local refresh success is only an action acknowledgement and cannot change canonical health color or recovery wording. |
 | Deployment, sentinel, paging, restore game-day, and rollback at staging | `NOT_CONFIGURED` | These are later owner and staging gates. |
+| Deployment receipt and readback contracts | `BUILT_AND_TESTED` | Runtime validators compile the declared Draft 2020-12 schemas as structural authority before semantic, chronology, evidence, and SHA checks; unknown fields and wrong nested types fail closed. |
 | Private account truth | `NOT_CONFIGURED` | No private credential or read was used. |
 | Signed validation and test-order lifecycle | `DEFERRED_OWNER_GATE` | Separate durable owner authorization is required for each later gate. |
 | Money movement and capital canaries | `DEFERRED_OWNER_GATE` | No authorization is implied by source, local wiring, tests, or a prior gate. |

@@ -10,6 +10,16 @@ import {
   requireKeys,
   sha256File,
 } from '../lib.mjs';
+import { compileJsonSchemaFile } from '../json-schema.mjs';
+
+const RECEIPT_SCHEMAS = Object.freeze({
+  RELEASE: 'release-receipt.schema.json',
+  DEPLOYMENT: 'deployment-receipt.schema.json',
+  ROLLBACK: 'rollback-receipt.schema.json',
+  BACKUP: 'backup-receipt.schema.json',
+  RESTORE: 'restore-receipt.schema.json',
+  INCIDENT: 'incident-receipt.schema.json',
+});
 
 const DEPLOYMENT_EVIDENCE = [
   'releaseManifest',
@@ -175,6 +185,19 @@ const args = parseArgs(process.argv.slice(2));
 if (!args.input || !args.kind) fail('--input and --kind are required');
 const value = readJson(args.input, 'operation receipt');
 if (value.kind !== args.kind) fail('receipt kind does not match --kind');
+const schemaName = RECEIPT_SCHEMAS[args.kind];
+if (!schemaName) fail(`unsupported receipt kind ${args.kind}`);
+let structuralValidator;
+try {
+  structuralValidator = compileJsonSchemaFile(
+    new URL(`../schemas/${schemaName}`, import.meta.url),
+    `${args.kind} receipt schema`,
+  );
+} catch (error) {
+  fail(`receipt schema compilation failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+const structuralResult = structuralValidator(value);
+if (!structuralResult.valid) fail(`${args.kind} receipt schema rejected input: ${structuralResult.error}`);
 if (value.schemaVersion !== 1) fail('receipt schemaVersion must be 1');
 const sha = (field) => { if (!isFullSha(value[field])) fail(`${field} must be a full Git SHA`); };
 const utc = (field) => { if (!isUtc(value[field])) fail(`${field} must be exact UTC seconds`); };

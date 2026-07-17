@@ -33,7 +33,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 | Historical validate-only core | `VERIFIED` | Verification applies to historical C2R, not to the new candidate SHA. |
 | Account A candidate source | `C9_SOURCE_READY_TO_FREEZE` | C9 is a single correction commit whose sole direct parent must byte-equal immutable C2. C3 through C8 and their evidence descendants are excluded from C9 ancestry. |
 | AI-Ops source: egress, contracts, runtime, adapters, cockpit, proof, replay, operations, runbooks | `INTEGRATED` | Nine sealed lanes and the egress patch are exact second-parent candidate merges. |
-| AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | AI-Ops root-test mount is also `NOT_CONFIGURED`; AI-Ops acceptance is explicitly excluded from the C2 baseline rather than inferred from `npm test`. |
+| AI provider activation, worker lifecycle, product route, owner signatures, and external paging | `NOT_CONFIGURED` | Provider and runtime activation remain `NOT_CONFIGURED`. Canonical root gates now mount the branch-aware AI-Ops acceptance suites without implying operational activation. |
 | AI-Ops composed production runtime | `UNWIRED` | AI code has no live capital, order, signing, self-approval, or silent production-patch authority. |
 | A-FORMAL `b491893416006cf529aef02e5dd4a25d6475e7b8` source | `INTEGRATED` | Merged through `48a89d9f`; pure formal artifacts are admitted. |
 | Formal runtime | `REFERENCE_ONLY` | TLA tooling is `NOT_CONFIGURED`; no runtime authority is granted. |
@@ -59,7 +59,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - D-LAUNCH-65 `QL_DIRECTOR_STATE.md` and the VFINAL5 receipt are separately packaged and byte-bound. They remain authority/defect evidence, not executable inputs or candidate ancestry.
 - The clean-clone proof generator is separated into deterministic tracked-byte evidence plus an ambient Git tri-state diagnostic. Moving refs and optional external objects are not baked into sealed report bytes.
 - Candidate-root `QL_DIRECTOR_STATE.md` SHA-256 `95d4c276…` and `QL_PARALLEL_DAG.md` SHA-256 `89a13c8a…` are retained pre-D-LAUNCH-65 context only. The separately packaged D-LAUNCH-65 payload at commit `9c8c9f98c7fbd491fb97fce70d723b6c8bed2a4d` is the governing director overlay.
-- The canonical Product Assurance gate now includes A-FORMAL and S2 action-evidence suites. AI-Ops port/shadow suites remain deliberately root-unmounted and excluded from C2 acceptance because their branch-specific assumptions are not candidate-compatible.
+- The canonical Product Assurance gate includes A-FORMAL and S2 action-evidence suites. Canonical root gates now mount all 449 AI-Ops port/shadow tests; donor-only identity and scope assertions remain exact on their donor branches while integrated runs verify current-tree truth. Production AI provider/runtime authority remains `NOT_CONFIGURED`.
 - The I00 donor/topology contract now admits the exact authorized post-L merge sequence without adding those sources to the original 16-donor equality count. A-FORMAL and S2 are candidate ancestors classified as integrated reference-only; PREVERIFY remains an explicit non-ancestor. Focused command contracts pass `29/29`.
 - The fixed matrix cardinalities remain 153 directive + 23 capability + 178 cockpit = 354. The evidence descendant must regenerate every candidate cell to exact C9; source mode cannot emit placeholders.
 - Focused proof is green at `47/47`; the acceptance contract is green at `47/47`, including a sole branch with no `current-main` ref. The five human I00 reports and machine report are refreshed from a clean tracked-byte source checkpoint.
@@ -80,6 +80,16 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - `integration/reports/i00-proof-evidence.json` is regenerated from the restricted tracked candidate source; its sealed bytes do not depend on richer ambient refs or unreachable Git objects.
 - `RefreshDock` presents canonical WATCHMAN status for its launcher, dot, and health class. Local `/api/refresh` success may report `Public Refresh Completed` but cannot announce recovery or render green while canonical health remains outage.
 - The source commit contains the fail-closed generator/schema correction and payload registry. Exact lock bytes, all 354 exact-C9 matrix cells, direct-parent proof, exact payload/provenance remeasurement, exact census, and manifests belong only to a later exact-C9 campaign evidence descendant.
+
+## Current canonical gate evidence
+
+These are measured `fix/pin-refresh` results for the newly mounted gate denominators; they do not alter the historical candidate rulings below.
+
+| Command | Mounted denominator | Measured result |
+| --- | ---: | --- |
+| `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
+| `npm run test:all` | 3,469 = 3 hostile perimeter + 449 AI-Ops + 3,017 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,011 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
+| `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
 
 ## Previous source evidence
 

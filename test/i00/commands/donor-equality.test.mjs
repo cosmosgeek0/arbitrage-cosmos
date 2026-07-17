@@ -4,19 +4,15 @@ import test from 'node:test';
 import {
   EXPECTED_DONOR_ROWS,
   PHASE2_GRAPH_BOUNDARY,
+  POST_L_TOPOLOGY_AUTHORITY,
   RECEIPT_BOUND_AUTHORITY,
-  collectDonorEqualityEvidence,
   collectReceiptBoundDonorEqualityEvidence,
   evaluateDonorEquality,
   verifyDonorEquality,
 } from '../donor-equality.mjs';
 
-const OBSERVATION = collectDonorEqualityEvidence({ candidateRef: 'HEAD' });
-
 function receiptBoundFixture() {
-  const observation = OBSERVATION.evidenceMode === RECEIPT_BOUND_AUTHORITY.mode
-    ? structuredClone(OBSERVATION)
-    : collectReceiptBoundDonorEqualityEvidence({ candidateRef: 'HEAD' });
+  const observation = collectReceiptBoundDonorEqualityEvidence({ candidateRef: 'HEAD' });
   if (!observation.receiptBound.cloneBoundary.qualifiesForReceiptBoundMode) {
     const branch = 'truth-campaign-20260716';
     Object.assign(observation.receiptBound.cloneBoundary, {
@@ -38,7 +34,8 @@ function receiptBoundFixture() {
   return observation;
 }
 
-const RECEIPT_BOUND_OBSERVATION = receiptBoundFixture();
+const OBSERVATION = receiptBoundFixture();
+const RECEIPT_BOUND_OBSERVATION = structuredClone(OBSERVATION);
 
 function hostile(mutator) {
   const copy = structuredClone(OBSERVATION);
@@ -93,6 +90,24 @@ test('receipt-bound mode is pinned to the tracked manifest and exact isolated-cl
 
 test('required-last L proof pins exact merge, parents, and authorized post-L topology', () => {
   const proof = evaluateDonorEquality(OBSERVATION);
+  assert.equal(OBSERVATION.mergeWindow.topologyCut, POST_L_TOPOLOGY_AUTHORITY.landing.commit);
+  assert.equal(OBSERVATION.mergeWindow.topologyCutAncestorOfCandidate, true);
+  assert.equal(
+    OBSERVATION.mergeWindow.topologyAuthority.observedBlobSha,
+    POST_L_TOPOLOGY_AUTHORITY.blobSha,
+  );
+  assert.equal(
+    OBSERVATION.mergeWindow.topologyAuthority.observedSha256,
+    POST_L_TOPOLOGY_AUTHORITY.sha256,
+  );
+  assert.deepEqual(
+    OBSERVATION.mergeWindow.topologyAuthority.landing.observedParents,
+    POST_L_TOPOLOGY_AUTHORITY.landing.parents,
+  );
+  assert.deepEqual(
+    OBSERVATION.mergeWindow.topologyAuthority.correction.observedParents,
+    POST_L_TOPOLOGY_AUTHORITY.correction.parents,
+  );
   assert.deepEqual(proof.requiredLast, {
     merge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
     firstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
@@ -100,7 +115,11 @@ test('required-last L proof pins exact merge, parents, and authorized post-L top
     authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
     postLTopologyExact: true,
   });
-  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 16);
+  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 17);
+  assert.equal(
+    proof.mergeWindow.authorizedLaterMerges.at(-1),
+    POST_L_TOPOLOGY_AUTHORITY.landing.commit,
+  );
   assert.deepEqual(proof.requiredLast.authorizedLaterMerges, proof.mergeWindow.authorizedLaterMerges);
   assert.deepEqual(proof.mergeWindow.laterMerges, proof.mergeWindow.authorizedLaterMerges);
   const lane = proof.donors.find((donor) => donor.id === 'L-LANE');
@@ -179,6 +198,21 @@ test('wrong merge parent, extra phase merge, or non-allowlisted post-L topology 
     value.mergeWindow.authorizedLaterMerges.push('2'.repeat(40));
   });
   assertBlocked(widenedAllowlist, 'POST_L_MERGE_ALLOWLIST_MISMATCH');
+
+  const forgedTopologyReceipt = hostile((value) => {
+    value.mergeWindow.topologyAuthority.observedSha256 = '0'.repeat(64);
+  });
+  assertBlocked(forgedTopologyReceipt, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
+
+  const substitutedTopologyCut = hostile((value) => {
+    value.mergeWindow.topologyCut = '0'.repeat(40);
+  });
+  assertBlocked(substitutedTopologyCut, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
+
+  const forgedLandingParents = hostile((value) => {
+    value.mergeWindow.topologyAuthority.landing.observedParents[1] = '0'.repeat(40);
+  });
+  assertBlocked(forgedLandingParents, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
 });
 
 test('altered acceptance or integration receipt hash fails closed', () => {

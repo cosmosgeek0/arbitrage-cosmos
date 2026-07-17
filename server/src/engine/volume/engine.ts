@@ -49,6 +49,9 @@ export class VolumeEngine {
   private universeKey = '';
   private emittedKeys = new Set<string>();
   private emittedKeyOrder: string[] = [];
+  private deliveredKeys = new Set<string>();
+  private deliveredKeyOrder: string[] = [];
+  private inFlightDeliveryKeys = new Set<string>();
   private sinkFailureCount = 0;
   private lastDecisionKey = new Map<string, string>();
   private lastDecisionPersistedAt = new Map<string, number>();
@@ -329,25 +332,50 @@ export class VolumeEngine {
       this.sinkFailureCount += 1;
       return;
     }
-    if (this.emittedKeys.has(key)) return;
-    this.emittedKeys.add(key);
-    this.emittedKeyOrder.push(key);
-    if (this.emittedKeyOrder.length > 5_000) {
-      const removed = this.emittedKeyOrder.shift();
-      if (removed !== undefined) this.emittedKeys.delete(removed);
+    if (!this.emittedKeys.has(key)) {
+      this.emittedKeys.add(key);
+      this.emittedKeyOrder.push(key);
+      if (this.emittedKeyOrder.length > 5_000) {
+        const removed = this.emittedKeyOrder.shift();
+        if (removed !== undefined) this.emittedKeys.delete(removed);
+      }
+      this.memSink.emit(event);
     }
-
-    this.memSink.emit(event);
     if (!externalSink) return;
+    if (this.deliveredKeys.has(key) || this.inFlightDeliveryKeys.has(key)) return;
+    if (this.inFlightDeliveryKeys.size >= 5_000) {
+      this.sinkFailureCount += 1;
+      return;
+    }
     try {
       const result = externalSink.emit(event) as unknown;
       if (result && typeof (result as PromiseLike<void>).then === 'function') {
-        void Promise.resolve(result).catch(() => {
-          this.sinkFailureCount += 1;
-        });
+        this.inFlightDeliveryKeys.add(key);
+        void Promise.resolve(result).then(
+          () => {
+            this.inFlightDeliveryKeys.delete(key);
+            this.rememberDelivered(key);
+          },
+          () => {
+            this.inFlightDeliveryKeys.delete(key);
+            this.sinkFailureCount += 1;
+          },
+        );
+      } else {
+        this.rememberDelivered(key);
       }
     } catch {
       this.sinkFailureCount += 1;
+    }
+  }
+
+  private rememberDelivered(key: string): void {
+    if (this.deliveredKeys.has(key)) return;
+    this.deliveredKeys.add(key);
+    this.deliveredKeyOrder.push(key);
+    if (this.deliveredKeyOrder.length > 5_000) {
+      const removed = this.deliveredKeyOrder.shift();
+      if (removed !== undefined) this.deliveredKeys.delete(removed);
     }
   }
 }

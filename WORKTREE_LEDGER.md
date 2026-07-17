@@ -1,6 +1,6 @@
 # WORKTREE_LEDGER.md — complete machine inventory (director-owned)
 
-Regenerated 2026-07-16T13:38:58.633839: 94 worktrees. States/rulings authoritative in QL_PARALLEL_DAG.md + QL_DIRECTOR_STATE.md (D-LAUNCH-1..53). ACTIVE WRITERS: ci-hotfix (CI-HOTFIX-2), egress-patch, port-a1/a4/a5/ops/obs. LAWS: one writer per tree; NEVER git clean -fdx / worktree prune / reset --hard on any tree; only director lands current-main. Off-machine backup: ~/cosmos-arbitrage-backup-20260716.bundle + GitHub origin.
+Durable pre-freeze census: **101 entries = 96 live Git worktrees + 5 `REMOVED_SAFE` tombstones**. The original 94-row registry was generated at `2026-07-16T13:38:58.633839`; the two campaign worktrees omitted from that table were captured immediately before C6 work began and are appended below. Rows are immutable census observations, not promises about later branch switches: in particular, the `truth-a` row intentionally records its clean pre-freeze state at `951e7a60709683d969abcca06de26197052cb374`, even after that worktree moves to the C6 branch. States/rulings are authoritative in QL_PARALLEL_DAG.md + QL_DIRECTOR_STATE.md (D-LAUNCH-1..65). ACTIVE WRITERS: ci-hotfix (CI-HOTFIX-2), egress-patch, port-a1/a4/a5/ops/obs. LAWS: one writer per tree; NEVER git clean -fdx / worktree prune / reset --hard on any tree; only director lands current-main. Off-machine backup: ~/cosmos-arbitrage-backup-20260716.bundle + GitHub origin.
 
 | Worktree | Branch | HEAD | Dirt |
 | --- | --- | --- | --- |
@@ -93,8 +93,22 @@ Regenerated 2026-07-16T13:38:58.633839: 94 worktrees. States/rulings authoritati
 | ~/role4-fix | role4-fix-20260715 | 37eeb5b | dirty:0 |
 | ~/runbook-shadow | runbook-shadow-20260715 | 25a3762 | dirty:0 |
 | ~/si-recon | si-recon-ruling-20260714 | f03ed78 | dirty:0 |
+| ~/truth-a | truth-campaign-20260716 | 951e7a60709683d969abcca06de26197052cb374 | tracked:0; untracked:0; clean pre-freeze snapshot |
+| ~/truth-b | (detached) | 787b73d108764d628f925ee630bfe2fbef89458e | tracked:0; untracked:7 |
 | ~/v1 | (detached) | 74eb452 | dirty:0 |
 | ~/v2 | (detached) | 74eb452 | dirty:0 |
 | ~/v3 | (detached) | 74eb452 | dirty:0 |
 | ~/v4 | (detached) | 74eb452 | dirty:0 |
 | ~/v5 | (detached) | 74eb452 | dirty:0 |
+
+## `REMOVED_SAFE` tombstones
+
+These five D-LAUNCH-61 read-only helper worktrees are no longer live Git registrations. D-LAUNCH-65 authorizes their durable tombstones; the four accepted outputs are retained as byte-exact candidate archive copies, while the two other lanes had no accepted output.
+
+| `former_absolute_path` | `worktree_name` | `live_registration_state` | `classification` | `disposition` | `disposition_reason` | `disposition_evidence` | `archive_source_commit` | `accepted_output_state` | `outputs` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `/Users/cosmosgeek/Desktop/prep-act` | `prep-act` | `REMOVED` | `REMOVED_SAFE` | `REMOVED_SAFE` | Director-authorized removal of a read-only D-LAUNCH-61 helper; no candidate source owned | `D-LAUNCH-65` | `0e4b364849075a454d7dd624ca068c238f4196c2` | `CANDIDATE_TRACKED_BYTE_EXACT_ARCHIVE_COPY` | 2 |
+| `/Users/cosmosgeek/Desktop/shard-prov` | `shard-prov` | `REMOVED` | `REMOVED_SAFE` | `REMOVED_SAFE` | Director-authorized removal of a read-only D-LAUNCH-61 helper; no candidate source owned | `D-LAUNCH-65` | `0e4b364849075a454d7dd624ca068c238f4196c2` | `CANDIDATE_TRACKED_BYTE_EXACT_ARCHIVE_COPY` | 1 |
+| `/Users/cosmosgeek/Desktop/shard-sec` | `shard-sec` | `REMOVED` | `REMOVED_SAFE` | `REMOVED_SAFE` | Director-authorized removal of a read-only D-LAUNCH-61 helper; no candidate source owned | `D-LAUNCH-65` | `0e4b364849075a454d7dd624ca068c238f4196c2` | `NO_ACCEPTED_OUTPUT` | 0 |
+| `/Users/cosmosgeek/Desktop/v-clean` | `v-clean` | `REMOVED` | `REMOVED_SAFE` | `REMOVED_SAFE` | Director-authorized removal of a read-only D-LAUNCH-61 helper; no candidate source owned | `D-LAUNCH-65` | `0e4b364849075a454d7dd624ca068c238f4196c2` | `CANDIDATE_TRACKED_BYTE_EXACT_ARCHIVE_COPY` | 1 |
+| `/Users/cosmosgeek/Desktop/v-cockpit` | `v-cockpit` | `REMOVED` | `REMOVED_SAFE` | `REMOVED_SAFE` | Director-authorized removal of a read-only D-LAUNCH-61 helper; no candidate source owned | `D-LAUNCH-65` | `0e4b364849075a454d7dd624ca068c238f4196c2` | `NO_ACCEPTED_OUTPUT` | 0 |

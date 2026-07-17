@@ -12,6 +12,7 @@ const DEFAULT_JSON_LIMIT_BYTES = 2 * 1024 * 1024;
 const LARGE_JSON_LIMIT_BYTES = 24 * 1024 * 1024;
 const NEGATIVE_CACHE_MS = 2_500;
 const MAX_CACHE_ENTRIES = 1_024;
+const MAX_ACTIVE_JSON_REQUESTS = 32;
 const jsonInFlight = new Map<string, Promise<unknown>>();
 const jsonFailures = new Map<string, { until: number; message: string }>();
 
@@ -85,6 +86,9 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
 
   const existing = jsonInFlight.get(key);
   if (existing) return existing as Promise<T>;
+  if (jsonInFlight.size >= MAX_ACTIVE_JSON_REQUESTS) {
+    throw new Error('Binance REST capacity reached');
+  }
 
   const work = (async (): Promise<T> => {
     const ctrl = new AbortController();
@@ -122,11 +126,11 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       clearTimeout(timer);
     }
   })();
-  boundedMapSet(jsonInFlight, key, work, 256);
+  jsonInFlight.set(key, work);
   try {
     return await work;
   } finally {
-    jsonInFlight.delete(key);
+    if (jsonInFlight.get(key) === work) jsonInFlight.delete(key);
   }
 }
 

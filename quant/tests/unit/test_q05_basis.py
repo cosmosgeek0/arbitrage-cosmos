@@ -138,6 +138,34 @@ class TestBasisComputation:
         assert label.convergence_censor_time_ns is None
         assert label.feasibility is ConstructionFeasibility.FEASIBLE
 
+    @pytest.mark.parametrize(
+        ("perp_price", "construction", "expected_negative"),
+        [
+            (10_400, BasisConstruction.NORMAL, False),
+            (10_400, BasisConstruction.REVERSE, True),
+            (9_600, BasisConstruction.NORMAL, True),
+            (9_600, BasisConstruction.REVERSE, False),
+        ],
+    )
+    def test_net_entry_edge_is_signed_for_each_trade_direction(
+        self,
+        perp_price: int,
+        construction: BasisConstruction,
+        expected_negative: bool,
+    ) -> None:
+        spot = _series((_point(-5, 10_000, 1),), series_id="spot-direction")
+        perp = _series((_point(-3, perp_price, 1),), series_id="perp-direction")
+        label = _compute(
+            construction=construction,
+            spot=spot,
+            perp=perp,
+            borrow=_borrow(BorrowKnownness.KNOWN_AVAILABLE),
+        )
+
+        assert label.status is OutcomeStatus.AVAILABLE
+        assert label.net_entry_edge is not None
+        assert label.net_entry_edge.is_negative is expected_negative
+
     def test_non_convergence_is_right_censored(self) -> None:
         perp = _series(
             (_point(-3, 10_400, 1), _point(120, 10_390, 2)),

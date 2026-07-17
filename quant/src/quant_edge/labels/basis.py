@@ -9,6 +9,7 @@ from quant_edge.labels.outcomes import OutcomeStatus
 from quant_edge.labels.rational import (
     ExactRatioV1,
     make_ratio,
+    price_return,
     ratio_add,
     ratio_compare,
     ratio_subtract,
@@ -18,12 +19,25 @@ from quant_edge.labels.series import EvidenceSeriesV1, SeriesKind
 from quant_edge.lake.contracts import (
     UTC_NS_MAX,
     UTC_NS_MIN,
+    ExactScaledValueV1,
     require_contract_id,
     require_strict_int,
 )
 
 MAX_FUNDING_EVENTS: Final = 1_024
 MAX_STALENESS_NS: Final = 3_600_000_000_000
+
+# Version-locked consumer projection of the canonical Basis runtime contract at
+# server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT. This module
+# is the sole quant owner of construction-to-leg economics; executable quotes
+# consume basis_entry_return rather than restating the denominator law.
+EXECUTABLE_BASIS_RETURN_AUTHORITY: Final = (
+    "server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT"
+)
+EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION: Final = (
+    "basis-executable-long-leg-notional-v1"
+)
+EXECUTABLE_BASIS_RETURN_LAW: Final = "RETURN_ON_LONG_LEG_ENTRY_NOTIONAL"
 
 
 class BasisConstruction(StrEnum):
@@ -41,6 +55,26 @@ class ConstructionFeasibility(StrEnum):
     FEASIBLE = "FEASIBLE"
     INFEASIBLE = "INFEASIBLE"
     UNKNOWN = "UNKNOWN"
+
+
+def basis_entry_return(
+    *,
+    construction: BasisConstruction,
+    spot_price: ExactScaledValueV1,
+    perp_price: ExactScaledValueV1,
+) -> ExactRatioV1:
+    """Return on the construction's long-leg entry notional.
+
+    NORMAL buys Spot and sells the perpetual; REVERSE buys the perpetual and
+    sells Spot. Crossed-side selection belongs to the caller, while this owner
+    alone maps construction to long-entry denominator and sell proceeds.
+    """
+
+    if not isinstance(construction, BasisConstruction):
+        raise ContractValueError("construction must be BasisConstruction")
+    if construction is BasisConstruction.NORMAL:
+        return price_return(spot_price, perp_price)
+    return price_return(perp_price, spot_price)
 
 
 def _require_ns(value: object, *, field: str) -> int:
@@ -337,11 +371,11 @@ def _last_value_at_or_before(
     series: EvidenceSeriesV1,
     time_ns: int,
     staleness_ns: int,
-) -> int | None:
+) -> ExactScaledValueV1 | None:
     point = series.last_price_at_or_before(time_ns)
     if point is None or time_ns - point.event_time_ns > staleness_ns:
         return None
-    return scaled_to_aligned(point.price)
+    return point.price
 
 
 def compute_basis_label(
@@ -403,16 +437,27 @@ def compute_basis_label(
     if spot_entry is None or perp_entry is None:
         return _unavailable(construction, definition, costs, borrow, OutcomeStatus.UNAVAILABLE)
 
-    entry_basis = make_ratio(perp_entry - spot_entry, spot_entry)
-    gross_edge = _abs_ratio(entry_basis)
-    net_entry_edge = ratio_subtract(gross_edge, costs.total_cost)
+    entry_basis = price_return(spot_entry, perp_entry)
+    absolute_entry_basis = _abs_ratio(entry_basis)
+    gross_entry_return = basis_entry_return(
+        construction=construction,
+        spot_price=spot_entry,
+        perp_price=perp_entry,
+    )
+    net_entry_edge = ratio_subtract(gross_entry_return, costs.total_cost)
 
     horizon_end = min(end, spot_series.completeness_end_ns, perp_series.completeness_end_ns)
-    partial_threshold = _fraction_of(gross_edge, definition.partial_convergence_fraction)
-    full_threshold = _fraction_of(gross_edge, definition.full_convergence_fraction)
+    partial_threshold = _fraction_of(
+        absolute_entry_basis,
+        definition.partial_convergence_fraction,
+    )
+    full_threshold = _fraction_of(
+        absolute_entry_basis,
+        definition.full_convergence_fraction,
+    )
     partial_time: int | None = None
     full_time: int | None = None
-    if not gross_edge.is_zero:
+    if not absolute_entry_basis.is_zero:
         for point in perp_series.price_points:
             if point.event_time_ns <= start:
                 continue
@@ -426,7 +471,10 @@ def compute_basis_label(
             if spot_value is None:
                 continue
             observed = _abs_ratio(
-                make_ratio(scaled_to_aligned(point.price) - spot_value, spot_value)
+                make_ratio(
+                    scaled_to_aligned(point.price) - scaled_to_aligned(spot_value),
+                    scaled_to_aligned(spot_value),
+                )
             )
             if partial_time is None and ratio_compare(observed, partial_threshold) <= 0:
                 partial_time = point.event_time_ns

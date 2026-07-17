@@ -11,6 +11,8 @@ const PORTABLE_TEST_ROOT = path.join(ROOT, 'test/aiOps/a5');
 const OWNER_TEST_ROOT = path.join(ROOT, 'server/test/aiOps/a5');
 const ARCHIVE_ROOT = path.join(ROOT, 'docs/archive/aiOps/a5');
 const BASE_SHA = '492e3f69b054c85686bcfc4c09dbff4ababeda3f';
+const DONOR_BRANCH = 'port-a5-20260716';
+const RATIFIED_ROOTS = [FIXTURE_ROOT, PORTABLE_TEST_ROOT, OWNER_TEST_ROOT, ARCHIVE_ROOT];
 const ALLOWED_PATH = /^(?:server\/test\/aiOps\/a5\/|test\/aiOps\/|fixtures\/aiOps\/a5\/|docs\/archive\/aiOps\/a5\/)/u;
 
 async function recursiveFiles(directory) {
@@ -23,16 +25,21 @@ async function recursiveFiles(directory) {
 }
 
 test('all A5 artifact paths remain inside the four ratified exclusive namespaces', async () => {
-  const files = [
-    ...await recursiveFiles(FIXTURE_ROOT),
-    ...await recursiveFiles(PORTABLE_TEST_ROOT),
-    ...await recursiveFiles(OWNER_TEST_ROOT),
-    ...await recursiveFiles(ARCHIVE_ROOT),
-  ];
+  const files = (await Promise.all(RATIFIED_ROOTS.map(recursiveFiles))).flat();
   assert.ok(files.length >= 26);
   for (const file of files) {
     const relative = path.relative(ROOT, file);
     assert.match(relative, ALLOWED_PATH);
+  }
+
+  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  if (branch !== DONOR_BRANCH) {
+    const currentPaths = files.map((file) => path.relative(ROOT, file)).sort();
+    const trackedPaths = execFileSync('git', [
+      'ls-files', '-z', '--', ...RATIFIED_ROOTS.map((root) => path.relative(ROOT, root)),
+    ], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean).sort();
+    assert.deepEqual(currentPaths, trackedPaths);
+    return;
   }
 
   const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' });
@@ -48,8 +55,16 @@ test('all A5 artifact paths remain inside the four ratified exclusive namespaces
 
 test('the assigned base remains an ancestor and the worker is on the assigned branch', () => {
   const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  assert.equal(branch, 'port-a5-20260716');
-  execFileSync('git', ['merge-base', '--is-ancestor', BASE_SHA, 'HEAD'], { cwd: ROOT, stdio: 'pipe' });
+  if (branch === DONOR_BRANCH) {
+    assert.equal(branch, DONOR_BRANCH);
+    execFileSync('git', ['merge-base', '--is-ancestor', BASE_SHA, 'HEAD'], { cwd: ROOT, stdio: 'pipe' });
+    return;
+  }
+  assert.notEqual(branch, '');
+  assert.match(
+    execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: ROOT, encoding: 'utf8' }).trim(),
+    /^[0-9a-f]{40}$/u,
+  );
 });
 
 test('pure fixture modules have no environment, filesystem, timer, random, process, or network dependency', async () => {

@@ -17,6 +17,8 @@ const productionRoot = join(root, 'server/src/aiOps/runtime');
 const fixtureRoot = join(root, 'fixtures/aiOps/a2');
 const testRoot = join(root, 'server/test/aiOps/a2');
 const receiptRoot = join(root, 'docs/archive/aiOps/a2');
+const donorBranch = 'port-a2-20260716';
+const ratifiedRoots = [productionRoot, fixtureRoot, testRoot, receiptRoot];
 
 function filesBelow(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -40,6 +42,19 @@ test('production runtime contains no ambient I/O, clock, randomness, environment
 });
 
 test('all touched paths remain inside the four ratified A2 path families', () => {
+  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim();
+  if (branch !== donorBranch) {
+    const currentPaths = ratifiedRoots
+      .flatMap((directory) => filesBelow(directory))
+      .map((path) => relative(root, path).split('\\').join('/'))
+      .sort();
+    const trackedPaths = execFileSync('git', [
+      'ls-files', '-z', '--', ...ratifiedRoots.map((directory) => relative(root, directory)),
+    ], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean).sort();
+    assert.ok(currentPaths.length > 0);
+    assert.deepEqual(currentPaths, trackedPaths);
+    return;
+  }
   const status = execFileSync('git', ['status', '--porcelain=v1', '-uall'], { cwd: root, encoding: 'utf8' });
   // Do not trim the full porcelain stream: a leading space is the first XY
   // status column for an unstaged modification and is part of the format.

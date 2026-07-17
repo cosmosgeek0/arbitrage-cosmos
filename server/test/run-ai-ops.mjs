@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnRunnerChild, superviseRunnerChild } from '../../test/runner-process-tree.mjs';
@@ -10,6 +11,33 @@ const SANDBOX_POLICY = '(version 1)(allow default)(deny network*)';
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 const LANE_TIMEOUT_MS = 120_000;
 const A1_IMPLEMENTATION_SHA = 'e9d028a9f5022dee1be80ee4f5e1f8ae6490f53c';
+
+function gitText(args) {
+  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
+}
+
+function a1CurrentHeadBlobs() {
+  const fixture = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/aiOps/a1/entry-inventory.v1.json'), 'utf8'));
+  const paths = [...new Set(
+    fixture.payload.filter((row) => row.resolvedAtPortBase).map((row) => row.path),
+  )].sort();
+  const records = execFileSync('git', ['ls-tree', '-r', '-z', 'HEAD', '--', ...paths], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  }).split('\0').filter(Boolean);
+  const blobs = Object.fromEntries(records.map((record) => {
+    const match = /^[0-7]{6} blob ([0-9a-f]{40})\t(.+)$/u.exec(record);
+    if (match === null) throw new Error(`A1_CURRENT_TREE_ENTRY_INVALID:${record}`);
+    return [match[2], match[1]];
+  }));
+  if (Object.keys(blobs).length !== paths.length) {
+    throw new Error(`A1_CURRENT_TREE_INVENTORY_MISMATCH:${Object.keys(blobs).length}:EXPECTED_${paths.length}`);
+  }
+  return JSON.stringify(blobs);
+}
+
+const CURRENT_BRANCH = gitText(['branch', '--show-current']);
+const A1_CURRENT_HEAD_BLOBS = a1CurrentHeadBlobs();
 
 function relativeTestFiles(directory) {
   const absolute = path.join(ROOT, directory);
@@ -92,6 +120,8 @@ const lanes = [
       AI_OPS_OS_NETWORK_DENY: '1',
       AI_OPS_REQUIRE_PORT_RECEIPT: '1',
       AI_OPS_EXPECTED_IMPLEMENTATION_SHA: A1_IMPLEMENTATION_SHA,
+      AI_OPS_A1_CURRENT_BRANCH: CURRENT_BRANCH,
+      AI_OPS_A1_CURRENT_HEAD_BLOBS: A1_CURRENT_HEAD_BLOBS,
     },
     nodeArgs: [
       '--permission',

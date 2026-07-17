@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # Provenance and Product Assurance verify reachable historical donor
+          # objects. The default depth of one cannot supply that evidence.
+          fetch-depth: 0
 
       - name: Use pinned Node.js
         uses: actions/setup-node@v4

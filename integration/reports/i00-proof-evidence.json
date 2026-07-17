@@ -1,18 +1,18 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "packet": "I00_PHASE2_CLOSURE",
-  "generatedAtUtc": "2026-07-14T11:33:45Z",
-  "proofScope": "PHASE2_SOURCE_CLOSURE",
+  "generatedAtUtc": "2026-07-16T00:00:00Z",
+  "proofScope": "C2_SOURCE_CLOSURE",
   "truthLabel": "MIXED_SOURCE_PROVED_AND_PENDING_MEASUREMENT",
   "targetState": "CANDIDATE_SOURCE_FROZEN",
   "productVerdict": "PENDING_MEASUREMENT",
   "candidateState": "NOT_CANDIDATE_READY",
   "base": {
-    "branch": "i00-product-assembly-20260713",
-    "head": "6b50cca34a5615e828e9606cd7201daf81272ec7",
-    "tree": "731dec2404bab0d27a804c634cda1518a6dcef5d",
+    "branch": "truth-campaign-20260716",
+    "head": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
+    "tree": "d1dd03ce4782b8446d4268cbd0103992be422e11",
     "donorEquality": "16/16/16/16",
-    "candidateCommit": "74eb452efab89ca92ec9ff5cb192b723b5f198f3"
+    "candidateCommit": null
   },
   "historicalPacket": {
     "packet": "IP-PROOF",
@@ -41,9 +41,9 @@
     "receipt": "IP_PROOF_RECEIPT.md"
   },
   "report": {
-    "generatedAtUtc": "2026-07-14T00:00:00Z",
-    "titleSuffix": "Phase 2 source closure — measurement pending",
-    "summary": "Accepted donor equality and source wiring are recorded. Runtime, browser, restart/reconciliation, and local-proxy performance measurements are not yet recorded. This is not an integration-candidate receipt.",
+    "generatedAtUtc": "2026-07-16T00:00:00Z",
+    "titleSuffix": "C2 source closure — exact browser and owner gates deferred",
+    "summary": "Candidate-source wiring and tracked-byte provenance are recorded without dereferencing moving refs or optional external objects. Exact C2 binding is supplied by the campaign evidence descendant. Runtime, rendered-browser, restart/reconciliation, real-soak, provider, paging, and deployment measurements remain pending or not configured. This is not an integration-candidate receipt.",
     "terminalNote": "Only exact source-wired, fail-closed control directions are classified as authenticated controls; unsupported reverse or broader mutations remain NOT_CONFIGURED or OWNER_GATED.",
     "resourceNote": "The deterministic resource fixture remains a synthetic measurement plan. Local-proxy performance results are PENDING_MEASUREMENT and must be added from a measured receipt without relabeling fixture samples as runtime observations.",
     "interfaceNote": "Vendor facts remain dated build inputs. No private read, signed call, cloud mutation, deployment, or live execution was performed.",
@@ -52,7 +52,7 @@
       "runtime": "server/src/productIntegration/runtime; server/src/systemIntegration",
       "control": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
       "ops": "ops/i00; fixtures/i00/baseline-route-migration.json",
-      "proof": "IP_PROOF_RECEIPT.md@23e985c17b9b860fee26be397fa05b26f3daf8f2",
+      "proof": "integration/reports/i00-proof-evidence.json (source-unbound; exact-C2 SHA-256 and Git-blob binding is recorded by verification/product-truth-20260716/C2_PROOF_BINDING.json)",
       "director": "fixtures/i00/living-director-input-acceptance.json",
       "provenance": "fixtures/i00/receipt-provenance.json"
     }
@@ -142,6 +142,93 @@
     {
       "id": "A_FORMAL",
       "status": "NOT_CONFIGURED",
+      "reason": "SOURCE_INTEGRATED; CANONICAL_PRODUCT_ASSURANCE_TEST_GATE_MOUNTED; FORMAL_RUNTIME_REFERENCE_ONLY; TLA_RUNTIME_TOOLING_NOT_CONFIGURED"
+    },
+    {
+      "id": "A_ACTION_EVIDENCE_S2",
+      "status": "NOT_CONFIGURED",
+      "reason": "SOURCE_INTEGRATED; CANONICAL_PRODUCT_ASSURANCE_TEST_GATE_MOUNTED; SUPPORTING_EVIDENCE_ONLY; PRODUCTION_CONSUMER_AND_ACTION_AUTHORITY_NOT_CONFIGURED"
+    },
+    {
+      "id": "AI_OPS_C2_ACCEPTANCE",
+      "status": "NOT_CONFIGURED",
+      "reason": "ROOT_TEST_MOUNT_NOT_CONFIGURED; PRODUCT_ROUTE_UNWIRED; PROVIDER_WORKER_SENTINEL_PAGING_NOT_CONFIGURED; EXCLUDED_FROM_C2_BASELINE"
+    },
+    {
+      "id": "PRODUCT_ASSURANCE_C2_CLOSURE",
+      "status": "OWNER_GATED",
+      "reason": "GENERATOR_ERA_ARTIFACT_SET_REFERENCE_ONLY; EXACT_C2_CLOSURE_AND_ROOT_ATTESTATION_DEFERRED; REAL_SOAK_NOT_RUN"
+    },
+    {
+      "id": "INCIDENT_ACK_COMMAND",
+      "status": "NOT_CONFIGURED",
+      "reason": "INCIDENT_ACK_COMMAND_OWNER_ABSENT"
+    },
+    {
+      "id": "SOURCE_ISOLATE_COMMAND",
+      "status": "NOT_CONFIGURED",
+      "reason": "CANONICAL_SOURCE_ISOLATION_COMMAND_ABSENT; INDIVIDUAL_COMPONENT_CONTROL_NOT_SUPPORTED"
+    }
+  ],
+  "historicalCandidateLimitations": [
+    {
+      "id": "PRIVATE_SIGNED_EXCHANGE",
+      "status": "NOT_CONFIGURED",
+      "reason": "PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED"
+    },
+    {
+      "id": "Q_PRODUCTION_TRANSPORT",
+      "status": "NOT_CONFIGURED",
+      "reason": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED"
+    },
+    {
+      "id": "LIVE_EXECUTION",
+      "status": "NOT_CONFIGURED",
+      "reason": "LIVE_EXECUTION_NOT_IMPLEMENTED"
+    },
+    {
+      "id": "DEPLOYMENT_TARGET",
+      "status": "OWNER_GATED",
+      "reason": "DEPLOYMENT_AUTHORIZATION_REQUIRED; REAL_TARGET_READBACK_REQUIRED"
+    },
+    {
+      "id": "L12_ACTIVE_SUBJECT_PRIVATE_TRUTH",
+      "status": "OWNER_GATED",
+      "reason": "CANONICAL_ACTIVE_SUBJECT_AND_PRIVATE_ACCOUNT_TRUTH_NOT_AUTHORIZED; ACCEPTED_PROJECTOR_NOT_INVOKED"
+    },
+    {
+      "id": "L13_ACCEPTED_PROJECTOR",
+      "status": "OWNER_GATED",
+      "reason": "VALIDATED_L12_ACTIVE_SUBJECT_TRUTH_UNAVAILABLE; ACCEPTED_PROJECTOR_NOT_INVOKED"
+    },
+    {
+      "id": "L14_PRODUCTION_ACTIVATION",
+      "status": "OWNER_GATED",
+      "reason": "NUMERIC_CONFIGURATION_CHECKPOINT_AND_RESERVATION_OWNERS_UNAVAILABLE; PRODUCTION_PERSISTENCE_NULL; NO_DISPATCH"
+    },
+    {
+      "id": "FOUNDATION_QUANTITY_PRODUCTION_CONSUMER",
+      "status": "NOT_CONFIGURED",
+      "reason": "CONTRACT_AND_HOSTILE_PROOFS_PRESENT; NO_AUTHORIZED_PRODUCTION_CONSUMER"
+    },
+    {
+      "id": "MANAGED_RESTART_EFFECT",
+      "status": "OWNER_GATED",
+      "reason": "KEYLESS_MANAGED_RESTART_OWNER_GATED; EXTERNAL_PROCESS_MANAGER_EFFECT_NOT_AUTHORIZED_OR_PROVED"
+    },
+    {
+      "id": "PRODUCTION_CAPACITY",
+      "status": "UNKNOWN",
+      "reason": "LOCAL_BOUNDED_ACCEPTANCE_ONLY; PRODUCTION_LOAD_AND_CAPACITY_NOT_MEASURED"
+    },
+    {
+      "id": "PRODUCT_ASSURANCE_PRODUCTION_PROJECTION",
+      "status": "NOT_CONFIGURED",
+      "reason": "PASSIVE_SOURCE_PROJECTION_ONLY; PRODUCTION_ASSURANCE_ACTIVATION_NOT_CONFIGURED"
+    },
+    {
+      "id": "A_FORMAL",
+      "status": "NOT_CONFIGURED",
       "reason": "POST_LANDING_EXCLUDED_BY_L_LAST_ORDERING; ACCEPTED_POST_LANDING_TIP_b491893416006cf529aef02e5dd4a25d6475e7b8"
     },
     {
@@ -155,6 +242,7 @@
       "reason": "NON_DONOR_WORKTREE_EXCLUDED_FROM_PHASE_2_CANDIDATE; TIP_46b2f1e31edf9f75aec7203e952a56f9869a2971; NO_INTEGRATION_DISPOSITION"
     }
   ],
+  "historicalCandidateLimitationsRole": "HISTORICAL_74EB_INTEGRATION_CANDIDATE_RECEIPT_COMPATIBILITY_ONLY",
   "counts": {
     "requirements": 83,
     "autonomyLayers": 20,
@@ -211,9 +299,9 @@
     },
     {
       "path": "QL_DIRECTOR_STATE.md",
-      "sha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
-      "anchoredSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
-      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+      "sha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+      "anchoredSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+      "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
       "evidenceMode": "COMMITTED_FILE",
       "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
@@ -221,16 +309,16 @@
       "historicalPacketPinPreserved": true,
       "finalRepinPassed": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
-      "acceptedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+      "acceptedSourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedLatestCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedGitBlob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+      "acceptedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
-      "sha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
-      "anchoredSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
-      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+      "sha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+      "anchoredSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+      "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "evidenceMode": "COMMITTED_FILE",
       "passed": true,
       "acceptanceMode": "LATEST_CURRENT_MAIN_TOUCH",
@@ -238,10 +326,10 @@
       "historicalPacketPinPreserved": true,
       "finalRepinPassed": true,
       "acceptedSourceRef": "current-main",
-      "acceptedSourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "acceptedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
-      "acceptedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
-      "acceptedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+      "acceptedSourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "acceptedLatestCommit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b",
+      "acceptedGitBlob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+      "acceptedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0"
     },
     {
       "path": "quant/DIRECTIVE_INPUTS.lock",
@@ -353,7 +441,7 @@
       "path": "QL_DIRECTOR_STATE.md",
       "sha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
       "anchoredSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+      "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -361,7 +449,7 @@
       "path": "QL_PARALLEL_DAG.md",
       "sha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
       "anchoredSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+      "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -431,14 +519,15 @@
     }
   ],
   "livingDirectorInputAcceptance": {
-    "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
+    "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2",
     "ruling": "D-LAUNCH-7",
     "mode": "LATEST_CURRENT_MAIN_TOUCH",
     "sourceRef": "current-main",
-    "sourceCutoffCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-    "sourceTip": "d78be24f4da14632c857ee250b62e3fec33c2743",
-    "cutoffExists": true,
-    "cutoffReachable": true,
+    "sourceCutoffCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+    "sourceTip": "2a832750f83137a8912c9f70e0b634b856f10aab",
+    "sourceCutoffTree": "3d2b8889e2aaf4a590993467a5bb3ecdf13c119b",
+    "sourceRefDisposition": "HISTORICAL_MOVING_REF_NOT_DEREFERENCED; AUTHORIZED_BYTES_VERIFIED_FROM_CANDIDATE",
+    "ambientCutoffProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
     "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
     "structuralChecks": {
       "schemaVersion": true,
@@ -446,7 +535,10 @@
       "mode": true,
       "sourceRef": true,
       "sourceCutoffCommit": true,
+      "sourceCutoffTree": true,
       "rulingCommit": true,
+      "candidateFreezeAuthorization": true,
+      "historicalDLaunch7Acceptance": true,
       "historicalPacketPinsPreserved": true,
       "finalRealAdapterRepinRequired": true,
       "finalRealAdapterRepinCompleted": true,
@@ -460,24 +552,26 @@
       {
         "path": "QL_DIRECTOR_STATE.md",
         "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-        "latestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-        "observedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
-        "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc",
+        "latestCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+        "observedGitBlob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+        "observedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
+        "authorizedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd",
         "safePath": true,
         "historicalPinValid": true,
-        "latestCommitReachable": true,
+        "latestCommitReachable": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "observationMatches": true,
         "passed": true
       },
       {
         "path": "QL_PARALLEL_DAG.md",
         "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-        "latestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
-        "observedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
-        "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec",
+        "latestCommit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b",
+        "observedGitBlob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+        "observedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+        "authorizedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
         "safePath": true,
         "historicalPinValid": true,
-        "latestCommitReachable": true,
+        "latestCommitReachable": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "observationMatches": true,
         "passed": true
       }
@@ -534,8 +628,7 @@
         "passed": true
       }
     ],
-    "passed": true,
-    "liveSourceTipDisposition": "MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED"
+    "passed": true
   },
   "authority": {
     "authorityConcepts": 13,
@@ -1093,6 +1186,114 @@
     ],
     "unclassifiedTransportCandidates": [],
     "ownerCandidateDefinitions": [
+      {
+        "concept": "capital-authority",
+        "declaration": "interface AuthenticatedCallbackReservationInput",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 81
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface AuthenticatedJobReservationInput",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 95
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type DurableDeliveryReservationResult",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 109
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function normalizedReservationResult",
+        "file": "server/src/aiOps/adapters/callbacks.ts",
+        "line": 378
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type AiOpsControlCategory",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 30
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "type AiOpsControlValue",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 31
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlRegistryInsertionRequest",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 33
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeRequest",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 154
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeSet",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 159
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "interface AiOpsControlChangeSetDecision",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 166
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlValue",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 173
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function evaluateProvisionalControlChangeSet",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 184
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function validateControlInsertionRequests",
+        "file": "server/src/aiOps/contracts/controls.ts",
+        "line": 213
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlValue",
+        "file": "server/src/aiOps/contracts/schemas.ts",
+        "line": 598
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function isControlRegistryInsertionRequest",
+        "file": "server/src/aiOps/contracts/schemas.ts",
+        "line": 616
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function durableCompletionReservationSlots",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 94
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function caseEffectReadbackReservationSlots",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 112
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validateCaseLedgerReconciliation",
+        "file": "server/src/aiOps/runtime/persistence.ts",
+        "line": 400
+      },
       {
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
@@ -5537,13 +5738,13 @@
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 32
+        "line": 34
       },
       {
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 764
+        "line": 921
       },
       {
         "concept": "control-authority",
@@ -5621,49 +5822,49 @@
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourceRecord",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 71
+        "line": 86
       },
       {
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourcePage",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 80
+        "line": 95
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlPreview",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 138
+        "line": 153
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlResultStatus",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 164
+        "line": 179
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlResult",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 171
+        "line": 186
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlWiringState",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 289
+        "line": 304
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlRegistryEntry",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 292
+        "line": 307
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 482
+        "line": 516
       },
       {
         "concept": "control-authority",
@@ -6737,61 +6938,61 @@
         "concept": "ledger-authority",
         "declaration": "type LiveEdgeMutationJournalAdapterErrorCode",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 65
+        "line": 67
       },
       {
         "concept": "ledger-authority",
         "declaration": "class LiveEdgeMutationJournalAdapterError",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 71
+        "line": 73
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalLedgerPort",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 81
+        "line": 83
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalClock",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 110
+        "line": 112
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LiveEdgeMutationJournalInventory",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 114
+        "line": 116
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface RegistryJournal",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 129
+        "line": 131
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface MutationJournalRegistry",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 135
+        "line": 137
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface MutationJournalAuditRecord",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 141
+        "line": 143
       },
       {
         "concept": "ledger-authority",
         "declaration": "function liveEdgeMutationJournalMutationKey",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 180
+        "line": 182
       },
       {
         "concept": "ledger-authority",
         "declaration": "class LiveEdgeMutationJournalPersistenceAdapter",
         "file": "server/src/systemIntegration/persistence/liveEdgeMutationJournalAdapter.ts",
-        "line": 439
+        "line": 441
       },
       {
         "concept": "capital-authority",
@@ -12979,7 +13180,7 @@
   ],
   "receiptProvenance": {
     "schemaVersion": 1,
-    "verificationBase": "6b50cca34a5615e828e9606cd7201daf81272ec7",
+    "verificationBase": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
     "items": [
       {
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
@@ -13172,215 +13373,217 @@
       }
     ]
   },
-  "receiptProvenanceVerification": {
-    "verificationBase": "6b50cca34a5615e828e9606cd7201daf81272ec7",
-    "baseExists": true,
+  "receiptProvenanceSeal": {
+    "schemaVersion": 1,
+    "mode": "TRACKED_RECEIPT_BYTES_ONLY",
+    "verificationBase": "59361e5459eeed674d71f7c8ba8c8adb0a41b2ba",
+    "ambientGitObjectProof": "NOT_SEALED; SEPARATE_TRI_STATE_DIAGNOSTIC",
     "results": [
       {
         "sha": "b272049b1e482ff75de27fbdaece7be5a7bbcc5d",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "3340f75270049de96846d153672b91f065844eef",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "c4ae7a9aee51050da2076bf4a454988b1d372bc4",
         "claimType": "NAMED_ADAPTED_PROVENANCE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "e28b4c13c2f57f181cc6ea61508089719c7ff59c",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "963538d3cc9da74b51b70347a70a017b6eab2910",
         "claimType": "NAMED_IN_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "87af78285a4b11bc8ca98c4cc9b3bb4a551d2537",
         "claimType": "NAMED_ACCEPTED_INTEGRATION_BASE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "a0c0c2e5ef3180aa720488463643433cefeb65e5",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "f03ed786a8c5cab50ef27ad33026a74f79f7df87",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "02b4eccc8d2ef53b830cafae06e5175715fa6ebb",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "692501587617d4880303fbd747d93e63c376f088",
         "claimType": "RECEIPTED_BYTE_EQUIVALENCE",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": false,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "8058ab8febb639839333d4e2c604068a0c7390ea",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "23e985c17b9b860fee26be397fa05b26f3daf8f2",
         "claimType": "COMMIT_CONTAINING_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "08a0a09780727e2b4ba59017b5701998abe29b77",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "ab33b3712cddd67c3ec91cfa1dd232c75226cd9f",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "d4ff9c94c9fec9477481223c4b33d8f671a34f6d",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "d35674e7f9621320c35e0bc0270efd515cc64dbd",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "b4d8a446cb4cd6e77e7fbaf38f927b7513dc316c",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       },
       {
         "sha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
         "claimType": "NAMED_IN_INTEGRATION_RECEIPT",
-        "commitExists": true,
-        "ancestorVerified": true,
+        "ancestorRequired": true,
         "currentReceiptHashVerified": true,
-        "receiptClaimVerified": true,
+        "currentReceiptNeedleVerified": true,
+        "ambientGitObjectProof": "SEPARATE_TRI_STATE_DIAGNOSTIC",
         "passed": true
       }
     ],
@@ -13877,9 +14080,9 @@
       "question": "Is any heavyweight requirement absent?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "All current accepted donors and source-closure seams are named and the living director inputs are re-pinned and accepted. A-FORMAL and S2 are accepted post-landing artifacts intentionally excluded from this candidate; PREVERIFY is non-donor. Q production transport, private/signed truth, live execution, external deployment, and runtime/browser/performance measurements remain explicitly unavailable, owner-gated, or pending.",
-      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; RUNTIME_BROWSER_MEASUREMENT_PENDING; PERFORMANCE_MEASUREMENT_PENDING",
-      "safeNextAction": "complete local measurements without upgrading NOT_CONFIGURED, OWNER_GATED, UNKNOWN, or excluded post-landing truth"
+      "answer": "All current accepted donors and source-closure seams are named and the living director inputs are re-pinned and accepted. A-FORMAL and S2 source plus canonical tests are integrated, but formal runtime and production action authority remain not configured. AI-Ops acceptance is excluded. Q production transport, private/signed truth, live execution, external deployment, exact browser/runtime/performance proof, and real soak remain explicitly unavailable, owner-gated, pending, or not run.",
+      "primaryBlocker": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED; PRIVATE_READ_AUTHORIZATION_REQUIRED; SIGNED_VALIDATION_AUTHORIZATION_REQUIRED; AI_OPS_ROOT_TEST_MOUNT_NOT_CONFIGURED; RUNTIME_BROWSER_MEASUREMENT_PENDING; PERFORMANCE_MEASUREMENT_PENDING; REAL_SOAK_NOT_RUN",
+      "safeNextAction": "complete exact owner-gated measurements without upgrading NOT_CONFIGURED, OWNER_GATED, UNKNOWN, excluded, or NOT_RUN truth"
     }
   ],
   "adapterInsertionPoints": [
@@ -13940,5 +14143,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "4ae96f186fcda8c1d2b4482c871a9d22f5c3c0d6519ad29b0ff0b9ab72d46b22"
+  "evidenceSha256": "9757618ec30093cba461b1fceb8181ba570e8bbfea1023fd8cdad067ca9b635d"
 }

@@ -1,0 +1,70 @@
+{
+  "schema": "AI_OPS_A3_PORT_ENTRY_GATE_V1",
+  "releaseStatus": "BUILT_AND_TESTED",
+  "authorityGranted": false,
+  "providerActivation": "FORBIDDEN",
+  "landedBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "shadowA3SealSha": "c345fbb42e25ea2139ea447e99b2c5036822770d",
+  "shadowA3xSealSha": "c6397f548b068450a8f666e191fc270295791867",
+  "shadowLineageBaseSha": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+  "shadowEvidenceAcceptedAsPortEvidence": false,
+  "insertionRequestRegistryCommitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+  "insertionRequestRegistryBlobSha": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+  "insertionRequestSchemaBlobSha": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+  "rows": [
+    {
+      "itemId": "fake-openai-api-adapter",
+      "classification": "BUILT_AND_TESTED",
+      "existingOwner": "server/src/aiOps/adapters/providerGateway.ts",
+      "disposition": "BUILD_SYNTHETIC_PORT_ADAPTER_ONLY"
+    },
+    {
+      "itemId": "fake-anthropic-api-adapter",
+      "classification": "BUILT_AND_TESTED",
+      "existingOwner": "server/src/aiOps/adapters/providerGateway.ts",
+      "disposition": "BUILD_SYNTHETIC_PORT_ADAPTER_ONLY"
+    },
+    {
+      "itemId": "owner-operated-subscription-cli-workers",
+      "classification": "NOT_CONFIGURED",
+      "existingOwner": "server/src/aiOps/adapters/cliTemplates.ts",
+      "disposition": "ADAPT_DECLARATIVE_TEMPLATES_TO_SYNTHETIC_PORTS_WITHOUT_PROCESS_OR_LOGIN"
+    },
+    {
+      "itemId": "approved-web-search-tool",
+      "classification": "SYNTHETIC_ONLY",
+      "existingOwner": "server/src/aiOps/adapters/toolGateway.ts#runApprovedWebResearch",
+      "disposition": "ADD_DETERMINISTIC_FIXTURE_PORT_WITH_ZERO_NETWORK"
+    },
+    {
+      "itemId": "repository-inspection-tools",
+      "classification": "SYNTHETIC_ONLY",
+      "existingOwner": "server/src/aiOps/adapters/toolGateway.ts",
+      "disposition": "ADD_EXACT_REVISION_READ_ONLY_SEARCH_AND_INSPECTION_DESCRIPTORS_PLUS_FIXTURE_PORT"
+    },
+    {
+      "itemId": "sandboxed-patch-proposals",
+      "classification": "BUILT_AND_TESTED",
+      "existingOwner": "server/src/aiOps/adapters/patchWorker.ts#planIsolatedPatchWorker",
+      "disposition": "ADAPT_EXISTING_PLANNER_THROUGH_THIN_NON_EXECUTING_PROJECTION"
+    },
+    {
+      "itemId": "api-vs-subscription-capability-separation",
+      "classification": "BUILT_AND_TESTED",
+      "existingOwner": "server/src/aiOps/adapters/contracts.ts",
+      "disposition": "ADD_ORTHOGONAL_ACCESS_AND_CREDENTIAL_CLASSES_WITH_EXACT_NO_FALLBACK_PROOFS"
+    },
+    {
+      "itemId": "real-provider-protocols-credentials-and-endpoints",
+      "classification": "REFERENCE_ONLY",
+      "existingOwner": "EXTERNAL_PROVIDER_AND_CREDENTIAL_BROKER_OWNERS",
+      "disposition": "NO_IMPLEMENTATION_OR_ACTIVATION_IN_PRESTAGE"
+    },
+    {
+      "itemId": "duplicate-provider-tool-patch-or-persistence-authority",
+      "classification": "REJECT_DUPLICATE",
+      "existingOwner": "A3_PRESTAGE_ADAPTERS_AND_CANONICAL_PROJECT_OWNERS",
+      "disposition": "FORBIDDEN"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ import {
   runAllScenarios,
   runAuthorityScan,
 } from '../../server/test/i00Acceptance/harness.mjs';
-import { verifyReceiptProvenance } from './git-provenance.mjs';
+import { verifyReceiptProvenanceSeal } from './git-provenance.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -90,7 +90,7 @@ function resourceReport(evidence) {
   );
   const limitations = table(
     ['Limitation', 'Status', 'Exact reason'],
-    evidence.knownLimitations.map((row) => [row.id, row.status, row.reason]),
+    (evidence.currentLimitations ?? evidence.knownLimitations).map((row) => [row.id, row.status, row.reason]),
   );
   return `${preamble('Resource and Backpressure Report', evidence)}\n`
     + `${evidence.report.resourceNote} The executable synthetic plan uses an injected clock, ${evidence.resourceHarness.sampleWindowMs} ms windows, at least ${evidence.resourceHarness.minimumSamples} samples, and p50/p95/p99/max. Capacity breach must become \`DEGRADED\` or \`BLOCKED\` before silent loss. Lower-tier shedding is counted in P4→P3→P2 order; P0 material loss remains exactly zero and P0/P1 remain available.\n\n`
@@ -127,33 +127,17 @@ function stableOwnerEvidence(row) {
   return { ...row, evidenceMode: 'PROTECTED_OWNER_SHA256_VERIFIED' };
 }
 
-/**
- * Normalize only environment transport facts after strict source verification.
- * The protected owner bytes and the living cutoff remain exact; whether those
- * bytes arrived from an owner file or a sealed candidate hash, and the current
- * descendant tip of a deliberately moving ref, are not candidate evidence.
- */
 export function normalizeMachineEvidenceAuthority({
   frozenInputs,
   historicalFrozenInputs,
   livingDirectorInputAcceptance,
 }) {
-  const { liveSourceTip, ...stableAcceptance } = livingDirectorInputAcceptance;
-  const descendantObserved = stableAcceptance.cutoffReachable === true
-    && typeof liveSourceTip === 'string'
-    && /^[0-9a-f]{40}$/u.test(liveSourceTip);
   return {
     frozenInputs: frozenInputs.map(stableOwnerEvidence),
     historicalFrozenInputs: historicalFrozenInputs.map(stableOwnerEvidence),
     livingDirectorInputAcceptance: {
-      ...stableAcceptance,
-      ...(descendantObserved ? {} : { liveSourceTip }),
-      liveSourceTipDisposition: descendantObserved
-        ? 'MOVING_REF_DESCENDANT_OBSERVED_NOT_SEALED'
-        : typeof liveSourceTip === 'string' && /^[0-9a-f]{40}$/u.test(liveSourceTip)
-          ? 'MOVING_REF_REACHABILITY_UNPROVEN'
-          : 'MOVING_REF_TIP_UNAVAILABLE_OR_INVALID',
-      directiveResults: stableAcceptance.directiveResults.map(stableOwnerEvidence),
+      ...livingDirectorInputAcceptance,
+      directiveResults: livingDirectorInputAcceptance.directiveResults.map(stableOwnerEvidence),
     },
   };
 }
@@ -176,7 +160,7 @@ export function buildMachineEvidence() {
   });
   const routes = routeContractScan(catalog);
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     packet: catalog.packet,
     generatedAtUtc: catalog.generatedAtUtc,
     proofScope: closure.proofScope,
@@ -189,7 +173,9 @@ export function buildMachineEvidence() {
     report: closure.report,
     donorEquality: closure.donorEquality,
     measurements: closure.measurements,
-    knownLimitations: closure.knownLimitations,
+    knownLimitations: closure.currentLimitations ?? closure.knownLimitations,
+    historicalCandidateLimitations: closure.knownLimitations,
+    historicalCandidateLimitationsRole: closure.knownLimitationsRole ?? null,
     counts: {
       requirements: closure.requirements.length,
       autonomyLayers: closure.autonomy.length,
@@ -233,7 +219,7 @@ export function buildMachineEvidence() {
     resourceFixtureMeasurement: measureResourceHarness(closure, resourceSamples),
     loadSheddingFixture: evaluateLoadShedding(resourceSamples),
     receiptProvenance,
-    receiptProvenanceVerification: verifyReceiptProvenance(receiptProvenance),
+    receiptProvenanceSeal: verifyReceiptProvenanceSeal(receiptProvenance),
     proofInputs: {
       authorityOwners: catalog.authorityOwners,
       semanticSources: catalog.semanticSources,

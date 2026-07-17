@@ -1,0 +1,1067 @@
+{
+  "artifactId": "aiops-classification-manifest",
+  "contentHash": "e12e87bad615f6a612b84529ea8c18cf3c0ded8a30ad96db8e732c3658556816",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": {
+    "entries": [
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/manifests/instances.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-identity-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "a8905e1e98d6bd904145a4e5641eb143b85a74ecce74fc79437b9d59f97d421f",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/manifests/instances.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-a1x-instances",
+        "transitiveDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/runbook-templates.v1.json#RECONNECT_STREAM",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-runbook-templates"
+        ],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [],
+        "kind": "RUNBOOK",
+        "reasonCodes": [
+          "SHADOW_HAS_NO_SIGNED_CLASS_A_REGISTRATION_HANDLER_OR_READBACK"
+        ],
+        "resourceId": "aiops-class-a-shadow-candidate",
+        "transitiveDependencyIds": [
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/manifests/classification.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "673e450ce566cd1cf00854bf9a913ff4ca9e7721656ece968e7e0bc283919247",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/manifests/classification.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "POLICY",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-classification-manifest",
+        "transitiveDependencyIds": [
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "B",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/controls.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner"
+        ],
+        "evidenceDigest": "503907386b4b8390fb41fca33e33e50c3f530e7986c843a3baef18e8375e7586",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/controls.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CONTROL_INSERTION_REQUEST",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-control-insertion-requests",
+        "transitiveDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "B",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/policy/policy.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-identity-adapter",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "ledger-adapter"
+        ],
+        "evidenceDigest": "7dec40f71e202c26f27a49f7bb8669e08ba43c3344153ff74c86daf9b80fa9b4",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/policy/policy.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "PERSISTENCE_PORT",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-decision-log-port",
+        "transitiveDependencyIds": [
+          "aiops-identity-adapter",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_ORDER_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_ORDER_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-01",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_FUNDS_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_FUNDS_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-02",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-03",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_OWNER_GATE_BYPASS",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_OWNER_GATE_BYPASS"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-04",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-05",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_SELF_POLICY_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_SELF_POLICY_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-06",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-07",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-08",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_SELF_MERGE_OR_DEPLOY",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-09",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-10",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_ARBITRARY_TOOL_OR_IO",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-11",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_SAFETY_CONTROL_DISABLE",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_SAFETY_CONTROL_DISABLE"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-12",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-13",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "D",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/aiOps/a1/hard-denials.v1.json#AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+        "evidenceRevision": "owner-file-20260714",
+        "hardDenialIds": [
+          "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
+        ],
+        "kind": "FIXTURE",
+        "reasonCodes": [
+          "HARD_DENIAL_OR_SENSITIVE_AUTHORITY_MATCH"
+        ],
+        "resourceId": "aiops-hard-denial-fixture-14",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/identity/identity.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "s6-evaluators"
+        ],
+        "evidenceDigest": "13cc855a48500152bc7f7d3102410573c8d31808955a10bc325ac0997423ac69",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/identity/identity.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-identity-adapter",
+        "transitiveDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/policy/policy.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-identity-adapter",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter"
+        ],
+        "evidenceDigest": "7dec40f71e202c26f27a49f7bb8669e08ba43c3344153ff74c86daf9b80fa9b4",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/policy/policy.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "POLICY",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-policy-adapter",
+        "transitiveDependencyIds": [
+          "aiops-identity-adapter",
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/reliability/runbooks.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "remediation-owner",
+          "s6-evaluators"
+        ],
+        "evidenceDigest": "e88f1a76f741216da62dc3271dbfc6458f4dcfe5fb3531bb57924724886976cd",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/reliability/runbooks.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "RUNBOOK",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-runbook-templates",
+        "transitiveDependencyIds": [
+          "aiops-source-authority",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/manifests/artifacts.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-a1x-instances",
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-schemas",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "fda6ee91a4166bd1f69352bfda19618c8e7960106518350d1a2f070f390506d7",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/manifests/artifacts.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-artifacts",
+        "transitiveDependencyIds": [
+          "aiops-a1x-instances",
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-schemas",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/policy/authority.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-source-shared",
+          "product-assurance-diagnostic-boundary"
+        ],
+        "evidenceDigest": "b14e79d2d7f92f5c54ad36dc370485a955a61cafbdd801ce00dd6f1fe4be52c3",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/policy/authority.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "POLICY",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-authority",
+        "transitiveDependencyIds": [
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time",
+          "product-assurance-diagnostic-boundary"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/index.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-a1x-instances",
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-artifacts",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-schemas",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "0c6b44b16cec43db2aed810bec7b532b53de47964761639f639541349514f104",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/index.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-index",
+        "transitiveDependencyIds": [
+          "aiops-a1x-instances",
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-artifacts",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-schemas",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/insertionRequests.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "6375317d75ad6c6c75d17b68e9c8f3470ee961ac165203dce55cdce2f3c92992",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/insertionRequests.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-insertion-requests",
+        "transitiveDependencyIds": [
+          "aiops-source-shared",
+          "foundation-canonical-json",
+          "foundation-time"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/schemas.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-shared"
+        ],
+        "evidenceDigest": "d1423e06438a7d5ec0100ea6fb058695810937a5dbeac058a9c75eb2440a2078",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/schemas.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-schemas",
+        "transitiveDependencyIds": [
+          "aiops-classification-manifest",
+          "aiops-control-insertion-requests",
+          "aiops-decision-log-port",
+          "aiops-identity-adapter",
+          "aiops-policy-adapter",
+          "aiops-runbook-templates",
+          "aiops-source-authority",
+          "aiops-source-insertion-requests",
+          "aiops-source-shared",
+          "command-owner",
+          "control-registry-owner",
+          "foundation-canonical-json",
+          "foundation-time",
+          "ledger-adapter",
+          "ledger-owner",
+          "product-assurance-diagnostic-boundary",
+          "remediation-owner",
+          "s6-boundary-schema",
+          "s6-evaluators"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/aiOps/contracts/shared.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "foundation-canonical-json",
+          "foundation-time"
+        ],
+        "evidenceDigest": "0365dcb3bf28bf9b8d6912b81f4551046323b6b8ba3e755ea1d85fee27a9cfca",
+        "evidenceDigestAlgorithm": "SHA-256",
+        "evidencePath": "server/src/aiOps/contracts/shared.ts",
+        "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "ADAPTER",
+        "reasonCodes": [
+          "EXPLICIT_AI_OPS_SECTION_7_CLASS"
+        ],
+        "resourceId": "aiops-source-shared",
+        "transitiveDependencyIds": [
+          "foundation-canonical-json",
+          "foundation-time"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "control-registry-owner"
+        ],
+        "evidenceDigest": "7dca4a1cb3c11f8a468d71d808a2933329b9538f",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "command-owner",
+        "transitiveDependencyIds": [
+          "control-registry-owner"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/productIntegration/runtime/controls.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "5338ceace7e97b51045b6928fd0c6c287d58093c",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/productIntegration/runtime/controls.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "control-registry-owner",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/foundation/contracts/identity.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "4f4aac43a685f9a4f3635e7eabcc0610917ea761",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/foundation/contracts/identity.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "foundation-canonical-json",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/foundation/contracts/time.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "7672fbfc23a286ac856348dbf244dcab2c937672",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/foundation/contracts/time.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "foundation-time",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "ledger-owner"
+        ],
+        "evidenceDigest": "94a0a02b11fef833a0779f8b93da896086bda5d3",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "ledger-adapter",
+        "transitiveDependencyIds": [
+          "ledger-owner"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/ledger.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "2d16cf8a978046efd37e159152b41b852e3e56fe",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/ledger.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "ledger-owner",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/productAssurance/diagnostics/boundary.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "foundation-canonical-json"
+        ],
+        "evidenceDigest": "7b6b92a4fcbcc15d22b90d35f1244427fa1b0eab",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/productAssurance/diagnostics/boundary.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "product-assurance-diagnostic-boundary",
+        "transitiveDependencyIds": [
+          "foundation-canonical-json"
+        ],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "server/src/productAssurance/remediation/campaign.ts",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "5b858894af4e31af0922a5e84e07b9cd795caf20",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "server/src/productAssurance/remediation/campaign.ts",
+        "evidenceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+        "hardDenialIds": [],
+        "kind": "CANONICAL_OWNER",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "remediation-owner",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+        "cycleMemberIds": [],
+        "directDependencyIds": [],
+        "evidenceDigest": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+        "evidenceRevision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+        "hardDenialIds": [],
+        "kind": "DONOR_CONTRACT",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "s6-boundary-schema",
+        "transitiveDependencyIds": [],
+        "unresolvedDependencyIds": []
+      },
+      {
+        "actionClass": "C",
+        "authorityCreated": false,
+        "classifiedPath": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+        "cycleMemberIds": [],
+        "directDependencyIds": [
+          "s6-boundary-schema"
+        ],
+        "evidenceDigest": "9d8399e6c0d2a74a892bf759342a75e40eabd867",
+        "evidenceDigestAlgorithm": "GIT_BLOB_SHA1",
+        "evidencePath": "fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs",
+        "evidenceRevision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+        "hardDenialIds": [],
+        "kind": "DONOR_CONTRACT",
+        "reasonCodes": [
+          "UNMAPPED_RESOURCE_DEFAULTS_TO_CLASS_C"
+        ],
+        "resourceId": "s6-evaluators",
+        "transitiveDependencyIds": [
+          "s6-boundary-schema"
+        ],
+        "unresolvedDependencyIds": []
+      }
+    ],
+    "generator": {
+      "algorithm": "SORTED_DFS_TRANSITIVE_CLOSURE_V1",
+      "id": "ai-ops-a1-transitive-classifier",
+      "version": 1
+    },
+    "inputDigest": "903482d20e0f38df2a6dfd5bf7a8e73123a47dfa717dc2a441ff3015fdc68b1d",
+    "manifestDigest": "a8d66e84377d93e47e82882590e2b6b9ba5ac3f523f4f9d6e162e8921823269e",
+    "operationalAuthorityCreated": false,
+    "schema": "AI_OPS_CLASSIFICATION_MANIFEST_V1",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_CLASSIFICATION_MANIFEST_ENVELOPE_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

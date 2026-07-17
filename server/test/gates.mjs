@@ -17,6 +17,7 @@ import {
 
 const HOST = '127.0.0.1';
 const REQUEST_TIMEOUT_MS = 20_000;
+const TRIPWIRE_URL = new URL('./private-egress-tripwire.mjs', import.meta.url).href;
 const results = [];
 
 async function availablePort() {
@@ -298,12 +299,22 @@ try {
     process.stdout.write(JSON.stringify(out));
     process.exit(0);
   `;
-  const cacheProbe = JSON.parse(execFileSync(process.execPath, ['--input-type=module', '--eval', cacheProbeScript], {
+  const cacheProbe = JSON.parse(execFileSync(process.execPath, [
+    '--import',
+    TRIPWIRE_URL,
+    '--input-type=module',
+    '--eval',
+    cacheProbeScript,
+  ], {
     cwd: cacheProbeCwd,
     env: {
       PATH: process.env.PATH,
       DATA_DIR: cacheProbeData,
       SKIP_DOTENV: '1',
+      I00_TEST_EGRESS_STRICT: '1',
+      ...(process.env.I00_TEST_EGRESS_REPORT_FILE === undefined
+        ? {}
+        : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
     },
     encoding: 'utf8',
     timeout: 10_000,
@@ -352,7 +363,7 @@ console.log('\nBooting server (hostile ambient credentials, isolated data dir)â€
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const privateEgressSentinel = path.join(dataDir, 'private-egress-attempts.log');
 const networkEgressSentinel = path.join(dataDir, 'network-egress-attempts.log');
-const child = spawn(process.execPath, ['--import', './server/test/private-egress-tripwire.mjs', 'server/dist/index.js'], {
+const child = spawn(process.execPath, ['--import', TRIPWIRE_URL, 'server/dist/index.js'], {
   // Synthetic credentials are deliberate: the runtime must remain keyless and
   // owner-gated even if every common ambient credential source is populated.
   env: {
@@ -377,6 +388,10 @@ const child = spawn(process.execPath, ['--import', './server/test/private-egress
     PRIVATE_EGRESS_SENTINEL_FILE: privateEgressSentinel,
     NETWORK_EGRESS_SENTINEL_FILE: networkEgressSentinel,
     I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
+    I00_TEST_EGRESS_STRICT: '1',
+    ...(process.env.I00_TEST_EGRESS_REPORT_FILE === undefined
+      ? {}
+      : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -976,12 +991,6 @@ check(
     typeof basisRuntime?.thresholds?.watchGapPct === 'number'
 );
 
-check(
-  'hostile ambient Binance and AWS credentials generated zero prohibited egress',
-  !existsSync(privateEgressSentinel),
-  existsSync(privateEgressSentinel) ? readFileSync(privateEgressSentinel, 'utf8').slice(0, 300) : ''
-);
-
 const iconsRes = await request('/api/icons?bases=BTC,ETH,TLM,BREV');
 const iconsBody = await iconsRes.json().catch(() => null);
 check('icon manifest endpoint responds', iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object');
@@ -992,7 +1001,20 @@ check(
     !(secRes.headers.get('content-security-policy') ?? '').includes('cdn.jsdelivr.net')
 );
 
-await stopChild(child);
+const gateExit = await stopChild(child);
+check(
+  'deterministic application gate child exits cleanly after its complete lifetime',
+  gateExit.code === 0 && gateExit.signal === null,
+  `code=${String(gateExit.code)} signal=${String(gateExit.signal)}`,
+);
+const blockedPrivateEgress = existsSync(privateEgressSentinel)
+  ? readFileSync(privateEgressSentinel, 'utf8').trim().split('\n').filter(Boolean)
+  : [];
+check(
+  'hostile ambient Binance and AWS credentials generated zero prohibited egress over the complete child lifetime',
+  blockedPrivateEgress.length === 0,
+  `${blockedPrivateEgress.length} prohibited attempts: ${blockedPrivateEgress.slice(0, 8).join(', ')}`,
+);
 const blockedPublicEgress = existsSync(networkEgressSentinel)
   ? readFileSync(networkEgressSentinel, 'utf8').trim().split('\n').filter(Boolean)
   : [];

@@ -1,0 +1,382 @@
+{
+  "schema": "PORT_OPS_PRESTAGE_RECEIPT_V1",
+  "packet": "RUN-16-PORT",
+  "phase": "POST_LANDING_PRESTAGE",
+  "terminalState": "PORT_OPS_PRESTAGE_READY",
+  "laneAcceptance": "PASS",
+  "prestageReady": true,
+  "prestageOnly": true,
+  "integratedAcceptedClaimed": false,
+  "authorityGranted": false,
+  "deploymentPerformed": false,
+  "networkMutationPerformed": false,
+  "credentialMutationPerformed": false,
+  "moneyMutationPerformed": false,
+  "mergePerformed": false,
+  "pushPerformed": false,
+  "authorityEffect": "NONE",
+  "baseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "implementationCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+  "implementationTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+  "implementationBranch": "port-ops-20260716",
+  "launchAuthority": {
+    "decision": "D-LAUNCH-51",
+    "decisionCommit": "e619ff18ef159c27061cfaf318036e18a4fac131",
+    "landedBaseDecision": "D-LAUNCH-50",
+    "landedBase": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "registryAuthority": {
+    "commit": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "gitBlob": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "rowSchema": "InsertionRequestRowV1",
+    "landedSchemaGitBlob": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+    "landedSchemaSha256": "abc7f76af710c08abf43b2b3f67a083861e131eadbeb5bcce8b7b4c72db372bc"
+  },
+  "receiptSealCommit": "ENCLOSING_COMMIT_NOT_SELF_REFERENTIAL",
+  "receiptPath": "fixtures/opsShadow/receipts/PORT_OPS_PRESTAGE_RECEIPT.v1.json",
+  "sourceShadow": {
+    "status": "SHADOW_SPECULATIVE",
+    "acceptanceTransferred": false,
+    "sealCommit": "cdf64b678539a7d63cb406d70b0ca491d40d1a05",
+    "receiptPath": "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+    "receiptBlob": "b1ddb6dab6ce267271c2e60a8f77a76897f9f5bf",
+    "receiptSha256": "b717f2a04455367a73aaa2a0fb0fcb2af64ba0266ae52d5b2796c2c9b00f4d85",
+    "use": "HISTORICAL_PROVENANCE_ONLY"
+  },
+  "operationalOwner": {
+    "immutableDonorCommit": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
+    "acceptedOpsLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
+    "amendmentContractBlob": "8ca3277a5cc69d1976e33a5cd2110c638db9f467",
+    "effectiveOpsLiveTree": "d016e6ffb2b805cf52d31728c8635221db56c2f6",
+    "effectiveRootDigestSha256": "94f7dffc6583b471e8d193f8ec95c3f5dc12a2a0081b8e10a342e9ac5c26e524"
+  },
+  "scope": {
+    "exclusivePathRoots": [
+      "fixtures/opsShadow",
+      "test/opsShadow"
+    ],
+    "implementationChangedPathCount": 10,
+    "implementationChangedPaths": [
+      {
+        "path": "fixtures/opsShadow/OPS_SHADOW_ENTRY_GATE.v1.json",
+        "gitBlob": "b4eded132d061da5ed1c2f8a4bace40b55860136",
+        "sha256": "7a7659deea72fefcbe633471883dfb4cd540e306da8fbdb71adcd6d53f84e721"
+      },
+      {
+        "path": "fixtures/opsShadow/OPS_SHADOW_INSERTION_REQUESTS.v1.json",
+        "gitBlob": "d0283418b9943ce9e9f0b8edc3ee29b53044ecdd",
+        "sha256": "a932d2af1b593fe43be107383ebfc02769e70ab05adf4bd61b370615a7207939"
+      },
+      {
+        "path": "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+        "gitBlob": "b1ddb6dab6ce267271c2e60a8f77a76897f9f5bf",
+        "sha256": "b717f2a04455367a73aaa2a0fb0fcb2af64ba0266ae52d5b2796c2c9b00f4d85"
+      },
+      {
+        "path": "test/opsShadow/contract.mjs",
+        "gitBlob": "233b6ac0483bbf7022df4afc331d12a6c1829e7b",
+        "sha256": "e0e43595f514fbfa4bd09a27d862e41927e6ebcc8c9e914a57fbfa67b1f696da"
+      },
+      {
+        "path": "test/opsShadow/entry-gate.test.mjs",
+        "gitBlob": "8102d998701162db7e20dd21fa53f0690cb8e53d",
+        "sha256": "d676125c9c1508710a9ed75aece285bb831832895a14a17e84df09aeb197efa2"
+      },
+      {
+        "path": "test/opsShadow/network-boundary.test.mjs",
+        "gitBlob": "8241574779c087b12f8a895cdd139bc59524d787",
+        "sha256": "88434396c5b8a399e4ab3bed9601e83a35851450f848cab402350c437831f07c"
+      },
+      {
+        "path": "test/opsShadow/owner-conformance.test.mjs",
+        "gitBlob": "c7334c84267073924375447a7c12bb32ede251a3",
+        "sha256": "d35f277f86e7667d9bf3e769c3f9453cbc1a6c91b923154947ce876c82dcee10"
+      },
+      {
+        "path": "test/opsShadow/receipt-binding.test.mjs",
+        "gitBlob": "74c551d903e5705bf3debc3b5dda9d0f007b1686",
+        "sha256": "6d74f4b3c9f362e06a102a80c94a5d95a451ad7b4eb45688510a376d8b8c7223"
+      },
+      {
+        "path": "test/opsShadow/run-focused.mjs",
+        "gitBlob": "55f114eb80578ef09c1d523ccbd51d27d3974d8e",
+        "sha256": "6356482e2008143afbe371574caf4e2f4a76bb54d3d3b157f38980f559e53d0f"
+      },
+      {
+        "path": "test/opsShadow/validate-receipt.mjs",
+        "gitBlob": "1eb4a2f5a4388c21d28b8cfc5a56243b2fd4bb94",
+        "sha256": "50f0cf40e47fb5a64aec6823021e50730454a31c2f5c88bbc8be0b18965b5737"
+      }
+    ]
+  },
+  "tests": [
+    {
+      "category": "PORT_OPS_CONFORMANCE_DENY_ALL",
+      "evidenceKind": "PACKET_DENY_ALL",
+      "command": "/usr/bin/sandbox-exec -p \"(version 1)(allow default)(deny network*)\" /Users/cosmosgeek/.local/node22/bin/node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/opsShadow/**/*.test.mjs",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "spawnError": null,
+      "positiveProofCount": 44,
+      "measured": {
+        "tests": 44,
+        "passed": 44,
+        "failed": 0
+      },
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "fbed234ec786ecd7964f5741f0507a1416ca165af7222e505cb52886fca67ce9",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "PORT_OPS_CANONICAL_DONOR",
+      "evidenceKind": "STATIC_CANONICAL_OWNER_DENY_ALL",
+      "command": "/usr/bin/sandbox-exec -p \"(version 1)(allow default)(deny network*)\" /Users/cosmosgeek/.local/node22/bin/node ops/i00/bin/verify-donor.mjs --repo . --integrated",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "spawnError": null,
+      "positiveProofCount": 2,
+      "measured": {
+        "status": "INTEGRATED_ACCEPTED_DONOR_WITH_AUTHORIZED_CORRECTIONS_VERIFIED",
+        "workingBytesExact": true
+      },
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "9ff5b0ca0d6c51d33476ca1a611e31c50f35ab6dc4cb0d508e80552d9c528b72",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "PORT_OPS_LIVE_AGGREGATE",
+      "evidenceKind": "LOCAL_FAKE_LOOPBACK_KERNEL_EXTERNAL_DENY_FIXED_PS_EXCEPTION",
+      "command": "/usr/bin/sandbox-exec -p \"(version 1)(allow default)(deny network*)(allow network-bind (local ip \\\"localhost:*\\\"))(allow network-inbound (local ip \\\"localhost:*\\\"))(allow network-outbound (remote ip \\\"localhost:*\\\"))(allow process-exec (with no-sandbox) (literal \\\"/bin/ps\\\"))\" bash ops/tests/run-all.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "spawnError": null,
+      "positiveProofCount": 396,
+      "measured": {
+        "passed": 12,
+        "failed": 0,
+        "assertionFooters": 11,
+        "workerScopeAssertions": 35,
+        "assertions": 384
+      },
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "eb8a5a1d1535cb7c665e00ab162e1c5561d4dfcae1b3573106926274163fe656",
+      "stderrSha256": "e687450df09f624e579321e2f37723a210612fd07a170a76f24b5cd32865ed8f"
+    },
+    {
+      "category": "PORT_OPS_I00_AGGREGATE",
+      "evidenceKind": "LOCAL_FAKE_LOOPBACK_KERNEL_EXTERNAL_DENY_FIXED_PS_EXCEPTION",
+      "command": "/usr/bin/sandbox-exec -p \"(version 1)(allow default)(deny network*)(allow network-bind (local ip \\\"localhost:*\\\"))(allow network-inbound (local ip \\\"localhost:*\\\"))(allow network-outbound (remote ip \\\"localhost:*\\\"))(allow process-exec (with no-sandbox) (literal \\\"/bin/ps\\\"))\" bash ops/tests/i00/run-all.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "spawnError": null,
+      "positiveProofCount": 737,
+      "measured": {
+        "passed": 12,
+        "failed": 0,
+        "assertions": 725
+      },
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "c3ae470bbcbec42eba364ab561b3cc5fd1810d0ea5a7cb92c83739e065234746",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "repositoryGates": [
+    {
+      "command": "npm test",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "spawnError": null,
+      "sharedBlocker": null,
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "94f3288452bdfc1066517fec3369ae1a061255b6e9719ce83c7a37ff80c718ef",
+      "stderrSha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+      "stdoutBytes": 44812,
+      "stderrBytes": 332
+    },
+    {
+      "command": "npm run test:all",
+      "outcome": "BLOCKED_SHARED_OWNER",
+      "exitCode": 1,
+      "signal": null,
+      "spawnError": null,
+      "sharedBlocker": {
+        "code": "OUT_OF_SCOPE_SHARED_OWNER_QL_REPIN_DRIFT",
+        "owner": "I00_ACCEPTANCE_AND_DIRECTOR_INPUT_OWNER",
+        "failingTestCount": 2,
+        "i00ProofPassed": 45,
+        "i00ProofFailed": 2,
+        "affectedInputs": [
+          {
+            "path": "QL_DIRECTOR_STATE.md",
+            "assignedBaseSha256": "57eaf6d10e5a4c3fe9dc60324fb906ebe1385aeb082283930853cbfdf19d0494",
+            "proofExpectedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+          },
+          {
+            "path": "QL_PARALLEL_DAG.md",
+            "assignedBaseSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0",
+            "proofExpectedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+          }
+        ],
+        "failingTests": [
+          "server/test/i00Acceptance/authority-protocol.test.mjs::final D-LAUNCH-7 repin accepts exact current-main objects while historical packet pins stay immutable",
+          "server/test/i00Acceptance/closure-evidence.test.mjs::current machine evidence is input-driven for both legal candidate phases and historical IP-PROOF evidence stays historical"
+        ],
+        "unchangedFromAssignedBase": true,
+        "requiredInsertionRequestIds": [
+          "AIOPS-IR-DOCS-017",
+          "AIOPS-IR-TEST-MOUNT-026"
+        ],
+        "broaderRootGreenClaimed": false
+      },
+      "testedCommitSha": "1398f33e1dcf7cd72ed49ff1814b440ba2df1c50",
+      "testedTreeSha": "4b6c132b6663813b53c86ab120e6cc44988887d6",
+      "worktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT",
+      "stdoutSha256": "41c3086f2d7781dc11733669e60b9e7a3e1b5d17051fbc77526b1d0f4d051ed1",
+      "stderrSha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+      "stdoutBytes": 293071,
+      "stderrBytes": 332
+    }
+  ],
+  "rootGateDisposition": "FOCUSED_LANE_GREEN_SHARED_ROOT_HANDOFF_REQUIRED",
+  "broaderRootGreenClaimed": false,
+  "adversarialReview": {
+    "outcome": "PASS",
+    "checks": [
+      {
+        "id": "ADV-SCOPE-001",
+        "outcome": "PASS",
+        "evidence": "Exact no-renames diff-tree proof contains ten additions under only the two ratified OPS roots."
+      },
+      {
+        "id": "ADV-SOURCE-002",
+        "outcome": "PASS",
+        "evidence": "The historical OPS shadow receipt is byte-identical to cdf64b6 and transfers no acceptance."
+      },
+      {
+        "id": "ADV-REGISTRY-003",
+        "outcome": "PASS",
+        "evidence": "All eleven typed insertion rows compare field-for-field with immutable registry object 08e0beaa."
+      },
+      {
+        "id": "ADV-NETWORK-004",
+        "outcome": "PASS",
+        "evidence": "Packet and donor run under OS deny-all; operational suites permit only loopback and a fixed ps inspection exception."
+      },
+      {
+        "id": "ADV-DONOR-005",
+        "outcome": "PASS",
+        "evidence": "The canonical donor verifier reports exact immutable donor bytes plus the ordered authorized corrections."
+      },
+      {
+        "id": "ADV-WATCHDOG-006",
+        "outcome": "PASS",
+        "evidence": "Hostile tests preserve generation-fenced lock-family ownership, loud unknowns, and bounded restart truth."
+      },
+      {
+        "id": "ADV-RESTORE-007",
+        "outcome": "PASS",
+        "evidence": "Hostile tests preserve descriptor-held bounded restore, content proof, and report-last publication."
+      },
+      {
+        "id": "ADV-RECEIPT-008",
+        "outcome": "PASS",
+        "evidence": "Receipt validation requires one exact implementation parent, one receipt-only seal child, clean tip, and exact bytes."
+      },
+      {
+        "id": "ADV-ROOT-GATES-009",
+        "outcome": "PASS",
+        "evidence": "npm test passed; test:all retains the exact shared QL repin block and expressly makes no root-green claim."
+      },
+      {
+        "id": "ADV-SECRETS-010",
+        "outcome": "PASS",
+        "evidence": "Only fake provider behavior is exercised; wildcard IAM, ambient credentials, and inline secrets fail closed."
+      }
+    ]
+  },
+  "insertionRequestIds": [
+    "AIOPS-IR-DEPLOYMENT-007",
+    "AIOPS-IR-TELEMETRY-012",
+    "AIOPS-IR-NOTIFY-014",
+    "AIOPS-IR-EGRESS-016",
+    "AIOPS-IR-DOCS-017",
+    "AIOPS-IR-SENTINEL-020",
+    "AIOPS-IR-MANAGED-INVENTORY-022",
+    "AIOPS-IR-APPROVAL-023",
+    "AIOPS-IR-BROWSER-PROBE-024",
+    "AIOPS-IR-CONFIG-025",
+    "AIOPS-IR-TEST-MOUNT-026"
+  ],
+  "dedupEvidence": [
+    {
+      "id": "OPS-PORT-PLAN-DESTINATION",
+      "disposition": "REJECT_DUPLICATE",
+      "evidence": "D-LAUNCH-51 supersedes the stale planner A5 destination with the existing ratified OPS roots."
+    },
+    {
+      "id": "OPS-WATCHDOG-CORRECTION-OWNER",
+      "disposition": "ADAPT_EXISTING",
+      "evidence": "WATCHDOG-007 remains the generation-fenced canonical owner; this packet only tests its contract."
+    },
+    {
+      "id": "OPS-RESTORE-CORRECTION-OWNER",
+      "disposition": "ADAPT_EXISTING",
+      "evidence": "BACKUP-008 remains the descriptor-bound canonical restore owner; this packet creates no restore path."
+    },
+    {
+      "id": "OPS-SHARED-TRUTH-OWNERS",
+      "disposition": "REFERENCE_ONLY",
+      "evidence": "Supervisor, Product projection, managed inventory, and restart readback remain canonical shared owners."
+    },
+    {
+      "id": "OPS-STATE-DOCUMENT-RECONCILIATION",
+      "disposition": "REFERENCE_ONLY",
+      "evidence": "Shared state and root acceptance reconciliation remain typed integrator handoffs, not direct lane edits."
+    }
+  ],
+  "limitations": [
+    {
+      "id": "HOST_NATIVE_VALIDATION",
+      "statement": "Native systemd and production-host validation remain owner-gated and were not simulated as successful host evidence."
+    },
+    {
+      "id": "NETWORK_BOUNDARY",
+      "statement": "Operational suites use numeric loopback under kernel external denial; fixed setuid /bin/ps identity inspection alone runs outside inherited sandboxing."
+    },
+    {
+      "id": "RESTORE_ATOMICITY",
+      "statement": "The landed restore owner proves reversible per-object publication, not an atomic multi-path generation switch or continuing target integrity."
+    },
+    {
+      "id": "EXTERNAL_ACTIVATION",
+      "statement": "No service, tunnel, DNS route, AWS secret, credential, deployment, or external provider was activated or mutated."
+    },
+    {
+      "id": "SHARED_SEAMS",
+      "statement": "Composition, routes, persistence, auth, navigation, shared state, and root test mounting remain exact draft insertion requests."
+    },
+    {
+      "id": "INTEGRATION_STATUS",
+      "statement": "Lane acceptance is prestage-only; npm test passed, while test:all remains nonzero solely for the exact shared I00 QL repin drift and no broader root-green status is claimed."
+    },
+    {
+      "id": "MONEY_AND_CREDENTIALS",
+      "statement": "LIVE_EXECUTION_NOT_IMPLEMENTED remains enforced; no order, borrow, repay, transfer, withdrawal, leverage, margin, signed/private call, or credential read occurred."
+    }
+  ]
+}

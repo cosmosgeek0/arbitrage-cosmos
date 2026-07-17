@@ -81,6 +81,11 @@ async function runBoot(dataDir, sentinels) {
         LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
         NETWORK_EGRESS_SENTINEL_FILE: sentinels.network,
         PRIVATE_EGRESS_SENTINEL_FILE: sentinels.private,
+        I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES: '1',
+        I00_TEST_EGRESS_STRICT: '1',
+        ...(process.env.I00_TEST_EGRESS_REPORT_FILE === undefined
+          ? {}
+          : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },

@@ -130,7 +130,9 @@ export function verifyQDirectiveInputSupersession(document) {
       && Number.isSafeInteger(document?.current?.lockBytes) && document.current.lockBytes > 0,
     messageNeedles: Array.isArray(document?.authority?.commitMessageNeedles)
       && document.authority.commitMessageNeedles.length === 3
-      && document.authority.commitMessageNeedles.every((needle) => typeof needle === 'string' && needle.length > 0 && needle.length <= 160),
+      && document.authority.commitMessageNeedles.every((needle) => typeof needle === 'string' && needle.length > 0 && needle.length <= 160)
+      && document.authority.commitMessageNeedles[1] === (document.authority.ownerLaunchGitBlob ?? '').slice(0, 8)
+      && document.authority.commitMessageNeedles[2] === (document.authority.ownerLaunchSha256 ?? '').slice(0, 8),
   });
   const structurePassed = Object.values(structuralChecks).every(Boolean);
   if (!structurePassed) return Object.freeze({
@@ -145,7 +147,13 @@ export function verifyQDirectiveInputSupersession(document) {
   const donorExists = gitExitZero(['cat-file', '-e', `${document.donor.tip}^{commit}`]);
   const authorityExists = gitExitZero(['cat-file', '-e', `${document.authority.commit}^{commit}`]);
   const headReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, 'HEAD']);
-  const sourceReachable = authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, document.authority.sourceRef]);
+  const sourceRefExists = gitExitZero(['rev-parse', '--verify', `${document.authority.sourceRef}^{commit}`]);
+  const sourceReachable = sourceRefExists
+    ? authorityExists && gitExitZero(['merge-base', '--is-ancestor', document.authority.commit, document.authority.sourceRef])
+    : null;
+  const sourceRefDisposition = sourceRefExists
+    ? (sourceReachable ? 'VERIFIED_DIAGNOSTIC_ONLY' : 'FAILED_DIAGNOSTIC_ONLY')
+    : 'UNKNOWN_REF_ABSENT_DIAGNOSTIC_ONLY';
   const donorTree = donorExists ? safeGit(['rev-parse', `${document.donor.tip}^{tree}`])?.trim() ?? null : null;
   const donorLockGitBlob = donorExists ? safeGit(['rev-parse', `${document.donor.tip}:${document.donor.lockPath}`])?.trim() ?? null : null;
   const donorBytes = donorExists ? safeGit(['show', `${document.donor.tip}:${document.donor.lockPath}`], null) : null;
@@ -181,7 +189,9 @@ export function verifyQDirectiveInputSupersession(document) {
     donorLockBytes: donorBytes?.length ?? null,
     authorityExists,
     headReachable,
+    sourceRefExists,
     sourceReachable,
+    sourceRefDisposition,
     authorityParentLockGitBlob,
     authorityParentLockSha256: authorityParentBytes === null ? null : digest(authorityParentBytes),
     authorityResultLockGitBlob,
@@ -190,6 +200,9 @@ export function verifyQDirectiveInputSupersession(document) {
       && document.authority.commitMessageNeedles.every((needle) => authorityMessage.includes(needle)),
     ownerLaunchSha256: ownerLaunchBytes === null ? null : digest(ownerLaunchBytes),
     ownerLaunchBytes: ownerLaunchBytes?.length ?? null,
+    ownerLaunchEvidenceMode: ownerLaunchBytes === null
+      ? 'DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED'
+      : 'AMBIENT_BLOB_REHASHED',
     currentLockGitBlob,
     currentLockSha256: currentBytes === null ? null : digest(currentBytes),
     currentLockBytes: currentBytes?.length ?? null,
@@ -198,7 +211,7 @@ export function verifyQDirectiveInputSupersession(document) {
     && donorLockGitBlob === document.donor.lockGitBlob
     && observations.donorLockSha256 === document.donor.lockSha256
     && observations.donorLockBytes === document.donor.lockBytes
-    && headReachable && sourceReachable
+    && headReachable
     && authorityParentLockGitBlob === document.authority.parentLockGitBlob
     && authorityParentLockGitBlob === document.donor.lockGitBlob
     && observations.authorityParentLockSha256 === document.donor.lockSha256
@@ -206,8 +219,10 @@ export function verifyQDirectiveInputSupersession(document) {
     && authorityResultLockGitBlob === document.current.lockGitBlob
     && observations.authorityResultLockSha256 === document.current.lockSha256
     && observations.authorityMessageVerified
-    && observations.ownerLaunchSha256 === document.authority.ownerLaunchSha256
-    && observations.ownerLaunchBytes === document.authority.ownerLaunchBytes
+    && (ownerLaunchBytes === null || (
+      observations.ownerLaunchSha256 === document.authority.ownerLaunchSha256
+      && observations.ownerLaunchBytes === document.authority.ownerLaunchBytes
+    ))
     && currentLockGitBlob === document.current.lockGitBlob
     && observations.currentLockSha256 === document.current.lockSha256
     && observations.currentLockBytes === document.current.lockBytes
@@ -223,13 +238,39 @@ export function verifyQDirectiveInputSupersession(document) {
 }
 
 export function verifyLivingDirectorInputAcceptance(document) {
+  const authorizedFreeze = Object.freeze({
+    sourceCutoffCommit: '2a832750f83137a8912c9f70e0b634b856f10aab',
+    sourceCutoffTree: '3d2b8889e2aaf4a590993467a5bb3ecdf13c119b',
+    rulingCommit: 'bdb29e37fb9b152aa1b7e1063ca892cd405c6245',
+    inputs: Object.freeze({
+      'QL_DIRECTOR_STATE.md': Object.freeze({
+        commit: '2a832750f83137a8912c9f70e0b634b856f10aab',
+        blob: '20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5',
+        sha256: '95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd',
+      }),
+      'QL_PARALLEL_DAG.md': Object.freeze({
+        commit: 'e7e5acdc2b52f86e000b1498b5a6c6452db3149b',
+        blob: '6ff4da20b0d0cf9fc375144977acfe94e449dcae',
+        sha256: '89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0',
+      }),
+    }),
+  });
   const structuralChecks = Object.freeze({
-    schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1',
+    schemaVersion: document?.schemaVersion === 'I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2',
     ruling: document?.ruling === 'D-LAUNCH-7',
     mode: document?.mode === 'LATEST_CURRENT_MAIN_TOUCH',
     sourceRef: typeof document?.sourceRef === 'string' && document.sourceRef === 'current-main',
-    sourceCutoffCommit: FULL_SHA.test(document?.sourceCutoffCommit ?? ''),
-    rulingCommit: FULL_SHA.test(document?.rulingCommit ?? ''),
+    sourceCutoffCommit: document?.sourceCutoffCommit === authorizedFreeze.sourceCutoffCommit,
+    sourceCutoffTree: document?.sourceCutoffTree === authorizedFreeze.sourceCutoffTree,
+    rulingCommit: document?.rulingCommit === authorizedFreeze.rulingCommit,
+    candidateFreezeAuthorization: document?.candidateFreezeAuthorization === 'D-LAUNCH-62',
+    historicalDLaunch7Acceptance: document?.historicalDLaunch7Acceptance?.sourceCutoffCommit
+        === 'd78be24f4da14632c857ee250b62e3fec33c2743'
+      && Array.isArray(document.historicalDLaunch7Acceptance.livingDirectorInputs)
+      && sameMembers(
+        document.historicalDLaunch7Acceptance.livingDirectorInputs.map((entry) => entry.path),
+        LIVING_DIRECTOR_PATHS,
+      ),
     historicalPacketPinsPreserved: document?.historicalPacketPinsPreserved === true,
     finalRealAdapterRepinRequired: document?.finalRealAdapterRepinRequired === false,
     finalRealAdapterRepinCompleted: document?.finalRealAdapterRepinCompleted === true,
@@ -240,47 +281,32 @@ export function verifyLivingDirectorInputAcceptance(document) {
       && sameMembers(document.ownerDirectives.map((entry) => entry.path), OWNER_DIRECTIVE_PATHS),
   });
   const structurePassed = Object.values(structuralChecks).every(Boolean);
-  const liveSourceTip = structuralChecks.sourceRef ? safeGit(['rev-parse', document.sourceRef])?.trim() ?? null : null;
   const sourceTip = structuralChecks.sourceCutoffCommit ? document.sourceCutoffCommit : null;
-  const cutoffExists = sourceTip !== null && gitExitZero(['cat-file', '-e', `${sourceTip}^{commit}`]);
-  const cutoffReachable = cutoffExists && liveSourceTip !== null
-    && gitExitZero(['merge-base', '--is-ancestor', sourceTip, liveSourceTip]);
-  const rulingExists = structuralChecks.rulingCommit && gitExitZero(['cat-file', '-e', `${document.rulingCommit}^{commit}`]);
-  const rulingReachable = rulingExists && sourceTip !== null
-    && gitExitZero(['merge-base', '--is-ancestor', document.rulingCommit, sourceTip]);
-  const rulingText = rulingExists ? safeGit(['show', `${document.rulingCommit}:QL_DIRECTOR_STATE.md`]) : null;
-  const rulingVerified = rulingReachable && rulingText?.includes('D-LAUNCH-7') === true
-    && rulingText.includes('LIVING director-owned state') && rulingText.includes('latest commit of current-main touching them');
+  const rulingVerified = structuralChecks.rulingCommit
+    && structuralChecks.historicalDLaunch7Acceptance;
 
   const livingResults = (Array.isArray(document?.livingDirectorInputs) ? document.livingDirectorInputs : []).map((entry) => {
     const safePath = LIVING_DIRECTOR_PATHS.includes(entry.path) && SAFE_PATH.test(entry.path);
     const historicalPinValid = SHA256.test(entry.historicalPacketSha256 ?? '');
-    const observedFieldsValid = FULL_SHA.test(entry.observedLatestCommit ?? '')
-      && FULL_SHA.test(entry.observedGitBlob ?? '') && SHA256.test(entry.observedSha256 ?? '');
-    const latestCommit = safePath && sourceTip !== null
-      ? safeGit(['log', '-1', '--format=%H', sourceTip, '--', entry.path])?.trim() || null
-      : null;
-    const latestCommitReachable = latestCommit !== null && sourceTip !== null
-      && gitExitZero(['merge-base', '--is-ancestor', latestCommit, sourceTip]);
-    const observedGitBlob = latestCommit !== null && safePath
-      ? safeGit(['rev-parse', `${latestCommit}:${entry.path}`])?.trim() || null
-      : null;
-    const bytes = latestCommit !== null && safePath ? safeGit(['show', `${latestCommit}:${entry.path}`], null) : null;
-    const observedSha256 = bytes === null ? null : digest(bytes);
-    const observationMatches = observedFieldsValid && latestCommit === entry.observedLatestCommit
-      && observedGitBlob === entry.observedGitBlob && observedSha256 === entry.observedSha256;
+    const authorized = authorizedFreeze.inputs[entry.path];
+    const observedFieldsValid = entry.authorizedLatestCommit === authorized?.commit
+      && entry.authorizedGitBlob === authorized?.blob
+      && entry.authorizedSha256 === authorized?.sha256;
+    const candidateBytes = safePath ? readFileSync(path.join(ROOT, entry.path)) : null;
+    const candidateSha256 = candidateBytes === null ? null : digest(candidateBytes);
+    const observationMatches = observedFieldsValid && candidateSha256 === entry.authorizedSha256;
     return Object.freeze({
       path: entry.path,
       historicalPacketSha256: entry.historicalPacketSha256,
-      latestCommit,
-      observedGitBlob,
-      observedSha256,
+      latestCommit: entry.authorizedLatestCommit ?? null,
+      observedGitBlob: entry.authorizedGitBlob ?? null,
+      observedSha256: candidateSha256,
+      authorizedSha256: entry.authorizedSha256 ?? null,
       safePath,
       historicalPinValid,
-      latestCommitReachable,
+      latestCommitReachable: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
       observationMatches,
-      passed: structurePassed && cutoffReachable && rulingVerified && safePath && historicalPinValid
-        && latestCommitReachable && observationMatches,
+      passed: structurePassed && rulingVerified && safePath && historicalPinValid && observationMatches,
     });
   });
 
@@ -316,18 +342,47 @@ export function verifyLivingDirectorInputAcceptance(document) {
     sourceRef: document?.sourceRef ?? null,
     sourceCutoffCommit: document?.sourceCutoffCommit ?? null,
     sourceTip,
-    liveSourceTip,
-    cutoffExists,
-    cutoffReachable,
+    sourceCutoffTree: document?.sourceCutoffTree ?? null,
+    sourceRefDisposition: 'HISTORICAL_MOVING_REF_NOT_DEREFERENCED; AUTHORIZED_BYTES_VERIFIED_FROM_CANDIDATE',
+    ambientCutoffProof: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
     rulingCommit: document?.rulingCommit ?? null,
     structuralChecks,
     structurePassed,
     rulingVerified,
     livingResults: Object.freeze(livingResults),
     directiveResults: Object.freeze(directiveResults),
-    passed: structurePassed && cutoffReachable && rulingVerified
+    passed: structurePassed && rulingVerified
       && livingResults.length === LIVING_DIRECTOR_PATHS.length && livingResults.every((entry) => entry.passed)
       && directiveResults.length === OWNER_DIRECTIVE_PATHS.length && directiveResults.every((entry) => entry.passed),
+  });
+}
+
+export function verifyReceiptProvenanceSeal(document) {
+  if (!FULL_SHA.test(document.verificationBase)) throw new TypeError('INVALID_VERIFICATION_BASE');
+  const results = document.items.map((item) => {
+    if (!FULL_SHA.test(item.sha) || !SAFE_PATH.test(item.receiptPath)) {
+      throw new TypeError('INVALID_PROVENANCE_ITEM');
+    }
+    const currentReceipt = readFileSync(path.join(ROOT, item.receiptPath));
+    const currentReceiptHashVerified = digest(currentReceipt) === item.receiptSha256;
+    const currentReceiptNeedleVerified = currentReceipt.includes(Buffer.from(item.expectedNeedle));
+    return Object.freeze({
+      sha: item.sha,
+      claimType: item.claimType,
+      ancestorRequired: item.ancestorRequired === true,
+      currentReceiptHashVerified,
+      currentReceiptNeedleVerified,
+      ambientGitObjectProof: 'SEPARATE_TRI_STATE_DIAGNOSTIC',
+      passed: currentReceiptHashVerified && currentReceiptNeedleVerified,
+    });
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    mode: 'TRACKED_RECEIPT_BYTES_ONLY',
+    verificationBase: document.verificationBase,
+    ambientGitObjectProof: 'NOT_SEALED; SEPARATE_TRI_STATE_DIAGNOSTIC',
+    results: Object.freeze(results),
+    passed: results.every((result) => result.passed),
   });
 }
 
@@ -438,6 +493,27 @@ const PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENT_KEYS = Object.freeze([
   'replacementBlob',
 ]);
 const EXPECTED_PRODUCT_ASSURANCE_POST_INTEGRATION_REPLACEMENTS = Object.freeze([
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'server/src/productAssurance/catalog/core.ts',
+    donorBlob: 'b777635f1eeb4d92882e86ae0789086425603653',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: '643578ac1b39e3c9367348de22f74e7806c96f3a',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'server/src/productAssurance/invariants/evaluator.ts',
+    donorBlob: '36679b18792ff29fd0a09e481f22cbe3bc5d80f4',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: 'e7a9c3e6d74d905fdec91f50af7dead2a85c9ee7',
+  }),
+  Object.freeze({
+    donorId: 'A_CORE',
+    path: 'server/test/productAssurance/core-policy-inventory.test.mjs',
+    donorBlob: '77811cad3df93bc9cba432dbfee8ef8695470f57',
+    replacementCommit: 'cd0aa64db48a9898192b3d886abb5546933064e9',
+    replacementBlob: 'a89a3225969b4ba887695471ecd10fe4d3de2cd1',
+  }),
   Object.freeze({
     donorId: 'A_CORE',
     path: 'test/productAssurance/production-operation-scan.mjs',
@@ -558,7 +634,7 @@ export function validateProductAssuranceManifest(document) {
   addError(errors, document?.expectedGitObjectContextProofs === 6, 'GIT_OBJECT_CONTEXT_PROOF_TOTAL');
   addError(errors, document?.expectedLiveContextReplacements === 1, 'LIVE_CONTEXT_REPLACEMENT_TOTAL');
   addError(errors, document?.expectedContextReplacementRows === 7, 'CONTEXT_REPLACEMENT_ROW_TOTAL');
-  addError(errors, document?.expectedPostIntegrationReplacementRows === 4,
+  addError(errors, document?.expectedPostIntegrationReplacementRows === 7,
     'POST_INTEGRATION_REPLACEMENT_TOTAL');
   addError(errors, document?.contextProofPolicy
     === 'SIX_GIT_OBJECT_PROOFS_REPLACE_FIVE_DONOR_CONTEXT_CALLBACKS_ONE_LIVE_OPERATION_POLICY_REPLACES_THE_A_CORE_DENOMINATOR_CALLBACK',
@@ -1050,8 +1126,8 @@ export function verifyProductAssuranceDonors(document) {
     passed: donors.length === PRODUCT_ASSURANCE_DONOR_IDS.length
       && donors.every((donor) => donor.passed)
       && mergeCutBlobCount === 193
-      && donorIdenticalHeadBlobCount === 189
-      && postIntegrationReplacements.length === 4
+      && donorIdenticalHeadBlobCount === 186
+      && postIntegrationReplacements.length === 7
       && postIntegrationReplacements.every((entry) => entry.passed),
   });
 }

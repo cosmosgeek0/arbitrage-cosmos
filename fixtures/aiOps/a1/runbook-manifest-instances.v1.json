@@ -1,0 +1,1550 @@
+{
+  "artifactId": "aiops-runbook-manifest-instances",
+  "contentHash": "a74d6d4d4f908cff8db1268e1f6c7d63e4bf89899a5a3aaad11e077850903a2f",
+  "createdAtMs": 1784160000000,
+  "environment": "SHADOW",
+  "owner": "AI_OPS_A1_CONTRACTS",
+  "payload": [
+    {
+      "actionClass": "A",
+      "actionId": "RECONNECT_STREAM",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "PUBLIC_STREAM_CONNECTION/{streamId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "PUBLIC_STREAM_DISCONNECTED_V1",
+        "PUBLIC_STREAM_BACKOFF_EXHAUSTED_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RECONNECT_STREAM_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "streamId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "PUBLIC_STREAM_OWNER_READBACK_READY",
+        "STREAM_GENERATION_ADVANCED",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RECONNECT_STREAM_INSTANCE_V1",
+      "manualFallbackId": "OWNER_RESTART_PUBLIC_STREAM",
+      "maximumAttempts": 3,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 10000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "498374ade4da97474c1d30872be182bd6da678eee5dd33fc85a4ba97b24df4f5",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "PUBLIC_STREAM_OWNER_CONFIRMED",
+        "NO_ACTIVE_RECONNECT_LEASE",
+        "REPLAY_CURSOR_VALID"
+      ],
+      "quietPeriodMs": 3600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 2,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "TRIGGER_EVENT",
+        "OWNER_READBACK_BEFORE",
+        "OWNER_READBACK_AFTER",
+        "REPLAY_CURSOR_PROOF"
+      ],
+      "requiredTelemetryIds": [
+        "STREAM_LIFECYCLE",
+        "STREAM_SEQUENCE_GAP",
+        "STREAM_RECONNECT_ATTEMPT"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "RECONNECT_CONNECTION_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "PUBLIC_STREAM",
+          "selectorParameter": "streamId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "STOP_RECONNECT_AND_RESTORE_OWNER_BACKOFF",
+      "runbookId": "AI_OPS_RUNBOOK_RECONNECT_STREAM",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "4a04b27d9425541f79fa8146f67b39f674f9e05e3a002c8387c1c075bf656bc6",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RECONNECT_STREAM"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "streamId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "expectedGeneration",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 30000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumDowntimeMs",
+          "required": true,
+          "valueType": "DURATION_MS"
+        },
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "replayCursorRef",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        }
+      ],
+      "unsignedPayloadDigest": "498374ade4da97474c1d30872be182bd6da678eee5dd33fc85a4ba97b24df4f5"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESUBSCRIBE_REPLAY_SAFE",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "PUBLIC_SUBSCRIPTION/{subscriptionId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "PUBLIC_SUBSCRIPTION_MISSING_V1",
+        "PUBLIC_SUBSCRIPTION_CURSOR_GAP_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RESUBSCRIBE_REPLAY_SAFE_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "subscriptionId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "SUBSCRIPTION_OWNER_READBACK_READY",
+        "CURSOR_CONTINUITY_PROVED",
+        "NO_DUPLICATE_DELIVERY",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RESUBSCRIBE_REPLAY_SAFE_INSTANCE_V1",
+      "manualFallbackId": "OWNER_REVIEW_SUBSCRIPTION_GAP",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 16000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "6cb2637dffde3bf9691c1180a33fb52bccfde19c54708e07b4ba583e20d05df1",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "SUBSCRIPTION_OWNER_CONFIRMED",
+        "CURSOR_REPLAY_SAFE",
+        "NO_ACTIVE_SUBSCRIPTION_LEASE"
+      ],
+      "quietPeriodMs": 3600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 2,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "TRIGGER_EVENT",
+        "CURSOR_BEFORE",
+        "CURSOR_AFTER",
+        "DEDUPE_READBACK"
+      ],
+      "requiredTelemetryIds": [
+        "SUBSCRIPTION_LIFECYCLE",
+        "SOURCE_SEQUENCE",
+        "REPLAY_EVENT_COUNT"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "RESUBSCRIBE_WITH_CURSOR_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "PUBLIC_SUBSCRIPTION",
+          "selectorParameter": "subscriptionId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "STOP_RESUBSCRIBE_AND_PRESERVE_GAP",
+      "runbookId": "AI_OPS_RUNBOOK_RESUBSCRIBE_REPLAY_SAFE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "69b563e921479e61c3008bb72d72ce5f0843978e8607eeb5829ede7804ea5a42",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESUBSCRIBE_REPLAY_SAFE"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "subscriptionId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "sourceId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "replayCursorRef",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 10000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumReplayEvents",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "6cb2637dffde3bf9691c1180a33fb52bccfde19c54708e07b4ba583e20d05df1"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESNAPSHOT_READ_MODEL",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "READ_MODEL_SNAPSHOT/{projectionId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "READ_MODEL_REVISION_STALLED_V1",
+        "READ_MODEL_SNAPSHOT_MISSING_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RESNAPSHOT_READ_MODEL_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "projectionId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "READ_MODEL_REVISION_MATCH",
+        "SNAPSHOT_CONTENT_HASH_MATCH",
+        "NO_CANONICAL_SOURCE_MUTATION",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RESNAPSHOT_READ_MODEL_INSTANCE_V1",
+      "manualFallbackId": "OWNER_REVIEW_READ_MODEL_SOURCE",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 30000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "5eb7e454c9832e2a9df82cff7d94d15d18b7371b0cda12782c457a77b18058e3",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "READ_MODEL_OWNER_CONFIRMED",
+        "SOURCE_REVISION_STABLE",
+        "NO_ACTIVE_SNAPSHOT_LEASE"
+      ],
+      "quietPeriodMs": 7200000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "SOURCE_REVISION",
+        "PRIOR_SNAPSHOT_HASH",
+        "NEW_SNAPSHOT_HASH",
+        "OWNER_READBACK_AFTER"
+      ],
+      "requiredTelemetryIds": [
+        "READ_MODEL_REVISION",
+        "SNAPSHOT_BYTE_COUNT",
+        "SNAPSHOT_HASH"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "RESNAPSHOT_DERIVED_PROJECTION_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "CANONICAL_READ_MODEL",
+          "selectorParameter": "projectionId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "DISCARD_DERIVED_SNAPSHOT_AND_RETAIN_PRIOR",
+      "runbookId": "AI_OPS_RUNBOOK_RESNAPSHOT_READ_MODEL",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "87f52933243790bac9fe0091c67028397e177634cdbe06883fc752ace4b22ddc",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESNAPSHOT_READ_MODEL"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "projectionId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "expectedRevision",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 16000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumSnapshotBytes",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "5eb7e454c9832e2a9df82cff7d94d15d18b7371b0cda12782c457a77b18058e3"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REFRESH_BOUNDED_METADATA_CACHE",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "METADATA_CACHE/{cacheId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "METADATA_CACHE_STALE_V1",
+        "METADATA_CACHE_ENTRY_MISSING_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_REFRESH_BOUNDED_METADATA_CACHE_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "cacheId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "CACHE_REVISION_MATCH",
+        "CACHE_ENTRY_BOUND_RESPECTED",
+        "NO_PRIVATE_SOURCE",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_REFRESH_BOUNDED_METADATA_CACHE_INSTANCE_V1",
+      "manualFallbackId": "OWNER_INVALIDATE_METADATA_CACHE",
+      "maximumAttempts": 2,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 20000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "621778adffe7b43644c360e6be10c8a3dad37c9bae6ad83e8ea73536ad934f29",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "CACHE_OWNER_CONFIRMED",
+        "PUBLIC_SOURCE_ONLY",
+        "NO_ACTIVE_CACHE_LEASE"
+      ],
+      "quietPeriodMs": 3600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 2,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "SOURCE_REVISION",
+        "PRIOR_CACHE_HASH",
+        "NEW_CACHE_HASH",
+        "CACHE_OWNER_READBACK"
+      ],
+      "requiredTelemetryIds": [
+        "CACHE_REVISION",
+        "CACHE_ENTRY_COUNT",
+        "CACHE_REFRESH_DURATION"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "REFRESH_PUBLIC_METADATA_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "BOUNDED_METADATA_CACHE",
+          "selectorParameter": "cacheId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "RESTORE_PRIOR_CACHE_REVISION",
+      "runbookId": "AI_OPS_RUNBOOK_REFRESH_BOUNDED_METADATA_CACHE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "ea180dd07509b7090f4d691ed4a989dc05800c016d4b4cfe653d0dddb0460665",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REFRESH_BOUNDED_METADATA_CACHE"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "cacheId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "expectedRevision",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 10000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumEntries",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "621778adffe7b43644c360e6be10c8a3dad37c9bae6ad83e8ea73536ad934f29"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REBUILD_BOUNDED_DERIVED_CACHE",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "DERIVED_CACHE/{cacheId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "DERIVED_CACHE_CORRUPT_V1",
+        "DERIVED_CACHE_REVISION_MISMATCH_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_REBUILD_BOUNDED_DERIVED_CACHE_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "cacheId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "DERIVED_CACHE_HASH_MATCH",
+        "SOURCE_REVISION_UNCHANGED",
+        "CACHE_ENTRY_BOUND_RESPECTED",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_REBUILD_BOUNDED_DERIVED_CACHE_INSTANCE_V1",
+      "manualFallbackId": "OWNER_QUARANTINE_DERIVED_CACHE",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 60000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "69947b657b814a6c8219d2d5f7487632a6b1850ac324f173b65e10205c58753e",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "DERIVED_CACHE_OWNER_CONFIRMED",
+        "CANONICAL_SOURCE_UNCHANGED",
+        "NO_ACTIVE_CACHE_LEASE"
+      ],
+      "quietPeriodMs": 14400000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "CANONICAL_SOURCE_HASH",
+        "PRIOR_CACHE_HASH",
+        "NEW_CACHE_HASH",
+        "CACHE_OWNER_READBACK"
+      ],
+      "requiredTelemetryIds": [
+        "DERIVED_CACHE_REVISION",
+        "DERIVED_CACHE_ENTRY_COUNT",
+        "DERIVED_CACHE_REBUILD_DURATION"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "REBUILD_FROM_CANONICAL_READ_ONLY_SOURCE",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "BOUNDED_DERIVED_CACHE",
+          "selectorParameter": "cacheId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "RESTORE_PRIOR_DERIVED_CACHE",
+      "runbookId": "AI_OPS_RUNBOOK_REBUILD_BOUNDED_DERIVED_CACHE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "fa31ce6afe45734439efe8869db0576a964e9c4ee27b90a1daf4c6f1bdb194e3",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REBUILD_BOUNDED_DERIVED_CACHE"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "cacheId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "sourceRevision",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 100000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumEntries",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "69947b657b814a6c8219d2d5f7487632a6b1850ac324f173b65e10205c58753e"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RESTART_CLASSIFIED_STATELESS_CHILD",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "STATELESS_CHILD/{componentId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "CLASSIFIED_STATELESS_CHILD_STOPPED_V1",
+        "CLASSIFIED_STATELESS_CHILD_CRASH_LOOP_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RESTART_CLASSIFIED_STATELESS_CHILD_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "componentId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "COMPONENT_GENERATION_ADVANCED",
+        "COMPONENT_OWNER_READBACK_READY",
+        "DEPENDENCIES_UNCHANGED",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RESTART_CLASSIFIED_STATELESS_CHILD_INSTANCE_V1",
+      "manualFallbackId": "OWNER_REVIEW_STATELESS_CHILD",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 40000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "94c38a92fda91ea5b2d8c5118d2b62075907c94a2ad9b226d80c487ed062c5f5",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "COMPONENT_CLASSIFIED_STATELESS",
+        "NO_ACTIVE_COMPONENT_LEASE",
+        "RESTART_BUDGET_AVAILABLE"
+      ],
+      "quietPeriodMs": 21600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "CLASSIFICATION_MANIFEST_ENTRY",
+        "COMPONENT_READBACK_BEFORE",
+        "COMPONENT_READBACK_AFTER",
+        "DEPENDENCY_HEALTH_READBACK"
+      ],
+      "requiredTelemetryIds": [
+        "COMPONENT_LIFECYCLE",
+        "COMPONENT_GENERATION",
+        "RESTART_BUDGET"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "RESTART_CHILD_PROCESS_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "CLASSIFIED_STATELESS_CHILD",
+          "selectorParameter": "componentId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "STOP_CHILD_AND_QUARANTINE_RESTART",
+      "runbookId": "AI_OPS_RUNBOOK_RESTART_CLASSIFIED_STATELESS_CHILD",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "6fdfca57d031145dc6a10ee7ae747fb87311dced90e480426e5a1bf34febe54c",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RESTART_CLASSIFIED_STATELESS_CHILD"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "componentId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "expectedGeneration",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 1,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumRestartAttempts",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "94c38a92fda91ea5b2d8c5118d2b62075907c94a2ad9b226d80c487ed062c5f5"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "DIAGNOSTIC_WORKER/{workerId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "LOCAL_DIAGNOSTIC_WORKER_DEADLINE_EXCEEDED_V1",
+        "LOCAL_DIAGNOSTIC_WORKER_SCHEMA_LOOP_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "workerId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "OLD_WORKER_FENCED",
+        "NEW_WORKER_GENERATION_READBACK",
+        "NO_PROVIDER_FALLBACK",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER_INSTANCE_V1",
+      "manualFallbackId": "OWNER_DISABLE_DIAGNOSTIC_ROUTE",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 60000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "672859ed60812d57bf24b59d2011901d5fcc9b0785b61e49d337d0668025e392",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "DIAGNOSTIC_WORKER_LOCAL_ONLY",
+        "NO_EFFECT_IN_FLIGHT",
+        "NO_ACTIVE_WORKER_LEASE"
+      ],
+      "quietPeriodMs": 21600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "WORKER_READBACK_BEFORE",
+        "LEASE_FENCE_RECEIPT",
+        "WORKER_READBACK_AFTER",
+        "CASE_CHECKPOINT_REFERENCE"
+      ],
+      "requiredTelemetryIds": [
+        "WORKER_LEASE_EPOCH",
+        "WORKER_DEADLINE",
+        "WORKER_SCHEMA_FAILURE_COUNT"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "ROTATE_DIAGNOSTIC_PROCESS_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "LOCAL_DIAGNOSTIC_WORKER",
+          "selectorParameter": "workerId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "STOP_REPLACEMENT_AND_PRESERVE_CASE",
+      "runbookId": "AI_OPS_RUNBOOK_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "ae47dbe431ffc3a55e5c1b568e7242b962191f7ec55af9203760673a95b8e000",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_ROTATE_STUCK_LOCAL_DIAGNOSTIC_WORKER"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "workerId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "leaseEpoch",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 60000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumRuntimeMs",
+          "required": true,
+          "valueType": "DURATION_MS"
+        }
+      ],
+      "unsignedPayloadDigest": "672859ed60812d57bf24b59d2011901d5fcc9b0785b61e49d337d0668025e392"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "DIAGNOSTIC_BUNDLE/{caseId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "DIAGNOSTIC_EVIDENCE_REQUESTED_V1",
+        "INCIDENT_EVIDENCE_INCOMPLETE_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "caseId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "BUNDLE_HASH_READBACK",
+        "BUNDLE_BYTE_BOUND_RESPECTED",
+        "REDACTION_PROOF_PRESENT",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE_INSTANCE_V1",
+      "manualFallbackId": "OWNER_COLLECT_DIAGNOSTIC_REFERENCES",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 40000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "406f4138d33ae6a50693e32b21ebef0db2053c151abf9f308ed72c20c615666c",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "CASE_ADMITTED",
+        "EVIDENCE_POINTERS_VALID",
+        "REDACTION_POLICY_AVAILABLE"
+      ],
+      "quietPeriodMs": 7200000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 2,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "CASE_REFERENCE",
+        "WINDOW_BOUNDS",
+        "BUNDLE_HASH",
+        "REDACTION_RECEIPT"
+      ],
+      "requiredTelemetryIds": [
+        "BUNDLE_BYTE_COUNT",
+        "BUNDLE_POINTER_COUNT",
+        "REDACTION_COUNT"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "COLLECT_REDACTED_POINTERS_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "DIAGNOSTIC_EVIDENCE_BUNDLE",
+          "selectorParameter": "caseId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "DISCARD_UNVERIFIED_BUNDLE",
+      "runbookId": "AI_OPS_RUNBOOK_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "7b1d6088a4ab4ab230fe56c690622eb0b4f2b1686b27b00b1762feb94ffc6840",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_COLLECT_BOUNDED_DIAGNOSTIC_BUNDLE"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "caseId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 9007199254740991,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "windowStartMs",
+          "required": true,
+          "valueType": "UTC_MILLIS"
+        },
+        {
+          "maximum": 9007199254740991,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "windowEndMs",
+          "required": true,
+          "valueType": "UTC_MILLIS"
+        },
+        {
+          "maximum": 32000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumBytes",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "406f4138d33ae6a50693e32b21ebef0db2053c151abf9f308ed72c20c615666c"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "READ_ONLY_RECONCILIATION/{reconciliationScopeId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "READ_ONLY_RECONCILIATION_STALE_V1",
+        "READ_ONLY_RECONCILIATION_QUERY_FAILED_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "reconciliationScopeId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "QUERY_RECEIPT_READBACK",
+        "RECONCILIATION_REVISION_UNCHANGED",
+        "NO_PRIVATE_CREDENTIAL_EXPOSURE",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY_INSTANCE_V1",
+      "manualFallbackId": "OWNER_RUN_REGISTERED_READ_ONLY_QUERY",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 30000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "62bbbe5cb9f0ceecb72f08016b902cc822a579f89bb12fe6aaa67eca28dadf44",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "READ_ONLY_QUERY_REGISTERED",
+        "RECONCILIATION_OWNER_CONFIRMED",
+        "NO_MUTATION_CAPABILITY"
+      ],
+      "quietPeriodMs": 21600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "QUERY_REGISTRATION",
+        "OWNER_READBACK_BEFORE",
+        "QUERY_RECEIPT",
+        "OWNER_READBACK_AFTER"
+      ],
+      "requiredTelemetryIds": [
+        "RECONCILIATION_QUERY_DURATION",
+        "RECONCILIATION_RESULT_COUNT",
+        "RECONCILIATION_REVISION"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "QUERY_AND_READBACK_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "READ_ONLY_RECONCILIATION_QUERY",
+          "selectorParameter": "reconciliationScopeId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "ABANDON_QUERY_AND_PRESERVE_UNKNOWN",
+      "runbookId": "AI_OPS_RUNBOOK_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "da33c1beee9c6ce5cfe923f51939e870146ca3154d031e0840a03b7dca8d7367",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_RERUN_SAFE_READ_ONLY_RECONCILIATION_QUERY"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "reconciliationScopeId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 1000000000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "expectedRevision",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        },
+        {
+          "maximum": 10000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumRecords",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "62bbbe5cb9f0ceecb72f08016b902cc822a579f89bb12fe6aaa67eca28dadf44"
+    },
+    {
+      "actionClass": "A",
+      "actionId": "REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "authorityCreated": false,
+      "conflictKeys": [
+        "LOCAL_OBSERVATION_SUBSCRIPTION/{subscriptionId}"
+      ],
+      "credentialAccessPermitted": false,
+      "effectOwnerId": "PRODUCT_ASSURANCE_REMEDIATION",
+      "effectOwnerInsertionRequestId": "AIOPS-IR-REMEDIATION-010",
+      "effectPermitted": false,
+      "eligibleFingerprintPatterns": [
+        "LOCAL_OBSERVATION_SUBSCRIPTION_LOST_V1",
+        "LOCAL_OBSERVATION_CURSOR_STALLED_V1"
+      ],
+      "executionBindingState": "NOT_WIRED",
+      "expiresAtMs": 1815696000000,
+      "fencingRequired": true,
+      "graduationTargetInstanceId": "AI_OPS_GRADUATION_TARGET_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_V1",
+      "idempotencyKeyFields": [
+        "caseId",
+        "actionId",
+        "subscriptionId",
+        "policyRevision"
+      ],
+      "identityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "82c6ca2b6a166a512a61e978f5d9afb86dd7c1d6",
+        "path": "AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+        "readOnly": true,
+        "sha256": "f177b6f2fcbb4668303996bfc50cf0517e1888fa62908675fdca2a4937b02cb7",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "independentPostconditionIds": [
+        "OBSERVATION_CURSOR_ADVANCED",
+        "OBSERVATION_OWNER_READBACK_READY",
+        "DESIRED_CAPITAL_STATE_UNCHANGED",
+        "NO_CAPITAL_EFFECT"
+      ],
+      "leaseRequired": true,
+      "liveExecutionState": "LIVE_EXECUTION_NOT_IMPLEMENTED",
+      "manifestInstanceId": "AI_OPS_RUNBOOK_MANIFEST_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION_INSTANCE_V1",
+      "manualFallbackId": "OWNER_RECREATE_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "maximumAttempts": 1,
+      "maximumBlastRadiusResources": 1,
+      "maximumDurationMs": 20000,
+      "maximumEffects": 1,
+      "networkPermitted": false,
+      "owner": "PRODUCT_ASSURANCE_REMEDIATION_OWNER_REQUIRED",
+      "ownerBindingState": "MISSING_REQUIRED",
+      "ownerSignature": {
+        "algorithm": null,
+        "authorityCreated": false,
+        "expiresAtMs": null,
+        "keyReference": null,
+        "schema": "AI_OPS_OWNER_SIGNATURE_PLACEHOLDER_V1",
+        "signatureBytesBase64Url": null,
+        "signatureState": "OWNER_SIGNATURE_REQUIRED",
+        "signedAtMs": null,
+        "signedPayloadDigest": "26c9f1b43182cd8d34ba22859e31048c89880a1c2ed665a172742b969f339fcc",
+        "signerIdentityId": null,
+        "signerRole": "AI_OPS_OWNER"
+      },
+      "portBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+      "preconditionIds": [
+        "SHADOW_MODE",
+        "OBSERVATION_OWNER_CONFIRMED",
+        "LOCAL_SUBSCRIPTION_ONLY",
+        "DESIRED_CAPITAL_STATE_UNCHANGED"
+      ],
+      "quietPeriodMs": 21600000,
+      "recurrenceThreshold": {
+        "escalationClass": "B",
+        "maximumCount": 1,
+        "maximumRatePermillion": 5000
+      },
+      "registrationState": "UNSIGNED_INACTIVE",
+      "reliabilityDraft": {
+        "branch": "aiops-prestage-20260714",
+        "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+        "gitBlobSha1": "4097bb6a5234f4c5dc456dac4c9928e7ef3266c5",
+        "path": "AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+        "readOnly": true,
+        "sha256": "12196c54cc5cb81888b59fd0e388df129a79bc69a30c1d8e88421158ea537269",
+        "status": "DRAFT-REQUIRES-OWNER-SIGNATURE"
+      },
+      "requiredEvidenceIds": [
+        "SUBSCRIPTION_READBACK_BEFORE",
+        "CURSOR_BEFORE",
+        "CURSOR_AFTER",
+        "SUBSCRIPTION_READBACK_AFTER"
+      ],
+      "requiredTelemetryIds": [
+        "OBSERVATION_CURSOR",
+        "OBSERVATION_DELIVERY_COUNT",
+        "OBSERVATION_GAP_COUNT"
+      ],
+      "resourceSelectors": [
+        {
+          "accessMode": "REPAIR_OBSERVATION_DELIVERY_ONLY",
+          "capitalMutationAllowed": false,
+          "maximumResources": 1,
+          "resourceKind": "LOCAL_OBSERVATION_SUBSCRIPTION",
+          "selectorParameter": "subscriptionId"
+        }
+      ],
+      "revision": 1,
+      "revocationState": "UNSIGNED_INACTIVE",
+      "rollbackOrCompensationId": "STOP_REPAIR_AND_PRESERVE_SUBSCRIPTION_GAP",
+      "runbookId": "AI_OPS_RUNBOOK_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION",
+      "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCE_V1",
+      "selectorAuthority": "RECOMMEND_ONLY",
+      "selectorIdentityId": "aiops-shadow-runtime-diagnostician",
+      "selectorIdentityRole": "RUNTIME_DIAGNOSTICIAN",
+      "selectorProviderState": "NOT_CONFIGURED",
+      "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
+      "sourceTemplateDigest": "1f12724cecef1b1af06569ffc8520d270af18b17dc1b72b38409c90407adab56",
+      "triggerIds": [
+        "AI_OPS_TRIGGER_REPAIR_LOCAL_OBSERVATION_SUBSCRIPTION"
+      ],
+      "typedParameters": [
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "subscriptionId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "observationSourceId",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": null,
+          "maximumLength": 192,
+          "minimum": null,
+          "parameterId": "replayCursorRef",
+          "required": true,
+          "valueType": "BOUNDED_ID"
+        },
+        {
+          "maximum": 10000,
+          "maximumLength": null,
+          "minimum": 0,
+          "parameterId": "maximumReplayEvents",
+          "required": true,
+          "valueType": "NONNEGATIVE_INTEGER"
+        }
+      ],
+      "unsignedPayloadDigest": "26c9f1b43182cd8d34ba22859e31048c89880a1c2ed665a172742b969f339fcc"
+    }
+  ],
+  "provenance": {
+    "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",
+    "donorLineage": {
+      "a1ImplementationRevision": "21ac214798bea6402c50ece3e026c00df4d582d8",
+      "a1SealedRevision": "83c1624d4a582eace27321182de35c372babbc1a",
+      "a1xImplementationRevision": "8c8bcf27c915c12946a7913a9c55351124b8180f",
+      "originBaseRevision": "03857dcdaff8d8b12627d27ddcc97505da1f2f86",
+      "sealedTipRevision": "e65cdca872e4cd6e35a8e18c12b71f16597c80d3"
+    },
+    "generatorId": "ai-ops-a1-contract-generator",
+    "generatorVersion": 2,
+    "hashProfile": "AI_OPS_CANONICAL_JSON_SHA256_V1",
+    "s6OwnerLawRevision": "c57610cb5f7d56efb61e53ae27057fbe92a6a2f6",
+    "shadowStatus": "SHADOW_SPECULATIVE",
+    "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
+  },
+  "revision": 1,
+  "schema": "AI_OPS_RUNBOOK_MANIFEST_INSTANCES_V1",
+  "state": "SHADOW_SPECULATIVE",
+  "version": 1
+}

@@ -357,7 +357,8 @@
 .pcr-surface-end em { color: var(--text-2); font-weight: 560; }
 .pcr-surface-end em.truth-synthetic-only { border-color: color-mix(in srgb, #d98a25 60%, var(--line-2)); color: #7a4b08; }
 [data-theme="dark"] .pcr-surface-end em.truth-synthetic-only { color: #f0b45d; }
-.pcr-surface-end em.truth-live-public { color: var(--up); }
+.pcr-surface-end em.truth-live-public { color: var(--text-2); }
+.pcr-surface[data-surface-ready="true"] .pcr-surface-end em.truth-live-public { color: var(--up); }
 .pcr-surface-end em.truth-wired { color: var(--accent); }
 .pcr-surface-end em.truth-blocked, .pcr-surface-end em.truth-missing, .pcr-surface-end em.truth-unavailable { color: var(--down); }
 .pcr-surface-end em.truth-unknown { color: var(--muted); }

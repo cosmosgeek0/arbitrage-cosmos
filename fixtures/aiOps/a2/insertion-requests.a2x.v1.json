@@ -1,0 +1,107 @@
+{
+  "schema": "AI_OPS_A2_PORT_INSERTION_DEDUP_MAP_V1",
+  "version": 1,
+  "targetBaseSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "sourceArtifactSha": "ca1fb094e19d0ccc6a8397ee08a65a662d051bd3",
+  "sourceExtensionSha": "9ae6c22012e7c23ebebff827b527d4d64a263884",
+  "registryCommitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+  "authorityCreated": false,
+  "mappings": [
+    {
+      "legacyRequestId": "A2-I00-CONTRACT-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-COMPOSITION-001", "AIOPS-IR-ROUTES-002", "AIOPS-IR-ASSURANCE-011"],
+      "referenceOnlyRowIds": ["AIOPS-IR-BARREL-018"]
+    },
+    {
+      "legacyRequestId": "A2-I00-PERSIST-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-AUDIT-021"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2-I00-QUEUE-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-PERSISTENCE-003"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2-I00-INCIDENT-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-INCIDENT-019", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-ROUTES-002", "AIOPS-IR-EVENTS-009"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2-I00-EVIDENCE-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-ASSURANCE-011", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-AUDIT-021"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2-I00-MATERIAL-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-EVENTS-009"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2-I00-EFFECT-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-REMEDIATION-010"],
+      "referenceOnlyRowIds": ["AIOPS-IR-CONTROLS-008"]
+    },
+    {
+      "legacyRequestId": "A2-I00-PROVIDER-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-TELEMETRY-012", "AIOPS-IR-PERSISTENCE-003"],
+      "referenceOnlyRowIds": ["AIOPS-IR-EGRESS-016", "AIOPS-IR-CONFIG-025"]
+    },
+    {
+      "legacyRequestId": "A2-I00-SIGNING-001",
+      "disposition": "NO_ONE_TO_ONE_REGISTRY_ROW",
+      "primaryRowIds": ["AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-AUDIT-021"],
+      "referenceOnlyRowIds": ["AIOPS-IR-AUTH-004"]
+    },
+    {
+      "legacyRequestId": "A2-I00-GATES-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-PACKAGE-006", "AIOPS-IR-MANAGED-INVENTORY-022", "AIOPS-IR-TEST-MOUNT-026"],
+      "referenceOnlyRowIds": ["AIOPS-IR-DOCS-017", "AIOPS-IR-BARREL-018"]
+    },
+    {
+      "legacyRequestId": "A2X-I00-INTAKE-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-INCIDENT-019", "AIOPS-IR-EVENTS-009", "AIOPS-IR-COMPOSITION-001", "AIOPS-IR-ROUTES-002"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2X-I00-PERSIST-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-PERSISTENCE-003"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2X-I00-ESCALATION-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-NOTIFY-014", "AIOPS-IR-REMEDIATION-010", "AIOPS-IR-INCIDENT-019", "AIOPS-IR-TELEMETRY-012", "AIOPS-IR-APPROVAL-023"],
+      "referenceOnlyRowIds": []
+    },
+    {
+      "legacyRequestId": "A2X-A3-PROVIDER-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-TELEMETRY-012", "AIOPS-IR-PERSISTENCE-003"],
+      "referenceOnlyRowIds": ["AIOPS-IR-EGRESS-016", "AIOPS-IR-CONFIG-025"]
+    },
+    {
+      "legacyRequestId": "A2X-I00-TRUST-001",
+      "disposition": "NO_ONE_TO_ONE_REGISTRY_ROW",
+      "primaryRowIds": ["AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-AUDIT-021"],
+      "referenceOnlyRowIds": ["AIOPS-IR-AUTH-004"]
+    },
+    {
+      "legacyRequestId": "A2X-I00-GATES-001",
+      "disposition": "DEDUPLICATED_TO_CANONICAL_REGISTRY",
+      "primaryRowIds": ["AIOPS-IR-PACKAGE-006", "AIOPS-IR-MANAGED-INVENTORY-022", "AIOPS-IR-TEST-MOUNT-026"],
+      "referenceOnlyRowIds": ["AIOPS-IR-DOCS-017", "AIOPS-IR-BARREL-018"]
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 {
-  "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V1",
-  "recordedAtUtc": "2026-07-14T12:38:21Z",
+  "schemaVersion": "I00_LIVING_DIRECTOR_INPUT_ACCEPTANCE_V2",
+  "recordedAtUtc": "2026-07-16T00:00:00Z",
   "ruling": "D-LAUNCH-7",
   "rulingCommit": "bdb29e37fb9b152aa1b7e1063ca892cd405c6245",
+  "candidateFreezeAuthorization": "D-LAUNCH-62",
   "sourceRef": "current-main",
-  "sourceCutoffCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
+  "sourceCutoffCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+  "sourceCutoffTree": "3d2b8889e2aaf4a590993467a5bb3ecdf13c119b",
   "mode": "LATEST_CURRENT_MAIN_TOUCH",
   "historicalPacketPinsPreserved": true,
   "finalRealAdapterRepinRequired": false,
@@ -14,18 +16,35 @@
     {
       "path": "QL_DIRECTOR_STATE.md",
       "historicalPacketSha256": "dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278",
-      "observedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
-      "observedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
-      "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+      "authorizedLatestCommit": "2a832750f83137a8912c9f70e0b634b856f10aab",
+      "authorizedGitBlob": "20d2ab2f2e11c09a60ceb247ae14d9a80d7d93d5",
+      "authorizedSha256": "95d4c2766451b7e126dc9cb411d68667a0fd1d8736f95d5cdff86015448074fd"
     },
     {
       "path": "QL_PARALLEL_DAG.md",
       "historicalPacketSha256": "275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546",
-      "observedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
-      "observedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
-      "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+      "authorizedLatestCommit": "e7e5acdc2b52f86e000b1498b5a6c6452db3149b",
+      "authorizedGitBlob": "6ff4da20b0d0cf9fc375144977acfe94e449dcae",
+      "authorizedSha256": "89a13c8a6a6b00a834d3dc586cc45c29eb4f7f32b2106fb5dea10fd2be3742a0"
     }
   ],
+  "historicalDLaunch7Acceptance": {
+    "sourceCutoffCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
+    "livingDirectorInputs": [
+      {
+        "path": "QL_DIRECTOR_STATE.md",
+        "observedLatestCommit": "d78be24f4da14632c857ee250b62e3fec33c2743",
+        "observedGitBlob": "8116ec491fc7fc863dbcb4015be4cdb105a5a1bc",
+        "observedSha256": "77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc"
+      },
+      {
+        "path": "QL_PARALLEL_DAG.md",
+        "observedLatestCommit": "ac01b5e43830bc681ee7e251749c4d1fab210029",
+        "observedGitBlob": "701b3f263e73bf659ba4319c5839e798c1ce7abb",
+        "observedSha256": "cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec"
+      }
+    ]
+  },
   "ownerDirectives": [
     {
       "path": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",

@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 1,
+  "packetId": "PORT-RUNBOOK",
+  "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+  "injectedClockStartMs": 1800000000000,
+  "receiptContract": {
+    "resultValues": ["PASS", "FAIL"],
+    "truthLabel": "SYNTHETIC_ONLY",
+    "authority": "SYNTHETIC_TEST",
+    "requiredZeroEffectFields": [
+      "capitalEffect",
+      "notionalEffect",
+      "credentialReads",
+      "networkAttempts",
+      "orderCalls",
+      "externalMutations",
+      "deploymentCalls"
+    ],
+    "forbiddenFields": ["acceptanceStatus", "candidateReady", "productionReady"]
+  },
+  "drills": [
+    {
+      "id": "source-loss",
+      "title": "Public source loss and sequence discontinuity",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/source-loss.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/01-source-loss.md"],
+      "ownerAnchors": [
+        "server/src/systemIntegration/adapters/probes.ts#probeRuntimeSource",
+        "server/src/intelligenceRuntime/contracts/sourceLifecycle.ts",
+        "server/src/systemIntegration/supervisor"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "PROJECTION_OWNER", "owner": "SYSTEM_INTEGRATION", "module": "server/src/systemIntegration/adapters/probes.ts", "operations": ["probeRuntimeSource"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-09"]}
+      ],
+      "evidenceCheckIds": ["sourceLossBlocks", "sequenceGapDegrades", "resyncRequiredRetained", "noFalseLiveLabel", "stalePublicBlocks"],
+      "contractBindingIds": ["unavailableBlock", "sequenceGap", "resync", "unavailableTruth"],
+      "scenarioIds": ["I00-09"],
+      "expectedTerminals": ["BLOCKED_STALE_PUBLIC"],
+      "assertionIds": [
+        "SOURCE_LOSS_BLOCKS",
+        "SEQUENCE_GAP_DEGRADES",
+        "RESYNC_REQUIRED_RETAINED",
+        "NO_FALSE_LIVE_LABEL",
+        "STALE_PUBLIC_BLOCKS_NEW_EXPOSURE",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "INTELLIGENCE_RUNTIME",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "SystemSupervisorReadModel@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "health", "fieldId": "source-event-processing-age"}, {"surfaceId": "dashboard", "fieldId": "root-blocker"}, {"surfaceId": "control-room", "fieldId": "machine-graph"}],
+        "sourceFieldPaths": ["components[public-spot-source].readiness", "components[public-spot-source].freshness", "components[public-spot-source].blockerCodes", "firstRootBlockerComponentId", "attentionQueue"],
+        "expectedFailureState": "BLOCKED_OR_DEGRADED",
+        "expectedReasonCodes": ["SOURCE_SNAPSHOT_UNAVAILABLE", "SEQUENCE_GAP", "PUBLIC_TRUTH_STALE"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No physical socket or source process is started.", "The landed public-source startup-egress admission owner is not exercised; this drill proves only synthetic source projection and accepted I00 scenario behavior.", "No generic connection-loss corpus is created; PORT-REPLAY owns that corpus if separately accepted."]
+    },
+    {
+      "id": "stale-truth",
+      "title": "Stale public and private truth remains unusable",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/stale-truth.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/01-source-loss.md"],
+      "ownerAnchors": [
+        "server/src/foundation/contracts/time.ts#evaluateFreshness",
+        "server/src/systemIntegration/adapters/probes.ts#probeRuntimeSource",
+        "server/src/systemIntegration/persistence/restart.ts"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "PROJECTION_OWNER", "owner": "SYSTEM_INTEGRATION", "module": "server/src/systemIntegration/adapters/probes.ts", "operations": ["probeRuntimeSource"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-09", "I00-10", "I00-11"]}
+      ],
+      "evidenceCheckIds": ["staleSourceDegraded", "staleSourceUnavailable", "sourceTimeOwnsAge", "privateStaleBlocks", "recoveryRemainsVisible", "qStaleAbstains"],
+      "contractBindingIds": ["staleDegrades", "staleUnavailable", "sourceTimeOwnsAge"],
+      "scenarioIds": ["I00-09", "I00-10", "I00-11"],
+      "expectedTerminals": ["BLOCKED_STALE_PUBLIC", "BLOCKED_STALE_PRIVATE_RECOVERY_VISIBLE", "Q_STALE_ABSTAIN"],
+      "assertionIds": [
+        "STALE_SOURCE_DEGRADED",
+        "STALE_SOURCE_UNAVAILABLE",
+        "SOURCE_TIME_OWNS_AGE",
+        "PRIVATE_STALE_BLOCKS",
+        "RECOVERY_REMAINS_VISIBLE",
+        "Q_STALE_ABSTAINS",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "INTELLIGENCE_RUNTIME",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "SystemSupervisorReadModel@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "health", "fieldId": "source-event-processing-age"}, {"surfaceId": "dashboard", "fieldId": "overall-posture"}, {"surfaceId": "control-room", "fieldId": "exposure-state"}],
+        "sourceFieldPaths": ["components[].sourceTimestamp", "components[].freshness", "components[].truthLabel", "summaries.reconciliation.blocksNewExposure", "attentionQueue"],
+        "expectedFailureState": "STALE_AND_BLOCKED",
+        "expectedReasonCodes": ["PUBLIC_TRUTH_STALE", "PRIVATE_TRUTH_STALE", "Q_STALE"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["Private truth is a committed synthetic owner scenario; no private API is called."]
+    },
+    {
+      "id": "restart-during-ambiguity",
+      "title": "Restart preserves ambiguity and blocks admission until reconciliation",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/restart-during-ambiguity.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/02-recovery-required.md"],
+      "ownerAnchors": [
+        "server/src/systemIntegration/persistence/restart.ts",
+        "server/src/systemIntegration/controls/service.ts",
+        "server/src/systemIntegration/composition"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "CANONICAL_OWNER", "owner": "SYSTEM_INTEGRATION", "module": "server/src/systemIntegration/persistence/restart.ts", "operations": ["createInitialCheckpointState", "prepareStartupState", "withRestartTruth", "upsertDryRunExecutionReference", "upsertReconciliationReference", "evaluateRestartBarrier"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-12", "I00-13", "I00-15", "I00-17"]}
+      ],
+      "evidenceCheckIds": ["ambiguousReferenceSurvives", "startupResetsTruthUnknown", "reconciliationRequiredBlocks", "supervisionContinues", "noDuplicateSubmission", "readyOnlyAfterReconciliation"],
+      "contractBindingIds": ["preservesReferences", "resetsTruthUnknown", "reconciliationBlocks", "supervisionContinues"],
+      "scenarioIds": ["I00-12", "I00-13", "I00-15", "I00-17"],
+      "expectedTerminals": ["RECONCILED_NO_DUPLICATE", "RECOVERY_REQUIRED_ONE_LEG", "READY_AFTER_RECONCILIATION", "RECONCILED_AFTER_DB_FAILURE"],
+      "assertionIds": [
+        "AMBIGUOUS_REFERENCE_SURVIVES_STARTUP",
+        "STARTUP_RESETS_TRUTH_UNKNOWN",
+        "RECONCILIATION_REQUIRED_BLOCKS",
+        "SUPERVISION_CONTINUES",
+        "NO_DUPLICATE_SUBMISSION",
+        "READY_ONLY_AFTER_RECONCILIATION",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "SYSTEM_INTEGRATION",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "RestartBarrierProjection+SystemSupervisorReadModel@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "control-room", "fieldId": "ambiguity-state"}, {"surfaceId": "control-room", "fieldId": "recovery-state"}, {"surfaceId": "dashboard", "fieldId": "attention"}],
+        "sourceFieldPaths": ["restartBarrier.canOpenOrIncrease", "restartBarrier.supervisionContinues", "restartBarrier.reasonCodes", "restartBarrier.reconciliationRequiredPlanIds", "control.generation"],
+        "expectedFailureState": "RECOVERY_REQUIRED",
+        "expectedReasonCodes": ["DRY_RUN_EXECUTION_RECONCILIATION_REQUIRED", "RECONCILIATION_BLOCKS_NEW_EXPOSURE", "PUBLIC_SOURCE_TRUTH_UNKNOWN", "ACCOUNT_TRUTH_UNKNOWN", "RECONCILIATION_TRUTH_UNKNOWN"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No process, service, router, or startup path is invoked.", "This drill proves the synthetic checkpoint barrier only; it does not execute the landed canonical restart-truth refresh coordinator or its production process path.", "No generic restart-storm corpus is created; PORT-REPLAY owns it if separately accepted."]
+    },
+    {
+      "id": "watchdog-failure",
+      "title": "Independent watchdog and delivery failure stay visible",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/watchdog-failure.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/04-watchdog-page-delivery.md"],
+      "ownerAnchors": [
+        "ops/live/bin/watchdog.sh",
+        "server/src/productAssurance/projections/operationalTruth.ts#projectIndependentSentinel",
+        "server/src/productAssurance/projections/operationalTruth.ts#evaluateWatchdogDelivery"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "PROJECTION_OWNER", "owner": "PRODUCT_ASSURANCE", "module": "server/src/productAssurance/projections/operationalTruth.ts", "operations": ["projectIndependentSentinel", "evaluateWatchdogDelivery"]},
+        {"role": "MOUNT_OWNER", "owner": "PRODUCT_INTEGRATION", "module": "server/src/productIntegration/runtime/managedInventory.ts", "operations": ["buildProductRuntimeManagedInventory"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-20"]}
+      ],
+      "evidenceCheckIds": ["independentSentinelFails", "disagreementVisible", "deliveryTimeoutFails", "missingDeliveryUnknown", "incidentFloodGrouped", "materialEventsRetained", "ownersUnmounted"],
+      "contractBindingIds": ["independentSentinelFails", "disagreementVisible", "deliveryTimeoutFails", "missingDeliveryUnknown", "ownersUnmounted"],
+      "scenarioIds": ["I00-20"],
+      "expectedTerminals": ["ONE_INCIDENT_100_EVENTS"],
+      "assertionIds": [
+        "INDEPENDENT_SENTINEL_FAILS",
+        "SELF_REPORT_DISAGREEMENT_VISIBLE",
+        "DELIVERY_TIMEOUT_FAILS",
+        "MISSING_DELIVERY_UNKNOWN",
+        "INCIDENT_FLOOD_GROUPED",
+        "MATERIAL_EVENTS_RETAINED",
+        "WATCHDOG_REMAINS_UNMOUNTED",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "OPS_EXTERNAL_WATCHDOG",
+        "projectionOwner": "PRODUCT_ASSURANCE",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "ProductRuntimeSupervisorEnvelope@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "health", "fieldId": "backup-release-watchdog"}, {"surfaceId": "dashboard", "fieldId": "attention"}],
+        "sourceFieldPaths": ["managedInventory.entries[identity=external-watchdog].inventoryState", "managedInventory.entries[identity=external-watchdog].reasonCode", "managedInventory.entries[identity=notification-incident-router].inventoryState", "dashboard.attentionQueue", "dashboard.traceIndex"],
+        "expectedFailureState": "MISSING_OR_NOT_CONFIGURED",
+        "expectedReasonCodes": ["INDEPENDENT_SENTINEL_FAILED", "WATCHDOG_DELIVERY_TIMEOUT", "WATCHDOG_DELIVERY_RECEIPT_MISSING", "EXTERNAL_WATCHDOG_MANAGED_COMPONENT_MISSING", "INCIDENT_OWNER_NOT_CONFIGURED"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No watchdog process, systemctl, probe socket, webhook, page, or real destination is invoked.", "PORT-OPS owns watchdog templates and harnesses and PORT-OBS owns paging and incident view contracts if those lanes are separately accepted."]
+    },
+    {
+      "id": "rollback",
+      "title": "Rollback refusal preserves the current release",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/rollback.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/05-rollback-restore.md"],
+      "ownerAnchors": [
+        "ops/i00/bin/rollback-switch.sh",
+        "ops/live/bin/rollback.sh",
+        "server/src/systemIntegration/ops"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-21"]}
+      ],
+      "evidenceCheckIds": ["preflightMismatchRejected", "currentReleasePreserved", "noForcePathInvoked", "noServiceOrDeploymentCall"],
+      "contractBindingIds": [],
+      "scenarioIds": ["I00-21"],
+      "expectedTerminals": ["PREFLIGHT_REJECTED_CURRENT_RELEASE_ACTIVE"],
+      "assertionIds": [
+        "PREFLIGHT_MISMATCH_REJECTED",
+        "CURRENT_RELEASE_PRESERVED",
+        "NO_FORCE_PATH_INVOKED",
+        "NO_SERVICE_OR_DEPLOYMENT_CALL",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "OPS_ROLLBACK",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "ProductRuntimeSupervisorEnvelope@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "control-room", "fieldId": "deployment-frozen"}, {"surfaceId": "control-room", "fieldId": "ledger-schema-compatibility"}, {"surfaceId": "dashboard", "fieldId": "attention"}],
+        "sourceFieldPaths": ["opsReadback.deploymentFrozen", "opsReadback.exposureState", "opsReadback.ambiguityState", "opsReadback.recoveryState", "opsReadback.currentSchemaVersion", "opsReadback.rollbackFloor", "dashboard.summaries.ledger"],
+        "expectedFailureState": "PREFLIGHT_BLOCKED_CURRENT_RELEASE_PRESERVED",
+        "expectedReasonCodes": ["RELEASE_SHA_MISMATCH"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No release link, service, deployment, host, or vendor is mutated.", "Executable ops mechanics remain adopted and PORT-OPS owns new fake validation harnesses if separately accepted."]
+    },
+    {
+      "id": "restore",
+      "title": "Isolated restore leaves the production-like fixture unchanged",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/restore.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/05-rollback-restore.md"],
+      "ownerAnchors": [
+        "ops/i00/bin/restore-drill-verify.sh",
+        "ops/live/bin/restore.sh",
+        "server/src/systemIntegration/ops"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "MOUNT_OWNER", "owner": "PRODUCT_INTEGRATION", "module": "server/src/productIntegration/runtime/managedInventory.ts", "operations": ["buildProductRuntimeManagedInventory"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-22"]}
+      ],
+      "evidenceCheckIds": ["isolatedRestoreVerified", "productionFixtureUnchanged", "productionRestoreBlocked", "backupRestoreOwnerMissing"],
+      "contractBindingIds": ["backupRestoreOwnerMissing"],
+      "scenarioIds": ["I00-22"],
+      "expectedTerminals": ["ISOLATED_RESTORE_NO_PRODUCTION_MUTATION"],
+      "assertionIds": [
+        "ISOLATED_RESTORE_VERIFIED",
+        "PRODUCTION_FIXTURE_UNCHANGED",
+        "PRODUCTION_RESTORE_REMAINS_BLOCKED",
+        "BACKUP_RESTORE_OWNER_REMAINS_MISSING",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "OPS_BACKUP_RESTORE",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "ProductRuntimeSupervisorEnvelope@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "health", "fieldId": "backup-release-watchdog"}, {"surfaceId": "control-room", "fieldId": "ops-interlock"}, {"surfaceId": "dashboard", "fieldId": "attention"}],
+        "sourceFieldPaths": ["managedInventory.entries[identity=backup-restore].inventoryState", "managedInventory.entries[identity=backup-restore].reasonCode", "opsReadback.currentSchemaVersion", "opsReadback.rollbackFloor", "dashboard.summaries.ledger"],
+        "expectedFailureState": "SYNTHETIC_ISOLATED_ONLY_OWNER_MISSING",
+        "expectedReasonCodes": ["BACKUP_RESTORE_MANAGED_COMPONENT_MISSING"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No SQLite backup or restore command is invoked by PORT-RUNBOOK; accepted owners and separately accepted PORT-OPS receipts remain dependencies.", "No production restore readiness is claimed."]
+    },
+    {
+      "id": "reconciliation-failure",
+      "title": "Partial and ambiguous reconciliation preserves exposure",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/reconciliation-failure.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md", "ownerPrep/drills/02-recovery-required.md"],
+      "ownerAnchors": [
+        "server/src/foundation/reconciliation/engine.ts#reconcileExecutionState",
+        "server/src/systemIntegration/persistence/restart.ts",
+        "server/src/systemIntegration/supervisor"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-12", "I00-13", "I00-17"]}
+      ],
+      "evidenceCheckIds": ["oneLegReconciliationPartial", "exposureRemainsNonzero", "newEntriesHalted", "recoveryVisible", "noDuplicateSubmission", "reconciliationPrecedesReady"],
+      "contractBindingIds": ["noExecutionAuthority", "recommendationsOnly"],
+      "scenarioIds": ["I00-12", "I00-13", "I00-17"],
+      "expectedTerminals": ["RECONCILED_NO_DUPLICATE", "RECOVERY_REQUIRED_ONE_LEG", "RECONCILED_AFTER_DB_FAILURE"],
+      "assertionIds": [
+        "ONE_LEG_RECONCILIATION_PARTIAL",
+        "EXPOSURE_REMAINS_NONZERO",
+        "NEW_ENTRIES_HALTED",
+        "RECOVERY_VISIBLE",
+        "NO_DUPLICATE_SUBMISSION",
+        "RECONCILIATION_PRECEDES_READY",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "BACKEND_FOUNDATION_RECONCILIATION",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "SystemSupervisorReadModel.summaries.reconciliation@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "control-room", "fieldId": "recovery-state"}, {"surfaceId": "control-room", "fieldId": "exposure-state"}, {"surfaceId": "dashboard", "fieldId": "root-blocker"}],
+        "sourceFieldPaths": ["summaries.reconciliation.status", "summaries.reconciliation.blocksNewExposure", "summaries.reconciliation.recommendation", "summaries.reconciliation.reasonCodes", "components[reconciliation].capitalExposed"],
+        "expectedFailureState": "PARTIAL_OR_AMBIGUOUS_RECOVERY_REQUIRED",
+        "expectedReasonCodes": ["ONE_LEG_EXPOSURE", "ACK_TIMEOUT", "DB_UNAVAILABLE"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["No venue, private source, order, or coordinator port is available.", "The accepted I00 scenario harness supplies synthetic owner observations; PORT-RUNBOOK creates no reconciliation algorithm."]
+    },
+    {
+      "id": "emergency-stop",
+      "title": "Emergency stop engages fail closed and never auto-resumes intake",
+      "classification": "ADAPT_EXISTING",
+      "entrypoint": "test/runbookShadow/drills/emergency-stop.mjs",
+      "preverifyDrafts": ["ownerPrep/drills/00-zero-capital-common-safety.md"],
+      "ownerAnchors": [
+        "server/src/systemIntegration/controls/service.ts#SystemControlService",
+        "server/src/productIntegration/runtime/systemControlCommandOwner.ts",
+        "server/src/foundation/risk/checks.ts#checkKillSwitch"
+      ],
+      "runtimeExecutionPlan": [
+        {"role": "CANONICAL_OWNER", "owner": "SYSTEM_INTEGRATION", "module": "server/src/systemIntegration/controls/service.ts", "operations": ["SystemControlService.mutate"]},
+        {"role": "FOUNDATION_CONTRACT_OWNER", "owner": "FOUNDATION_CONTROL_PLANE", "module": "server/src/foundation/contracts/runtime.ts", "operations": ["LIVE_EXECUTION_BLOCK_CODE"]},
+        {"role": "ACCEPTED_EXECUTABLE_HARNESS", "owner": "I00_ACCEPTANCE_HARNESS", "module": "server/test/i00Acceptance/harness.mjs", "operations": ["I00-14", "I00-18"]}
+      ],
+      "evidenceCheckIds": ["killEngages", "intakePausesAtomically", "exactReplayIdempotent", "riskIncreaseBlocked", "releaseDoesNotResumeIntake", "recoveryRemainsVisible", "liveExecutionBarrierRetained"],
+      "contractBindingIds": ["killAndPauseAsymmetric", "exactReplay", "riskIncreaseBlocked", "liveExecutionBarrier"],
+      "scenarioIds": ["I00-14", "I00-18"],
+      "expectedTerminals": ["KILLED_ADDITIONS_RECOVERY_VISIBLE", "ALREADY_APPLIED"],
+      "assertionIds": [
+        "KILL_ENGAGES",
+        "INTAKE_PAUSES_ATOMICALLY",
+        "EXACT_REPLAY_IDEMPOTENT",
+        "RISK_INCREASE_BLOCKED",
+        "RELEASE_DOES_NOT_RESUME_INTAKE",
+        "RECOVERY_REMAINS_VISIBLE",
+        "LIVE_EXECUTION_BARRIER_RETAINED",
+        "ZERO_EFFECT"
+      ],
+      "projectionContract": {
+        "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+        "truthLabel": "SYNTHETIC_ONLY",
+        "authority": "SYNTHETIC_TEST",
+        "canonicalOwner": "SYSTEM_INTEGRATION",
+        "projectionOwner": "SYSTEM_INTEGRATION",
+        "mountOwner": "PRODUCT_INTEGRATION",
+        "targetSchema": "SystemSupervisorReadModel.control@1",
+        "integrationState": "DIRECTOR_MOUNT_REQUIRED",
+        "surfaceBindings": [{"surfaceId": "control-room", "fieldId": "emergency-controls"}, {"surfaceId": "dashboard", "fieldId": "overall-posture"}, {"surfaceId": "control-room", "fieldId": "control-registry"}],
+        "sourceFieldPaths": ["control.killSwitchEngaged", "control.intakePaused", "control.safeMode", "summaries.execution.barrier", "attentionQueue"],
+        "expectedFailureState": "KILL_ENGAGED_INTAKE_PAUSED",
+        "expectedReasonCodes": ["KILL_SWITCH_ENGAGED", "LIVE_EXECUTION_NOT_IMPLEMENTED"],
+        "insertionRequestIds": ["AIOPS-IR-COCKPIT-015", "AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-TEST-MOUNT-026"]
+      },
+      "limitations": ["Canonical control-service semantics execute through existing bounded test persistence plus packet-local composition and rejection-ledger ports; I00-14 and I00-18 supply additional synthetic scenario evidence.", "No live execution, order, capital, or recovery mutation exists in this drill."]
+    }
+  ]
+}

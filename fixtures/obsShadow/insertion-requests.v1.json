@@ -1,0 +1,159 @@
+{
+  "schemaVersion": "OBS_PORT_INSERTION_REQUEST_CATALOG_V1",
+  "packetPosture": "PORT_PRESTAGE",
+  "authorityEffect": "NONE",
+  "registry": {
+    "branch": "aiops-prestage-20260714",
+    "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "registryPath": "AI_OPS_COLLISION_MAP.md",
+    "registryBlob": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "schemaPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+    "schemaBlob": "042456c58b1cd5b6eb179c0c9c289f6e69d06034"
+  },
+  "dedupDisposition": [
+    {
+      "sourceRequestId": "OBS-IR-001-PAGING-RECEIPT-DETAIL",
+      "disposition": "DEDUP_TO_EXISTING_AIOPS_IR_ROWS",
+      "rowIds": [
+        "AIOPS-IR-NOTIFY-014",
+        "AIOPS-IR-COCKPIT-015"
+      ]
+    },
+    {
+      "sourceRequestId": "OBS-IR-002-INCIDENT-DRILL-RESULT",
+      "disposition": "DEDUP_TO_EXISTING_AIOPS_IR_ROWS",
+      "rowIds": [
+        "AIOPS-IR-INCIDENT-019",
+        "AIOPS-IR-COCKPIT-015"
+      ]
+    },
+    {
+      "sourceRequestId": "OBS-IR-003-ADOPT-EXISTING-OBSERVABILITY-VIEWS",
+      "disposition": "DEDUP_TO_EXISTING_AIOPS_IR_ROWS",
+      "rowIds": [
+        "AIOPS-IR-TELEMETRY-012",
+        "AIOPS-IR-COCKPIT-015"
+      ]
+    },
+    {
+      "sourceRequestId": "OBS-PORT-FOCUSED-TEST-DISCOVERY",
+      "disposition": "DEDUP_TO_EXISTING_AIOPS_IR_ROWS",
+      "rowIds": [
+        "AIOPS-IR-TEST-MOUNT-026"
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-TELEMETRY-012",
+      "status": "DRAFT",
+      "requestedOwner": "FOUNDATION_OBSERVABILITY_AND_SYSTEM_INTEGRATION_SUPERVISOR",
+      "targetSeam": "server/src/foundation/observability/types.ts::DiagnosticsPolicy/DiagnosticsInput/DiagnosticsSnapshot/DiagnosticsResult; derive.ts::deriveDiagnostics; systemIntegration/supervisor/**; productIntegration/runtime/trace.ts; productAssurance/projections/operationalTruth.ts",
+      "reason": "AI queue, drop, lag, provider, case and resource facts need canonical health projection.",
+      "contract": [
+        "Register bounded observations without a second telemetry or health authority."
+      ],
+      "tests": [
+        "Inject missing, stale, future, dropped, saturated and provider-outage evidence",
+        "run core non-degradation soak."
+      ],
+      "expectedBehavior": [
+        "Missing telemetry is MISSING/SILENT",
+        "authority downgrades",
+        "core service remains within signed overhead budgets."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TELEMETRY-012",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-NOTIFY-014",
+      "status": "DRAFT",
+      "requestedOwner": "CANONICAL_NOTIFICATION_OWNER_REQUIRED",
+      "targetSeam": "server/src/index.ts::notificationRoutingSnapshot; GET /api/notification-routing; web/src/lib/notifications.ts; web/src/pages/NotificationsPage.tsx",
+      "reason": "Current surface is in-app routing projection only; no canonical incident-linked external delivery owner exists.",
+      "contract": [
+        "After incident-owner ratification, bind page, acknowledgement, escalation and delivery",
+        "external email, Telegram, WhatsApp and SNS remain NOT_CONFIGURED",
+        "AWS intake remains OWNER_GATED."
+      ],
+      "tests": [
+        "Prove destination acceptance/readback, dedupe, expiry, acknowledgement race and delivery-loss alarm using fake endpoints only."
+      ],
+      "expectedBehavior": [
+        "No external notification is claimed without an owner receipt",
+        "loss and unavailable destinations are operator-visible."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-NOTIFY-014",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-COCKPIT-015",
+      "status": "DRAFT",
+      "requestedOwner": "PRODUCT_CONTROL_ROOM",
+      "targetSeam": "web/src/lib/productIntegration/**; web/src/features/productControlRoom/ProductControlRoom.tsx::ProductControlRoom; ProductControlRoomRoute.tsx::ProductControlRoomRoute; surfaceMounts.ts::SURFACE_MOUNT_CONTRACTS; web/src/App.tsx::PRODUCT_INTEGRATION_ENDPOINTS",
+      "reason": "Accepted A4 views must consume the existing Product client/cursor and server truth.",
+      "contract": [
+        "Bind fixture views to canonical authenticated APIs and durable cursor owner."
+      ],
+      "tests": [
+        "Exercise loading, stale, missing, gap, reconnect, forbidden and cursor-resume states in the rendered app."
+      ],
+      "expectedBehavior": [
+        "Unknown/unavailable remains visible",
+        "no browser recomputation, parallel store, polling client or socket."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-COCKPIT-015",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-INCIDENT-019",
+      "status": "DRAFT",
+      "requestedOwner": "DIRECTOR_RATIFIED_INCIDENT_OWNER_REQUIRED",
+      "targetSeam": "Owner/path MISSING; evidence at server/src/productIntegration/runtime/projection.ts::buildProductRuntimeSupervisorEnvelope",
+      "reason": "Incident identity, grouping, fingerprint, severity and lifecycle have no canonical owner.",
+      "contract": [
+        "Director ratifies one owner",
+        "A2 supplies only a typed admission projection after ratification."
+      ],
+      "tests": [
+        "Prove grouping, split/merge/reopen/close, acknowledgement races, dedupe, persistence and hostile false-green behavior."
+      ],
+      "expectedBehavior": [
+        "INCIDENT_OWNER_NOT_CONFIGURED changes only with owner receipt",
+        "Ledger remains persistence, not policy."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-INCIDENT-019",
+      "authorityCreated": false
+    },
+    {
+      "schema": "InsertionRequestRowV1",
+      "version": 1,
+      "rowId": "AIOPS-IR-TEST-MOUNT-026",
+      "status": "DRAFT",
+      "requestedOwner": "ROOT_TEST_ACCEPTANCE_OWNER",
+      "targetSeam": "package.json::test:all:built; test/i00/complete-acceptance.mjs; server/test/i00Acceptance/**",
+      "reason": "Accepted lane gates need one canonical root acceptance mount.",
+      "contract": [
+        "Register sealed lane tests and AI-off/fault gates only after acceptance."
+      ],
+      "tests": [
+        "Run focused lane suites, network-free root suite, complete acceptance, hostile false-green and exact exit-code checks."
+      ],
+      "expectedBehavior": [
+        "Real failures return nonzero",
+        "no fake success",
+        "accepted counts and commands are recorded in canonical state/receipt."
+      ],
+      "wiringState": "PENDING_BACKEND:AIOPS-IR-TEST-MOUNT-026",
+      "authorityCreated": false
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "product-truth-c2-evidence-selection.v1",
+  "source_candidate": null,
+  "source_candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "candidate_embedded_package": "SOURCE_UNBOUND",
+  "selection_rule": "The candidate source commit cannot self-name. Select only a campaign evidence descendant whose manifest hashes C2_EVIDENCE_BINDING.json, whose ancestry contains exact C2, and whose post-C2 diff is confined to verification/product-truth-20260716/**. Reject old-C acceptance identifiers and ambiguous descendants.",
+  "valid_chain": "C2 -> campaign evidence child",
+  "post_c2_path_allowlist": [
+    "verification/product-truth-20260716/**"
+  ],
+  "required_binding": "C2_EVIDENCE_BINDING.json hashed by MANIFEST.sha256",
+  "final_verifier_handoff": "BLOCKED_PENDING_WAVE1B",
+  "old_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
+  "old_candidate_disposition": "REJECTED_FOR_FINAL_HANDOFF_CRITICAL_FINDINGS"
+}

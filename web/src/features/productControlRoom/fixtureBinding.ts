@@ -2,6 +2,7 @@ import type { SystemComponentSnapshot, SystemSupervisorSnapshot, SystemSuperviso
 import {
   buildFixtureBinding,
   buildFixtureManagedInventory,
+  buildSyntheticComponentPresentation,
   type ProductComponentProjection,
   type ProductFixtureScenarioId,
   type ProductFixtureSession,
@@ -129,12 +130,14 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
   const desiredLifecycle = component.desiredState === 'STOPPED'
     ? 'STOPPED'
     : component.desiredState === 'PAUSED' ? 'PAUSED' : 'READY';
+  const observedLifecycle = component.readiness;
+  const projectedCapability = component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC';
   return Object.freeze({
     componentId: component.componentId,
     owner: component.ownerPath || component.owner,
     desiredLifecycle,
-    observedLifecycle: component.readiness,
-    capability: component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC',
+    observedLifecycle,
+    capability: projectedCapability,
     heartbeatAtMs: component.lastReceiveAtMs ?? component.lastSuccessAtMs,
     lastAdvanceAtMs: component.lastProcessAtMs ?? component.lastSuccessAtMs,
     sourceAgeMs: component.sourceTimestamp?.sourceTimeMs === null
@@ -155,6 +158,10 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     supportedControlIds: Object.freeze([...component.supportedControls]),
     correlationId: null,
     truthLabel: 'SYNTHETIC_ONLY',
+    canonicalPresentation: buildSyntheticComponentPresentation({
+      observedLifecycle,
+      capability: projectedCapability,
+    }),
   });
 }
 

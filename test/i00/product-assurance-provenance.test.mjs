@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import {
   mkdtempSync,
   mkdirSync,
@@ -20,6 +19,7 @@ import {
   verifyProductAssuranceOperationReport,
   verifyProductAssuranceSuiteInventory,
 } from './git-provenance.mjs';
+import { runGitEvidence } from './verify-scope.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const MANIFEST_PATH = path.join(ROOT, 'fixtures/i00/product-assurance-manifest.v1.json');
@@ -71,11 +71,7 @@ const S4_NON_CONTEXT_TRACKED_FILES = Object.freeze([
 ]);
 
 function git(cwd, ...args) {
-  return execFileSync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
+  return runGitEvidence({ cwd, args }).stdout.trim();
 }
 
 function assertTrackedInventoryMatchesCleanClone() {
@@ -106,9 +102,9 @@ function assertTrackedInventoryMatchesCleanClone() {
     const dirtyStatus = git(source, 'status', '--porcelain=v1', '--untracked-files=all', '--ignored');
     assert(dirtyStatus.includes(`?? ${untrackedDecoy}`), dirtyStatus);
     assert(dirtyStatus.includes(`!! ${ignoredDecoy}`), dirtyStatus);
-    execFileSync('git', ['clone', '--no-hardlinks', '--quiet', source, cleanClone], {
+    runGitEvidence({
       cwd: temporaryRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      args: ['clone', '--no-hardlinks', '--quiet', source, cleanClone],
     });
     assert.equal(git(cleanClone, 'status', '--porcelain=v1', '--untracked-files=all'), '');
     assert.deepEqual(
@@ -136,7 +132,7 @@ test('Product Assurance manifest closes 801 donor callbacks plus one live replac
   assert.equal(validation.gitObjectContextProofs, 6);
   assert.equal(validation.liveContextReplacements, 1);
   assert.equal(validation.contextReplacementRows, 7);
-  assert.equal(validation.postIntegrationReplacementRows, 4);
+  assert.equal(validation.postIntegrationReplacementRows, 7);
 
   const core = manifest.suites.find((suite) => suite.id === 'A_CORE_BEHAVIOR');
   assert.equal(core.expectedPasses, 31);
@@ -174,8 +170,8 @@ test('all six accepted assurance donors are exact Git-object ancestors with immu
   const result = verifyProductAssuranceDonors(manifest);
   assert.equal(result.passed, true, JSON.stringify(result.donors.filter((entry) => !entry.passed)));
   assert.equal(result.mergeCutBlobCount, 193);
-  assert.equal(result.donorIdenticalHeadBlobCount, 189);
-  assert.equal(result.postIntegrationReplacementCount, 4);
+  assert.equal(result.donorIdenticalHeadBlobCount, 186);
+  assert.equal(result.postIntegrationReplacementCount, 7);
   assert(result.postIntegrationReplacements.every((entry) => entry.passed));
   assert.deepEqual(result.donors.map((entry) => [entry.id, entry.pathCount, entry.blobMismatches.length]), [
     ['A_CORE', 36, 0],

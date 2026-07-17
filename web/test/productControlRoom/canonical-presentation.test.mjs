@@ -3,194 +3,71 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
-  canonicalComponentPresentation,
   canonicalKillSwitchEngagePosture,
-  canonicalMarketFeedReadinessPresentation,
   canonicalRefreshTargetPosture,
-  canonicalStrategyRuntimePresentation,
-  canonicalWatchmanOverallPresentation,
-} from '../../src/lib/canonicalCockpitTruth.ts';
+  canonicalWatchmanLauncherPresentation,
+} from '../../src/lib/operatorControlPosture.ts';
 
-const component = (overrides = {}) => ({
-  componentId: 'basis-engine',
-  owner: 'BasisEngine:server/src/engine/basis',
-  desiredLifecycle: 'READY',
-  observedLifecycle: 'READY',
-  capability: 'DRY_RUN',
-  heartbeatAtMs: 1_800_000_000_000,
-  lastAdvanceAtMs: 1_800_000_000_000,
-  sourceAgeMs: 10,
-  eventAgeMs: 10,
-  processingAgeMs: 10,
-  queueDepth: 0,
-  queueCapacity: 128,
-  droppedCount: 0,
-  blockerCode: null,
-  rootCauseComponentId: null,
-  capitalRelevance: 'POTENTIAL',
-  supportedControlIds: [],
-  correlationId: null,
-  truthLabel: 'BUILT_AND_TESTED',
-  ...overrides,
+test('canonical cockpit presentation is owned by the server projection and the client derivation module is retired', async () => {
+  const serverProjection = await readFile(new URL('../../../server/src/productIntegration/runtime/projection.ts', import.meta.url), 'utf8');
+  assert.match(serverProjection, /function canonicalComponentPresentation\(/);
+  assert.match(serverProjection, /function canonicalCockpitTruth\(/);
+  assert.match(serverProjection, /canonicalCockpit,[\s\S]*digest:/);
+  await assert.rejects(
+    readFile(new URL('../../src/lib/canonicalCockpitTruth.ts', import.meta.url), 'utf8'),
+    (error) => error?.code === 'ENOENT',
+  );
 });
 
-test('READY plus DRY_RUN stays non-green and exposes lifecycle, capability, and truth separately', () => {
-  const posture = canonicalComponentPresentation(component(), 'PROVEN');
-  assert.equal(posture.status, 'degraded');
-  assert.equal(posture.tone, 'warn');
-  assert.equal(posture.statusLabel, 'Validate Only');
-  assert.equal(posture.lifecycle, 'READY');
-  assert.equal(posture.capability, 'DRY_RUN');
-  assert.equal(posture.truthLabel, 'BUILT_AND_TESTED');
-  assert.match(posture.stateLabel, /READY · VALIDATE ONLY · BUILT AND TESTED/);
+test('all cockpit consumers render canonical supervisor presentation without client-side recomputation', async () => {
+  const consumers = await Promise.all([
+    readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/Dashboard.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/NotificationsPage.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/SystemHealth.tsx', import.meta.url), 'utf8'),
+  ]);
+  const combined = consumers.join('\n');
+  assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.watchmanOverall/);
+  assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
+  assert.match(consumers[0], /component\.canonicalPresentation/);
+  assert.match(consumers[1], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
+  assert.match(consumers[2], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
+  assert.match(consumers[3], /snapshot\.canonicalCockpit\.watchmanOverall/);
+  assert.doesNotMatch(combined, /canonical(?:Component|MarketFeedReadiness|StrategyRuntime|WatchmanOverall)Presentation\s*\(/);
 });
 
-test('green requires the exact READY plus LIVE_PUBLIC capability and truth triple', () => {
-  assert.equal(canonicalComponentPresentation(component({ capability: 'LIVE_PUBLIC' }), 'PROVEN').status, 'degraded');
-  assert.equal(canonicalComponentPresentation(component({ truthLabel: 'LIVE_PUBLIC' }), 'PROVEN').status, 'degraded');
-  assert.equal(canonicalComponentPresentation(component({ capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }), 'UNPROVEN').status, 'outage');
-  const live = canonicalComponentPresentation(component({ capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }), 'PROVEN');
-  assert.equal(live.status, 'operational');
-  assert.equal(live.tone, 'ok');
-  assert.equal(live.statusLabel, 'Live Public');
+test('surface renderer and CSS require relational readiness before showing live-public green', async () => {
+  const [renderer, styles] = await Promise.all([
+    readFile(new URL('../../src/features/productControlRoom/components/SurfaceBindingPanel.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/features/productControlRoom/styles/productControlRoom.css', import.meta.url), 'utf8'),
+  ]);
+  assert.match(renderer, /productSurfaceReadinessBlocker\(surface\)/);
+  assert.match(renderer, /data-surface-ready=\{effectiveBlocked \? 'false' : 'true'\}/);
+  assert.match(renderer, /effectiveBlocked \? 'BLOCKED' : surface\.truthLabel/);
+  assert.match(styles, /\.pcr-surface-end em\.truth-live-public\s*\{\s*color:\s*var\(--text-2\);\s*\}/);
+  assert.match(styles, /\.pcr-surface\[data-surface-ready="true"\] \.pcr-surface-end em\.truth-live-public\s*\{\s*color:\s*var\(--up\);\s*\}/);
 });
 
-test('NOT_CONFIGURED and missing canonical components cannot become healthy', () => {
-  const ownerGated = canonicalComponentPresentation(component({ capability: 'NOT_CONFIGURED', truthLabel: 'NOT_CONFIGURED' }), 'PROVEN');
-  assert.equal(ownerGated.status, 'planned');
-  assert.equal(ownerGated.tone, 'warn');
-  assert.equal(canonicalComponentPresentation(null, 'PROVEN').status, 'outage');
-});
-
-test('strategy header and Watchman remain validate-only for hostile machine-ready dry-run input', () => {
-  const basis = component();
-  const volume = component({ componentId: 'volume-engine', owner: 'VolumeEngine:server/src/engine/volume' });
-  const strategy = canonicalStrategyRuntimePresentation(basis, volume, 'PROVEN');
-  assert.deepEqual(strategy, { tone: 'warn', label: 'Validate-Only Ready', livePublicCount: 0 });
-
-  const overall = canonicalWatchmanOverallPresentation({
-    continuity: 'PROVEN',
-    machineReady: 'YES',
-    effectiveMode: 'VALIDATE_ONLY',
-    components: [basis, volume],
-  });
-  assert.deepEqual(overall, { status: 'degraded', label: 'Validate Only' });
-
-  const unknownMode = canonicalWatchmanOverallPresentation({
-    continuity: 'PROVEN',
-    machineReady: 'YES',
-    effectiveMode: 'UNKNOWN',
-    components: [
-      component({ capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-      component({ componentId: 'volume-engine', capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-    ],
-  });
-  assert.deepEqual(unknownMode, { status: 'degraded', label: 'Effective Mode Unknown' });
-});
-
-test('System Health cannot paint machine-ready non-operational modes green', async () => {
-  const liveComponents = [
-    component({ capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-    component({ componentId: 'volume-engine', capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-  ];
-  for (const [effectiveMode, label] of [
-    ['VALIDATE_ONLY', 'Validate Only'],
-    ['READ_ONLY', 'Read Only'],
-    ['ADVISORY', 'Advisory'],
-  ]) {
-    assert.deepEqual(canonicalWatchmanOverallPresentation({
-      continuity: 'PROVEN',
-      machineReady: 'YES',
-      effectiveMode,
-      components: liveComponents,
-    }), { status: 'degraded', label });
-  }
-
+test('System Health maps only the canonical supervisor Watchman status to its visual tone', async () => {
   const source = await readFile(new URL('../../src/pages/SystemHealth.tsx', import.meta.url), 'utf8');
-  assert.match(source, /canonicalWatchmanOverallPresentation\(\{[\s\S]*effectiveMode: snapshot\.ownerView\.effectiveMode,[\s\S]*components: snapshot\.components,/);
+  assert.match(source, /snapshot\.canonicalCockpit\.watchmanOverall/);
   assert.match(source, /overallPresentation\.status === 'operational'[\s\S]*\? 'healthy'/);
   assert.match(source, /\{overallPresentation\.label\}/);
   assert.doesNotMatch(source, /machineReady === 'YES'\s*\?\s*'healthy'/);
 });
 
-test('Trust Advisor derives its overall tone from canonical posture and cannot green hostile non-live modes', async () => {
-  const liveComponents = [
-    component({ capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-    component({ componentId: 'volume-engine', capability: 'LIVE_PUBLIC', truthLabel: 'LIVE_PUBLIC' }),
-  ];
-  for (const [effectiveMode, label] of [
-    ['VALIDATE_ONLY', 'Validate Only'],
-    ['READ_ONLY', 'Read Only'],
-    ['ADVISORY', 'Advisory'],
-  ]) {
-    const posture = canonicalWatchmanOverallPresentation({
-      continuity: 'PROVEN',
-      machineReady: 'YES',
-      effectiveMode,
-      components: liveComponents,
-    });
-    assert.deepEqual(posture, { status: 'degraded', label });
-  }
-  assert.deepEqual(canonicalWatchmanOverallPresentation({
-    continuity: 'PROVEN',
-    machineReady: 'YES',
-    effectiveMode: 'READ_ONLY',
-    components: [component(), liveComponents[1]],
-  }), { status: 'degraded', label: 'Validate Only' });
-
+test('Trust Advisor uses canonical supervisor posture and feed readiness', async () => {
   const source = await readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8');
   const start = source.indexOf('const advisorOverallPresentation');
   const end = source.indexOf('const advScore', start);
   assert.notEqual(start, -1, 'Header does not define canonical advisor posture');
   assert.notEqual(end, -1, 'Header advisor posture block is incomplete');
   const advisorSource = source.slice(start, end);
-  assert.match(advisorSource, /canonicalWatchmanOverallPresentation\(\{[\s\S]*continuity: productBinding\.continuity,[\s\S]*machineReady: productSnapshot\.ownerView\.machineReady,[\s\S]*effectiveMode: productSnapshot\.ownerView\.effectiveMode,[\s\S]*components: productSnapshot\.components,/);
-  assert.match(advisorSource, /advisorOverallPresentation\.status === 'outage'[\s\S]*\? 'bad'/);
-  assert.match(advisorSource, /advisorOverallPresentation\.status !== 'operational'[\s\S]*\? 'warn'/);
+  assert.match(advisorSource, /productSnapshot\.canonicalCockpit\.watchmanOverall/);
+  assert.match(advisorSource, /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
+  assert.match(advisorSource, /advisorOverallPresentation\.status === 'operational'/);
+  assert.match(advisorSource, /advisorMarketFeedReadiness\.proven/);
   assert.doesNotMatch(advisorSource, /machineReady\s*===\s*['"]YES['"]/);
-});
-
-test('Trust Advisor proves market feeds only from the exact canonical source pair and owner freshness', async () => {
-  const liveSource = (componentId) => component({
-    componentId,
-    capability: 'LIVE_PUBLIC',
-    truthLabel: 'LIVE_PUBLIC',
-  });
-  const inputs = {
-    continuity: 'PROVEN',
-    machineReady: 'YES',
-    dataFreshness: '2s stale',
-    components: [liveSource('public-spot-source'), liveSource('public-usdm-source')],
-  };
-  assert.deepEqual(canonicalMarketFeedReadinessPresentation(inputs), {
-    proven: true,
-    label: 'Market Feed Readiness Proven',
-    detail: 'Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness 2s stale.',
-  });
-
-  for (const hostile of [
-    { ...inputs, continuity: 'BACKFILL' },
-    { ...inputs, machineReady: 'UNKNOWN' },
-    { ...inputs, dataFreshness: null },
-    { ...inputs, components: [inputs.components[0]] },
-    { ...inputs, components: [...inputs.components, inputs.components[0]] },
-    { ...inputs, components: [component({ componentId: 'public-spot-source' }), inputs.components[1]] },
-    { ...inputs, components: [inputs.components[0], liveSource('public-usdm-source'), liveSource('public-usdm-source')] },
-  ]) {
-    const posture = canonicalMarketFeedReadinessPresentation(hostile);
-    assert.equal(posture.proven, false);
-    assert.equal(posture.label, 'Market Feed Readiness Unproven');
-  }
-
-  const source = await readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8');
-  const start = source.indexOf('const advisorMarketFeedReadiness');
-  const end = source.indexOf('const advScore', start);
-  assert.notEqual(start, -1);
-  assert.notEqual(end, -1);
-  const advisorSource = source.slice(start, end);
-  assert.match(advisorSource, /canonicalMarketFeedReadinessPresentation\(\{[\s\S]*continuity: productBinding\.continuity,[\s\S]*machineReady: productSnapshot\.ownerView\.machineReady,[\s\S]*dataFreshness: productSnapshot\.ownerView\.dataFreshness,[\s\S]*components: productSnapshot\.components,/);
-  assert.match(advisorSource, /advisorMarketFeedReadiness\.proven[\s\S]*sev: 'pass'/);
-  assert.doesNotMatch(advisorSource, /feedsOk|state\?\.feeds|Market feeds live/i);
 });
 
 test('premium topbar keeps all six measured roles in empty, action, and preference states', async () => {
@@ -263,9 +140,9 @@ test('kill-switch control stays idempotent engage-only and never offers Resume',
 test('Notifications cannot derive engine green state from legacy runtime polls', async () => {
   const source = await readFile(new URL('../../src/pages/NotificationsPage.tsx', import.meta.url), 'utf8');
   assert.match(source, /useProductControlRoomContext\(\)/);
-  assert.match(source, /canonicalStrategyRuntimePresentation\(/);
-  assert.match(source, /canonicalComponentPresentation\(/);
+  assert.match(source, /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(source, /runtimePresentation\.livePublicCount/);
+  assert.doesNotMatch(source, /canonical(?:Component|StrategyRuntime)Presentation\s*\(/);
   assert.doesNotMatch(source, /\/api\/engine\/(?:basis|volume)/);
   assert.doesNotMatch(source, /status\?\.running|\/ 2 Online|are online/);
 });
@@ -310,4 +187,27 @@ test('only exact public-information refresh targets can bypass canonical control
   assert.match(refreshDock, /disabled=\{busy\.current \|\| !selectedRecovery\.posture\.actionAllowed\}/);
   assert.match(refreshDock, /CONTROL_PREVIEW_REQUIRED/);
   assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
+});
+
+test('successful local refresh cannot supersede canonical Watchman outage truth', async () => {
+  assert.deepEqual(canonicalWatchmanLauncherPresentation({
+    canonicalStatus: 'outage',
+    canonicalLabel: 'Not Ready',
+    actionState: 'ok',
+  }), {
+    healthStatus: 'outage',
+    label: 'Connection Watchman · Not Ready · Public Refresh Completed',
+  });
+
+  const [header, styles] = await Promise.all([
+    readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/styles.css', import.meta.url), 'utf8'),
+  ]);
+  const refreshDock = header.slice(header.indexOf('export function RefreshDock()'), header.indexOf('export function Topbar()'));
+  assert.match(refreshDock, /canonicalWatchmanLauncherPresentation\(\{/);
+  assert.match(refreshDock, /data-action-state=\{st\}/);
+  assert.match(refreshDock, /rdock-control-state status-\$\{launcherPresentation\.healthStatus\}/);
+  assert.doesNotMatch(refreshDock, /Connections Recovered/);
+  assert.doesNotMatch(refreshDock, /st === 'ok' \? 'operational'/);
+  assert.doesNotMatch(styles, /\.rdock-(?:control-)?btn\.(?:ok|err)\b/);
 });

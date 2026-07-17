@@ -1,0 +1,313 @@
+{
+  "schema": "OPS_SHADOW_RECEIPT_V1",
+  "packet": "RUN-16",
+  "task": "OPS-SHADOW",
+  "shadowStatus": "SHADOW_SPECULATIVE",
+  "terminalState": "OPS_SHADOW_READY",
+  "acceptanceClaimed": false,
+  "prestageReadyClaimed": false,
+  "integratedAcceptedClaimed": false,
+  "authorityGranted": false,
+  "deploymentPerformed": false,
+  "networkMutationPerformed": false,
+  "credentialMutationPerformed": false,
+  "moneyMutationPerformed": false,
+  "mergePerformed": false,
+  "pushPerformed": false,
+  "authorityEffect": "NONE",
+  "possiblePortingRequires": [
+    "C2",
+    "DIRECTOR_ADJUDICATION"
+  ],
+  "launchAuthority": {
+    "decision": "D-LAUNCH-37",
+    "decisionCommit": "d090d006019e21b150fa7b74831240695d8791e3",
+    "orderId": "90dcac299155"
+  },
+  "baseSha": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+  "implementationCommitSha": "d5f2fc86acc7367902009cfe01c7bf9a50ecb1f1",
+  "implementationTreeSha": "b104dbddb9ad80a415e085c38b6939c8b83f93ac",
+  "implementationBranch": "ops-shadow-20260715",
+  "receiptSealCommit": "ENCLOSING_COMMIT_NOT_SELF_REFERENTIAL",
+  "receiptPath": "fixtures/opsShadow/receipts/OPS_SHADOW_RECEIPT.v1.json",
+  "donor": {
+    "acceptedCommit": "2cec412927fa2f64f05a0b2774b18e45f8ce4fa5",
+    "implementationCommit": "9a82d4715c73ebe4156638c2bf5e8a2c02373bbf",
+    "opsLiveTree": "584163858a0333cb1ccb9eff756e91a851b1cb71",
+    "parity": "EXACT_OPS_LIVE_TREE_MATCH"
+  },
+  "scope": {
+    "exclusivePathRoots": [
+      "fixtures/opsShadow",
+      "test/opsShadow"
+    ],
+    "implementationChangedPathCount": 9,
+    "implementationChangedPaths": [
+      {
+        "path": "fixtures/opsShadow/OPS_SHADOW_ENTRY_GATE.v1.json",
+        "gitBlob": "e2065aba5b54e798f27ae736c9cde20ca5e0eb6a",
+        "sha256": "3f8a86c87a1d59074d7efbb505cbb9a785fdc45b80f209943ffe3158e8ef8540"
+      },
+      {
+        "path": "fixtures/opsShadow/OPS_SHADOW_INSERTION_REQUESTS.v1.json",
+        "gitBlob": "0e7ec2c969f4eea7faed12791616487d79151a58",
+        "sha256": "71d76dff15442d6199a10beb994b24628ffeef308ee6fbd378c830bd0aeb0b6c"
+      },
+      {
+        "path": "test/opsShadow/contract.mjs",
+        "gitBlob": "07ac482c8db09f0da9da3e8ad3f2cbb9dfea8d1d",
+        "sha256": "3e4ba167d86b02efe22b45f7856a4ef0cf5c3fef0802fc5a4b2de7e70582e10c"
+      },
+      {
+        "path": "test/opsShadow/entry-gate.test.mjs",
+        "gitBlob": "e52467e3762ca32a3c1b3a87a298204865fa85ae",
+        "sha256": "09775f53cde679f76de2d7a8f1777b091876132bf26b847671904688ea508552"
+      },
+      {
+        "path": "test/opsShadow/network-boundary.test.mjs",
+        "gitBlob": "6777b1905baa3ab264f7470c935f29a1b3d22f9f",
+        "sha256": "3188498d3f9ba2b7c738c3ac207124148b4d2fa58ae4299b2c0c39bf35452d6c"
+      },
+      {
+        "path": "test/opsShadow/owner-conformance.test.mjs",
+        "gitBlob": "688d4f4734e5d1758dbb3f8eabf3572c49728caf",
+        "sha256": "d1328e4cda633862a6a66db6e08ab4462885ecc22db9e9ec6881632040af4854"
+      },
+      {
+        "path": "test/opsShadow/receipt-binding.test.mjs",
+        "gitBlob": "2f7994cec30445d5b4ddbbcc36e3a1928eedb8a5",
+        "sha256": "49c0e26ec58dedef07172a688e7a06add87e6c8f817a036ff3cfa3bdbfed5b25"
+      },
+      {
+        "path": "test/opsShadow/run-focused.mjs",
+        "gitBlob": "24ee8dea838959b559d83dbcdef9f41612a660af",
+        "sha256": "7a3dd6f71d70a38d62c29d78ef4fecd9cc0f4f7068d253384e4afeb2b5fd4746"
+      },
+      {
+        "path": "test/opsShadow/validate-receipt.mjs",
+        "gitBlob": "ec51798202e8c3891ef8dd811b03d56c5efac736",
+        "sha256": "402a1f1dd4155ac311f0f253df1ab8f5c07e8496a4c4809152a09e276e7557a0"
+      }
+    ]
+  },
+  "tests": [
+    {
+      "category": "OPS_SHADOW_CONFORMANCE",
+      "command": "/Users/cosmosgeek/.local/node22/bin/node --import ./server/test/private-egress-tripwire.mjs --test --test-concurrency=1 --test-reporter=spec test/opsShadow/**/*.test.mjs",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": null,
+      "tests": 34,
+      "passed": 34,
+      "stdoutSha256": "a5ee80acc5276a07a402b9a3d7d7c4bb71363124fce3c1fc5d5061312b4eb661",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_SYSTEMD",
+      "command": "bash ops/tests/test-systemd-units.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 91,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "1f01dfa3c6c083644e5505d99f73460721c36a013b395671c4b006750d480c74",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_WATCHDOG",
+      "command": "bash ops/tests/test-watchdog.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 34,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "ad2b62ffe406666e66ff5c5e68f1021436da72b6752e9b7f069c45271e9efb1f",
+      "stderrSha256": "32fd33efc965d9e95086977f6828522a376e27ea267883107880e3932b1a1388"
+    },
+    {
+      "category": "DONOR_BACKUP_RESTORE",
+      "command": "bash ops/tests/test-backup-restore.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 30,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "04fadb8aefc8f815ac8406689d7093f104871c1f869a8dc8f3220ac383c81b26",
+      "stderrSha256": "4945173f058859eaaddd7440b731f8fa9dad55a8fd992e011ab22091bea3e50b"
+    },
+    {
+      "category": "I00_BACKUP_RESTORE_ADAPTERS",
+      "command": "bash ops/tests/i00/test-backup-and-restore-adapters.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 18,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "7073b21a7f8e06dc68a36a2f59fe8294e5f673e8637b686803bf3b4889fea966",
+      "stderrSha256": "3f1180a6f32d145f685b2da1776fb46af4ac938edc67b0bd229564a19ee35f11"
+    },
+    {
+      "category": "DONOR_RESTORE_DRILL",
+      "command": "bash ops/tests/test-restore-drill.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 11,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "3dad5b647e512fafae3ea65b46b709ab9c9a2e03c0675247c51205bef8043c64",
+      "stderrSha256": "ed88c665cf52ad74f1dce010c11ecadab4d7ce4163d401bac5df652ee91308c0"
+    },
+    {
+      "category": "DONOR_ROLLBACK",
+      "command": "bash ops/tests/test-rollback.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 27,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "209d1002d0b24b51baf21b2b8bd02684a0bfd5f41b4132c51ca2dfaccc8db419",
+      "stderrSha256": "d51179d2395567dd9db6655a450397f75e35562267d0771f23a636a98a7ce442"
+    },
+    {
+      "category": "DONOR_DEPLOY",
+      "command": "bash ops/tests/test-deploy.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 52,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "837b26d54ed1500292b6a7a2a49aebe7a4ef486c2ba9162773c03ec73251df8d",
+      "stderrSha256": "3a4925df792bf14a877bc1053c065f1e12e1daac1d3e21519c711f027406c6e3"
+    },
+    {
+      "category": "I00_STATIC_SAFETY",
+      "command": "bash ops/tests/i00/test-static-safety.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 34,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "0361c5acd40a9ec19173a35869bd6b82476c762defadb1fc7677681ab0a86b54",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_CLOUDFLARE",
+      "command": "bash ops/tests/test-cloudflare-templates.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 16,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "90fda84bab193d4cc1af581682f5c385184f68200d1553db99198c3a3011e6ca",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_ENV",
+      "command": "bash ops/tests/test-env-templates.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 19,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "ee5bfecbb19e6e6d41856523d1c3ccea9c97abf4f2427306def4cfb30d2ffe21",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_SECRET_SCAN",
+      "command": "bash ops/tests/test-secret-scanner.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 13,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "182b3bbceee56ef6b82c99948fc3ef45c0f41254ea39e5f354120efb9530c1eb",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "DONOR_STATIC_SYNTAX",
+      "command": "bash ops/tests/test-shell-syntax.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 40,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "ccfc4f0aba75d7142c42fcf9e7c251ae4211bbaea820537b4c35fa4f2271ff62",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "I00_FAKE_SECRETS_PROVIDER",
+      "command": "bash ops/tests/i00/test-secrets-provider.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 34,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "0ad6e0452c0f40d1e992f6cc435c0f905f4718ebaa7f80c5f53ae1117b7bbc17",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "category": "I00_TEMPLATE_SCHEMA",
+      "command": "bash ops/tests/i00/test-templates-and-schemas.sh",
+      "outcome": "PASS",
+      "exitCode": 0,
+      "signal": null,
+      "assertions": 50,
+      "tests": null,
+      "passed": null,
+      "stdoutSha256": "7c96add720b16d98014b3ba38a0e60a5436b76399fdb3c8a5cba22703e78faac",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "aggregateEvidence": {
+    "focusedCommandCount": 15,
+    "packetTestCount": 34,
+    "packetPassedCount": 34,
+    "shellAssertionCount": 469,
+    "failedFocusedCommandCount": 0,
+    "testWorktreeState": "CLEAN_EXACT_IMPLEMENTATION_COMMIT"
+  },
+  "forbiddenSuitesNotRun": [
+    "npm test",
+    "npm run test:all",
+    "browser",
+    "performance",
+    "soak"
+  ],
+  "insertionRequestIds": [
+    "OPS-SHADOW-IR-RESTORE-001",
+    "OPS-SHADOW-IR-SYSTEMD-002",
+    "OPS-SHADOW-IR-CLOUDFLARE-003",
+    "OPS-SHADOW-IR-WATCHDOG-004",
+    "OPS-SHADOW-IR-OWNER-INPUTS-005"
+  ],
+  "limitations": [
+    "The current host is Darwin arm64 and has no systemd-analyze, cloudflared, AWS CLI, or cfn-guard binary; native vendor validation is not claimed.",
+    "No full npm, browser, performance, soak, target-host, deployment, activation, or network-mutation suite was run under the same-machine rule.",
+    "Production restore remains BLOCKED_DONOR_AMENDMENT and is represented only by OPS-SHADOW-IR-RESTORE-001.",
+    "The broader I00 release/preflight test was attempted but failed before proof because better-sqlite3 is unavailable in this unhydrated worktree; it is excluded from green evidence, and no dependency hydration was performed.",
+    "Cloudflare local-versus-remote tunnel management remains subject to future C2 and director adjudication.",
+    "No target Linux, systemd, filesystem atomic-swap, safe SQLite version, capacity, external paging, AWS, Cloudflare, or production readback evidence exists.",
+    "No acceptance, integration, prestage, port, merge, push, or deployment status is conferred by this speculative receipt."
+  ],
+  "prohibitionsPreserved": [
+    "LIVE_EXECUTION_NOT_IMPLEMENTED",
+    "NO_REAL_CREDENTIALS",
+    "NO_EXTERNAL_NETWORK_MUTATION",
+    "NO_MONEY_PATHS",
+    "NO_OPERATIONAL_OWNER_DUPLICATION"
+  ]
+}

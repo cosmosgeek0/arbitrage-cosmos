@@ -1,0 +1,63 @@
+OWNER ACCELERATION ORDER — USE THE SPARE ACCOUNT WITHOUT TOUCHING RUN-9
+
+RUN-9 remains the sole writer and repair authority for the current candidate. Do not interrupt it, add writers to its branch, modify its worktree, or make it absorb speculative work.
+
+The spare account must now create isolated SHADOW_SPECULATIVE worktrees from the latest recorded clean accepted base. These are future-stage artifacts only. They must never merge into Main, RUN-9, C2, or any candidate before exact-SHA verification and director adjudication.
+
+Before writing anything, inventory the repository and classify every proposed capability as:
+
+ADOPT_EXISTING / ADAPT_EXISTING / MISSING_BUILD / REFERENCE_ONLY / REJECT_DUPLICATE
+
+Do not rebuild an existing capability.
+
+Launch these independent packets concurrently:
+
+1. A2-SHADOW — AI incident/evidence runtime
+   Build the provider-neutral event intake, incident case state machine, evidence bundle, token/cost/rate budget, deduplication, cooldown, escalation, durable session handoff and replay fixtures. Fake providers only. No credentials, network calls, live code edits or money-path authority.
+
+2. A3-SHADOW — AI provider and tool adapters
+   Build provider-neutral interfaces and fake adapters for OpenAI API, Anthropic API, optional owner-operated subscription/CLI workers, search, repository inspection and sandboxed patch proposals. Explicitly prove that subscription access and paid APIs are different capability classes. No auth bypass, browser-cookie reuse or live credentials.
+
+3. OPS-SHADOW — deployment and recovery artifacts
+   Build testable systemd, watchdog, backup, restore, rollback, Cloudflare tunnel and Secrets Manager templates. Local/fake validation only. No AWS, Cloudflare, Binance or secret mutation.
+
+4. REPLAY-SHADOW — load, soak and failure corpus
+   Build candidate-independent replay datasets, latency/load/soak harnesses, restart storms, partial-fill ambiguity, stale-data, connection-loss, rate-limit, clock-skew and recovery campaigns. No candidate-specific assertions.
+
+5. OBS-SHADOW — operational visibility
+   Inventory existing cockpit support first. Build only missing historical trends, paging receipts, incident drill fixtures, expected-versus-observed inventory views, telemetry-loss detection and cost/budget projections. Do not touch existing mounted pages or shared UI composition.
+
+6. RUNBOOK-SHADOW — operator drills
+   Create executable, zero-capital owner drills for source loss, stale truth, restart during ambiguity, watchdog failure, rollback, restore, reconciliation failure and emergency stop. Produce simple pass/fail receipts and cockpit projection contracts.
+
+Rules for every packet:
+
+- One isolated worktree and one exclusive path owner.
+- No Main, RUN-9, candidate, package-root, shared-schema, router, startup or money-path edits.
+- No real credentials, network mutations, orders, deployment or capital.
+- No “green” without executable tests and an immutable receipt.
+- Commit each packet independently with exact base SHA, changed paths, tests, limitations and insertion requests.
+- Mark every result SHADOW_SPECULATIVE and expect possible porting after C2.
+- If running on the same machine as RUN-9, perform code/static work only; do not run CPU-heavy full suites. Heavy tests belong on another machine or VM.
+
+WHEN C2 FREEZES:
+
+Immediately stop speculative expansion and launch five fresh read-only exact-C2 verification shards:
+
+V1 repository/build/unit/inventory
+V2 Q/L/execution/reconciliation/recovery
+V3 browser/UI/cockpit/zero-egress
+V4 security/authority/provenance/secrets
+V5 restart/performance/rollback/restore/operations
+
+One fresh Role-3 session alone synthesizes their receipts and may issue VERIFIED_CANDIDATE. No verifier edits source. Any accepted correction creates C3 and repeats exact-SHA verification.
+
+Return only:
+- current RUN-9 status;
+- six worktree paths and base SHAs;
+- six copy-paste worker prompts;
+- collision matrix;
+- receipt destinations;
+- C2 verification launch blocks.
+
+Do not perform the shadow work yourself. Orchestrate it and keep your context small.

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,10 +39,26 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
   requiredLastMerge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
   requiredLastFirstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
   requiredLastDonor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
-  // Director-authorized by exact QL_DIRECTOR_STATE.md objects at D-LAUNCH-47/48:
-  // 723837873c4aef565eb1dea739c760f66252e1b9 / 4f3e10f2f0371278c4c953501c4ca532d6fe2f78.
+  // Exact authorized post-L merge topology through the D-LAUNCH-62 candidate.
+  // These merges remain outside the original 16-donor equality count; their
+  // ancestry is admitted only by the exact list below.
   authorizedLaterMerges: deepFreeze([
     '449350d60ab30a385edeccdf4d91716ef8550537',
+    '51efaaa41fbaf85bcbefa9adc6cdbd640d814506',
+    '6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd',
+    'c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6',
+    '4eff62bdd30eceddf39bbbdf417b0eba51c22b7c',
+    '9c7e8b16bc8fbaba0110daa391a6e6160dae5802',
+    'b3f49616e69ee5036386414030b482b5f02e9c13',
+    '2787ebf3665c1efe32af9c426504af6b871898f1',
+    '614e5a8ed20b5c810ee92268a3f3c12c30971519',
+    '9c3bb17638cd8bc5478b813c22c5a7050f046ce3',
+    '955e204964f44246e0c69772578f43180a56b33f',
+    '611df36d12d00c3fbf041fff4af9cccde03afc91',
+    'e3b84307af010b8b1547418f5f6cb5078039413d',
+    '48a89d9f07574868fc6346725781ba954f488a4c',
+    '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
+    '995904ada86e86ef4214bea596331b978a332da0',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -255,9 +271,9 @@ export const EXPECTED_DONOR_MANIFEST = deepFreeze([
 ]);
 
 export const EXPECTED_EXCLUSIONS = deepFreeze([
-  { id: 'A-FORMAL', tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8', treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056', disposition: 'POSTLANDING_EXCLUDED', worktree: { directory: 'ip-assur-formal', branch: 'ip-assur-formal-20260713' } },
-  { id: 'A-ACTION-EVIDENCE-S2', tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b', treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3', disposition: 'POSTLANDING_EXCLUDED', worktree: { directory: 'ip-assur-action', branch: 'ip-assur-action-20260714' } },
-  { id: 'PREVERIFY', tipSha: '46b2f1e31edf9f75aec7203e952a56f9869a2971', treeSha: 'ad11b333ca412093d55c5e26560ce4b3b9792c1b', disposition: 'NON_DONOR_NOT_CONFIGURED', worktree: { directory: 'preverify', branch: 'preverify-20260714' } },
+  { id: 'A-FORMAL', tipSha: 'b491893416006cf529aef02e5dd4a25d6475e7b8', treeSha: 'c48e7ddb5572a01190cf94cef2b2426a8df2f056', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', candidateAncestry: 'REQUIRED', worktree: { directory: 'ip-assur-formal', branch: 'ip-assur-formal-20260713' } },
+  { id: 'A-ACTION-EVIDENCE-S2', tipSha: 'ca30adf5e97b6697afec49f13073024d953b117b', treeSha: '1637f682c97d8fcbd4cd955afe0e48542bcb90d3', disposition: 'POSTLANDING_INTEGRATED_REFERENCE_ONLY', candidateAncestry: 'REQUIRED', worktree: { directory: 'ip-assur-action', branch: 'ip-assur-action-20260714' } },
+  { id: 'PREVERIFY', tipSha: '46b2f1e31edf9f75aec7203e952a56f9869a2971', treeSha: 'ad11b333ca412093d55c5e26560ce4b3b9792c1b', disposition: 'NON_DONOR_NOT_CONFIGURED', candidateAncestry: 'FORBIDDEN', worktree: { directory: 'preverify', branch: 'preverify-20260714' } },
 ]);
 
 export const INTEGRATION_ORDER = deepFreeze([
@@ -294,6 +310,19 @@ export const EXPECTED_DONOR_ROWS = deepFreeze(EXPECTED_DONOR_MANIFEST.map((donor
   acceptanceReceiptSha256s: donor.acceptanceReceipts.map((receipt) => receipt.sha256),
   integrationReceiptSha256: donor.integrationReceipt.sha256,
 })));
+
+export const RECEIPT_BOUND_AUTHORITY = deepFreeze({
+  mode: 'TRACKED_RECEIPT_SINGLE_BRANCH',
+  sourceCommit: 'dea2d2a5c2b5e83d3aea75b0e368f0a478596561',
+  path: 'docs/archive/i00-phase2/INTEGRATION_CANDIDATE_READY_RECEIPT.md',
+  sha256: 'ce1d7d386a017bb1359a17d139e1d126200d85f9d2c0cd674be7f3081c028ecc',
+  blobSha: '49cacfc4c67ec264dd445209d435d0d262cd8542',
+  receiptSchemaVersion: 'i00.integration-candidate-receipt.v2',
+  receiptCandidate: '74eb452efab89ca92ec9ff5cb192b723b5f198f3',
+  sealedProofSha256: '4087828b10afb1291eeed1dbed77e14639581d23496f1766033ed5cbc556842c',
+  allowedUnavailableDonorIds: deepFreeze(['DASHBOARD-SHELL']),
+  allowedUnavailableExclusionIds: deepFreeze(['PREVERIFY']),
+});
 
 function invokeGit(cwd, args, encoding = 'utf8') {
   try {
@@ -368,6 +397,109 @@ function parseTreeEntries(bytes) {
   });
 }
 
+function gitLines(cwd, args) {
+  const value = gitText(cwd, args);
+  return value === '' ? [] : value.split('\n');
+}
+
+function acceptedGit(cwd, args, output = 'text') {
+  return runGitEvidence({ cwd, args, output, acceptedStatuses: [0, 1] });
+}
+
+function canonicalPath(value) {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+function commitAvailability(repoRoot, commit) {
+  const exists = acceptedGit(repoRoot, ['rev-parse', '--verify', '--quiet', `${commit}^{commit}`]);
+  if (exists.status === 1) return { commit, state: 'ABSENT', objectType: null, tree: null };
+  return {
+    commit,
+    state: 'PRESENT',
+    objectType: gitText(repoRoot, ['cat-file', '-t', commit]),
+    tree: gitText(repoRoot, ['rev-parse', `${commit}^{tree}`]),
+  };
+}
+
+function collectCloneBoundary(repoRoot) {
+  const worktrees = parseWorktrees(gitBytes(repoRoot, ['worktree', 'list', '--porcelain', '-z']));
+  const symbolicHead = acceptedGit(repoRoot, ['symbolic-ref', '-q', 'HEAD']);
+  const fetchRefspecResult = acceptedGit(repoRoot, ['config', '--get-all', 'remote.origin.fetch']);
+  const fetchRefspecs = fetchRefspecResult.status === 0
+    ? fetchRefspecResult.stdout.trim().split('\n').filter(Boolean)
+    : [];
+  const localBranches = gitLines(repoRoot, ['for-each-ref', '--format=%(refname)', 'refs/heads']);
+  const remoteBranches = gitLines(
+    repoRoot,
+    ['for-each-ref', '--format=%(refname)', 'refs/remotes/origin'],
+  ).filter((ref) => ref !== 'refs/remotes/origin/HEAD');
+  const allRefs = gitLines(repoRoot, ['for-each-ref', '--format=%(refname)', 'refs']);
+  const gitDirValue = gitText(repoRoot, ['rev-parse', '--git-dir']);
+  const gitDir = path.resolve(repoRoot, gitDirValue);
+  const alternatesPath = path.join(gitDir, 'objects/info/alternates');
+  const shallow = gitText(repoRoot, ['rev-parse', '--is-shallow-repository']) === 'true';
+  const refspecMatch = fetchRefspecs.length === 1
+    ? fetchRefspecs[0].match(/^\+refs\/heads\/([^:]+):refs\/remotes\/origin\/\1$/u)
+    : null;
+  const branch = refspecMatch?.[1] ?? null;
+  const soleWorktreeMatchesRepo = worktrees.length === 1
+    && canonicalPath(worktrees[0].path) === canonicalPath(repoRoot);
+  const currentMainPresent = allRefs.some((ref) => (
+    ref === 'refs/heads/current-main' || ref === 'refs/remotes/origin/current-main'
+  ));
+  const detached = symbolicHead.status === 1;
+  const alternatesPresent = existsSync(alternatesPath);
+  const singleBranchRefsExact = branch !== null
+    && exactJson(localBranches, [`refs/heads/${branch}`])
+    && exactJson(remoteBranches, [`refs/remotes/origin/${branch}`]);
+  return {
+    checkoutHead: gitText(repoRoot, ['rev-parse', 'HEAD']),
+    worktreeCount: worktrees.length,
+    soleWorktreeMatchesRepo,
+    detached,
+    fetchRefspecs,
+    branch,
+    localBranches,
+    remoteBranches,
+    singleBranchRefsExact,
+    currentMainPresent,
+    shallow,
+    gitDir,
+    alternatesPath,
+    alternatesPresent,
+    qualifiesForReceiptBoundMode: soleWorktreeMatchesRepo
+      && detached
+      && singleBranchRefsExact
+      && !currentMainPresent
+      && !shallow
+      && !alternatesPresent,
+  };
+}
+
+function parseReceiptBoundAuthority(bytes) {
+  const text = bytes.toString('utf8');
+  const begin = '<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V2_BEGIN -->';
+  const end = '<!-- I00_INTEGRATION_CANDIDATE_RECEIPT_V2_END -->';
+  if (text.indexOf(begin) === -1 || text.indexOf(begin) !== text.lastIndexOf(begin)
+      || text.indexOf(end) === -1 || text.indexOf(end) !== text.lastIndexOf(end)) {
+    throw new Error('RECEIPT_BOUND_AUTHORITY_MARKERS_INVALID');
+  }
+  const beginIndex = text.indexOf(begin) + begin.length;
+  const endIndex = text.indexOf(end, beginIndex);
+  const fenced = text.slice(beginIndex, endIndex);
+  const fenceStart = fenced.indexOf('```json');
+  const jsonStart = fenceStart + '```json'.length;
+  const fenceEnd = fenced.indexOf('```', jsonStart);
+  if (fenceStart === -1 || fenceEnd === -1 || fenced.indexOf('```json', jsonStart) !== -1) {
+    throw new Error('RECEIPT_BOUND_AUTHORITY_JSON_FENCE_INVALID');
+  }
+  return JSON.parse(fenced.slice(jsonStart, fenceEnd));
+}
+
 function parentsOf(repoRoot, commit) {
   const value = gitText(repoRoot, ['show', '-s', '--format=%P', commit]);
   return value === '' ? [] : value.split(' ');
@@ -417,13 +549,28 @@ function validateManifest() {
   ])) failures.push('STATIC_INTEGRATION_ORDER_INVALID');
   if (!exactJson(PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges, [
     '449350d60ab30a385edeccdf4d91716ef8550537',
+    '51efaaa41fbaf85bcbefa9adc6cdbd640d814506',
+    '6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd',
+    'c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6',
+    '4eff62bdd30eceddf39bbbdf417b0eba51c22b7c',
+    '9c7e8b16bc8fbaba0110daa391a6e6160dae5802',
+    'b3f49616e69ee5036386414030b482b5f02e9c13',
+    '2787ebf3665c1efe32af9c426504af6b871898f1',
+    '614e5a8ed20b5c810ee92268a3f3c12c30971519',
+    '9c3bb17638cd8bc5478b813c22c5a7050f046ce3',
+    '955e204964f44246e0c69772578f43180a56b33f',
+    '611df36d12d00c3fbf041fff4af9cccde03afc91',
+    'e3b84307af010b8b1547418f5f6cb5078039413d',
+    '48a89d9f07574868fc6346725781ba954f488a4c',
+    '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
+    '995904ada86e86ef4214bea596331b978a332da0',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }
   return failures;
 }
 
-export function collectDonorEqualityEvidence({
+function collectFullWorkspaceDonorEqualityEvidence({
   repoRoot = DEFAULT_REPO_ROOT,
   workspaceRoot = path.dirname(repoRoot),
   candidateRef = 'HEAD',
@@ -577,6 +724,7 @@ export function collectDonorEqualityEvidence({
 
   return {
     schemaVersion: 'I00_DONOR_EQUALITY_OBSERVATION_V1',
+    evidenceMode: 'LIVE_FULL_WORKSPACE',
     repoRoot: absoluteRepoRoot,
     workspaceRoot: absoluteWorkspaceRoot,
     candidate: {
@@ -607,15 +755,422 @@ export function collectDonorEqualityEvidence({
   };
 }
 
+function collectReceiptBoundAuthority(repoRoot) {
+  const source = RECEIPT_BOUND_AUTHORITY.sourceCommit;
+  const objectSpec = `${source}:${RECEIPT_BOUND_AUTHORITY.path}`;
+  const bytes = gitBytes(repoRoot, ['show', objectSpec]);
+  const document = parseReceiptBoundAuthority(bytes);
+  const sealedProof = structuredClone(document.donorProof);
+  const claimedProofSha256 = sealedProof?.proofSha256 ?? null;
+  if (sealedProof && typeof sealedProof === 'object') delete sealedProof.proofSha256;
+  return {
+    document,
+    evidence: {
+      mode: RECEIPT_BOUND_AUTHORITY.mode,
+      sourceCommit: source,
+      sourceCommitObjectType: gitText(repoRoot, ['cat-file', '-t', source]),
+      path: RECEIPT_BOUND_AUTHORITY.path,
+      objectType: gitText(repoRoot, ['cat-file', '-t', objectSpec]),
+      expectedBlobSha: RECEIPT_BOUND_AUTHORITY.blobSha,
+      observedBlobSha: gitText(repoRoot, ['rev-parse', objectSpec]),
+      expectedSha256: RECEIPT_BOUND_AUTHORITY.sha256,
+      observedSha256: sha256(bytes),
+      receiptSchemaVersion: document?.schemaVersion ?? null,
+      receiptCandidate: document?.candidate?.commit ?? null,
+      donorEquality: structuredClone(document?.donorEquality ?? null),
+      donorRows: structuredClone(document?.donors ?? null),
+      sealedProofStatus: document?.donorProof?.status ?? null,
+      sealedProofCounts: structuredClone(document?.donorProof?.counts ?? null),
+      sealedProofExactSets: structuredClone(document?.donorProof?.exactSets ?? null),
+      sealedProofFailures: structuredClone(document?.donorProof?.failures ?? null),
+      expectedSealedProofSha256: RECEIPT_BOUND_AUTHORITY.sealedProofSha256,
+      claimedSealedProofSha256: claimedProofSha256,
+      recomputedSealedProofSha256: sha256(Buffer.from(JSON.stringify(sealedProof), 'utf8')),
+    },
+  };
+}
+
+export function collectReceiptBoundDonorEqualityEvidence({
+  repoRoot = DEFAULT_REPO_ROOT,
+  workspaceRoot = path.dirname(repoRoot),
+  candidateRef = 'HEAD',
+} = {}) {
+  const absoluteRepoRoot = path.resolve(repoRoot);
+  const absoluteWorkspaceRoot = path.resolve(workspaceRoot);
+  const candidateSha = gitText(absoluteRepoRoot, ['rev-parse', '--verify', `${candidateRef}^{commit}`]);
+  const authority = collectReceiptBoundAuthority(absoluteRepoRoot);
+  const sealedDonors = new Map(
+    (authority.document?.donorProof?.donors ?? []).map((donor) => [donor.id, donor]),
+  );
+  const unavailableDonorIds = [];
+  const unexpectedUnavailableDonorIds = [];
+  const donorLiveChecks = [];
+
+  const donors = EXPECTED_DONOR_MANIFEST.map((expected) => {
+    const sealed = structuredClone(sealedDonors.get(expected.id) ?? { id: expected.id });
+    const availability = commitAvailability(absoluteRepoRoot, expected.tipSha);
+    if (availability.state === 'ABSENT') {
+      unavailableDonorIds.push(expected.id);
+      if (!RECEIPT_BOUND_AUTHORITY.allowedUnavailableDonorIds.includes(expected.id)) {
+        unexpectedUnavailableDonorIds.push(expected.id);
+      }
+    } else {
+      sealed.tip = {
+        sha: expected.tipSha,
+        objectType: availability.objectType,
+        expectedTree: expected.treeSha,
+        observedTree: availability.tree,
+      };
+    }
+
+    const integrationParents = parentsOf(absoluteRepoRoot, expected.integrationCommit);
+    let methodProof;
+    let dashboardCut = null;
+    if (expected.integrationMethod === 'RECEIPTED_EQUIVALENCE') {
+      const cutEntries = parseTreeEntries(gitBytes(absoluteRepoRoot, [
+        'ls-tree', '-r', '-z', expected.integrationCommit, '--', expected.equivalence.path,
+      ]));
+      const cutSubtree = gitText(
+        absoluteRepoRoot,
+        ['rev-parse', `${expected.integrationCommit}:${expected.equivalence.path}`],
+      );
+      dashboardCut = {
+        path: expected.equivalence.path,
+        expectedTree: expected.equivalence.tree,
+        observedTree: cutSubtree,
+        expectedFileCount: expected.equivalence.fileCount,
+        observedFileCount: cutEntries.length,
+      };
+      if (availability.state === 'PRESENT') {
+        const donorEntries = parseTreeEntries(gitBytes(absoluteRepoRoot, [
+          'ls-tree', '-r', '-z', expected.tipSha, '--', expected.equivalence.path,
+        ]));
+        methodProof = {
+          kind: expected.integrationMethod,
+          equivalencePath: expected.equivalence.path,
+          expectedTree: expected.equivalence.tree,
+          donorSubtree: gitText(
+            absoluteRepoRoot,
+            ['rev-parse', `${expected.tipSha}:${expected.equivalence.path}`],
+          ),
+          cutSubtree,
+          expectedFileCount: expected.equivalence.fileCount,
+          donorFileCount: donorEntries.length,
+          cutFileCount: cutEntries.length,
+          exactEntries: exactJson(donorEntries, cutEntries),
+          donorTipAncestorOfCandidate: isAncestor(absoluteRepoRoot, expected.tipSha, candidateSha),
+        };
+      } else {
+        methodProof = structuredClone(sealed?.integration?.methodProof ?? null);
+      }
+    } else {
+      methodProof = {
+        kind: expected.integrationMethod,
+        exactParents: exactJson(integrationParents, expected.integrationParents),
+        donorIsSecondParent: integrationParents.length === 2
+          && integrationParents[1] === expected.tipSha,
+        donorTipAncestorOfCandidate: isAncestor(absoluteRepoRoot, expected.tipSha, candidateSha),
+      };
+    }
+
+    const integrationReceipt = collectReceipt(
+      absoluteRepoRoot,
+      candidateSha,
+      expected.integrationReceipt,
+      absoluteRepoRoot,
+    );
+    sealed.integration = {
+      method: expected.integrationMethod,
+      commit: expected.integrationCommit,
+      objectType: gitText(absoluteRepoRoot, ['cat-file', '-t', expected.integrationCommit]),
+      expectedTree: expected.integrationTree,
+      observedTree: gitText(absoluteRepoRoot, ['rev-parse', `${expected.integrationCommit}^{tree}`]),
+      expectedParents: expected.integrationParents,
+      observedParents: integrationParents,
+      ancestorOfCandidate: isAncestor(absoluteRepoRoot, expected.integrationCommit, candidateSha),
+      methodProof,
+      receipt: integrationReceipt,
+    };
+    donorLiveChecks.push({
+      id: expected.id,
+      tipAvailability: availability,
+      unavailableDisposition: availability.state === 'ABSENT'
+        ? (RECEIPT_BOUND_AUTHORITY.allowedUnavailableDonorIds.includes(expected.id)
+            ? 'EXPECTED_NON_ANCESTOR_IN_SINGLE_BRANCH'
+            : 'UNEXPECTED_MISSING')
+        : 'DIRECT_GIT_OBJECT_VERIFIED',
+      integrationObjectVerified: sealed.integration.objectType === 'commit'
+        && sealed.integration.observedTree === expected.integrationTree
+        && exactJson(sealed.integration.observedParents, expected.integrationParents)
+        && sealed.integration.ancestorOfCandidate === true,
+      integrationReceiptVerified: integrationReceipt.observedSha256
+        === expected.integrationReceipt.sha256,
+      dashboardCut,
+    });
+    return sealed;
+  });
+
+  const firstParentMergeShas = gitText(absoluteRepoRoot, [
+    'rev-list', '--first-parent', '--reverse', '--min-parents=2',
+    `${PHASE2_GRAPH_BOUNDARY.windowStart}..${PHASE2_GRAPH_BOUNDARY.requiredLastMerge}`,
+  ]).split('\n').filter(Boolean);
+  const firstParentMerges = firstParentMergeShas.map((commit) => ({
+    commit,
+    tree: gitText(absoluteRepoRoot, ['rev-parse', `${commit}^{tree}`]),
+    parents: parentsOf(absoluteRepoRoot, commit),
+  }));
+  const laterMergeText = gitText(absoluteRepoRoot, [
+    'rev-list', '--reverse', '--min-parents=2',
+    `${PHASE2_GRAPH_BOUNDARY.requiredLastMerge}..${candidateSha}`,
+  ]);
+  const laterMerges = laterMergeText === '' ? [] : laterMergeText.split('\n');
+
+  const donorsById = new Map(EXPECTED_DONOR_MANIFEST.map((donor) => [donor.id, donor]));
+  const integrationOrderPairs = INTEGRATION_ORDER.slice(0, -1).map((id, index) => {
+    const nextId = INTEGRATION_ORDER[index + 1];
+    return {
+      before: id,
+      after: nextId,
+      isAncestor: isAncestor(
+        absoluteRepoRoot,
+        donorsById.get(id).integrationCommit,
+        donorsById.get(nextId).integrationCommit,
+      ),
+    };
+  });
+
+  const sealedExclusions = new Map(
+    (authority.document?.donorProof?.exclusions ?? []).map((entry) => [entry.id, entry]),
+  );
+  const unavailableExclusionIds = [];
+  const unexpectedUnavailableExclusionIds = [];
+  const exclusions = EXPECTED_EXCLUSIONS.map((expected) => {
+    const sealed = structuredClone(sealedExclusions.get(expected.id) ?? {
+      id: expected.id,
+      disposition: expected.disposition,
+    });
+    sealed.disposition = expected.disposition;
+    const availability = commitAvailability(absoluteRepoRoot, expected.tipSha);
+    if (availability.state === 'ABSENT') {
+      unavailableExclusionIds.push(expected.id);
+      if (!RECEIPT_BOUND_AUTHORITY.allowedUnavailableExclusionIds.includes(expected.id)) {
+        unexpectedUnavailableExclusionIds.push(expected.id);
+      }
+    } else {
+      sealed.tip = {
+        sha: expected.tipSha,
+        objectType: availability.objectType,
+        expectedTree: expected.treeSha,
+        observedTree: availability.tree,
+        ancestorOfCandidate: isAncestor(absoluteRepoRoot, expected.tipSha, candidateSha),
+      };
+    }
+    return sealed;
+  });
+
+  const integrationReceiptPaths = [...new Set(
+    EXPECTED_DONOR_MANIFEST.map((donor) => donor.integrationReceipt.path),
+  )];
+  const integrationReceiptWorktreeStatus = parseStatus(gitBytes(absoluteRepoRoot, [
+    'status', '--porcelain=v1', '-z', '--untracked-files=no', '--', ...integrationReceiptPaths,
+  ]));
+  const boundary = collectCloneBoundary(absoluteRepoRoot);
+
+  return {
+    schemaVersion: 'I00_DONOR_EQUALITY_OBSERVATION_V1',
+    evidenceMode: RECEIPT_BOUND_AUTHORITY.mode,
+    repoRoot: absoluteRepoRoot,
+    workspaceRoot: absoluteWorkspaceRoot,
+    candidate: {
+      requestedRef: candidateRef,
+      sha: candidateSha,
+      objectType: gitText(absoluteRepoRoot, ['cat-file', '-t', candidateSha]),
+      tree: gitText(absoluteRepoRoot, ['rev-parse', `${candidateSha}^{tree}`]),
+      descendsFromWindowStart: isAncestor(
+        absoluteRepoRoot,
+        PHASE2_GRAPH_BOUNDARY.windowStart,
+        candidateSha,
+      ),
+      descendsFromAuthorityAcceptance: isAncestor(
+        absoluteRepoRoot,
+        PHASE2_GRAPH_BOUNDARY.authorityAcceptance,
+        candidateSha,
+      ),
+      descendsFromRequiredLastMerge: isAncestor(
+        absoluteRepoRoot,
+        PHASE2_GRAPH_BOUNDARY.requiredLastMerge,
+        candidateSha,
+      ),
+    },
+    donors,
+    mergeWindow: {
+      start: PHASE2_GRAPH_BOUNDARY.windowStart,
+      expectedSequence: EXPECTED_PHASE2_MERGE_SEQUENCE,
+      observedSequence: firstParentMergeShas,
+      observed: firstParentMerges,
+      permittedNonDonor: PHASE2_GRAPH_BOUNDARY.permittedNonDonorMerge,
+      authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
+      laterMerges,
+    },
+    integrationOrder: { expected: INTEGRATION_ORDER, pairs: integrationOrderPairs },
+    exclusions,
+    integrationReceiptWorktreeStatus,
+    receiptBound: {
+      authority: authority.evidence,
+      cloneBoundary: boundary,
+      authoritySourceAncestorOfCheckout: isAncestor(
+        absoluteRepoRoot,
+        RECEIPT_BOUND_AUTHORITY.sourceCommit,
+        boundary.checkoutHead,
+      ),
+      unavailableDonorIds,
+      unexpectedUnavailableDonorIds,
+      unavailableExclusionIds,
+      unexpectedUnavailableExclusionIds,
+      donorLiveChecks,
+    },
+  };
+}
+
+export function collectDonorEqualityEvidence(options = {}) {
+  const repoRoot = path.resolve(options.repoRoot ?? DEFAULT_REPO_ROOT);
+  const boundary = collectCloneBoundary(repoRoot);
+  if (boundary.qualifiesForReceiptBoundMode) {
+    return collectReceiptBoundDonorEqualityEvidence({ ...options, repoRoot });
+  }
+  return collectFullWorkspaceDonorEqualityEvidence({ ...options, repoRoot });
+}
+
 function pushFailure(failures, code) {
   if (!failures.includes(code)) failures.push(code);
 }
 
 export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DONOR_ROWS } = {}) {
   const failures = validateManifest();
+  const expectedIds = EXPECTED_DONOR_MANIFEST.map((donor) => donor.id);
   if (!exactJson(expectedRows, EXPECTED_DONOR_ROWS)) pushFailure(failures, 'CALLER_EXPECTED_DONOR_TABLE_MISMATCH');
   if (observation?.schemaVersion !== 'I00_DONOR_EQUALITY_OBSERVATION_V1') {
     pushFailure(failures, 'OBSERVATION_SCHEMA_INVALID');
+  }
+  const evidenceMode = observation?.evidenceMode ?? 'LIVE_FULL_WORKSPACE';
+  if (evidenceMode !== 'LIVE_FULL_WORKSPACE'
+      && evidenceMode !== RECEIPT_BOUND_AUTHORITY.mode) {
+    pushFailure(failures, 'EVIDENCE_MODE_INVALID');
+  }
+  if (evidenceMode === RECEIPT_BOUND_AUTHORITY.mode) {
+    const receiptBound = observation?.receiptBound ?? {};
+    const authority = receiptBound.authority ?? {};
+    const expectedEquality = {
+      expected: 16,
+      discovered: 16,
+      accepted: 16,
+      integrated: 16,
+      proof: '16/16/16/16',
+    };
+    const authorityValid = authority.mode === RECEIPT_BOUND_AUTHORITY.mode
+      && authority.sourceCommit === RECEIPT_BOUND_AUTHORITY.sourceCommit
+      && authority.sourceCommitObjectType === 'commit'
+      && authority.path === RECEIPT_BOUND_AUTHORITY.path
+      && authority.objectType === 'blob'
+      && authority.expectedBlobSha === RECEIPT_BOUND_AUTHORITY.blobSha
+      && authority.observedBlobSha === RECEIPT_BOUND_AUTHORITY.blobSha
+      && authority.expectedSha256 === RECEIPT_BOUND_AUTHORITY.sha256
+      && authority.observedSha256 === RECEIPT_BOUND_AUTHORITY.sha256
+      && authority.receiptSchemaVersion === RECEIPT_BOUND_AUTHORITY.receiptSchemaVersion
+      && authority.receiptCandidate === RECEIPT_BOUND_AUTHORITY.receiptCandidate
+      && exactJson(authority.donorEquality, expectedEquality)
+      && exactJson(authority.donorRows, EXPECTED_DONOR_ROWS)
+      && authority.sealedProofStatus === 'PASS'
+      && exactJson(authority.sealedProofCounts, {
+        expected: 16,
+        discovered: 16,
+        accepted: 16,
+        integrated: 16,
+      })
+      && Object.values(authority.sealedProofExactSets ?? {}).length === 4
+      && Object.values(authority.sealedProofExactSets ?? {})
+        .every((ids) => exactJson(ids, expectedIds))
+      && exactJson(authority.sealedProofFailures, [])
+      && authority.expectedSealedProofSha256 === RECEIPT_BOUND_AUTHORITY.sealedProofSha256
+      && authority.claimedSealedProofSha256 === RECEIPT_BOUND_AUTHORITY.sealedProofSha256
+      && authority.recomputedSealedProofSha256 === RECEIPT_BOUND_AUTHORITY.sealedProofSha256;
+    if (!authorityValid) pushFailure(failures, 'RECEIPT_BOUND_AUTHORITY_INVALID');
+
+    const boundary = receiptBound.cloneBoundary ?? {};
+    const branch = boundary.branch;
+    const boundaryValid = boundary.qualifiesForReceiptBoundMode === true
+      && boundary.worktreeCount === 1
+      && boundary.soleWorktreeMatchesRepo === true
+      && boundary.detached === true
+      && FULL_SHA.test(boundary.checkoutHead ?? '')
+      && typeof branch === 'string'
+      && branch.length > 0
+      && exactJson(
+        boundary.fetchRefspecs,
+        [`+refs/heads/${branch}:refs/remotes/origin/${branch}`],
+      )
+      && exactJson(boundary.localBranches, [`refs/heads/${branch}`])
+      && exactJson(boundary.remoteBranches, [`refs/remotes/origin/${branch}`])
+      && boundary.singleBranchRefsExact === true
+      && boundary.currentMainPresent === false
+      && boundary.shallow === false
+      && boundary.alternatesPresent === false
+      && receiptBound.authoritySourceAncestorOfCheckout === true;
+    if (!boundaryValid) pushFailure(failures, 'RECEIPT_BOUND_CLONE_BOUNDARY_INVALID');
+
+    const unavailableDonorIds = receiptBound.unavailableDonorIds ?? [];
+    if (!Array.isArray(unavailableDonorIds)
+        || unavailableDonorIds.some((id) => (
+          !RECEIPT_BOUND_AUTHORITY.allowedUnavailableDonorIds.includes(id)
+        ))
+        || !exactJson(receiptBound.unexpectedUnavailableDonorIds, [])) {
+      pushFailure(failures, 'UNEXPECTED_UNAVAILABLE_DONOR_OBJECT');
+    }
+    const unavailableExclusionIds = receiptBound.unavailableExclusionIds ?? [];
+    if (!Array.isArray(unavailableExclusionIds)
+        || unavailableExclusionIds.some((id) => (
+          !RECEIPT_BOUND_AUTHORITY.allowedUnavailableExclusionIds.includes(id)
+        ))
+        || !exactJson(receiptBound.unexpectedUnavailableExclusionIds, [])) {
+      pushFailure(failures, 'UNEXPECTED_UNAVAILABLE_EXCLUSION_OBJECT');
+    }
+    const liveChecks = Array.isArray(receiptBound.donorLiveChecks)
+      ? receiptBound.donorLiveChecks
+      : [];
+    if (!exactJson(liveChecks.map((entry) => entry.id), expectedIds)) {
+      pushFailure(failures, 'RECEIPT_BOUND_LIVE_CHECK_SET_INVALID');
+    }
+    for (const expected of EXPECTED_DONOR_MANIFEST) {
+      const live = liveChecks.find((entry) => entry.id === expected.id);
+      const availability = live?.tipAvailability ?? {};
+      const availabilityValid = availability.commit === expected.tipSha
+        && (
+          (availability.state === 'PRESENT'
+            && availability.objectType === 'commit'
+            && availability.tree === expected.treeSha
+            && live?.unavailableDisposition === 'DIRECT_GIT_OBJECT_VERIFIED')
+          || (availability.state === 'ABSENT'
+            && RECEIPT_BOUND_AUTHORITY.allowedUnavailableDonorIds.includes(expected.id)
+            && live?.unavailableDisposition === 'EXPECTED_NON_ANCESTOR_IN_SINGLE_BRANCH')
+        );
+      if (!availabilityValid
+          || live?.integrationObjectVerified !== true
+          || live?.integrationReceiptVerified !== true) {
+        pushFailure(failures, `${expected.id}_RECEIPT_BOUND_LIVE_CHECK_INVALID`);
+      }
+      if (expected.integrationMethod === 'RECEIPTED_EQUIVALENCE') {
+        const cut = live?.dashboardCut ?? {};
+        if (cut.path !== expected.equivalence.path
+            || cut.expectedTree !== expected.equivalence.tree
+            || cut.observedTree !== expected.equivalence.tree
+            || cut.expectedFileCount !== expected.equivalence.fileCount
+            || cut.observedFileCount !== expected.equivalence.fileCount) {
+          pushFailure(failures, `${expected.id}_RECEIPT_BOUND_CUT_INVALID`);
+        }
+      } else if (live?.dashboardCut !== null) {
+        pushFailure(failures, `${expected.id}_UNEXPECTED_EQUIVALENCE_CUT`);
+      }
+    }
   }
   const candidate = observation?.candidate ?? {};
   if (candidate.objectType !== 'commit' || !FULL_SHA.test(candidate.sha ?? '') || !FULL_SHA.test(candidate.tree ?? '')) {
@@ -627,7 +1182,6 @@ export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DON
 
   const observedDonors = Array.isArray(observation?.donors) ? observation.donors : [];
   const observedIds = observedDonors.map((donor) => donor.id);
-  const expectedIds = EXPECTED_DONOR_MANIFEST.map((donor) => donor.id);
   if (!exactJson(observedIds, expectedIds) || new Set(observedIds).size !== 16) {
     pushFailure(failures, 'DONOR_ID_SET_INVALID');
   }
@@ -783,12 +1337,13 @@ export function evaluateDonorEquality(observation, { expectedRows = EXPECTED_DON
   const exclusionProofs = [];
   for (const expected of EXPECTED_EXCLUSIONS) {
     const observed = observedExclusions.find((entry) => entry.id === expected.id);
+    const expectedAncestor = expected.candidateAncestry === 'REQUIRED';
     const valid = observed?.disposition === expected.disposition
       && observed?.tip?.sha === expected.tipSha
       && observed?.tip?.objectType === 'commit'
       && observed?.tip?.expectedTree === expected.treeSha
       && observed?.tip?.observedTree === expected.treeSha
-      && observed?.tip?.ancestorOfCandidate === false
+      && observed?.tip?.ancestorOfCandidate === expectedAncestor
       && observed?.worktree?.observedHead === expected.tipSha
       && observed?.worktree?.observedBranch === `refs/heads/${expected.worktree.branch}`;
     if (!valid) pushFailure(failures, `${expected.id}_EXCLUSION_PROOF_INVALID`);

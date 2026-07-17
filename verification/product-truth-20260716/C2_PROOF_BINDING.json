@@ -1,0 +1,68 @@
+{
+  "schema": "product-truth-c2-proof-binding.v1",
+  "candidate_sha": null,
+  "candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "candidate_tree": null,
+  "candidate_parent": null,
+  "binding": "SOURCE_COMMIT_CANNOT_SELF_NAME",
+  "artifacts": [
+    {
+      "relative_path": "fixtures/i00/closure-evidence.json",
+      "candidate_git_blob": null,
+      "sha256": "817dcec623bfa4d6734113571ec56422f46845c34a7f7d0fefde2463d797a82d",
+      "byte_length": 123182
+    },
+    {
+      "relative_path": "fixtures/i00/proof-catalog.json",
+      "candidate_git_blob": null,
+      "sha256": "c8b15cb7ac1fbc3094c44c9630a99b8ea5c748ef537142d5f2bbc1e1e5e30a1a",
+      "byte_length": 37373
+    },
+    {
+      "relative_path": "fixtures/i00/living-director-input-acceptance.json",
+      "candidate_git_blob": null,
+      "sha256": "03bdbc0ca78b2e1069bc55a7cea81c92fa21d818f40bc5114344e38c1e58fc68",
+      "byte_length": 3123
+    },
+    {
+      "relative_path": "MISSION_COVERAGE_MATRIX.md",
+      "candidate_git_blob": null,
+      "sha256": "0af12b593bcadd67fb649155f13a0203c3d03be90293e31494bb50e33b51feae",
+      "byte_length": 104025
+    },
+    {
+      "relative_path": "AUTONOMY_CLOSURE_REPORT.md",
+      "candidate_git_blob": null,
+      "sha256": "946c35897aa519ccfe2661b008cef874b2be9f0274a2176b0ee9ebd57b86b9d9",
+      "byte_length": 11585
+    },
+    {
+      "relative_path": "NO_TERMINAL_DEPENDENCY_REPORT.md",
+      "candidate_git_blob": null,
+      "sha256": "eb13b346a4acafee8bf1477f43ca9f8ca2dcde2819d961e50ad353d4c3aac7ad",
+      "byte_length": 11471
+    },
+    {
+      "relative_path": "RESOURCE_AND_BACKPRESSURE_REPORT.md",
+      "candidate_git_blob": null,
+      "sha256": "c0c7daaa16516bd60409bd8eecdf0fe33dd5c466981ecdd581d5dd1483b43f8c",
+      "byte_length": 14709
+    },
+    {
+      "relative_path": "OFFICIAL_INTERFACE_MATRIX.md",
+      "candidate_git_blob": null,
+      "sha256": "15de6e6e6d3f648c037c6267855ed0f45da66a4d851628d8317d7a09d644acbb",
+      "byte_length": 18431
+    },
+    {
+      "relative_path": "integration/reports/i00-proof-evidence.json",
+      "candidate_git_blob": null,
+      "sha256": "8c45974c2b27f1c92fb7bb53b2a50f3146233614015b218105374863dff7a9b7",
+      "byte_length": 529097
+    }
+  ],
+  "browser_proof": "DEFERRED_OWNER_GATE; EXACT_C2_RENDERED_BROWSER_RECEIPT_NOT_PRODUCED",
+  "runtime_proof": "DEFERRED_OWNER_GATE; EXACT_C2_COMPOSED_RUNTIME_RECEIPT_NOT_PRODUCED",
+  "real_soak": "NOT_RUN",
+  "authority_granted": false
+}

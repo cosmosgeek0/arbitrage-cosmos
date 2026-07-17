@@ -36,7 +36,7 @@
     "test:focused": "npm run build -w server && npm run test:focused:built",
     "test:protocol:built": "node packages/edge-protocol-tests/protocol.test.mjs",
     "test:protocol": "npm run test:protocol:built",
-    "test:deterministic:built": "npm run test:engine:built && npm run test:focused:built && npm run test:product-assurance:built && npm run test:i00:acceptance-contract",
+    "test:deterministic:built": "node server/test/run-deterministic-network-free.mjs",
     "test:server:built": "npm run test:deterministic:built",
     "test:server": "npm run build && npm run test:server:built",
     "test:intelligence:built": "node --test --test-concurrency=1 --test-reporter=dot \"server/test/intelligenceFoundation/**/*.test.mjs\"",
@@ -61,11 +61,13 @@
     "test:i00:acceptance-contract": "node --test --test-concurrency=1 --test-reporter=spec \"test/i00/performance/*.test.mjs\"",
     "test:i00:performance": "node test/i00/performance/local-proxy-soak.mjs --run",
     "test:i00:complete": "node test/i00/complete-acceptance.mjs",
-    "test:product-assurance:built": "node test/i00/run-product-assurance.mjs",
+    "test:product-assurance:core:built": "node test/i00/run-product-assurance.mjs",
+    "test:product-assurance:formal-action:built": "node --test --test-concurrency=1 --test-reporter=spec \"test/productAssurance/systemic/formal/**/*.test.mjs\" \"test/productAssurance/systemic/actionEvidence/**/*.test.mjs\"",
+    "test:product-assurance:built": "npm run test:product-assurance:core:built && npm run test:product-assurance:formal-action:built",
     "test:product-assurance": "npm run build -w server && npm run test:product-assurance:built",
     "test:live-edge:built": "node --test --test-concurrency=1 --test-reporter=spec \"server/test/liveEdge/**/*.test.mjs\"",
     "test:all:built": "npm run test:deterministic:built && npm run test:app:built && npm run test:intelligence:built && npm run test:intelligence:runtime:built && npm run test:capital:built && npm run test:foundation:built && npm run test:integration:built && npm run test:protocol:built && npm run test:product-integration:built && npm run test:product-control:built && npm run test:i00:proof:built && npm run test:i00:commands && npm run test:live-edge:built",
     "test:all": "npm run typecheck && npm run build && npm run test:all:built",
-    "test": "npm run typecheck && npm run build && npm run test:deterministic:built"
+    "test": "node server/test/run-deterministic-network-free.mjs --root"
   }
 }

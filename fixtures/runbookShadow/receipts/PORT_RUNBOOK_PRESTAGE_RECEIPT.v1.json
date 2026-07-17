@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "packetId": "PORT-RUNBOOK",
+  "packetName": "PORT-RUNBOOK",
+  "packetDisposition": "POST_LANDING_PORT_PRESTAGE",
+  "terminalState": "PORT_RUNBOOK_PRESTAGE_READY",
+  "authorityCreated": false,
+  "branch": "port-runbook-20260716",
+  "baseCommit": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "baseTree": "3adef4d97ab595a8c81a307bac8dce22d037abdb",
+  "implementationParentSha": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
+  "implementationCommit": "ef7bb7939c315c49ee0bb6fed8d3ed11020480d3",
+  "implementationTree": "732c48f4a95a132c75f5604b3e605d47f90f1b67",
+  "sealCommitIdentity": "ENCLOSING_GIT_COMMIT_SHA_IS_AUTHORITATIVE_AND_IS_NOT_SELF_RECORDED",
+  "directiveEvidence": {
+    "directive": "D-LAUNCH-51",
+    "commit": "e619ff18ef159c27061cfaf318036e18a4fac131",
+    "tree": "b54be2c72896973ae76ad8a84d19bcbe79a26f3d",
+    "directorStatePath": "QL_DIRECTOR_STATE.md",
+    "directorStateBlob": "2a637746e24d378f955a7afd425728ece1250b87",
+    "workerPromptsPath": "WORKER_PROMPTS.md",
+    "workerPromptsBlob": "bb77b141bab0b153b1277dd164bd3e62ea218325"
+  },
+  "sourceEvidence": {
+    "branch": "runbook-shadow-20260715",
+    "payloadBase": "098f7b9449ab3b1c26bda19f51537bfea01d4c48",
+    "shadowImplementationCommit": "c1e296c760740e82572c38ceafc9e5cf87e95e60",
+    "sealedCommit": "25a3762cac93f2cad8045720ef00ae2f134d7966",
+    "sealedTree": "5fd4ea1b8be15680ee630a834bbec35ae55abde5",
+    "shadowReceiptPath": "fixtures/runbookShadow/receipts/RUNBOOK_SHADOW_RECEIPT.v1.json",
+    "shadowReceiptBlob": "710d6ee6e020636f164259a073242a167e60e023",
+    "shadowReceiptDisposition": "LINEAGE_ONLY_NOT_ACCEPTANCE",
+    "sourcePathCount": 27
+  },
+  "portPlanEvidence": {
+    "scriptPath": "/Users/cosmosgeek/Desktop/port-plan/portPlan/runbook-port.sh",
+    "scriptSha256": "bb03b6b0c047ae1d616e91cca08d9f7ba07201e4e58b214883572adc5180f845",
+    "conflictReportPath": "/Users/cosmosgeek/Desktop/port-plan/PORT_PLAN.md",
+    "conflictReportSha256": "b9bc9fc0297b59eb9f04ce2334f028a53949c84ddd5282c341bbb77e4e145802",
+    "prePortCheck": "RUNBOOK_PORT_CHECK_OK target=492e3f69b054c85686bcfc4c09dbff4ababeda3f payload=098f7b9449ab3b1c26bda19f51537bfea01d4c48..25a3762cac93f2cad8045720ef00ae2f134d7966 source_ref=refs/heads/runbook-shadow-20260715",
+    "applyDisposition": "NOT_RUN_OBSOLETE_RELOCATION_CONFLICTS_WITH_D_LAUNCH_51_ROOTS"
+  },
+  "registryEvidence": {
+    "branch": "aiops-prestage-20260714",
+    "commit": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
+    "tree": "b2e0b07a145861d984b0048725f030b84127e92d",
+    "collisionMapPath": "AI_OPS_COLLISION_MAP.md",
+    "collisionMapBlob": "5f76b29a81b6af4eee7a156afc16979fea02635e",
+    "schemaPath": "fixtures/productAssurance/systemic/agentBoundary/agent-boundary-v1.schema.json",
+    "schemaBlobAtBase": "042456c58b1cd5b6eb179c0c9c289f6e69d06034",
+    "schemaDefinition": "InsertionRequestRowV1"
+  },
+  "changedPaths": {
+    "implementation": [
+      "fixtures/runbookShadow/drills.v1.json",
+      "fixtures/runbookShadow/entry-gate.v1.json",
+      "fixtures/runbookShadow/insertion-requests.v1.json",
+      "test/runbookShadow/cli.test.mjs",
+      "test/runbookShadow/drills.test.mjs",
+      "test/runbookShadow/drills/emergency-stop.mjs",
+      "test/runbookShadow/drills/reconciliation-failure.mjs",
+      "test/runbookShadow/drills/restart-during-ambiguity.mjs",
+      "test/runbookShadow/drills/restore.mjs",
+      "test/runbookShadow/drills/rollback.mjs",
+      "test/runbookShadow/drills/source-loss.mjs",
+      "test/runbookShadow/drills/stale-truth.mjs",
+      "test/runbookShadow/drills/watchdog-failure.mjs",
+      "test/runbookShadow/entry-gate.test.mjs",
+      "test/runbookShadow/hostile.test.mjs",
+      "test/runbookShadow/import-purity.test.mjs",
+      "test/runbookShadow/lib/cli.mjs",
+      "test/runbookShadow/lib/constants.mjs",
+      "test/runbookShadow/lib/native-owner-loader.mjs",
+      "test/runbookShadow/lib/network-deny.mjs",
+      "test/runbookShadow/lib/receipt.mjs",
+      "test/runbookShadow/lib/runner.mjs",
+      "test/runbookShadow/projection-contract.test.mjs",
+      "test/runbookShadow/run-all.mjs",
+      "test/runbookShadow/scope.test.mjs"
+    ],
+    "seal": [
+      "fixtures/runbookShadow/receipts/PORT_RUNBOOK_PRESTAGE_RECEIPT.v1.json",
+      "test/runbookShadow/receipt-seal.test.mjs"
+    ],
+    "all": [
+      "fixtures/runbookShadow/drills.v1.json",
+      "fixtures/runbookShadow/entry-gate.v1.json",
+      "fixtures/runbookShadow/insertion-requests.v1.json",
+      "fixtures/runbookShadow/receipts/PORT_RUNBOOK_PRESTAGE_RECEIPT.v1.json",
+      "test/runbookShadow/cli.test.mjs",
+      "test/runbookShadow/drills.test.mjs",
+      "test/runbookShadow/drills/emergency-stop.mjs",
+      "test/runbookShadow/drills/reconciliation-failure.mjs",
+      "test/runbookShadow/drills/restart-during-ambiguity.mjs",
+      "test/runbookShadow/drills/restore.mjs",
+      "test/runbookShadow/drills/rollback.mjs",
+      "test/runbookShadow/drills/source-loss.mjs",
+      "test/runbookShadow/drills/stale-truth.mjs",
+      "test/runbookShadow/drills/watchdog-failure.mjs",
+      "test/runbookShadow/entry-gate.test.mjs",
+      "test/runbookShadow/hostile.test.mjs",
+      "test/runbookShadow/import-purity.test.mjs",
+      "test/runbookShadow/lib/cli.mjs",
+      "test/runbookShadow/lib/constants.mjs",
+      "test/runbookShadow/lib/native-owner-loader.mjs",
+      "test/runbookShadow/lib/network-deny.mjs",
+      "test/runbookShadow/lib/receipt.mjs",
+      "test/runbookShadow/lib/runner.mjs",
+      "test/runbookShadow/projection-contract.test.mjs",
+      "test/runbookShadow/receipt-seal.test.mjs",
+      "test/runbookShadow/run-all.mjs",
+      "test/runbookShadow/scope.test.mjs"
+    ]
+  },
+  "implementationManifest": {
+    "pathCount": 25,
+    "pathListSha256": "05fa8b66df1a289955548b1865a0cde7a86f26fcb10687059207b9aa70aa22dd",
+    "scopedLsTreeSha256": "9ecad3ef9d64c99baa76462664628c72e9c56207a8f43dec71a0c58136547f87",
+    "stablePatchId": "bf13c221da8f9ba90f5f61de9b91062642274e44"
+  },
+  "drillReceipts": [
+    {"drillId":"source-loss","result":"PASS","exitCode":0,"assertionPassed":6,"assertionTotal":6,"receiptDigestSha256":"ca86e3ea57ed9813d445a1f66edeadf7c569d758ab366de681a472e3318f31b6","ownerEvidenceDigestSha256":"fa209b5a7b21149557db57c4da60b47f6fc3912997bce1168cfff8f1529c175b","observedTerminals":["BLOCKED_STALE_PUBLIC"]},
+    {"drillId":"stale-truth","result":"PASS","exitCode":0,"assertionPassed":7,"assertionTotal":7,"receiptDigestSha256":"3fd3ea512585701482c8938483ee9bf79d421b0fd92f1eec22974aa42598e034","ownerEvidenceDigestSha256":"bb2e08795e4ae38ed55159d773cc7d990f09d33f46bbb3b76424dd9ef7754e59","observedTerminals":["BLOCKED_STALE_PUBLIC","BLOCKED_STALE_PRIVATE_RECOVERY_VISIBLE","Q_STALE_ABSTAIN"]},
+    {"drillId":"restart-during-ambiguity","result":"PASS","exitCode":0,"assertionPassed":7,"assertionTotal":7,"receiptDigestSha256":"43a306d1ed951d359fe275f81171ab6bc3153d2a46bc6881d23986baea767a77","ownerEvidenceDigestSha256":"828c68874269badabb0ff04047d8f30d5019a799cf53410b8568f669a13d5943","observedTerminals":["RECONCILED_NO_DUPLICATE","RECOVERY_REQUIRED_ONE_LEG","READY_AFTER_RECONCILIATION","RECONCILED_AFTER_DB_FAILURE"]},
+    {"drillId":"watchdog-failure","result":"PASS","exitCode":0,"assertionPassed":8,"assertionTotal":8,"receiptDigestSha256":"298154406b2fdde828fb7815e9f5f0537f6b77d005155df62e970270bec75996","ownerEvidenceDigestSha256":"a68fce5d4c9b57a9641a788a9ea7125345a3d14e4b63e1c83942b0a6578ceb41","observedTerminals":["ONE_INCIDENT_100_EVENTS"]},
+    {"drillId":"rollback","result":"PASS","exitCode":0,"assertionPassed":5,"assertionTotal":5,"receiptDigestSha256":"d539f523c10126469d71dcaff529ca8bcfc3eded023dc719f46be57cf32d3a62","ownerEvidenceDigestSha256":"9a6a0e04f99229b360bd0827dc5f825406745abadcc3312d1a63ac7f25f20dc1","observedTerminals":["PREFLIGHT_REJECTED_CURRENT_RELEASE_ACTIVE"]},
+    {"drillId":"restore","result":"PASS","exitCode":0,"assertionPassed":5,"assertionTotal":5,"receiptDigestSha256":"7c76919c42ce5a67de2577e09036b23f2290970cdad082b04d63f2ba39d38cf7","ownerEvidenceDigestSha256":"9526f7a9fdd5ec8d37c8806da8860168f1ce569898ea2f3c7153136926782f41","observedTerminals":["ISOLATED_RESTORE_NO_PRODUCTION_MUTATION"]},
+    {"drillId":"reconciliation-failure","result":"PASS","exitCode":0,"assertionPassed":7,"assertionTotal":7,"receiptDigestSha256":"5700de0c268202f006492020d648d06d87a343ad1454113cecb0cace7ad3c81a","ownerEvidenceDigestSha256":"25213af60e8bcb704b05067d73267cacad587fec4abcdaec5235c5ea7f97e733","observedTerminals":["RECONCILED_NO_DUPLICATE","RECOVERY_REQUIRED_ONE_LEG","RECONCILED_AFTER_DB_FAILURE"]},
+    {"drillId":"emergency-stop","result":"PASS","exitCode":0,"assertionPassed":8,"assertionTotal":8,"receiptDigestSha256":"f67479bcc22cabbc36f443aa6e9a4092c712b18cb0b96e39271a99b791e782a1","ownerEvidenceDigestSha256":"3aee7bbc214e260fa7248398980a1a9e0ca9077cf7c30a4f96697e2a2ce6ad94","observedTerminals":["KILLED_ADDITIONS_RECOVERY_VISIBLE","ALREADY_APPLIED"]}
+  ],
+  "verification": [
+    {"id":"focused-os-network-denied-preseal","command":"/usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' node --test --test-concurrency=1 --test-reporter=spec test/runbookShadow/cli.test.mjs test/runbookShadow/drills.test.mjs test/runbookShadow/entry-gate.test.mjs test/runbookShadow/hostile.test.mjs test/runbookShadow/import-purity.test.mjs test/runbookShadow/projection-contract.test.mjs test/runbookShadow/scope.test.mjs","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":0,"passed":15,"failed":0},
+    {"id":"direct-run-all-os-network-denied","command":"/usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' node test/runbookShadow/run-all.mjs","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":0,"passed":8,"failed":0,"assertionPassed":53,"assertionFailed":0,"networkAttempts":0,"stdoutSha256":"4754e6eff525ce64ba628ecc46a7181917a2f75aaad899a6ee951bd29a9b9f97"},
+    {"id":"javascript-syntax","command":"find test/runbookShadow -type f -name '*.mjs' -print0 | sort -z | xargs -0 -n1 node --check","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":0,"checked":22},
+    {"id":"json-parse","command":"find fixtures/runbookShadow -type f -name '*.json' -print0 | sort -z | xargs -0 -n1 jq -e .","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":0,"checked":3},
+    {"id":"npm-test","command":"npm test","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":1,"typecheck":"PASS","build":"PASS","failure":"PRODUCT_ASSURANCE_RUN_FAILED:A_CASE_S4_SAFE_PURITY","failedTest":"protected untracked I00 input remains byte-identical","failedPath":"test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs","disposition":"OUT_OF_SCOPE_D_LAUNCH_51_S4_WORKTREE_STATE_DEFECT_FAMILY"},
+    {"id":"npm-test-all","command":"npm run test:all","atCommit":"ef7bb7939c315c49ee0bb6fed8d3ed11020480d3","exitCode":1,"typecheck":"PASS","build":"PASS","failure":"PRODUCT_ASSURANCE_RUN_FAILED:A_CASE_S4_SAFE_PURITY","failedTest":"protected untracked I00 input remains byte-identical","failedPath":"test/productAssurance/systemic/assuranceCase/purity-scope.test.mjs","disposition":"OUT_OF_SCOPE_D_LAUNCH_51_S4_WORKTREE_STATE_DEFECT_FAMILY"}
+  ],
+  "sealVerification": {
+    "command": "/usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' node --test --test-concurrency=1 --test-reporter=spec 'test/runbookShadow/*.test.mjs'",
+    "expectedPassed": 19,
+    "expectedFailed": 0,
+    "resultAuthority": "POST_COMMIT_RUN_ON_ENCLOSING_SEAL_COMMIT"
+  },
+  "zeroEffects": {
+    "capitalEffect": "0",
+    "notionalEffect": "0",
+    "credentialReads": 0,
+    "networkAttempts": 0,
+    "orderCalls": 0,
+    "externalMutations": 0,
+    "deploymentCalls": 0
+  },
+  "effectEvidence": {
+    "capitalEffect": "DECLARED_ZERO_SYNTHETIC_DOMAIN",
+    "notionalEffect": "DECLARED_ZERO_SYNTHETIC_DOMAIN",
+    "credentialReads": "ENFORCED_NO_ENV_OR_CREDENTIAL_PATH",
+    "networkAttempts": "OBSERVED_CANONICAL_EGRESS_TRIPWIRE_RUNBOOK_SUPPLEMENT_AND_OS_NETWORK_DENIAL",
+    "orderCalls": "ENFORCED_NO_MONEY_PATH_AND_SYNTHETIC_OWNER_INPUTS",
+    "externalMutations": "ENFORCED_EXCLUSIVE_PATH_AND_LOCAL_HARNESS_SCOPE",
+    "deploymentCalls": "ENFORCED_NO_OPS_OWNER_INVOCATION"
+  },
+  "insertionRequests": {
+    "manifestPath": "fixtures/runbookShadow/insertion-requests.v1.json",
+    "manifestBlobAtImplementationCommit": "3023252d59d52157b1b870b149c5b68a02f4a930",
+    "ids": ["AIOPS-IR-PERSISTENCE-003", "AIOPS-IR-COCKPIT-015", "AIOPS-IR-TEST-MOUNT-026"],
+    "serializedVerbatimFromImmutableRegistry": true,
+    "allStatusDraft": true,
+    "allRequireFreshIntegratorAdjudication": true,
+    "authorityCreated": false
+  },
+  "rootGateDisposition": {
+    "laneAcceptanceGreen": true,
+    "rootCommandsGreen": false,
+    "protectedOwnerInput": "I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+    "protectedOwnerInputPresent": false,
+    "ownerDirectiveEvidence": "D-LAUNCH-51 identifies the S4 harness as worktree-state-dependent and assigns the first post-landing correction to CI-HOTFIX.",
+    "workerAction": "NO_OUT_OF_SCOPE_FIX_OR_SYNTHETIC_OWNER_FILE"
+  },
+  "limitations": [
+    "All receipts are deterministic SYNTHETIC_ONLY evidence with SYNTHETIC_TEST authority; no production source, physical socket, private exchange source, order path, capital path, deployment, or external mutation is exercised.",
+    "The landed public-source startup-egress admission owner and canonical production restart-truth coordinator are not exercised; operational watchdog, rollback, restore, backup, and service-manager scripts are not invoked.",
+    "Network attempts are intercepted in process by the canonical System Integration tripwire plus RUNBOOK HTTP2, UDP, and DNS coverage and are additionally denied by macOS sandbox-exec; other zero-effect fields are constrained evidence, not universal machine instrumentation.",
+    "The native owner loader requires Node 22.18 or newer in practice because it relies on default TypeScript stripping and synchronous module hooks.",
+    "The immutable lineage and scope gates are PRESTAGE_ONLY: they require local side-branch refs and objects, the exact port-runbook-20260716 branch, and the assigned-base delta. They are not clean-clone or post-landing root-mountable unchanged.",
+    "A fresh integrator must regenerate branch-independent provenance and scope gates before adjudicating AIOPS-IR-TEST-MOUNT-026; this exact prestage suite must not be registered unchanged.",
+    "AIOPS-IR-PERSISTENCE-003, AIOPS-IR-COCKPIT-015, and AIOPS-IR-TEST-MOUNT-026 remain immutable-registry DRAFT requests and create no persistence, cockpit, package, or root-test authority.",
+    "Owner output re-execution and immutable owner blobs prove deterministic behavior, but runtimeExecutions is the declared operation plan rather than an instrumented call trace.",
+    "npm test and npm run test:all both stop at the out-of-scope S4 protected-untracked-owner-input purity assertion; typecheck and build pass, but no root-green claim is made and later test:all families do not execute after the short-circuit.",
+    "No browser, performance, soak, real restart, live watchdog, real rollback, real restore, durable drill-history, or cockpit mount is exercised.",
+    "The shadow receipt is retained only as source lineage and never substitutes for this real port receipt.",
+    "sandbox-exec is macOS-specific; Node 22's permission model does not provide a network-denial flag, so a future cross-platform mount needs an equivalent OS egress boundary."
+  ],
+  "nonClaims": [
+    "PORT_RUNBOOK_PRESTAGE_READY is lane prestage only, not integrated, deployed, capital, candidate, or production readiness.",
+    "No canonical owner, shared seam, route, package, persistence, navigation, auth, or cockpit surface is changed.",
+    "No root npm green status is claimed.",
+    "No shadow acceptance or shadow receipt is promoted.",
+    "No credential, signed/private exchange call, money path, transfer, withdrawal, borrow, repay, or live execution authority is created.",
+    "LIVE_EXECUTION_NOT_IMPLEMENTED remains the exact enforced barrier."
+  ]
+}

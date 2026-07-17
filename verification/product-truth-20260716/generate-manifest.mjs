@@ -1,134 +1,358 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const repo = process.cwd();
-const root = resolve(repo, 'verification/product-truth-20260716');
-const manifest = resolve(root, 'MANIFEST.sha256');
+const REQUIRED_C2_PARENT = 'dea2d2a5c2b5e83d3aea75b0e368f0a478596561';
+const REJECTED_PREDECESSOR = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
+const REJECTED_PREDECESSOR_TREE = 'a770f9f393e6229252731cd5247e9a1abfd2e509';
+const REJECTED_CANDIDATE_SHAS = Object.freeze([
+  REJECTED_PREDECESSOR,
+  '78f708d6cdb9d1618c53d3f08f71097b4320a63b',
+  '4c9143a0bcc331aa170e9e26b741240b39df8b9e',
+  '959a5f9900e25f53414710bbfb3464c3ccb67a5d',
+  '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
+  'a283eb859ec1142aadecbd64e0b84959535f6216',
+]);
+const CAMPAIGN_RELATIVE_ROOT = 'verification/product-truth-20260716';
+const EXACT_EVIDENCE_PATHS = Object.freeze([
+  'AI_OPS_C2_DISPOSITION.json',
+  'C2_PROOF_BINDING.json',
+  'CAPABILITY_TRUTH_MATRIX.csv',
+  'COCKPIT_BINDING_MATRIX.csv',
+  'DIRECTIVE_COVERAGE_MATRIX.csv',
+  'EVIDENCE_SELECTION.json',
+  'INDEPENDENT_FINDINGS.json',
+  'INPUTS.lock',
+  'LOCKED_INPUT_PAYLOADS.json',
+  'MANIFEST.json',
+  'MANIFEST.sha256',
+  'MERGE_PROVENANCE.json',
+  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
+  'STATE.md',
+  'WORKTREE_CENSUS.json',
+].map((name) => `${CAMPAIGN_RELATIVE_ROOT}/${name}`));
+const MANIFEST_JSON = 'MANIFEST.json';
+const MANIFEST_SHA256 = 'MANIFEST.sha256';
+const REQUIRED_MATRIX_COUNTS = Object.freeze({
+  'DIRECTIVE_COVERAGE_MATRIX.csv': 153,
+  'CAPABILITY_TRUTH_MATRIX.csv': 23,
+  'COCKPIT_BINDING_MATRIX.csv': 178,
+});
+const EXACT_AUTHORITY_FILES = Object.freeze([
+  'AI_OPS_C2_DISPOSITION.json',
+  'INPUTS.lock',
+  'DIRECTIVE_COVERAGE_MATRIX.csv',
+  'CAPABILITY_TRUTH_MATRIX.csv',
+  'COCKPIT_BINDING_MATRIX.csv',
+  'C2_PROOF_BINDING.json',
+  'EVIDENCE_SELECTION.json',
+  'INDEPENDENT_FINDINGS.json',
+  'LOCKED_INPUT_PAYLOADS.json',
+  'MERGE_PROVENANCE.json',
+  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
+  'STATE.md',
+  'WORKTREE_CENSUS.json',
+]);
+const BANNED_EXACT_EVIDENCE = Object.freeze([
+  REJECTED_PREDECESSOR,
+  REJECTED_PREDECESSOR_TREE,
+  'SELF_COMMIT_UNBOUND',
+  'SOURCE_COMMIT_CANNOT_SELF_NAME',
+  'C2_NOT_YET_FROZEN',
+  'exact-C2',
+  'EXACT_C2_',
+]);
+
 const candidateIndex = process.argv.indexOf('--candidate');
 const candidate = candidateIndex >= 0 ? process.argv[candidateIndex + 1] : null;
 const verifyOnly = process.argv.includes('--verify-only');
 if (!/^[a-f0-9]{40}$/u.test(candidate ?? '')) throw new Error('EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 
-function runGit(args, { allowFailure = false } = {}) {
+function runGit(args, { allowFailure = false, cwd = process.cwd() } = {}) {
   const result = spawnSync('git', args, {
-    cwd: repo, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', TZ: 'UTC', GIT_OPTIONAL_LOCKS: '0' },
-    maxBuffer: 32 * 1024 * 1024,
+    cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_OPTIONAL_LOCKS: '0',
+      LC_ALL: 'C',
+      TZ: 'UTC',
+    },
+    maxBuffer: 64 * 1024 * 1024,
   });
-  if (!allowFailure && result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+  if (!allowFailure && result.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);
+  }
   return result;
 }
-function git(...args) { return runGit(args).stdout.trim(); }
-function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
-function readJson(name) { return JSON.parse(readFileSync(resolve(root, name), 'utf8')); }
-function assertEqual(label, actual, expected) { if (actual !== expected) throw new Error(`${label}:${String(actual)}:${String(expected)}`); }
 
-assertEqual('CANDIDATE_COMMIT', git('rev-parse', `${candidate}^{commit}`), candidate);
-const candidateTree = git('rev-parse', `${candidate}^{tree}`);
-const candidateParent = git('rev-parse', `${candidate}^`);
-if (runGit(['merge-base', '--is-ancestor', candidate, 'HEAD'], { allowFailure: true }).status !== 0) {
-  throw new Error('CANDIDATE_NOT_ANCESTOR_OF_EVIDENCE_HEAD');
+const repo = runGit(['rev-parse', '--show-toplevel']).stdout.trim();
+const campaignRoot = resolve(repo, CAMPAIGN_RELATIVE_ROOT);
+const manifestJsonPath = resolve(campaignRoot, MANIFEST_JSON);
+const manifestSha256Path = resolve(campaignRoot, MANIFEST_SHA256);
+
+function git(...args) {
+  return runGit(args, { cwd: repo }).stdout.trim();
 }
 
-const inputLock = readJson('INPUTS.lock');
-const proof = readJson('C2_PROOF_BINDING.json');
-const gate = readJson('C2_GATE_REPORT.json');
-const findings = readJson('INDEPENDENT_FINDINGS.json');
-const selection = readJson('EVIDENCE_SELECTION.json');
-const aiOps = readJson('AI_OPS_C2_DISPOSITION.json');
-const productAssurance = readJson('PRODUCT_ASSURANCE_C2_DISPOSITION.json');
-const census = readJson('WORKTREE_CENSUS.json');
-const disposition = readJson('ARTIFACT_DISPOSITION.json');
-const binding = readJson('C2_EVIDENCE_BINDING.json');
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
-for (const [label, actual] of [
-  ['INPUT_LOCK', inputLock.candidate], ['PROOF', proof.candidate_sha], ['GATE', gate.candidate?.commit],
-  ['FINDINGS', findings.candidate_sha], ['SELECTION', selection.source_candidate], ['AI_OPS', aiOps.candidate_sha],
-  ['PRODUCT_ASSURANCE', productAssurance.candidate_sha], ['CENSUS', census.candidate_sha],
-  ['DISPOSITION', disposition.candidate_sha], ['BINDING', binding.candidate_sha],
-]) assertEqual(`${label}_CANDIDATE`, actual, candidate);
-for (const [label, actual] of [
-  ['INPUT_LOCK', inputLock.candidate_tree], ['PROOF', proof.candidate_tree], ['GATE', gate.candidate?.tree],
-  ['CENSUS', census.candidate_tree_sha], ['BINDING', binding.candidate_tree],
-]) assertEqual(`${label}_TREE`, actual, candidateTree);
-assertEqual('PROOF_PARENT', proof.candidate_parent, candidateParent);
-assertEqual('GATE_PARENT', gate.candidate?.parent, candidateParent);
-assertEqual('BINDING_PARENT', binding.candidate_parent, candidateParent);
-assertEqual('GATE_ALL_REQUIRED_COMMANDS', gate.all_required_commands_passed, true);
-assertEqual('GATE_INDEPENDENT', gate.independent, false);
-assertEqual('GATE_INDEPENDENT_TOKEN', gate.independent_token_issued, false);
-assertEqual('FRESH_CLONE_CLEAN', gate.fresh_single_branch_clone?.final_clean, true);
-assertEqual('FRESH_CLONE_HEAD', gate.fresh_single_branch_clone?.detached_head, candidate);
-assertEqual('FRESH_CLONE_CURRENT_MAIN_ABSENT', gate.fresh_single_branch_clone?.current_main_ref_present, false);
-assertEqual('CURRENT_MAIN_UNTOUCHED', gate.current_main?.touched_by_account_a, false);
-assertEqual('CENSUS_UNKNOWN', census.unknown_count, 0);
-assertEqual('BINDING_PASS0', binding.pass_0_gate, 'BLOCKED:C2_OFF_MACHINE_CUSTODY_NOT_ESTABLISHED');
+function gitBlob(bytes) {
+  const header = Buffer.from(`blob ${bytes.length}\0`, 'utf8');
+  return createHash('sha1').update(header).update(bytes).digest('hex');
+}
 
-const requiredCommands = [
-  [gate.local_checkout?.commands ?? [], 'npm test'],
-  [gate.local_checkout?.commands ?? [], 'npm run test:all'],
-  [gate.fresh_single_branch_clone?.commands ?? [], 'npm ci'],
-  [gate.fresh_single_branch_clone?.commands ?? [], 'npm test'],
-  [gate.fresh_single_branch_clone?.commands ?? [], 'npm run test:all'],
-];
-for (const [rows, command] of requiredCommands) {
-  if (!rows.some((row) => row.command === command && row.exit_code === 0 && /^[a-f0-9]{64}$/u.test(row.output_sha256 ?? ''))) {
-    throw new Error(`PASSING_GATE_COMMAND_MISSING:${command}`);
+function assertEqual(label, actual, expected) {
+  if (actual !== expected) throw new Error(`${label}:${JSON.stringify(actual)}:${JSON.stringify(expected)}`);
+}
+
+function readCampaignBytes(relativePath) {
+  return readFileSync(resolve(campaignRoot, relativePath));
+}
+
+function readCampaignText(relativePath) {
+  return readCampaignBytes(relativePath).toString('utf8');
+}
+
+function readCampaignJson(relativePath) {
+  try {
+    return JSON.parse(readCampaignText(relativePath));
+  } catch (error) {
+    throw new Error(`INVALID_JSON:${relativePath}:${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-for (const name of ['DIRECTIVE_COVERAGE_MATRIX.csv', 'CAPABILITY_TRUTH_MATRIX.csv']) {
-  const text = readFileSync(resolve(root, name), 'utf8');
-  if (text.includes('SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT')) throw new Error(`UNBOUND_MATRIX:${name}`);
-  if (!text.includes(candidate)) throw new Error(`CANDIDATE_MISSING_FROM_MATRIX:${name}`);
-}
-for (const name of ['STATE.md', 'FINAL_VERDICT.md', 'AUTHORITY_RESOLUTION.md', 'CLEAN_CLONE_ACCEPTANCE.md']) {
-  const text = readFileSync(resolve(root, name), 'utf8');
-  if (!text.includes(candidate)) throw new Error(`CURRENT_VERDICT_NOT_CANDIDATE_BOUND:${name}`);
-  if (text.includes('BASELINE_TRUTH_ACCEPTED:41752d6a87dc1cb1b933bb4460c9cabfc15ff694')) throw new Error(`REJECTED_OLD_TOKEN_IN_CURRENT_VERDICT:${name}`);
+function sorted(values) {
+  return [...values].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
 }
 
-const diffPaths = git('diff', '--name-only', candidate, '--').split('\n').filter(Boolean);
-for (const changed of diffPaths) {
-  if (!changed.startsWith('verification/product-truth-20260716/')) throw new Error(`POST_C2_PATH_OUTSIDE_ALLOWLIST:${changed}`);
+function parseCsv(text, name) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (quoted) {
+      if (character === '"') {
+        if (text[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += character;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      if (field.length > 0) throw new Error(`MALFORMED_CSV_QUOTE:${name}`);
+      quoted = true;
+    } else if (character === ',') {
+      row.push(field);
+      field = '';
+    } else if (character === '\n') {
+      row.push(field.endsWith('\r') ? field.slice(0, -1) : field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += character;
+    }
+  }
+
+  if (quoted) throw new Error(`UNTERMINATED_CSV_QUOTE:${name}`);
+  if (field.length > 0 || row.length > 0) {
+    row.push(field.endsWith('\r') ? field.slice(0, -1) : field);
+    rows.push(row);
+  }
+  if (rows.length < 2) throw new Error(`EMPTY_MATRIX:${name}`);
+  return rows;
 }
 
-function walk(directory) {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const absolute = resolve(directory, entry.name);
-    if (entry.isDirectory()) return walk(absolute);
-    if (!entry.isFile() || absolute === manifest) return [];
-    return [absolute];
-  });
-}
-function renderManifest() {
-  const rows = walk(root)
-    .sort((left, right) => relative(root, left).localeCompare(relative(root, right)))
-    .map((absolute) => {
-      const name = relative(root, absolute);
-      const bytes = readFileSync(absolute);
-      if (statSync(absolute).size !== bytes.length) throw new Error(`SIZE_DRIFT:${name}`);
-      return `${sha256(bytes)}  ${name}`;
-    });
-  return `${rows.join('\n')}\n`;
+function assertExactMatrix(name, expectedCount) {
+  const rows = parseCsv(readCampaignText(name), name);
+  const header = rows[0];
+  const candidateColumn = header.indexOf('candidate_sha');
+  if (candidateColumn < 0) throw new Error(`MATRIX_CANDIDATE_COLUMN_MISSING:${name}`);
+  if (header.lastIndexOf('candidate_sha') !== candidateColumn) {
+    throw new Error(`MATRIX_CANDIDATE_COLUMN_DUPLICATED:${name}`);
+  }
+
+  const dataRows = rows.slice(1);
+  assertEqual(`${name}_ROW_COUNT`, dataRows.length, expectedCount);
+  for (let index = 0; index < dataRows.length; index += 1) {
+    const row = dataRows[index];
+    assertEqual(`${name}_ROW_${index + 1}_COLUMN_COUNT`, row.length, header.length);
+    assertEqual(`${name}_ROW_${index + 1}_CANDIDATE`, row[candidateColumn], candidate);
+  }
 }
 
-const allClassified = new Set([
-  ...disposition.current_authority.map((row) => row.artifact),
-  ...disposition.historical_reference_only.map((row) => row.artifact),
-]);
-for (const absolute of walk(root)) {
-  const name = relative(root, absolute);
-  if (!allClassified.has(name)) throw new Error(`UNCLASSIFIED_CAMPAIGN_ARTIFACT:${name}`);
+assertEqual('CANDIDATE_COMMIT', git('rev-parse', `${candidate}^{commit}`), candidate);
+if (REJECTED_CANDIDATE_SHAS.includes(candidate)) {
+  throw new Error(`REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidate}`);
+}
+const candidateTree = git('rev-parse', `${candidate}^{tree}`);
+const candidateCommitRow = git('rev-list', '--parents', '-n', '1', candidate).split(/\s+/u);
+assertEqual('CANDIDATE_PARENT_COUNT', candidateCommitRow.length - 1, 1);
+const candidateParent = candidateCommitRow[1];
+assertEqual('CANDIDATE_SOLE_DIRECT_PARENT', candidateParent, REQUIRED_C2_PARENT);
+if (!git('show', `${candidate}:STATE.md`).includes('| Account A correction candidate C8 |')) {
+  throw new Error('C8_SOURCE_STATE_MARKER_MISSING');
 }
 
-const rendered = renderManifest();
+if (runGit(['merge-base', '--is-ancestor', candidate, 'HEAD'], { allowFailure: true, cwd: repo }).status !== 0) {
+  throw new Error('CANDIDATE_NOT_ANCESTOR_OF_EVIDENCE_HEAD');
+}
+
+const inputLock = readCampaignJson('INPUTS.lock');
+const proof = readCampaignJson('C2_PROOF_BINDING.json');
+const selection = readCampaignJson('EVIDENCE_SELECTION.json');
+const provenance = readCampaignJson('MERGE_PROVENANCE.json');
+const census = readCampaignJson('WORKTREE_CENSUS.json');
+
+assertEqual('INPUT_LOCK_CANDIDATE', inputLock.candidate, candidate);
+assertEqual('INPUT_LOCK_TREE', inputLock.candidate_tree, candidateTree);
+assertEqual('INPUT_LOCK_PARENT', inputLock.candidate_parent, candidateParent);
+assertEqual('PROOF_CANDIDATE', proof.candidate_sha, candidate);
+assertEqual('PROOF_TREE', proof.candidate_tree, candidateTree);
+assertEqual('PROOF_PARENT', proof.candidate_parent, candidateParent);
+assertEqual('SELECTION_CANDIDATE', selection.source_candidate, candidate);
+assertEqual('SELECTION_TREE', selection.source_candidate_tree, candidateTree);
+assertEqual('SELECTION_PARENT', selection.source_candidate_parent, candidateParent);
+assertEqual(
+  'SELECTION_POST_CANDIDATE_ALLOWLIST',
+  JSON.stringify(sorted(selection.post_candidate_path_allowlist)),
+  JSON.stringify(sorted(EXACT_EVIDENCE_PATHS)),
+);
+assertEqual('PROVENANCE_CANDIDATE', provenance.candidate_sha, candidate);
+assertEqual('PROVENANCE_TREE', provenance.candidate_tree_sha, candidateTree);
+assertEqual('PROVENANCE_PARENT', provenance.candidate_parent_sha, candidateParent);
+assertEqual('CENSUS_CANDIDATE', census.candidate_sha, candidate);
+assertEqual('CENSUS_TREE', census.candidate_tree_sha, candidateTree);
+if (Object.hasOwn(census, 'candidate_parent_sha')) {
+  assertEqual('CENSUS_PARENT', census.candidate_parent_sha, candidateParent);
+}
+
+for (const [name, expectedCount] of Object.entries(REQUIRED_MATRIX_COUNTS)) {
+  assertExactMatrix(name, expectedCount);
+}
+
+for (const name of EXACT_AUTHORITY_FILES) {
+  const text = readCampaignText(name);
+  for (const rejected of BANNED_EXACT_EVIDENCE) {
+    if (text.includes(rejected)) throw new Error(`BANNED_EXACT_EVIDENCE:${name}:${rejected}`);
+  }
+}
+
+const postCandidatePaths = git('diff', '--name-only', candidate, '--')
+  .split('\n')
+  .filter(Boolean)
+  .sort();
+const fullEvidencePaths = [...EXACT_EVIDENCE_PATHS].sort();
+const preManifestEvidencePaths = EXACT_EVIDENCE_PATHS
+  .filter((path) => !path.endsWith(`/${MANIFEST_JSON}`) && !path.endsWith(`/${MANIFEST_SHA256}`))
+  .sort();
+const permittedPostCandidatePathSets = verifyOnly
+  ? [fullEvidencePaths]
+  : [preManifestEvidencePaths, fullEvidencePaths];
+if (!permittedPostCandidatePathSets.some(
+  (expectedPaths) => JSON.stringify(expectedPaths) === JSON.stringify(postCandidatePaths),
+)) {
+  throw new Error(`POST_CANDIDATE_EXACT_EVIDENCE_PATHS:${JSON.stringify(postCandidatePaths)}`);
+}
+
+function trackedCampaignPaths() {
+  const output = runGit(
+    ['ls-files', '--cached', '-z', '--', `${CAMPAIGN_RELATIVE_ROOT}/`],
+    { cwd: repo },
+  ).stdout;
+  const excluded = new Set([
+    `${CAMPAIGN_RELATIVE_ROOT}/${MANIFEST_JSON}`,
+    `${CAMPAIGN_RELATIVE_ROOT}/${MANIFEST_SHA256}`,
+  ]);
+  return sorted(output.split('\0').filter((path) => path && !excluded.has(path)));
+}
+
+function manifestEntry(repositoryRelativePath) {
+  if (repositoryRelativePath.includes('\n') || repositoryRelativePath.includes('\r')) {
+    throw new Error(`MANIFEST_PATH_HAS_LINE_BREAK:${JSON.stringify(repositoryRelativePath)}`);
+  }
+  const absolutePath = resolve(repo, repositoryRelativePath);
+  const stat = lstatSync(absolutePath);
+  if (!stat.isFile()) throw new Error(`TRACKED_CAMPAIGN_ENTRY_NOT_REGULAR_FILE:${repositoryRelativePath}`);
+  const bytes = readFileSync(absolutePath);
+  assertEqual(`BYTE_LENGTH:${repositoryRelativePath}`, stat.size, bytes.length);
+  return {
+    path: repositoryRelativePath.slice(`${CAMPAIGN_RELATIVE_ROOT}/`.length),
+    sha256: sha256(bytes),
+    byte_length: bytes.length,
+    git_blob: gitBlob(bytes),
+  };
+}
+
+const entries = trackedCampaignPaths().map(manifestEntry);
+if (entries.length === 0) throw new Error('EMPTY_TRACKED_CAMPAIGN_FILE_SET');
+const inventoryLines = entries.map(
+  (entry) => `${entry.path}\0${entry.sha256}\0${entry.byte_length}\0${entry.git_blob}`,
+);
+const manifestObject = {
+  schema: 'product-truth-manifest.v2',
+  candidate_sha: candidate,
+  candidate_tree_sha: candidateTree,
+  candidate_parent_sha: candidateParent,
+  candidate_parent_count: 1,
+  required_direct_parent_sha: REQUIRED_C2_PARENT,
+  scope: `${CAMPAIGN_RELATIVE_ROOT}/** tracked files at generation time`,
+  exclusions: [MANIFEST_JSON, MANIFEST_SHA256],
+  compatibility_manifest: MANIFEST_SHA256,
+  entry_count: entries.length,
+  inventory_sha256: sha256(Buffer.from(`${inventoryLines.join('\n')}\n`, 'utf8')),
+  entries,
+};
+const renderedJson = `${JSON.stringify(manifestObject, null, 2)}\n`;
+
+const compatibilityEntries = [
+  ...entries,
+  {
+    path: MANIFEST_JSON,
+    sha256: sha256(Buffer.from(renderedJson, 'utf8')),
+    byte_length: Buffer.byteLength(renderedJson, 'utf8'),
+    git_blob: gitBlob(Buffer.from(renderedJson, 'utf8')),
+  },
+];
+const renderedSha256 = `${compatibilityEntries
+  .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+  .map((entry) => `${entry.sha256}  ${entry.path}`)
+  .join('\n')}\n`;
+
+if (renderedJson.includes(REJECTED_PREDECESSOR) || renderedJson.includes('SELF_COMMIT_UNBOUND')) {
+  throw new Error('BANNED_VALUE_IN_MANIFEST_JSON');
+}
+
 if (verifyOnly) {
-  assertEqual('MANIFEST_BYTES', readFileSync(manifest, 'utf8'), rendered);
+  assertEqual('MANIFEST_JSON_BYTES', readFileSync(manifestJsonPath, 'utf8'), renderedJson);
+  assertEqual('MANIFEST_SHA256_BYTES', readFileSync(manifestSha256Path, 'utf8'), renderedSha256);
 } else {
-  writeFileSync(manifest, rendered);
+  writeFileSync(manifestJsonPath, renderedJson);
+  writeFileSync(manifestSha256Path, renderedSha256);
 }
-process.stdout.write(`${JSON.stringify({ candidate, candidateTree, candidateParent, entry_count: rendered.trimEnd().split('\n').length, manifest_sha256: sha256(Buffer.from(rendered)), self_excluded: true, verified: verifyOnly })}\n`);
+
+process.stdout.write(`${JSON.stringify({
+  candidate,
+  candidate_tree: candidateTree,
+  candidate_parent: candidateParent,
+  candidate_parent_count: 1,
+  entry_count: entries.length,
+  manifest_json_sha256: sha256(Buffer.from(renderedJson, 'utf8')),
+  manifest_sha256_sha256: sha256(Buffer.from(renderedSha256, 'utf8')),
+  verified: verifyOnly,
+})}\n`);

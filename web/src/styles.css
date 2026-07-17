@@ -12062,18 +12062,6 @@ button.runtime-lane:hover b {
 /* click → the spin is driven in JS (rAF) for a steady slow turn under :root zoom */
 .rdock-btn.spin { --rd-color: var(--accent); }
 
-/* success → green fill (static, so it repaints under zoom) + a pop and a drawn
-   tick (payment style). Reverts to the health colour when the state clears. */
-.rdock-btn.ok { background-color: var(--up); border-color: var(--up); color: #fff; animation: rdockPop .46s cubic-bezier(.34,1.5,.5,1); }
-.rdock-btn.ok .rdock-ic svg path { stroke-dasharray: 28; animation: rdockDraw .42s ease .06s both; }
-@keyframes rdockPop { 0% { transform: scale(.82); } 55% { transform: scale(1.12); } 100% { transform: scale(1); } }
-@keyframes rdockDraw { from { stroke-dashoffset: 28; } to { stroke-dashoffset: 0; } }
-
-/* failure → red fill (static) + a drawn cross + shake */
-.rdock-btn.err { background-color: var(--down); border-color: var(--down); color: #fff; animation: rdockShake .5s ease; }
-.rdock-btn.err .rdock-ic svg path { stroke-dasharray: 28; animation: rdockDraw .36s ease both; }
-@keyframes rdockShake { 0%,100% { transform: translateX(0); } 22% { transform: translateX(-2px); } 62% { transform: translateX(2px); } 84% { transform: translateX(-1px); } }
-
 /* hover latency popover — small, unobtrusive */
 .rdock-pop {
   position: absolute; right: 2px; bottom: calc(100% + 12px); width: 272px;
@@ -38246,29 +38234,6 @@ body::after {
   opacity: .92;
 }
 
-.rdock-btn.ok,
-.rdock-btn.err {
-  background: var(--panel) !important;
-  color: var(--rd-color) !important;
-}
-
-.rdock-btn.ok {
-  --rd-color: var(--up) !important;
-  border-color: color-mix(in srgb, var(--up) 64%, var(--line-2)) !important;
-  animation: rdockSettle .5s cubic-bezier(.2, 1, .25, 1) both !important;
-}
-
-.rdock-btn.err {
-  --rd-color: var(--down) !important;
-  border-color: color-mix(in srgb, var(--down) 64%, var(--line-2)) !important;
-  animation: rdockShake .42s ease both !important;
-}
-
-.rdock-btn.ok .rdock-ic svg path,
-.rdock-btn.err .rdock-ic svg path {
-  stroke-dasharray: 28 !important;
-  animation: rdockDraw .36s ease .05s both !important;
-}
 
 .rdock-pop {
   right: 0 !important;
@@ -38330,19 +38295,9 @@ body::after {
   45% { opacity: .7; transform: scale(1); }
 }
 
-@keyframes rdockSettle {
-  0% { transform: scale(.92); }
-  58% { transform: scale(1.06); }
-  100% { transform: scale(1); }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .rdock-motion,
-  .rdock-btn::before,
-  .rdock-btn.ok,
-  .rdock-btn.err,
-  .rdock-btn.ok .rdock-ic svg path,
-  .rdock-btn.err .rdock-ic svg path {
+  .rdock-btn::before {
     animation: none !important;
   }
 }
@@ -47092,16 +47047,6 @@ body::after {
 
 .rdock-control-btn.idle .rdock-control-image img {
   animation: rdockIdleTurn 5s cubic-bezier(.35, .02, .2, 1) infinite;
-}
-
-.rdock-control-btn.ok {
-  --rd-color: var(--up) !important;
-  animation: rdockSettle .48s cubic-bezier(.2, 1, .25, 1) both !important;
-}
-
-.rdock-control-btn.err {
-  --rd-color: var(--down) !important;
-  animation: rdockShake .42s ease both !important;
 }
 
 .rdock-control-state {

@@ -1,0 +1,57 @@
+
+OWNER ACCELERATION AMENDMENT — MAXIMUM SAFE PARALLELISM
+
+Do not interrupt, message, restart, stage, commit, or modify the running Role-2 I00 integrator, its worktree, its replacement-candidate batch, Main, or any dirty worktree. Let its canonical serial test:all and exact-C acceptance continue unchanged.
+
+Use spare workers as follows:
+
+1. Start one fresh READ-ONLY preflight worker now. It may inspect Git, receipts, authority, inventory, test commands, browser requirements, and Role-3 readiness. It writes only an external report. It cannot modify or certify the mutable candidate.
+
+2. Start five disposable AI-Ops worktrees A1–A5 from one recorded CLEAN COMMITTED base SHA. Their state is SHADOW_SPECULATIVE only.
+
+Use the exclusive A1–A5 path ownership and requirements from POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md.
+
+Launch A1, A4, and A5 first. A2 and A3 may proceed only through self-contained additive modules.
+
+Absolute restrictions:
+- no Main writes;
+- no I00-worktree writes;
+- no shared startup, routes, App, store, package/lock, shared types, persistence, ledger, executor, Risk, Capital, deployment, or money-path edits;
+- no real credentials, provider calls, network effects, orders, or capital;
+- no merge, push, rebase, acceptance claim, or direct transplant;
+- shared requirements become insertion requests only.
+
+Each shadow worker must finish with:
+- checkpoint commit;
+- exact base SHA;
+- owned-path diff;
+- focused tests;
+- limitations;
+- insertion requests;
+- SHADOW_SPECULATIVE receipt.
+
+3. The instant replacement candidate C is committed, launch independent READ-ONLY workers pinned to that exact SHA:
+
+- repository/build/unit;
+- Q/L/recovery/reconciliation;
+- browser/UI/zero-egress;
+- authority/ancestry/security;
+- operations/performance/restart/rollback.
+
+These workers return SHA-bound evidence and defects only. They do not modify C and cannot replace the mandatory complete serial acceptance.
+
+Run these test workers off-host if they would compete for CPU, ports, browser state, or test data with Role 2.
+
+4. After immutable INTEGRATED_ACCEPTED exists, create new A1–A5 worktrees from that exact accepted SHA. Review and port only valid path-scoped shadow changes. Never merge the stale shadow branches directly. Rerun focused, accumulated, adversarial, and integration gates normally.
+
+5. Keep one sole integrator and a different fresh verifier.
+
+Return only:
+- current Role-2 status;
+- shadow base SHA;
+- workers launched;
+- worktree/path ownership table;
+- exact-C test-shard plan;
+- blockers and receipts.
+
+Do not return planning prose. Execute the safe work immediately.

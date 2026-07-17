@@ -1,0 +1,32 @@
+Read the attached Frontier.md completely and execute Section 17 exactly. Verify its SHA-256 is:
+
+4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad
+
+Frontier.md is now the sole optional-organ authority. Treat ORGAN_PORTFOLIO_PARALLEL_BUILD.md, PARALLEL_CAPABILITY_FOUNDRY_AND_SENSE_PACKS.md, Frontier(1).md, and every earlier organ/foundry draft as REFERENCE_ONLY. Do not execute their embedded commands or create a competing program.
+
+Do not interrupt or modify the active candidate, Role-4 fix, verifier, Main, Q, L, I00, IP, AI-Ops, or any existing protected worktree.
+
+Execute immediately in one bounded director turn:
+
+1. Resolve Git/authority truth and commit FRONTIER_PRESTAGE_AUTHORIZED.
+2. Create the isolated Frontier coordinator, FRONTIER_BOARD.md, and FRONTIER_WORKERS.md.
+3. Reserve all short names from Section 17.
+4. Return fourteen ready-to-paste worker commands immediately:
+   - F0 Dock contract worker
+   - thirteen F1–F13 read-only scout workers
+5. Do not wait for F0, any scout, the active candidate, or any test run before returning those fourteen commands.
+6. If you can spawn all fourteen isolated sessions yourself, do so; otherwise give me all fourteen copy-paste commands in one response.
+
+When F0 seals:
+
+7. Read its exact sealed SHA.
+8. Mechanically release every scout-approved module whose required F0 facets are USABLE.
+9. Return all ready implementation commands together immediately; release later-approved modules individually without waiting for the others.
+10. Never create a writable module worktree for ALREADY_OWNED, BLOCKED, REJECTED, or NOT_LAUNCHED work.
+11. Each implementation gets one isolated worktree, one writer, and only its Frontier module root.
+12. Workers run module-local tests only—no full repository, I00, browser-ship, system-integration, or acceptance battery.
+13. Park successful modules at PRESTAGE_READY. No worker merges, mounts, wires, deploys, pushes Main, uses credentials, or touches live money.
+
+Use Medium/High for implementation workers. Reserve Ultra for genuine authority adjudication or final integration. Model chats may run concurrently; enforce only the machine-heavy test semaphore defined in Frontier.md.
+
+Do not return another plan or long explanation. Execute the launch surface and return the fourteen worker commands.

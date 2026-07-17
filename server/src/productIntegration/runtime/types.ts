@@ -68,6 +68,21 @@ export type ProductRuntimeCapability =
   | 'LIVE_MANUAL_CAPPED' | 'SHADOW' | 'DRY_RUN' | 'REPLAY'
   | 'SYNTHETIC' | 'NOT_CONFIGURED' | 'UNAVAILABLE' | 'UNKNOWN';
 
+export type ProductRuntimePresentationTone = 'ok' | 'warn' | 'bad' | 'idle';
+export type ProductRuntimeWatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
+
+/**
+ * Server-owned display posture for one canonical component. The browser may
+ * render this value or fail closed on transport continuity; it may not derive
+ * a replacement verdict from lifecycle/capability/truth fields.
+ */
+export interface ProductRuntimeComponentPresentation {
+  readonly status: ProductRuntimeWatchmanStatus;
+  readonly tone: ProductRuntimePresentationTone;
+  readonly statusLabel: string;
+  readonly stateLabel: string;
+}
+
 export interface ProductRuntimeMaterialSourceRecord {
   readonly cursor: string;
   readonly event: Readonly<SystemTraceEvent>;
@@ -340,6 +355,7 @@ export interface ProductRuntimeComponentProjection {
   readonly supportedControlIds: readonly string[];
   readonly correlationId: string | null;
   readonly truthLabel: ProductRuntimeTruthLabel;
+  readonly canonicalPresentation: Readonly<ProductRuntimeComponentPresentation>;
 }
 
 export type ProductRuntimeManagedInventoryState =
@@ -479,6 +495,24 @@ export interface ProductRuntimeSurfaceProjection {
   readonly evidence: readonly Readonly<ProductRuntimeSurfaceDatum>[];
 }
 
+export interface ProductRuntimeCanonicalCockpitTruth {
+  readonly source: 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION';
+  readonly marketFeedReadiness: Readonly<{
+    readonly proven: boolean;
+    readonly label: 'Market Feed Readiness Proven' | 'Market Feed Readiness Unproven';
+    readonly detail: string;
+  }>;
+  readonly strategyRuntime: Readonly<{
+    readonly tone: ProductRuntimePresentationTone;
+    readonly label: string;
+    readonly livePublicCount: number;
+  }>;
+  readonly watchmanOverall: Readonly<{
+    readonly status: ProductRuntimeWatchmanStatus;
+    readonly label: string;
+  }>;
+}
+
 export interface ProductRuntimeSupervisorEnvelope {
   readonly schemaVersion: typeof PRODUCT_RUNTIME_SUPERVISOR_SCHEMA;
   readonly revision: string;
@@ -490,6 +524,7 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly bootReleaseReadback: Readonly<ProductRuntimeBootReleaseReadback>;
   readonly ownerView: Readonly<ProductRuntimeOwnerView>;
+  readonly canonicalCockpit: Readonly<ProductRuntimeCanonicalCockpitTruth>;
   readonly dashboard: Readonly<SystemSupervisorReadModel>;
   readonly components: readonly Readonly<ProductRuntimeComponentProjection>[];
   readonly managedInventory: Readonly<ProductRuntimeManagedInventoryProjection>;

@@ -52,7 +52,7 @@ FROZEN_Q_LANE_FILES_SHA256: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "quant/DIRECTIVE_INPUTS.lock",
-        "410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1",
+        "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24",
     ),
     (
         "quant/EDGE_HYPOTHESIS_MAP.md",

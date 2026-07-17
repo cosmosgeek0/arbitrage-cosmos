@@ -117,6 +117,124 @@ test('money flow shares one bounded pagination walk and preserves its response s
   }
 });
 
+test('money flow bounds active walkers without evicting duplicate work', { concurrency: false }, async () => {
+  const capacity = 4;
+  const requests = [];
+  globalThis.fetch = (input, init = {}) => new Promise((resolve, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+    requests.push({ input: String(input), resolve });
+  });
+  const moneyflow = await import(`${modulePath('binance/moneyflow')}?capacity=${Date.now()}`);
+  const active = Array.from({ length: capacity }, (_, index) => (
+    moneyflow.fetchMoneyFlow(`FLOW${index}USDT`, '15m')
+  ));
+  await Promise.resolve();
+  assert.equal(requests.length, capacity);
+
+  const duplicate = moneyflow.fetchMoneyFlow('FLOW0USDT', '15m');
+  await Promise.resolve();
+  assert.equal(requests.length, capacity, 'same-key caller must share the active walker');
+  await assert.rejects(
+    moneyflow.fetchMoneyFlow('FLOWOVERUSDT', '15m'),
+    /money flow capacity reached/,
+  );
+  assert.equal(requests.length, capacity, 'overflow must fail before starting a walker');
+
+  const completeWindow = () => jsonResponse([{
+    p: '100', q: '2', T: Date.now() - 16 * 60_000, m: false,
+  }]);
+  requests[0].resolve(completeWindow());
+  const [first, joined] = await Promise.all([active[0], duplicate]);
+  assert.deepEqual(joined, first);
+
+  const admittedAfterSettlement = moneyflow.fetchMoneyFlow('FLOWOVERUSDT', '15m');
+  await Promise.resolve();
+  assert.equal(requests.length, capacity + 1, 'settled walker must release one admission slot');
+  for (const request of requests.slice(1)) request.resolve(completeWindow());
+  await Promise.all([...active.slice(1), admittedAfterSettlement]);
+});
+
+test('money flow cancellation is subscriber-safe and abandons work only after the last caller', { concurrency: false }, async () => {
+  const requests = [];
+  globalThis.fetch = (input, init = {}) => new Promise((resolve, reject) => {
+    init.signal?.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+    requests.push({ input: String(input), resolve, signal: init.signal });
+  });
+  const moneyflow = await import(`${modulePath('binance/moneyflow')}?abort=${Date.now()}`);
+  const firstController = new AbortController();
+  const first = moneyflow.fetchMoneyFlow('SHAREDUSDT', '15m', firstController.signal);
+  const survivor = moneyflow.fetchMoneyFlow('SHAREDUSDT', '15m');
+  await Promise.resolve();
+  assert.equal(requests.length, 1);
+
+  firstController.abort();
+  await assert.rejects(first, (error) => error?.name === 'AbortError');
+  assert.equal(requests[0].signal.aborted, false, 'one departing subscriber must not abort shared work');
+  requests[0].resolve(jsonResponse([{
+    p: '100', q: '2', T: Date.now() - 16 * 60_000, m: false,
+  }]));
+  assert.equal((await survivor).symbol, 'SHAREDUSDT');
+
+  const soleController = new AbortController();
+  const sole = moneyflow.fetchMoneyFlow('ABANDONUSDT', '15m', soleController.signal);
+  await Promise.resolve();
+  assert.equal(requests.length, 2);
+  soleController.abort();
+  await assert.rejects(sole, (error) => error?.name === 'AbortError');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(requests[1].signal.aborted, true, 'last departing subscriber must abort upstream work');
+
+  const retry = moneyflow.fetchMoneyFlow('ABANDONUSDT', '15m');
+  await Promise.resolve();
+  assert.equal(requests.length, 3, 'caller cancellation must not poison retry admission');
+  requests[2].resolve(jsonResponse([{
+    p: '100', q: '2', T: Date.now() - 16 * 60_000, m: false,
+  }]));
+  assert.equal((await retry).symbol, 'ABANDONUSDT');
+});
+
+test('money flow never reports stale cache as a successful refresh', { concurrency: false }, async () => {
+  const originalNow = Date.now;
+  let now = 1_700_000_000_000;
+  let calls = 0;
+  Date.now = () => now;
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      if (calls > 1) throw new Error('upstream unavailable');
+      return jsonResponse([{ p: '100', q: '2', T: now - 16 * 60_000, m: false }]);
+    };
+    const moneyflow = await import(`${modulePath('binance/moneyflow')}?stale=${now}`);
+    const first = await moneyflow.fetchMoneyFlow('STALEUSDT', '15m');
+    assert.equal(first.fetchedAt, now);
+
+    now += 46_000;
+    await assert.rejects(moneyflow.fetchMoneyFlow('STALEUSDT', '15m'), /money flow unavailable/);
+    assert.equal(calls, 2);
+    await assert.rejects(moneyflow.fetchMoneyFlow('STALEUSDT', '15m'), /money flow unavailable/);
+    assert.equal(calls, 2, 'negative-cache interval must remain an explicit failure');
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('money flow reports call-cap truncation through coverage fields', { concurrency: false }, async () => {
+  let calls = 0;
+  globalThis.fetch = async (input) => {
+    calls++;
+    const endTime = Number(new URL(String(input)).searchParams.get('endTime'));
+    const row = { p: '100', q: '1', T: endTime - 1_000, m: false };
+    return jsonResponse(Array.from({ length: 1_000 }, () => row));
+  };
+  const moneyflow = await import(`${modulePath('binance/moneyflow')}?coverage=${Date.now()}`);
+  const flow = await moneyflow.fetchMoneyFlow('COVERAGEUSDT', '1d');
+  assert.equal(calls, 60);
+  assert.equal(flow.sampled, true);
+  assert.equal(flow.coveredMs > 0, true);
+  assert.equal(flow.coveredMs < flow.windowMs, true);
+  assert.equal(Number.isFinite(flow.fetchedAt), true);
+});
+
 test('profile lookup single-flights misses and honors its negative cache', { concurrency: false }, async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-test-'));
   process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');

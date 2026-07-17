@@ -995,6 +995,7 @@ class BasisLifecyclePort {
     try {
       await this.runtime.start();
     } catch (error) {
+      try { this.runtime.stop(); } catch { /* preserve the first startup failure */ }
       this.markTracker.stop();
       this.bookTracker.stop();
       throw error;
@@ -1049,6 +1050,7 @@ class VolumeLifecyclePort {
     try {
       await this.runtime.start();
     } catch (error) {
+      try { this.runtime.stop(); } catch { /* preserve the first startup failure */ }
       this.tradeTracker.stop();
       this.bookTracker.stop();
       throw error;

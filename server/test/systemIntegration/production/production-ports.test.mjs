@@ -140,14 +140,58 @@ function createWorld() {
     spot,
     usdm,
     market,
+    basis,
     basisStatus,
     basisSnapshot,
+    volume,
     volumeStatus,
     volumeSnapshot,
     ports,
     ctx,
   };
 }
+
+test('rejected Basis and Volume starts stop partial runtimes and preserve the startup error', async () => {
+  const world = createWorld();
+  const basisStartFailure = new Error('basis partial-start rejection');
+  world.basis.start = async () => {
+    world.calls.basisStart += 1;
+    world.basisStatus.running = true;
+    await Promise.resolve();
+    throw basisStartFailure;
+  };
+  world.basis.stop = () => {
+    world.calls.basisStop += 1;
+    world.basisStatus.running = false;
+    throw new Error('basis cleanup rejection');
+  };
+
+  await assert.rejects(
+    world.ports.runtimes.basis.start(),
+    (error) => error === basisStartFailure,
+  );
+  assert.equal(world.calls.basisStop, 1);
+  assert.equal(world.basisStatus.running, false);
+
+  const volumeStartFailure = new Error('volume partial-start rejection');
+  world.volume.start = async () => {
+    world.calls.volumeStart += 1;
+    world.volumeStatus.running = true;
+    await Promise.resolve();
+    throw volumeStartFailure;
+  };
+  world.volume.stop = () => {
+    world.calls.volumeStop += 1;
+    world.volumeStatus.running = false;
+  };
+
+  await assert.rejects(
+    world.ports.runtimes.volume.start(),
+    (error) => error === volumeStartFailure,
+  );
+  assert.equal(world.calls.volumeStop, 1);
+  assert.equal(world.volumeStatus.running, false);
+});
 
 async function startMarket(world) {
   await world.ports.runtimes.market.init();

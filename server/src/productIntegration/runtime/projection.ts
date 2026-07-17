@@ -20,7 +20,9 @@ import {
   type ProductRuntimeBootReleaseIdentityIssue,
   type ProductRuntimeBootReleaseReadback,
   type ProductRuntimeBootReleaseRecord,
+  type ProductRuntimeCanonicalCockpitTruth,
   type ProductRuntimeCommandOwnerPort,
+  type ProductRuntimeComponentPresentation,
   type ProductRuntimeComponentProjection,
   type ProductRuntimeCorrelationTrace,
   type ProductRuntimeDependencyEdge,
@@ -83,6 +85,47 @@ function capability(component: Readonly<SystemComponentSnapshot>): ProductRuntim
   return 'UNKNOWN';
 }
 
+function capabilityLabel(value: ProductRuntimeCapability): string {
+  if (value === 'LIVE_PUBLIC') return 'Live Public';
+  if (value === 'LIVE_PRIVATE_READ') return 'Private Read';
+  if (value === 'LIVE_SIGNED_VALIDATE') return 'Signed Validate';
+  if (value === 'LIVE_MANUAL_CAPPED') return 'Manual Capped';
+  if (value === 'DRY_RUN') return 'Validate Only';
+  if (value === 'SHADOW') return 'Shadow';
+  if (value === 'REPLAY') return 'Replay';
+  if (value === 'SYNTHETIC') return 'Synthetic';
+  if (value === 'NOT_CONFIGURED') return 'Not Configured';
+  if (value === 'UNAVAILABLE') return 'Unavailable';
+  return 'Unknown';
+}
+
+function canonicalComponentPresentation(input: Readonly<{
+  observedLifecycle: ProductRuntimeLifecycle;
+  capability: ProductRuntimeCapability;
+  truthLabel: ProductRuntimeTruthLabel;
+}>): Readonly<ProductRuntimeComponentPresentation> {
+  const stateLabel = `${input.observedLifecycle.replaceAll('_', ' ')} · ${capabilityLabel(input.capability).toUpperCase()} · ${input.truthLabel.replaceAll('_', ' ')}`;
+  if (input.capability === 'NOT_CONFIGURED' || input.truthLabel === 'NOT_CONFIGURED') {
+    return Object.freeze({ status: 'planned', tone: 'warn', statusLabel: 'Not Configured', stateLabel });
+  }
+  if (['FAILED', 'BLOCKED', 'RECOVERY_REQUIRED'].includes(input.observedLifecycle)
+    || ['BLOCKED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN'].includes(input.truthLabel)
+    || ['UNAVAILABLE', 'UNKNOWN'].includes(input.capability)) {
+    return Object.freeze({ status: 'outage', tone: 'bad', statusLabel: 'Unavailable', stateLabel });
+  }
+  if (input.observedLifecycle === 'READY'
+    && input.capability === 'LIVE_PUBLIC'
+    && input.truthLabel === 'LIVE_PUBLIC') {
+    return Object.freeze({ status: 'operational', tone: 'ok', statusLabel: 'Live Public', stateLabel });
+  }
+  return Object.freeze({
+    status: 'degraded',
+    tone: 'warn',
+    statusLabel: capabilityLabel(input.capability),
+    stateLabel,
+  });
+}
+
 function desiredLifecycle(component: Readonly<SystemComponentSnapshot>): ProductRuntimeLifecycle {
   if (component.desiredState === 'STOPPED') return 'STOPPED';
   if (component.desiredState === 'PAUSED') return 'PAUSED';
@@ -129,12 +172,15 @@ function components(
       || candidate.affectedComponentIds.includes(component.componentId));
     const recent = snapshot.recentCorrelatedDecisions.find((event) => event.componentId === component.componentId);
     const recovery = component.componentId === 'reconciliation' && snapshot.summaries.reconciliation.blocksNewExposure;
+    const projectedObservedLifecycle = recovery ? 'RECOVERY_REQUIRED' : observedLifecycle(component);
+    const projectedCapability = capability(component);
+    const projectedTruthLabel = componentTruth(component);
     return Object.freeze({
       componentId: component.componentId,
       owner: `${component.owner}:${component.ownerPath}`,
       desiredLifecycle: desiredLifecycle(component),
-      observedLifecycle: recovery ? 'RECOVERY_REQUIRED' : observedLifecycle(component),
-      capability: capability(component),
+      observedLifecycle: projectedObservedLifecycle,
+      capability: projectedCapability,
       heartbeatAtMs: component.lastSuccessAtMs,
       lastAdvanceAtMs: component.componentId === meaningfulAdvance?.ownerComponentId
         ? meaningfulAdvance.observedAtMs
@@ -151,7 +197,12 @@ function components(
         : ['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only'].includes(component.componentId) ? 'POTENTIAL' : 'NONE',
       supportedControlIds: controlIds(component),
       correlationId: recent?.correlationId ?? null,
-      truthLabel: componentTruth(component),
+      truthLabel: projectedTruthLabel,
+      canonicalPresentation: canonicalComponentPresentation({
+        observedLifecycle: projectedObservedLifecycle,
+        capability: projectedCapability,
+        truthLabel: projectedTruthLabel,
+      }),
     } satisfies ProductRuntimeComponentProjection);
   }));
 }
@@ -521,6 +572,93 @@ function ownerView(
   });
 }
 
+function canonicalCockpitTruth(
+  view: Readonly<ProductRuntimeOwnerView>,
+  projectedComponents: readonly Readonly<ProductRuntimeComponentProjection>[],
+): Readonly<ProductRuntimeCanonicalCockpitTruth> {
+  const exactComponent = (componentId: string): Readonly<ProductRuntimeComponentProjection> | null => {
+    const matches = projectedComponents.filter((component) => component.componentId === componentId);
+    return matches.length === 1 ? matches[0]! : null;
+  };
+
+  const sourceComponents = ['public-spot-source', 'public-usdm-source'].map((componentId) => ({
+    componentId,
+    matches: projectedComponents.filter((component) => component.componentId === componentId),
+  }));
+  let marketFeedReadiness: ProductRuntimeCanonicalCockpitTruth['marketFeedReadiness'];
+  if (view.machineReady !== 'YES') {
+    marketFeedReadiness = Object.freeze({
+      proven: false,
+      label: 'Market Feed Readiness Unproven',
+      detail: `Canonical owner machine readiness is ${view.machineReady}.`,
+    });
+  } else if (view.dataFreshness === null) {
+    marketFeedReadiness = Object.freeze({
+      proven: false,
+      label: 'Market Feed Readiness Unproven',
+      detail: 'Canonical owner data freshness is unavailable.',
+    });
+  } else {
+    const invalidCardinality = sourceComponents.find(({ matches }) => matches.length !== 1);
+    const nonOperational = sourceComponents.find(({ matches }) => matches[0]?.canonicalPresentation.status !== 'operational');
+    if (invalidCardinality) {
+      marketFeedReadiness = Object.freeze({
+        proven: false,
+        label: 'Market Feed Readiness Unproven',
+        detail: `Canonical ${invalidCardinality.componentId} cardinality is ${invalidCardinality.matches.length}; expected exactly one.`,
+      });
+    } else if (nonOperational) {
+      const source = nonOperational.matches[0]!;
+      marketFeedReadiness = Object.freeze({
+        proven: false,
+        label: 'Market Feed Readiness Unproven',
+        detail: `Canonical ${nonOperational.componentId} is ${source.canonicalPresentation.stateLabel}.`,
+      });
+    } else {
+      marketFeedReadiness = Object.freeze({
+        proven: true,
+        label: 'Market Feed Readiness Proven',
+        detail: `Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness ${view.dataFreshness}.`,
+      });
+    }
+  }
+
+  const basis = exactComponent('basis-engine');
+  const volume = exactComponent('volume-engine');
+  const strategyComponents = [basis, volume];
+  const livePublicCount = strategyComponents.filter((component) => component?.canonicalPresentation.status === 'operational').length;
+  const strategyRuntime = livePublicCount === strategyComponents.length
+    ? Object.freeze({ tone: 'ok' as const, label: 'Public Runtime Live', livePublicCount })
+    : strategyComponents.some((component) => component === null || component.canonicalPresentation.status === 'outage')
+      ? Object.freeze({ tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount })
+      : strategyComponents.some((component) => component?.capability === 'DRY_RUN')
+        ? Object.freeze({ tone: 'warn' as const, label: 'Validate-Only Ready', livePublicCount })
+        : Object.freeze({ tone: 'warn' as const, label: 'Review Required', livePublicCount });
+
+  let watchmanOverall: ProductRuntimeCanonicalCockpitTruth['watchmanOverall'];
+  if (view.effectiveMode === 'BLOCKED' || view.machineReady === 'NO') {
+    watchmanOverall = Object.freeze({ status: 'outage', label: 'Not Ready' });
+  } else if (view.machineReady !== 'YES') {
+    watchmanOverall = Object.freeze({ status: 'degraded', label: 'Readiness Unknown' });
+  } else if (view.effectiveMode === 'VALIDATE_ONLY'
+    || projectedComponents.some((component) => component.capability === 'DRY_RUN')) {
+    watchmanOverall = Object.freeze({ status: 'degraded', label: 'Validate Only' });
+  } else if (view.effectiveMode === 'READ_ONLY') {
+    watchmanOverall = Object.freeze({ status: 'degraded', label: 'Read Only' });
+  } else if (view.effectiveMode === 'ADVISORY') {
+    watchmanOverall = Object.freeze({ status: 'degraded', label: 'Advisory' });
+  } else {
+    watchmanOverall = Object.freeze({ status: 'degraded', label: 'Effective Mode Unknown' });
+  }
+
+  return Object.freeze({
+    source: 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION',
+    marketFeedReadiness,
+    strategyRuntime,
+    watchmanOverall,
+  });
+}
+
 function accountTruth(snapshot: Readonly<SystemSupervisorReadModel>): ProductRuntimeTruthLabel {
   const state = snapshot.summaries.capital.accountTruthState.trim().toUpperCase();
   if (state.includes('SYNTHETIC')) return 'SYNTHETIC_ONLY';
@@ -564,6 +702,10 @@ const OPS_SURFACE_FIELDS = new Set([
   'recovery-state',
   'ledger-schema-compatibility',
   'ops-interlock',
+]);
+
+const REQUIRED_SURFACE_BLOCKING_TRUTH = new Set<ProductRuntimeTruthLabel>([
+  'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
 ]);
 
 function opsInterlockTruth(interlock: Readonly<CanonicalOpsIntakeInterlock>): ProductRuntimeTruthLabel {
@@ -669,25 +811,9 @@ function surfaces(
   const result: Record<string, Readonly<ProductRuntimeSurfaceProjection>> = {};
   for (const surfaceId of Object.keys(SURFACE_EVIDENCE) as (keyof typeof SURFACE_EVIDENCE)[]) {
     const baseTruthLabel = surfaceTruth(surfaceId, snapshot);
-    const truthLabel = (surfaceId === 'control-room' || surfaceId === 'health')
+    const ownerTruthLabel = (surfaceId === 'control-room' || surfaceId === 'health')
       ? weakestSurfaceTruth([baseTruthLabel, opsInterlockTruth(opsIntakeInterlock)])
       : baseTruthLabel;
-    const blocked = truthLabel === 'MISSING' || truthLabel === 'NOT_CONFIGURED'
-      || truthLabel === 'UNAVAILABLE' || truthLabel === 'UNKNOWN';
-    const blockedSummary = truthLabel === 'UNKNOWN'
-      ? `${SURFACE_LABELS[surfaceId]} owner evidence is unknown.`
-      : truthLabel === 'MISSING'
-        ? `${SURFACE_LABELS[surfaceId]} owner evidence is missing.`
-        : truthLabel === 'UNAVAILABLE'
-          ? `${SURFACE_LABELS[surfaceId]} owner evidence is unavailable.`
-          : `${SURFACE_LABELS[surfaceId]} owner evidence is not configured.`;
-    const blockedCode = truthLabel === 'UNKNOWN'
-      ? 'CANONICAL_OWNER_UNKNOWN'
-      : truthLabel === 'MISSING'
-        ? 'CANONICAL_OWNER_MISSING'
-        : truthLabel === 'UNAVAILABLE'
-          ? 'CANONICAL_OWNER_UNAVAILABLE'
-          : 'CANONICAL_OWNER_NOT_CONFIGURED';
     const evidence = SURFACE_EVIDENCE[surfaceId].map((fieldId) => {
       const canonicalOpsDatum = opsDatum(fieldId, opsReadback, opsIntakeInterlock);
       if (canonicalOpsDatum) {
@@ -703,13 +829,44 @@ function surfaces(
         fieldId,
         label: fieldId.replaceAll('-', ' '),
         value,
-        truthLabel: meaningfulAdvanceUnknown ? 'UNKNOWN' : value === null ? 'MISSING' : truthLabel,
+        truthLabel: meaningfulAdvanceUnknown ? 'UNKNOWN' : value === null ? 'MISSING' : ownerTruthLabel,
         canonicalSource: `systemIntegration:${surfaceId}:${fieldId}`,
         unavailableReason: meaningfulAdvanceUnknown
           ? 'CANONICAL_MEANINGFUL_ADVANCE_NOT_PUBLISHED'
           : value === null ? 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED' : null,
       } satisfies ProductRuntimeSurfaceDatum);
     });
+    const requiredEvidenceBlocker = evidence.find((datum) => (
+      datum.value === null || REQUIRED_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)
+    ));
+    const truthLabel = weakestSurfaceTruth([
+      ownerTruthLabel,
+      ...evidence.map((datum) => datum.truthLabel),
+    ]);
+    const blocked = requiredEvidenceBlocker !== undefined
+      || REQUIRED_SURFACE_BLOCKING_TRUTH.has(truthLabel);
+    const blockedSummary = requiredEvidenceBlocker
+      ? `${SURFACE_LABELS[surfaceId]} required evidence ${requiredEvidenceBlocker.fieldId} is ${requiredEvidenceBlocker.truthLabel}.`
+      : truthLabel === 'UNKNOWN'
+        ? `${SURFACE_LABELS[surfaceId]} owner evidence is unknown.`
+        : truthLabel === 'MISSING'
+          ? `${SURFACE_LABELS[surfaceId]} owner evidence is missing.`
+          : truthLabel === 'UNAVAILABLE'
+            ? `${SURFACE_LABELS[surfaceId]} owner evidence is unavailable.`
+            : truthLabel === 'BLOCKED'
+              ? `${SURFACE_LABELS[surfaceId]} owner evidence is blocked.`
+              : `${SURFACE_LABELS[surfaceId]} owner evidence is not configured.`;
+    const blockedCode = requiredEvidenceBlocker
+      ? `REQUIRED_EVIDENCE_${requiredEvidenceBlocker.truthLabel}:${requiredEvidenceBlocker.fieldId}`
+      : truthLabel === 'UNKNOWN'
+        ? 'CANONICAL_OWNER_UNKNOWN'
+        : truthLabel === 'MISSING'
+          ? 'CANONICAL_OWNER_MISSING'
+          : truthLabel === 'UNAVAILABLE'
+            ? 'CANONICAL_OWNER_UNAVAILABLE'
+            : truthLabel === 'BLOCKED'
+              ? 'CANONICAL_OWNER_BLOCKED'
+              : 'CANONICAL_OWNER_NOT_CONFIGURED';
     result[surfaceId] = Object.freeze({
       surfaceId,
       label: SURFACE_LABELS[surfaceId],
@@ -794,6 +951,7 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     input.applicationStartFailureCodes ?? Object.freeze([]),
     bootReleaseReadback,
   );
+  const canonicalCockpit = canonicalCockpitTruth(view, projectedComponents);
   const projectedSurfaces = surfaces(
     input.snapshot,
     dashboard,
@@ -817,6 +975,7 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     }),
     bootReleaseReadback,
     ownerView: view,
+    canonicalCockpit,
     dashboard,
     components: projectedComponents,
     managedInventory,

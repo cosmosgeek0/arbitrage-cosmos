@@ -1,43 +1,47 @@
 # Product Truth Campaign State
 
-Pass-0 status: `READY_FOR_C2_FREEZE`
+Campaign status: `C7_SOURCE_READY_TO_FREEZE_AFTER_C6_CANONICAL_REJECTION`
 
-Next-gate status: `BLOCKED` — containing-commit C2 assignment, exact root/full gates, fresh single-branch clone, and C2 custody
+Immutable required parent C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+
+Rejected C5: `959a5f9900e25f53414710bbfb3464c3ccb67a5d`
+
+Rejected immutable C6: `89cd7e066b97f2f33d730d1e0adf291ebe7c4f64` — exact clean canonical security gate rejected forbidden subprocess/environment access in the newly added campaign contract test; C6 was not amended.
+
+C7 source candidate: `ASSIGNED_BY_CONTAINING_SOURCE_COMMIT` — a commit cannot contain its own SHA.
 
 Actor: `ACCOUNT_A_CANDIDATE_WRITER`
 
-Gate: `BLOCKED:C2_EXACT_SHA_AND_GATES_PENDING`
+Gate: `PENDING_EXACT_C7_FREEZE`
 
-This file is the sole campaign-status authority. Root `STATE.md` owns product state.
+Final verifier: `PENDING_FRESH_INDEPENDENT_VERIFICATION`
 
-## Candidate transition
+This file alone owns campaign status. Root `STATE.md` owns product state. The containing source commit is the one immutable C7 correction commit; it must have exactly one direct parent, and that parent must byte-equal C2. C3 through C6 and all earlier evidence descendants are excluded from C7 ancestry.
 
-- Old candidate C `41752d6a87dc1cb1b933bb4460c9cabfc15ff694` is rejected for final-verifier handoff because Wave 1 contains critical provenance findings.
-- C2 cannot self-name inside its source commit. Candidate-embedded matrices use `SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT`; `EVIDENCE_SELECTION.json` defines the only valid exact-C2 selection rule.
-- Source base Main remains `2ae812624f20b9bc93fc4ad66cb568929101110f`. The D-LAUNCH-62 director record at `2a832750…` is a controlling input, not candidate ancestry. `current-main` has not been changed by Account A.
-- The prior D-LAUNCH-61 GitHub custody head `d2c4f43…` and bundle cover old C only. They do not satisfy C2 custody.
+## Source correction contract
 
-## Wave 1 adjudication
+- The accepted C5 source and VFINAL5 corrections are preserved. The only post-C6 behavioral correction removes forbidden `child_process` and environment access from the campaign contract test while retaining pure fail-closed assertions; the other deltas relabel campaign artifacts and state for immutable C7.
+- `RefreshDock` always derives health color, status, and readiness wording from canonical supervisor truth. Local `/api/refresh` success is neutral action acknowledgement only and cannot produce `Connections Recovered` or an operational/green class while canonical truth remains outage.
+- The exact-candidate generator requires a full candidate SHA and immutable C2 parent, rejects merge candidates, and has no placeholder/source mode. Both predecessor generators fail closed.
+- Twenty-three external lock inputs and two governing evidence objects have raw candidate-tracked payload copies with reproducible byte length, SHA-256, and Git blob OID. Those copies are rehash-only evidence and confer no live-input or execution authority.
+- `WORKTREE_LEDGER.md` owns the pre-freeze 96-live snapshot, including `truth-a` and `truth-b`, plus five complete `REMOVED_SAFE` tombstones for 101 durable entries.
+- D-LAUNCH-65 is explicitly bound by commit, tree, parent, `QL_DIRECTOR_STATE.md` blob/hash/bytes, and candidate-tracked payload. Ambient or moving `current-main` is not accepted as evidence.
+- `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced. This wave adds no private, signed, order, borrow, repay, transfer, withdrawal, leverage, margin, deployment, credential, or capital path.
 
-- All durable findings were ingested: PROV `2 CRITICAL + 8 HIGH + 1 MEDIUM` and CLEAN `2 HIGH + 1 MEDIUM`, fourteen total. The abbreviated director prose did not cause PROV-009/010/011 to be dropped.
-- `INPUTS.lock` v3 directly hashes controlling, protected, POST-I00, IP_ASSURANCE, Frontier, composite deployment, superseded, absent-superseded, and Wave-1 inputs.
-- Directive coverage now contains 17 explicit Frontier rows, six missing MISSION laws, three missing ARCHITECTURE laws, honest `NOT_CONFIGURED` rows for `INCIDENT_ACK` and `SOURCE_ISOLATE`, and exact Ledger/quantity-bridge mappings.
-- AI-Ops source remains `INTEGRATED`; route `UNWIRED`; provider, worker, sentinel, paging, and root-test mount `NOT_CONFIGURED`; C2 baseline acceptance `EXCLUDED`. Canonical runners print that exclusion.
-- Product Assurance root gating includes A-FORMAL and S2 action-evidence (`131/131` focused checks). The obsolete generator-era closure artifact set is explicitly `REFERENCE_ONLY_NOT_C2_EVIDENCE`; exact C2 regeneration is a `DEFERRED_OWNER_GATE` disposition.
-- The required-last donor contract preserves `16/16/16/16` equality while admitting the exact authorized post-L merge sequence. A-FORMAL and S2 are integrated reference-only ancestors, PREVERIFY remains a non-ancestor, and the focused command suite passes `28/28`.
-- Sealed I00 proof evidence is now generated from tracked bytes. Ambient Git objects and moving refs are separate tri-state diagnostics. Focused proof passed `47/47`; acceptance contract passed `44/44`, including exact-byte parity from a sole branch with no `current-main` ref.
-- The legacy D-LAUNCH-1 Q-lock verifier follows the same clean-clone law: exact candidate-reachable transition/commit bytes are sealed truth, while `current-main` and the raw owner blob are diagnostic-only; absent raw bytes remain attested-not-rehashed rather than fabricated.
-- D-LAUNCH-7 historical pins remain immutable. The V2 living-input seal binds D-LAUNCH-62-authorized current QL bytes.
+## Exact evidence descendant contract
 
-## Exact boundaries
+After C7 is frozen, the evidence generator must regenerate from exact candidate bytes:
 
-- Browser/runtime proof: `BLOCKED` — no exact-C2 rendered browser receipt has been produced.
-- Product Assurance real soak and incident corpus: `NOT_RUN` / `UNKNOWN_EMPTY`.
-- Deployment, external sentinel, paging, restore, rollback: `NOT_CONFIGURED`.
-- Private/signed/test-order/capital paths: `DEFERRED_OWNER_GATE`; no authority granted.
-- Wave 1b (`shard-sec` and `v-cockpit`): `PENDING`; final-verifier handoff is blocked.
-- C2 off-machine custody: `PENDING`; old-C custody is historical only.
+- `INPUTS.lock`: exactly 61 unique rows, each with explicit source, disposition, and matrix linkage; exact candidate `STATE.md` blob/hash/bytes.
+- `DIRECTIVE_COVERAGE_MATRIX.csv`: 153/153 exact-C7 candidate cells.
+- `CAPABILITY_TRUTH_MATRIX.csv`: 23/23 exact-C7 candidate cells.
+- `COCKPIT_BINDING_MATRIX.csv`: 178/178 exact-C7 candidate cells.
+- `C2_PROOF_BINDING.json`, `EVIDENCE_SELECTION.json`, and `MERGE_PROVENANCE.json`: exact C7, tree, and sole C2 parent.
+- `WORKTREE_CENSUS.json`: exact C7, 96 live rows, five complete tombstones, and 101 durable entries.
+- `MANIFEST.json` and `MANIFEST.sha256`: deterministic hashes generated last and independently verified.
 
-## Exact next action
+No exact-authority artifact may contain an unbound candidate token or predecessor `41752d6a87dc1cb1b933bb4460c9cabfc15ff694`. Evidence descendants may change only `verification/product-truth-20260716/**`; any source correction after C7 is C8, never an amendment.
 
-Commit this source-complete state as provisional C2, run the canonical local and fresh single-branch gates against that exact SHA, generate exact-C2 evidence and manifest, then reassess Pass 0. Issue no baseline token unless C2 itself has valid custody.
+## Freeze and handoff
+
+The writer freezes the containing source commit once, asserts `C7^ == C2` and parent count one, runs the focused/canonical gates and clean-clone gates, normally self-pushes the campaign custody chain without touching `current-main`, verifies the exact evidence and live-remote clone, emits `BASELINE_TRUTH_ACCEPTED:<full-C7-SHA>`, then stops for the fresh final verifier.

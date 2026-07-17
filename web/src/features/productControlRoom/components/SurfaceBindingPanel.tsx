@@ -1,5 +1,5 @@
 import type { ProductSurfaceProjection, ProductSupervisorEnvelope, SurfaceId } from '../../../lib/productIntegration';
-import { REQUIRED_SURFACE_IDS } from '../../../lib/productIntegration';
+import { productSurfaceReadinessBlocker, REQUIRED_SURFACE_IDS } from '../../../lib/productIntegration';
 import { useProductControlRoomContext } from '../ProductControlRoomProvider';
 
 export function ProductSurfaceAdapter({
@@ -62,16 +62,19 @@ function SurfaceRow({ surface, blocked = false, onTrace }: {
   blocked?: boolean;
   onTrace?: (correlationId: string) => void;
 }) {
+  const requiredEvidenceBlocker = productSurfaceReadinessBlocker(surface);
+  const relationallyBlocked = requiredEvidenceBlocker !== null;
+  const effectiveBlocked = blocked || relationallyBlocked;
   const truthClass = `truth-${surface.truthLabel.toLowerCase().replaceAll('_', '-')}`;
   return (
-    <article className="pcr-surface" aria-label={`${surface.label} Binding`}>
+    <article className="pcr-surface" data-surface-ready={effectiveBlocked ? 'false' : 'true'} aria-label={`${surface.label} Binding`}>
       <span><strong>{surface.label}</strong><small>{surface.summary}</small></span>
       <span>
         <code>{surface.canonicalSource}</code>
-        <small>{surface.evidence.length} required fields · {surface.blocker ?? 'No Adapter Blocker'}</small>
+        <small>{surface.evidence.length} required fields · {blocked ? 'STALE_CANONICAL_CONTINUITY' : requiredEvidenceBlocker ?? surface.blocker ?? 'No Adapter Blocker'}</small>
         {surface.correlationId && onTrace && <button className="pcr-trace-link" type="button" onClick={() => onTrace(surface.correlationId!)}>Read Trace</button>}
       </span>
-      <span className="pcr-surface-end"><em className={blocked ? 'truth-blocked' : truthClass}>{blocked ? 'BLOCKED' : surface.truthLabel}</em><b className={`binding-${blocked ? 'blocked-backend' : surface.bindingState.toLowerCase().replaceAll('_', '-')}`}>{blocked ? 'BLOCKED_BACKEND' : surface.bindingState}</b></span>
+      <span className="pcr-surface-end"><em className={effectiveBlocked ? 'truth-blocked' : truthClass}>{effectiveBlocked ? 'BLOCKED' : surface.truthLabel}</em><b className={`binding-${effectiveBlocked ? 'blocked-backend' : surface.bindingState.toLowerCase().replaceAll('_', '-')}`}>{effectiveBlocked ? 'BLOCKED_BACKEND' : surface.bindingState}</b></span>
     </article>
   );
 }

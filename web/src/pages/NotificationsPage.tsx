@@ -14,7 +14,6 @@ import {
 import { PillSelect } from '../components/PillSelect';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { liveAge } from '../format';
-import { canonicalComponentPresentation, canonicalStrategyRuntimePresentation } from '../lib/canonicalCockpitTruth';
 import { fetchJson } from '../lib/http';
 import { curateNotifications, groupNotifications, notificationEnabled, type CuratedNotification } from '../lib/notifications';
 import { createSettledPoll } from '../lib/polling';
@@ -246,13 +245,13 @@ export function NotificationsPage() {
   const productSnapshot = productBinding.snapshot;
   const basisComponent = productSnapshot?.components.find((component) => component.componentId === 'basis-engine');
   const volumeComponent = productSnapshot?.components.find((component) => component.componentId === 'volume-engine');
-  const basisPosture = canonicalComponentPresentation(basisComponent, productBinding.continuity);
-  const volumePosture = canonicalComponentPresentation(volumeComponent, productBinding.continuity);
-  const runtimePresentation = canonicalStrategyRuntimePresentation(basisComponent, volumeComponent, productBinding.continuity);
+  const runtimePresentation = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.strategyRuntime
+    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: 0 };
   const botState = runtimePresentation.label;
   const botTone = runtimePresentation.tone === 'ok' ? 'good' : runtimePresentation.tone;
   const botDetail = productSnapshot
-    ? `Basis ${basisPosture.lifecycle} / ${basisPosture.capability} / ${basisPosture.truthLabel} · Volume ${volumePosture.lifecycle} / ${volumePosture.capability} / ${volumePosture.truthLabel}`
+    ? `Basis ${basisComponent?.observedLifecycle ?? 'UNKNOWN'} / ${basisComponent?.capability ?? 'UNKNOWN'} / ${basisComponent?.truthLabel ?? 'UNKNOWN'} · Volume ${volumeComponent?.observedLifecycle ?? 'UNKNOWN'} / ${volumeComponent?.capability ?? 'UNKNOWN'} / ${volumeComponent?.truthLabel ?? 'UNKNOWN'}`
     : productBinding.error ?? 'Canonical Product supervisor truth is unavailable';
   const routingSourceAvailable = (key: keyof RoutingSnapshot['sources'], connector: ConnectorState) => (
     !routingFailed

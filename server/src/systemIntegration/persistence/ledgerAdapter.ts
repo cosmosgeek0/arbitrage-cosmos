@@ -80,7 +80,10 @@ const AUDIT_SCHEMA = 'cosmos.system-integration.audit' as const;
 const AUDIT_VERSION = 1 as const;
 const IDEMPOTENCY_AUDIT_SCHEMA = 'cosmos.system-integration.idempotency' as const;
 const IDEMPOTENCY_AUDIT_VERSION = 1 as const;
+const APPROVAL_STATE_AUDIT_SCHEMA = 'cosmos.system-integration.approval-state' as const;
+const APPROVAL_STATE_AUDIT_VERSION = 1 as const;
 const MAX_IDEMPOTENCY_EVENT_READBACK = 8;
+const MAX_APPROVAL_STATE_EVENT_READBACK = 8;
 const MAX_ATOMIC_LEDGER_EVENTS = 8;
 const SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
 
@@ -99,6 +102,18 @@ interface DurableIdempotencyReadback {
 interface DurableIdempotencyWrite {
   readonly receipt: Readonly<PersistedIdempotencyReceipt>;
   readonly canonicalLedgerEventId: 'SELF' | number | null;
+}
+
+interface DurableApprovalStateAuditEvent {
+  readonly schema: typeof APPROVAL_STATE_AUDIT_SCHEMA;
+  readonly version: typeof APPROVAL_STATE_AUDIT_VERSION;
+  readonly approvalId: string;
+  readonly state: Readonly<OperatorApprovalState>;
+}
+
+interface DurableApprovalStateWrite {
+  readonly approvalId: string;
+  readonly state: Readonly<OperatorApprovalState>;
 }
 
 function failed<T>(code: PersistenceFailureCode, message: string): PersistenceResult<T> {
@@ -155,6 +170,10 @@ function idempotencyEventKind(idempotencyKey: string): string {
   return persistenceDigest(`${IDEMPOTENCY_AUDIT_SCHEMA}:${idempotencyKey}`);
 }
 
+function approvalStateEventKind(approvalId: string): string {
+  return persistenceDigest(`${APPROVAL_STATE_AUDIT_SCHEMA}:${approvalId}`);
+}
+
 function validPersistedIdempotencyReceipt(value: unknown): value is Readonly<PersistedIdempotencyReceipt> {
   if (!isRecord(value)
     || Object.keys(value).length !== 6
@@ -182,6 +201,43 @@ function unresolvedControlRuntimePublication(value: Readonly<PersistedIdempotenc
   if (!isRecord(value.receipt) || value.receipt.kind !== 'CONTROL_MUTATION') return false;
   const publication = value.receipt.runtimePublication;
   return publication === 'PENDING' || publication === 'UNKNOWN';
+}
+
+function samePersistedIdempotencyReceipt(
+  left: Readonly<PersistedIdempotencyReceipt>,
+  right: Readonly<PersistedIdempotencyReceipt>,
+): boolean {
+  return left.idempotencyKey === right.idempotencyKey
+    && left.requestDigest === right.requestDigest
+    && left.correlationId === right.correlationId
+    && left.recordedAtMs === right.recordedAtMs
+    && left.checkpointRevision === right.checkpointRevision
+    && sameJson(left.receipt, right.receipt);
+}
+
+function controlRuntimePublicationForArchive(
+  value: Readonly<PersistedIdempotencyReceipt>,
+): 'NOT_REQUIRED' | 'PENDING' | 'PUBLISHED' | 'UNKNOWN' | null | 'INVALID' {
+  if (!isRecord(value.receipt) || value.receipt.kind !== 'CONTROL_MUTATION') return null;
+  const publication = value.receipt.runtimePublication;
+  if (publication === 'NOT_REQUIRED' || publication === 'PENDING'
+    || publication === 'PUBLISHED' || publication === 'UNKNOWN') return publication;
+  if (publication === undefined
+    && value.receipt.applied === true
+    && requiresRuntimePublication(value.receipt.command)) return 'UNKNOWN';
+  return 'INVALID';
+}
+
+function validateApprovalStateContinuation(
+  older: Readonly<OperatorApprovalState>,
+  newer: Readonly<OperatorApprovalState>,
+): boolean {
+  const revisionDelta = newer.revision - older.revision;
+  return revisionDelta >= 0
+    && newer.uses.length - older.uses.length === revisionDelta
+    && canonicalPersistenceJson(newer.approval) === canonicalPersistenceJson(older.approval)
+    && newer.sourcePolicyDigest === older.sourcePolicyDigest
+    && canonicalPersistenceJson(newer.uses.slice(0, older.uses.length)) === canonicalPersistenceJson(older.uses);
 }
 
 function checkpointChecksum(serialized: string): string {
@@ -705,27 +761,45 @@ function validApprovalStateProjection(value: unknown, approvalId: string): value
   return new Set(identities).size === identities.length;
 }
 
-function latestValidateOnlyApprovalState(
+function approvalStateFromIdempotencyReceipt(
+  persisted: Readonly<PersistedIdempotencyReceipt>,
+): Readonly<{ approvalId: string; state: Readonly<OperatorApprovalState> }> | null {
+  if (!isRecord(persisted.receipt)
+    || persisted.receipt.kind !== 'VALIDATE_ONLY_RUN'
+    || !isRecord(persisted.receipt.record)
+    || !isRecord(persisted.receipt.record.ownerInvocations)
+    || persisted.receipt.record.ownerInvocations.approvalUseReductions !== 1) return null;
+  const approvalId = String(persisted.receipt.record.approvalId);
+  const candidate = persisted.receipt.record.approvalState;
+  if (!validApprovalStateProjection(candidate, approvalId)) {
+    throw new Error('persisted validate-only approval state is corrupt');
+  }
+  return Object.freeze({
+    approvalId,
+    state: candidate as unknown as Readonly<OperatorApprovalState>,
+  });
+}
+
+function latestValidateOnlyApprovalStateFromCheckpoint(
   state: Readonly<SystemIntegrationCheckpointState>,
   approvalId: string,
+  durableBaseline: Readonly<OperatorApprovalState> | null = null,
 ): Readonly<OperatorApprovalState> | null {
   const revisions = new Map<number, {
     readonly state: Readonly<OperatorApprovalState>;
     readonly bytes: string;
   }>();
+  if (durableBaseline !== null) {
+    revisions.set(durableBaseline.revision, {
+      state: durableBaseline,
+      bytes: canonicalPersistenceJson(durableBaseline),
+    });
+  }
   for (const persisted of state.idempotencyReceipts) {
-    if (!isRecord(persisted.receipt)
-      || persisted.receipt.kind !== 'VALIDATE_ONLY_RUN'
-      || !isRecord(persisted.receipt.record)
-      || persisted.receipt.record.approvalId !== approvalId
-      || !isRecord(persisted.receipt.record.ownerInvocations)
-      || persisted.receipt.record.ownerInvocations.approvalUseReductions !== 1) continue;
-    const candidate = persisted.receipt.record.approvalState;
-    if (!validApprovalStateProjection(candidate, approvalId)) {
-      throw new Error('persisted validate-only approval state is corrupt');
-    }
-    const bytes = canonicalPersistenceJson(candidate);
-    const typed = candidate as unknown as Readonly<OperatorApprovalState>;
+    const projected = approvalStateFromIdempotencyReceipt(persisted);
+    if (projected === null || projected.approvalId !== approvalId) continue;
+    const bytes = canonicalPersistenceJson(projected.state);
+    const typed = projected.state;
     const existing = revisions.get(typed.revision);
     if (existing && existing.bytes !== bytes) {
       throw new Error('persisted validate-only approval state has a same-revision history conflict');
@@ -737,10 +811,7 @@ function latestValidateOnlyApprovalState(
     const previous = ordered[index - 1].state;
     const current = ordered[index].state;
     if (current.revision !== previous.revision + 1
-      || current.uses.length !== previous.uses.length + 1
-      || canonicalPersistenceJson(current.approval) !== canonicalPersistenceJson(previous.approval)
-      || current.sourcePolicyDigest !== previous.sourcePolicyDigest
-      || canonicalPersistenceJson(current.uses.slice(0, previous.uses.length)) !== canonicalPersistenceJson(previous.uses)) {
+      || !validateApprovalStateContinuation(previous, current)) {
       throw new Error('persisted validate-only approval state history is discontinuous');
     }
   }
@@ -750,6 +821,7 @@ function latestValidateOnlyApprovalState(
 function assertApprovalStateCompareAndSet(
   state: Readonly<SystemIntegrationCheckpointState>,
   record: Readonly<Record<string, SystemJsonValue>>,
+  latestDurable: Readonly<OperatorApprovalState> | null = null,
 ): void {
   if (!isRecord(record.ownerInvocations)
     || record.ownerInvocations.approvalUseReductions !== 1) return;
@@ -758,7 +830,7 @@ function assertApprovalStateCompareAndSet(
     throw new Error('validate-only approval state is invalid');
   }
   const incoming = record.approvalState as unknown as Readonly<OperatorApprovalState>;
-  const latest = latestValidateOnlyApprovalState(state, approvalId);
+  const latest = latestValidateOnlyApprovalStateFromCheckpoint(state, approvalId, latestDurable);
   if (latest === null) return;
   const incomingBytes = canonicalPersistenceJson(incoming);
   const latestBytes = canonicalPersistenceJson(latest);
@@ -1003,7 +1075,7 @@ export class SystemLedgerPersistenceAdapter {
     let rows: LedgerEventRecord[];
     try {
       rows = this.ledger.recentEvents(
-        MAX_IDEMPOTENCY_EVENT_READBACK,
+        MAX_IDEMPOTENCY_EVENT_READBACK + 1,
         idempotencyEventKind(idempotencyKey),
       );
     } catch (error) {
@@ -1013,9 +1085,14 @@ export class SystemLedgerPersistenceAdapter {
       );
     }
     if (rows.length === 0) return { ok: true, value: null };
+    if (rows.length > MAX_IDEMPOTENCY_EVENT_READBACK) {
+      return failed('PERSISTENCE_CORRUPT', 'durable idempotency evidence exceeds its revision bound');
+    }
 
     let newest: Readonly<DurableIdempotencyReadback> | null = null;
     let canonicalIntent: Readonly<PersistedIdempotencyReceipt> | null = null;
+    let canonicalEventIdentity: number | null = null;
+    let hasCanonicalEventIdentity = false;
     for (const row of rows) {
       if (!isRecord(row.data)
         || Object.keys(row.data).length !== 4
@@ -1035,40 +1112,102 @@ export class SystemLedgerPersistenceAdapter {
         return failed('PERSISTENCE_CORRUPT', 'durable idempotency event identity is invalid');
       }
       const candidate = row.data.receipt;
+      const resolvedEventIdentity = canonicalLedgerEventId === 'SELF'
+        ? row.id
+        : canonicalLedgerEventId === null
+          ? null
+          : Number(canonicalLedgerEventId);
+      if (hasCanonicalEventIdentity && canonicalEventIdentity !== resolvedEventIdentity) {
+        return failed('PERSISTENCE_CORRUPT', 'durable idempotency event identity changed across revisions');
+      }
+      canonicalEventIdentity = resolvedEventIdentity;
+      hasCanonicalEventIdentity = true;
       if (canonicalIntent === null) {
         canonicalIntent = candidate;
       } else {
         const candidateReceipt = isRecord(candidate.receipt) ? candidate.receipt : null;
         const canonicalReceipt = isRecord(canonicalIntent.receipt) ? canonicalIntent.receipt : null;
-        const candidatePublication = candidateReceipt?.runtimePublication;
-        const canonicalPublication = canonicalReceipt?.runtimePublication;
-        const sameReceipt = candidateReceipt !== null && canonicalReceipt !== null
-          && sameJson(
-            { ...candidateReceipt, runtimePublication: 'TERMINAL_OR_PENDING' },
-            { ...canonicalReceipt, runtimePublication: 'TERMINAL_OR_PENDING' },
-          );
+        const candidatePublication = controlRuntimePublicationForArchive(candidate);
+        const canonicalPublication = controlRuntimePublicationForArchive(canonicalIntent);
+        const sameReceipt = candidatePublication === null && canonicalPublication === null
+          ? sameJson(candidate.receipt, canonicalIntent.receipt)
+          : candidateReceipt !== null && canonicalReceipt !== null
+            && candidatePublication !== 'INVALID'
+            && canonicalPublication !== 'INVALID'
+            && sameJson(
+              { ...candidateReceipt, runtimePublication: 'CONTROL_PUBLICATION_STATE' },
+              { ...canonicalReceipt, runtimePublication: 'CONTROL_PUBLICATION_STATE' },
+            )
+            && (candidatePublication === canonicalPublication
+              || (canonicalPublication === 'PUBLISHED'
+                && (candidatePublication === 'PENDING' || candidatePublication === 'UNKNOWN')));
         if (candidate.requestDigest !== canonicalIntent.requestDigest
           || candidate.correlationId !== canonicalIntent.correlationId
           || candidate.recordedAtMs !== canonicalIntent.recordedAtMs
           || candidate.checkpointRevision !== canonicalIntent.checkpointRevision
-          || !sameReceipt
-          || !['NOT_REQUIRED', 'PENDING', 'PUBLISHED', 'UNKNOWN'].includes(String(candidatePublication))
-          || !['NOT_REQUIRED', 'PENDING', 'PUBLISHED', 'UNKNOWN'].includes(String(canonicalPublication))) {
+          || !sameReceipt) {
           return failed('PERSISTENCE_CORRUPT', 'durable idempotency evidence conflicts across revisions');
         }
       }
       if (newest === null) {
         newest = Object.freeze({
           receipt: candidate,
-          ledgerEventId: canonicalLedgerEventId === 'SELF'
-            ? row.id
-            : canonicalLedgerEventId === null
-              ? null
-              : Number(canonicalLedgerEventId),
+          ledgerEventId: resolvedEventIdentity,
         });
       }
     }
     return { ok: true, value: newest };
+  }
+
+  private durableApprovalState(
+    approvalId: string,
+  ): PersistenceResult<Readonly<OperatorApprovalState> | null> {
+    let rows: LedgerEventRecord[];
+    try {
+      rows = this.ledger.recentEvents(
+        MAX_APPROVAL_STATE_EVENT_READBACK,
+        approvalStateEventKind(approvalId),
+      );
+    } catch (error) {
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'durable approval-state readback failed'));
+    }
+    let newest: Readonly<OperatorApprovalState> | null = null;
+    for (const row of rows) {
+      if (!isRecord(row.data)
+        || Object.keys(row.data).length !== 4
+        || row.data.schema !== APPROVAL_STATE_AUDIT_SCHEMA
+        || row.data.version !== APPROVAL_STATE_AUDIT_VERSION
+        || row.data.approvalId !== approvalId
+        || !validApprovalStateProjection(row.data.state, approvalId)) {
+        return failed('PERSISTENCE_CORRUPT', 'durable approval-state evidence is malformed or conflicts with its indexed owner');
+      }
+      const candidate = row.data.state as unknown as Readonly<OperatorApprovalState>;
+      if (newest === null) {
+        newest = candidate;
+      } else if (!validateApprovalStateContinuation(candidate, newest)) {
+        return failed('PERSISTENCE_CORRUPT', 'durable approval-state evidence regressed or conflicts across revisions');
+      }
+    }
+    return { ok: true, value: newest };
+  }
+
+  private latestValidateOnlyApprovalState(
+    state: Readonly<SystemIntegrationCheckpointState>,
+    approvalId: string,
+  ): PersistenceResult<Readonly<OperatorApprovalState> | null> {
+    const durable = this.durableApprovalState(approvalId);
+    if (!durable.ok) return durable;
+    try {
+      return {
+        ok: true,
+        value: latestValidateOnlyApprovalStateFromCheckpoint(state, approvalId, durable.value),
+      };
+    } catch (error) {
+      return failed(
+        'PERSISTENCE_CORRUPT',
+        errorMessage(error, 'checkpoint approval-state evidence conflicts with its durable archive'),
+      );
+    }
   }
 
   private withProductIdentityRestartBarrier(
@@ -1364,6 +1503,7 @@ export class SystemLedgerPersistenceAdapter {
     nextState: Readonly<SystemIntegrationCheckpointState>,
     audit: Readonly<PersistenceAuditInput>,
     idempotencyWrites: readonly Readonly<DurableIdempotencyWrite>[] = Object.freeze([]),
+    approvalStateWrites: readonly Readonly<DurableApprovalStateWrite>[] = Object.freeze([]),
   ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
     if (this.sealed) return failed('PERSISTENCE_SEALED', 'final shutdown checkpoint has sealed this adapter');
     let serialized: string;
@@ -1391,7 +1531,13 @@ export class SystemLedgerPersistenceAdapter {
       canonicalLedgerEventId: entry.canonicalLedgerEventId,
       receipt: entry.receipt,
     }));
-    if (data.length + durableIdempotencyEvents.length > MAX_ATOMIC_LEDGER_EVENTS) {
+    const durableApprovalStateEvents: readonly DurableApprovalStateAuditEvent[] = approvalStateWrites.map((entry) => ({
+      schema: APPROVAL_STATE_AUDIT_SCHEMA,
+      version: APPROVAL_STATE_AUDIT_VERSION,
+      approvalId: entry.approvalId,
+      state: entry.state,
+    }));
+    if (data.length + durableIdempotencyEvents.length + durableApprovalStateEvents.length > MAX_ATOMIC_LEDGER_EVENTS) {
       return failed('INVALID_PERSISTENCE_REQUEST', 'persistence atomic event batch exceeds its bound');
     }
     try {
@@ -1408,6 +1554,15 @@ export class SystemLedgerPersistenceAdapter {
         const encodedAudit = canonicalPersistenceJson(durableEvent);
         if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
           return failed('INVALID_PERSISTENCE_REQUEST', 'durable idempotency event exceeds its byte bound');
+        }
+      }
+      for (const durableEvent of durableApprovalStateEvents) {
+        if (!validApprovalStateProjection(durableEvent.state, durableEvent.approvalId)) {
+          return failed('INVALID_PERSISTENCE_REQUEST', 'durable approval-state event is invalid');
+        }
+        const encodedAudit = canonicalPersistenceJson(durableEvent);
+        if (Buffer.byteLength(encodedAudit, 'utf8') > SYSTEM_PERSISTENCE_LIMITS.maximumAuditEventBytes) {
+          return failed('INVALID_PERSISTENCE_REQUEST', 'durable approval-state event exceeds its byte bound');
         }
       }
       if (this.ledger.probeWritable && !this.ledger.probeWritable(true)) {
@@ -1428,6 +1583,11 @@ export class SystemLedgerPersistenceAdapter {
           })),
           ...durableIdempotencyEvents.map((durableEvent) => ({
             kind: idempotencyEventKind(durableEvent.receipt.idempotencyKey),
+            symbol: null,
+            data: durableEvent,
+          })),
+          ...durableApprovalStateEvents.map((durableEvent) => ({
+            kind: approvalStateEventKind(durableEvent.approvalId),
             symbol: null,
             data: durableEvent,
           })),
@@ -1496,6 +1656,7 @@ export class SystemLedgerPersistenceAdapter {
     nextState: Readonly<SystemIntegrationCheckpointState>,
     audit: Readonly<PersistenceAuditInput>,
     idempotencyWrites: readonly Readonly<DurableIdempotencyWrite>[],
+    approvalStateWrites: readonly Readonly<DurableApprovalStateWrite>[],
   ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
     const current = this.currentState();
     if (!current.ok) return current;
@@ -1512,14 +1673,14 @@ export class SystemLedgerPersistenceAdapter {
       if (!indexed.ok) return indexed;
       prepared = indexed.value;
     }
-    return this.writePrepared(prepared, audit, idempotencyWrites);
+    return this.writePrepared(prepared, audit, idempotencyWrites, approvalStateWrites);
   }
 
   commitCheckpoint(
     nextState: Readonly<SystemIntegrationCheckpointState>,
     audit: Readonly<PersistenceAuditInput>,
   ): PersistenceResult<Readonly<PersistedCommitReceipt>> {
-    return this.commitCheckpointInternal(nextState, audit, Object.freeze([]));
+    return this.commitCheckpointInternal(nextState, audit, Object.freeze([]), Object.freeze([]));
   }
 
   applyIdempotentTransition<T extends SystemJsonValue>(
@@ -1553,13 +1714,8 @@ export class SystemLedgerPersistenceAdapter {
       if (existing.requestDigest !== input.requestDigest) {
         return failed('IDEMPOTENCY_KEY_CONFLICT', 'idempotency key was used for different intent');
       }
-      if (durableExisting.value !== null && (
-        durableExisting.value.receipt.requestDigest !== existing.requestDigest
-        || durableExisting.value.receipt.correlationId !== existing.correlationId
-        || durableExisting.value.receipt.recordedAtMs !== existing.recordedAtMs
-        || durableExisting.value.receipt.checkpointRevision !== existing.checkpointRevision
-        || !sameJson(durableExisting.value.receipt.receipt, existing.receipt)
-      )) {
+      if (durableExisting.value !== null
+        && !samePersistedIdempotencyReceipt(durableExisting.value.receipt, existing)) {
         return failed('PERSISTENCE_CORRUPT', 'checkpoint and durable idempotency evidence conflict');
       }
       return {
@@ -1595,44 +1751,6 @@ export class SystemLedgerPersistenceAdapter {
       };
     }
 
-    let retainedReceipts = current.value.idempotencyReceipts;
-    const durableWrites: DurableIdempotencyWrite[] = [];
-    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
-      let evicted = false;
-      for (let index = 0; index < retainedReceipts.length; index += 1) {
-        const candidate = retainedReceipts[index];
-        if (!terminalControlReceipt(candidate)) continue;
-        const archived = this.durableIdempotencyReceipt(candidate.idempotencyKey);
-        if (!archived.ok) return archived;
-        if (archived.value !== null && (
-          archived.value.receipt.requestDigest !== candidate.requestDigest
-          || archived.value.receipt.correlationId !== candidate.correlationId
-          || archived.value.receipt.recordedAtMs !== candidate.recordedAtMs
-          || archived.value.receipt.checkpointRevision !== candidate.checkpointRevision
-          || !sameJson(archived.value.receipt.receipt, candidate.receipt)
-        )) {
-          return failed('PERSISTENCE_CORRUPT', 'terminal control receipt conflicts with its durable archive');
-        }
-        if (archived.value === null) {
-          durableWrites.push(Object.freeze({
-            receipt: candidate,
-            canonicalLedgerEventId: this.findAuditEvent(candidate.checkpointRevision)?.id ?? null,
-          }));
-        }
-        retainedReceipts = Object.freeze([
-          ...retainedReceipts.slice(0, index),
-          ...retainedReceipts.slice(index + 1),
-        ]);
-        evicted = true;
-        break;
-      }
-      if (!evicted) {
-        return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted by non-evictable evidence');
-      }
-    }
-    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
-      return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted; refusing unsafe eviction');
-    }
     let transition;
     try {
       transition = input.transition(current.value);
@@ -1656,11 +1774,75 @@ export class SystemLedgerPersistenceAdapter {
       checkpointRevision: transition.nextState.revision,
       receipt,
     });
+    const isControlReceipt = isRecord(receipt) && receipt.kind === 'CONTROL_MUTATION';
+    let retainedReceipts = current.value.idempotencyReceipts;
+    const durableWrites: DurableIdempotencyWrite[] = [];
+    const approvalStateWrites: DurableApprovalStateWrite[] = [];
+    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
+      const evictionIndex = retainedReceipts
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate }) => (
+          terminalControlReceipt(candidate)
+          || controlRuntimePublicationForArchive(candidate) === null
+        ))
+        .sort((left, right) => (
+          left.candidate.checkpointRevision - right.candidate.checkpointRevision
+          || left.candidate.recordedAtMs - right.candidate.recordedAtMs
+          || left.index - right.index
+        ))[0]?.index ?? -1;
+      if (evictionIndex < 0) {
+        return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted by non-evictable evidence');
+      }
+      const candidate = retainedReceipts[evictionIndex];
+      const archived = this.durableIdempotencyReceipt(candidate.idempotencyKey);
+      if (!archived.ok) return archived;
+      if (archived.value !== null && !samePersistedIdempotencyReceipt(archived.value.receipt, candidate)) {
+        return failed('PERSISTENCE_CORRUPT', 'eviction candidate conflicts with its durable idempotency archive');
+      }
+      if (archived.value === null) {
+        durableWrites.push(Object.freeze({
+          receipt: candidate,
+          canonicalLedgerEventId: this.findAuditEvent(candidate.checkpointRevision)?.id ?? null,
+        }));
+      }
+      let approvalProjection: ReturnType<typeof approvalStateFromIdempotencyReceipt>;
+      try {
+        approvalProjection = approvalStateFromIdempotencyReceipt(candidate);
+      } catch (error) {
+        return failed('PERSISTENCE_CORRUPT', errorMessage(error, 'eviction approval-state evidence is corrupt'));
+      }
+      if (approvalProjection !== null) {
+        const archivedApproval = this.durableApprovalState(approvalProjection.approvalId);
+        if (!archivedApproval.ok) return archivedApproval;
+        if (archivedApproval.value === null) {
+          approvalStateWrites.push(approvalProjection);
+        } else {
+          const older = approvalProjection.state.revision < archivedApproval.value.revision
+            ? approvalProjection.state
+            : archivedApproval.value;
+          const newer = approvalProjection.state.revision < archivedApproval.value.revision
+            ? archivedApproval.value
+            : approvalProjection.state;
+          if (!validateApprovalStateContinuation(older, newer)) {
+            return failed('PERSISTENCE_CORRUPT', 'eviction approval-state evidence conflicts with its durable archive');
+          }
+          if (approvalProjection.state.revision > archivedApproval.value.revision) {
+            approvalStateWrites.push(approvalProjection);
+          }
+        }
+      }
+      retainedReceipts = Object.freeze([
+        ...retainedReceipts.slice(0, evictionIndex),
+        ...retainedReceipts.slice(evictionIndex + 1),
+      ]);
+    }
+    if (retainedReceipts.length >= SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts) {
+      return failed('CHECKPOINT_INVALID', 'idempotency receipt capacity is exhausted; refusing unsafe eviction');
+    }
     const nextState: SystemIntegrationCheckpointState = {
       ...transition.nextState,
       idempotencyReceipts: [...retainedReceipts, persistedReceipt],
     };
-    const isControlReceipt = isRecord(receipt) && receipt.kind === 'CONTROL_MUTATION';
     if (isControlReceipt) {
       durableWrites.push(Object.freeze({ receipt: persistedReceipt, canonicalLedgerEventId: 'SELF' }));
     }
@@ -1670,20 +1852,24 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs: input.occurredAtMs,
       traceEvent: input.traceEvent,
       traceEvents: input.traceEvents,
-    }, durableWrites);
+    }, durableWrites, approvalStateWrites);
     if (!committed.ok) return committed;
-    const durableCommitted = isControlReceipt
-      ? this.durableIdempotencyReceipt(input.idempotencyKey)
-      : { ok: true as const, value: null };
+    let canonicalLedgerEventId: number | null = committed.value.ledgerEventId;
+    if (isControlReceipt) {
+      const durableCommitted = this.durableIdempotencyReceipt(input.idempotencyKey);
+      if (!durableCommitted.ok) return durableCommitted;
+      if (durableCommitted.value === null) {
+        return failed('PERSISTENCE_WRITE_FAILED', 'control idempotency archive committed without readable evidence');
+      }
+      canonicalLedgerEventId = durableCommitted.value.ledgerEventId;
+    }
     return {
       ok: true,
       value: Object.freeze({
         replayed: false,
         receipt,
         checkpointRevision: committed.value.checkpointRevision,
-        ledgerEventId: durableCommitted.ok
-          ? durableCommitted.value?.ledgerEventId ?? committed.value.ledgerEventId
-          : committed.value.ledgerEventId,
+        ledgerEventId: canonicalLedgerEventId,
       }),
     };
   }
@@ -1784,7 +1970,9 @@ export class SystemLedgerPersistenceAdapter {
     if (!BOUNDED_ID.test(approvalId)) throw new TypeError('validate-only approval ID is invalid');
     const current = this.currentState();
     if (!current.ok) throw new Error(`${current.code}: ${current.message}`);
-    return latestValidateOnlyApprovalState(current.value, approvalId);
+    const latest = this.latestValidateOnlyApprovalState(current.value, approvalId);
+    if (!latest.ok) throw new Error(`${latest.code}: ${latest.message}`);
+    return latest.value;
   }
 
   async persistValidateOnly(record: unknown): Promise<Readonly<{ persistenceId: string }>> {
@@ -1799,6 +1987,12 @@ export class SystemLedgerPersistenceAdapter {
     const idempotencyKey = `validate-only:v2:${persistenceDigest(recordId).slice(0, 64)}`;
     const current = this.currentState();
     if (!current.ok) throw new Error(`${current.code}: ${current.message}`);
+    const approvalId = String(value.approvalId);
+    const durableApproval = isRecord(value.ownerInvocations)
+      && value.ownerInvocations.approvalUseReductions === 1
+      ? this.durableApprovalState(approvalId)
+      : { ok: true as const, value: null };
+    if (!durableApproval.ok) throw new Error(`${durableApproval.code}: ${durableApproval.message}`);
     const traces = validateOnlyTraceEvents(value);
     const persisted = this.applyIdempotentTransition({
       idempotencyKey,
@@ -1807,7 +2001,7 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs,
       traceEvents: traces,
       transition: (state) => {
-        assertApprovalStateCompareAndSet(state, value);
+        assertApprovalStateCompareAndSet(state, value, durableApproval.value);
         let dryRunExecutions = state.dryRunExecutions;
         let reconciliations = state.reconciliations;
         const executionPlan = isRecord(value.executionPlan) ? value.executionPlan : null;
@@ -2143,6 +2337,10 @@ export class SystemLedgerPersistenceAdapter {
     let stored = current.value.idempotencyReceipts.find((entry) => entry.idempotencyKey === idempotencyKey);
     const durable = this.durableIdempotencyReceipt(idempotencyKey);
     if (!durable.ok) throw new Error(durable.message);
+    if (stored && durable.value !== null
+      && !samePersistedIdempotencyReceipt(stored, durable.value.receipt)) {
+      throw new Error('checkpoint control receipt conflicts with its durable archive');
+    }
     if (!stored && durable.value !== null && unresolvedControlRuntimePublication(durable.value.receipt)) {
       throw new Error('unresolved control publication evidence is missing from the active checkpoint');
     }
@@ -2177,6 +2375,10 @@ export class SystemLedgerPersistenceAdapter {
     );
     const durable = this.durableIdempotencyReceipt(commit.request.idempotencyKey);
     if (!durable.ok) throw new Error(durable.message);
+    if (existing && durable.value !== null
+      && !samePersistedIdempotencyReceipt(existing, durable.value.receipt)) {
+      throw new Error('checkpoint control receipt conflicts with its durable archive');
+    }
     if (!existing && durable.value !== null && unresolvedControlRuntimePublication(durable.value.receipt)) {
       throw new Error('unresolved control publication evidence is missing from the active checkpoint');
     }
@@ -2329,12 +2531,8 @@ export class SystemLedgerPersistenceAdapter {
 
     const durable = this.durableIdempotencyReceipt(commit.idempotencyKey);
     if (!durable.ok) throw new Error(durable.message);
-    if (durable.value !== null && (
-      durable.value.receipt.requestDigest !== stored.requestDigest
-      || durable.value.receipt.correlationId !== stored.correlationId
-      || durable.value.receipt.recordedAtMs !== stored.recordedAtMs
-      || durable.value.receipt.checkpointRevision !== stored.checkpointRevision
-    )) {
+    if (durable.value !== null
+      && !samePersistedIdempotencyReceipt(durable.value.receipt, stored)) {
       throw new Error('persisted control runtime publication archive conflicts');
     }
     const publishedReceipt = Object.freeze({
@@ -2374,7 +2572,7 @@ export class SystemLedgerPersistenceAdapter {
       canonicalLedgerEventId: durable.value?.ledgerEventId
         ?? this.findAuditEvent(stored.checkpointRevision)?.id
         ?? null,
-    })]);
+    })], Object.freeze([]));
     if (!marked.ok) throw new Error(`${marked.code}: ${marked.message}`);
     return { kind: 'PUBLISHED' };
   }

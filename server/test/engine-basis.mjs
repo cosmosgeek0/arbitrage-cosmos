@@ -5,7 +5,14 @@
  * Run after `npm run build -w server`:  node server/test/engine-basis.mjs
  * Prints ✓/✗ per case and exits non-zero on any failure.
  */
-import { createReplayHarness, buildSnapshots } from '../dist/engine/basis/index.js';
+import {
+  BASIS_DEFAULTS,
+  buildFundingContext,
+  buildSnapshots,
+  createReplayHarness,
+  estimateEdge,
+  fundingCarryPctOverHold,
+} from '../dist/engine/basis/index.js';
 import { BasisRuntime } from '../dist/services/basisRuntime.js';
 
 const results = [];
@@ -173,6 +180,54 @@ section('5. funding against the trade ⇒ funding_against_trade');
   check('reject funding_against_trade', d?.kind === 'reject' && d?.rejectCode === 'funding_against_trade', d?.humanReason);
   check('evidence carries funding drag over expected hold', typeof d?.evidence.fundingCarryPctOverHold === 'number' && d.evidence.fundingCarryPctOverHold < -0.15);
   check('no proposal', h.engine.proposals.all().length === 0);
+}
+
+// =====================================================================
+section('5b. funding is charged only at known discrete settlements');
+{
+  const period = 8 * 60 * 60_000;
+  const hold = 4 * 60 * 60_000;
+  const noSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', hold, period, hold + 1,
+  );
+  const oneSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', hold, period, 60_000,
+  );
+  const unknownSecondSettlement = fundingCarryPctOverHold(
+    [0.001], 'long_spot_short_perp', 17 * 60 * 60_000, period, 60_000,
+  );
+  check('hold ending before funding has zero carry', noSettlement === 0, `carry=${noSettlement}`);
+  check('one crossed funding timestamp charges the full known rate', approx(oneSettlement, 0.1), `carry=${oneSettlement}`);
+  check('a crossed settlement without a known future rate stays unknown', unknownSecondSettlement === null, `carry=${unknownSecondSettlement}`);
+
+  const staleSchedule = buildFundingContext(
+    { symbol: SYM, markPrice: 100, fundingRate: 0.001, nextFundingTs: T0 - 1, ts: T0 },
+    [],
+    'long_spot_short_perp',
+    { gapPct: 1, slopePctPerMin: 0, samples: 1 },
+    T0,
+    BASIS_DEFAULTS,
+    0,
+  );
+  check(
+    'past next-funding metadata cannot manufacture a current settlement',
+    !staleSchedule.fresh && staleSchedule.carryPctOverHold === null,
+  );
+
+  const unknownFunding = {
+    fundingRate: 0.001, stalenessMs: 0, fresh: true, nextFundingTs: T0 + 60_000,
+    msToFunding: 60_000, carryPctOverHold: null, expectedHoldMs: hold,
+    flipRisk: 0, captureFactor: 0,
+  };
+  const edge = estimateEdge(
+    'long_spot_short_perp',
+    { gapPct: 1, slopePctPerMin: 0, samples: 1 },
+    unknownFunding,
+    { slippagePct: 0.01, depthScore: 1, sufficient: true, source: 'ladder' },
+    0,
+    BASIS_DEFAULTS,
+  );
+  check('unknown crossed-settlement carry keeps net edge unknown', edge.netEdgePct === null, `net=${edge.netEdgePct}`);
 }
 
 // =====================================================================

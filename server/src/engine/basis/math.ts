@@ -170,19 +170,32 @@ export function slopePerMinute(samples: Array<{ ts: number; v: number }>): numbe
 // ---------- funding carry ----------
 
 /**
- * Signed funding carry for a direction over an expected hold, pct of notional.
- * Positive funding pays shorts: helps A (short perp), hurts B (long perp).
+ * Signed funding carry from the discrete funding timestamps crossed by a hold,
+ * pct of notional. `knownSettlementRates[0]` belongs to the supplied next
+ * funding timestamp; later entries, when present, belong to subsequent periods.
+ * A crossed timestamp with no known rate stays unknown rather than being
+ * prorated from the current rate.
  */
 export function fundingCarryPctOverHold(
-  fundingRate: number,
+  knownSettlementRates: readonly number[],
   direction: BasisDirection,
   holdMs: number,
   fundingPeriodMs: number,
-): number {
-  const periods = holdMs / fundingPeriodMs;
+  msToNextFunding: number,
+): number | null {
+  if (!Number.isFinite(holdMs) || holdMs < 0
+    || !Number.isFinite(fundingPeriodMs) || fundingPeriodMs <= 0
+    || !Number.isFinite(msToNextFunding) || msToNextFunding <= 0) return null;
+  if (msToNextFunding > holdMs) return 0;
+  const settlementCount = 1 + Math.floor((holdMs - msToNextFunding) / fundingPeriodMs);
+  if (!Number.isSafeInteger(settlementCount)
+    || settlementCount < 1
+    || settlementCount > knownSettlementRates.length) return null;
+  const rates = knownSettlementRates.slice(0, settlementCount);
+  if (rates.some((rate) => !Number.isFinite(rate) || Math.abs(rate) > 0.1)) return null;
   const receivesWhenPositive = direction === 'long_spot_short_perp';
   const sign = receivesWhenPositive ? 1 : -1;
-  return fundingRate * 100 * periods * sign;
+  return rates.reduce((total, rate) => total + rate * 100 * sign, 0);
 }
 
 /** Borrow interest over the hold, pct of notional (reverse basis only). */

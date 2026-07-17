@@ -30,9 +30,9 @@ This file alone owns campaign status. Root `STATE.md` owns product state. The co
 - The exact payload generator emits an internally consistent v2 document: exact candidate/tree, exact generator identity, recomputed inventory checksum, independently recomputed payload-set checksum, and explicit source-preparation lineage.
 - `MERGE_PROVENANCE.json` v3 remeasures lane changed paths, parent topology, donor matches/mismatches, candidate receipt blobs, aggregates, and every landed-core candidate blob from exact C9 rather than carrying seed counts forward.
 - The exact verifier independently recomputes both payload checksums and the full provenance measurement; it rejects stale nested blobs or counts even when top-level candidate identity is correct.
-- Twenty-three external lock inputs and two governing evidence objects have raw candidate-tracked payload copies with reproducible byte length, SHA-256, and Git blob OID. Those copies are rehash-only evidence and confer no live-input or execution authority.
+- Twenty-three external lock inputs and two governing evidence objects are archived off-tree at `~/cosmos-campaign-archive/locked-input-payloads/`; the campaign metadata preserves their verified byte lengths, SHA-256 values, and Git blob OIDs. The archive confers no live-input or execution authority.
 - `WORKTREE_LEDGER.md` owns the pre-freeze 96-live snapshot, including `truth-a` and `truth-b`, plus five complete `REMOVED_SAFE` tombstones for 101 durable entries.
-- D-LAUNCH-65 is explicitly bound by commit, tree, parent, `QL_DIRECTOR_STATE.md` blob/hash/bytes, and candidate-tracked payload. Ambient or moving `current-main` is not accepted as evidence.
+- D-LAUNCH-65 remains explicitly bound by commit, tree, parent, and `QL_DIRECTOR_STATE.md` blob/hash/bytes; its payload copy is `ARCHIVED_OFF_TREE`. Ambient or moving `current-main` is not accepted as evidence.
 - `LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced. This wave adds no private, signed, order, borrow, repay, transfer, withdrawal, leverage, margin, deployment, credential, or capital path.
 
 ## Exact evidence descendant contract
@@ -44,7 +44,7 @@ After C9 is frozen, the evidence generator must regenerate from exact candidate 
 - `CAPABILITY_TRUTH_MATRIX.csv`: 23/23 exact-C9 candidate cells.
 - `COCKPIT_BINDING_MATRIX.csv`: 178/178 exact-C9 candidate cells.
 - `C2_PROOF_BINDING.json` and `EVIDENCE_SELECTION.json`: exact C9, tree, and sole C2 parent.
-- `LOCKED_INPUT_PAYLOADS.json`: exact-bound current inventory checksum and independently rehashed payload-set checksum.
+- `LOCKED_INPUT_PAYLOADS.json`: `ARCHIVED_OFF_TREE` storage truth with the existing inventory, payload-set, per-member SHA-256, Git blob, and byte-length bindings preserved.
 - `MERGE_PROVENANCE.json`: exact C9 topology plus independently recomputable lane and landed-core blob measurements.
 - `WORKTREE_CENSUS.json`: exact C9, 96 live rows, five complete tombstones, and 101 durable entries.
 - `MANIFEST.json` and `MANIFEST.sha256`: deterministic hashes generated last and independently verified.

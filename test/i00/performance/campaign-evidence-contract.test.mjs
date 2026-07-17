@@ -6,10 +6,13 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  AUTHORITY_PAYLOAD_SPECS,
   C9_CORRECTION_GRANTS,
   D_LAUNCH_65_AUTHORITY,
   EXACT_EVIDENCE_OUTPUTS,
   EXTERNAL_INPUT_SPECS,
+  LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH,
+  LOCKED_INPUT_PAYLOAD_STORAGE_STATUS,
   LOCK_INVENTORY_MATRIX_REQUIREMENT_ID,
   REJECTED_CANDIDATE_SHAS,
   REJECTED_SELECTION_HISTORY,
@@ -23,10 +26,6 @@ const ROOT = path.resolve(HERE, '../../..');
 const CAMPAIGN = path.join(ROOT, 'verification/product-truth-20260716');
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
-const gitBlob = (bytes) => createHash('sha1')
-  .update(Buffer.from(`blob ${bytes.length}\0`))
-  .update(bytes)
-  .digest('hex');
 const canonicalJson = (value) => {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -38,8 +37,12 @@ const canonicalJson = (value) => {
   return JSON.stringify(value);
 };
 
-test('campaign payload registry makes every external lock input independently rehashable', () => {
+const withoutArchiveStorage = ({ archive_path, storage_status, ...member }) => member;
+
+test('campaign payload registry preserves every external lock input as an archived hash binding', () => {
   const metadata = JSON.parse(readFileSync(path.join(CAMPAIGN, 'LOCKED_INPUT_PAYLOADS.json'), 'utf8'));
+  assert.equal(metadata.storage_status, LOCKED_INPUT_PAYLOAD_STORAGE_STATUS);
+  assert.equal(metadata.archive_path, LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH);
   assert.equal(EXTERNAL_INPUT_SPECS.length, 23);
   assert.equal(metadata.members.length, 23);
   assert.equal(new Set(metadata.members.map((row) => row.input_id)).size, 23);
@@ -48,35 +51,49 @@ test('campaign payload registry makes every external lock input independently re
   for (const member of metadata.members) {
     const spec = specs.get(member.input_id);
     assert.ok(spec, `unknown payload member ${member.input_id}`);
-    assert.ok(!path.isAbsolute(member.payload_relative_path), `${member.input_id} must be clone-relative`);
-    const bytes = readFileSync(path.join(CAMPAIGN, member.payload_relative_path));
-    assert.equal(bytes.length, member.byte_length, `${member.input_id} byte length`);
-    assert.equal(sha256(bytes), member.sha256, `${member.input_id} sha256`);
-    assert.equal(gitBlob(bytes), member.git_blob, `${member.input_id} Git blob`);
+    assert.ok(!path.isAbsolute(member.payload_relative_path), `${member.input_id} must retain its historical clone-relative identity`);
+    assert.equal(member.storage_status, LOCKED_INPUT_PAYLOAD_STORAGE_STATUS, `${member.input_id} storage status`);
+    assert.equal(member.archive_path, LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH, `${member.input_id} archive path`);
+    assert.equal(spec.payloadStorageStatus, LOCKED_INPUT_PAYLOAD_STORAGE_STATUS, `${member.input_id} registry storage status`);
+    assert.equal(spec.payloadArchivePath, LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH, `${member.input_id} registry archive path`);
     assert.equal(member.sha256, spec.expectedSha256, `${member.input_id} registry sha256`);
+    assert.equal(member.expected_sha256, spec.expectedSha256, `${member.input_id} preserved expected sha256`);
+    assert.match(member.sha256, /^[a-f0-9]{64}$/u, `${member.input_id} sha256 shape`);
+    assert.match(member.git_blob, /^[a-f0-9]{40}$/u, `${member.input_id} Git blob shape`);
+    assert.ok(Number.isSafeInteger(member.byte_length) && member.byte_length > 0, `${member.input_id} byte length`);
   }
   assert.equal(
     metadata.inventory_sha256,
     sha256(Buffer.from(canonicalJson({
-      members: metadata.members,
-      authority_members: metadata.authority_members,
+      members: metadata.members.map(withoutArchiveStorage),
+      authority_members: metadata.authority_members.map(withoutArchiveStorage),
     }))),
   );
 });
 
-test('D-LAUNCH-65 and VFINAL5 authorities are payload-bound without ambient current-main', () => {
+test('D-LAUNCH-65 and VFINAL5 authorities retain archived payload hash bindings without ambient current-main', () => {
   const metadata = JSON.parse(readFileSync(path.join(CAMPAIGN, 'LOCKED_INPUT_PAYLOADS.json'), 'utf8'));
   const authorities = new Map(metadata.authority_members.map((row) => [row.member_id, row]));
+  const authoritySpecs = new Map(AUTHORITY_PAYLOAD_SPECS.map((row) => [row.memberId, row]));
   for (const [id, expected] of [
     ['authority:D_LAUNCH_65', D_LAUNCH_65_AUTHORITY],
     ['authority:VFINAL5_RECEIPT', VFINAL5_AUTHORITY],
   ]) {
     const member = authorities.get(id);
+    const spec = authoritySpecs.get(id);
     assert.ok(member, `missing ${id}`);
-    const bytes = readFileSync(path.join(CAMPAIGN, member.payload_relative_path));
-    assert.equal(bytes.length, expected.byte_length);
-    assert.equal(sha256(bytes), expected.sha256);
-    assert.equal(gitBlob(bytes), expected.git_blob);
+    assert.ok(spec, `missing registry spec ${id}`);
+    assert.equal(member.storage_status, LOCKED_INPUT_PAYLOAD_STORAGE_STATUS);
+    assert.equal(member.archive_path, LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH);
+    assert.equal(spec.payloadStorageStatus, LOCKED_INPUT_PAYLOAD_STORAGE_STATUS);
+    assert.equal(spec.payloadArchivePath, LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH);
+    assert.equal(member.byte_length, expected.byte_length);
+    assert.equal(member.expected_byte_length, expected.byte_length);
+    assert.equal(member.sha256, expected.sha256);
+    assert.equal(member.expected_sha256, expected.sha256);
+    assert.equal(spec.expectedSha256, expected.sha256);
+    assert.equal(member.git_blob, expected.git_blob);
+    assert.equal(member.expected_git_blob, expected.git_blob);
   }
 });
 

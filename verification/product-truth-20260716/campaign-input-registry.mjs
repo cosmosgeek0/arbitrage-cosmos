@@ -55,6 +55,8 @@ export const REJECTED_CANDIDATE_SHAS = Object.freeze([
 ]);
 export const CAMPAIGN_BRANCH = 'truth-campaign-20260716';
 export const LOCK_INVENTORY_MATRIX_REQUIREMENT_ID = 'CAMP-09-PROVENANCE';
+export const LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH = '~/cosmos-campaign-archive/locked-input-payloads/';
+export const LOCKED_INPUT_PAYLOAD_STORAGE_STATUS = 'ARCHIVED_OFF_TREE';
 export const C9_CORRECTION_GRANTS = Object.freeze([
   '.gitattributes',
   'STATE.md',
@@ -131,6 +133,8 @@ const control = (legacyId, authority, originalPath, expectedSha256) => ({
   authority,
   originalPath,
   expectedSha256,
+  payloadStorageStatus: LOCKED_INPUT_PAYLOAD_STORAGE_STATUS,
+  payloadArchivePath: LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH,
 });
 
 const superseded = (legacyId, originalPath, expectedSha256, supersededBy) => ({
@@ -140,6 +144,8 @@ const superseded = (legacyId, originalPath, expectedSha256, supersededBy) => ({
   authority: 'SUPERSEDED_REFERENCE_ONLY',
   originalPath,
   expectedSha256,
+  payloadStorageStatus: LOCKED_INPUT_PAYLOAD_STORAGE_STATUS,
+  payloadArchivePath: LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH,
   supersededBy,
 });
 
@@ -177,6 +183,8 @@ export const AUTHORITY_PAYLOAD_SPECS = Object.freeze([
     expectedSha256: D_LAUNCH_65_AUTHORITY.sha256,
     expectedGitBlob: D_LAUNCH_65_AUTHORITY.git_blob,
     expectedByteLength: D_LAUNCH_65_AUTHORITY.byte_length,
+    payloadStorageStatus: LOCKED_INPUT_PAYLOAD_STORAGE_STATUS,
+    payloadArchivePath: LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH,
     payloadRelativePath: 'locked-input-payloads/authority-D_LAUNCH_65-QL_DIRECTOR_STATE.md',
   }),
   Object.freeze({
@@ -186,6 +194,8 @@ export const AUTHORITY_PAYLOAD_SPECS = Object.freeze([
     expectedSha256: VFINAL5_AUTHORITY.sha256,
     expectedGitBlob: VFINAL5_AUTHORITY.git_blob,
     expectedByteLength: VFINAL5_AUTHORITY.byte_length,
+    payloadStorageStatus: LOCKED_INPUT_PAYLOAD_STORAGE_STATUS,
+    payloadArchivePath: LOCKED_INPUT_PAYLOAD_ARCHIVE_PATH,
     payloadRelativePath: 'locked-input-payloads/authority-VFINAL5_RECEIPT.md',
   }),
 ]);

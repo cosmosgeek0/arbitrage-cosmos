@@ -8,6 +8,7 @@ import { Ledger } from '../../../dist/ledger.js';
 import {
   SYSTEM_PERSISTENCE_CONFIG_KEY,
   SYSTEM_PERSISTENCE_EVENT_KIND,
+  SYSTEM_PERSISTENCE_LIMITS,
   SystemLedgerPersistenceAdapter,
   decodeSystemCheckpoint,
   encodeSystemCheckpoint,
@@ -321,6 +322,170 @@ test('control commits replay exactly and rejection audit is atomic, idempotent, 
     assert.equal((await adapter.findControlMutation(restartRequest.idempotencyKey)).runtimePublication, 'PUBLISHED');
     assert.deepEqual(adapter.readPendingControlRuntimePublications().value, []);
     assert.equal(adapter.restartBarrier(T0 + 6).value.reasonCodes.includes('CONTROL_COMMITTED_RUNTIME_PENDING'), false);
+  } finally {
+    try { ledger.close(); } catch {}
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('terminal control idempotency evidence rolls over without losing exact lifetime replay', async () => {
+  const dataDir = tempDataDir();
+  let ledger = new Ledger(dataDir);
+  try {
+    let adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0, 'control.capacity.empty').ok, true);
+    assert.equal(adapter.persistStartup({
+      startedAtMs: T0 + 1,
+      correlationId: 'control.capacity.start',
+    }).ok, true);
+
+    const pendingBefore = adapter.currentState().value.control;
+    const pendingAfter = {
+      ...pendingBefore,
+      revision: pendingBefore.revision + 1,
+      generation: pendingBefore.generation + 1,
+      updatedAtMs: T0 + 2,
+      correlationId: 'control.capacity.pending',
+    };
+    const pendingCommit = {
+      request: {
+        idempotencyKey: 'control.capacity.pending.0000',
+        expectedRevision: pendingBefore.revision,
+        reason: 'Keep unresolved runtime publication evidence resident',
+        requestedAtMs: T0 + 2,
+        correlationId: 'control.capacity.pending',
+        mutation: { command: 'RESTART_COMPONENT', componentId: 'market-universe' },
+      },
+      actor: { id: 'local-operator', email: null, source: 'loopback' },
+      requestDigest: 'f'.repeat(64),
+      before: pendingBefore,
+      after: pendingAfter,
+      applied: true,
+      code: 'MANAGED_RUNTIME_RESTART_ACCEPTED',
+    };
+    assert.equal((await adapter.commitControlMutation(pendingCommit)).kind, 'COMMITTED');
+
+    const firstTerminalBefore = adapter.currentState().value.control;
+    const firstTerminalAfter = {
+      ...firstTerminalBefore,
+      revision: firstTerminalBefore.revision + 1,
+      safeMode: 'ADVISORY',
+      updatedAtMs: T0 + 3,
+      correlationId: 'control.capacity.terminal.0000',
+    };
+    const firstTerminalCommit = {
+      request: {
+        idempotencyKey: 'control.capacity.terminal.0000',
+        expectedRevision: firstTerminalBefore.revision,
+        reason: 'Create canonical terminal control evidence before rollover',
+        requestedAtMs: T0 + 3,
+        correlationId: 'control.capacity.terminal.0000',
+        mutation: { command: 'SET_SAFE_MODE', safeMode: 'ADVISORY' },
+      },
+      actor: { id: 'local-operator', email: null, source: 'loopback' },
+      requestDigest: '1'.padStart(64, '0'),
+      before: firstTerminalBefore,
+      after: firstTerminalAfter,
+      applied: true,
+      code: 'CONTROL_APPLIED',
+    };
+    const firstTerminalResult = await adapter.commitControlMutation(firstTerminalCommit);
+    assert.equal(firstTerminalResult.kind, 'COMMITTED');
+
+    const decoded = decodeSystemCheckpoint(ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+    assert.equal(decoded.ok, true);
+    const seeded = structuredClone(decoded.value);
+    const terminalTemplate = seeded.idempotencyReceipts.find(
+      (entry) => entry.idempotencyKey === firstTerminalCommit.request.idempotencyKey,
+    );
+    for (let index = 1;
+      seeded.idempotencyReceipts.length < SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts;
+      index += 1) {
+      const suffix = String(index).padStart(4, '0');
+      seeded.idempotencyReceipts.push({
+        ...structuredClone(terminalTemplate),
+        idempotencyKey: `control.capacity.fixture.${suffix}`,
+        requestDigest: (index + 1).toString(16).padStart(64, '0'),
+        correlationId: `control.capacity.fixture.${suffix}`,
+        recordedAtMs: T0 + 3 + index,
+      });
+    }
+    ledger.setConfigValueAndLogEvent(
+      SYSTEM_PERSISTENCE_CONFIG_KEY,
+      encodeSystemCheckpoint(seeded),
+      SYSTEM_PERSISTENCE_EVENT_KIND,
+      null,
+      { capacityFixture: true },
+    );
+    ledger.close();
+    ledger = new Ledger(dataDir);
+    adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0 + 600, 'control.capacity.seeded').ok, true);
+
+    const rolloverBefore = adapter.currentState().value.control;
+    const rolloverAfter = {
+      ...rolloverBefore,
+      revision: rolloverBefore.revision + 1,
+      safeMode: 'VALIDATE_ONLY',
+      updatedAtMs: T0 + 601,
+      correlationId: 'control.capacity.rollover',
+    };
+    const rolloverCommit = {
+      request: {
+        idempotencyKey: 'control.capacity.rollover.0513',
+        expectedRevision: rolloverBefore.revision,
+        reason: 'Admit a new control after the bounded receipt window is full',
+        requestedAtMs: T0 + 601,
+        correlationId: 'control.capacity.rollover',
+        mutation: { command: 'SET_SAFE_MODE', safeMode: 'VALIDATE_ONLY' },
+      },
+      actor: { id: 'local-operator', email: null, source: 'loopback' },
+      requestDigest: 'd'.repeat(64),
+      before: rolloverBefore,
+      after: rolloverAfter,
+      applied: true,
+      code: 'CONTROL_APPLIED',
+    };
+    assert.equal((await adapter.commitControlMutation(rolloverCommit)).kind, 'COMMITTED');
+
+    const boundedState = adapter.currentState().value;
+    assert.equal(
+      boundedState.idempotencyReceipts.length,
+      SYSTEM_PERSISTENCE_LIMITS.maximumIdempotencyReceipts,
+    );
+    assert.ok(boundedState.idempotencyReceipts.some(
+      (entry) => entry.idempotencyKey === pendingCommit.request.idempotencyKey,
+    ));
+    assert.equal(boundedState.idempotencyReceipts.some(
+      (entry) => entry.idempotencyKey === firstTerminalCommit.request.idempotencyKey,
+    ), false);
+    assert.equal(adapter.readPendingControlRuntimePublications().value.length, 1);
+
+    const eventCountBeforeReplay = ledger.recentEvents(2_000).length;
+    const found = await adapter.findControlMutation(firstTerminalCommit.request.idempotencyKey);
+    assert.equal(found.requestDigest, firstTerminalCommit.requestDigest);
+    assert.equal(found.receipt.ledgerEventId, firstTerminalResult.receipt.ledgerEventId);
+    const replay = await adapter.commitControlMutation(firstTerminalCommit);
+    assert.equal(replay.kind, 'IDEMPOTENT_REPLAY');
+    assert.equal(replay.receipt.ledgerEventId, firstTerminalResult.receipt.ledgerEventId);
+    assert.equal(ledger.recentEvents(2_000).length, eventCountBeforeReplay);
+    const conflict = await adapter.commitControlMutation({
+      ...firstTerminalCommit,
+      requestDigest: 'e'.repeat(64),
+    });
+    assert.equal(conflict.kind, 'IDEMPOTENCY_CONFLICT');
+    assert.equal(ledger.recentEvents(2_000).length, eventCountBeforeReplay);
+
+    ledger.close();
+    ledger = new Ledger(dataDir);
+    adapter = new SystemLedgerPersistenceAdapter(ledger);
+    assert.equal(adapter.load(T0 + 602, 'control.capacity.reload').ok, true);
+    const restartedReplay = await adapter.commitControlMutation(firstTerminalCommit);
+    assert.equal(restartedReplay.kind, 'IDEMPOTENT_REPLAY');
+    assert.equal(restartedReplay.receipt.ledgerEventId, firstTerminalResult.receipt.ledgerEventId);
+    assert.ok(adapter.currentState().value.idempotencyReceipts.some(
+      (entry) => entry.idempotencyKey === pendingCommit.request.idempotencyKey,
+    ));
   } finally {
     try { ledger.close(); } catch {}
     rmSync(dataDir, { recursive: true, force: true });

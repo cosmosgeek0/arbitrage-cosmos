@@ -20,7 +20,7 @@ import {
   type ProductControlRegistryEntry,
   type ProductControlResult,
 } from '../../../lib/productIntegration';
-import { canonicalKillSwitchEngagePosture } from '../../../lib/canonicalCockpitTruth';
+import { canonicalKillSwitchEngagePosture } from '../../../lib/operatorControlPosture';
 import { PillSelect } from '../../../components/PillSelect';
 
 export interface ControlRegistryPanelProps {

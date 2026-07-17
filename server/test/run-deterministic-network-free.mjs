@@ -1,16 +1,20 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  spawnRunnerChild,
+  superviseRunnerChild,
+  terminateRunnerChild,
+} from '../../test/runner-process-tree.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TRIPWIRE_URL = new URL('./private-egress-tripwire.mjs', import.meta.url).href;
 const INSTALL_KEY = Symbol.for('cosmos.test.network-egress-tripwire.v2');
 const REPORT_VERSION = 2;
 const AI_OPS_ACCEPTANCE_DISPOSITION =
-  'AI_OPS_ACCEPTANCE=EXCLUDED_FROM_C2_BASELINE; AI_OPS_ROOT_TEST_MOUNT=NOT_CONFIGURED';
+  'AI_OPS_ACCEPTANCE=EXCLUDED_FROM_C2_BASELINE; AI_OPS_ROOT_TEST_MOUNT=REGISTERED_POST_AUDIT';
 const ALLOWED_RECORD_KINDS = new Set(['INSTALL', 'ATTEMPT', 'ATTEMPT_OVERFLOW']);
 const DETERMINISTIC_SCRIPTS = Object.freeze([
   'test:engine:built',
@@ -24,6 +28,15 @@ const ROOT_SCRIPTS = Object.freeze([
   ...DETERMINISTIC_SCRIPTS,
   'test:i00:proof:built',
 ]);
+const SCRIPT_TIMEOUT_MS = Object.freeze({
+  typecheck: 300_000,
+  build: 300_000,
+  'test:engine:built': 300_000,
+  'test:focused:built': 300_000,
+  'test:product-assurance:built': 900_000,
+  'test:i00:acceptance-contract': 300_000,
+  'test:i00:proof:built': 300_000,
+});
 
 function selectedMode(args) {
   if (args.length === 0) return 'DETERMINISTIC';
@@ -60,10 +73,17 @@ function readTranscript(reportPath) {
     });
 }
 
-function waitForChild(child) {
+function waitForChild(child, timeoutMs) {
   return new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', (code, signal) => resolve({ code, signal }));
+    const deadline = superviseRunnerChild(child, timeoutMs);
+    child.once('error', (error) => {
+      deadline.finish();
+      reject(error);
+    });
+    child.once('close', (code, signal) => {
+      deadline.finish();
+      resolve({ code, signal, timedOut: deadline.timedOut, timeoutMs });
+    });
   });
 }
 
@@ -125,14 +145,16 @@ try {
     }
   } else {
     for (const script of scripts) {
-      activeChild = spawn('npm', ['run', script], {
+      activeChild = spawnRunnerChild(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', script], {
         cwd: ROOT,
         env: environment,
         stdio: 'inherit',
       });
       const childRecord = Object.freeze({ script, pid: activeChild.pid });
       topLevelChildren.push(childRecord);
-      const exit = await waitForChild(activeChild);
+      const timeoutMs = SCRIPT_TIMEOUT_MS[script];
+      if (!Number.isSafeInteger(timeoutMs)) throw new Error(`TEST_RUNNER_TIMEOUT_MISSING:${script}`);
+      const exit = await waitForChild(activeChild, timeoutMs);
       activeChild = null;
       if (exit.code !== 0 || exit.signal !== null) {
         failedChild = Object.freeze({ ...childRecord, ...exit });
@@ -177,7 +199,7 @@ try {
   );
 } finally {
   if (activeChild !== null && activeChild.exitCode === null && activeChild.signalCode === null) {
-    activeChild.kill('SIGTERM');
+    terminateRunnerChild(activeChild);
   }
   rmSync(temp, { recursive: true, force: true });
 }
@@ -186,7 +208,8 @@ if (auditError !== null || failedChild !== null) {
   if (auditError === null && failedChild !== null) {
     process.stderr.write(
       `Deterministic test child failed: script=${failedChild.script} code=${String(failedChild.code)} ` +
-      `signal=${String(failedChild.signal)}\n`,
+      `signal=${String(failedChild.signal)} timedOut=${String(failedChild.timedOut)} ` +
+      `timeoutMs=${String(failedChild.timeoutMs)}\n`,
     );
   }
   preserveFailureExitCode();

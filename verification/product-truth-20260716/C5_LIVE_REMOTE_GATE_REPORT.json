@@ -1,9 +1,15 @@
 {
   "schema": "product-truth-c5-live-remote-custody-gate.v1",
-  "generated_at_utc": "2026-07-17T04:18:02.483Z",
+  "generated_at_utc": "2026-07-17T04:23:44.833Z",
   "actor_role": "ACCOUNT_A_CANDIDATE_CUSTODIAN",
   "actor_write_permission": "CAMPAIGN_EVIDENCE_AND_AUTHORIZED_CAMPAIGN_BRANCH_CUSTODY_ONLY",
   "final_independent_verifier": false,
+  "attempt": 2,
+  "prior_attempt": {
+    "evidence_commit": "9e4005535691bb1ddb8a51c3d95394e0920832bc",
+    "report_sha256": "32b5fcd13c53c04e5708b63459b3ce4cd026fad436968ccfb28348c3d5a30edf",
+    "result": "BLOCKED_RECORDER_PROBE_C4_OBJECT_ABSENT"
+  },
   "candidate": {
     "c5": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
     "immutable_c2": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
@@ -13,7 +19,7 @@
     "tree": "28d3d9922cc1201333775a458919afe9158e6dc2"
   },
   "evidence_bridge": {
-    "tip": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+    "commit": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
     "expected_first_parent": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
     "expected_second_parent": "fd6a277057fb5b360bd297cfcbdffcaaa915ba64",
     "observed_parents": [
@@ -22,10 +28,15 @@
     ],
     "source_diff_scope": "verification/product-truth-20260716/**",
     "paths": [
+      "verification/product-truth-20260716/C5_LIVE_REMOTE_GATE_REPORT.json",
       "verification/product-truth-20260716/STATE.md",
       "verification/product-truth-20260716/run-c5-live-remote-gate.mjs"
     ]
   },
+  "campaign_tip": "55485943ffcfbf80bc55609039264169c8880fb6",
+  "campaign_tip_parents": [
+    "9e4005535691bb1ddb8a51c3d95394e0920832bc"
+  ],
   "constraints": {
     "current_main_write_authorized": false,
     "current_main_push_authorized": false,
@@ -34,7 +45,7 @@
     "merge_to_current_main_authorized": false,
     "required_battery_sequence": "npm ci && npm test && npm run test:all",
     "remote_mutation_commands_performed": [
-      "command-024"
+      "command-027"
     ]
   },
   "preflight": {
@@ -54,7 +65,13 @@
       "command-013",
       "command-014",
       "command-015",
-      "command-016"
+      "command-016",
+      "command-017",
+      "command-018",
+      "command-100",
+      "command-101",
+      "command-102",
+      "command-103"
     ],
     "result": "PASS_C5_IMMUTABLE_EVIDENCE_ONLY_FAST_FORWARD_BRIDGE",
     "dirty_paths": [
@@ -64,11 +81,11 @@
   },
   "environment": {
     "command_ids": [
-      "command-017",
-      "command-018",
       "command-019",
       "command-020",
-      "command-021"
+      "command-021",
+      "command-022",
+      "command-023"
     ],
     "normalized": {
       "git": "git version 2.50.1 (Apple Git-155)",
@@ -81,33 +98,31 @@
   },
   "campaign_push": {
     "command_ids": [
-      "command-024",
-      "command-025",
-      "command-026"
+      "command-026",
+      "command-027",
+      "command-028",
+      "command-029"
     ],
     "result": "PASS_AUTHORIZED_NON_FORCE_CAMPAIGN_ONLY_FAST_FORWARD",
-    "before": "fd6a277057fb5b360bd297cfcbdffcaaa915ba64",
-    "after": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
-    "local_tip": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
-    "fast_forward_from": "fd6a277057fb5b360bd297cfcbdffcaaa915ba64",
+    "before": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+    "after": "55485943ffcfbf80bc55609039264169c8880fb6",
+    "local_tip": "55485943ffcfbf80bc55609039264169c8880fb6",
+    "fast_forward_from": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
     "origin_equals_local_tip": true
   },
   "bundle": {
     "path": "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
     "command_ids": [
-      "command-027",
-      "command-028",
-      "command-029",
       "command-030",
       "command-031",
       "command-032",
       "command-033",
-      "command-034"
-    ],
-    "clone_command_ids": [
+      "command-034",
       "command-035",
       "command-036",
-      "command-037",
+      "command-037"
+    ],
+    "clone_command_ids": [
       "command-038",
       "command-039",
       "command-040",
@@ -128,55 +143,245 @@
       "command-055",
       "command-056",
       "command-057",
-      "command-058"
+      "command-058",
+      "command-059",
+      "command-060",
+      "command-061",
+      "command-062",
+      "command-063"
     ],
-    "result": "NOT_RUN",
-    "sha256": "8f6c0497c13fb890b30b25caebd1bdb8454984753632a47f4e3294585ede4fc0",
-    "byte_length": 63400622,
+    "result": "PASS_REBUILT_COMPLETE_HISTORY_DIGEST_AND_INDEPENDENT_CLONE",
+    "sha256": "1b629de9c69712ffde6ea89776105bc1a322da93d04ca17e7c36582faeac766c",
+    "byte_length": 63410220,
     "complete_history": true,
-    "campaign_head": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
-    "current_main_head": "3bf7bb25830df85dcbc978bfcecf16216a02d265"
+    "campaign_head": "55485943ffcfbf80bc55609039264169c8880fb6",
+    "current_main_head": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+    "clone": {
+      "initial_head": "55485943ffcfbf80bc55609039264169c8880fb6",
+      "initial_branch": "truth-campaign-20260716",
+      "initial_parents": [
+        "9e4005535691bb1ddb8a51c3d95394e0920832bc"
+      ],
+      "custody_bridge": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "custody_bridge_parents": [
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+        "fd6a277057fb5b360bd297cfcbdffcaaa915ba64"
+      ],
+      "detached_head": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "candidate_tree": "28d3d9922cc1201333775a458919afe9158e6dc2",
+      "candidate_parents": [
+        "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+      ],
+      "rejected_c4_object_present": false,
+      "local_branch_refs": [
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "remote_tracking_branch_refs": [
+        "refs/remotes/origin/truth-campaign-20260716"
+      ],
+      "fetch_refspec": "+refs/heads/truth-campaign-20260716:refs/remotes/origin/truth-campaign-20260716",
+      "current_main_ref_present": false,
+      "shallow": false,
+      "worktree_count": 1,
+      "hardlink_audit": {
+        "label": "BUNDLE_CLONE",
+        "requested_clone_flag": "--no-hardlinks",
+        "object_files_checked": 3,
+        "max_link_count": 1,
+        "hardlinked_object_file_count": 0,
+        "hardlinked_object_files": [],
+        "alternates_path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone/.git/objects/info/alternates",
+        "alternates_present": false,
+        "passed": true
+      },
+      "final_clean": true
+    }
   },
   "live_remote": {
     "before_command_ids": [
-      "command-022",
-      "command-023"
+      "command-024",
+      "command-025"
     ],
-    "after_command_ids": [],
-    "result": "NOT_RUN",
+    "after_command_ids": [
+      "command-098",
+      "command-099"
+    ],
+    "result": "PASS_LIVE_REF_STABLE_EXACT_C5_REACHABLE_THROUGH_EVIDENCE_BRIDGE",
     "before": {
-      "campaign": "fd6a277057fb5b360bd297cfcbdffcaaa915ba64",
+      "campaign": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "current_main": "3bf7bb25830df85dcbc978bfcecf16216a02d265"
+    },
+    "after": {
+      "campaign": "55485943ffcfbf80bc55609039264169c8880fb6",
       "current_main": "3bf7bb25830df85dcbc978bfcecf16216a02d265"
     }
   },
   "live_remote_clone": {
-    "setup_command_ids": [],
-    "topology_command_ids": [],
-    "input_command_ids": [],
-    "battery_command_ids": [],
-    "final_command_ids": [],
-    "result": "NOT_RUN"
+    "setup_command_ids": [
+      "command-064"
+    ],
+    "topology_command_ids": [
+      "command-065",
+      "command-066",
+      "command-067",
+      "command-068",
+      "command-069",
+      "command-070",
+      "command-071",
+      "command-072",
+      "command-073",
+      "command-074",
+      "command-075",
+      "command-076",
+      "command-077",
+      "command-078",
+      "command-079",
+      "command-080",
+      "command-081",
+      "command-082",
+      "command-083",
+      "command-084",
+      "command-085",
+      "command-086",
+      "command-087",
+      "command-088",
+      "command-089"
+    ],
+    "input_command_ids": [
+      "command-090",
+      "command-091",
+      "command-092"
+    ],
+    "battery_command_ids": [
+      "command-093",
+      "command-094",
+      "command-095"
+    ],
+    "final_command_ids": [
+      "command-096",
+      "command-097"
+    ],
+    "result": "PASS_EXACT_C5_LIVE_REMOTE_LITERAL_CLEAN_CLONE",
+    "topology": {
+      "initial_head": "55485943ffcfbf80bc55609039264169c8880fb6",
+      "initial_branch": "truth-campaign-20260716",
+      "initial_parents": [
+        "9e4005535691bb1ddb8a51c3d95394e0920832bc"
+      ],
+      "custody_bridge": "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "custody_bridge_parents": [
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+        "fd6a277057fb5b360bd297cfcbdffcaaa915ba64"
+      ],
+      "detached_head": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "candidate_tree": "28d3d9922cc1201333775a458919afe9158e6dc2",
+      "candidate_parents": [
+        "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+      ],
+      "rejected_c4_object_present": false,
+      "local_branch_refs": [
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "remote_tracking_branch_refs": [
+        "refs/remotes/origin/truth-campaign-20260716"
+      ],
+      "fetch_refspec": "+refs/heads/truth-campaign-20260716:refs/remotes/origin/truth-campaign-20260716",
+      "current_main_ref_present": false,
+      "shallow": false,
+      "worktree_count": 1,
+      "hardlink_audit": {
+        "label": "LIVE_REMOTE_CLONE",
+        "requested_clone_flag": "--no-hardlinks",
+        "object_files_checked": 3,
+        "max_link_count": 1,
+        "hardlinked_object_file_count": 0,
+        "hardlinked_object_files": [],
+        "alternates_path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone/.git/objects/info/alternates",
+        "alternates_present": false,
+        "passed": true
+      },
+      "final_clean": true
+    },
+    "source_transport": "LIVE_REMOTE_SSH",
+    "clone_flags": [
+      "--no-hardlinks",
+      "--single-branch",
+      "--branch",
+      "truth-campaign-20260716"
+    ],
+    "dependency_lock": {
+      "paths": [
+        "package-lock.json"
+      ],
+      "package_lock_sha256": "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+      "package_lock_git_blob": "54efede0fbadd309ca38375349075affc347cb51"
+    },
+    "final_clean": true,
+    "final_head": "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
   },
   "current_main": {
     "before": {
       "local": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
       "cached_origin": "3bf7bb25830df85dcbc978bfcecf16216a02d265"
     },
-    "after": null,
-    "changed_during_gate": null
+    "after": {
+      "local": "3bf7bb25830df85dcbc978bfcecf16216a02d265",
+      "cached_origin": "3bf7bb25830df85dcbc978bfcecf16216a02d265"
+    },
+    "changed_during_gate": false
   },
   "actions": [
     {
+      "action": "HARDLINK_AUDIT:BUNDLE_CLONE",
+      "started_at_utc": "2026-07-17T04:24:03.679Z",
+      "ended_at_utc": "2026-07-17T04:24:03.680Z",
+      "exit_code": 0,
+      "count": 3,
+      "count_basis": "GIT_OBJECT_FILES_INSPECTED",
+      "evidence": {
+        "label": "BUNDLE_CLONE",
+        "requested_clone_flag": "--no-hardlinks",
+        "object_files_checked": 3,
+        "max_link_count": 1,
+        "hardlinked_object_file_count": 0,
+        "hardlinked_object_files": [],
+        "alternates_path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone/.git/objects/info/alternates",
+        "alternates_present": false,
+        "passed": true
+      },
+      "evidence_sha256": "19e3d749a08770edcef710adb9bff20dc7112fae529d411a0011650bfb23e4a4"
+    },
+    {
+      "action": "HARDLINK_AUDIT:LIVE_REMOTE_CLONE",
+      "started_at_utc": "2026-07-17T04:24:27.036Z",
+      "ended_at_utc": "2026-07-17T04:24:27.036Z",
+      "exit_code": 0,
+      "count": 3,
+      "count_basis": "GIT_OBJECT_FILES_INSPECTED",
+      "evidence": {
+        "label": "LIVE_REMOTE_CLONE",
+        "requested_clone_flag": "--no-hardlinks",
+        "object_files_checked": 3,
+        "max_link_count": 1,
+        "hardlinked_object_file_count": 0,
+        "hardlinked_object_files": [],
+        "alternates_path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone/.git/objects/info/alternates",
+        "alternates_present": false,
+        "passed": true
+      },
+      "evidence_sha256": "1399500b3bc4964d4578fc79eb523f683d8062c45fac516f516286c064cd9cec"
+    },
+    {
       "action": "REMOVE_TEMPORARY_BUNDLE_AND_LIVE_REMOTE_CLONES",
-      "started_at_utc": "2026-07-17T04:18:21.556Z",
-      "ended_at_utc": "2026-07-17T04:18:21.708Z",
+      "started_at_utc": "2026-07-17T04:37:23.783Z",
+      "ended_at_utc": "2026-07-17T04:37:25.213Z",
       "exit_code": 0,
       "count": 0,
       "evidence": {
-        "path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy",
+        "path": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj",
         "removed": true
       },
-      "evidence_sha256": "8b4f5393d25e02b86f87573713337a9055b99e32429f27741030f117d0b3f3f7"
+      "evidence_sha256": "7214e3c62cf29ac89d18c3f6985ffd80c00fdd9d828422a7e0b0ca3e8ca08948"
     }
   ],
   "commands": [
@@ -190,8 +395,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.484Z",
-      "ended_at_utc": "2026-07-17T04:18:02.494Z",
+      "started_at_utc": "2026-07-17T04:23:44.834Z",
+      "ended_at_utc": "2026-07-17T04:23:44.844Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -222,17 +427,17 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.494Z",
-      "ended_at_utc": "2026-07-17T04:18:02.502Z",
+      "started_at_utc": "2026-07-17T04:23:44.844Z",
+      "ended_at_utc": "2026-07-17T04:23:44.852Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "stdout_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "output_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 41,
       "stderr_byte_length": 0,
@@ -256,8 +461,42 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.502Z",
-      "ended_at_utc": "2026-07-17T04:18:02.513Z",
+      "started_at_utc": "2026-07-17T04:23:44.853Z",
+      "ended_at_utc": "2026-07-17T04:23:44.862Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-004",
+      "command": "git show -s --format=%P f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:23:44.862Z",
+      "ended_at_utc": "2026-07-17T04:23:44.874Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -279,7 +518,41 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-004",
+      "command_id": "command-005",
+      "command": "git merge-base --is-ancestor f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6 HEAD",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+        "HEAD"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:23:44.874Z",
+      "ended_at_utc": "2026-07-17T04:23:44.883Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-006",
       "command": "git rev-parse refs/heads/truth-campaign-20260716",
       "argv": [
         "git",
@@ -288,17 +561,17 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.513Z",
-      "ended_at_utc": "2026-07-17T04:18:02.521Z",
+      "started_at_utc": "2026-07-17T04:23:44.883Z",
+      "ended_at_utc": "2026-07-17T04:23:44.891Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "stdout_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "output_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 41,
       "stderr_byte_length": 0,
@@ -311,7 +584,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-005",
+      "command_id": "command-007",
       "command": "git cat-file -t 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
       "argv": [
         "git",
@@ -321,8 +594,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.521Z",
-      "ended_at_utc": "2026-07-17T04:18:02.530Z",
+      "started_at_utc": "2026-07-17T04:23:44.891Z",
+      "ended_at_utc": "2026-07-17T04:23:44.899Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -344,7 +617,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-006",
+      "command_id": "command-008",
       "command": "git rev-parse '959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}'",
       "argv": [
         "git",
@@ -353,8 +626,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.530Z",
-      "ended_at_utc": "2026-07-17T04:18:02.539Z",
+      "started_at_utc": "2026-07-17T04:23:44.899Z",
+      "ended_at_utc": "2026-07-17T04:23:44.907Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -376,7 +649,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-007",
+      "command_id": "command-009",
       "command": "git show -s --format=%P 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
       "argv": [
         "git",
@@ -387,8 +660,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.539Z",
-      "ended_at_utc": "2026-07-17T04:18:02.549Z",
+      "started_at_utc": "2026-07-17T04:23:44.907Z",
+      "ended_at_utc": "2026-07-17T04:23:44.917Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -410,7 +683,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-008",
+      "command_id": "command-010",
       "command": "git merge-base --is-ancestor dea2d2a5c2b5e83d3aea75b0e368f0a478596561 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
       "argv": [
         "git",
@@ -421,80 +694,12 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.549Z",
-      "ended_at_utc": "2026-07-17T04:18:02.557Z",
+      "started_at_utc": "2026-07-17T04:23:44.917Z",
+      "ended_at_utc": "2026-07-17T04:23:44.925Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 0,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-009",
-      "command": "git merge-base --is-ancestor 78f708d6cdb9d1618c53d3f08f71097b4320a63b 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-      "argv": [
-        "git",
-        "merge-base",
-        "--is-ancestor",
-        "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.558Z",
-      "ended_at_utc": "2026-07-17T04:18:02.567Z",
-      "exit_code": 1,
-      "signal": null,
-      "expected_exit_codes": [
-        1
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 0,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-010",
-      "command": "git merge-base --is-ancestor 4c9143a0bcc331aa170e9e26b741240b39df8b9e 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-      "argv": [
-        "git",
-        "merge-base",
-        "--is-ancestor",
-        "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.567Z",
-      "ended_at_utc": "2026-07-17T04:18:02.578Z",
-      "exit_code": 1,
-      "signal": null,
-      "expected_exit_codes": [
-        1
       ],
       "exit_code_expected": true,
       "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -513,6 +718,74 @@
     },
     {
       "command_id": "command-011",
+      "command": "git merge-base --is-ancestor 78f708d6cdb9d1618c53d3f08f71097b4320a63b 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:23:44.925Z",
+      "ended_at_utc": "2026-07-17T04:23:44.935Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-012",
+      "command": "git merge-base --is-ancestor 4c9143a0bcc331aa170e9e26b741240b39df8b9e 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:23:44.935Z",
+      "ended_at_utc": "2026-07-17T04:23:44.944Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-013",
       "command": "git merge-base --is-ancestor fd6a277057fb5b360bd297cfcbdffcaaa915ba64 HEAD",
       "argv": [
         "git",
@@ -523,8 +796,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.578Z",
-      "ended_at_utc": "2026-07-17T04:18:02.587Z",
+      "started_at_utc": "2026-07-17T04:23:44.944Z",
+      "ended_at_utc": "2026-07-17T04:23:44.954Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -546,7 +819,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-012",
+      "command_id": "command-014",
       "command": "git diff --name-only 959a5f9900e25f53414710bbfb3464c3ccb67a5d HEAD",
       "argv": [
         "git",
@@ -557,19 +830,19 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.587Z",
-      "ended_at_utc": "2026-07-17T04:18:02.595Z",
+      "started_at_utc": "2026-07-17T04:23:44.954Z",
+      "ended_at_utc": "2026-07-17T04:23:44.962Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "75a9886b35c4b0f62084992c050021f481069389c040780cf7e34610309c7e13",
+      "stdout_sha256": "1ba95d41660c69ea671a41c227be2b2282a2884d1e893c385e3342d4caab7004",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "75a9886b35c4b0f62084992c050021f481069389c040780cf7e34610309c7e13",
+      "output_sha256": "1ba95d41660c69ea671a41c227be2b2282a2884d1e893c385e3342d4caab7004",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 109,
+      "stdout_byte_length": 177,
       "stderr_byte_length": 0,
       "package_events": [],
       "test_count": 0,
@@ -580,7 +853,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-013",
+      "command_id": "command-015",
       "command": "git status --porcelain=v1 -z --untracked-files=all",
       "argv": [
         "git",
@@ -591,17 +864,17 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.595Z",
-      "ended_at_utc": "2026-07-17T04:18:02.613Z",
+      "started_at_utc": "2026-07-17T04:23:44.963Z",
+      "ended_at_utc": "2026-07-17T04:23:44.982Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "d1ad9f36d70d0c5f537a840a08f7780066414ca9964518898f0977a06d957308",
+      "stdout_sha256": "043e39e5090ad9f8d7c2b497f22b10f02b1cc0ba70da7da3c2f42d75545046f5",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "d1ad9f36d70d0c5f537a840a08f7780066414ca9964518898f0977a06d957308",
+      "output_sha256": "043e39e5090ad9f8d7c2b497f22b10f02b1cc0ba70da7da3c2f42d75545046f5",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 71,
       "stderr_byte_length": 0,
@@ -614,7 +887,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-014",
+      "command_id": "command-016",
       "command": "git remote get-url origin",
       "argv": [
         "git",
@@ -624,8 +897,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.613Z",
-      "ended_at_utc": "2026-07-17T04:18:02.621Z",
+      "started_at_utc": "2026-07-17T04:23:44.982Z",
+      "ended_at_utc": "2026-07-17T04:23:44.991Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -647,7 +920,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-015",
+      "command_id": "command-017",
       "command": "git rev-parse refs/heads/current-main",
       "argv": [
         "git",
@@ -656,8 +929,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.622Z",
-      "ended_at_utc": "2026-07-17T04:18:02.630Z",
+      "started_at_utc": "2026-07-17T04:23:44.991Z",
+      "ended_at_utc": "2026-07-17T04:23:44.999Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -679,7 +952,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-016",
+      "command_id": "command-018",
       "command": "git rev-parse refs/remotes/origin/current-main",
       "argv": [
         "git",
@@ -688,8 +961,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.630Z",
-      "ended_at_utc": "2026-07-17T04:18:02.638Z",
+      "started_at_utc": "2026-07-17T04:23:44.999Z",
+      "ended_at_utc": "2026-07-17T04:23:45.007Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -711,7 +984,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-017",
+      "command_id": "command-019",
       "command": "git --version",
       "argv": [
         "git",
@@ -719,8 +992,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.638Z",
-      "ended_at_utc": "2026-07-17T04:18:02.646Z",
+      "started_at_utc": "2026-07-17T04:23:45.007Z",
+      "ended_at_utc": "2026-07-17T04:23:45.015Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -742,7 +1015,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-018",
+      "command_id": "command-020",
       "command": "node --version",
       "argv": [
         "node",
@@ -750,8 +1023,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.646Z",
-      "ended_at_utc": "2026-07-17T04:18:02.657Z",
+      "started_at_utc": "2026-07-17T04:23:45.015Z",
+      "ended_at_utc": "2026-07-17T04:23:45.026Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -773,7 +1046,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-019",
+      "command_id": "command-021",
       "command": "npm --version",
       "argv": [
         "npm",
@@ -781,8 +1054,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.657Z",
-      "ended_at_utc": "2026-07-17T04:18:02.712Z",
+      "started_at_utc": "2026-07-17T04:23:45.026Z",
+      "ended_at_utc": "2026-07-17T04:23:45.084Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -804,7 +1077,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-020",
+      "command_id": "command-022",
       "command": "sw_vers -productVersion",
       "argv": [
         "sw_vers",
@@ -812,8 +1085,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.713Z",
-      "ended_at_utc": "2026-07-17T04:18:02.719Z",
+      "started_at_utc": "2026-07-17T04:23:45.084Z",
+      "ended_at_utc": "2026-07-17T04:23:45.091Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -835,7 +1108,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-021",
+      "command_id": "command-023",
       "command": "uname -m",
       "argv": [
         "uname",
@@ -843,8 +1116,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.720Z",
-      "ended_at_utc": "2026-07-17T04:18:02.722Z",
+      "started_at_utc": "2026-07-17T04:23:45.091Z",
+      "ended_at_utc": "2026-07-17T04:23:45.093Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -866,111 +1139,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-022",
-      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/truth-campaign-20260716",
-      "argv": [
-        "git",
-        "ls-remote",
-        "--exit-code",
-        "--heads",
-        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
-        "refs/heads/truth-campaign-20260716"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:02.722Z",
-      "ended_at_utc": "2026-07-17T04:18:05.802Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "96a6152ce8302e676df887f9614a911612c4528255211a4f6c6893177ef4ce5f",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "96a6152ce8302e676df887f9614a911612c4528255211a4f6c6893177ef4ce5f",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 76,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-023",
-      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/current-main",
-      "argv": [
-        "git",
-        "ls-remote",
-        "--exit-code",
-        "--heads",
-        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
-        "refs/heads/current-main"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:05.803Z",
-      "ended_at_utc": "2026-07-17T04:18:09.137Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 65,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
       "command_id": "command-024",
-      "command": "git push --porcelain origin refs/heads/truth-campaign-20260716:refs/heads/truth-campaign-20260716",
-      "argv": [
-        "git",
-        "push",
-        "--porcelain",
-        "origin",
-        "refs/heads/truth-campaign-20260716:refs/heads/truth-campaign-20260716"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:09.138Z",
-      "ended_at_utc": "2026-07-17T04:18:12.704Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "81f0aa7ed24d141c709bbf0cf30c7f095f02aff78a3bbef929ab7f6c9f840376",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "81f0aa7ed24d141c709bbf0cf30c7f095f02aff78a3bbef929ab7f6c9f840376",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 143,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-025",
       "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/truth-campaign-20260716",
       "argv": [
         "git",
@@ -982,8 +1151,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:12.704Z",
-      "ended_at_utc": "2026-07-17T04:18:15.852Z",
+      "started_at_utc": "2026-07-17T04:23:45.093Z",
+      "ended_at_utc": "2026-07-17T04:23:48.288Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1005,7 +1174,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-026",
+      "command_id": "command-025",
       "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/current-main",
       "argv": [
         "git",
@@ -1017,8 +1186,8 @@
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:15.853Z",
-      "ended_at_utc": "2026-07-17T04:18:18.893Z",
+      "started_at_utc": "2026-07-17T04:23:48.290Z",
+      "ended_at_utc": "2026-07-17T04:23:51.383Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1040,20 +1209,19 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-027",
-      "command": "git bundle create /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203 refs/heads/truth-campaign-20260716 refs/heads/current-main",
+      "command_id": "command-026",
+      "command": "git merge-base --is-ancestor f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6 55485943ffcfbf80bc55609039264169c8880fb6",
       "argv": [
         "git",
-        "bundle",
-        "create",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203",
-        "refs/heads/truth-campaign-20260716",
-        "refs/heads/current-main"
+        "merge-base",
+        "--is-ancestor",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+        "55485943ffcfbf80bc55609039264169c8880fb6"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:18.895Z",
-      "ended_at_utc": "2026-07-17T04:18:19.202Z",
+      "started_at_utc": "2026-07-17T04:23:51.384Z",
+      "ended_at_utc": "2026-07-17T04:23:51.400Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1075,30 +1243,66 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-028",
-      "command": "git bundle verify /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203",
+      "command_id": "command-027",
+      "command": "git push --porcelain origin refs/heads/truth-campaign-20260716:refs/heads/truth-campaign-20260716",
       "argv": [
         "git",
-        "bundle",
-        "verify",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203"
+        "push",
+        "--porcelain",
+        "origin",
+        "refs/heads/truth-campaign-20260716:refs/heads/truth-campaign-20260716"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.202Z",
-      "ended_at_utc": "2026-07-17T04:18:19.211Z",
+      "started_at_utc": "2026-07-17T04:23:51.400Z",
+      "ended_at_utc": "2026-07-17T04:23:54.743Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "a76bde973d19decdf2943d4dd8c0f5f1269aed4a32eac0b252a11afcdfa5539f",
-      "stderr_sha256": "df5b0a3280bde8fda7a36dcab48c612a85bce6cfdcf47b87015cf640ce466ff8",
-      "output_sha256": "97dbaf01978828f5c14cac1ac2815845bca2f6113688f62edb881d870c2f720c",
+      "stdout_sha256": "0ede178c0803d34fab81f685be31ae958d4c470072e634007bbc48e27d856980",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "0ede178c0803d34fab81f685be31ae958d4c470072e634007bbc48e27d856980",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 256,
-      "stderr_byte_length": 72,
+      "stdout_byte_length": 143,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-028",
+      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:23:54.744Z",
+      "ended_at_utc": "2026-07-17T04:23:57.897Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "27aa545b910288a755a6ec3f2abcadb9728f1029c7a9c9201877136d8fe6cbd4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "27aa545b910288a755a6ec3f2abcadb9728f1029c7a9c9201877136d8fe6cbd4",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 76,
+      "stderr_byte_length": 0,
       "package_events": [],
       "test_count": 0,
       "test_count_basis": "NOT_A_TEST_COMMAND",
@@ -1109,30 +1313,30 @@
     },
     {
       "command_id": "command-029",
-      "command": "git bundle list-heads /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203 refs/heads/truth-campaign-20260716 refs/heads/current-main",
+      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/current-main",
       "argv": [
         "git",
-        "bundle",
-        "list-heads",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203",
-        "refs/heads/truth-campaign-20260716",
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
         "refs/heads/current-main"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.211Z",
-      "ended_at_utc": "2026-07-17T04:18:19.218Z",
+      "started_at_utc": "2026-07-17T04:23:57.898Z",
+      "ended_at_utc": "2026-07-17T04:24:00.983Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "b3ef4c9e658374fd5b3845bbfe943e2f638fe8ced124b3654f90748ce1af2d4d",
+      "stdout_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "b3ef4c9e658374fd5b3845bbfe943e2f638fe8ced124b3654f90748ce1af2d4d",
+      "output_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 141,
+      "stdout_byte_length": 65,
       "stderr_byte_length": 0,
       "package_events": [],
       "test_count": 0,
@@ -1144,17 +1348,19 @@
     },
     {
       "command_id": "command-030",
-      "command": "mv -f /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "command": "git bundle create /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080 refs/heads/truth-campaign-20260716 refs/heads/current-main",
       "argv": [
-        "mv",
-        "-f",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-60203",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+        "git",
+        "bundle",
+        "create",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080",
+        "refs/heads/truth-campaign-20260716",
+        "refs/heads/current-main"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.219Z",
-      "ended_at_utc": "2026-07-17T04:18:19.222Z",
+      "started_at_utc": "2026-07-17T04:24:00.984Z",
+      "ended_at_utc": "2026-07-17T04:24:01.299Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1177,29 +1383,29 @@
     },
     {
       "command_id": "command-031",
-      "command": "shasum -a 256 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "command": "git bundle verify /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080",
       "argv": [
-        "shasum",
-        "-a",
-        "256",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+        "git",
+        "bundle",
+        "verify",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.222Z",
-      "ended_at_utc": "2026-07-17T04:18:19.348Z",
+      "started_at_utc": "2026-07-17T04:24:01.300Z",
+      "ended_at_utc": "2026-07-17T04:24:01.308Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "2e52c219d976f2945374fccb4218ad914bbb7fa4b2389a9fff07356be09f2c97",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "2e52c219d976f2945374fccb4218ad914bbb7fa4b2389a9fff07356be09f2c97",
+      "stdout_sha256": "c56c8e227c6ea01d7c37a93f61a2534d29b149c5001953619f617da53c0b9f0b",
+      "stderr_sha256": "71d4c7689cc9142d3a9ab1d720b0b9e0b6301736ffc123103b6dd3877015169d",
+      "output_sha256": "b7cd77f75ae5bcd67e1af4a4fb678a48c66d7ab98c5d57760d725a59db34f094",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 120,
-      "stderr_byte_length": 0,
+      "stdout_byte_length": 256,
+      "stderr_byte_length": 72,
       "package_events": [],
       "test_count": 0,
       "test_count_basis": "NOT_A_TEST_COMMAND",
@@ -1210,94 +1416,28 @@
     },
     {
       "command_id": "command-032",
-      "command": "stat -f %z /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
-      "argv": [
-        "stat",
-        "-f",
-        "%z",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.349Z",
-      "ended_at_utc": "2026-07-17T04:18:19.351Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "6dcc14f585bfff2e7ccede22451f8292d8e187c3b5aef4fc1924c90716561655",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "6dcc14f585bfff2e7ccede22451f8292d8e187c3b5aef4fc1924c90716561655",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 9,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-033",
-      "command": "git bundle verify /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
-      "argv": [
-        "git",
-        "bundle",
-        "verify",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
-      ],
-      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.351Z",
-      "ended_at_utc": "2026-07-17T04:18:19.359Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "a76bde973d19decdf2943d4dd8c0f5f1269aed4a32eac0b252a11afcdfa5539f",
-      "stderr_sha256": "6da3b50ac3eda2880355e26ee0d8367a46b3a51cc2017e1f2c4aacfbd06b3ac4",
-      "output_sha256": "11bf6c0782a76d83fa2abff67ca83c6616d3176ff78e470a90ae5da90cd5cc8c",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 256,
-      "stderr_byte_length": 62,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-034",
-      "command": "git bundle list-heads /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle refs/heads/truth-campaign-20260716 refs/heads/current-main",
+      "command": "git bundle list-heads /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080 refs/heads/truth-campaign-20260716 refs/heads/current-main",
       "argv": [
         "git",
         "bundle",
         "list-heads",
-        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080",
         "refs/heads/truth-campaign-20260716",
         "refs/heads/current-main"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.359Z",
-      "ended_at_utc": "2026-07-17T04:18:19.367Z",
+      "started_at_utc": "2026-07-17T04:24:01.308Z",
+      "ended_at_utc": "2026-07-17T04:24:01.316Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "b3ef4c9e658374fd5b3845bbfe943e2f638fe8ced124b3654f90748ce1af2d4d",
+      "stdout_sha256": "28d68b61eba0cf5136f9b2a36f86c6d3fa6b3364370443164a635b58e579edfc",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "b3ef4c9e658374fd5b3845bbfe943e2f638fe8ced124b3654f90748ce1af2d4d",
+      "output_sha256": "28d68b61eba0cf5136f9b2a36f86c6d3fa6b3364370443164a635b58e579edfc",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 141,
       "stderr_byte_length": 0,
@@ -1310,8 +1450,175 @@
       "unexpected_skip_markers": []
     },
     {
+      "command_id": "command-033",
+      "command": "mv -f /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "argv": [
+        "mv",
+        "-f",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle.tmp-63080",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:01.316Z",
+      "ended_at_utc": "2026-07-17T04:24:01.319Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-034",
+      "command": "shasum -a 256 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "argv": [
+        "shasum",
+        "-a",
+        "256",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:01.319Z",
+      "ended_at_utc": "2026-07-17T04:24:01.446Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "645151e395693a30e6a956857e1d7272e22286bd466e3f38f85375c05d8b8d1f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "645151e395693a30e6a956857e1d7272e22286bd466e3f38f85375c05d8b8d1f",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 120,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
       "command_id": "command-035",
-      "command": "git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle /var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "command": "stat -f %z /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "argv": [
+        "stat",
+        "-f",
+        "%z",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:01.447Z",
+      "ended_at_utc": "2026-07-17T04:24:01.448Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "42ee7f2eeb12ec39a1ec5cbbc8dbe6c5d0859603d3b43718d47b91936a0937d1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "42ee7f2eeb12ec39a1ec5cbbc8dbe6c5d0859603d3b43718d47b91936a0937d1",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 9,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-036",
+      "command": "git bundle verify /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+      "argv": [
+        "git",
+        "bundle",
+        "verify",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:01.449Z",
+      "ended_at_utc": "2026-07-17T04:24:01.456Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "c56c8e227c6ea01d7c37a93f61a2534d29b149c5001953619f617da53c0b9f0b",
+      "stderr_sha256": "6da3b50ac3eda2880355e26ee0d8367a46b3a51cc2017e1f2c4aacfbd06b3ac4",
+      "output_sha256": "26b9e55cf9ff42b0e672de0a8ebb84dc036c138b9d4c30bd4226e50b4afeaf11",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 256,
+      "stderr_byte_length": 62,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-037",
+      "command": "git bundle list-heads /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle refs/heads/truth-campaign-20260716 refs/heads/current-main",
+      "argv": [
+        "git",
+        "bundle",
+        "list-heads",
+        "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
+        "refs/heads/truth-campaign-20260716",
+        "refs/heads/current-main"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:01.457Z",
+      "ended_at_utc": "2026-07-17T04:24:01.464Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "28d68b61eba0cf5136f9b2a36f86c6d3fa6b3364370443164a635b58e579edfc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "28d68b61eba0cf5136f9b2a36f86c6d3fa6b3364370443164a635b58e579edfc",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 141,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-038",
+      "command": "git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 /Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle /var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "argv": [
         "git",
         "clone",
@@ -1320,12 +1627,12 @@
         "--branch",
         "truth-campaign-20260716",
         "/Users/cosmosgeek/cosmos-arbitrage-C5-20260717.bundle",
-        "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone"
+        "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone"
       ],
       "cwd": "/Users/cosmosgeek/Desktop/truth-a",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:19.368Z",
-      "ended_at_utc": "2026-07-17T04:18:20.304Z",
+      "started_at_utc": "2026-07-17T04:24:01.465Z",
+      "ended_at_utc": "2026-07-17T04:24:02.394Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1333,8 +1640,8 @@
       ],
       "exit_code_expected": true,
       "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "721702edfb17a6c89ae5608c521bce4cd1b9139397565955072ad91755196065",
-      "output_sha256": "721702edfb17a6c89ae5608c521bce4cd1b9139397565955072ad91755196065",
+      "stderr_sha256": "ae4249ca7e25cb91213b62309e7102ceffea0f6e996783a3d31ce324efb4c4ac",
+      "output_sha256": "ae4249ca7e25cb91213b62309e7102ceffea0f6e996783a3d31ce324efb4c4ac",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 0,
       "stderr_byte_length": 111,
@@ -1347,26 +1654,26 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-036",
+      "command_id": "command-039",
       "command": "git rev-parse HEAD",
       "argv": [
         "git",
         "rev-parse",
         "HEAD"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.304Z",
-      "ended_at_utc": "2026-07-17T04:18:20.312Z",
+      "started_at_utc": "2026-07-17T04:24:02.395Z",
+      "ended_at_utc": "2026-07-17T04:24:02.403Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "stdout_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "a5b518784c1ae82be6d8c1708ead2e3971d4bcec6ef73c9f6e22a6bf97eb8f77",
+      "output_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 41,
       "stderr_byte_length": 0,
@@ -1379,17 +1686,17 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-037",
+      "command_id": "command-040",
       "command": "git branch --show-current",
       "argv": [
         "git",
         "branch",
         "--show-current"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.313Z",
-      "ended_at_utc": "2026-07-17T04:18:20.320Z",
+      "started_at_utc": "2026-07-17T04:24:02.403Z",
+      "ended_at_utc": "2026-07-17T04:24:02.410Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1411,7 +1718,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-038",
+      "command_id": "command-041",
       "command": "git show -s --format=%P HEAD",
       "argv": [
         "git",
@@ -1420,10 +1727,44 @@
         "--format=%P",
         "HEAD"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.320Z",
-      "ended_at_utc": "2026-07-17T04:18:20.329Z",
+      "started_at_utc": "2026-07-17T04:24:02.411Z",
+      "ended_at_utc": "2026-07-17T04:24:02.419Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-042",
+      "command": "git show -s --format=%P f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.420Z",
+      "ended_at_utc": "2026-07-17T04:24:02.429Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1445,7 +1786,41 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-039",
+      "command_id": "command-043",
+      "command": "git merge-base --is-ancestor f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6 refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.429Z",
+      "ended_at_utc": "2026-07-17T04:24:02.438Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-044",
       "command": "git checkout --detach 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
       "argv": [
         "git",
@@ -1453,10 +1828,10 @@
         "--detach",
         "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.329Z",
-      "ended_at_utc": "2026-07-17T04:18:20.536Z",
+      "started_at_utc": "2026-07-17T04:24:02.438Z",
+      "ended_at_utc": "2026-07-17T04:24:02.652Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1478,17 +1853,17 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-040",
+      "command_id": "command-045",
       "command": "git rev-parse HEAD",
       "argv": [
         "git",
         "rev-parse",
         "HEAD"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.536Z",
-      "ended_at_utc": "2026-07-17T04:18:20.544Z",
+      "started_at_utc": "2026-07-17T04:24:02.652Z",
+      "ended_at_utc": "2026-07-17T04:24:02.660Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1510,7 +1885,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-041",
+      "command_id": "command-046",
       "command": "git symbolic-ref -q HEAD",
       "argv": [
         "git",
@@ -1518,177 +1893,10 @@
         "-q",
         "HEAD"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.545Z",
-      "ended_at_utc": "2026-07-17T04:18:20.553Z",
-      "exit_code": 1,
-      "signal": null,
-      "expected_exit_codes": [
-        1
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 0,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-042",
-      "command": "git cat-file -t 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-      "argv": [
-        "git",
-        "cat-file",
-        "-t",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
-      ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.553Z",
-      "ended_at_utc": "2026-07-17T04:18:20.562Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 7,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-043",
-      "command": "git rev-parse '959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}'",
-      "argv": [
-        "git",
-        "rev-parse",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}"
-      ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.562Z",
-      "ended_at_utc": "2026-07-17T04:18:20.570Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 41,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-044",
-      "command": "git show -s --format=%P 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-      "argv": [
-        "git",
-        "show",
-        "-s",
-        "--format=%P",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
-      ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.570Z",
-      "ended_at_utc": "2026-07-17T04:18:20.579Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 41,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-045",
-      "command": "git merge-base --is-ancestor 959a5f9900e25f53414710bbfb3464c3ccb67a5d refs/heads/truth-campaign-20260716",
-      "argv": [
-        "git",
-        "merge-base",
-        "--is-ancestor",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-        "refs/heads/truth-campaign-20260716"
-      ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.579Z",
-      "ended_at_utc": "2026-07-17T04:18:20.587Z",
-      "exit_code": 0,
-      "signal": null,
-      "expected_exit_codes": [
-        0
-      ],
-      "exit_code_expected": true,
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 0,
-      "stderr_byte_length": 0,
-      "package_events": [],
-      "test_count": 0,
-      "test_count_basis": "NOT_A_TEST_COMMAND",
-      "explicit_test_summaries": [],
-      "passing_ratio_evidence": [],
-      "skip_summaries": [],
-      "unexpected_skip_markers": []
-    },
-    {
-      "command_id": "command-046",
-      "command": "git merge-base --is-ancestor 78f708d6cdb9d1618c53d3f08f71097b4320a63b 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-      "argv": [
-        "git",
-        "merge-base",
-        "--is-ancestor",
-        "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
-        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
-      ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
-      "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.587Z",
-      "ended_at_utc": "2026-07-17T04:18:20.596Z",
+      "started_at_utc": "2026-07-17T04:24:02.661Z",
+      "ended_at_utc": "2026-07-17T04:24:02.668Z",
       "exit_code": 1,
       "signal": null,
       "expected_exit_codes": [
@@ -1711,44 +1919,206 @@
     },
     {
       "command_id": "command-047",
-      "command": "git merge-base --is-ancestor 4c9143a0bcc331aa170e9e26b741240b39df8b9e 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "command": "git cat-file -t 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
       "argv": [
         "git",
-        "merge-base",
-        "--is-ancestor",
-        "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+        "cat-file",
+        "-t",
         "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.596Z",
-      "ended_at_utc": "2026-07-17T04:18:20.604Z",
-      "exit_code": 128,
+      "started_at_utc": "2026-07-17T04:24:02.669Z",
+      "ended_at_utc": "2026-07-17T04:24:02.677Z",
+      "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
-        1
+        0
       ],
-      "exit_code_expected": false,
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_sha256": "b33abc6d8f8c6fbaaa688adbd07fd39c7b1aa75099c60866e7f9944c9ca8ddbb",
-      "output_sha256": "b33abc6d8f8c6fbaaa688adbd07fd39c7b1aa75099c60866e7f9944c9ca8ddbb",
+      "exit_code_expected": true,
+      "stdout_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
-      "stdout_byte_length": 0,
-      "stderr_byte_length": 72,
+      "stdout_byte_length": 7,
+      "stderr_byte_length": 0,
       "package_events": [],
       "test_count": 0,
       "test_count_basis": "NOT_A_TEST_COMMAND",
       "explicit_test_summaries": [],
       "passing_ratio_evidence": [],
       "skip_summaries": [],
-      "unexpected_skip_markers": [],
-      "stdout_tail": [],
-      "stderr_tail": [
-        "fatal: Not a valid commit name 4c9143a0bcc331aa170e9e26b741240b39df8b9e"
-      ]
+      "unexpected_skip_markers": []
     },
     {
       "command_id": "command-048",
+      "command": "git rev-parse '959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}'",
+      "argv": [
+        "git",
+        "rev-parse",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.677Z",
+      "ended_at_utc": "2026-07-17T04:24:02.686Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-049",
+      "command": "git show -s --format=%P 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.687Z",
+      "ended_at_utc": "2026-07-17T04:24:02.694Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-050",
+      "command": "git merge-base --is-ancestor 959a5f9900e25f53414710bbfb3464c3ccb67a5d refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.695Z",
+      "ended_at_utc": "2026-07-17T04:24:02.703Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-051",
+      "command": "git merge-base --is-ancestor 78f708d6cdb9d1618c53d3f08f71097b4320a63b 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.704Z",
+      "ended_at_utc": "2026-07-17T04:24:02.712Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-052",
+      "command": "git cat-file -e '4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}'",
+      "argv": [
+        "git",
+        "cat-file",
+        "-e",
+        "4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:02.713Z",
+      "ended_at_utc": "2026-07-17T04:24:02.721Z",
+      "exit_code": 128,
+      "signal": null,
+      "expected_exit_codes": [
+        128
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "2363993de62f83198c554db60a49cef3ac037a0bc7641a8ace37a7c9834d0c0b",
+      "output_sha256": "2363993de62f83198c554db60a49cef3ac037a0bc7641a8ace37a7c9834d0c0b",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 81,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-053",
       "command": "git for-each-ref '--format=%(refname)' refs/heads",
       "argv": [
         "git",
@@ -1756,10 +2126,10 @@
         "--format=%(refname)",
         "refs/heads"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.605Z",
-      "ended_at_utc": "2026-07-17T04:18:20.613Z",
+      "started_at_utc": "2026-07-17T04:24:02.722Z",
+      "ended_at_utc": "2026-07-17T04:24:02.729Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1781,7 +2151,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-049",
+      "command_id": "command-054",
       "command": "git for-each-ref '--format=%(refname)' refs/remotes/origin",
       "argv": [
         "git",
@@ -1789,10 +2159,10 @@
         "--format=%(refname)",
         "refs/remotes/origin"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.613Z",
-      "ended_at_utc": "2026-07-17T04:18:20.621Z",
+      "started_at_utc": "2026-07-17T04:24:02.730Z",
+      "ended_at_utc": "2026-07-17T04:24:02.738Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1814,7 +2184,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-050",
+      "command_id": "command-055",
       "command": "git for-each-ref '--format=%(refname)' refs",
       "argv": [
         "git",
@@ -1822,10 +2192,10 @@
         "--format=%(refname)",
         "refs"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.621Z",
-      "ended_at_utc": "2026-07-17T04:18:20.630Z",
+      "started_at_utc": "2026-07-17T04:24:02.738Z",
+      "ended_at_utc": "2026-07-17T04:24:02.746Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1847,7 +2217,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-051",
+      "command_id": "command-056",
       "command": "git config --get-all remote.origin.fetch",
       "argv": [
         "git",
@@ -1855,10 +2225,10 @@
         "--get-all",
         "remote.origin.fetch"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.631Z",
-      "ended_at_utc": "2026-07-17T04:18:20.638Z",
+      "started_at_utc": "2026-07-17T04:24:02.746Z",
+      "ended_at_utc": "2026-07-17T04:24:02.754Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1880,7 +2250,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-052",
+      "command_id": "command-057",
       "command": "git remote get-url origin",
       "argv": [
         "git",
@@ -1888,10 +2258,10 @@
         "get-url",
         "origin"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.638Z",
-      "ended_at_utc": "2026-07-17T04:18:20.646Z",
+      "started_at_utc": "2026-07-17T04:24:02.754Z",
+      "ended_at_utc": "2026-07-17T04:24:02.762Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1913,7 +2283,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-053",
+      "command_id": "command-058",
       "command": "git worktree list --porcelain -z",
       "argv": [
         "git",
@@ -1922,19 +2292,19 @@
         "--porcelain",
         "-z"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.646Z",
-      "ended_at_utc": "2026-07-17T04:18:20.654Z",
+      "started_at_utc": "2026-07-17T04:24:02.763Z",
+      "ended_at_utc": "2026-07-17T04:24:02.771Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
         0
       ],
       "exit_code_expected": true,
-      "stdout_sha256": "d6f5a42fb71147981a2a23b96f956e4975b70ee22fc30277441a014778fb5b20",
+      "stdout_sha256": "f52cd014694270e37bb11979003b946e59e48d8e0ae9fc058687170e8df84fd4",
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "output_sha256": "d6f5a42fb71147981a2a23b96f956e4975b70ee22fc30277441a014778fb5b20",
+      "output_sha256": "f52cd014694270e37bb11979003b946e59e48d8e0ae9fc058687170e8df84fd4",
       "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
       "stdout_byte_length": 166,
       "stderr_byte_length": 0,
@@ -1947,17 +2317,17 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-054",
+      "command_id": "command-059",
       "command": "git rev-parse --is-shallow-repository",
       "argv": [
         "git",
         "rev-parse",
         "--is-shallow-repository"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.654Z",
-      "ended_at_utc": "2026-07-17T04:18:20.662Z",
+      "started_at_utc": "2026-07-17T04:24:02.772Z",
+      "ended_at_utc": "2026-07-17T04:24:02.780Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -1979,7 +2349,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-055",
+      "command_id": "command-060",
       "command": "git show-ref --verify --quiet refs/heads/current-main",
       "argv": [
         "git",
@@ -1988,10 +2358,10 @@
         "--quiet",
         "refs/heads/current-main"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.663Z",
-      "ended_at_utc": "2026-07-17T04:18:20.670Z",
+      "started_at_utc": "2026-07-17T04:24:02.781Z",
+      "ended_at_utc": "2026-07-17T04:24:02.788Z",
       "exit_code": 1,
       "signal": null,
       "expected_exit_codes": [
@@ -2013,7 +2383,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-056",
+      "command_id": "command-061",
       "command": "git show-ref --verify --quiet refs/remotes/origin/current-main",
       "argv": [
         "git",
@@ -2022,10 +2392,10 @@
         "--quiet",
         "refs/remotes/origin/current-main"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.670Z",
-      "ended_at_utc": "2026-07-17T04:18:20.678Z",
+      "started_at_utc": "2026-07-17T04:24:02.789Z",
+      "ended_at_utc": "2026-07-17T04:24:02.796Z",
       "exit_code": 1,
       "signal": null,
       "expected_exit_codes": [
@@ -2047,7 +2417,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-057",
+      "command_id": "command-062",
       "command": "git fsck --full --strict",
       "argv": [
         "git",
@@ -2055,10 +2425,10 @@
         "--full",
         "--strict"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:20.678Z",
-      "ended_at_utc": "2026-07-17T04:18:21.341Z",
+      "started_at_utc": "2026-07-17T04:24:02.797Z",
+      "ended_at_utc": "2026-07-17T04:24:03.462Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -2080,7 +2450,7 @@
       "unexpected_skip_markers": []
     },
     {
-      "command_id": "command-058",
+      "command_id": "command-063",
       "command": "git status --porcelain=v1 --untracked-files=all",
       "argv": [
         "git",
@@ -2088,10 +2458,10 @@
         "--porcelain=v1",
         "--untracked-files=all"
       ],
-      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-F3BbYy/bundle-clone",
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/bundle-clone",
       "kind": "probe",
-      "started_at_utc": "2026-07-17T04:18:21.342Z",
-      "ended_at_utc": "2026-07-17T04:18:21.555Z",
+      "started_at_utc": "2026-07-17T04:24:03.462Z",
+      "ended_at_utc": "2026-07-17T04:24:03.679Z",
       "exit_code": 0,
       "signal": null,
       "expected_exit_codes": [
@@ -2111,17 +2481,1750 @@
       "passing_ratio_evidence": [],
       "skip_summaries": [],
       "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-064",
+      "command": "git clone --no-hardlinks --single-branch --branch truth-campaign-20260716 git@github.com:cosmosgeek0/arbitrage-cosmos.git /var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "argv": [
+        "git",
+        "clone",
+        "--no-hardlinks",
+        "--single-branch",
+        "--branch",
+        "truth-campaign-20260716",
+        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+        "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:03.680Z",
+      "ended_at_utc": "2026-07-17T04:24:25.711Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "64058a140e801beb333ef88ceba7e588dde9977e86b48ed7ab18ea935572a393",
+      "output_sha256": "64058a140e801beb333ef88ceba7e588dde9977e86b48ed7ab18ea935572a393",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 116,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-065",
+      "command": "git rev-parse HEAD",
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.711Z",
+      "ended_at_utc": "2026-07-17T04:24:25.719Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-066",
+      "command": "git branch --show-current",
+      "argv": [
+        "git",
+        "branch",
+        "--show-current"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.720Z",
+      "ended_at_utc": "2026-07-17T04:24:25.727Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "ba55e037f726587755cdbe87f509cad5a67bc00f17ebff031c5b42fdf05c9965",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "ba55e037f726587755cdbe87f509cad5a67bc00f17ebff031c5b42fdf05c9965",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 24,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-067",
+      "command": "git show -s --format=%P HEAD",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "HEAD"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.728Z",
+      "ended_at_utc": "2026-07-17T04:24:25.737Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "b689900bd4b5eddcd17abcff87e5ca7420a7a3321e8759d3388e0248e2704ca8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-068",
+      "command": "git show -s --format=%P f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.737Z",
+      "ended_at_utc": "2026-07-17T04:24:25.746Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "073f0aaa27a4eaf946a69ae112483bf0bd7a9ad4f805fcf2d37e1d9066f3bca8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "073f0aaa27a4eaf946a69ae112483bf0bd7a9ad4f805fcf2d37e1d9066f3bca8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 82,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-069",
+      "command": "git merge-base --is-ancestor f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6 refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.747Z",
+      "ended_at_utc": "2026-07-17T04:24:25.755Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-070",
+      "command": "git checkout --detach 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "checkout",
+        "--detach",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.756Z",
+      "ended_at_utc": "2026-07-17T04:24:25.967Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "8d2998695dba04e0cc8357a3f3bdd9bbe3d10588f6786cb5320c4247972d114c",
+      "output_sha256": "8d2998695dba04e0cc8357a3f3bdd9bbe3d10588f6786cb5320c4247972d114c",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 71,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-071",
+      "command": "git rev-parse HEAD",
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.967Z",
+      "ended_at_utc": "2026-07-17T04:24:25.975Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "5445326c0a65edb506081be52f4ebdc9d4bb4b4a5b236ff9ec4e8a72bc9619cc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "5445326c0a65edb506081be52f4ebdc9d4bb4b4a5b236ff9ec4e8a72bc9619cc",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-072",
+      "command": "git symbolic-ref -q HEAD",
+      "argv": [
+        "git",
+        "symbolic-ref",
+        "-q",
+        "HEAD"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.976Z",
+      "ended_at_utc": "2026-07-17T04:24:25.983Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-073",
+      "command": "git cat-file -t 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "cat-file",
+        "-t",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.984Z",
+      "ended_at_utc": "2026-07-17T04:24:25.992Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "50836eee574ecff79dea3b4fd40673d7d000f7a5f177d8a6a3000b59c78383b8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 7,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-074",
+      "command": "git rev-parse '959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}'",
+      "argv": [
+        "git",
+        "rev-parse",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d^{tree}"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:25.993Z",
+      "ended_at_utc": "2026-07-17T04:24:26.001Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "ac717d386a54b10ec2b17079b65ba7b81a49df142d4c3a1d74ab4f5aa747c8d2",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-075",
+      "command": "git show -s --format=%P 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "show",
+        "-s",
+        "--format=%P",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.001Z",
+      "ended_at_utc": "2026-07-17T04:24:26.010Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "60728f9c67739932f60047581681b2b016290cbbcfb9fa63dc6a1679425d2c82",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-076",
+      "command": "git merge-base --is-ancestor 959a5f9900e25f53414710bbfb3464c3ccb67a5d refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.010Z",
+      "ended_at_utc": "2026-07-17T04:24:26.019Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-077",
+      "command": "git merge-base --is-ancestor 78f708d6cdb9d1618c53d3f08f71097b4320a63b 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "argv": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.020Z",
+      "ended_at_utc": "2026-07-17T04:24:26.029Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-078",
+      "command": "git cat-file -e '4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}'",
+      "argv": [
+        "git",
+        "cat-file",
+        "-e",
+        "4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.036Z",
+      "ended_at_utc": "2026-07-17T04:24:26.045Z",
+      "exit_code": 128,
+      "signal": null,
+      "expected_exit_codes": [
+        128
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "2363993de62f83198c554db60a49cef3ac037a0bc7641a8ace37a7c9834d0c0b",
+      "output_sha256": "2363993de62f83198c554db60a49cef3ac037a0bc7641a8ace37a7c9834d0c0b",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 81,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-079",
+      "command": "git for-each-ref '--format=%(refname)' refs/heads",
+      "argv": [
+        "git",
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/heads"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.045Z",
+      "ended_at_utc": "2026-07-17T04:24:26.054Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "39529146331840c5ba1ecf379d8b4a038420b81fa106d2f7253c42de8d91c2e8",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "39529146331840c5ba1ecf379d8b4a038420b81fa106d2f7253c42de8d91c2e8",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 35,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-080",
+      "command": "git for-each-ref '--format=%(refname)' refs/remotes/origin",
+      "argv": [
+        "git",
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/remotes/origin"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.054Z",
+      "ended_at_utc": "2026-07-17T04:24:26.062Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "129748f61971e4032643c98f318e1c881ba38c091ec25eb8dd50cc4c9fb24b79",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "129748f61971e4032643c98f318e1c881ba38c091ec25eb8dd50cc4c9fb24b79",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 44,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-081",
+      "command": "git for-each-ref '--format=%(refname)' refs",
+      "argv": [
+        "git",
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.063Z",
+      "ended_at_utc": "2026-07-17T04:24:26.071Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e923b2e2ba3b0ee3bc7553fb6e72633ba4790c534b8243285a903d558e18cee4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e923b2e2ba3b0ee3bc7553fb6e72633ba4790c534b8243285a903d558e18cee4",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 435,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-082",
+      "command": "git config --get-all remote.origin.fetch",
+      "argv": [
+        "git",
+        "config",
+        "--get-all",
+        "remote.origin.fetch"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.071Z",
+      "ended_at_utc": "2026-07-17T04:24:26.078Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "2ec99da4384dab728f5b5033a8785e069c937c75637f39a32cc7b5e06a1344da",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "2ec99da4384dab728f5b5033a8785e069c937c75637f39a32cc7b5e06a1344da",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 80,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-083",
+      "command": "git remote get-url origin",
+      "argv": [
+        "git",
+        "remote",
+        "get-url",
+        "origin"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.079Z",
+      "ended_at_utc": "2026-07-17T04:24:26.087Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "d43e03524d0d476fc47205895b77e46b5187836b14138aa7e279d22ad13af34d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "d43e03524d0d476fc47205895b77e46b5187836b14138aa7e279d22ad13af34d",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 48,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-084",
+      "command": "git worktree list --porcelain -z",
+      "argv": [
+        "git",
+        "worktree",
+        "list",
+        "--porcelain",
+        "-z"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.088Z",
+      "ended_at_utc": "2026-07-17T04:24:26.096Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "ccb8ee3efa81913a7784219e97fc9a88943734dab8194f57fff8c81699c1274a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "ccb8ee3efa81913a7784219e97fc9a88943734dab8194f57fff8c81699c1274a",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 171,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-085",
+      "command": "git rev-parse --is-shallow-repository",
+      "argv": [
+        "git",
+        "rev-parse",
+        "--is-shallow-repository"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.097Z",
+      "ended_at_utc": "2026-07-17T04:24:26.104Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "2ed27c1421e6928dbe13dbfdb5c59e1045b30341fe7ebe05700006bc5ac572c0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "2ed27c1421e6928dbe13dbfdb5c59e1045b30341fe7ebe05700006bc5ac572c0",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 6,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-086",
+      "command": "git show-ref --verify --quiet refs/heads/current-main",
+      "argv": [
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/heads/current-main"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.104Z",
+      "ended_at_utc": "2026-07-17T04:24:26.112Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-087",
+      "command": "git show-ref --verify --quiet refs/remotes/origin/current-main",
+      "argv": [
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/remotes/origin/current-main"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.112Z",
+      "ended_at_utc": "2026-07-17T04:24:26.120Z",
+      "exit_code": 1,
+      "signal": null,
+      "expected_exit_codes": [
+        1
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-088",
+      "command": "git fsck --full --strict",
+      "argv": [
+        "git",
+        "fsck",
+        "--full",
+        "--strict"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.120Z",
+      "ended_at_utc": "2026-07-17T04:24:26.797Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-089",
+      "command": "git status --porcelain=v1 --untracked-files=all",
+      "argv": [
+        "git",
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:26.798Z",
+      "ended_at_utc": "2026-07-17T04:24:27.035Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-090",
+      "command": "git ls-files '*package-lock.json'",
+      "argv": [
+        "git",
+        "ls-files",
+        "*package-lock.json"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:27.037Z",
+      "ended_at_utc": "2026-07-17T04:24:27.045Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "62d1b5e7751856dfa5d7d9fb28996e1e32b47223f0098ea6169c4984ad0d2645",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "62d1b5e7751856dfa5d7d9fb28996e1e32b47223f0098ea6169c4984ad0d2645",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 18,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-091",
+      "command": "shasum -a 256 package-lock.json",
+      "argv": [
+        "shasum",
+        "-a",
+        "256",
+        "package-lock.json"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:27.046Z",
+      "ended_at_utc": "2026-07-17T04:24:27.055Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "7b1b879bdd96bc4078e981bda4a08cebc8bdb5c82ea547644bb1e46b4c2694d2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "7b1b879bdd96bc4078e981bda4a08cebc8bdb5c82ea547644bb1e46b4c2694d2",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 84,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-092",
+      "command": "git rev-parse 959a5f9900e25f53414710bbfb3464c3ccb67a5d:package-lock.json",
+      "argv": [
+        "git",
+        "rev-parse",
+        "959a5f9900e25f53414710bbfb3464c3ccb67a5d:package-lock.json"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:24:27.056Z",
+      "ended_at_utc": "2026-07-17T04:24:27.065Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "84a92133c6ce0b3f5b45d4ca4ee55869fde49da560f11f6660d18235f47f7984",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "84a92133c6ce0b3f5b45d4ca4ee55869fde49da560f11f6660d18235f47f7984",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-093",
+      "command": "npm ci",
+      "argv": [
+        "npm",
+        "ci"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "install",
+      "started_at_utc": "2026-07-17T04:24:27.066Z",
+      "ended_at_utc": "2026-07-17T04:24:29.650Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "f917fb5d113652e5f93cc288e33b126daab632c9aeee6768e36abda3f9045c57",
+      "stderr_sha256": "fe49a93af7f6a5072c3a3ef65019009ce521808d6b5a32810ad9a6a433f4524d",
+      "output_sha256": "29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 143,
+      "stderr_byte_length": 150,
+      "package_events": [
+        {
+          "kind": "added",
+          "count": 229
+        },
+        {
+          "kind": "audited",
+          "count": 232
+        }
+      ],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-094",
+      "command": "npm test",
+      "argv": [
+        "npm",
+        "test"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "test",
+      "started_at_utc": "2026-07-17T04:24:29.651Z",
+      "ended_at_utc": "2026-07-17T04:26:27.658Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "df0df72411c87d3e676e7f27e9a7a30121a23083ef2bf0130485601adc5d0680",
+      "stderr_sha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+      "output_sha256": "c99b388dcd11df58cd234401489c9d99c56a7c12822dd316ac8410c47706d2ef",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 62294,
+      "stderr_byte_length": 332,
+      "package_events": [],
+      "test_count": 413,
+      "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+      "explicit_test_summaries": [
+        {
+          "line": "124 passed, 0 failed",
+          "count": 124
+        },
+        {
+          "line": "# tests 51",
+          "count": 51
+        },
+        {
+          "line": "# tests 14",
+          "count": 14
+        },
+        {
+          "line": "# tests 2",
+          "count": 2
+        },
+        {
+          "line": "ℹ tests 131",
+          "count": 131
+        },
+        {
+          "line": "ℹ tests 44",
+          "count": 44
+        },
+        {
+          "line": "ℹ tests 47",
+          "count": 47
+        }
+      ],
+      "passing_ratio_evidence": [
+        {
+          "line": "107/107 checks passed",
+          "passed": 107,
+          "total": 107
+        },
+        {
+          "line": "59/59 financial safety checks passed.",
+          "passed": 59,
+          "total": 59
+        },
+        {
+          "line": "29/29 storage/config/AWS checks passed.",
+          "passed": 29,
+          "total": 29
+        }
+      ],
+      "skip_summaries": [
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        }
+      ],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-095",
+      "command": "npm run test:all",
+      "argv": [
+        "npm",
+        "run",
+        "test:all"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "test",
+      "started_at_utc": "2026-07-17T04:26:27.661Z",
+      "ended_at_utc": "2026-07-17T04:37:16.992Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "a2b949a4339c9ff2a8e80a05e76ac5e0dc65c5935f7e29bf366ee3e55b1cb254",
+      "stderr_sha256": "ccb6bf354a0674eeb1e49df9a880a000b75240079fdb849282bb899d81eeb58c",
+      "output_sha256": "8c7d70715a3c4a35fcd4c0a31e68211c0c3b77d59a532f7d743302e7764ec24c",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 446755,
+      "stderr_byte_length": 332,
+      "package_events": [],
+      "test_count": 2674,
+      "test_count_basis": "SUM_OF_EXACT_EMITTED_TEST_SUMMARY_COUNTS",
+      "explicit_test_summaries": [
+        {
+          "line": "124 passed, 0 failed",
+          "count": 124
+        },
+        {
+          "line": "# tests 51",
+          "count": 51
+        },
+        {
+          "line": "# tests 14",
+          "count": 14
+        },
+        {
+          "line": "# tests 2",
+          "count": 2
+        },
+        {
+          "line": "ℹ tests 131",
+          "count": 131
+        },
+        {
+          "line": "ℹ tests 44",
+          "count": 44
+        },
+        {
+          "line": "ℹ tests 402",
+          "count": 402
+        },
+        {
+          "line": "ℹ tests 111",
+          "count": 111
+        },
+        {
+          "line": "ℹ tests 101",
+          "count": 101
+        },
+        {
+          "line": "ℹ tests 47",
+          "count": 47
+        },
+        {
+          "line": "ℹ tests 29",
+          "count": 29
+        },
+        {
+          "line": "ℹ tests 1618",
+          "count": 1618
+        }
+      ],
+      "passing_ratio_evidence": [
+        {
+          "line": "107/107 checks passed",
+          "passed": 107,
+          "total": 107
+        },
+        {
+          "line": "59/59 financial safety checks passed.",
+          "passed": 59,
+          "total": 59
+        },
+        {
+          "line": "29/29 storage/config/AWS checks passed.",
+          "passed": 29,
+          "total": 29
+        },
+        {
+          "line": "83/83 gates passed",
+          "passed": 83,
+          "total": 83
+        },
+        {
+          "line": "Borrow truth: 179/179 checks passed",
+          "passed": 179,
+          "total": 179
+        },
+        {
+          "line": "Borrow import purity: 31/31 checks passed",
+          "passed": 31,
+          "total": 31
+        },
+        {
+          "line": "105/105 checks passed",
+          "passed": 105,
+          "total": 105
+        },
+        {
+          "line": "25/25 checks passed",
+          "passed": 25,
+          "total": 25
+        },
+        {
+          "line": "226/226 checks passed",
+          "passed": 226,
+          "total": 226
+        },
+        {
+          "line": "78/78 checks passed",
+          "passed": 78,
+          "total": 78
+        },
+        {
+          "line": "PASS control: 97/97",
+          "passed": 97,
+          "total": 97
+        },
+        {
+          "line": "PASS binance-usdm: 251/251",
+          "passed": 251,
+          "total": 251
+        },
+        {
+          "line": "PASS binance-usdm-import-purity: 59/59",
+          "passed": 59,
+          "total": 59
+        },
+        {
+          "line": "178/178 execution checks passed",
+          "passed": 178,
+          "total": 178
+        },
+        {
+          "line": "30/30 execution import-purity checks passed",
+          "passed": 30,
+          "total": 30
+        },
+        {
+          "line": "131/131 compatibility checks passed",
+          "passed": 131,
+          "total": 131
+        },
+        {
+          "line": "29/29 cross-lane import-purity checks passed",
+          "passed": 29,
+          "total": 29
+        },
+        {
+          "line": "130/130 checks passed",
+          "passed": 130,
+          "total": 130
+        },
+        {
+          "line": "72/72 checks passed.",
+          "passed": 72,
+          "total": 72
+        },
+        {
+          "line": "27/27 reconciliation import-purity checks passed",
+          "passed": 27,
+          "total": 27
+        },
+        {
+          "line": "75/75 reconciliation checks passed",
+          "passed": 75,
+          "total": 75
+        },
+        {
+          "line": "34/34 replay import-purity checks passed",
+          "passed": 34,
+          "total": 34
+        },
+        {
+          "line": "132/132 replay checks passed",
+          "passed": 132,
+          "total": 132
+        },
+        {
+          "line": "PASS: 884/884 risk checks passed.",
+          "passed": 884,
+          "total": 884
+        },
+        {
+          "line": "33/33 scenario import-purity checks passed",
+          "passed": 33,
+          "total": 33
+        },
+        {
+          "line": "80/80 scenario checks passed",
+          "passed": 80,
+          "total": 80
+        },
+        {
+          "line": "22/22 protocol checks passed",
+          "passed": 22,
+          "total": 22
+        },
+        {
+          "line": "✔ Git-backed donor proof measures exact 16/16/16/16 equality (7.885542ms)",
+          "passed": 16,
+          "total": 16
+        }
+      ],
+      "skip_summaries": [
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "# skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "# todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        },
+        {
+          "line": "ℹ skipped 0",
+          "kind": "skipped",
+          "count": 0
+        },
+        {
+          "line": "ℹ todo 0",
+          "kind": "todo",
+          "count": 0
+        }
+      ],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-096",
+      "command": "git status --porcelain=v1 -z --untracked-files=all",
+      "argv": [
+        "git",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:16.999Z",
+      "ended_at_utc": "2026-07-17T04:37:17.240Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 0,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-097",
+      "command": "git rev-parse HEAD",
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/var/folders/cm/08r6pbhx51v7b7ycd32wvtqw0000gn/T/truth-a-c5-live-custody-uBrJrj/live-remote-clone",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:17.241Z",
+      "ended_at_utc": "2026-07-17T04:37:17.249Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "5445326c0a65edb506081be52f4ebdc9d4bb4b4a5b236ff9ec4e8a72bc9619cc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "5445326c0a65edb506081be52f4ebdc9d4bb4b4a5b236ff9ec4e8a72bc9619cc",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-098",
+      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/truth-campaign-20260716",
+      "argv": [
+        "git",
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+        "refs/heads/truth-campaign-20260716"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:17.251Z",
+      "ended_at_utc": "2026-07-17T04:37:20.508Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "27aa545b910288a755a6ec3f2abcadb9728f1029c7a9c9201877136d8fe6cbd4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "27aa545b910288a755a6ec3f2abcadb9728f1029c7a9c9201877136d8fe6cbd4",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 76,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-099",
+      "command": "git ls-remote --exit-code --heads git@github.com:cosmosgeek0/arbitrage-cosmos.git refs/heads/current-main",
+      "argv": [
+        "git",
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "git@github.com:cosmosgeek0/arbitrage-cosmos.git",
+        "refs/heads/current-main"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:20.511Z",
+      "ended_at_utc": "2026-07-17T04:37:23.723Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "c5aa460c3057c42d9742c1a172e93f859bb08fe9fcbcc712478b2335cd7744fb",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 65,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-100",
+      "command": "git rev-parse refs/heads/current-main",
+      "argv": [
+        "git",
+        "rev-parse",
+        "refs/heads/current-main"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:23.727Z",
+      "ended_at_utc": "2026-07-17T04:37:23.738Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-101",
+      "command": "git rev-parse refs/remotes/origin/current-main",
+      "argv": [
+        "git",
+        "rev-parse",
+        "refs/remotes/origin/current-main"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:23.739Z",
+      "ended_at_utc": "2026-07-17T04:37:23.749Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "66a2725d2d4f96032a729a5d49e49a50b5cfbbf758a6df58ba5c8e200a88144e",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-102",
+      "command": "git rev-parse HEAD",
+      "argv": [
+        "git",
+        "rev-parse",
+        "HEAD"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:23.750Z",
+      "ended_at_utc": "2026-07-17T04:37:23.758Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "92ee7b6b83142daf98948656314e12c864227312c502ca5514d96146765d3712",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 41,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
+    },
+    {
+      "command_id": "command-103",
+      "command": "git status --porcelain=v1 -z --untracked-files=all",
+      "argv": [
+        "git",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all"
+      ],
+      "cwd": "/Users/cosmosgeek/Desktop/truth-a",
+      "kind": "probe",
+      "started_at_utc": "2026-07-17T04:37:23.759Z",
+      "ended_at_utc": "2026-07-17T04:37:23.780Z",
+      "exit_code": 0,
+      "signal": null,
+      "expected_exit_codes": [
+        0
+      ],
+      "exit_code_expected": true,
+      "stdout_sha256": "043e39e5090ad9f8d7c2b497f22b10f02b1cc0ba70da7da3c2f42d75545046f5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "output_sha256": "043e39e5090ad9f8d7c2b497f22b10f02b1cc0ba70da7da3c2f42d75545046f5",
+      "output_digest_rule": "SHA256_OF_STDOUT_BYTES_THEN_STDERR_BYTES",
+      "stdout_byte_length": 71,
+      "stderr_byte_length": 0,
+      "package_events": [],
+      "test_count": 0,
+      "test_count_basis": "NOT_A_TEST_COMMAND",
+      "explicit_test_summaries": [],
+      "passing_ratio_evidence": [],
+      "skip_summaries": [],
+      "unexpected_skip_markers": []
     }
   ],
-  "command_execution_count": 58,
-  "all_required_checks_passed": false,
-  "baseline_token_permitted": false,
-  "failure": {
-    "command_id": "command-047",
-    "command": "git merge-base --is-ancestor 4c9143a0bcc331aa170e9e26b741240b39df8b9e 959a5f9900e25f53414710bbfb3464c3ccb67a5d",
-    "exit_code": 128,
-    "first_causal_error": "fatal: Not a valid commit name 4c9143a0bcc331aa170e9e26b741240b39df8b9e",
-    "affected_evidence_path": "verification/product-truth-20260716/C5_LIVE_REMOTE_GATE_REPORT.json",
-    "observed_at_utc": "2026-07-17T04:18:21.556Z"
-  }
+  "command_execution_count": 103,
+  "all_required_checks_passed": true,
+  "baseline_token_permitted": true,
+  "failure": null,
+  "completed_at_utc": "2026-07-17T04:37:23.782Z"
 }

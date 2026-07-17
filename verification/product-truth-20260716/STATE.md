@@ -1,6 +1,6 @@
 # Product Truth Campaign State
 
-Campaign status: `C5_LIVE_REMOTE_GATE_ATTEMPT_2_STAGED`
+Campaign status: `BASELINE_TRUTH_ACCEPTED_C5`
 
 Immutable rejected C2: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
 
@@ -10,19 +10,19 @@ Immutable rejected C4: `4c9143a0bcc331aa170e9e26b741240b39df8b9e`
 
 Immutable C5 source candidate: `959a5f9900e25f53414710bbfb3464c3ccb67a5d`
 
-C5 source tree: `BOUND_BY_C5_LIVE_REMOTE_GATE_REPORT`
+C5 source tree: `28d3d9922cc1201333775a458919afe9158e6dc2`
 
 Custody bridge: `f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6`
 
 Attempt 1 evidence child: `9e4005535691bb1ddb8a51c3d95394e0920832bc`
 
-Evidence HEAD: `ATTEMPT_2_RECORDER_CONTAINING_EVIDENCE_ONLY_CHILD` — the exact containing SHA is measured after the corrected recorder is committed.
+Evidence HEAD: `ATTEMPT_2_SUCCESS_CONTAINING_EVIDENCE_ONLY_CHILD` — a commit cannot contain its own SHA; the exact containing SHA is reported separately by `git rev-parse HEAD` after this receipt is committed.
 
 Actor: `ACCOUNT_A_CANDIDATE_CUSTODIAN`
 
-Gate: `ATTEMPT_2_NOT_RUN`
+Gate: `BASELINE_TRUTH_ACCEPTED:959a5f9900e25f53414710bbfb3464c3ccb67a5d`
 
-Custody: `C5_REACHABLE_ON_LIVE_CAMPAIGN_BRANCH; FULL_LIVE_REMOTE_BATTERY_NOT_RUN`
+Custody: `VERIFIED_LIVE_REMOTE_BRANCH_AND_BACKUP_BUNDLE_AT_EXACT_C5`
 
 This file is the sole campaign-status authority. Root `STATE.md` owns product state. C2, C3, and C4 remain immutable and rejected. C5 is the immutable source candidate; neither this evidence bridge nor any later receipt is a replacement C5. Any source correction after C5 is C6 and must again be a single correction commit whose sole direct parent is immutable C2.
 
@@ -60,7 +60,7 @@ The fail-closed recorder is `run-c5-live-remote-gate.mjs`. It must:
 6. Run exactly `npm ci`, `npm test`, and `npm run test:all` in that order. Every command record must include argv, cwd, UTC start/end, actual and expected exit codes, byte counts, stdout/stderr/combined SHA-256, emitted test counts and bases, and skip evidence.
 7. Leave the detached live clone clean at exact C5, prove the remote refs remained stable, and permit the baseline token only when the aggregate is fully green.
 
-The measured output belongs in `C5_LIVE_REMOTE_GATE_REPORT.json` as a later campaign evidence child. The report is Account A custody evidence, not independent final verification.
+The measured output is `C5_LIVE_REMOTE_GATE_REPORT.json` in this later campaign evidence child. The report is Account A custody evidence, not independent final verification.
 
 ## Attempt 1 measured result
 
@@ -77,14 +77,29 @@ The measured output belongs in `C5_LIVE_REMOTE_GATE_REPORT.json` as a later camp
 - The corrected single-branch probe now requires `git cat-file -e 4c9143a0bcc331aa170e9e26b741240b39df8b9e^{commit}` to exit exactly `128`, proving rejected C4 is absent at the clone boundary. Local full-repository preflight separately retains the exact `merge-base --is-ancestor C4 C5` exit-`1` proof.
 - The recorder now distinguishes immutable custody bridge `f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6` from the later campaign evidence tip. It accepts only a campaign tip that contains the bridge, differs from C5 solely under the campaign directory, and is a normal fast-forward of the live remote ref.
 
+## Attempt 2 measured acceptance
+
+- Evidence interval: first recorded command `2026-07-17T04:23:44.834Z`; last recorded command ended `2026-07-17T04:37:23.780Z`; temporary-clone cleanup ended `2026-07-17T04:37:25.213Z`.
+- Full report: `C5_LIVE_REMOTE_GATE_REPORT.json`; SHA-256 `15065a1bbe5bac7f9de5b7637b0754c181eb4e2512fa9390205bdb326a59137f`; `149870` bytes; `103` recorded command executions; aggregate `true`; token permission `true`; failure `null`.
+- Toolchain: Git `2.50.1 (Apple Git-155)`, Node `v22.23.1`, npm `10.9.8`, macOS `26.5.2`, `arm64`; normalized environment SHA-256 `f378f48f08ba23d7f2b67e528a2921b3ede08f4d297563d5120c7080a9dcb1f0`.
+- The authorized non-force campaign-only push advanced live `origin/truth-campaign-20260716` from custody bridge `f2de0647b3a96dbf747c2a9c576eafeec9bfb9d6` to exact evidence tip `55485943ffcfbf80bc55609039264169c8880fb6`. The live ref exactly equaled the local campaign tip before the authoritative clone began.
+- Bundle `~/cosmos-arbitrage-C5-20260717.bundle`: complete history; SHA-256 `1b629de9c69712ffde6ea89776105bc1a322da93d04ca17e7c36582faeac766c`; `63410220` bytes; campaign head `55485943ffcfbf80bc55609039264169c8880fb6`; current-main head `3bf7bb25830df85dcbc978bfcecf16216a02d265`.
+- The independent bundle clone used `--no-hardlinks --single-branch`; exact C5 was reachable and detached; C5 tree was `28d3d9922cc1201333775a458919afe9158e6dc2`; sole parent was immutable C2; rejected C4 was absent; `current-main` refs were absent; strict fsck exited `0`; one worktree and one local/remote campaign ref were present; three object files had maximum link count `1`, zero hardlinks, and no alternates; final state was clean.
+- The authoritative live SSH clone used `git clone --no-hardlinks --single-branch --branch truth-campaign-20260716`, then detached exact C5. It proved the same exact C5 tree and sole-parent topology, rejected C3 non-ancestry, rejected C4 object absence, one campaign branch/ref, non-shallow history, one worktree, strict fsck exit `0`, no `current-main` ref, no alternates, and zero hardlinked objects.
+- Dependency lock: only `package-lock.json`; SHA-256 `3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf`; Git blob `54efede0fbadd309ca38375349075affc347cb51`.
+- `npm ci`: `2026-07-17T04:24:27.066Z` to `2026-07-17T04:24:29.650Z`; exit `0`; 229 packages added and 232 audited; output SHA-256 `29a54f3b3eed828f6fd2f77738dcaa7199593632126ad1e097aa077a6c48d816`.
+- `npm test`: `2026-07-17T04:24:29.651Z` to `2026-07-17T04:26:27.658Z`; exit `0`; emitted test count `413`; output SHA-256 `c99b388dcd11df58cd234401489c9d99c56a7c12822dd316ac8410c47706d2ef`; zero unexpected skip/todo markers.
+- `npm run test:all`: `2026-07-17T04:26:27.661Z` to `2026-07-17T04:37:16.992Z`; exit `0`; emitted test count `2674`; output SHA-256 `8c7d70715a3c4a35fcd4c0a31e68211c0c3b77d59a532f7d743302e7764ec24c`; zero unexpected skip/todo markers.
+- The final live clone remained clean at exact C5. Live campaign and current-main refs were re-read after the battery; the campaign ref remained at the tested evidence tip and `current-main` remained `3bf7bb25830df85dcbc978bfcecf16216a02d265` locally, in the cached origin ref, and on the live remote.
+
 ## Exact boundaries
 
-- Exact-C5 live-remote custody gate: `ATTEMPT_1_BLOCKED_BEFORE_NPM; ATTEMPT_2_PENDING`.
-- C5 off-machine custody: `LIVE_CAMPAIGN_BRANCH_REACHABLE_AT_BRIDGE`; authoritative live-remote battery remains pending.
-- Independent final verification: `BLOCKED` until Account A emits the exact baseline token, then reserved for a different fresh session.
+- Exact-C5 live-remote custody gate: `PASS` on Attempt 2; Attempt 1 remains immutable failed evidence.
+- C5 off-machine custody: `VERIFIED` through live `origin/truth-campaign-20260716` and the verified complete-history backup bundle.
+- Independent final verification: `READY_FOR_DIFFERENT_FRESH_SESSION`; Account A does not perform it.
 - Deployment, external sentinel, paging, restore, rollback: `NOT_CONFIGURED`.
 - Private, signed, test-order, borrow, repay, transfer, withdrawal, leverage, margin, deployment, credential, and capital paths: `DEFERRED_OWNER_GATE` or permanently unavailable under `LIVE_EXECUTION_NOT_IMPLEMENTED`.
 
 ## Exact next action
 
-Commit the corrected recorder as a new evidence child without rewriting the custody bridge or Attempt 1, then rerun `node verification/product-truth-20260716/run-c5-live-remote-gate.mjs`. Emit `BASELINE_TRUTH_ACCEPTED:959a5f9900e25f53414710bbfb3464c3ccb67a5d` and stop only if every recorded gate is green.
+Seal this measured report as the separate evidence child, emit `BASELINE_TRUTH_ACCEPTED:959a5f9900e25f53414710bbfb3464c3ccb67a5d`, and stop. The next actor is the independent final verifier in a different fresh session. Only the director may later land to `current-main`.

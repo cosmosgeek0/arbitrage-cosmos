@@ -63,6 +63,7 @@ CF_ACCESS_AUD=audience_12345678
 I00_TESTED_SHA=0123456789abcdef0123456789abcdef01234567
 I00_CONFIG_REVISION=config-1
 I00_MODEL_REVISION=UNAVAILABLE
+I00_PUBLIC_SOURCE_STARTUP_EGRESS=1
 ENV
 assert_success node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime.env"
 sed 's/HOST=127.0.0.1/HOST=0.0.0.0/' "$TEST_TMP/runtime.env" > "$TEST_TMP/public.env"

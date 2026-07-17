@@ -50,6 +50,14 @@ done
 load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 
+if [ "${I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES+x}" = x ]; then
+  die_code 1 "I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES is forbidden for deployment"
+fi
+if [ "${I00_PUBLIC_SOURCE_STARTUP_EGRESS+x}" = x ] \
+    && [ "$I00_PUBLIC_SOURCE_STARTUP_EGRESS" != 1 ]; then
+  die_code 1 "I00_PUBLIC_SOURCE_STARTUP_EGRESS must be absent or exactly 1"
+fi
+
 : "${READINESS_GATE_PATHS:=/health/live /health/ready}"
 : "${POST_SWITCH_GATE_PATHS:=$READINESS_GATE_PATHS}"
 : "${GATE_TIMEOUT_SEC:=60}"
@@ -157,12 +165,14 @@ run_probe_gate() {
   probe_data="$(mktemp -d "${TMPDIR:-/tmp}/cosmos-probe.XXXXXX")"
   PROBE_DATA_TMP="$probe_data"
   if [ -n "$PROBE_CMD" ]; then
-    RELEASE_DIR="$RELEASE_DIR" PROBE_PORT="$PROBE_PORT" PROBE_DATA_DIR="$probe_data" \
-      bash -c "$PROBE_CMD" &
+    env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
+      RELEASE_DIR="$RELEASE_DIR" PROBE_PORT="$PROBE_PORT" PROBE_DATA_DIR="$probe_data" \
+      I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 bash -c "$PROBE_CMD" &
   else
     ( cd "$RELEASE_DIR" \
-      && PORT="$PROBE_PORT" HOST=127.0.0.1 DATA_DIR="$probe_data" SKIP_DOTENV=1 \
-         exec "$NODE" server/dist/index.js ) &
+      && exec env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
+         PORT="$PROBE_PORT" HOST=127.0.0.1 DATA_DIR="$probe_data" SKIP_DOTENV=1 \
+         I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 "$NODE" server/dist/index.js ) &
   fi
   probe_pid=$!
   PROBE_PID="$probe_pid"

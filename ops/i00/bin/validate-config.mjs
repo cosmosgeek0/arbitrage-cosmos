@@ -23,6 +23,7 @@ const required = [
   'HOST', 'PORT', 'DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR',
   'CONTROL_ROOM_OPERATOR_EMAIL', 'CF_ACCESS_TEAM_DOMAIN', 'CF_ACCESS_AUD',
   'I00_TESTED_SHA', 'I00_CONFIG_REVISION', 'I00_MODEL_REVISION',
+  'I00_PUBLIC_SOURCE_STARTUP_EGRESS',
 ];
 for (const key of required) {
   if (!values[key] || hasPlaceholder(values[key])) fail(`required config ${key} is missing or unresolved`);
@@ -37,6 +38,12 @@ if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.CONTROL_ROOM_OPERATOR_EMAIL)) fail
 if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(values.CF_ACCESS_TEAM_DOMAIN)) fail('Cloudflare Access team domain is invalid');
 if (!/^[A-Za-z0-9_-]{8,256}$/.test(values.CF_ACCESS_AUD)) fail('Cloudflare Access audience is invalid');
 if (!isFullSha(values.I00_TESTED_SHA)) fail('I00_TESTED_SHA must be a full Git SHA');
+if (values.I00_PUBLIC_SOURCE_STARTUP_EGRESS !== '1') {
+  fail('I00_PUBLIC_SOURCE_STARTUP_EGRESS must be exactly 1');
+}
+if ('I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES' in values) {
+  fail('I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES is forbidden in activation config');
+}
 if (args['expected-sha'] && values.I00_TESTED_SHA !== args['expected-sha']) fail('runtime config tested SHA does not match the candidate release');
 
 process.stdout.write(`${JSON.stringify({ status: 'CONFIG_VALID_NO_SECRETS', host: values.HOST, port: Number(values.PORT), testedSha: values.I00_TESTED_SHA })}\n`);

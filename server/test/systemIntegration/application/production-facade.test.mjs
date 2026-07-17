@@ -70,6 +70,7 @@ function fixture(options = {}) {
   let localMutationAuthority = options.localMutationAuthority ?? 'PROVEN_ABSENT';
   let ordinaryDrainTruth = options.ordinaryDrainTruth ?? canonicalDrainTruth();
   let restartTruthRefreshCalls = 0;
+  let traceWindowReads = 0;
   const controlRuntimeEffects = new Map(options.controlRuntimeEffects ?? []);
   let persistenceWriteCalls = 0;
   let persistenceWriteFailureAtCall = options.persistenceWriteFailureAtCall ?? null;
@@ -96,6 +97,12 @@ function fixture(options = {}) {
         return (...args) => {
           order.push('ledger:load');
           return target.getConfigValue(...args);
+        };
+      }
+      if (property === 'recentEvents') {
+        return (...args) => {
+          if (args[1] === 'system.integration.trace') traceWindowReads += 1;
+          return target.recentEvents(...args);
         };
       }
       if (property === 'setConfigValueAndLogEvent' || property === 'compareAndSetConfigValueAndLogEvents') {
@@ -303,6 +310,7 @@ function fixture(options = {}) {
     setVolumeStopThrows(value) { volume.setStopThrows(value); },
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
+    traceWindowReads() { return traceWindowReads; },
   };
 }
 
@@ -385,6 +393,37 @@ test('application shell persists startup before any data component and reads nev
   }
   assert.ok(supervisor.components.find((entry) => entry.componentId === 'engine-supervisor')
     .blockerCodes.includes('EFFECTIVE_KILL_SWITCH_ENGAGED'));
+});
+
+test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {
+  const f = fixture({
+    externalKill: false,
+    restartTruth: Object.freeze({
+      publicSourceTruth: 'FRESH',
+      accountTruth: 'FRESH',
+      reconciliationTruth: 'FRESH',
+      observedAtMs: T0,
+    }),
+  });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 6);
+
+  const beforeFirstRead = f.traceWindowReads();
+  f.app.supervisor();
+  assert.equal(f.traceWindowReads(), beforeFirstRead + 1);
+  f.app.supervisor();
+  await f.app.read.graph();
+  assert.equal(f.traceWindowReads(), beforeFirstRead + 1);
+
+  const mutation = await f.app.controls.mutate(validControlRequest(f, {
+    command: 'SET_SAFE_MODE', safeMode: 'ADVISORY',
+  }, 'trace-cache-revision'), ACTOR);
+  assert.equal(mutation.ok, true);
+  const beforeAdvancedRead = f.traceWindowReads();
+  f.app.supervisor();
+  assert.equal(f.traceWindowReads(), beforeAdvancedRead + 1);
+  f.app.supervisor();
+  assert.equal(f.traceWindowReads(), beforeAdvancedRead + 1);
 });
 
 test('startup persists only an owner-supplied current restart observation before runtime admission', () => {

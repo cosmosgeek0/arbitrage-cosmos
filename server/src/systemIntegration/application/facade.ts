@@ -305,6 +305,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   private drainAdmissionInProgress = false;
   private readonly runtimePublicationEffects = new Map<string, SystemControlRuntimeEffectReadback>();
   private readonly pendingRestartPublications = new Map<string, Readonly<ManagedRestartCommandIdentity>>();
+  private persistedTraceCache: Readonly<{
+    checkpointRevision: number;
+    events: readonly Readonly<SystemTraceEvent>[];
+  }> | null = null;
   private startupSucceeded = false;
 
   readonly read: SystemIntegrationReadPort;
@@ -1025,16 +1029,24 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   private persistedTraceEvents(): readonly Readonly<SystemTraceEvent>[] {
     const state = this.checkpoint();
-    if (!state) return Object.freeze([]);
-    const correlations = [...new Set(state.traceIndex.map((entry) => entry.correlationId))];
-    const events: SystemTraceEvent[] = [];
-    for (const traceCorrelationId of correlations) {
-      const queried = this.persistence.queryTrace({ correlationId: traceCorrelationId, limit: 200 });
-      if (!queried.ok) continue;
-      events.push(...queried.value.events.map((entry) => entry.event));
-      if (events.length >= MAX_TRACE_EVENTS) break;
+    if (!state) {
+      this.persistedTraceCache = null;
+      return Object.freeze([]);
     }
-    return Object.freeze(events.slice(-MAX_TRACE_EVENTS));
+    if (this.persistedTraceCache?.checkpointRevision === state.revision) {
+      return this.persistedTraceCache.events;
+    }
+    const correlations = [...new Set(state.traceIndex.map((entry) => entry.correlationId))];
+    const queried = this.persistence.queryTraces(correlations.map((traceCorrelationId) => ({
+      correlationId: traceCorrelationId,
+      limit: SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit,
+    })));
+    if (!queried.ok) return Object.freeze([]);
+    const events = Object.freeze(queried.value
+      .flatMap((result) => result.events.map((entry) => entry.event))
+      .slice(-MAX_TRACE_EVENTS));
+    this.persistedTraceCache = Object.freeze({ checkpointRevision: state.revision, events });
+    return events;
   }
 
   private ownerTraceEvents(): readonly Readonly<SystemTraceEvent>[] {

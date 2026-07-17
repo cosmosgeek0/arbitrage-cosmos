@@ -1723,16 +1723,32 @@ export class SystemLedgerPersistenceAdapter {
     };
   }
 
-  queryTrace(query: Readonly<TraceQuery>): PersistenceResult<Readonly<PersistedTraceQueryResult>> {
-    if (!query || !CORRELATION_ID.test(query.correlationId)) {
-      return failed('INVALID_PERSISTENCE_REQUEST', 'trace correlation ID is invalid');
+  queryTraces(
+    queries: readonly Readonly<TraceQuery>[],
+  ): PersistenceResult<readonly Readonly<PersistedTraceQueryResult>[]> {
+    if (!Array.isArray(queries)
+      || queries.length > SYSTEM_PERSISTENCE_LIMITS.maximumTraceIndexEntries) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'trace query batch exceeds its bound');
     }
-    const limit = query.limit ?? 100;
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit
-      || (query.sinceMs !== undefined && !validUtcMillis(query.sinceMs))
-      || (query.untilMs !== undefined && !validUtcMillis(query.untilMs))
-      || (query.sinceMs !== undefined && query.untilMs !== undefined && query.sinceMs >= query.untilMs)) {
-      return failed('INVALID_PERSISTENCE_REQUEST', 'trace query bounds are invalid');
+    if (queries.length === 0) return { ok: true, value: Object.freeze([]) };
+    const correlations = new Set<string>();
+    const normalized: Array<Readonly<{ query: Readonly<TraceQuery>; limit: number }>> = [];
+    for (const query of queries) {
+      if (!query || !CORRELATION_ID.test(query.correlationId)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace correlation ID is invalid');
+      }
+      if (correlations.has(query.correlationId)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace query batch contains a duplicate correlation ID');
+      }
+      correlations.add(query.correlationId);
+      const limit = query.limit ?? 100;
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > SYSTEM_PERSISTENCE_LIMITS.maximumTraceQueryLimit
+        || (query.sinceMs !== undefined && !validUtcMillis(query.sinceMs))
+        || (query.untilMs !== undefined && !validUtcMillis(query.untilMs))
+        || (query.sinceMs !== undefined && query.untilMs !== undefined && query.sinceMs >= query.untilMs)) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'trace query bounds are invalid');
+      }
+      normalized.push(Object.freeze({ query, limit }));
     }
     let raw: LedgerEventRecord[];
     try {
@@ -1743,33 +1759,51 @@ export class SystemLedgerPersistenceAdapter {
     } catch (error) {
       return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
     }
-    const matching: PersistedTraceEventRecord[] = [];
+    const grouped = new Map<string, PersistedTraceEventRecord[]>(
+      [...correlations].map((correlationId) => [correlationId, []]),
+    );
     for (const row of raw) {
       if (!isRecord(row.data)) continue;
       if (!isRecord(row.data.trace)) continue;
       const sourceTrace = row.data.trace;
-      if (sourceTrace.correlationId !== query.correlationId) continue;
+      if (typeof sourceTrace.correlationId !== 'string') continue;
+      const matching = grouped.get(sourceTrace.correlationId);
+      if (!matching) continue;
       if (typeof sourceTrace.occurredAtMs !== 'number') continue;
-      if (query.sinceMs !== undefined && sourceTrace.occurredAtMs < query.sinceMs) continue;
-      if (query.untilMs !== undefined && sourceTrace.occurredAtMs >= query.untilMs) continue;
       const event = { ...sourceTrace, persistedAtMs: row.ts } as unknown as SystemTraceEvent;
       if (validateSystemTraceEvent(event).length > 0) continue;
       matching.push(Object.freeze({ ledgerEventId: row.id, persistedAtMs: row.ts, event: Object.freeze(event) }));
     }
-    matching.sort((left, right) => (
-      left.event.sequence - right.event.sequence
-      || left.event.occurredAtMs - right.event.occurredAtMs
-      || left.ledgerEventId - right.ledgerEventId
-    ));
-    const truncated = matching.length > limit || raw.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
-    const events = matching.slice(Math.max(0, matching.length - limit));
-    return {
-      ok: true,
-      value: Object.freeze({
+    for (const matching of grouped.values()) {
+      matching.sort((left, right) => (
+        left.event.sequence - right.event.sequence
+        || left.event.occurredAtMs - right.event.occurredAtMs
+        || left.ledgerEventId - right.ledgerEventId
+      ));
+    }
+    const scanTruncated = raw.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
+    const results = normalized.map(({ query, limit }) => {
+      const matching = (grouped.get(query.correlationId) ?? []).filter((entry) => (
+        (query.sinceMs === undefined || entry.event.occurredAtMs >= query.sinceMs)
+        && (query.untilMs === undefined || entry.event.occurredAtMs < query.untilMs)
+      ));
+      const truncated = matching.length > limit || scanTruncated;
+      const events = matching.slice(Math.max(0, matching.length - limit));
+      return Object.freeze({
         correlationId: query.correlationId,
         events: Object.freeze(events),
         truncated,
-      }),
+      });
+    });
+    return { ok: true, value: Object.freeze(results) };
+  }
+
+  queryTrace(query: Readonly<TraceQuery>): PersistenceResult<Readonly<PersistedTraceQueryResult>> {
+    const queried = this.queryTraces(Object.freeze([query]));
+    if (!queried.ok) return queried;
+    return {
+      ok: true,
+      value: queried.value[0],
     };
   }
 

@@ -8,7 +8,7 @@ import { curateNotifications, groupNotifications, notificationEnabled } from '..
 import { fireRefresh } from '../lib/refresh';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
-import { canonicalComponentPresentation, canonicalMarketFeedReadinessPresentation, canonicalRefreshTargetPosture, canonicalWatchmanOverallPresentation } from '../lib/canonicalCockpitTruth';
+import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -1709,21 +1709,11 @@ function SharedTopBar() {
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
-  const advisorOverallPresentation = productSnapshot
-    ? canonicalWatchmanOverallPresentation({
-      continuity: productBinding.continuity,
-      machineReady: productSnapshot.ownerView.machineReady,
-      effectiveMode: productSnapshot.ownerView.effectiveMode,
-      components: productSnapshot.components,
-    })
+  const advisorOverallPresentation = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.watchmanOverall
     : { status: 'outage' as const, label: 'Supervisor Unavailable' };
-  const advisorMarketFeedReadiness = productSnapshot
-    ? canonicalMarketFeedReadinessPresentation({
-      continuity: productBinding.continuity,
-      machineReady: productSnapshot.ownerView.machineReady,
-      dataFreshness: productSnapshot.ownerView.dataFreshness,
-      components: productSnapshot.components,
-    })
+  const advisorMarketFeedReadiness = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.marketFeedReadiness
     : {
       proven: false,
       label: 'Market Feed Readiness Unproven' as const,
@@ -2835,19 +2825,21 @@ function watchmanGroupIcon(group: WatchmanGroup): ReactNode {
   return <IconShield size={17} />;
 }
 
-function canonicalWatchmanGroup(componentId: string): WatchmanGroup {
+function watchmanGroupForComponent(componentId: string): WatchmanGroup {
   if (componentId === 'public-spot-source' || componentId === 'public-usdm-source') return 'binance';
   if (componentId === 'market-universe' || componentId.includes('intelligence')) return 'sources';
   if (componentId === 'basis-engine' || componentId === 'volume-engine') return 'bot';
   return 'control_path';
 }
 
-function canonicalWatchmanComponent(component: Readonly<ProductComponentProjection>, continuity: ProductBindingContinuity): WatchmanComponent {
-  const posture = canonicalComponentPresentation(component, continuity);
+function watchmanComponentFromSupervisor(component: Readonly<ProductComponentProjection>, continuity: ProductBindingContinuity): WatchmanComponent {
+  const posture = continuity === 'PROVEN'
+    ? component.canonicalPresentation
+    : { status: 'outage' as const, statusLabel: 'Continuity Blocked' };
   return {
     id: component.componentId,
     label: component.componentId.replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    group: canonicalWatchmanGroup(component.componentId),
+    group: watchmanGroupForComponent(component.componentId),
     status: posture.status,
     statusLabel: posture.statusLabel,
     detail: `${component.owner} · Lifecycle ${component.observedLifecycle} · Capability ${component.capability} · Truth ${component.truthLabel}${component.blockerCode ? ` · ${component.blockerCode}` : ''}`,
@@ -2940,7 +2932,7 @@ export function RefreshDock() {
 
   const productSnapshot = binding.snapshot;
   const productBindingContinuity = binding.continuity;
-  const canonicalComponents = (productSnapshot?.components ?? []).map((component) => canonicalWatchmanComponent(component, productBindingContinuity));
+  const canonicalComponents = (productSnapshot?.components ?? []).map((component) => watchmanComponentFromSupervisor(component, productBindingContinuity));
   const effectiveLastResetTs = lastRefreshTs;
   const browserStatus: WatchmanStatus = !connected || appRtt === null
     ? 'outage'
@@ -2989,15 +2981,15 @@ export function RefreshDock() {
     },
   ];
   const components: WatchmanComponent[] = [browserComponent, ...canonicalComponents, ...ownerGatedComponents];
-  const overallPresentation = productSnapshot
-    ? canonicalWatchmanOverallPresentation({
-      continuity: binding.continuity,
-      machineReady: productSnapshot.ownerView.machineReady,
-      effectiveMode: productSnapshot.ownerView.effectiveMode,
-      components: productSnapshot.components,
-    })
+  const overallPresentation = productSnapshot && binding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.watchmanOverall
     : { status: 'outage' as const, label: 'Canonical Truth Unavailable' };
   const overallStatus: WatchmanStatus = overallPresentation.status;
+  const launcherPresentation = canonicalWatchmanLauncherPresentation({
+    canonicalStatus: overallStatus,
+    canonicalLabel: overallPresentation.label,
+    actionState: st,
+  });
   const sourceComponents = components.filter((component) => component.group === 'sources');
   const infrastructureComponents = components.filter((component) => component.group === 'infrastructure');
   const sourceCoverage = productSnapshot?.dashboard.summaries.sourceCoverage;
@@ -3048,7 +3040,7 @@ export function RefreshDock() {
   };
 
   const overallLabel = overallPresentation.label;
-  const label = st === 'spin' ? 'Recovery Running' : st === 'ok' ? 'Connections Recovered' : st === 'err' ? 'Recovery Needs Review' : `Connection Watchman · ${overallLabel}`;
+  const label = launcherPresentation.label;
   const groupedConnections = (Object.keys(watchmanGroupLabel) as WatchmanGroup[]).map((group) => ({
     group,
     rows: components.filter((component) => component.group === group),
@@ -3231,11 +3223,11 @@ export function RefreshDock() {
         </section>
       )}
 
-      <button className={`rdock-btn rdock-control-btn status-${overallStatus} ${st}`} onClick={() => setOpen((value) => !value)} title={label} aria-label={label} aria-expanded={open}>
+      <button className={`rdock-btn rdock-control-btn status-${launcherPresentation.healthStatus} ${st === 'spin' ? 'spin' : ''}`} data-action-state={st} onClick={() => setOpen((value) => !value)} title={label} aria-label={label} aria-expanded={open}>
         <span className="rdock-control-image" aria-hidden="true">
           <img className="watchman-reset-mark" src="/connection-reset-mark.svg" alt="" draggable={false} />
         </span>
-        <i className={`rdock-control-state status-${st === 'ok' ? 'operational' : st === 'err' ? 'outage' : overallStatus}`} />
+        <i className={`rdock-control-state status-${launcherPresentation.healthStatus}`} />
       </button>
     </div>
   );

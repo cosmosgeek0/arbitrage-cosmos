@@ -26,6 +26,12 @@ const OPS_PROJECTION = Object.freeze({
   opsIntakeInterlock: makeOpsInterlock(),
 });
 
+const SURFACE_BLOCKING_TRUTH = new Set(['BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN']);
+
+function requiredSurfaceBlocker(surface) {
+  return surface.evidence.find((datum) => datum.value === null || SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)) ?? null;
+}
+
 test('Product readiness consumes the exact canonical application-start result', async () => {
   const service = createProductIntegrationRuntime({
     read: makeRead({
@@ -60,13 +66,40 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
     floor: envelope.dashboard.summaries.ledger.rollbackFloor,
   }, { state: 'AVAILABLE', current: 1, floor: 1 });
   assert.equal(envelope.components.length, 14);
+  const publicSpot = envelope.components.find((component) => component.componentId === 'public-spot-source');
+  const basis = envelope.components.find((component) => component.componentId === 'basis-engine');
+  assert.deepEqual(publicSpot.canonicalPresentation, {
+    status: 'operational', tone: 'ok', statusLabel: 'Live Public', stateLabel: 'READY · LIVE PUBLIC · LIVE PUBLIC',
+  });
+  assert.deepEqual(basis.canonicalPresentation, {
+    status: 'degraded', tone: 'warn', statusLabel: 'Validate Only', stateLabel: 'READY · VALIDATE ONLY · BUILT AND TESTED',
+  });
+  assert.deepEqual(envelope.canonicalCockpit, {
+    source: 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION',
+    marketFeedReadiness: {
+      proven: true,
+      label: 'Market Feed Readiness Proven',
+      detail: 'Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness 900ms max public-source age.',
+    },
+    strategyRuntime: { tone: 'warn', label: 'Validate-Only Ready', livePublicCount: 0 },
+    watchmanOverall: { status: 'degraded', label: 'Validate Only' },
+  });
   assert.equal(Object.keys(envelope.surfaces).length, 18);
-  assert.equal(envelope.surfaces.dashboard.bindingState, 'BINDING_READY');
+  assert.equal(envelope.surfaces.dashboard.bindingState, 'BLOCKED_BACKEND');
+  assert.equal(envelope.surfaces.dashboard.truthLabel, 'MISSING');
+  assert.equal(envelope.surfaces.dashboard.blocker, 'REQUIRED_EVIDENCE_MISSING:pnl-drawdown');
   assert.equal(envelope.surfaces.account.bindingState, 'BLOCKED_BACKEND');
-  assert.equal(envelope.surfaces.account.truthLabel, 'NOT_CONFIGURED');
-  assert.equal(envelope.surfaces.borrow.truthLabel, 'NOT_CONFIGURED');
-  assert.equal(envelope.surfaces.notifications.truthLabel, 'NOT_CONFIGURED');
+  assert.equal(envelope.surfaces.account.truthLabel, 'MISSING');
+  assert.equal(envelope.surfaces.borrow.truthLabel, 'MISSING');
+  assert.equal(envelope.surfaces.notifications.truthLabel, 'MISSING');
   assert.equal(envelope.surfaces.notifications.bindingState, 'BLOCKED_BACKEND');
+  for (const surface of Object.values(envelope.surfaces)) {
+    const blocker = requiredSurfaceBlocker(surface);
+    if (blocker === null) continue;
+    assert.equal(surface.bindingState, 'BLOCKED_BACKEND', `${surface.surfaceId} cannot bind with ${blocker.fieldId} missing`);
+    assert.ok(SURFACE_BLOCKING_TRUTH.has(surface.truthLabel), `${surface.surfaceId} cannot stay green with ${blocker.fieldId} missing`);
+    assert.match(surface.blocker ?? '', /^REQUIRED_EVIDENCE_/);
+  }
   for (const surfaceId of ['control-room', 'health']) {
     const evidence = Object.fromEntries(envelope.surfaces[surfaceId].evidence.map((datum) => [datum.fieldId, datum]));
     assert.equal(evidence['deployment-frozen'].value, 'NOT_FROZEN');
@@ -379,15 +412,15 @@ test('supervisor READY with unavailable canonical public advance cannot mint Pro
   const unknown = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: unknownSnapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(unknown.truthLabel, 'UNKNOWN');
   assert.equal(unknown.surfaces.dashboard.truthLabel, 'UNKNOWN');
-  assert.equal(unknown.surfaces.dashboard.summary, 'Dashboard owner evidence is unknown.');
-  assert.equal(unknown.surfaces.dashboard.blocker, 'CANONICAL_OWNER_UNKNOWN');
+  assert.equal(unknown.surfaces.dashboard.summary, 'Dashboard required evidence overall-posture is UNKNOWN.');
+  assert.equal(unknown.surfaces.dashboard.blocker, 'REQUIRED_EVIDENCE_UNKNOWN:overall-posture');
 
   const unavailableSnapshot = makeSupervisor({ truthLabel: 'UNAVAILABLE', overallPosture: 'BLOCKED' });
   const unavailable = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: unavailableSnapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(unavailable.truthLabel, 'UNAVAILABLE');
-  assert.equal(unavailable.surfaces.dashboard.truthLabel, 'UNAVAILABLE');
+  assert.equal(unavailable.surfaces.dashboard.truthLabel, 'MISSING');
   assert.equal(unavailable.surfaces.dashboard.bindingState, 'BLOCKED_BACKEND');
-  assert.equal(unavailable.surfaces.dashboard.blocker, 'CANONICAL_OWNER_UNAVAILABLE');
+  assert.equal(unavailable.surfaces.dashboard.blocker, 'REQUIRED_EVIDENCE_UNAVAILABLE:overall-posture');
 });
 
 test('public-source freshness is unknown unless both canonical source owners are present', () => {
@@ -585,8 +618,10 @@ test('nested synthetic owner evidence forces the persistent label while account 
   const envelope = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot, materialEvents: page, traces: [], nowMs: T0 });
   assert.equal(envelope.truthLabel, 'BUILT_AND_TESTED');
   assert.equal(envelope.persistentSyntheticLabel, true);
-  assert.equal(envelope.surfaces.account.truthLabel, 'SYNTHETIC_ONLY');
-  assert.equal(envelope.surfaces.borrow.truthLabel, 'SYNTHETIC_ONLY');
+  assert.equal(envelope.surfaces.account.truthLabel, 'MISSING');
+  assert.equal(envelope.surfaces.account.bindingState, 'BLOCKED_BACKEND');
+  assert.equal(envelope.surfaces.borrow.truthLabel, 'MISSING');
+  assert.equal(envelope.surfaces.borrow.bindingState, 'BLOCKED_BACKEND');
 
   const unknownAccountSummaries = Object.freeze({
     ...source.summaries,

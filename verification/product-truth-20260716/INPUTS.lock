@@ -271,7 +271,7 @@
     },
     {
       "id": "QL_DIRECTOR_STATE",
-      "authority": "CONTROLLING_CANDIDATE_DIRECTOR_STATE",
+      "authority": "PRE_D_LAUNCH_65_REFERENCE_ONLY",
       "relative_path": "QL_DIRECTOR_STATE.md",
       "candidate_commit": null,
       "git_blob": null,

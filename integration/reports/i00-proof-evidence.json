@@ -5738,13 +5738,13 @@
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 32
+        "line": 34
       },
       {
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 764
+        "line": 921
       },
       {
         "concept": "control-authority",
@@ -5822,49 +5822,49 @@
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourceRecord",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 71
+        "line": 86
       },
       {
         "concept": "semantic-source",
         "declaration": "interface ProductRuntimeMaterialSourcePage",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 80
+        "line": 95
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlPreview",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 138
+        "line": 153
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlResultStatus",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 164
+        "line": 179
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlResult",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 171
+        "line": 186
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlWiringState",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 289
+        "line": 304
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlRegistryEntry",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 292
+        "line": 307
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 482
+        "line": 516
       },
       {
         "concept": "control-authority",
@@ -14143,5 +14143,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "5cfbb05d4ec089c286635f254c7dba71d73a097812fcf75da6a1daef1c98d05b"
+  "evidenceSha256": "9757618ec30093cba461b1fceb8181ba570e8bbfea1023fd8cdad067ca9b635d"
 }

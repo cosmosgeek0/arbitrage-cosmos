@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
-import { canonicalWatchmanOverallPresentation } from '../lib/canonicalCockpitTruth';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
 import './Health.css';
@@ -19,13 +18,8 @@ export function SystemHealth() {
   const snapshot = binding.snapshot;
   const healthSurface = snapshot?.surfaces.health;
   const machineReady = snapshot?.ownerView.machineReady ?? null;
-  const overallPresentation = snapshot
-    ? canonicalWatchmanOverallPresentation({
-      continuity: binding.continuity,
-      machineReady: snapshot.ownerView.machineReady,
-      effectiveMode: snapshot.ownerView.effectiveMode,
-      components: snapshot.components,
-    })
+  const overallPresentation = snapshot && binding.continuity === 'PROVEN'
+    ? snapshot.canonicalCockpit.watchmanOverall
     : { status: 'outage' as const, label: 'Canonical Truth Unavailable' };
   const overallTone: HealthTone = overallPresentation.status === 'operational'
     ? 'healthy'

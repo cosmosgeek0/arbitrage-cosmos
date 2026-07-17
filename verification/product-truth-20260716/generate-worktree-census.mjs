@@ -5,11 +5,42 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import {
+  AUTHORITY_PAYLOAD_SPECS,
+  D_LAUNCH_65_AUTHORITY,
+  EXACT_EVIDENCE_OUTPUTS,
+  REJECTED_CANDIDATE_SHAS,
+  REQUIRED_C2_PARENT,
+} from './campaign-input-registry.mjs';
+
 const MAIN = '/Users/cosmosgeek/Desktop/Main';
 const OUTPUT = resolve(
   process.cwd(),
   'verification/product-truth-20260716/WORKTREE_CENSUS.json',
 );
+const REQUIRED_LIVE_WORKTREE_COUNT = 96;
+const REQUIRED_REMOVED_SAFE_TOMBSTONE_COUNT = 5;
+const REQUIRED_DURABLE_ENTRY_COUNT = 101;
+const CAMPAIGN_ROOT = 'verification/product-truth-20260716';
+const EXACT_EVIDENCE_PATHS = Object.freeze(
+  EXACT_EVIDENCE_OUTPUTS.map((name) => `${CAMPAIGN_ROOT}/${name}`).sort(),
+);
+const REQUIRED_LIVE_CLASSIFICATION_COUNTS = Object.freeze({
+  MERGED_RETAINED: 42,
+  SUPERSEDED_SAFE: 33,
+  ABANDONED_SAFE: 20,
+  SEALED_UNMERGED: 0,
+  ACTIVE_DIRTY: 0,
+  BLOCKED: 1,
+  DUPLICATE_PATCH: 0,
+  UNKNOWN: 0,
+});
+const D_LAUNCH_65_PAYLOAD_SPEC = AUTHORITY_PAYLOAD_SPECS.find(
+  (spec) => spec.memberId === 'authority:D_LAUNCH_65',
+);
+if (!D_LAUNCH_65_PAYLOAD_SPEC) {
+  throw new Error('D-LAUNCH-65 candidate payload registry entry is missing');
+}
 const D_LAUNCH_61_READ_ONLY_SHARDS = new Set([
   'prep-act',
   'shard-prov',
@@ -17,6 +48,53 @@ const D_LAUNCH_61_READ_ONLY_SHARDS = new Set([
   'v-clean',
   'v-cockpit',
 ]);
+const REMOVED_SAFE_TOMBSTONE_INPUTS = [
+  {
+    worktree: 'prep-act',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/ACTIVATION_RUNBOOK_DRAFT.md',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/ACTIVATION_RUNBOOK_DRAFT.md',
+        sha256: '81b516dc6b69fe482bdaded03f6ce424de9a89b080bd03c2287d87a9176d1b00',
+        git_blob: 'a7b50c724659891834ed05e0198a209ac8b841a9',
+        bytes: 32859,
+      },
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/CANARY_PRECHECK.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/CANARY_PRECHECK.json',
+        sha256: '02c4181f49385a2f8d9620babeead4a4a94506e7586dae1e6613ae944d623f92',
+        git_blob: '6dc2b74e408742c93a068ec7d1e669d4ce0f94bd',
+        bytes: 10577,
+      },
+    ],
+  },
+  {
+    worktree: 'shard-prov',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/PROV_FINDINGS.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/PROV_FINDINGS.json',
+        sha256: 'b0e06ead6b8280545c36ab7b8d5f58de75819dfa653c51dde7c09f720efe71fc',
+        git_blob: '25db7293f197f771c9aca5c5d16551c0d15709e0',
+        bytes: 39646,
+      },
+    ],
+  },
+  { worktree: 'shard-sec', outputs: [] },
+  {
+    worktree: 'v-clean',
+    outputs: [
+      {
+        source_path: 'docs/archive/campaign-detail-20260716/shard-receipts/CLEAN_CLONE_FINDINGS.json',
+        candidate_path: 'verification/product-truth-20260716/wave1-inputs/CLEAN_CLONE_FINDINGS.json',
+        sha256: '0c8c59354486db404334107470865d4255ce0049dfcd38701fe0eb163c23250c',
+        git_blob: 'e00120964c3fdb89d9d6999a676a1e89d830455d',
+        bytes: 26371,
+      },
+    ],
+  },
+  { worktree: 'v-cockpit', outputs: [] },
+];
 
 const MERGED_RETAINED = [
   'Main',
@@ -128,7 +206,6 @@ const BLOCKED = [
   'egress-patch',
   'truth-a',
   'truth-b',
-  ...D_LAUNCH_61_READ_ONLY_SHARDS,
 ];
 
 const CANDIDATE_ADMISSION_LANES = new Set([
@@ -160,7 +237,7 @@ const GROUPS = {
   BLOCKED,
 };
 
-const EXPECTED_NAMES = new Set(Object.values(GROUPS).flat());
+const LIVE_POLICY_NAMES = new Set(Object.values(GROUPS).flat());
 
 const BASE_OVERRIDES = {
   'truth-a': '787b73d108764d628f925ee630bfe2fbef89458e',
@@ -312,7 +389,7 @@ const HISTORICAL_WRITE_GRANTS = {
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    encoding: options.encoding ?? 'utf8',
+    encoding: options.encoding === undefined ? 'utf8' : options.encoding,
     env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C', TZ: 'UTC' },
     maxBuffer: 256 * 1024 * 1024,
   });
@@ -361,6 +438,33 @@ function parseWorktrees(raw) {
   return records;
 }
 
+function exactStringList(actual, expected) {
+  return actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+}
+
+function normalizedWorktreeInventory(records, candidateSha) {
+  return records
+    .map((record) => {
+      const normalized = { ...record };
+      if (basename(normalized.worktree) === 'truth-a') normalized.HEAD = candidateSha;
+      return Object.fromEntries(
+        Object.entries(normalized).sort(([left], [right]) => left.localeCompare(right)),
+      );
+    })
+    .sort((left, right) => String(left.worktree).localeCompare(String(right.worktree)));
+}
+
+function normalizedTruthAStatusSha256(branch, candidateSha) {
+  return sha256(JSON.stringify({
+    normalization: 'EXACT_CANDIDATE_OR_EXACT_EVIDENCE_DESCENDANT',
+    branch_name: branch,
+    head_sha: candidateSha,
+    dirty_tracked_paths: [],
+    untracked_paths: [],
+  }));
+}
+
 function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
   const unexplainedSourceDirt = dirtyTracked.filter((path) => (
     name !== 'truth-a' || !path.startsWith('verification/product-truth-20260716/')
@@ -383,14 +487,12 @@ function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
     const committedDelta = candidateIsAncestor
       ? nulList(git(MAIN, 'diff', '--name-only', '-z', `${candidateSha}..${head}`).stdout)
       : [];
-    const evidenceOnly = committedDelta.every((path) => (
-      path.startsWith('verification/product-truth-20260716/')
-    )) && dirtyTracked.every((path) => (
-      path.startsWith('verification/product-truth-20260716/')
-    )) && untracked.every((path) => (
-      path.startsWith('verification/product-truth-20260716/')
-    ));
-    if (candidateIsAncestor && evidenceOnly) return 'MERGED_RETAINED';
+    const exactEvidenceDescendant = committedDelta.length === 0
+      || exactStringList(committedDelta, EXACT_EVIDENCE_PATHS);
+    const cleanCustody = dirtyTracked.length === 0 && untracked.length === 0;
+    if (candidateIsAncestor && exactEvidenceDescendant && cleanCustody) {
+      return 'MERGED_RETAINED';
+    }
   }
   for (const [classification, names] of Object.entries(GROUPS)) {
     if (names.includes(name)) return classification;
@@ -701,25 +803,307 @@ function diffIdentity(base, head) {
   };
 }
 
+function verifiedDLaunch65Authority(candidateSha) {
+  const authorityCommit = text(
+    MAIN,
+    'rev-parse',
+    `${D_LAUNCH_65_AUTHORITY.commit}^{commit}`,
+  );
+  const authorityTree = text(MAIN, 'rev-parse', `${authorityCommit}^{tree}`);
+  const authorityParents = text(MAIN, 'rev-list', '--parents', '-n', '1', authorityCommit)
+    .split(/\s+/u)
+    .slice(1);
+  const authoritySpec = `${authorityCommit}:${D_LAUNCH_65_AUTHORITY.path}`;
+  const authorityType = text(MAIN, 'cat-file', '-t', authoritySpec);
+  const authorityBlob = text(MAIN, 'rev-parse', authoritySpec);
+  const authorityBytes = run('git', ['-C', MAIN, 'show', authoritySpec], {
+    encoding: null,
+  }).stdout;
+  const authoritySha256 = sha256(authorityBytes);
+
+  if (authorityCommit !== D_LAUNCH_65_AUTHORITY.commit
+      || authorityTree !== D_LAUNCH_65_AUTHORITY.tree
+      || authorityParents.length !== 1
+      || authorityParents[0] !== D_LAUNCH_65_AUTHORITY.parent
+      || authorityType !== 'blob'
+      || authorityBlob !== D_LAUNCH_65_AUTHORITY.git_blob
+      || authoritySha256 !== D_LAUNCH_65_AUTHORITY.sha256
+      || authorityBytes.length !== D_LAUNCH_65_AUTHORITY.byte_length) {
+    throw new Error('D-LAUNCH-65 immutable authority object binding mismatch');
+  }
+
+  const authorityLines = authorityBytes.toString('utf8').split('\n');
+  const rulingLines = authorityLines.slice(287, 289);
+  if (rulingLines.length !== 2
+      || !rulingLines[0].startsWith('### D-LAUNCH-65 (2026-07-16):')
+      || !rulingLines[1].includes(D_LAUNCH_65_AUTHORITY.archive_source_commit.slice(0, 7))
+      || !rulingLines[1].includes('tombstones record NO_ACCEPTED_OUTPUT')) {
+    throw new Error('D-LAUNCH-65 ruling line binding mismatch');
+  }
+
+  const archiveCommit = text(
+    MAIN,
+    'rev-parse',
+    `${D_LAUNCH_65_AUTHORITY.archive_source_commit}^{commit}`,
+  );
+  const archiveTree = text(MAIN, 'rev-parse', `${archiveCommit}^{tree}`);
+  const archiveSubtree = text(
+    MAIN,
+    'rev-parse',
+    `${archiveCommit}:docs/archive/campaign-detail-20260716/shard-receipts`,
+  );
+  if (archiveCommit !== D_LAUNCH_65_AUTHORITY.archive_source_commit
+      || archiveTree !== D_LAUNCH_65_AUTHORITY.archive_source_tree
+      || archiveSubtree !== D_LAUNCH_65_AUTHORITY.archive_subtree) {
+    throw new Error('D-LAUNCH-65 authorized archive object binding mismatch');
+  }
+
+  const candidatePayloadPath = [
+    'verification/product-truth-20260716',
+    D_LAUNCH_65_PAYLOAD_SPEC.payloadRelativePath,
+  ].join('/');
+  const candidatePayloadSpec = `${candidateSha}:${candidatePayloadPath}`;
+  const candidatePayloadType = text(process.cwd(), 'cat-file', '-t', candidatePayloadSpec);
+  const candidatePayloadBlob = text(process.cwd(), 'rev-parse', candidatePayloadSpec);
+  const candidatePayloadBytes = run(
+    'git',
+    ['-C', process.cwd(), 'show', candidatePayloadSpec],
+    { encoding: null },
+  ).stdout;
+  const candidatePayloadSha256 = sha256(candidatePayloadBytes);
+  if (candidatePayloadType !== 'blob'
+      || candidatePayloadBlob !== D_LAUNCH_65_AUTHORITY.git_blob
+      || candidatePayloadSha256 !== D_LAUNCH_65_AUTHORITY.sha256
+      || candidatePayloadBytes.length !== D_LAUNCH_65_AUTHORITY.byte_length
+      || !candidatePayloadBytes.equals(authorityBytes)) {
+    throw new Error('Candidate-tracked D-LAUNCH-65 authority payload is not byte exact');
+  }
+
+  const currentMainResult = run(
+    'git',
+    ['-C', MAIN, 'rev-parse', '--verify', 'refs/heads/current-main'],
+    { allowFailure: true },
+  );
+  const originCurrentMainResult = run(
+    'git',
+    ['-C', MAIN, 'rev-parse', '--verify', 'refs/remotes/origin/current-main'],
+    { allowFailure: true },
+  );
+  const currentMainSha = currentMainResult.status === 0 ? currentMainResult.stdout.trim() : null;
+  const originCurrentMainSha = originCurrentMainResult.status === 0
+    ? originCurrentMainResult.stdout.trim()
+    : null;
+
+  return {
+    directive_id: 'D-LAUNCH-65',
+    binding_state: 'VERIFIED_IMMUTABLE_GIT_OBJECT_AND_CANDIDATE_PAYLOAD',
+    ambient_current_main_imported_as_evidence: false,
+    source_commit: authorityCommit,
+    source_tree: authorityTree,
+    source_parent: authorityParents[0],
+    source_path: D_LAUNCH_65_AUTHORITY.path,
+    source_git_blob: authorityBlob,
+    source_sha256: authoritySha256,
+    source_bytes: authorityBytes.length,
+    ruling_line_range: D_LAUNCH_65_AUTHORITY.ruling_lines,
+    ruling_lines_sha256: sha256(`${rulingLines.join('\n')}\n`),
+    candidate_commit: candidateSha,
+    candidate_payload_path: candidatePayloadPath,
+    candidate_payload_git_blob: candidatePayloadBlob,
+    candidate_payload_sha256: candidatePayloadSha256,
+    candidate_payload_bytes: candidatePayloadBytes.length,
+    candidate_payload_byte_exact: true,
+    archive_source_commit: archiveCommit,
+    archive_source_tree: archiveTree,
+    archive_source_subtree: archiveSubtree,
+    current_main_sha: currentMainSha,
+    origin_current_main_sha: originCurrentMainSha,
+    current_main_observation_only: true,
+    authority_in_current_main_ancestry: null,
+    authority_in_origin_current_main_ancestry: null,
+  };
+}
+
+function verifiedArchivedOutput(candidateSha, output) {
+  const sourceSpec = `${D_LAUNCH_65_AUTHORITY.archive_source_commit}:${output.source_path}`;
+  const candidateSpec = `${candidateSha}:${output.candidate_path}`;
+  const sourceBytes = run('git', ['-C', MAIN, 'show', sourceSpec], { encoding: null }).stdout;
+  const candidateBytes = run(
+    'git',
+    ['-C', process.cwd(), 'show', candidateSpec],
+    { encoding: null },
+  ).stdout;
+  const sourceBlob = text(MAIN, 'rev-parse', sourceSpec);
+  const candidateBlob = text(process.cwd(), 'rev-parse', candidateSpec);
+  const sourceType = text(MAIN, 'cat-file', '-t', sourceSpec);
+  const candidateType = text(process.cwd(), 'cat-file', '-t', candidateSpec);
+  const sourceSha256 = sha256(sourceBytes);
+  const candidateSha256 = sha256(candidateBytes);
+  const sourceBytesLength = Buffer.byteLength(sourceBytes);
+  const candidateBytesLength = Buffer.byteLength(candidateBytes);
+  if (sourceType !== 'blob' || candidateType !== 'blob') {
+    throw new Error(`D-LAUNCH-65 archive input is not a blob: ${output.source_path}`);
+  }
+  if (sourceBlob !== output.git_blob || candidateBlob !== output.git_blob) {
+    throw new Error(`D-LAUNCH-65 archive blob mismatch: ${output.source_path}`);
+  }
+  if (sourceSha256 !== output.sha256 || candidateSha256 !== output.sha256) {
+    throw new Error(`D-LAUNCH-65 archive SHA-256 mismatch: ${output.source_path}`);
+  }
+  if (sourceBytesLength !== output.bytes || candidateBytesLength !== output.bytes) {
+    throw new Error(`D-LAUNCH-65 archive byte-length mismatch: ${output.source_path}`);
+  }
+  return {
+    source_commit: D_LAUNCH_65_AUTHORITY.archive_source_commit,
+    source_path: output.source_path,
+    source_git_blob: sourceBlob,
+    source_sha256: sourceSha256,
+    source_bytes: sourceBytesLength,
+    candidate_commit: candidateSha,
+    candidate_path: output.candidate_path,
+    candidate_git_blob: candidateBlob,
+    candidate_sha256: candidateSha256,
+    candidate_bytes: candidateBytesLength,
+    byte_exact: sourceBytes.equals(candidateBytes),
+  };
+}
+
+function removedSafeTombstones(candidateSha, authorityBinding) {
+  const configuredNames = REMOVED_SAFE_TOMBSTONE_INPUTS.map((entry) => entry.worktree).sort();
+  const authorizedNames = [...D_LAUNCH_61_READ_ONLY_SHARDS].sort();
+  if (new Set(configuredNames).size !== configuredNames.length
+      || JSON.stringify(configuredNames) !== JSON.stringify(authorizedNames)) {
+    throw new Error('D-LAUNCH-65 removed-safe tombstone set is not exact');
+  }
+  return REMOVED_SAFE_TOMBSTONE_INPUTS.map((entry) => {
+    const outputs = entry.outputs.map((output) => verifiedArchivedOutput(candidateSha, output));
+    if (outputs.some((output) => output.byte_exact !== true)) {
+      throw new Error(`D-LAUNCH-65 candidate copy is not byte exact: ${entry.worktree}`);
+    }
+    return {
+      tombstone_id: `removed-safe:${entry.worktree}`,
+      durable_entry_kind: 'REMOVED_SAFE_TOMBSTONE',
+      former_absolute_path: `/Users/cosmosgeek/Desktop/${entry.worktree}`,
+      worktree_name: entry.worktree,
+      live_registration_state: 'REMOVED_CONFIRMED_ABSENT',
+      registered_in_live_inventory: false,
+      classification: 'REMOVED_SAFE',
+      disposition: 'REMOVED_SAFE',
+      removal_authorized: true,
+      removal_authority_id: authorityBinding.directive_id,
+      removal_authority_source_commit: authorityBinding.source_commit,
+      removal_authority_source_path: authorityBinding.source_path,
+      removal_authority_source_git_blob: authorityBinding.source_git_blob,
+      removal_authority_source_sha256: authorityBinding.source_sha256,
+      removal_authority_candidate_payload_path: authorityBinding.candidate_payload_path,
+      removal_authority_candidate_payload_git_blob:
+        authorityBinding.candidate_payload_git_blob,
+      removal_authority_candidate_payload_sha256:
+        authorityBinding.candidate_payload_sha256,
+      removal_time_utc: null,
+      removal_time_state: 'NOT_RECORDED_BY_GIT',
+      prior_lane_role: 'D_LAUNCH_61_READ_ONLY_SHARD',
+      candidate_source_ownership: 'NONE',
+      disposition_reason:
+        'Director-authorized removal of a read-only D-LAUNCH-61 helper worktree; no candidate source was owned by this lane',
+      disposition_evidence: 'D-LAUNCH-65',
+      archive_source_commit: D_LAUNCH_65_AUTHORITY.archive_source_commit,
+      archive_source_tree: D_LAUNCH_65_AUTHORITY.archive_source_tree,
+      archive_source_subtree: D_LAUNCH_65_AUTHORITY.archive_subtree,
+      accepted_output_count: outputs.length,
+      accepted_output_state: outputs.length === 0
+        ? 'NO_ACCEPTED_OUTPUT'
+        : 'CANDIDATE_TRACKED_BYTE_EXACT_ARCHIVE_COPY',
+      outputs,
+    };
+  });
+}
+
 const candidateArg = process.argv[2];
 if (!/^[a-f0-9]{40}$/u.test(candidateArg ?? '')) {
   throw new Error('EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 }
-const censusStartedAt = new Date().toISOString();
 const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`);
+if (candidateSha !== candidateArg) {
+  throw new Error('CANDIDATE_ARGUMENT_MUST_NAME_THE_EXACT_COMMIT_OBJECT');
+}
+if (REJECTED_CANDIDATE_SHAS.includes(candidateSha)) {
+  throw new Error(`REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidateSha}`);
+}
+const candidateRootState = text(process.cwd(), 'show', `${candidateSha}:STATE.md`);
+if (!candidateRootState.includes('| Account A correction candidate C9 |')) {
+  throw new Error('C9_SOURCE_STATE_MARKER_MISSING');
+}
 const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);
+if (!/^[a-f0-9]{40}$/u.test(candidateTree)) {
+  throw new Error('EXACT_FULL_CANDIDATE_TREE_REQUIRED');
+}
+const candidateParentLine = text(
+  process.cwd(),
+  'rev-list',
+  '--parents',
+  '-n',
+  '1',
+  candidateSha,
+).split(/\s+/u);
+const candidateParents = candidateParentLine.slice(1);
+if (candidateParentLine[0] !== candidateSha
+    || candidateParents.length !== 1
+    || candidateParents[0] !== REQUIRED_C2_PARENT) {
+  throw new Error(
+    `C9_DIRECT_PARENT_MISMATCH: expected sole parent ${REQUIRED_C2_PARENT}, observed ${candidateParents.join(',') || 'NONE'}`,
+  );
+}
+const candidateCommitTime = new Date(
+  text(process.cwd(), 'show', '-s', '--format=%cI', candidateSha),
+).toISOString();
+const censusStartedAt = candidateCommitTime;
+const dLaunch65Authority = verifiedDLaunch65Authority(candidateSha);
 const rawWorktrees = git(MAIN, 'worktree', 'list', '--porcelain', '-z').stdout;
 const records = parseWorktrees(rawWorktrees);
-
-if (records.length !== EXPECTED_NAMES.size) {
-  throw new Error(`Expected ${EXPECTED_NAMES.size} registered worktrees, observed ${records.length}`);
-}
+const normalizedInventorySha256 = sha256(JSON.stringify(
+  normalizedWorktreeInventory(records, candidateSha),
+));
 const observedNames = new Set(records.map((record) => basename(record.worktree)));
-for (const name of EXPECTED_NAMES) {
-  if (!observedNames.has(name)) throw new Error(`Expected registered worktree missing: ${name}`);
+if (observedNames.size !== records.length) {
+  throw new Error('Live Git worktree inventory contains duplicate terminal directory names');
+}
+if (LIVE_POLICY_NAMES.size !== REQUIRED_LIVE_WORKTREE_COUNT) {
+  throw new Error(
+    `Live policy count drift: expected ${REQUIRED_LIVE_WORKTREE_COUNT}, configured ${LIVE_POLICY_NAMES.size}`,
+  );
+}
+if (observedNames.size !== REQUIRED_LIVE_WORKTREE_COUNT) {
+  throw new Error(
+    `Live Git worktree count drift: expected ${REQUIRED_LIVE_WORKTREE_COUNT}, observed ${observedNames.size}`,
+  );
+}
+for (const requiredName of ['truth-a', 'truth-b']) {
+  if (!observedNames.has(requiredName)) {
+    throw new Error(`Required live campaign worktree missing from Git: ${requiredName}`);
+  }
+}
+for (const name of D_LAUNCH_61_READ_ONLY_SHARDS) {
+  if (observedNames.has(name)) throw new Error(`REMOVED_SAFE worktree is still registered: ${name}`);
+}
+for (const name of LIVE_POLICY_NAMES) {
+  if (!observedNames.has(name)) throw new Error(`Live policy worktree missing from Git: ${name}`);
 }
 for (const name of observedNames) {
-  if (!EXPECTED_NAMES.has(name)) throw new Error(`Registered worktree has no explicit policy: ${name}`);
+  if (!LIVE_POLICY_NAMES.has(name)) throw new Error(`Registered worktree has no explicit policy: ${name}`);
+}
+const liveGitDerivedExpectedCount = observedNames.size;
+const removedTombstones = removedSafeTombstones(candidateSha, dLaunch65Authority);
+if (removedTombstones.length !== REQUIRED_REMOVED_SAFE_TOMBSTONE_COUNT) {
+  throw new Error(
+    `REMOVED_SAFE tombstone count drift: expected ${REQUIRED_REMOVED_SAFE_TOMBSTONE_COUNT}, observed ${removedTombstones.length}`,
+  );
+}
+const durableEntryCount = liveGitDerivedExpectedCount + removedTombstones.length;
+if (durableEntryCount !== REQUIRED_DURABLE_ENTRY_COUNT) {
+  throw new Error(
+    `Durable census count drift: expected ${REQUIRED_DURABLE_ENTRY_COUNT}, observed ${durableEntryCount}`,
+  );
 }
 
 const rows = records.map((record) => {
@@ -736,8 +1120,11 @@ const rows = records.map((record) => {
     throw new Error(`${name} terminal HEAD drift: expected ${expectedTerminalHead}, observed ${head}`);
   }
   const classification = classificationFor(name, head, candidateSha, dirtyTracked, untracked);
+  const evidenceNormalized = name === 'truth-a';
+  const outputHead = evidenceNormalized ? candidateSha : head;
+  const outputTree = evidenceNormalized ? candidateTree : text(path, 'rev-parse', 'HEAD^{tree}');
   const base = resolveBase(name, branch, head);
-  const tracking = branchTracking(branch, head);
+  const tracking = branchTracking(branch, outputHead);
   const acceptedDonorSha =
     classification === 'MERGED_RETAINED' && name !== 'Main' && name !== 'truth-a'
       ? head
@@ -762,8 +1149,8 @@ const rows = records.map((record) => {
     worktree_name: name,
     branch_name: branch,
     detached: Boolean(record.detached),
-    head_sha: head,
-    tree_sha: text(path, 'rev-parse', 'HEAD^{tree}'),
+    head_sha: outputHead,
+    tree_sha: outputTree,
     base_sha: base.sha,
     base_state: base.state,
     base_method: base.method,
@@ -786,7 +1173,19 @@ const rows = records.map((record) => {
       path: untrackedPath,
       disposition: untrackedDisposition(name, untrackedPath),
     })),
-    status_porcelain_v2_sha256: sha256(statusRaw),
+    status_porcelain_v2_sha256: evidenceNormalized
+      ? normalizedTruthAStatusSha256(branch, candidateSha)
+      : sha256(statusRaw),
+    status_porcelain_v2_sha256_basis: evidenceNormalized
+      ? 'DETERMINISTIC_CLEAN_STATUS_WITH_HEAD_NORMALIZED_TO_EXACT_CANDIDATE'
+      : 'LIVE_GIT_STATUS_PORCELAIN_V2',
+    head_identity_basis: evidenceNormalized
+      ? 'EXACT_FROZEN_CANDIDATE_NOT_MUTABLE_EVIDENCE_DESCENDANT_HEAD'
+      : 'LIVE_REGISTERED_WORKTREE_HEAD',
+    mutable_custody_head_recorded: evidenceNormalized ? false : true,
+    exact_candidate_custody_normalization: evidenceNormalized
+      ? 'LIVE_HEAD_VALIDATED_AS_EXACT_CANDIDATE_OR_EXACT_15_PATH_EVIDENCE_DESCENDANT; OUTPUT_BOUND_TO_EXACT_CANDIDATE'
+      : null,
     task: taskFor(name),
     owner: ownerFor(name),
     allowed_write_paths: currentWriteGrantFor(name),
@@ -802,7 +1201,7 @@ const rows = records.map((record) => {
     accepted_donor_sha: acceptedDonorSha,
     donor_in_candidate_ancestry: inCandidate,
     selective_merge_receipt: selective,
-    diff_identity: diffIdentity(base.sha, head),
+    diff_identity: diffIdentity(base.sha, outputHead),
     patch_duplicated_elsewhere: false,
     patch_duplicate_peers: [],
     classification,
@@ -854,30 +1253,90 @@ classificationCounts.DUPLICATE_PATCH = rows.filter(
 ).length;
 classificationCounts.UNKNOWN = rows.filter((row) => row.classification === 'UNKNOWN').length;
 
+for (const [classification, expectedCount] of Object.entries(
+  REQUIRED_LIVE_CLASSIFICATION_COUNTS,
+)) {
+  if (classificationCounts[classification] !== expectedCount) {
+    throw new Error(
+      `${classification} count drift: expected ${expectedCount}, observed ${classificationCounts[classification]}`,
+    );
+  }
+}
+const truthARow = rows.find((row) => row.worktree_name === 'truth-a');
+const truthBRow = rows.find((row) => row.worktree_name === 'truth-b');
+if (!truthARow || truthARow.classification !== 'MERGED_RETAINED') {
+  throw new Error('truth-a must be present as exact-candidate MERGED_RETAINED evidence custody');
+}
+if (!truthBRow || truthBRow.classification !== 'BLOCKED') {
+  throw new Error('truth-b must be present as the independent BLOCKED verifier worktree');
+}
+
+const trackedDirtyPathCount = rows.reduce(
+  (total, row) => total + row.dirty_tracked_paths.length,
+  0,
+);
+const unexplainedDirtySourcePathCount = rows.reduce(
+  (total, row) => total + row.dirty_source_paths.length,
+  0,
+);
+if (trackedDirtyPathCount !== 0 || unexplainedDirtySourcePathCount !== 0) {
+  throw new Error(
+    `Exact-candidate census requires a clean live registry: tracked=${trackedDirtyPathCount}, unexplained_source=${unexplainedDirtySourcePathCount}`,
+  );
+}
+
+const durableClassificationCounts = {
+  ...classificationCounts,
+  REMOVED_SAFE: removedTombstones.length,
+};
+
 const document = {
-  schema: 'product-truth-worktree-census.v1',
-  generated_at_utc: new Date().toISOString(),
+  schema: 'product-truth-worktree-census.v2',
+  generated_at_utc: candidateCommitTime,
+  generated_at_basis: 'EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC',
   actor_role: 'ACCOUNT_A',
   account_b_reasoning_or_artifacts_read: false,
   account_b_status_scope: 'HEAD and Git status metadata only, required by campaign §5',
   source_command: 'git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z',
-  source_command_sha256: sha256(rawWorktrees),
+  source_command_sha256: normalizedInventorySha256,
+  source_command_sha256_basis:
+    'SORTED_PORCELAIN_RECORDS_WITH_TRUTH_A_HEAD_NORMALIZED_TO_EXACT_CANDIDATE',
+  expected_registered_worktree_count: REQUIRED_LIVE_WORKTREE_COUNT,
+  expected_count_basis:
+    'C9_LOCKED_96_LIVE_POLICY_NAMES_RECONCILED_BYTE_FOR_BYTE_TO_GIT_WORKTREE_INVENTORY',
+  live_policy_name_count: LIVE_POLICY_NAMES.size,
   candidate_sha: candidateSha,
   candidate_tree_sha: candidateTree,
-  current_main_sha: text(MAIN, 'rev-parse', 'refs/heads/current-main'),
-  origin_current_main_sha: text(MAIN, 'rev-parse', 'refs/remotes/origin/current-main'),
+  candidate_binding: {
+    exact_candidate_sha: candidateSha,
+    exact_candidate_tree: candidateTree,
+    direct_parent_sha: candidateParents[0],
+    parent_count: candidateParents.length,
+    required_c2_parent_sha: REQUIRED_C2_PARENT,
+    sole_direct_parent_is_required_c2: true,
+  },
+  authority_bindings: {
+    D_LAUNCH_65: dLaunch65Authority,
+  },
+  current_main_sha: dLaunch65Authority.current_main_sha,
+  origin_current_main_sha: dLaunch65Authority.origin_current_main_sha,
+  current_main_observation_is_ambient_evidence: false,
+  live_registered_worktree_count: rows.length,
   registered_worktree_count: rows.length,
-  tracked_dirty_path_count: rows.reduce((total, row) => total + row.dirty_tracked_paths.length, 0),
-  unexplained_dirty_source_path_count: rows.reduce(
-    (total, row) => total + row.dirty_source_paths.length,
-    0,
-  ),
+  removed_safe_tombstone_count: removedTombstones.length,
+  durable_entry_count: durableEntryCount,
+  durable_entry_formula: '96 LIVE_REGISTERED + 5 REMOVED_SAFE_TOMBSTONES = 101',
+  tracked_dirty_path_count: trackedDirtyPathCount,
+  unexplained_dirty_source_path_count: unexplainedDirtySourcePathCount,
   untracked_path_count: rows.reduce((total, row) => total + row.untracked_paths.length, 0),
   worktrees_with_untracked_paths: rows.filter((row) => row.untracked_paths.length > 0).length,
   classification_counts: classificationCounts,
+  live_classification_counts: classificationCounts,
+  durable_classification_counts: durableClassificationCounts,
   duplicate_method:
     'exact binary diff SHA-256 plus exact sorted path/blob manifest SHA-256; empty deltas are not patches',
   unknown_count: classificationCounts.UNKNOWN,
+  removed_safe_tombstones: removedTombstones,
   receipt: {
     exact_candidate_sha: candidateSha,
     command_or_operator_action:
@@ -887,9 +1346,12 @@ const document = {
     dependency_lock_sha256:
       '3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf',
     start_time_utc: censusStartedAt,
-    end_time_utc: new Date().toISOString(),
+    end_time_utc: candidateCommitTime,
+    timestamp_basis: 'EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC',
     exit_code: 0,
-    test_count: rows.length,
+    test_count: durableEntryCount,
+    live_worktree_test_count: rows.length,
+    removed_safe_tombstone_test_count: removedTombstones.length,
     artifact_hashes:
       'MANIFEST.sha256 is generated last and excludes itself; the evidence Git commit binds the manifest',
     actor_role: 'ACCOUNT_A',
@@ -897,6 +1359,7 @@ const document = {
     deviations_skips_unavailable_evidence: [
       'Account B filenames and Git metadata only; Account B content was not read',
       'No worktree was cleaned, pruned, reset, or deleted',
+      'D-LAUNCH-65 authorizes five REMOVED_SAFE helper tombstones; four accepted outputs are verified from exact commit 0e4b364849075a454d7dd624ca068c238f4196c2 and two lanes have NO_ACCEPTED_OUTPUT',
     ],
   },
   rows: rows.sort((left, right) => left.absolute_path.localeCompare(right.absolute_path)),
@@ -908,7 +1371,9 @@ console.log(
   JSON.stringify({
     output: OUTPUT,
     candidate_sha: candidateSha,
-    registered_worktrees: document.registered_worktree_count,
+    live_registered_worktrees: document.live_registered_worktree_count,
+    removed_safe_tombstones: document.removed_safe_tombstone_count,
+    durable_entries: document.durable_entry_count,
     tracked_dirty_paths: document.tracked_dirty_path_count,
     untracked_paths: document.untracked_path_count,
     classifications: classificationCounts,

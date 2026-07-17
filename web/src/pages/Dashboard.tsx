@@ -18,10 +18,6 @@ import { EquityChart, PerfChart, type PerfDay } from '../components/PerfChart';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { TokenIcon } from '../components/TokenIcon';
-import {
-  canonicalComponentPresentation,
-  canonicalStrategyRuntimePresentation,
-} from '../lib/canonicalCockpitTruth';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
@@ -215,16 +211,21 @@ export function Dashboard() {
   const usdMSource = componentById('public-usdm-source');
   const basisComponent = componentById('basis-engine');
   const volumeComponent = componentById('volume-engine');
-  const spotPosture = canonicalComponentPresentation(spotSource, productBinding.continuity);
-  const usdMPosture = canonicalComponentPresentation(usdMSource, productBinding.continuity);
-  const basisPosture = canonicalComponentPresentation(basisComponent, productBinding.continuity);
-  const volumePosture = canonicalComponentPresentation(volumeComponent, productBinding.continuity);
-  const runtimePresentation = canonicalStrategyRuntimePresentation(basisComponent, volumeComponent, productBinding.continuity);
+  const unavailablePosture = { tone: 'bad' as const, statusLabel: 'Unavailable' };
+  const supervisorPosture = (component: typeof spotSource) => productBinding.continuity === 'PROVEN'
+    ? component?.canonicalPresentation ?? unavailablePosture
+    : unavailablePosture;
+  const basisPosture = supervisorPosture(basisComponent);
+  const volumePosture = supervisorPosture(volumeComponent);
+  const runtimePresentation = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.strategyRuntime
+    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: 0 };
+  const marketFeedReadiness = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.canonicalCockpit.marketFeedReadiness
+    : null;
   const basisStrategy = dashboard?.summaries.strategies.basis;
   const volumeStrategy = dashboard?.summaries.strategies.volume;
-  const publicSourceTone: Tone = [spotPosture, usdMPosture].some((posture) => posture.tone === 'bad')
-    ? 'bad'
-    : [spotPosture, usdMPosture].every((posture) => posture.tone === 'ok') ? 'ok' : 'warn';
+  const publicSourceTone: Tone = marketFeedReadiness?.proven === true ? 'ok' : 'bad';
   const publicSourceDetail = [spotSource, usdMSource].filter(Boolean).map((component) => (
     `${component!.componentId} · ${component!.observedLifecycle} · ${component!.capability} · ${component!.truthLabel}`
   )).join(' / ') || 'UNKNOWN · canonical public-source components are unavailable';

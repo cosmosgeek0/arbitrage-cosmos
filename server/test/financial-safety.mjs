@@ -442,6 +442,47 @@ console.log('\nFinancial safety regressions:');
   check('unknown sell basis makes daily-loss policy incomplete', !policy.complete && policy.reasons.some((reason) => /cost basis unavailable/.test(reason)));
 }
 
+// Base-asset commission changes real inventory on both sides. Fee attribution
+// remains separate, so inventory PnL plus the fee deduction conserves value.
+{
+  const firstLedger = new FakeLedger();
+  const first = new AccountService(null, firstLedger, () => 110);
+  const ts = Date.now();
+  first.recordFill({
+    symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY', price: '100', qty: '1',
+    quoteQty: '100', commission: '0.01', commissionAsset: 'BTC', ts, source: 'test',
+  });
+  first.recordFill({
+    symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL', price: '110', qty: '0.99',
+    quoteQty: '108.9', commission: '0', commissionAsset: 'USDT', ts: ts + 1, source: 'test',
+  });
+  const firstPolicy = first.dailyLossPolicy();
+  check(
+    'BUY base commission removes acquired inventory without double-counting its fee',
+    first.pnl().avgCost.get('BTC')?.qty === 0
+      && firstPolicy.complete
+      && firstPolicy.valueUsd === 8.9,
+  );
+
+  const secondLedger = new FakeLedger();
+  const second = new AccountService(null, secondLedger, () => 110);
+  second.recordFill({
+    symbol: 'BTCUSDT', tradeId: 1, orderId: 1, side: 'BUY', price: '100', qty: '1.01',
+    quoteQty: '101', commission: '0', commissionAsset: 'USDT', ts, source: 'test',
+  });
+  second.recordFill({
+    symbol: 'BTCUSDT', tradeId: 2, orderId: 2, side: 'SELL', price: '110', qty: '1',
+    quoteQty: '110', commission: '0.01', commissionAsset: 'BTC', ts: ts + 1, source: 'test',
+  });
+  const secondPolicy = second.dailyLossPolicy();
+  check(
+    'SELL base commission removes the extra disposed inventory without phantom quantity',
+    second.pnl().avgCost.get('BTC')?.qty === 0
+      && secondPolicy.complete
+      && secondPolicy.valueUsd === 9,
+  );
+}
+
 // Service boundaries reject non-finite internal values even if a caller skips
 // the HTTP parser.
 {

@@ -1,11 +1,13 @@
 import type { BinanceClient, ApiRestrictions } from '../binance/client.js';
 import { boundedBinanceIdentifier } from '../binance/identifiers.js';
 import {
+  absoluteExactDecimal,
   addExactDecimals,
   compareExactDecimals,
   divideExactDecimals,
   minimumExactDecimal,
   multiplyExactDecimals,
+  negateExactDecimal,
   normalizeNonNegativeExactDecimal,
   subtractExactDecimals,
   type ExactDecimal,
@@ -97,6 +99,56 @@ function exactNumber(value: ExactDecimal): number {
 
 function numberMap<K>(map: ReadonlyMap<K, ExactDecimal>): Map<K, number> {
   return new Map([...map].map(([key, value]) => [key, exactNumber(value)]));
+}
+
+interface FillEconomicDeltas {
+  readonly baseDelta: ExactDecimal;
+  readonly quoteDelta: ExactDecimal;
+  readonly inventoryQty: NonNegativeDecimal;
+  readonly inventoryQuoteAmount: NonNegativeDecimal;
+}
+
+/**
+ * One exact owner for fill economics. Gross exchange quantities stay durable;
+ * inventory consumes the signed net asset deltas while fees remain a separate
+ * policy deduction, so base commission is neither ignored nor double-counted.
+ */
+function fillEconomicDeltas(fill: Readonly<FillRow>, base: string): FillEconomicDeltas {
+  const baseCommission = fill.commissionAsset === base ? fill.commission : EXACT_ZERO;
+  const quoteCommission = fill.commissionAsset === 'USDT' ? fill.commission : EXACT_ZERO;
+  const baseDelta = fill.side === 'BUY'
+    ? subtractExactDecimals(fill.qty, baseCommission)
+    : negateExactDecimal(addExactDecimals(fill.qty, baseCommission));
+  if (fill.side === 'BUY' && compareExactDecimals(baseDelta, EXACT_ZERO) <= 0) {
+    throw new Error('base commission consumes the acquired quantity');
+  }
+
+  const quoteDelta = fill.side === 'BUY'
+    ? negateExactDecimal(addExactDecimals(fill.quoteQty, quoteCommission))
+    : subtractExactDecimals(fill.quoteQty, quoteCommission);
+  if (fill.side === 'SELL' && compareExactDecimals(quoteDelta, EXACT_ZERO) < 0) {
+    throw new Error('quote commission exceeds sell proceeds');
+  }
+
+  // Remove quote-denominated commission because the fee map accounts for it.
+  // Base-denominated commission changes inventory, so value those consumed
+  // units at the fill price before the same amount is deducted as a fee.
+  const grossInventoryQuote = fill.side === 'BUY'
+    ? subtractExactDecimals(absoluteExactDecimal(quoteDelta), quoteCommission)
+    : addExactDecimals(quoteDelta, quoteCommission);
+  const baseCommissionValue = multiplyExactDecimals(baseCommission, fill.price);
+  const inventoryQuoteAmount = fill.side === 'BUY'
+    ? subtractExactDecimals(grossInventoryQuote, baseCommissionValue)
+    : addExactDecimals(grossInventoryQuote, baseCommissionValue);
+  if (compareExactDecimals(inventoryQuoteAmount, EXACT_ZERO) < 0) {
+    throw new Error('base commission value exceeds acquisition cost');
+  }
+  return Object.freeze({
+    baseDelta,
+    quoteDelta,
+    inventoryQty: normalizeNonNegativeExactDecimal(absoluteExactDecimal(baseDelta)),
+    inventoryQuoteAmount: normalizeNonNegativeExactDecimal(inventoryQuoteAmount),
+  });
 }
 
 function utcDayStart(ts = Date.now()): number {
@@ -771,6 +823,14 @@ export class AccountService {
         markIncomplete(day, `legacy binary64 fill requires authoritative reconciliation for ${f.symbol}`);
         pos.legacyTainted = true;
       }
+      let economics: FillEconomicDeltas;
+      try {
+        economics = fillEconomicDeltas(f, base);
+      } catch (error) {
+        markIncomplete(day, `invalid fill economics for ${f.symbol}: ${errorMessage(error)}`);
+        positionsExact.set(base, pos);
+        continue;
+      }
       if (compareExactDecimals(f.commission, EXACT_ZERO) > 0 && f.commissionAsset) {
         exactMapAdd(feesByAssetExact, f.commissionAsset, f.commission);
         const feeUsd = this.fillFeeUsd(f, base);
@@ -780,26 +840,30 @@ export class AccountService {
         markIncomplete(day, 'fee asset unavailable');
       }
       if (f.side === 'BUY') {
-        pos.qty = addExactDecimals(pos.qty, f.qty);
-        pos.totalCost = addExactDecimals(pos.totalCost, f.quoteQty);
+        pos.qty = addExactDecimals(pos.qty, economics.inventoryQty);
+        pos.totalCost = addExactDecimals(pos.totalCost, economics.inventoryQuoteAmount);
       } else {
         if (pos.legacyTainted) {
           markIncomplete(day, `cost basis depends on legacy binary64 fill for ${f.symbol}`);
         }
-        const matched = minimumExactDecimal(f.qty, pos.qty);
+        const matched = minimumExactDecimal(economics.inventoryQty, pos.qty);
         let matchedCost: ExactDecimal = EXACT_ZERO;
         if (compareExactDecimals(matched, EXACT_ZERO) > 0) {
           matchedCost = compareExactDecimals(matched, pos.qty) === 0
             ? pos.totalCost
             : divideExactDecimals(multiplyExactDecimals(pos.totalCost, matched), pos.qty, 24);
-          const matchedProceeds = compareExactDecimals(matched, f.qty) === 0
-            ? f.quoteQty
-            : divideExactDecimals(multiplyExactDecimals(f.quoteQty, matched), f.qty, 24);
+          const matchedProceeds = compareExactDecimals(matched, economics.inventoryQty) === 0
+            ? economics.inventoryQuoteAmount
+            : divideExactDecimals(
+              multiplyExactDecimals(economics.inventoryQuoteAmount, matched),
+              economics.inventoryQty,
+              24,
+            );
           const gain = subtractExactDecimals(matchedProceeds, matchedCost);
           exactMapAdd(realizedByDayExact, day, gain);
           exactMapAdd(realizedBySymbolExact, f.symbol, gain);
         }
-        if (compareExactDecimals(matched, f.qty) < 0) {
+        if (compareExactDecimals(matched, economics.inventoryQty) < 0) {
           markIncomplete(day, `cost basis unavailable for ${f.symbol} sell`);
         }
         if (compareExactDecimals(matched, pos.qty) === 0) {

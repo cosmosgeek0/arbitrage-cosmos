@@ -34,9 +34,7 @@ MAX_STALENESS_NS: Final = 3_600_000_000_000
 EXECUTABLE_BASIS_RETURN_AUTHORITY: Final = (
     "server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT"
 )
-EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION: Final = (
-    "basis-executable-long-leg-notional-v1"
-)
+EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION: Final = "basis-executable-long-leg-notional-v1"
 EXECUTABLE_BASIS_RETURN_LAW: Final = "RETURN_ON_LONG_LEG_ENTRY_NOTIONAL"
 
 
@@ -378,6 +376,20 @@ def _last_value_at_or_before(
     return point.price
 
 
+def _require_compatible_basis_instruments(
+    spot_series: EvidenceSeriesV1,
+    perp_series: EvidenceSeriesV1,
+) -> None:
+    spot = spot_series.instrument
+    perp = perp_series.instrument
+    if spot.instrument_id == perp.instrument_id:
+        raise ContractValueError("basis legs must be distinct instruments")
+    if spot.base_size_unit_id != perp.base_size_unit_id:
+        raise ContractValueError("basis legs must have matching base-size units")
+    if spot.quote_price_unit_id != perp.quote_price_unit_id:
+        raise ContractValueError("basis legs must have matching quote-price units")
+
+
 def compute_basis_label(
     *,
     construction: BasisConstruction,
@@ -407,6 +419,7 @@ def compute_basis_label(
                 "executable-quote basis legs are not supported by definition v1; "
                 "supply price evidence and keep executable edge UNAVAILABLE"
             )
+    _require_compatible_basis_instruments(spot_series, perp_series)
     if not isinstance(definition, BasisDefinitionV1):
         raise ContractValueError("definition must be BasisDefinitionV1")
     if not isinstance(costs, BasisCostAssumptionV1):

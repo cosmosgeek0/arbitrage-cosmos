@@ -29,7 +29,11 @@ from quant_edge.labels.series import (
     QuotePointV1,
     SeriesKind,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -56,6 +60,14 @@ def _quote(offset_s: int, bid: int, ask: int, ordinal: int) -> QuotePointV1:
     )
 
 
+def _market_identity(symbol: str, *, base_unit: str = "BNB") -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=f"test-{symbol}",
+        base_size_unit_id=base_unit,
+        quote_price_unit_id="USDT",
+    )
+
+
 def _series(
     points: tuple[PricePointV1, ...],
     *,
@@ -63,10 +75,12 @@ def _series(
     end_s: int = 7_200,
     gaps: tuple[GapIntervalV1, ...] = (),
     series_id: str = "series-1",
+    base_unit: str = "BNB",
 ) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol=symbol,
+        instrument=_market_identity(symbol, base_unit=base_unit),
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,
@@ -81,6 +95,7 @@ def _quote_series(points: tuple[QuotePointV1, ...]) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id="series-q",
         symbol="BNBUSDT",
+        instrument=_market_identity("BNBUSDT"),
         kind=SeriesKind.EXECUTABLE_QUOTES,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,
@@ -336,6 +351,7 @@ class TestCostedOutcomes:
         series = EvidenceSeriesV1(
             series_id="series-1",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             kind=SeriesKind.TRADE_MID_PROXY,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS - 120 * SECOND_NS,
@@ -479,7 +495,7 @@ class TestEngineContracts:
         with pytest.raises(ContractValueError):
             compute_sample_outcomes(
                 sample,
-                _series(DEFAULT_POINTS, symbol="ETHUSDT"),
+                _series(DEFAULT_POINTS, symbol="ETHUSDT", base_unit="ETH"),
                 definition=_definition(),
                 barriers=_barriers(),
                 cost_scenarios=_scenarios(),

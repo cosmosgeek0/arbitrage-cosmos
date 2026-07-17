@@ -20,12 +20,14 @@ from quant_edge.labels.basis import (
 from quant_edge.labels.rational import (
     ExactRatioV1,
     ratio_subtract,
+    require_matching_units,
     scaled_to_aligned,
 )
 from quant_edge.lake.contracts import (
     UTC_NS_MAX,
     UTC_NS_MIN,
     ExactScaledValueV1,
+    InstrumentIdentityV1,
     require_reason_code,
     require_strict_int,
 )
@@ -90,6 +92,7 @@ class SizedQuoteV1:
     and an unknown size is never treated as depth."""
 
     leg: LegKind
+    instrument: InstrumentIdentityV1
     event_time_ns: int
     ordinal: int
     bid: ExactScaledValueV1
@@ -100,10 +103,15 @@ class SizedQuoteV1:
     def __post_init__(self) -> None:
         if not isinstance(self.leg, LegKind):
             raise ContractValueError("leg must be LegKind")
+        if not isinstance(self.instrument, InstrumentIdentityV1):
+            raise ContractValueError("instrument must be InstrumentIdentityV1")
         _require_ns(self.event_time_ns, field="event_time_ns")
         require_strict_int(self.ordinal, field="ordinal", minimum=0)
         bid = _require_positive_scaled(self.bid, field="bid")
         ask = _require_positive_scaled(self.ask, field="ask")
+        require_matching_units(bid, ask, field="quote bid and ask")
+        if bid.unit_id != self.instrument.quote_price_unit_id:
+            raise ContractValueError("quote price unit must match instrument quote_price_unit_id")
         if scaled_to_aligned(bid) > scaled_to_aligned(ask):
             raise ContractValueError("quotes cannot be crossed")
         for name in ("bid_size", "ask_size"):
@@ -114,6 +122,8 @@ class SizedQuoteV1:
                 raise ContractValueError(f"{name} must be ExactScaledValueV1 or None")
             if size.coefficient < 0:
                 raise ContractValueError(f"{name} cannot be negative")
+            if size.unit_id != self.instrument.base_size_unit_id:
+                raise ContractValueError(f"{name} unit must match instrument base_size_unit_id")
 
     def as_mapping(self) -> dict[str, object]:
         def scaled(value: ExactScaledValueV1 | None) -> dict[str, object] | None:
@@ -131,6 +141,7 @@ class SizedQuoteV1:
             "bid": scaled(self.bid),
             "bidSize": scaled(self.bid_size),
             "eventTimeNs": str(self.event_time_ns),
+            "instrument": self.instrument.as_mapping(),
             "leg": self.leg.value,
             "ordinal": self.ordinal,
         }
@@ -240,6 +251,7 @@ class NetExecutableEdgeV1:
 def _size_covers(size: ExactScaledValueV1 | None, intended: ExactScaledValueV1) -> bool | None:
     if size is None:
         return None
+    require_matching_units(size, intended, field="size coverage")
     return scaled_to_aligned(size) >= scaled_to_aligned(intended)
 
 
@@ -290,6 +302,21 @@ def compute_executable_basis(
             )
         if quote.event_time_ns > as_of:
             raise ContractValueError(f"{name} cannot be newer than as-of")
+
+    if spot_quote is not None and perp_quote is not None:
+        spot_instrument = spot_quote.instrument
+        perp_instrument = perp_quote.instrument
+        if spot_instrument.instrument_id == perp_instrument.instrument_id:
+            raise ContractValueError("executable basis legs must be distinct instruments")
+        if spot_instrument.base_size_unit_id != perp_instrument.base_size_unit_id:
+            raise ContractValueError("executable basis legs must have matching base-size units")
+        if spot_instrument.quote_price_unit_id != perp_instrument.quote_price_unit_id:
+            raise ContractValueError("executable basis legs must have matching quote-price units")
+    for name, quote in (("spot_quote", spot_quote), ("perp_quote", perp_quote)):
+        if quote is not None and intended.unit_id != quote.instrument.base_size_unit_id:
+            raise ContractValueError(
+                f"intended_size unit must match {name} instrument base_size_unit_id"
+            )
 
     status = ExecutableStatus.UNKNOWN
     entry_basis: ExactRatioV1 | None = None

@@ -56,6 +56,7 @@ from quant_edge.lake.contracts import (
     DigestV1,
     EvidencePosture,
     ExactScaledValueV1,
+    InstrumentIdentityV1,
     QualityState,
 )
 
@@ -65,6 +66,14 @@ SECOND_NS = 1_000_000_000
 
 def _usdt(price: int) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
+
+
+def _market_identity(symbol: str) -> InstrumentIdentityV1:
+    return InstrumentIdentityV1(
+        instrument_id=f"test-{symbol}",
+        base_size_unit_id="BNB",
+        quote_price_unit_id="USDT",
+    )
 
 
 def _point(offset_s: int, ordinal: int, spot: int, perp: int) -> BasisPointV1:
@@ -179,6 +188,7 @@ class TestHostileTypeGuards:
     def test_executable_type_guards(self) -> None:
         quote = SizedQuoteV1(
             leg=LegKind.SPOT,
+            instrument=_market_identity("BNBUSDT"),
             event_time_ns=BASE_NS,
             ordinal=0,
             bid=_usdt(10_000),
@@ -189,6 +199,7 @@ class TestHostileTypeGuards:
         with pytest.raises(ContractValueError, match="must be ExactScaledValueV1"):
             SizedQuoteV1(
                 leg=LegKind.SPOT,
+                instrument=_market_identity("BNBUSDT"),
                 event_time_ns=BASE_NS,
                 ordinal=0,
                 bid=100.0,  # type: ignore[arg-type]
@@ -366,6 +377,7 @@ class TestRealPathEdges:
         spot_series = EvidenceSeriesV1(
             series_id="hostile-spot",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             kind=SeriesKind.TRADE_MID_PROXY,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS + 20 * SECOND_NS,
@@ -383,6 +395,7 @@ class TestRealPathEdges:
         perp_series = EvidenceSeriesV1(
             series_id="hostile-perp",
             symbol="BNBUSDT-PERP",
+            instrument=_market_identity("BNBUSDT-PERP"),
             kind=SeriesKind.TRADE_MID_PROXY,
             posture=EvidencePosture.SYNTHETIC,
             completeness_start_ns=BASE_NS,
@@ -447,6 +460,7 @@ class TestRealPathEdges:
         spot_series = EvidenceSeriesV1(
             series_id="tied-spot",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             price_points=tuple(
                 PricePointV1(
                     event_time_ns=BASE_NS + index * 10 * SECOND_NS + SECOND_NS,
@@ -460,6 +474,7 @@ class TestRealPathEdges:
         perp_series = EvidenceSeriesV1(
             series_id="tied-perp",
             symbol="BNBUSDT-PERP",
+            instrument=_market_identity("BNBUSDT-PERP"),
             price_points=tuple(
                 PricePointV1(
                     event_time_ns=BASE_NS + index * 10 * SECOND_NS + SECOND_NS,
@@ -493,6 +508,7 @@ class TestRealPathEdges:
         spot_series = EvidenceSeriesV1(
             series_id="const-spot",
             symbol="BNBUSDT",
+            instrument=_market_identity("BNBUSDT"),
             price_points=tuple(
                 PricePointV1(
                     event_time_ns=BASE_NS + index * 10 * SECOND_NS + SECOND_NS,
@@ -506,6 +522,7 @@ class TestRealPathEdges:
         perp_series = EvidenceSeriesV1(
             series_id="const-perp",
             symbol="BNBUSDT-PERP",
+            instrument=_market_identity("BNBUSDT-PERP"),
             price_points=tuple(
                 PricePointV1(
                     event_time_ns=BASE_NS + index * 10 * SECOND_NS + SECOND_NS,

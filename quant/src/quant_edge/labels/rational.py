@@ -63,6 +63,21 @@ def make_ratio(numerator: int, denominator: int) -> ExactRatioV1:
 ZERO_RATIO: Final = make_ratio(0, 1)
 
 
+def require_matching_units(
+    left: object,
+    right: object,
+    *,
+    field: str,
+) -> tuple[ExactScaledValueV1, ExactScaledValueV1]:
+    """Validate a pair of exact scaled values before cross-value arithmetic."""
+
+    if not isinstance(left, ExactScaledValueV1) or not isinstance(right, ExactScaledValueV1):
+        raise ContractValueError(f"{field} requires exact scaled values")
+    if left.unit_id != right.unit_id:
+        raise ContractValueError(f"{field} requires matching units")
+    return left, right
+
+
 def ratio_add(left: ExactRatioV1, right: ExactRatioV1) -> ExactRatioV1:
     return make_ratio(
         left.numerator * right.denominator + right.numerator * left.denominator,
@@ -98,8 +113,11 @@ def scaled_to_aligned(value: ExactScaledValueV1) -> int:
 def price_return(reference: ExactScaledValueV1, future: ExactScaledValueV1) -> ExactRatioV1:
     """Exact simple return ``future/reference - 1``; reference must be positive."""
 
-    if not isinstance(reference, ExactScaledValueV1) or not isinstance(future, ExactScaledValueV1):
-        raise ContractValueError("returns are computed over exact scaled prices")
+    reference, future = require_matching_units(
+        reference,
+        future,
+        field="price return",
+    )
     reference_aligned = scaled_to_aligned(reference)
     future_aligned = scaled_to_aligned(future)
     if reference_aligned <= 0:
@@ -115,6 +133,7 @@ def price_spread_ratio(
 ) -> ExactRatioV1:
     """Exact relative spread ``(ask - bid) / mid`` with ``mid = (ask + bid) / 2``."""
 
+    bid, ask = require_matching_units(bid, ask, field="price spread")
     bid_aligned = scaled_to_aligned(bid)
     ask_aligned = scaled_to_aligned(ask)
     if bid_aligned <= 0 or ask_aligned <= 0:

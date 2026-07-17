@@ -32,7 +32,7 @@ from quant_edge.labels.basis import (
     ConstructionFeasibility,
 )
 from quant_edge.labels.rational import make_ratio
-from quant_edge.lake.contracts import ExactScaledValueV1
+from quant_edge.lake.contracts import ExactScaledValueV1, InstrumentIdentityV1
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
@@ -44,8 +44,27 @@ def _usdt(price: int) -> ExactScaledValueV1:
     return ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
 
 
-def _size(amount: int) -> ExactScaledValueV1:
-    return ExactScaledValueV1(coefficient=amount, scale=0, unit_id="BNB")
+def _price(price: int, unit_id: str) -> ExactScaledValueV1:
+    return ExactScaledValueV1(coefficient=price, scale=2, unit_id=unit_id)
+
+
+def _size(amount: int, unit_id: str = "BNB") -> ExactScaledValueV1:
+    return ExactScaledValueV1(coefficient=amount, scale=0, unit_id=unit_id)
+
+
+def _instrument(
+    leg: LegKind,
+    *,
+    instrument_id: str | None = None,
+    base_unit: str = "BNB",
+    quote_unit: str = "USDT",
+) -> InstrumentIdentityV1:
+    default_id = "binance-spot-BNBUSDT" if leg is LegKind.SPOT else "binance-usdm-perp-BNBUSDT"
+    return InstrumentIdentityV1(
+        instrument_id=instrument_id or default_id,
+        base_size_unit_id=base_unit,
+        quote_price_unit_id=quote_unit,
+    )
 
 
 def _quote(
@@ -56,15 +75,22 @@ def _quote(
     offset_s: int = 9,
     bid_size: int | None = 5,
     ask_size: int | None = 5,
+    instrument: InstrumentIdentityV1 | None = None,
 ) -> SizedQuoteV1:
+    quote_instrument = instrument or _instrument(leg)
     return SizedQuoteV1(
         leg=leg,
+        instrument=quote_instrument,
         event_time_ns=BASE_NS + offset_s * SECOND_NS,
         ordinal=1,
-        bid=_usdt(bid),
-        ask=_usdt(ask),
-        bid_size=None if bid_size is None else _size(bid_size),
-        ask_size=None if ask_size is None else _size(ask_size),
+        bid=_price(bid, quote_instrument.quote_price_unit_id),
+        ask=_price(ask, quote_instrument.quote_price_unit_id),
+        bid_size=(
+            None if bid_size is None else _size(bid_size, quote_instrument.base_size_unit_id)
+        ),
+        ask_size=(
+            None if ask_size is None else _size(ask_size, quote_instrument.base_size_unit_id)
+        ),
     )
 
 
@@ -126,6 +152,7 @@ class TestSizedQuote:
         with pytest.raises(ContractValueError, match="cannot be negative"):
             SizedQuoteV1(
                 leg=LegKind.SPOT,
+                instrument=_instrument(LegKind.SPOT),
                 event_time_ns=BASE_NS,
                 ordinal=0,
                 bid=_usdt(10_000),
@@ -133,9 +160,34 @@ class TestSizedQuote:
                 bid_size=ExactScaledValueV1(coefficient=-1, scale=0, unit_id="BNB"),
                 ask_size=None,
             )
+
+    def test_quote_identity_enforces_price_and_size_units(self) -> None:
+        with pytest.raises(ContractValueError, match="quote price unit"):
+            SizedQuoteV1(
+                leg=LegKind.SPOT,
+                instrument=_instrument(LegKind.SPOT, quote_unit="USDC"),
+                event_time_ns=BASE_NS,
+                ordinal=0,
+                bid=_usdt(10_000),
+                ask=_usdt(10_002),
+                bid_size=None,
+                ask_size=None,
+            )
+        with pytest.raises(ContractValueError, match="base_size_unit_id"):
+            SizedQuoteV1(
+                leg=LegKind.SPOT,
+                instrument=_instrument(LegKind.SPOT),
+                event_time_ns=BASE_NS,
+                ordinal=0,
+                bid=_usdt(10_000),
+                ask=_usdt(10_002),
+                bid_size=_size(1, "ETH"),
+                ask_size=None,
+            )
         with pytest.raises(ContractValueError, match="ExactScaledValueV1"):
             SizedQuoteV1(
                 leg=LegKind.SPOT,
+                instrument=_instrument(LegKind.SPOT),
                 event_time_ns=BASE_NS,
                 ordinal=0,
                 bid=_usdt(10_000),
@@ -146,6 +198,7 @@ class TestSizedQuote:
         with pytest.raises(ContractValueError, match="LegKind"):
             SizedQuoteV1(
                 leg="SPOT",  # type: ignore[arg-type]
+                instrument=_instrument(LegKind.SPOT),
                 event_time_ns=BASE_NS,
                 ordinal=0,
                 bid=_usdt(10_000),
@@ -164,10 +217,7 @@ class TestExecutableBasisConstructionDistinctness:
         assert EXECUTABLE_BASIS_RETURN_AUTHORITY == (
             "server/src/engine/basis/math.ts#EXECUTABLE_BASIS_RETURN_CONTRACT"
         )
-        assert (
-            f"version: '{EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION}'"
-            in runtime_authority
-        )
+        assert f"version: '{EXECUTABLE_BASIS_RETURN_CONTRACT_VERSION}'" in runtime_authority
         assert f"returnLaw: '{EXECUTABLE_BASIS_RETURN_LAW}'" in runtime_authority
 
     def test_normal_uses_spot_ask_and_perp_bid(self) -> None:
@@ -204,6 +254,52 @@ class TestExecutableBasisConstructionDistinctness:
             _basis(BasisConstruction.NORMAL, spot_quote=PERP)
         with pytest.raises(ContractValueError, match="never interchangeable"):
             _basis(BasisConstruction.NORMAL, perp_quote=SPOT)
+
+    def test_pair_identity_rejects_same_instrument_cross_asset_and_cross_currency(
+        self,
+    ) -> None:
+        with pytest.raises(ContractValueError, match="distinct instruments"):
+            _basis(
+                BasisConstruction.NORMAL,
+                spot_quote=_quote(
+                    LegKind.SPOT,
+                    10_000,
+                    10_002,
+                    instrument=_instrument(LegKind.SPOT, instrument_id="same-market"),
+                ),
+                perp_quote=_quote(
+                    LegKind.USDM_PERP,
+                    10_060,
+                    10_062,
+                    instrument=_instrument(LegKind.USDM_PERP, instrument_id="same-market"),
+                ),
+            )
+
+        with pytest.raises(ContractValueError, match="matching base-size units"):
+            _basis(
+                BasisConstruction.NORMAL,
+                perp_quote=_quote(
+                    LegKind.USDM_PERP,
+                    10_060,
+                    10_062,
+                    instrument=_instrument(LegKind.USDM_PERP, base_unit="ETH"),
+                ),
+            )
+
+        with pytest.raises(ContractValueError, match="matching quote-price units"):
+            _basis(
+                BasisConstruction.NORMAL,
+                perp_quote=_quote(
+                    LegKind.USDM_PERP,
+                    10_060,
+                    10_062,
+                    instrument=_instrument(LegKind.USDM_PERP, quote_unit="USDC"),
+                ),
+            )
+
+    def test_intended_size_must_use_the_pair_base_unit(self) -> None:
+        with pytest.raises(ContractValueError, match="intended_size unit"):
+            _basis(BasisConstruction.NORMAL, intended_size=_size(2, "ETH"))
 
 
 class TestExecutableBasisStatusLaw:

@@ -18,6 +18,7 @@ from quant_edge.lake.contracts import (
     DigestV1,
     EvidencePosture,
     ExactScaledValueV1,
+    InstrumentIdentityV1,
     PartitionKeyV1,
     QualityFactsV1,
     QualityState,
@@ -375,6 +376,19 @@ def test_unavailable_row_rejects_numeric_observations() -> None:
         )
 
 
+def test_reference_row_rejects_units_that_disagree_with_declared_assets() -> None:
+    with pytest.raises(ContractValueError, match="price unit"):
+        replace(
+            _row(),
+            price=ExactScaledValueV1(coefficient=123_450, scale=2, unit_id="BTC"),
+        )
+    with pytest.raises(ContractValueError, match="quantity unit"):
+        replace(
+            _row(),
+            quantity=ExactScaledValueV1(coefficient=25, scale=3, unit_id="USDT"),
+        )
+
+
 @pytest.mark.parametrize(
     "changes",
     [
@@ -487,6 +501,25 @@ def test_exact_scaled_values_accept_only_frozen_numeric_boundaries(
     )
 
 
+def test_instrument_identity_is_explicit_canonical_contract_truth() -> None:
+    identity = InstrumentIdentityV1(
+        instrument_id="binance-spot-BTCUSDT",
+        base_size_unit_id="BTC",
+        quote_price_unit_id="USDT",
+    )
+    assert identity.as_mapping() == {
+        "baseSizeUnitId": "BTC",
+        "instrumentId": "binance-spot-BTCUSDT",
+        "quotePriceUnitId": "USDT",
+    }
+    with pytest.raises(ContractValueError, match="instrument_id"):
+        InstrumentIdentityV1(
+            instrument_id="../BTCUSDT",
+            base_size_unit_id="BTC",
+            quote_price_unit_id="USDT",
+        )
+
+
 def test_non_path_contract_fields_accept_canonical_colon_and_dotted_ids() -> None:
     stable_id = "runtime:0123456789abcdef01234567"
     row = replace(
@@ -498,6 +531,7 @@ def test_non_path_contract_fields_accept_canonical_colon_and_dotted_ids() -> Non
         quote_asset_id="asset:89abcdef0123456789abcdef",
         session_id="session:0123456789abcdef01234567",
         price=ExactScaledValueV1(1, 0, "asset:89abcdef0123456789abcdef"),
+        quantity=ExactScaledValueV1(1, 0, "asset:0123456789abcdef01234567"),
     )
     assert row.record_id == stable_id
     entry = replace(_partition_entry(), source_sessions=(row.session_id,))

@@ -72,7 +72,11 @@ from quant_edge.labels.stages import (
     StageEvidenceV1,
     generate_stage,
 )
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import (
+    EvidencePosture,
+    ExactScaledValueV1,
+    InstrumentIdentityV1,
+)
 from quant_edge.randomness import DeterministicRandom
 
 CAMPAIGN_SEED = 20260712
@@ -105,6 +109,11 @@ def _series(
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol="BNBUSDT",
+        instrument=InstrumentIdentityV1(
+            instrument_id=f"synthetic-{series_id}",
+            base_size_unit_id="BNB",
+            quote_price_unit_id="USDT",
+        ),
         kind=SeriesKind.TRADE_MID_PROXY,
         posture=EvidencePosture.SYNTHETIC,
         completeness_start_ns=BASE_NS - 120 * SECOND_NS,

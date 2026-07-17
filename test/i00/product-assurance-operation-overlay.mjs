@@ -41,6 +41,12 @@ const ASSESSMENT_SITE_IDS = Object.freeze([
   'OPSITE_3EC04308A744BC59E87E',
 ].sort());
 
+const PROFILE_PATH = 'server/src/binance/profile.ts';
+const PROFILE_SOURCE_SHA256 = '518efea8d27b649c34fb0b12789ab787572eff4573e38bdf7657eb66dfa4cdc5';
+const PROFILE_SITE_IDS = Object.freeze([
+  'OPSITE_5EA03340B3E6E86C7930',
+].sort());
+
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
   operationId: 'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
@@ -63,9 +69,19 @@ const ASSESSMENT_RULE = Object.freeze({
   symbolPattern: '^(?:new:BoundedInboundQueue|this\\.#queue\\.(?:offer|shift))$',
 });
 
+const PROFILE_RULE = Object.freeze({
+  ruleId: 'robustness-token-profile-bounded-queue-v1',
+  operationId: 'OP_RUNTIME_IN_MEMORY_QUEUE',
+  pathExact: Object.freeze([PROFILE_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.QUEUE_CONSUME]),
+  symbolPattern: '^profileRequestQueue\\.shift$',
+});
+
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
   TWIN_RULE,
   ASSESSMENT_RULE,
+  PROFILE_RULE,
 ]);
 
 function exactMembers(actual, expected) {
@@ -95,7 +111,7 @@ function exactSites(report, {
 
 function verifyBaseUncovered(report) {
   const observed = report.uncoveredSites.map((site) => site.siteId).sort();
-  const expected = [...TWIN_SITE_IDS, ...ASSESSMENT_SITE_IDS].sort();
+  const expected = [...TWIN_SITE_IDS, ...ASSESSMENT_SITE_IDS, ...PROFILE_SITE_IDS].sort();
   if (!exactMembers(observed, expected)) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
   }
@@ -117,6 +133,13 @@ function verifyBaseUncovered(report) {
     ]),
     symbolSet: new Set(['new:BoundedInboundQueue', 'this.#queue.offer', 'this.#queue.shift']),
   })) throw new Error('I00_OPERATION_OVERLAY_ASSESSMENT_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: PROFILE_PATH,
+    sourceSha256: PROFILE_SOURCE_SHA256,
+    siteIds: PROFILE_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.QUEUE_CONSUME]),
+    symbolSet: new Set(['profileRequestQueue.shift']),
+  })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
@@ -142,6 +165,15 @@ function verifyIntegratedMappings(report) {
     operationId: ASSESSMENT_RULE.operationId,
     mappingRuleId: ASSESSMENT_RULE.ruleId,
   })) throw new Error('I00_OPERATION_OVERLAY_ASSESSMENT_MAPPING_DRIFT');
+  if (!exactSites(report, {
+    path: PROFILE_PATH,
+    sourceSha256: PROFILE_SOURCE_SHA256,
+    siteIds: PROFILE_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.QUEUE_CONSUME]),
+    symbolSet: new Set(['profileRequestQueue.shift']),
+    operationId: PROFILE_RULE.operationId,
+    mappingRuleId: PROFILE_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_MAPPING_DRIFT');
   if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
     throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
   }

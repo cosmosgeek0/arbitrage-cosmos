@@ -1316,25 +1316,25 @@
         "concept": "exchange-hand",
         "declaration": "interface SpotExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 149
+        "line": 153
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface FuturesExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 160
+        "line": 164
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface ExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 174
+        "line": 178
       },
       {
         "concept": "exchange-hand",
         "declaration": "function fetchExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 185
+        "line": 189
       },
       {
         "concept": "semantic-source",
@@ -2970,15 +2970,21 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "interface SupervisorHistoryRetention",
+        "file": "server/src/foundation/control/supervisor.ts",
+        "line": 108
+      },
+      {
+        "concept": "control-authority",
         "declaration": "class DeterministicSupervisor",
         "file": "server/src/foundation/control/supervisor.ts",
-        "line": 116
+        "line": 156
       },
       {
         "concept": "control-authority",
         "declaration": "function createDeterministicSupervisor",
         "file": "server/src/foundation/control/supervisor.ts",
-        "line": 1536
+        "line": 1740
       },
       {
         "concept": "control-authority",
@@ -6678,63 +6684,75 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "function terminalControlReceipt",
+        "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "line": 175
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function unresolvedControlRuntimePublication",
+        "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
+        "line": 181
+      },
+      {
+        "concept": "control-authority",
         "declaration": "interface ControlPersistenceActor",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 434
+        "line": 492
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlPersistenceCommit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 440
+        "line": 498
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRuntimePublicationState",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 450
+        "line": 508
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlRuntimePublicationCommit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 452
+        "line": 510
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRuntimePublicationResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 459
+        "line": 517
       },
       {
         "concept": "control-authority",
         "declaration": "interface ControlRejectionAudit",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 463
+        "line": 521
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 478
+        "line": 536
       },
       {
         "concept": "control-authority",
         "declaration": "type ControlRejectionPersistenceResult",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 493
+        "line": 551
       },
       {
         "concept": "control-authority",
         "declaration": "interface StoredControlReceipt",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 497
+        "line": 555
       },
       {
         "concept": "ledger-authority",
         "declaration": "class SystemLedgerPersistenceAdapter",
         "file": "server/src/systemIntegration/persistence/ledgerAdapter.ts",
-        "line": 926
+        "line": 984
       },
       {
         "concept": "control-authority",
@@ -14143,5 +14161,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "9757618ec30093cba461b1fceb8181ba570e8bbfea1023fd8cdad067ca9b635d"
+  "evidenceSha256": "fcfe68611f2e563d856713e3cc7e1b23b8a244a2ffe6904fe6604232056d088b"
 }

@@ -183,7 +183,7 @@ test('only exact public-information refresh targets can bypass canonical control
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
   ]);
   const refreshDock = header.slice(header.indexOf('export function RefreshDock()'), header.indexOf('export function Topbar()'));
-  assert.match(refreshDock, /if \(!targetPosture\.actionAllowed\)[\s\S]*return;[\s\S]*fetch\('\/api\/refresh'/);
+  assert.match(refreshDock, /if \(!targetPosture\.actionAllowed\)[\s\S]*return;[\s\S]*fetchJson<\{[\s\S]*\}>\('\/api\/refresh'/);
   assert.match(refreshDock, /disabled=\{busy\.current \|\| !selectedRecovery\.posture\.actionAllowed\}/);
   assert.match(refreshDock, /CONTROL_PREVIEW_REQUIRED/);
   assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);

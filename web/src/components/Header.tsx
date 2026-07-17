@@ -7,7 +7,7 @@ import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
-import { createSettledPoll } from '../lib/polling';
+import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
@@ -2822,6 +2822,11 @@ type ConnectionResetTarget = 'all' | 'market' | 'runtime' | 'news' | 'calendar' 
 type WatchmanStatus = 'operational' | 'degraded' | 'outage' | 'planned';
 type WatchmanGroup = 'control_path' | 'binance' | 'bot' | 'sources' | 'infrastructure';
 type WatchmanView = 'overview' | 'connections' | 'sources';
+type BrowserHealthProbe = {
+  rttMs: number;
+  observationReported: boolean;
+  observationError: string | null;
+};
 type WatchmanComponent = {
   id: string;
   label: string;
@@ -2904,41 +2909,70 @@ export function RefreshDock() {
   const [dockView, setDockView] = useState<WatchmanView>('overview');
   const [cadenceReset, setCadenceReset] = useState(false);
   const [recoveryTarget, setRecoveryTarget] = useState<ConnectionResetTarget>('all');
+  const [healthProbeError, setHealthProbeError] = useState<string | null>(null);
+  const [browserObservationError, setBrowserObservationError] = useState<string | null>(null);
+  const [healthProbeStatus, setHealthProbeStatus] = useState<'LOADING' | 'CURRENT' | 'UNAVAILABLE'>('LOADING');
   const busy = useRef(false);
+  const healthPollRef = useRef<SettledPoll | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const recoveryStatusReset = useMemo(() => createDelayedResetOwner(), []);
 
-  const pingHealthNow = useCallback(async (): Promise<number | null> => {
+  const runHealthProbe = useCallback(async (signal: AbortSignal): Promise<BrowserHealthProbe> => {
     const t0 = performance.now();
+    await fetchJson<unknown>('/health/live', { cache: 'no-store', signal }, 4_000);
+    const rttMs = performance.now() - t0;
     try {
-      const response = await fetch('/health/live', { cache: 'no-store' });
-      if (!response.ok) throw new Error();
-      const next = performance.now() - t0;
-      setAppRtt(next);
-      void fetch('/api/connections/browser-observation', {
+      await fetchJson<unknown>('/api/connections/browser-observation', {
         method: 'POST',
+        cache: 'no-store',
+        signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rttMs: next, socketConnected: connected }),
-      }).catch(() => undefined);
-      return next;
-    } catch {
-      setAppRtt(null);
-      return null;
+        body: JSON.stringify({ rttMs, socketConnected: connected }),
+      }, 3_000);
+      return { rttMs, observationReported: true, observationError: null };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return {
+        rttMs,
+        observationReported: false,
+        observationError: apiErrorMessage(error, 'Browser observation report failed'),
+      };
     }
   }, [connected]);
 
   useEffect(() => {
-    void pingHealthNow();
-    const timer = window.setInterval(() => {
-      void pingHealthNow();
-    }, 5_000);
-    return () => window.clearInterval(timer);
-  }, [pingHealthNow]);
+    const healthPoll = createSettledPoll<BrowserHealthProbe>({
+      intervalMs: 5_000,
+      timeoutMs: 8_000,
+      request: runHealthProbe,
+      onSuccess: (probe) => {
+        setHealthProbeStatus('CURRENT');
+        setAppRtt(probe.rttMs);
+        setHealthProbeError(null);
+        setBrowserObservationError(probe.observationReported ? null : probe.observationError);
+      },
+      onError: (error) => {
+        setHealthProbeStatus('UNAVAILABLE');
+        setAppRtt(null);
+        setHealthProbeError(apiErrorMessage(error, 'Watchman health probe failed'));
+        setBrowserObservationError(null);
+      },
+    });
+    healthPollRef.current = healthPoll;
+    healthPoll.start();
+    return () => {
+      if (healthPollRef.current === healthPoll) healthPollRef.current = null;
+      healthPoll.stop();
+    };
+  }, [runHealthProbe]);
+
+  useEffect(() => () => recoveryStatusReset.cancel(), [recoveryStatusReset]);
 
   useEffect(() => {
     if (!open) return;
-    void pingHealthNow();
+    healthPollRef.current?.refresh();
     void binding.refresh();
-  }, [binding.refresh, open, pingHealthNow]);
+  }, [binding.refresh, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -2979,18 +3013,26 @@ export function RefreshDock() {
   const effectiveLastResetTs = lastRefreshTs;
   const browserStatus: WatchmanStatus = !connected || appRtt === null
     ? 'outage'
-    : appRtt >= 800
-      ? 'outage'
-      : appRtt >= 350
-        ? 'degraded'
-        : 'operational';
+    : browserObservationError
+      ? 'degraded'
+      : appRtt >= 800
+        ? 'outage'
+        : appRtt >= 350
+          ? 'degraded'
+          : 'operational';
   const browserComponent: WatchmanComponent = {
     id: 'browser-session',
     label: 'Browser / Website Session',
     group: 'control_path',
     status: browserStatus,
     statusLabel: watchmanStatusLabel(browserStatus),
-    detail: `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /health/live liveness round trip`,
+    detail: healthProbeStatus === 'LOADING'
+      ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · liveness probe loading · browser observation unreported`
+      : healthProbeError
+      ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · ${healthProbeError}`
+      : browserObservationError
+        ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · browser observation stale · ${browserObservationError}`
+        : `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /health/live liveness round trip · browser observation reported`,
     value: appRtt === null ? 'Offline' : msLabel(appRtt),
     required: false,
     updatedAt: Date.now(),
@@ -3042,7 +3084,7 @@ export function RefreshDock() {
     setLastRefreshTs(ts);
     setLastRefreshIssues(issues);
     setSt(ok ? 'ok' : 'err');
-    window.setTimeout(() => setSt('idle'), ok ? 1500 : 2400);
+    recoveryStatusReset.schedule(ok ? 1500 : 2400, () => setSt('idle'));
   };
 
   const runTarget = async (target: ConnectionResetTarget) => {
@@ -3054,32 +3096,31 @@ export function RefreshDock() {
     if (busy.current) return;
     busy.current = true;
     setTargetBusy(target);
+    recoveryStatusReset.cancel();
     setSt('spin');
-    const startedAt = Date.now();
     let ok = false;
     let issues: string[] = [];
     let ts = Date.now();
     try {
-      const response = await fetch('/api/refresh', {
+      const result = await fetchJson<{ ok?: boolean; issues?: string[]; ts?: number }>('/api/refresh', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target }),
-      });
-      const result = await response.json() as { ok?: boolean; issues?: string[]; ts?: number };
-      ok = response.ok && result.ok === true;
-      issues = result.issues ?? (response.ok ? [] : [`${target} reset failed`]);
+      }, 8_000);
+      ok = result.ok === true;
+      issues = result.issues ?? (ok ? [] : [`${target} reset failed`]);
       ts = result.ts ?? Date.now();
       fireRefresh();
-    } catch {
-      issues = [`${target} reset failed`];
-    }
-    await Promise.all([pingHealthNow(), binding.refresh()]);
-    const wait = Math.max(0, 2150 - (Date.now() - startedAt));
-    window.setTimeout(() => {
-      finish(ok && issues.length === 0, issues, ts);
-      setTargetBusy(null);
+    } catch (error) {
+      issues = [apiErrorMessage(error, `${target} reset failed`)];
+    } finally {
       busy.current = false;
-    }, wait);
+      setTargetBusy(null);
+      finish(ok && issues.length === 0, issues, ts);
+      healthPollRef.current?.refresh();
+      void binding.refresh();
+    }
   };
 
   const overallLabel = overallPresentation.label;
@@ -3145,7 +3186,7 @@ export function RefreshDock() {
             <span><em>Browser RTT</em><b>{appRtt == null ? '—' : msLabel(appRtt)}</b><small>Direct control API probe</small></span>
             <span><em>Binding Continuity</em><b>{binding.continuity}</b><small>{binding.error ?? productSnapshot?.ownerView.dataFreshness ?? 'No freshness claim'}</small></span>
             <span><em>Ops Interlock</em><b>{productSnapshot?.opsIntakeInterlock.state ?? 'UNKNOWN'}</b><small>{productSnapshot?.opsIntakeInterlock.reasonCodes[0] ?? 'Canonical readback'}</small></span>
-            <span><em>Recovery State</em><b>{productSnapshot?.opsReadback.recoveryState ?? 'UNKNOWN'}</b><small>{effectiveLastResetTs ? `Last manual recovery ${timeAgo(effectiveLastResetTs)}` : 'No local recovery run'}</small></span>
+            <span><em>Recovery State</em><b>{productSnapshot?.opsReadback.recoveryState ?? 'UNKNOWN'}</b><small>{effectiveLastResetTs ? `Last manual recovery attempt ${timeAgo(effectiveLastResetTs)}` : 'No local recovery attempt'}</small></span>
           </div>
 
           <div className="rdock-view-tabs" role="tablist" aria-label="Connection Control View">

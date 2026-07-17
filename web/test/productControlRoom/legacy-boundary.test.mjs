@@ -252,7 +252,7 @@ test('legacy liveness and PnL surfaces cannot imply semantic readiness or valida
     read('pages/Account.tsx'),
     read('types.ts'),
   ]);
-  assert.match(header, /fetch\('\/health\/live'/);
+  assert.match(header, /fetchJson<unknown>\('\/health\/live'/);
   assert.doesNotMatch(header, /fetch\('\/api\/health'/);
   assert.match(header, /direct \/health\/live liveness round trip/);
   assert.match(types, /positions:\s*PositionEntry\[\]\s*\|\s*null/);

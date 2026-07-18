@@ -92,7 +92,7 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'BASIS_ENGINE', ownerPath: 'server/src/engine/basis',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_BASIS_INTAKE'),
   }),
   'volume-engine': Object.freeze({
     owner: 'VOLUME_ENGINE', ownerPath: 'server/src/engine/volume',

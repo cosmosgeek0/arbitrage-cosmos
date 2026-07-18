@@ -287,6 +287,7 @@ systemIntegration = createSystemIntegrationApplication({
   runtimes: systemIntegrationProduction.runtimes,
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
+  strategyIntake: systemIntegrationProduction.strategyIntake,
   strategySymbolPolicy: systemIntegrationProduction.strategySymbolPolicy,
   sizeCeilings: Object.freeze({
     SYSTEM: Object.freeze({

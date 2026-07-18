@@ -128,6 +128,7 @@ export type RejectCode =
   | 'risk_blocked'
   | 'account_not_connected'
   | 'kill_switch_on'
+  | 'intake_paused'
   // volume
   | 'baseline_missing'
   | 'volume_not_abnormal'

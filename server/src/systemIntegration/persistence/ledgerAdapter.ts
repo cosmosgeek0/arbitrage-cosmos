@@ -150,6 +150,7 @@ function sameJson(left: unknown, right: unknown): boolean {
 function requiresRuntimePublication(command: unknown): boolean {
   return command === 'RESTART_COMPONENT'
     || command === 'SET_COMPONENT_STATE'
+    || command === 'SET_BASIS_INTAKE'
     || command === 'CLEAR_DEPLOYMENT_FREEZE'
     || command === 'SET_BASIS_SYMBOL_POLICY'
     || command === 'SET_VOLUME_SYMBOL_POLICY'

@@ -45,6 +45,10 @@ export function parseControlBody(value: unknown): ParsedControlBody {
       allowed = ['command', 'expectedRevision', 'reason', 'paused'];
       mutation = { command: value.command, paused: value.paused };
       break;
+    case 'SET_BASIS_INTAKE':
+      allowed = ['command', 'expectedRevision', 'reason', 'paused'];
+      mutation = { command: value.command, paused: value.paused };
+      break;
     case 'SET_BASIS_SYMBOL_POLICY':
     case 'SET_VOLUME_SYMBOL_POLICY':
       allowed = ['command', 'expectedRevision', 'reason', 'action', 'symbol'];

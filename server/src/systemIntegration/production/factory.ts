@@ -1295,6 +1295,13 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
+  const strategyIntake = Object.freeze({
+    basis: Object.freeze({
+      readPaused: () => input.basis.intakePaused(),
+      setPaused: (paused: boolean) => input.basis.setIntakePaused(paused),
+    }),
+  });
+
   const strategySymbolPolicy = Object.freeze({
     basis: Object.freeze({
       readBlockedSymbols: () => input.basis.operatorBlockedSymbols(),
@@ -1338,6 +1345,6 @@ export function createProductionSystemIntegrationPorts(
   });
 
   return Object.freeze({
-    sourceRegistry, runtimes, components, summaries, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
+    sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
   });
 }

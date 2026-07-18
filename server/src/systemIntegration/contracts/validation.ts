@@ -457,6 +457,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     REVOKE_APPROVAL: ['command', 'approvalId'],
     REVOKE_RESERVATION: ['command', 'reservationId'],
     RESTART_COMPONENT: ['command', 'componentId'],
+    SET_BASIS_INTAKE: ['command', 'paused'],
     CLEAR_DEPLOYMENT_FREEZE: ['command', 'expectedObservedAtUtc'],
     SET_PUBLIC_SOURCE_LIFECYCLE: ['command', 'sourceId', 'action'],
     SET_BASIS_SYMBOL_POLICY: ['command', 'action', 'symbol'],
@@ -471,6 +472,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       if (!isSystemComponentId(mutation.componentId) || !isDesiredRuntimeState(mutation.desiredState)) issues.push(issue('mutation', 'COMPONENT_STATE_INVALID', 'component and desired state must be canonical'));
       break;
     case 'SET_INTAKE_PAUSED':
+    case 'SET_BASIS_INTAKE':
       if (typeof mutation.paused !== 'boolean') issues.push(issue('mutation.paused', 'BOOLEAN_REQUIRED', 'paused must be boolean'));
       break;
     case 'SET_BASIS_SYMBOL_POLICY':

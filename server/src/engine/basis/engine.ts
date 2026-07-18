@@ -62,6 +62,7 @@ export class BasisEngine {
   private latestPriority = new Map<string, PriorityScore>();
   private running = false;
   private killSwitchOn = false;
+  private intakePausedValue = false;
   /** Dynamic application-config blocklist; refreshed by BasisRuntime. */
   private policyBlocked = new Set<string>();
   private policyAllowed: Set<string> | null = null;
@@ -316,7 +317,17 @@ export class BasisEngine {
         nowTs: now,
       };
 
-      const raw = this.scanner.evaluate(bf, ctx);
+      const evaluated = this.scanner.evaluate(bf, ctx);
+      const raw: Decision = this.intakePausedValue && evaluated.kind === 'proposal'
+        ? {
+            ...evaluated,
+            kind: 'reject',
+            rejectCode: 'intake_paused',
+            humanReason: 'basis proposal intake is paused; observation remains active',
+            evidence: { ...evaluated.evidence, intakePaused: true },
+            correlationId: evaluated.correlationId,
+          }
+        : evaluated;
       const corr =
         raw.kind === 'ignore'
           ? (this.lifecycle.get(symbol).correlationId ?? newCorrelationId(this.clock, 'basis_idle'))

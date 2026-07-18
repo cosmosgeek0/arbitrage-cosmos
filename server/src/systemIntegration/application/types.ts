@@ -76,6 +76,13 @@ export interface SystemIntegrationApplicationOptions {
   readonly summaries?: ApplicationSummaryReadPort;
   readonly traces?: ApplicationTraceReadPort;
   readonly deploymentFreezeClear?: DeploymentFreezeClearOwnerPort;
+  /** Narrow command/readback seam; strategy engines remain the sole owners. */
+  readonly strategyIntake?: Readonly<{
+    basis?: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
+  }>;
   /** Narrow durable deny-overlay seam; strategy engines remain the effective policy owners. */
   readonly strategySymbolPolicy?: Readonly<{
     basis?: StrategySymbolPolicyOwnerPort;

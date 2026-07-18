@@ -110,6 +110,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires one atomic PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. The hostile lease suite is 4/4, System Integration is 412/412, and live competitors exit before a second boot revision while dead same-host ownership recovers atomically. |
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
 | 19 | `FIX-092` | `BUILT_AND_TESTED` | AI-Ops A1/A2/A5 donor mode is selected only by exact donor commit and tree; integrated current-tree truth works on attached or detached HEAD. The detached clean-clone parent regression failed 3/4 before the fix, and the focused identity regression is 1/1 after it. |
+| 20 | `FIX-105` | `BUILT_AND_TESTED` | A5 donor-only expectations are conditional on the exact sealed donor commit/tree pair, never merely a branch label. The parent-relative matrix assertion failed 1/2 before the exact donor case was registered and passes 2/2 after it. |
 
 ## Previous source evidence
 

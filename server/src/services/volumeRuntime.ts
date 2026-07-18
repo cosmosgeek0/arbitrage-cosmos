@@ -207,6 +207,18 @@ export class VolumeRuntime {
     });
   }
 
+  operatorBlockedSymbols(): readonly string[] {
+    return this.engine.operatorBlockedSymbols();
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    return this.engine.setOperatorSymbolBlocked(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
   private async refreshUniverse(generation: number): Promise<void> {
     if (!this.isActive(generation)) return;
     const config = this.readConfig();

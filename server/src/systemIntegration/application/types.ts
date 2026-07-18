@@ -75,6 +75,11 @@ export interface SystemIntegrationApplicationOptions {
   readonly summaries?: ApplicationSummaryReadPort;
   readonly traces?: ApplicationTraceReadPort;
   readonly deploymentFreezeClear?: DeploymentFreezeClearOwnerPort;
+  /** Narrow durable deny-overlay seam; strategy engines remain the effective policy owners. */
+  readonly strategySymbolPolicy?: Readonly<{
+    basis?: StrategySymbolPolicyOwnerPort;
+    volume?: StrategySymbolPolicyOwnerPort;
+  }>;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
@@ -87,6 +92,22 @@ export interface StrategyIntakeControlReadback {
   readonly strategy: 'basis' | 'volume';
   readonly desiredPaused: boolean;
   readonly effectivePaused: boolean | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface StrategySymbolPolicyOwnerPort {
+  readBlockedSymbols(): readonly string[];
+  setBlocked(symbol: string, blocked: boolean): boolean;
+  isAllowed(symbol: string): boolean;
+}
+
+export interface StrategySymbolPolicyControlReadback {
+  readonly strategy: 'basis' | 'volume';
+  readonly symbol: string;
+  readonly desiredBlocked: boolean;
+  readonly effectiveBlocked: boolean | null;
+  readonly effectiveAllowed: boolean | null;
   readonly controlRevision: number;
   readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
 }
@@ -157,6 +178,10 @@ export interface SystemIntegrationApplicationFacade {
   supervisor(): Readonly<SystemSupervisorReadModel>;
   controlState(): Readonly<SystemControlState>;
   strategyIntakeState(strategy: 'basis' | 'volume'): Readonly<StrategyIntakeControlReadback>;
+  strategySymbolPolicyState(
+    strategy: 'basis' | 'volume',
+    symbol: string,
+  ): Readonly<StrategySymbolPolicyControlReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

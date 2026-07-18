@@ -150,7 +150,9 @@ function sameJson(left: unknown, right: unknown): boolean {
 function requiresRuntimePublication(command: unknown): boolean {
   return command === 'RESTART_COMPONENT'
     || command === 'SET_COMPONENT_STATE'
-    || command === 'CLEAR_DEPLOYMENT_FREEZE';
+    || command === 'CLEAR_DEPLOYMENT_FREEZE'
+    || command === 'SET_BASIS_SYMBOL_POLICY'
+    || command === 'SET_VOLUME_SYMBOL_POLICY';
 }
 
 function idempotencyEventKind(idempotencyKey: string): string {
@@ -2443,6 +2445,7 @@ export class SystemLedgerPersistenceAdapter {
       transition: (state) => {
         let desiredComponents = state.desiredComponents;
         let strategyIntake = state.strategyIntake;
+        let strategySymbolPolicy = state.strategySymbolPolicy;
         let reservations = state.reservations;
         let approvals = state.approvals;
         const mutation: Readonly<SystemControlMutation> = commit.request.mutation;
@@ -2466,6 +2469,17 @@ export class SystemLedgerPersistenceAdapter {
             ...state.strategyIntake,
             volumePaused: mutation.paused,
           });
+        } else if (commit.applied && (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+          || mutation.command === 'SET_VOLUME_SYMBOL_POLICY')) {
+          const field = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basisBlocked' : 'volumeBlocked';
+          const current = state.strategySymbolPolicy[field];
+          const next = mutation.action === 'BLOCK'
+            ? [...new Set([...current, mutation.symbol])].sort((left, right) => left.localeCompare(right, 'en'))
+            : current.filter((symbol) => symbol !== mutation.symbol);
+          strategySymbolPolicy = Object.freeze({
+            ...state.strategySymbolPolicy,
+            [field]: Object.freeze(next),
+          });
         } else if (commit.applied && mutation.command === 'REVOKE_RESERVATION') {
           reservations = state.reservations.map((entry) => entry.reservationId === mutation.reservationId
             ? { ...entry, blocksAllocation: false, correlationId: commit.request.correlationId, updatedAtMs: commit.request.requestedAtMs }
@@ -2482,6 +2496,7 @@ export class SystemLedgerPersistenceAdapter {
             generation: commit.after.generation,
             control: commit.after,
             strategyIntake,
+            strategySymbolPolicy,
             desiredComponents,
             reservations,
             approvals,

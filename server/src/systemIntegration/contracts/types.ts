@@ -248,7 +248,9 @@ export type SystemControlMutation =
       readonly command: 'SET_PUBLIC_SOURCE_LIFECYCLE';
       readonly sourceId: Extract<SystemComponentId, 'public-spot-source' | 'public-usdm-source'>;
       readonly action: 'ISOLATE' | 'RESTART';
-    };
+    }
+  | { readonly command: 'SET_BASIS_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string }
+  | { readonly command: 'SET_VOLUME_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

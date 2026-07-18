@@ -617,6 +617,23 @@ section('23. runtime symbol policy applies immediately without cooldown debt');
   check('new allowlist takes effect on next tick', !engine.decisions(10).some((decision) =>
     decision.ts === clock.now() && decision.rejectCode === 'symbol_blocked'));
   check('symbol remains free of stale cooldown', engine.focusMgr.stateOf('POLICYUSDT') === 'IDLE');
+  engine.setOperatorSymbolBlocked('POLICYUSDT', true);
+  engine.setSymbolPolicy(['POLICYUSDT'], []);
+  check('strategy-local BLOCK remains stricter than a global allowlist', engine.symbolAllowedByPolicy('POLICYUSDT') === false);
+  engine.setOperatorSymbolBlocked('POLICYUSDT', false);
+  engine.setSymbolPolicy([], []);
+  check('strategy-local ALLOW cannot bypass an empty global allowlist', engine.symbolAllowedByPolicy('POLICYUSDT') === false);
+  engine.setSymbolPolicy(['POLICYUSDT'], []);
+  const feature = engine.featureSnapshot('POLICYUSDT');
+  const proposal = engine.proposalStore.upsertFromDecision({
+    symbol: 'POLICYUSDT', ts: clock.now(), strategy: 'volume_spike', kind: 'proposal', rejectCode: null,
+    humanReason: 'operator block invalidation proof', correlationId: 'policy-block-correlation',
+    evidence: { direction: 'long', confidence: 0.8 },
+  }, feature);
+  engine.setOperatorSymbolBlocked('POLICYUSDT', true);
+  const blockedIntent = engine.intentFor(proposal.id);
+  check('BLOCK expires an open proposal before its final intent bridge',
+    proposal.status === 'expired' && blockedIntent.ok === false && blockedIntent.reason === 'symbol_blocked');
 }
 
 // ================================================================

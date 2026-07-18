@@ -62,6 +62,9 @@ export interface ProductionBasisRuntimePort {
   stop(): void;
   connectionStatus(): Readonly<ProductionBasisConnectionStatus>;
   integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  operatorBlockedSymbols(): readonly string[];
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean;
+  symbolAllowedByPolicy(symbol: string): boolean;
 }
 
 export interface ProductionVolumeConnectionStatus {
@@ -78,6 +81,9 @@ export interface ProductionVolumeRuntimePort {
   stop(): void;
   connectionStatus(): Readonly<ProductionVolumeConnectionStatus>;
   integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  operatorBlockedSymbols(): readonly string[];
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean;
+  symbolAllowedByPolicy(symbol: string): boolean;
 }
 
 export interface ProductionSystemIntegrationInput {
@@ -98,4 +104,16 @@ export interface ProductionSystemIntegrationPorts {
   readonly components: ApplicationComponentReadPorts;
   /** Exact owner counts only; this adapter never computes strategy scores. */
   readonly summaries: ApplicationSummaryReadPort;
+  readonly strategySymbolPolicy: Readonly<{
+    basis: Readonly<{
+      readBlockedSymbols(): readonly string[];
+      setBlocked(symbol: string, blocked: boolean): boolean;
+      isAllowed(symbol: string): boolean;
+    }>;
+    volume: Readonly<{
+      readBlockedSymbols(): readonly string[];
+      setBlocked(symbol: string, blocked: boolean): boolean;
+      isAllowed(symbol: string): boolean;
+    }>;
+  }>;
 }

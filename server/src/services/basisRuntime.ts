@@ -174,6 +174,18 @@ export class BasisRuntime {
     });
   }
 
+  operatorBlockedSymbols(): readonly string[] {
+    return this.engine.operatorBlockedSymbols();
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    return this.engine.setOperatorSymbolBlocked(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
   private onEngineEvent(event: EngineEvent): void {
     const decisionKind = typeof event.payload.kind === 'string' ? event.payload.kind : null;
     if (event.kind === 'strategy_decision' && decisionKind === 'ignore') return;
@@ -241,7 +253,10 @@ export class BasisRuntime {
         eligible: true,
         ineligibleReason: null,
       })));
-      this.engine.replaceBlockedSymbols(Array.isArray(config.blockedSymbols) ? config.blockedSymbols : []);
+      this.engine.replaceSymbolPolicy(
+        Array.isArray(config.allowedSymbols) ? config.allowedSymbols : [],
+        Array.isArray(config.blockedSymbols) ? config.blockedSymbols : [],
+      );
       this.eligibleSymbols = this.engine.market.universe().filter((meta) => meta.eligible).map((meta) => meta.symbol).sort();
       this.universePolicyKey = this.policyKey(config);
       if (this.eligibleSymbols.length === 0) {

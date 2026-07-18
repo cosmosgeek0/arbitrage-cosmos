@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { resolveFxRate, useStore, useResolvedTheme, type Page } from '../store';
-import type { LedgerEvent } from '../types';
+import type { LedgerEvent, MarketRow } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
@@ -459,6 +459,30 @@ interface SearchEntry {
   kind?: 'token' | 'perp' | 'page' | 'setting';
 }
 type SearchTab = 'top' | 'crypto' | 'perps' | 'settings';
+
+type PerpetualSearchMarket = Pick<
+  MarketRow,
+  'perpMark' | 'perpLast' | 'perpVolume24h' | 'perpChange24hPct' | 'fundingRate'
+>;
+
+const finiteSearchFact = (value: number | null | undefined): number | null => (
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+);
+
+/**
+ * Project only perpetual-owned evidence into a perpetual search result. Spot
+ * price/change fields are deliberately absent from this boundary so a missing
+ * futures fact cannot be made to look known by borrowing another instrument.
+ */
+export function projectPerpetualSearchFacts(market: PerpetualSearchMarket) {
+  return {
+    perpMark: finiteSearchFact(market.perpMark) ?? finiteSearchFact(market.perpLast),
+    volume: finiteSearchFact(market.perpVolume24h),
+    changePct: finiteSearchFact(market.perpChange24hPct),
+    fundingRate: finiteSearchFact(market.fundingRate),
+  };
+}
+
 const compactMoney = (v: number | null | undefined) => {
   if (!Number.isFinite(v ?? NaN)) return '—';
   const n = Number(v);
@@ -535,18 +559,18 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
       kind: 'token' as const,
       keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
     }));
-    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => ({
-      label: `${m.base} Perpetual`,
-      hint: `${m.symbol} · Perpetual`,
-      symbol: m.symbol,
-      base: m.base,
-      perpMark: m.perpMark ?? m.perpLast ?? m.spot,
-      volume: m.perpVolume24h,
-      changePct: m.perpChange24hPct ?? m.change24hPct,
-      fundingRate: m.fundingRate,
-      kind: 'perp' as const,
-      keywords: `${m.base} ${m.symbol} perp perpetual futures funding leverage`.toLowerCase(),
-    }));
+    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
+      const facts = projectPerpetualSearchFacts(m);
+      return {
+        label: `${m.base} Perpetual`,
+        hint: `${m.symbol} · Perpetual`,
+        symbol: m.symbol,
+        base: m.base,
+        ...facts,
+        kind: 'perp' as const,
+        keywords: `${m.base} ${m.symbol} perp perpetual futures funding`.toLowerCase(),
+      };
+    });
     return [...pages, ...tokens, ...perps];
   }, [markets]);
   // Close on outside click even when the query is empty. The panel opens on
@@ -634,16 +658,22 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
           <>
             <TokenIcon symbol={r.symbol ?? r.base ?? r.label} size={34} />
             <span className="ssr-asset">
-              <span className="ssr-label">{r.label}{r.kind === 'perp' && <em>50X</em>}</span>
+              <span className="ssr-label">{r.label}</span>
               <span className="ssr-hint">{r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}</span>
             </span>
             <span className="ssr-mid">
-              <b>{compactMoney(r.volume)} vol</b>
-              <small>{r.kind === 'perp' ? `${searchPct((r.fundingRate ?? 0) * 100, 4).replace('↗ ', '').replace('↘ ', '')}/hr funding` : r.symbol}</small>
+              <b>{r.kind === 'perp' && r.volume == null ? 'UNKNOWN vol' : `${compactMoney(r.volume)} vol`}</b>
+              <small>{r.kind === 'perp'
+                ? r.fundingRate == null
+                  ? 'UNKNOWN funding'
+                  : `${searchPct(r.fundingRate * 100, 4).replace('↗ ', '').replace('↘ ', '')} funding`
+                : r.symbol}</small>
             </span>
             <span className="ssr-price">
-              <b>{searchPrice(r.kind === 'perp' ? r.perpMark : r.spot)}</b>
-              <small className={change !== null && change < 0 ? 'neg' : 'pos'}>{searchPct(change)}</small>
+              <b>{r.kind === 'perp' && r.perpMark == null ? 'UNKNOWN' : searchPrice(r.kind === 'perp' ? r.perpMark : r.spot)}</b>
+              <small className={change === null ? undefined : change < 0 ? 'neg' : 'pos'}>
+                {r.kind === 'perp' && change === null ? 'UNKNOWN' : searchPct(change)}
+              </small>
             </span>
           </>
         ) : (

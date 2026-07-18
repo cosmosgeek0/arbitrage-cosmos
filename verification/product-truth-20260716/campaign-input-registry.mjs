@@ -1,6 +1,17 @@
 import path from 'node:path';
 
 export const REQUIRED_C2_PARENT = 'dea2d2a5c2b5e83d3aea75b0e368f0a478596561';
+export const EXACT_C9_CANDIDATE = 'd8a86f722689ed82ad40f9ec44bbbc19c2347646';
+export const EXACT_C9_TREE = '1da28eb2dcc03a0545fc2bc51e2a735e88826014';
+export const SEALED_C9_EVIDENCE_COMMIT = '5fd74604082420fbe46d98e408ef4ca0d1b57711';
+export const SEALED_C9_EVIDENCE_TREE = '762143c25a77390d5b24e23b8f81c49a26b9d7d4';
+export const SEALED_C9_EVIDENCE_PARENTS = Object.freeze([
+  EXACT_C9_CANDIDATE,
+  '951e7a60709683d969abcca06de26197052cb374',
+]);
+export const SAME_TREE_LANDING_COMMIT = 'bcb3e76b274b7f459af0f85545d38ca117c1f0bd';
+export const SAME_TREE_LANDING_PARENT = '06b24ca10c5e2db73b2e6bea6121252d47fd7812';
+export const SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256 = 'd84ea2ef90c9634c8a62fc42036b71990c9edcb5bdb8d3eb01cb5b61a4c16d08';
 export const PREDECESSOR_CANDIDATE = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
 export const PREDECESSOR_TREE = 'a770f9f393e6229252731cd5247e9a1abfd2e509';
 export const REJECTED_C8_CANDIDATE = '6ab02a82931ae8234456c0710cca41b94fdc12c9';
@@ -84,11 +95,15 @@ export const C9_CORRECTION_GRANTS = Object.freeze([
 ]);
 export const EXACT_EVIDENCE_OUTPUTS = Object.freeze([
   'AI_OPS_C2_DISPOSITION.json',
+  'AUTHORITY_RESOLUTION.md',
   'C2_PROOF_BINDING.json',
   'CAPABILITY_TRUTH_MATRIX.csv',
+  'CLEAN_CLONE_ACCEPTANCE.md',
   'COCKPIT_BINDING_MATRIX.csv',
+  'COMPOSED_RUNTIME_RECEIPT.md',
   'DIRECTIVE_COVERAGE_MATRIX.csv',
   'EVIDENCE_SELECTION.json',
+  'FINAL_VERDICT.md',
   'INDEPENDENT_FINDINGS.json',
   'INPUTS.lock',
   'LOCKED_INPUT_PAYLOADS.json',
@@ -96,8 +111,276 @@ export const EXACT_EVIDENCE_OUTPUTS = Object.freeze([
   'MANIFEST.sha256',
   'MERGE_PROVENANCE.json',
   'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
+  'STAGING_OPERATIONAL_RECEIPT.md',
   'STATE.md',
+  'UNMERGED_DELTA_REPORT.md',
   'WORKTREE_CENSUS.json',
+]);
+
+export const EXACT_EVIDENCE_TOOLING_FILES = Object.freeze([
+  'campaign-input-registry.mjs',
+  'generate-exact-candidate-evidence.mjs',
+  'generate-manifest.mjs',
+  'human-evidence-renderer.mjs',
+  'verify-exact-candidate-evidence.mjs',
+]);
+
+export const EXACT_EVIDENCE_DESCENDANT_FILES = Object.freeze([
+  ...EXACT_EVIDENCE_OUTPUTS,
+  ...EXACT_EVIDENCE_TOOLING_FILES,
+]);
+
+export const FORBIDDEN_HUMAN_GATE_TOKENS = Object.freeze([
+  'BASELINE_TRUTH_ACCEPTED',
+  'CLEAN_CLONE_ACCEPTED',
+  'LOCAL_RUNTIME_ACCEPTED',
+  'STAGING_OPERATIONAL_ACCEPTED',
+  'VERIFIED_ACCEPTED',
+]);
+
+export const SEALED_C9_SOURCE_PATHS = Object.freeze([
+  'AI_OPS_C2_DISPOSITION.json',
+  'C2_PROOF_BINDING.json',
+  'CAPABILITY_TRUTH_MATRIX.csv',
+  'COCKPIT_BINDING_MATRIX.csv',
+  'DIRECTIVE_COVERAGE_MATRIX.csv',
+  'EVIDENCE_SELECTION.json',
+  'INDEPENDENT_FINDINGS.json',
+  'INPUTS.lock',
+  'MANIFEST.json',
+  'MERGE_PROVENANCE.json',
+  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
+  'WORKTREE_CENSUS.json',
+]);
+
+export const FRONTIER_REFERENCE_COMMITS = Object.freeze([
+  Object.freeze({
+    sha: 'f0168cb37bd04d21bc90591ab2256770de3b75bc',
+    role: 'ACCEPTED_PRE_FRONTIER_BASE_WITH_ZERO_FRONTIER_PATHS',
+    expected_ancestor_of_candidate: true,
+  }),
+  Object.freeze({
+    sha: '887221418345ad54d7b98881b359fab85a6188e6',
+    role: 'PARKED_FRONTIER_COORDINATOR_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5',
+    role: 'PARKED_FRONTIER_F0_DOCK_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: 'e435c1f0c6850b2c53501d3410dd5ce92b64b286',
+    role: 'PARKED_FRONTIER_F1_VENUE_MESH_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '56a08f4efb3f1b82205c4265c1dd18bbd1a70209',
+    role: 'PARKED_FRONTIER_F2_PORTFOLIO_LAB_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '3c9c794e88513bee340f336c5fc4d2dd8eebf47e',
+    role: 'PARKED_FRONTIER_F3_STRATEGY_ARENA_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '7a658b9850f743b944c35253568ae4a231a768b0',
+    role: 'PARKED_FRONTIER_F8_EDGE_METER_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+  Object.freeze({
+    sha: '2c29de4e4d01e8087c00e79f180b731790943baa',
+    role: 'PARKED_FRONTIER_F13_DECISION_LAB_BLOCKED_TIP',
+    expected_ancestor_of_candidate: false,
+  }),
+]);
+
+export const HISTORICAL_PAYLOAD_COMMIT_SPECS = Object.freeze([
+  ...FRONTIER_REFERENCE_COMMITS
+    .filter((row) => !row.expected_ancestor_of_candidate)
+    .map((row) => Object.freeze({ sha: row.sha, role: row.role })),
+  Object.freeze({
+    sha: SAME_TREE_LANDING_COMMIT,
+    role: 'NOT_CANDIDATE_TRUTH_SAME_TREE_COMMIT_IDENTITY_IS_INSUFFICIENT',
+  }),
+]);
+
+export const EXACT_EVIDENCE_PROOF_REFERENCES = Object.freeze([
+  Object.freeze({
+    proof_reference_id: 'C9_SOURCE_STATE',
+    commit: EXACT_C9_CANDIDATE,
+    path: 'STATE.md',
+    git_blob: '2241a8f018e349ec7a7b49564c8dcca3ec03159b',
+    sha256: '7bbdb6d892394405e8ab0cb8a81ac4ba6096582175ce07dd6682cab22bd50b3e',
+    byte_length: 17_412,
+    required_symbols: Object.freeze(['| Account A correction candidate C9 |']),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_PROOF_BINDING',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/C2_PROOF_BINDING.json',
+    git_blob: 'b9381b3ae7366f1d1a6822363dde08c01b4ee8c7',
+    sha256: 'f4e80fc5742d0031c831041befddb9c76cceb108be3c54534d2c6e787fc52cf2',
+    byte_length: 4_089,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-c9-proof-binding.v2"',
+      `"candidate_sha": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_INPUT_LOCK',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/INPUTS.lock',
+    git_blob: 'b64de79756b5f2d2a8df7e6b41344edc9d64cc29',
+    sha256: 'f66f5021d13fc18b822d3d31f021c880ace0453f26ee7505361e507bccd107d8',
+    byte_length: 67_109,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-inputs-lock.v4"',
+      `"candidate": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_SELECTION_V2',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/EVIDENCE_SELECTION.json',
+    git_blob: 'd742ee7ac15e352fb281177111fe2bd20fd0e4b6',
+    sha256: '186ef8ba0fac457ad60738fac57c662745cf32f367f6cc706558f0ccbc9fdc01',
+    byte_length: 4_312,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-c9-evidence-selection.v2"',
+      `"source_candidate": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_MANIFEST_V2',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/MANIFEST.json',
+    git_blob: 'c6b9bd8e63d14613b21284589975addb463ae3d3',
+    sha256: 'd931ad1383f4b7a91700220b62b006c53316e4fe41102a7279884857bfcfead5',
+    byte_length: 14_957,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-manifest.v2"',
+      `"candidate_sha": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_PROVENANCE',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/MERGE_PROVENANCE.json',
+    git_blob: '751ce7a6e02f6895cdc3a99969914527dc72e7c4',
+    sha256: '9c4039e90424d92274e7f0a5cb990ce57fd21ed4d08801ba62d317debe0613b7',
+    byte_length: 71_232,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-merge-provenance.v3"',
+      `"candidate_sha": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_CENSUS',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/WORKTREE_CENSUS.json',
+    git_blob: '8b71a2f4383184e52fe87871c9542c61739da47f',
+    sha256: '104347b7ae72b71acd09a82d8c034a3dd89f155674d97dc989bbc0012e810846',
+    byte_length: 311_293,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-worktree-census.v2"',
+      `"candidate_sha": "${EXACT_C9_CANDIDATE}"`,
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_FINDINGS',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/INDEPENDENT_FINDINGS.json',
+    git_blob: '53eb697f7ac9048c4679b39b4d125395d9656d0f',
+    sha256: '17f5a99f433a81310ab5cadcdde06962c3eb2a80c4a5ec8fa271adf0b00b06a6',
+    byte_length: 8_465,
+    required_symbols: Object.freeze([
+      '"schema": "product-truth-c9-independent-findings.v3"',
+      '"wave1b": "C9_SOURCE_FIXED_FRESH_FINAL_VERIFIER_PENDING"',
+    ]),
+  }),
+  Object.freeze({
+    proof_reference_id: 'SEALED_C9_PRODUCT_ASSURANCE',
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    path: 'verification/product-truth-20260716/PRODUCT_ASSURANCE_C2_DISPOSITION.json',
+    git_blob: '71720f5e2d43735b2125022c44a2973b65b86056',
+    sha256: 'a02540e684a52f918e9896c0196d2e46b050d841612a1248a177edfe2a037654',
+    byte_length: 4_152,
+    required_symbols: Object.freeze([
+      '"schema": "product-assurance-c9-disposition.v2"',
+      '"binding": "EXACT_CANDIDATE"',
+    ]),
+  }),
+]);
+
+export const HUMAN_EVIDENCE_ARTIFACT_SPECS = Object.freeze([
+  Object.freeze({
+    path: 'AUTHORITY_RESOLUTION.md',
+    selection_id: 'C9_AUTHORITY_PENDING_FRESH_VERIFIER',
+    state: 'PENDING_FRESH_VERIFIER',
+    actor: 'CAMPAIGN_EVIDENCE_GENERATOR',
+    candidate_write_authority: false,
+    sha256: 'fce15e57e2bda56c8992ed8fc5c1bbcd9598397e032037bb280b0615cf486e15',
+    git_blob: 'f2efdcbc80c56812cdaba03fb04b547a73eb955b',
+    byte_length: 1_861,
+    proof_reference_ids: Object.freeze(['C9_SOURCE_STATE', 'SEALED_C9_INPUT_LOCK', 'SEALED_C9_PROVENANCE']),
+  }),
+  Object.freeze({
+    path: 'CLEAN_CLONE_ACCEPTANCE.md',
+    selection_id: 'C9_CLEAN_CLONE_NOT_RUN',
+    state: 'NOT_RUN',
+    actor: 'ACCOUNT_A_BUILDER_EVIDENCE_ONLY',
+    candidate_write_authority: false,
+    sha256: 'c02ba1c3834a8c427b22c4d62a4dd883b322742280f15f40d037b85e7eed1d71',
+    git_blob: 'd25aeca6f6641cf970dc0c358d11fcc78f9d3ba3',
+    byte_length: 1_535,
+    proof_reference_ids: Object.freeze(['C9_SOURCE_STATE', 'SEALED_C9_MANIFEST_V2']),
+  }),
+  Object.freeze({
+    path: 'COMPOSED_RUNTIME_RECEIPT.md',
+    selection_id: 'C9_COMPOSED_RUNTIME_NOT_RUN',
+    state: 'NOT_RUN',
+    actor: 'CAMPAIGN_EVIDENCE_GENERATOR',
+    candidate_write_authority: false,
+    sha256: '542d1a7c980c91506c84cad742912a01afc1410f092726336dd756519224d1e0',
+    git_blob: 'c0bdc25af0dc664221fba287fad60ac3291b5800',
+    byte_length: 1_612,
+    proof_reference_ids: Object.freeze(['SEALED_C9_PROOF_BINDING', 'SEALED_C9_FINDINGS']),
+  }),
+  Object.freeze({
+    path: 'FINAL_VERDICT.md',
+    selection_id: 'C9_FINAL_VERDICT_PENDING_FRESH_VERIFIER',
+    state: 'PENDING_FRESH_VERIFIER',
+    actor: 'NO_FINAL_VERIFIER_ASSIGNED',
+    candidate_write_authority: false,
+    sha256: 'd44c5b2dbd44e26295b67c1c58b66b771ee558e103f346238cdc798325fe9b3f',
+    git_blob: '472658f3c3977f4a07b4b51d5f1eaed20ab270aa',
+    byte_length: 3_256,
+    proof_reference_ids: Object.freeze(['SEALED_C9_SELECTION_V2', 'SEALED_C9_FINDINGS', 'SEALED_C9_PRODUCT_ASSURANCE']),
+  }),
+  Object.freeze({
+    path: 'STAGING_OPERATIONAL_RECEIPT.md',
+    selection_id: 'C9_STAGING_NOT_CONFIGURED',
+    state: 'NOT_CONFIGURED',
+    actor: 'NO_STAGING_OPERATOR_ASSIGNED',
+    candidate_write_authority: false,
+    sha256: 'd7bab7360c0f5dcae594875b118c34cd7c4ea62bd427dc3152acb151ea811144',
+    git_blob: '08bc75d86fb221851a07ece9f3a8684a194d0ee9',
+    byte_length: 1_677,
+    proof_reference_ids: Object.freeze(['SEALED_C9_PROOF_BINDING', 'SEALED_C9_PRODUCT_ASSURANCE']),
+  }),
+  Object.freeze({
+    path: 'UNMERGED_DELTA_REPORT.md',
+    selection_id: 'C9_DELTA_REVIEW_BLOCKED_PENDING_FRESH_VERIFIER',
+    state: 'BLOCKED:FRESH_FINAL_VERIFIER_PENDING',
+    actor: 'CAMPAIGN_EVIDENCE_GENERATOR',
+    candidate_write_authority: false,
+    sha256: '8681c89fb1301a413911a532cc1e6d577bdac418618fdaa28663d410a464d22f',
+    git_blob: 'a907335807ace4241a1683a6990454583624dc2d',
+    byte_length: 1_729,
+    proof_reference_ids: Object.freeze(['SEALED_C9_CENSUS', 'SEALED_C9_PROVENANCE']),
+  }),
 ]);
 
 export const D_LAUNCH_65_AUTHORITY = Object.freeze({

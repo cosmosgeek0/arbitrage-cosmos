@@ -1,20 +1,33 @@
-# Composed Runtime Receipt
+# Exact C9 Composed-Runtime Receipt
 
-Status: `BLOCKED`
+Status: `NOT_RUN`
 
-Candidate: `41752d6a87dc1cb1b933bb4460c9cabfc15ff694`
+Selection ID: `C9_COMPOSED_RUNTIME_NOT_RUN`
 
-No campaign Pass-6 composed-runtime acceptance was run. Root deterministic tests and historical C2 replay/browser evidence are `REFERENCE_ONLY` for this later gate; they do not prove exact-C empty-state replay, live-public validate-only operation, zero-authority shadow intents, restart recovery, host/process failure drills, alert delivery, durable incident records, or a 24-hour soak.
+- Exact candidate: `d8a86f722689ed82ad40f9ec44bbbc19c2347646`
+- Candidate tree: `1da28eb2dcc03a0545fc2bc51e2a735e88826014`
+- Sole direct parent: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+- Actor: `CAMPAIGN_EVIDENCE_GENERATOR`
+- Candidate source write authority: `false`
 
-Required exact-C modes and fault drills therefore remain `BLOCKED`. `LOCAL_RUNTIME_ACCEPTED` is not issued.
+## Result
+
+No composed-runtime mode, fault drill, restart recovery drill, or soak was executed.
+
+Unavailable or skipped: Runtime, failure-recovery, alert-delivery, and soak measurements are absent.
+
+## Machine proof references
+
+| Proof ID | Commit | Path | Git blob | SHA-256 | Bytes |
+| --- | --- | --- | --- | --- | ---: |
+| `SEALED_C9_PROOF_BINDING` | `5fd74604082420fbe46d98e408ef4ca0d1b57711` | `verification/product-truth-20260716/C2_PROOF_BINDING.json` | `b9381b3ae7366f1d1a6822363dde08c01b4ee8c7` | `f4e80fc5742d0031c831041befddb9c76cceb108be3c54534d2c6e787fc52cf2` | 4089 |
+| `SEALED_C9_FINDINGS` | `5fd74604082420fbe46d98e408ef4ca0d1b57711` | `verification/product-truth-20260716/INDEPENDENT_FINDINGS.json` | `53eb697f7ac9048c4679b39b4d125395d9656d0f` | `17f5a99f433a81310ab5cadcdde06962c3eb2a80c4a5ec8fa271adf0b00b06a6` | 8465 |
 
 ## Receipt fields
 
-- Command/operator action: record exact absence of Pass-6 execution without starting a runtime.
-- Environment/toolchain digest: `8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca`.
-- Dependency lock SHA-256: `3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf`.
-- Start/end UTC: `2026-07-16T11:43:00Z` / `2026-07-16T11:43:00Z`.
-- Artifact-generation exit code: `0`; composed-runtime test count: `0`.
-- Artifact hashes: `MANIFEST.sha256` is generated last and excludes itself.
-- Actor: `ACCOUNT_A`; candidate source write permission: `false`.
-- Deviations/skips/unavailable: every Pass-6 runtime mode, fault drill, alert proof, recovery proof, and soak is unavailable.
+- Command or operator action: deterministic output-only rendering from verified Git objects; no candidate mutation and no live-worktree census.
+- Start UTC: `2026-07-17T14:43:20+05:30`
+- End UTC: `2026-07-17T14:43:20+05:30`
+- Timestamp basis: `EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC`
+- Artifact generation result: `NOT_RUN`
+- Candidate source write authority: `false`

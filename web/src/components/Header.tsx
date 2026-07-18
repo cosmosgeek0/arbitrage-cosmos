@@ -153,8 +153,23 @@ function useMenu<T extends HTMLElement>(hover = true) {
   return { open, setOpen: setOpenExclusive, ref };
 }
 
+export type QuickViewLoadStatus = 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+
+export function parseQuickViewItems<T>(payload: unknown): T[] {
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { items?: unknown }).items)) {
+    throw new Error('Quick-view response is missing an items array');
+  }
+  return (payload as { items: T[] }).items;
+}
+
+export function quickViewLivePresentation(status: QuickViewLoadStatus): { ok: boolean; title: string } {
+  if (status === 'CURRENT') return { ok: true, title: 'Live — current response' };
+  if (status === 'UNAVAILABLE') return { ok: false, title: 'Unavailable — current response failed' };
+  return { ok: false, title: 'Loading — awaiting current response' };
+}
+
 // A small live-pulsing dot for anything that refreshes continuously.
-export function LiveDot({ ok = true, title = 'Live — refreshing' }: { ok?: boolean; title?: string }) {
+export function LiveDot({ ok = false, title = 'Not current' }: { ok?: boolean; title?: string }) {
   return <span className={`live-dot ${ok ? 'on' : 'off'}`} title={title} aria-hidden />;
 }
 
@@ -3459,16 +3474,25 @@ function NewsModal({ onClose }: { onClose: () => void }) {
   const { setPage } = useStore();
   const [tab, setTab] = useState<number>(48);
   const [items, setItems] = useState<NewsRow[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<QuickViewLoadStatus>('LOADING');
 
   useEffect(() => {
     let alive = true;
     setItems(null);
-    setFailed(false);
+    setLoadStatus('LOADING');
     fetch(`/api/news?catalog=${tab}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
-      .then((d: { items: NewsRow[] }) => alive && setItems(d.items ?? []))
-      .catch(() => alive && setFailed(true));
+      .then((payload: unknown) => {
+        const nextItems = parseQuickViewItems<NewsRow>(payload);
+        if (!alive) return;
+        setItems(nextItems);
+        setLoadStatus('CURRENT');
+      })
+      .catch(() => {
+        if (!alive) return;
+        setItems(null);
+        setLoadStatus('UNAVAILABLE');
+      });
     return () => {
       alive = false;
     };
@@ -3478,7 +3502,7 @@ function NewsModal({ onClose }: { onClose: () => void }) {
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-modal news-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
-          <div className="ov-title"><IconNewspaper size={17} /> Binance news <LiveDot /></div>
+          <div className="ov-title"><IconNewspaper size={17} /> Binance news <LiveDot {...quickViewLivePresentation(loadStatus)} /></div>
           <div className="ov-actions">
             <button className="ov-btn" onClick={() => { onClose(); setPage('news'); }}>Full page →</button>
             <a className="ov-btn" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener"><IconExternal size={14} /> Binance</a>
@@ -3502,7 +3526,7 @@ function NewsModal({ onClose }: { onClose: () => void }) {
               </a>
             ))
           ) : (
-            <div className="ov-empty">{failed ? 'Feed unavailable — Binance could not be reached.' : items ? 'No announcements in this category.' : 'Loading…'}</div>
+            <div className="ov-empty">{loadStatus === 'UNAVAILABLE' ? 'Feed unavailable — Binance could not be reached.' : items ? 'No announcements in this category.' : 'Loading…'}</div>
           )}
         </div>
       </div>
@@ -3513,15 +3537,26 @@ function NewsModal({ onClose }: { onClose: () => void }) {
 function CalendarModal({ onClose }: { onClose: () => void }) {
   const { setPage, prefs } = useStore();
   const [items, setItems] = useState<CalItem[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<QuickViewLoadStatus>('LOADING');
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
 
   useEffect(() => {
     let alive = true;
+    setItems(null);
+    setLoadStatus('LOADING');
     fetch('/api/calendar')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
-      .then((d: { items: CalItem[] }) => alive && setItems(d.items ?? []))
-      .catch(() => alive && setFailed(true));
+      .then((payload: unknown) => {
+        const nextItems = parseQuickViewItems<CalItem>(payload);
+        if (!alive) return;
+        setItems(nextItems);
+        setLoadStatus('CURRENT');
+      })
+      .catch(() => {
+        if (!alive) return;
+        setItems(null);
+        setLoadStatus('UNAVAILABLE');
+      });
     return () => {
       alive = false;
     };
@@ -3544,7 +3579,7 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-modal cal-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
-          <div className="ov-title"><IconCalendar size={17} /> Economic calendar <LiveDot /></div>
+          <div className="ov-title"><IconCalendar size={17} /> Economic calendar <LiveDot {...quickViewLivePresentation(loadStatus)} /></div>
           <div className="ov-actions">
             <button className="ov-btn" onClick={() => { onClose(); setPage('calendar'); }}>Full page →</button>
             <a className="ov-btn" href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener"><IconExternal size={14} /> TradingView</a>
@@ -3580,7 +3615,7 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
               </div>
             ))
           ) : (
-            <div className="ov-empty">{failed ? 'Calendar unavailable — source could not be reached.' : items ? 'No events in range.' : 'Loading…'}</div>
+            <div className="ov-empty">{loadStatus === 'UNAVAILABLE' ? 'Calendar unavailable — source could not be reached.' : items ? 'No events in range.' : 'Loading…'}</div>
           )}
         </div>
       </div>

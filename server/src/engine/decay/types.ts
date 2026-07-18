@@ -88,6 +88,8 @@ export interface StrategyDecayMeasurement {
   readonly measurementId: string;
   readonly strategy: StrategyDecaySource;
   readonly configVersion: string;
+  /** Content address of window/sample/threshold measurement policy. */
+  readonly measurementPolicyRevision: string;
   readonly direction: string;
   readonly evaluatedAtMs: number;
   readonly evidenceAuthority: StrategyDecayEvidenceAuthority;

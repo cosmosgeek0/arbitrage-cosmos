@@ -30,7 +30,7 @@
     "test:engine:basis": "npm run build -w server && npm run test:engine:basis:built",
     "test:engine:volume:built": "node server/test/engine-volume.mjs",
     "test:engine:volume": "npm run build -w server && npm run test:engine:volume:built",
-    "test:engine:decay:built": "node --test --test-concurrency=1 server/test/engine-decay.mjs",
+    "test:engine:decay:built": "node --test --test-concurrency=1 server/test/engine-decay.mjs server/test/engine-decay-measurement.mjs",
     "test:engine:decay": "npm run build -w server && npm run test:engine:decay:built",
     "test:engine:built": "npm run test:engine:basis:built && npm run test:engine:volume:built && npm run test:engine:decay:built",
     "test:engine": "npm run build -w server && npm run test:engine:built",

@@ -10,6 +10,7 @@ import {
   STRATEGY_DECAY_MEASUREMENT_SCHEMA,
   STRATEGY_DECAY_MEASUREMENT_SCHEMA_VERSION,
   StrategyDecayLedgerAdapter,
+  deriveStrategyDecayMeasurementId,
   deriveStrategyDecayPolicyRevision,
   evaluateStrategyDecayGovernance,
   strategyDecayConfigKey,
@@ -53,12 +54,12 @@ function measurement(sequence, state = 'STABLE', overrides = {}) {
     reasonCodes: Object.freeze(states[index] === 'UNKNOWN' ? ['DIRECT_CROWDING_UNAVAILABLE'] : []),
     evidenceIds: Object.freeze(states[index] === 'UNKNOWN' ? [] : [`evidence-${axis.toLowerCase()}-${sequence}`]),
   }));
-  return Object.freeze({
+  const material = {
     schema: STRATEGY_DECAY_MEASUREMENT_SCHEMA,
     schemaVersion: STRATEGY_DECAY_MEASUREMENT_SCHEMA_VERSION,
-    measurementId: `decaymeas_${sequence.toString(16).padStart(32, '0')}`,
     strategy: 'BASIS',
     configVersion: 'basis-config-v1',
+    measurementPolicyRevision: `decaymeasurepolicy_${'a'.repeat(32)}`,
     direction: 'LONG_SPOT_SHORT_PERP',
     evaluatedAtMs: NOW + sequence,
     evidenceAuthority: unknown ? 'UNKNOWN' : 'PRODUCTION',
@@ -68,6 +69,10 @@ function measurement(sequence, state = 'STABLE', overrides = {}) {
     state,
     reasonCodes: Object.freeze(unknown ? ['DIRECT_CROWDING_UNAVAILABLE'] : []),
     ...overrides,
+  };
+  return Object.freeze({
+    ...material,
+    measurementId: deriveStrategyDecayMeasurementId(material),
   });
 }
 

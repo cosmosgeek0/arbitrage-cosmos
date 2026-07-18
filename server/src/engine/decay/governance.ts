@@ -47,7 +47,8 @@ const POLICY_KEYS = Object.freeze([
   'maximumRecentDecisions',
 ] as const);
 const MEASUREMENT_KEYS = Object.freeze([
-  'schema', 'schemaVersion', 'measurementId', 'strategy', 'configVersion', 'direction',
+  'schema', 'schemaVersion', 'measurementId', 'strategy', 'configVersion',
+  'measurementPolicyRevision', 'direction',
   'evaluatedAtMs', 'evidenceAuthority', 'baselineWindow', 'currentWindow', 'axes',
   'state', 'reasonCodes',
 ] as const);
@@ -211,7 +212,7 @@ function validateAxis(value: unknown, expectedAxis: string, issues: string[]): S
   if (!nonNegativeSafeInteger(axis.currentSampleCount)) issues.push(`AXIS_${expectedAxis}_CURRENT_COUNT_INVALID`);
   if (axis.unit !== 'RATIO' && axis.unit !== 'QUOTE_ASSET') issues.push(`AXIS_${expectedAxis}_UNIT_INVALID`);
   if (!sortedUniqueStrings(axis.reasonCodes, 32, REASON_CODE)) issues.push(`AXIS_${expectedAxis}_REASONS_INVALID`);
-  if (!sortedUniqueStrings(axis.evidenceIds, 20_000, LABEL)) issues.push(`AXIS_${expectedAxis}_EVIDENCE_IDS_INVALID`);
+  if (!sortedUniqueStrings(axis.evidenceIds, 20_010, LABEL)) issues.push(`AXIS_${expectedAxis}_EVIDENCE_IDS_INVALID`);
   const unknown = axis.state === 'UNKNOWN';
   if (unknown) {
     if (axis.baselineValue !== null || axis.currentValue !== null) issues.push(`AXIS_${expectedAxis}_UNKNOWN_VALUE_CONTRADICTION`);
@@ -230,6 +231,12 @@ function derivedMeasurementState(axes: readonly StrategyDecayAxisAssessment[]): 
   return 'STABLE';
 }
 
+export function deriveStrategyDecayMeasurementId(
+  measurement: Omit<StrategyDecayMeasurement, 'measurementId'>,
+): string {
+  return `decaymeas_${stableHash128Hex(canonicalJson(measurement))}`;
+}
+
 export function validateStrategyDecayMeasurement(value: unknown): readonly string[] {
   const issues: string[] = [];
   const measurement = recordWithExactKeys(value, MEASUREMENT_KEYS);
@@ -239,6 +246,10 @@ export function validateStrategyDecayMeasurement(value: unknown): readonly strin
   if (typeof measurement.measurementId !== 'string' || !MEASUREMENT_ID.test(measurement.measurementId)) issues.push('MEASUREMENT_ID_INVALID');
   if (!(STRATEGY_DECAY_SOURCES as readonly unknown[]).includes(measurement.strategy)) issues.push('MEASUREMENT_STRATEGY_INVALID');
   if (!label(measurement.configVersion)) issues.push('MEASUREMENT_CONFIG_VERSION_INVALID');
+  if (typeof measurement.measurementPolicyRevision !== 'string'
+    || !/^decaymeasurepolicy_[a-f0-9]{32}$/.test(measurement.measurementPolicyRevision)) {
+    issues.push('MEASUREMENT_POLICY_REVISION_INVALID');
+  }
   if (!label(measurement.direction)) issues.push('MEASUREMENT_DIRECTION_INVALID');
   if (!isValidUtcMillis(measurement.evaluatedAtMs)) issues.push('MEASUREMENT_EVALUATED_AT_INVALID');
   if (!(STRATEGY_DECAY_EVIDENCE_AUTHORITIES as readonly unknown[]).includes(measurement.evidenceAuthority)) {
@@ -266,6 +277,16 @@ export function validateStrategyDecayMeasurement(value: unknown): readonly strin
     && measurement.state !== derivedMeasurementState(axes)) issues.push('MEASUREMENT_STATE_AXIS_CONTRADICTION');
   if (measurement.evidenceAuthority !== 'PRODUCTION' && measurement.state !== 'UNKNOWN') {
     issues.push('NON_PRODUCTION_MEASUREMENT_MUST_BE_UNKNOWN');
+  }
+  if (issues.length === 0) {
+    try {
+      const { measurementId: _measurementId, ...material } = measurement as unknown as StrategyDecayMeasurement;
+      if (measurement.measurementId !== deriveStrategyDecayMeasurementId(material)) {
+        issues.push('MEASUREMENT_ID_CONTENT_MISMATCH');
+      }
+    } catch {
+      issues.push('MEASUREMENT_ID_CONTENT_MISMATCH');
+    }
   }
   return Object.freeze([...new Set(issues)].sort());
 }

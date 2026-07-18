@@ -11,7 +11,11 @@ import {
 } from '../../intelligenceFoundation/contracts/index.js';
 import {
   BINANCE_SOURCE_FACTS,
+  normalizeFunding,
   normalizeMarkPrice,
+  normalizeOpenInterest,
+  normalizeTrade,
+  type BinanceSourceFact,
 } from '../../intelligenceFoundation/evidence/index.js';
 import {
   buildUniverseGraph,
@@ -25,6 +29,10 @@ import {
 import {
   IntelligenceRuntimeBridge,
 } from '../../intelligenceRuntime/bridge/index.js';
+import {
+  VolumeEvidenceRouter,
+  type RegisteredEvidenceRouteReceipt,
+} from '../../intelligenceRuntime/routing/index.js';
 import {
   runtimeUniverseTruth,
   unavailableUniverseTruth,
@@ -65,6 +73,7 @@ import type {
   ProductionSystemIntegrationInput,
   ProductionSystemIntegrationPorts,
   ProductionVolumeConnectionStatus,
+  ProductionVolumeEvidenceCut,
   ProductionVolumeRuntimePort,
 } from './types.js';
 
@@ -128,6 +137,14 @@ function invalidMarketFactsCut(): Readonly<MarketFactsCut> {
 function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>): void {
   if (!input || typeof input !== 'object') throw new TypeError('production integration input is required');
   if (typeof input.clock?.nowMs !== 'function') throw new TypeError('clock.nowMs is required');
+  if (input.intelligenceEvidenceMaximumBytes !== undefined
+      && (!Number.isSafeInteger(input.intelligenceEvidenceMaximumBytes)
+        || input.intelligenceEvidenceMaximumBytes < 512
+        || input.intelligenceEvidenceMaximumBytes > MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES)) {
+    throw new RangeError(
+      `intelligenceEvidenceMaximumBytes must be an integer in [512, ${MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES}]`,
+    );
+  }
   for (const [name, value, methods] of [
     ['market', input.market, ['init', 'start', 'stop', 'allRows', 'priceUpdatedAt', 'markEventTimestamp']],
     ['basis', input.basis, ['start', 'stop', 'connectionStatus', 'integrationSnapshot']],
@@ -421,6 +438,20 @@ const PUBLIC_UNIVERSE_CONFIGURATION = 'i00-public-universe-v1';
 const MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS = 5_000;
 const MAX_PROJECTED_UNIVERSE_ROWS = 640;
 const MAX_PROJECTED_MARK_EVIDENCE = 256;
+const MAX_PROJECTED_OPEN_INTEREST_EVIDENCE = 256;
+const MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES = 2 * 1024 * 1024;
+
+function unknownRateBudget() {
+  return Object.freeze({
+    state: 'UNKNOWN' as const,
+    usedWeight: null,
+    limit: null,
+    intervalMs: null,
+    resetsAtMs: null,
+    retryAfterMs: null,
+    observedAtMs: null,
+  });
+}
 
 interface IntelligenceRefresh {
   readonly universeReady: boolean;
@@ -661,6 +692,7 @@ function coverageSlice(
  */
 class PublicIntelligenceLifecycle {
   private readonly bridge: IntelligenceRuntimeBridge;
+  private readonly router: VolumeEvidenceRouter;
   private readonly projectionIntervalMs: number;
   private runtimeActive = false;
   private intelligenceActive = false;
@@ -671,14 +703,25 @@ class PublicIntelligenceLifecycle {
   private lastUniverseReady = false;
   private lastEvidenceReady = false;
   private siblingRefreshHandoff: Readonly<IntelligenceRefreshHandoff> | null = null;
+  private publicationGeneration = 0;
+  private readonly sourceRevisions = new Map<string, number>();
 
   constructor(
     private readonly clock: ProductionSystemIntegrationInput['clock'],
     private readonly market: ProductionMarketEnginePort,
     private readonly evidence: MarketEvidenceReader,
+    private readonly volume: ProductionVolumeRuntimePort,
     private readonly maxAgeMs: number,
+    maximumEvidenceBytes?: number,
   ) {
-    this.bridge = new IntelligenceRuntimeBridge({ clock });
+    this.bridge = new IntelligenceRuntimeBridge({
+      clock,
+      ...(maximumEvidenceBytes === undefined
+        ? {}
+        : { config: { maximumEvidenceBytes } }),
+    });
+    this.router = new VolumeEvidenceRouter({ clock, sink: this.bridge });
+    this.volume.setEvidenceObserver?.((cut) => this.onVolumeEvidence(cut));
     // Sampling may reduce allocation churn, but it must never outlive the
     // source contract. Re-project at least twice inside the configured
     // freshness window and immediately fail closed on the source reads below.
@@ -690,6 +733,10 @@ class PublicIntelligenceLifecycle {
 
   readPinnedSymbols(): readonly string[] {
     return this.bridge.operatorFocusPins();
+  }
+
+  readEvidenceRoutingSnapshot() {
+    return this.router.snapshot();
   }
 
   readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
@@ -721,6 +768,9 @@ class PublicIntelligenceLifecycle {
   }
 
   startRuntime(): Promise<void> {
+    if (this.runtimeActive) return Promise.resolve();
+    this.publicationGeneration += 1;
+    this.sourceRevisions.clear();
     this.runtimeActive = true;
     return Promise.resolve();
   }
@@ -728,11 +778,13 @@ class PublicIntelligenceLifecycle {
   stopRuntime(): void {
     this.runtimeActive = false;
     this.intelligenceActive = false;
+    this.router.invalidate('INTELLIGENCE_RUNTIME_STOPPED');
     this.resetGenerationProjection();
   }
 
   startIntelligence(): Promise<void> {
     if (!this.runtimeActive) throw new TypeError('market intelligence requires the intelligence runtime');
+    if (this.intelligenceActive) return Promise.resolve();
     this.siblingRefreshHandoff = null;
     this.intelligenceActive = true;
     return Promise.resolve();
@@ -795,7 +847,7 @@ class PublicIntelligenceLifecycle {
   }
 
   private focusTruthCurrent(): boolean {
-    if (!this.runtimeActive || !this.intelligenceActive
+    if (!this.runtimeActive
         || !this.lastUniverseReady || !this.lastEvidenceReady
         || this.lastProjectedSpotTimestamp === null || this.lastProjectedUsdmTimestamp === null) return false;
     try {
@@ -810,6 +862,153 @@ class PublicIntelligenceLifecycle {
     }
   }
 
+  private nextSourceRevision(sourceId: string, dataset: string): number {
+    const key = `${this.publicationGeneration}\u0000${sourceId}\u0000${dataset}`;
+    const prior = this.sourceRevisions.get(key) ?? 0;
+    if (prior >= Number.MAX_SAFE_INTEGER) throw new RangeError('public evidence source revision exhausted');
+    const next = prior + 1;
+    this.sourceRevisions.set(key, next);
+    return next;
+  }
+
+  private marketEvidenceCurrent(
+    fact: BinanceSourceFact,
+    revision: number,
+    receipt: Readonly<RegisteredEvidenceRouteReceipt>,
+    fundingProjected: boolean,
+  ): boolean {
+    if (receipt.state !== 'FRESH'
+        || receipt.received < 1
+        || receipt.rejected !== 0
+        || receipt.routed + receipt.duplicate !== receipt.received) return false;
+    try {
+      const snapshot = this.router.snapshot();
+      const exactSource = snapshot.sources.find((source) => (
+        source.sourceId === fact.sourceId
+        && source.dataset === fact.dataset
+        && source.lifecycle === 'LIVE'
+        && source.generation === this.publicationGeneration
+        && source.revision === revision
+      ));
+      if (exactSource?.closed !== false || exactSource.bootstrapped !== true) return false;
+      if (!fundingProjected) return true;
+      return snapshot.capabilities.find((capability) => (
+        capability.capability === 'FUNDING'
+      ))?.freshness === 'FRESH';
+    } catch {
+      return false;
+    }
+  }
+
+  private onVolumeEvidence(cut: Readonly<ProductionVolumeEvidenceCut>): void {
+    const fact = BINANCE_SOURCE_FACTS.SPOT_AGG_TRADE;
+    const nowMs = this.clock.nowMs();
+    if (!isValidUtcMillis(nowMs)) {
+      this.router.invalidate('PUBLICATION_CLOCK_INVALID');
+      return;
+    }
+    if (cut.kind === 'SOURCE_CLOSED') {
+      if (!Number.isSafeInteger(cut.observedAtMs) || cut.observedAtMs < 0 || cut.observedAtMs > nowMs) {
+        this.router.invalidate('SOURCE_CLOSE_TIME_INVALID');
+        return;
+      }
+      this.router.route({
+        correlationId: stableId('existing-volume-source-close', {
+          generation: cut.generation,
+          revision: cut.revision,
+          observedAtMs: cut.observedAtMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'STOPPED' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: cut.generation,
+          revision: cut.revision,
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: cut.observedAtMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+      return;
+    }
+    if (!this.runtimeActive
+        || !Number.isSafeInteger(cut.receivedAtMs) || cut.receivedAtMs < 0 || cut.receivedAtMs > nowMs) return;
+    const result = normalizeTrade(cut.raw, {
+      sourceKey: 'SPOT_AGG_TRADE',
+      sourceId: fact.sourceId,
+      endpointClass: fact.endpointClass,
+      instrument: {
+        venue: 'BINANCE',
+        productFamily: 'SPOT',
+        symbol: cut.raw.s,
+        pair: cut.raw.s,
+        baseAsset: cut.baseAsset,
+        quoteAsset: 'USDT',
+        contractType: null,
+      },
+      receivedTimeMs: cut.receivedAtMs,
+      evaluatedAtMs: nowMs,
+      maxAgeMs: this.maxAgeMs,
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+    });
+    this.router.route({
+      correlationId: stableId('existing-volume-trade-ingest', {
+        generation: cut.generation,
+        revision: cut.revision,
+        aggregateTradeId: cut.raw.a,
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: cut.continuity,
+        generation: cut.generation,
+        revision: cut.revision,
+        bootstrap: cut.continuity === 'CONTIGUOUS' ? 'CONTIGUOUS_OWNER' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: cut.receivedAtMs,
+      }),
+      evidence: result.ok ? Object.freeze([result.value]) : Object.freeze([]),
+      qualityFailures: result.ok ? result.qualityFailures : result.failures,
+    });
+  }
+
+  private markUsdMEvidenceUnavailable(nowMs: number): void {
+    for (const fact of [BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE, BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST]) {
+      this.router.route({
+        correlationId: stableId('existing-market-source-unavailable', {
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          generation: this.publicationGeneration,
+          observedAtMs: nowMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'WARMING' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: this.publicationGeneration,
+          revision: this.nextSourceRevision(fact.sourceId, fact.dataset),
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: nowMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+    }
+  }
+
   private refresh(ctx: ComponentStepContext): Readonly<IntelligenceRefresh> {
     // Receipt time and evaluation time belong to the same deterministic
     // supervisor step. Taking a second clock sample here can place a newly
@@ -820,6 +1019,7 @@ class PublicIntelligenceLifecycle {
     const usdmFresh = usdm.connected
       && usdm.timestamp !== null
       && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
+    if (!usdmFresh) this.markUsdMEvidenceUnavailable(ctx.nowMs);
     if (!spot.connected || !spotFresh) {
       this.lastUniverseReady = false;
       this.lastEvidenceReady = false;
@@ -918,7 +1118,7 @@ class PublicIntelligenceLifecycle {
       const sourceTimeMs = marketCut.usdmSourceTimes.get(row.symbol) ?? null;
       if (sourceTimeMs === null || sourceTimeMs !== usdmTimestamp.sourceTimeMs
           || sourceTimeMs > usdmTimestamp.receivedAtMs) continue;
-      const result = normalizeMarkPrice({
+      const rawMark = {
         e: 'markPriceUpdate',
         E: sourceTimeMs,
         s: row.symbol,
@@ -928,7 +1128,12 @@ class PublicIntelligenceLifecycle {
         ...(typeof row.perpIndexPrice === 'number' && Number.isFinite(row.perpIndexPrice) && row.perpIndexPrice > 0
           ? { i: String(row.perpIndexPrice) }
           : {}),
-      }, {
+        ...(typeof row.fundingRate === 'number' && Number.isFinite(row.fundingRate) && Math.abs(row.fundingRate) <= 1
+          ? { r: String(row.fundingRate) }
+          : {}),
+        ...(validUtcOrNull(row.nextFundingTime) !== null ? { T: row.nextFundingTime } : {}),
+      };
+      const context = {
         sourceKey: 'USD_M_MARK_PRICE',
         sourceId: fact.sourceId,
         endpointClass: fact.endpointClass,
@@ -945,31 +1150,112 @@ class PublicIntelligenceLifecycle {
         evaluatedAtMs: nowMs,
         maxAgeMs: this.maxAgeMs,
         configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
-      });
-      if (result.ok) {
-        normalized.push(result.value);
-        qualityFailures.push(...result.qualityFailures);
+      } as const;
+      const mark = normalizeMarkPrice(rawMark, context);
+      if (mark.ok) {
+        normalized.push(mark.value);
+        qualityFailures.push(...mark.qualityFailures);
       } else {
-        qualityFailures.push(...result.failures);
+        qualityFailures.push(...mark.failures);
+      }
+      if (rawMark.r !== undefined && normalized.length < MAX_PROJECTED_MARK_EVIDENCE) {
+        const funding = normalizeFunding(rawMark, context);
+        if (funding.ok) {
+          normalized.push(funding.value);
+          qualityFailures.push(...funding.qualityFailures);
+        } else {
+          qualityFailures.push(...funding.failures);
+        }
       }
     }
-    if (normalized.length === 0) {
-      this.bridge.evaluate();
-      return Object.freeze({ universeReady, evidenceReady: false });
-    }
-    const receipt = this.bridge.ingest({
+    const markSourceRevision = this.nextSourceRevision(fact.sourceId, fact.dataset);
+    const fundingProjected = normalized.some((record) => record.kind === 'FUNDING');
+    const receipt = this.router.route({
       correlationId: stableId('existing-market-intelligence-ingest', {
         sourceTimeMs: usdmTimestamp.sourceTimeMs,
         evidenceIds: normalized.map((record) => record.id),
       }),
       scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: this.publicationGeneration,
+        revision: markSourceRevision,
+        bootstrap: normalized.length > 0 ? 'CURRENT_SNAPSHOT' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: nowMs,
+      }),
       evidence: normalized,
       qualityFailures,
+    });
+
+    const openInterest: NormalizedEvidence[] = [];
+    const openInterestQualityFailures = [];
+    const openInterestFact = BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST;
+    for (const row of boundedRows) {
+      if (openInterest.length >= MAX_PROJECTED_OPEN_INTEREST_EVIDENCE || !row.hasPerp
+          || typeof row.openInterest !== 'number' || !Number.isFinite(row.openInterest) || row.openInterest < 0) continue;
+      const sourceTimeMs = validUtcOrNull(row.openInterestUpdatedAt);
+      if (sourceTimeMs === null || sourceTimeMs > nowMs) continue;
+      const result = normalizeOpenInterest({
+        symbol: row.symbol,
+        openInterest: String(row.openInterest),
+        time: sourceTimeMs,
+      }, {
+        sourceKey: 'USD_M_OPEN_INTEREST',
+        sourceId: openInterestFact.sourceId,
+        endpointClass: openInterestFact.endpointClass,
+        instrument: {
+          venue: 'BINANCE',
+          productFamily: 'USD_M_PERPETUAL',
+          symbol: row.symbol,
+          pair: row.symbol,
+          baseAsset: row.base,
+          quoteAsset: 'USDT',
+          contractType: 'PERPETUAL',
+        },
+        receivedTimeMs: nowMs,
+        evaluatedAtMs: nowMs,
+        maxAgeMs: this.maxAgeMs,
+        configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      });
+      if (result.ok) {
+        openInterest.push(result.value);
+        openInterestQualityFailures.push(...result.qualityFailures);
+      } else {
+        openInterestQualityFailures.push(...result.failures);
+      }
+    }
+    this.router.route({
+      correlationId: stableId('existing-market-open-interest-ingest', {
+        evidenceIds: openInterest.map((record) => record.id),
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: openInterestFact.sourceId,
+        dataset: openInterestFact.dataset,
+        endpointClass: openInterestFact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: this.publicationGeneration,
+        revision: this.nextSourceRevision(openInterestFact.sourceId, openInterestFact.dataset),
+        bootstrap: openInterest.length > 0 ? 'CURRENT_SNAPSHOT' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: nowMs,
+      }),
+      evidence: openInterest,
+      qualityFailures: openInterestQualityFailures,
     });
     const evaluation = this.bridge.evaluate();
     return Object.freeze({
       universeReady,
-      evidenceReady: receipt.accepted + receipt.duplicate > 0 && evaluation.attentionPlan !== null,
+      evidenceReady: evaluation.attentionPlan !== null
+        && this.marketEvidenceCurrent(fact, markSourceRevision, receipt, fundingProjected),
     });
   }
 }
@@ -1200,7 +1486,9 @@ export function createProductionSystemIntegrationPorts(
     input.clock,
     input.market,
     evidence,
+    input.volume,
     maxAgeMs,
+    input.intelligenceEvidenceMaximumBytes,
   );
   const basisLifecycle = new BasisLifecyclePort(input.basis, maxAgeMs);
   const volumeLifecycle = new VolumeLifecyclePort(input.volume, maxAgeMs);
@@ -1295,6 +1583,10 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
+  const intelligenceEvidence = Object.freeze({
+    readRoutingSnapshot: () => publicIntelligence.readEvidenceRoutingSnapshot(),
+  });
+
   const strategyIntake = Object.freeze({
     basis: Object.freeze({
       readPaused: () => input.basis.intakePaused(),
@@ -1349,6 +1641,7 @@ export function createProductionSystemIntegrationPorts(
   });
 
   return Object.freeze({
-    sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
+    sourceRegistry, runtimes, components, summaries, intelligenceEvidence,
+    strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
   });
 }

@@ -189,7 +189,7 @@ export class FocusManager {
         }
         // fake/blocked signal: close focus if held, cool the symbol down
         if (this.focus.has(symbol)) {
-          this.close(symbol, d.rejectCode === 'risk_blocked' ? 'risk_rejected' : 'signal_expired', now);
+          this.close(symbol, 'signal_expired', now);
         }
         if (this.candidates.delete(symbol)) {
           this.sink.emit(

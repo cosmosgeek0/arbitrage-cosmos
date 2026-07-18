@@ -6,9 +6,9 @@
  */
 import type {
   FeatureSnapshot,
-  RejectCode,
   WindowKey,
 } from '../v0/types.js';
+import type { VolumeRejectCode } from './rejectVocabulary.js';
 
 // ---------- extended reject vocabulary ----------
 
@@ -27,13 +27,13 @@ export type VolumeDetailCode =
   | 'aggregate_single_print'; // one aggTrade aggregating a single raw print
 
 /** Map a detail code to the closest frozen v0 code (contract-safe). */
-export const DETAIL_TO_V0: Record<VolumeDetailCode, RejectCode> = {
+export const DETAIL_TO_V0 = {
   wash_uniformity_suspect: 'taker_imbalance_missing',
   imbalance_weak: 'taker_imbalance_missing',
   depth_vanished: 'depth_too_thin',
-  confirmation_pending: 'volume_not_abnormal',
+  confirmation_pending: null,
   aggregate_single_print: 'one_print_spike',
-};
+} as const satisfies Record<VolumeDetailCode, VolumeRejectCode | null>;
 
 // ---------- tape / raw trade forensics ----------
 

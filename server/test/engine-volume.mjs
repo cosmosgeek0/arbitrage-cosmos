@@ -20,6 +20,8 @@ import {
   steadyBooks,
   mapAggTrade,
   miniTickerDelta,
+  VOLUME_HISTORICAL_REJECT_CODE_MAP,
+  VOLUME_REJECT_CODES,
 } from '../dist/engine/volume/index.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
@@ -366,6 +368,18 @@ section('11. snapshots return contract-shaped data');
   check('per-symbol features exposed', snap.featuresOf(SYM)?.baselineReady === true);
   check('ignore decisions counted, not stored', engine.ignoredCount() > 0 &&
     engine.decisions(2000).every((d) => d.kind !== 'ignore'));
+  const vocabulary = snap.rejectVocabulary();
+  check('volume_not_abnormal retires to a non-reject ignore outcome',
+    VOLUME_HISTORICAL_REJECT_CODE_MAP.volume_not_abnormal.successorOutcome === 'ignore'
+      && VOLUME_HISTORICAL_REJECT_CODE_MAP.volume_not_abnormal.successorCode === null);
+  check('risk_blocked moves to the canonical risk_rejected event',
+    VOLUME_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorOutcome === 'risk_rejected'
+      && VOLUME_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorCode === null);
+  check('retired Volume spellings cannot appear in the detector vocabulary',
+    ['volume_not_abnormal', 'risk_blocked'].every((code) => !VOLUME_REJECT_CODES.includes(code)));
+  check('snapshot exposes exact Volume vocabulary and historical map',
+    JSON.stringify(vocabulary.emitted) === JSON.stringify(VOLUME_REJECT_CODES)
+      && vocabulary.historical.volume_not_abnormal.successorOutcome === 'ignore');
 }
 
 // ================================================================

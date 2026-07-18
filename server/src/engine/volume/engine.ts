@@ -8,7 +8,6 @@ import type {
   Clock,
   Decision,
   EventSink,
-  RiskVerdictBridge,
   SymbolMeta,
   TradeTick,
 } from '../v0/types.js';
@@ -21,7 +20,11 @@ import { FocusManager } from './focus.js';
 import { ProposalStore, type IntentResult } from './proposals.js';
 import { MemoryEventSink, makeEvent } from './events.js';
 import { priorityOf } from './priority.js';
-import type { WakeupSnapshot } from './types.js';
+import type {
+  VolumeFoundationRiskAttachmentInput,
+  VolumeProposalRiskCut,
+  WakeupSnapshot,
+} from './types.js';
 import type { SeedMinute } from './rolling.js';
 import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol, positive, validSymbolMeta } from './validation.js';
 
@@ -217,8 +220,12 @@ export class VolumeEngine {
     return this.proposalStore.intentFor(proposalId, this.killSwitchOn);
   }
 
-  recordRiskResult(proposalId: string, verdict: Readonly<RiskVerdictBridge>): boolean {
-    return this.proposalStore.recordRiskResult(proposalId, verdict);
+  readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null {
+    return this.proposalStore.readProposalRiskCut(proposalId);
+  }
+
+  recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean {
+    return this.proposalStore.recordFoundationRiskResult(input);
   }
 
   // ---- core tick ----
@@ -237,7 +244,9 @@ export class VolumeEngine {
         killSwitch: this.killSwitchOn,
         symbolAllowed: this.symbolAllowed(symbol),
         borrowStatus: 'not_needed',
-        nowTs: now,
+        // The detector decision and proposal owner fields must bind to the
+        // exact feature cut, even when a production clock advances mid-tick.
+        nowTs: f.ts,
         correlationId: this.correlationFor(symbol),
       };
       const evaluated = this.detector.evaluate(f, ctx);

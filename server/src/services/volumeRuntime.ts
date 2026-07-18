@@ -5,7 +5,12 @@ import type { VolumeConfig } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
 import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
-import type { Decision, EngineEvent, EngineProposal } from '../engine/v0/types.js';
+import type { Decision, EngineEvent } from '../engine/v0/types.js';
+import type {
+  VolumeFoundationRiskAttachmentInput,
+  VolumeProposal,
+  VolumeProposalRiskCut,
+} from '../engine/volume/types.js';
 import type { AppConfig } from '../types.js';
 import type { Ledger } from '../ledger.js';
 
@@ -23,7 +28,7 @@ export interface VolumeRuntimeIntegrationSnapshot {
   lastTickTs: number | null;
   config: VolumeConfig;
   decisions: Decision[];
-  proposals: EngineProposal[];
+  proposals: VolumeProposal[];
 }
 
 const STREAM_CHUNK = 140;
@@ -205,6 +210,16 @@ export class VolumeRuntime {
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
     });
+  }
+
+  /** Passive exact-cut read used only by the production Foundation risk composer. */
+  readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null {
+    return this.engine.readProposalRiskCut(proposalId);
+  }
+
+  /** Exact compare-and-record; Volume remains the sole proposal mutation owner. */
+  recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean {
+    return this.engine.recordFoundationRiskResult(input);
   }
 
   setIntakePaused(paused: boolean): boolean {
@@ -636,6 +651,15 @@ export class VolumeRuntime {
           direction: proposal.direction,
           confidence: proposal.confidence,
           reason: proposal.reason,
+          proposalRevision: proposal.proposalRevision,
+          proposalDigest: proposal.proposalDigest,
+          configurationRevision: proposal.configurationRevision,
+          featureObservedAtMs: proposal.featureObservedAtMs,
+          expiresAtMs: proposal.expiresAtMs,
+          baselineVolume: proposal.baselineVolume,
+          currentVolume1m: proposal.currentVolume1m,
+          tradeCountMultiple: proposal.tradeCountMultiple,
+          riskResult: proposal.riskResult,
         } : null,
       };
     }).filter((row): row is NonNullable<typeof row> => row !== null);

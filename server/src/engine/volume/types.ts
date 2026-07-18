@@ -7,9 +7,9 @@
 import type {
   EngineProposal,
   FeatureSnapshot,
-  RiskVerdictBridge,
   WindowKey,
 } from '../v0/types.js';
+import type { RiskCheck, RiskVerdict } from '../../foundation/contracts/index.js';
 import type { VolumeRejectCode } from './rejectVocabulary.js';
 
 // ---------- extended reject vocabulary ----------
@@ -133,16 +133,80 @@ export interface PriorityBreakdown {
   focusAgePenalty: number;
 }
 
-/** Volume-owned proposal fields copied from the decisive feature cut. */
+/** Exact immutable identity of one Volume-owned proposal cut. */
+export interface VolumeProposalRiskCut {
+  readonly proposalId: string;
+  readonly proposalRevision: number;
+  readonly proposalDigest: string;
+  readonly configurationRevision: string;
+  readonly correlationId: string;
+  readonly symbol: string;
+  readonly direction: 'long' | 'short';
+  readonly updatedTs: number;
+  readonly featureObservedAtMs: number;
+  readonly expiresAtMs: number;
+}
+
+/**
+ * Input accepted by the Volume owner's compare-and-record boundary.
+ * System Integration owns canonical proposal projection and supplies the
+ * untouched Foundation verdict. Volume only verifies the exact source cut
+ * is still current before attaching that projection.
+ */
+export interface VolumeFoundationRiskAttachmentInput {
+  readonly expectedProposalId: string;
+  readonly expectedProposalRevision: number;
+  readonly expectedProposalDigest: string;
+  readonly expectedConfigurationRevision: string;
+  readonly expectedCorrelationId: string;
+  readonly canonicalProposalId: string;
+  readonly planId: string;
+  readonly riskIntentDigest: string;
+  readonly verdict: Readonly<RiskVerdict>;
+  readonly verdictDigest: string;
+}
+
+/** Foundation-owned result attached to one exact Volume proposal revision. */
+export interface VolumeFoundationRiskResult {
+  readonly owner: 'FOUNDATION_MULTI_LEG_RISK';
+  readonly proposalId: string;
+  readonly canonicalProposalId: string;
+  readonly proposalRevision: number;
+  readonly proposalDigest: string;
+  readonly configurationRevision: string;
+  readonly correlationId: string;
+  readonly planId: string;
+  readonly riskIntentDigest: string;
+  readonly verdictDigest: string;
+  readonly allowed: boolean;
+  readonly evaluatedAt: number;
+  readonly expiresAt: number;
+  readonly checks: readonly Readonly<RiskCheck>[];
+  readonly blockingCodes: readonly string[];
+}
+
+/** Volume-owned proposal fields copied from one decisive feature cut. */
 export interface VolumeProposal extends EngineProposal {
-  /** Robust completed-minute median supplied by the baseline owner. */
+  /** Volume proposals are directional spot wakeups, never basis leg pairs. */
+  direction: 'long' | 'short';
+  /** Monotonic source-owner revision, beginning at 1. */
+  proposalRevision: number;
+  /** Canonical digest of proposal semantics, excluding the risk attachment. */
+  proposalDigest: string;
+  /** Canonical revision of the exact VolumeConfig used for this cut. */
+  configurationRevision: string;
+  /** Exact feature-cut time shared by all three metrics below. */
+  featureObservedAtMs: number;
+  /** Machine-readable proposal expiry owned by Volume. */
+  expiresAtMs: number;
+  /** Robust completed-minute quote-volume median, in quote asset per minute. */
   baselineVolume: number | null;
-  /** Current rolling 60-second quote volume supplied by the window owner. */
+  /** Current rolling 60-second quote volume, in quote asset units. */
   currentVolume1m: number | null;
-  /** Detector's decisive 5-second trade-count multiple. */
+  /** Detector's decisive rolling 5-second trade-count multiple. */
   tradeCountMultiple: number | null;
-  /** Attached result from the existing risk bridge; null until supplied. */
-  riskResult: Readonly<Omit<RiskVerdictBridge, 'reasons'> & { readonly reasons: readonly string[] }> | null;
+  /** Exact canonical Foundation result; null until compare-and-record succeeds. */
+  riskResult: Readonly<VolumeFoundationRiskResult> | null;
 }
 
 // ---------- proposal invalidation ----------
@@ -153,7 +217,8 @@ export type InvalidationReason =
   | 'move_exhausted'
   | 'ttl_expired'
   | 'universe_removed'
-  | 'capacity_pruned';
+  | 'capacity_pruned'
+  | 'signal_superseded';
 
 export interface InvalidationRule {
   /** 60s volume multiple at/below this ⇒ volume_normalized */
@@ -162,7 +227,7 @@ export interface InvalidationRule {
   spreadBlownOutBps: number;
   /** |move since proposal| at/above this ⇒ move_exhausted */
   moveExhaustedPct: number;
-  referencePrice: number;
+  referencePrice: number | null;
 }
 
 // ---------- synthetic replay scripting ----------

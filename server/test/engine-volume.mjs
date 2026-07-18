@@ -25,6 +25,14 @@ import {
   projectVolumeRejectDisposition,
 } from '../dist/engine/volume/index.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
+import {
+  canonicalJson,
+  deriveCanonicalProposalId,
+  derivePlanId,
+  deriveRiskVerdict,
+  deriveSourceProposalId,
+  stableHash128Hex,
+} from '../dist/foundation/contracts/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let passCount = 0;
@@ -39,6 +47,44 @@ function section(title) {
   console.log(`\n— ${title}`);
 }
 const approx = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
+
+function blockedFoundationVerdict(evaluatedAt, ttlMs = 1_000) {
+  return deriveRiskVerdict({
+    evaluatedAt,
+    ttlMs,
+    checks: [{
+      code: 'VALIDATE_ONLY_REVIEW_REQUIRED',
+      status: 'FAIL',
+      blocking: true,
+      detail: 'synthetic Foundation owner proof',
+      observed: 'REVIEW_REQUIRED',
+      limit: 'PASS',
+      evidenceTimestamp: evaluatedAt,
+    }],
+  });
+}
+
+function riskAttachment(cut, verdict, overrides = {}) {
+  const sourceRecordId = deriveSourceProposalId({ source: 'VOLUME', engineKey: cut.proposalId });
+  const canonicalProposalId = deriveCanonicalProposalId({
+    source: 'VOLUME',
+    sourceRecordId,
+    symbol: cut.symbol,
+  });
+  return {
+    expectedProposalId: cut.proposalId,
+    expectedProposalRevision: cut.proposalRevision,
+    expectedProposalDigest: cut.proposalDigest,
+    expectedConfigurationRevision: cut.configurationRevision,
+    expectedCorrelationId: cut.correlationId,
+    canonicalProposalId,
+    planId: derivePlanId({ canonicalProposalId, attempt: 0 }),
+    riskIntentDigest: `riskint_${'a'.repeat(32)}`,
+    verdict,
+    verdictDigest: `riskv_${stableHash128Hex(`foundationRiskVerdict|${canonicalJson(verdict)}`)}`,
+    ...overrides,
+  };
+}
 
 // ---------- shared scenario plumbing ----------
 
@@ -169,34 +215,186 @@ section('2. sustained volume + trade-count activation ⇒ focus → proposal');
   check('proposal direction long (taker-buy pressure)', p?.direction === 'long', p?.direction);
   check('proposal open/updated', p?.status === 'open' || p?.status === 'updated', p?.status);
   check('confidence in (0,1]', typeof p?.confidence === 'number' && p.confidence > 0 && p.confidence <= 1, `c=${p?.confidence?.toFixed(3)}`);
-  check('proposal exposes baseline/current 1m volume and trade-count multiple from owner features',
-    typeof p?.baselineVolume === 'number' && p.baselineVolume > 0
-      && typeof p.currentVolume1m === 'number' && p.currentVolume1m > 0
-      && typeof p.tradeCountMultiple === 'number' && p.tradeCountMultiple > 0);
+  const decisiveCut = engine.featureSnapshot(SYM);
+  check('proposal metrics equal one exact owner feature cut',
+    p?.featureObservedAtMs === decisiveCut?.ts
+      && p?.baselineVolume === decisiveCut?.baseline.quotePerMinMedian
+      && p?.currentVolume1m === decisiveCut?.windows['60s']?.quoteVolume
+      && p?.tradeCountMultiple === decisiveCut?.tradeCountMultiple['5s']);
+  check('proposal carries monotonic revision, content digest, config revision, and machine expiry',
+    p?.proposalRevision >= 1
+      && /^vprop_[0-9a-f]{64}$/.test(p?.proposalDigest ?? '')
+      && /^vcfg_[0-9a-f]{64}$/.test(p?.configurationRevision ?? '')
+      && p?.expiresAtMs === p?.createdTs + engine.cfg.proposalTtlMs);
+  const proposalDecision = [...engine.decisions(2_000)].reverse()
+    .find((decision) => decision.kind === 'proposal');
+  let crossCutRejected = false;
+  let crossTimeRejected = false;
+  let futureCutRejected = false;
+  try {
+    engine.proposalStore.upsertFromDecision(proposalDecision, { ...decisiveCut, symbol: 'OTHERUSDT' });
+  } catch { crossCutRejected = true; }
+  try {
+    engine.proposalStore.upsertFromDecision(proposalDecision, { ...decisiveCut, ts: decisiveCut.ts - 1 });
+  } catch { crossTimeRejected = true; }
+  try {
+    engine.proposalStore.upsertFromDecision(
+      { ...proposalDecision, ts: runner.clock.now() + 1 },
+      { ...decisiveCut, ts: runner.clock.now() + 1 },
+    );
+  } catch { futureCutRejected = true; }
+  check('cross-symbol, cross-time, or future decision/feature cuts are refused',
+    proposalDecision !== undefined && crossCutRejected && crossTimeRejected && futureCutRejected);
   check('proposal starts with no fabricated risk result', p?.riskResult === null);
-  const riskResult = {
-    allowed: false,
-    reasons: ['VALIDATE_ONLY_REVIEW_REQUIRED'],
-    correlationId: p?.correlationId,
-    ts: runner.clock.now(),
+  const firstCut = engine.readProposalRiskCut(p.id);
+  const firstVerdict = blockedFoundationVerdict(runner.clock.now());
+  const firstAttachment = riskAttachment(firstCut, firstVerdict);
+  const otherSourceRecordId = deriveSourceProposalId({ source: 'VOLUME', engineKey: 'other-volume-proposal' });
+  const otherCanonicalProposalId = deriveCanonicalProposalId({
+    source: 'VOLUME',
+    sourceRecordId: otherSourceRecordId,
+    symbol: firstCut.symbol,
+  });
+  check('wrong revision, digest, config, or correlation cannot attach',
+    engine.recordFoundationRiskResult({ ...firstAttachment, expectedProposalRevision: firstCut.proposalRevision + 1 }) === false
+      && engine.recordFoundationRiskResult({ ...firstAttachment, expectedProposalDigest: 'vprop_wrong' }) === false
+      && engine.recordFoundationRiskResult({ ...firstAttachment, expectedConfigurationRevision: 'vcfg_wrong' }) === false
+      && engine.recordFoundationRiskResult({ ...firstAttachment, expectedCorrelationId: 'wrong-correlation' }) === false);
+  check('canonical proposal, plan, and risk-intent identities are exact and closed',
+    engine.recordFoundationRiskResult({
+      ...firstAttachment,
+      canonicalProposalId: otherCanonicalProposalId,
+    }) === false
+      && engine.recordFoundationRiskResult({
+        ...firstAttachment,
+        planId: derivePlanId({ canonicalProposalId: firstAttachment.canonicalProposalId, attempt: 1 }),
+      }) === false
+      && engine.recordFoundationRiskResult({
+        ...firstAttachment,
+        riskIntentDigest: 'riskint_wrong',
+      }) === false);
+  const arrayVerdict = [];
+  Object.assign(arrayVerdict, firstVerdict);
+  const sparseVerdict = {
+    allowed: true,
+    evaluatedAt: runner.clock.now(),
+    expiresAt: runner.clock.now() + 1_000,
+    checks: new Array(1),
+    blockingCodes: [],
   };
-  check('correlation-mismatched risk result is rejected',
-    typeof engine.recordRiskResult === 'function'
-      && engine.recordRiskResult(p.id, { ...riskResult, correlationId: 'wrong-correlation' }) === false
-      && engine.proposalStore.byId(p.id)?.riskResult === null);
-  const attached = typeof engine.recordRiskResult === 'function'
-    && engine.recordRiskResult(p.id, riskResult);
-  check('canonical risk result attaches without recomputation', attached === true
-    && engine.proposalStore.byId(p.id)?.riskResult?.reasons[0] === 'VALIDATE_ONLY_REVIEW_REQUIRED');
-  const serialized = JSON.parse(JSON.stringify(new VolumeSnapshots(engine).proposals()[0]));
-  check('proposal serialization preserves the explicit fields and risk result',
-    serialized.baselineVolume === p.baselineVolume
-      && serialized.currentVolume1m === p.currentVolume1m
-      && serialized.tradeCountMultiple === p.tradeCountMultiple
-      && serialized.riskResult?.allowed === false);
+  check('array and sparse-array verdict shapes fail closed before attachment',
+    engine.recordFoundationRiskResult(riskAttachment(firstCut, arrayVerdict)) === false
+      && engine.recordFoundationRiskResult(riskAttachment(firstCut, sparseVerdict)) === false);
+  const mutableExtra = { note: 'before' };
+  const extraCheckVerdict = {
+    ...firstVerdict,
+    checks: [{ ...firstVerdict.checks[0], mutableExtra }],
+  };
+  const extraCheckRejected = engine.recordFoundationRiskResult(riskAttachment(firstCut, extraCheckVerdict)) === false;
+  mutableExtra.note = 'after';
+  check('noncanonical RiskCheck keys cannot leak mutable state into stored or serialized truth',
+    extraCheckRejected && engine.proposalStore.byId(p.id)?.riskResult === null);
+  check('future and already-expired verdicts fail closed',
+    engine.recordFoundationRiskResult(riskAttachment(
+      firstCut,
+      blockedFoundationVerdict(runner.clock.now() + 1),
+    )) === false
+      && engine.recordFoundationRiskResult(riskAttachment(
+        firstCut,
+        { ...firstVerdict, expiresAt: runner.clock.now() },
+      )) === false);
+  runner.clock.advance(1);
+  const firstAttached = engine.recordFoundationRiskResult(firstAttachment);
+  check('canonical Foundation result can attach after evaluation while its exact cut remains current', firstAttached === true
+    && engine.proposalStore.byId(p.id)?.riskResult?.owner === 'FOUNDATION_MULTI_LEG_RISK'
+    && engine.proposalStore.byId(p.id)?.riskResult?.blockingCodes[0] === 'VALIDATE_ONLY_REVIEW_REQUIRED');
+  const riskEventsBeforeReplay = engine.memSink.byKind('risk_rejected').length;
+  check('exact Foundation result replay is idempotent',
+    engine.recordFoundationRiskResult(firstAttachment) === true
+      && engine.memSink.byKind('risk_rejected').length === riskEventsBeforeReplay);
+
+  runner.clock.advance(1);
+  engine.tick();
+  const refreshed = engine.proposalStore.byId(p.id);
+  const refreshedCut = engine.readProposalRiskCut(p.id);
+  check('newer feature evidence advances revision/digest and clears prior risk',
+    refreshed?.proposalRevision === p.proposalRevision + 1
+      && refreshed?.proposalDigest !== p.proposalDigest
+      && refreshed?.riskResult === null);
+  check('delayed prior-revision verdict cannot relabel the refreshed proposal',
+    engine.recordFoundationRiskResult(firstAttachment) === false);
+  const currentVerdict = blockedFoundationVerdict(runner.clock.now());
+  const currentAttachment = riskAttachment(refreshedCut, currentVerdict);
+  check('a verdict cannot outlive the exact Volume proposal cut',
+    engine.recordFoundationRiskResult(riskAttachment(
+      refreshedCut,
+      { ...currentVerdict, expiresAt: refreshedCut.expiresAtMs + 1 },
+    )) === false);
+  check('current refreshed cut accepts its own Foundation result',
+    engine.recordFoundationRiskResult(currentAttachment) === true);
+
+  const projected = new VolumeSnapshots(engine).proposals()[0];
+  const serialized = JSON.parse(JSON.stringify(projected));
+  check('proposal serialization preserves exact owner fields and risk binding',
+    serialized.proposalRevision === refreshedCut.proposalRevision
+      && serialized.proposalDigest === refreshedCut.proposalDigest
+      && serialized.configurationRevision === refreshedCut.configurationRevision
+      && serialized.baselineVolume === refreshed.baselineVolume
+      && serialized.currentVolume1m === refreshed.currentVolume1m
+      && serialized.tradeCountMultiple === refreshed.tradeCountMultiple
+      && serialized.riskResult?.proposalDigest === refreshedCut.proposalDigest
+      && Object.keys(serialized.riskResult?.checks?.[0] ?? {}).sort().join(',')
+        === 'blocking,code,detail,evidenceTimestamp,limit,observed,status'
+      && !('rule' in serialized)
+      && !('invalidatedBy' in serialized));
+  const beforeMutation = JSON.stringify(projected);
+  try { projected.evidence.direction = 'mutated'; } catch {}
+  try { projected.riskResult.blockingCodes.push('MUTATED'); } catch {}
+  check('snapshot projection is deeply frozen and mutation-isolated',
+    Object.isFrozen(projected)
+      && Object.isFrozen(projected.evidence)
+      && Object.isFrozen(projected.riskResult)
+      && Object.isFrozen(projected.riskResult.blockingCodes)
+      && JSON.stringify(projected) === beforeMutation);
   check('invalidation metadata present', typeof p?.invalidation === 'string' && p.invalidation.includes('volume multiple'));
   check('state is PROPOSED', engine.focusMgr.stateOf(SYM) === 'PROPOSED', engine.focusMgr.stateOf(SYM));
   check('no automatic order anywhere', engine.memSink.all().every((e) => !/order/.test(e.kind)));
+
+  const sameCut = engine.featureSnapshot(SYM);
+  const staleCorrelationReplay = engine.proposalStore.upsertFromDecision(
+    { ...proposalDecision, ts: sameCut.ts, correlationId: 'corr-r57-stale-replay' },
+    sameCut,
+  );
+  check('a different correlation cannot supersede an equally old feature cut',
+    staleCorrelationReplay.id === refreshed.id
+      && engine.proposalStore.byId(refreshed.id)?.riskResult?.verdictDigest === currentAttachment.verdictDigest);
+
+  runner.clock.advance(1);
+  const newerCut = engine.featureSnapshot(SYM);
+  const replacement = engine.proposalStore.upsertFromDecision(
+    { ...proposalDecision, ts: newerCut.ts, correlationId: 'corr-r57-superseding-signal' },
+    newerCut,
+  );
+  const superseded = engine.proposalStore.byId(refreshed.id);
+  check('a newer differently correlated signal terminalizes the old proposal before replacement',
+    replacement.id !== refreshed.id
+      && replacement.correlationId === 'corr-r57-superseding-signal'
+      && superseded?.status === 'expired'
+      && superseded?.proposalRevision === refreshed.proposalRevision + 1
+      && superseded?.proposalDigest !== refreshed.proposalDigest
+      && superseded?.riskResult === null
+      && engine.memSink.byKind('proposal_expired').some(
+        (event) => event.correlationId === refreshed.correlationId
+          && event.payload?.invalidatedBy === 'signal_superseded',
+      ));
+
+  runner.clock.set(replacement.expiresAtMs);
+  const expiredIntent = engine.intentFor(replacement.id);
+  check('intent minting terminalizes and refuses a proposal at its machine expiry',
+    expiredIntent.ok === false
+      && expiredIntent.reason === 'proposal_not_open'
+      && engine.proposalStore.byId(replacement.id)?.status === 'expired'
+      && engine.readProposalRiskCut(replacement.id) === null);
 }
 
 // ================================================================
@@ -342,6 +540,8 @@ section('9. kill switch ⇒ blocked from execution path');
   live.engine.setKillSwitch(true);
   const blocked = live.engine.intentFor(p.id);
   check('kill switch blocks intent minting', blocked.ok === false && blocked.reason === 'kill_switch_on');
+  check('kill switch rejection does not fabricate a Foundation risk result',
+    live.engine.proposalStore.byId(p.id)?.riskResult === null);
   check('block ledgered as risk_rejected/kill_switch_on',
     live.engine.memSink.byKind('risk_rejected').some((e) => e.rejectCode === 'kill_switch_on'));
   globalThis.__live = live; // reused by case 10
@@ -694,9 +894,68 @@ section('22. lifecycle and proposal persistence are idempotent');
   engine.proposalStore.upsertFromDecision(decision, feature);
   check('identical proposal persisted exactly once', engine.memSink.byKind('proposal_created').length === 1 &&
     engine.memSink.byKind('proposal_updated').length === 0);
+
+  const initial = engine.proposalStore.all()[0];
+  clock.advance(1);
+  engine.cfg.suggestedNotionalUsd = 37;
+  const newerFeature = engine.featureSnapshot('IDEMUSDT');
+  const shortDecision = {
+    ...decision,
+    ts: newerFeature.ts,
+    evidence: { direction: 'short', confidence: 0.9 },
+  };
+  const directionalRefresh = engine.proposalStore.upsertFromDecision(shortDecision, newerFeature);
+  check('same-correlation refresh updates direction, sizing, revision, and digest as one cut',
+    directionalRefresh.direction === 'short'
+      && directionalRefresh.suggestedNotionalUsd === 37
+      && directionalRefresh.proposalRevision === initial.proposalRevision + 1
+      && directionalRefresh.proposalDigest !== initial.proposalDigest);
+  let invalidDirectionRejected = false;
+  try {
+    engine.proposalStore.upsertFromDecision({
+      ...shortDecision,
+      evidence: { direction: 'sideways', confidence: 0.9 },
+    }, newerFeature);
+  } catch { invalidDirectionRejected = true; }
+  check('missing or malformed direction cannot fabricate a long proposal side', invalidDirectionRejected);
+  const beforeStaleReplay = engine.proposalStore.byId(directionalRefresh.id);
+  clock.advance(engine.cfg.staleMs + 1);
+  let staleReplayRejected = false;
+  try {
+    engine.proposalStore.upsertFromDecision(shortDecision, newerFeature);
+  } catch { staleReplayRejected = true; }
+  check('an exactly matched but stale decision/feature cut cannot receive a fresh proposal TTL',
+    staleReplayRejected
+      && engine.proposalStore.byId(directionalRefresh.id)?.proposalDigest === beforeStaleReplay.proposalDigest);
   engine.stop();
   engine.stop();
   check('double stop emits one engine_stopped event', engine.memSink.byKind('engine_stopped').length === 1);
+}
+
+// ================================================================
+section('22b. advancing production clock keeps decision and feature cuts exact');
+{
+  const rand = seededRng(222);
+  const { engine, runner } = mkWorld();
+  warmup(runner, rand);
+  runner.play([{ symbol: SYM, trades: cleanBurst(rand), books: burstBooks() }], 16_000);
+  const before = engine.proposalStore.openFor(SYM);
+  let advancingNow = runner.clock.now();
+  const stableNow = runner.clock.now.bind(runner.clock);
+  runner.clock.now = () => advancingNow++;
+  let tickError = null;
+  try { engine.tick(); } catch (error) { tickError = error; }
+  runner.clock.now = stableNow;
+  runner.clock.set(advancingNow);
+  const after = engine.proposalStore.openFor(SYM);
+  const lastProposalDecision = [...engine.decisions(2_000)].reverse()
+    .find((candidate) => candidate.kind === 'proposal');
+  check('mid-tick clock movement cannot split detector time from the exact feature cut',
+    before !== undefined
+      && tickError === null
+      && after?.proposalRevision === before.proposalRevision + 1
+      && lastProposalDecision?.ts === after?.featureObservedAtMs);
+  engine.stop();
 }
 
 // ================================================================

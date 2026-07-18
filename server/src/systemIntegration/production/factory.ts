@@ -56,6 +56,7 @@ import {
 } from './temporal.js';
 import { admitProductionSourceRegistry } from './sourceAdmission.js';
 import { createProductionCapitalEligibilityPort } from './capitalEconomics.js';
+import { createProductionVolumeRiskPort } from './volumeRisk.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
@@ -1257,6 +1258,11 @@ export function createProductionSystemIntegrationPorts(
     clock: input.clock,
     owners: input.capitalEconomicsOwners ?? null,
   });
+  const volumeRisk = createProductionVolumeRiskPort({
+    clock: input.clock,
+    runtime: input.volume,
+    owner: input.volumeRiskEvidenceOwner ?? null,
+  });
 
   return Object.freeze({
     sourceRegistry,
@@ -1265,5 +1271,6 @@ export function createProductionSystemIntegrationPorts(
     summaries,
     strategyIntake,
     capitalEligibility,
+    volumeRisk,
   });
 }

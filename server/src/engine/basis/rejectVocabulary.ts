@@ -1,4 +1,4 @@
-import type { RejectCode } from '../v0/types.js';
+import type { FocusExitReason, RejectCode } from '../v0/types.js';
 
 /** Exact reject codes the Basis scanner is allowed to emit. */
 export const BASIS_REJECT_CODES = Object.freeze([
@@ -29,7 +29,7 @@ export type HistoricalBasisRejectCode =
 export interface HistoricalBasisRejectDisposition {
   readonly disposition: 'RETIRED_DUPLICATE' | 'MOVED_TO_OWNER';
   readonly successorCode: BasisRejectCode | null;
-  readonly successorOutcome: string;
+  readonly successorOutcome: 'strategy_decision' | 'risk_rejected' | 'ACCOUNT_TRUTH_BLOCKED';
   readonly owner: 'BASIS' | 'FOUNDATION_RISK' | 'CAPITAL_ELIGIBILITY';
 }
 
@@ -60,6 +60,107 @@ export const BASIS_HISTORICAL_REJECT_CODE_MAP: Readonly<
     owner: 'CAPITAL_ELIGIBILITY',
   }),
 });
+
+export type BasisRejectProjectionClassification =
+  | 'CURRENT_SCANNER'
+  | 'CURRENT_ENGINE'
+  | 'HISTORICAL'
+  | 'INVALID';
+
+/**
+ * Lossless operational interpretation of a raw Basis reject spelling.
+ *
+ * `intake_paused` is an Engine-owned runtime outcome rather than a scanner
+ * outcome, so it remains deliberately outside `BASIS_REJECT_CODES`.
+ */
+export interface BasisRejectProjection {
+  readonly rawCode: string | null;
+  readonly classification: BasisRejectProjectionClassification;
+  readonly disposition:
+    | 'CURRENT'
+    | HistoricalBasisRejectDisposition['disposition']
+    | 'INVALID';
+  readonly successorCode: BasisRejectCode | 'intake_paused' | null;
+  readonly successorOutcome:
+    | 'strategy_decision'
+    | 'risk_rejected'
+    | 'ACCOUNT_TRUTH_BLOCKED'
+    | 'INVALID';
+  readonly owner:
+    | HistoricalBasisRejectDisposition['owner']
+    | 'ENGINE'
+    | 'UNRESOLVED';
+  readonly focusExitReason: Extract<FocusExitReason, 'risk_rejected' | 'cooldown'>;
+}
+
+const BASIS_REJECT_CODE_SET: ReadonlySet<string> = new Set(BASIS_REJECT_CODES);
+
+/**
+ * Project persisted/replayed spellings through the canonical retirement map.
+ * Consumers must use this instead of independently reinterpreting raw codes.
+ */
+export function projectBasisRejectDisposition(rawCode: unknown): Readonly<BasisRejectProjection> {
+  if (typeof rawCode !== 'string') {
+    return Object.freeze({
+      rawCode: null,
+      classification: 'INVALID',
+      disposition: 'INVALID',
+      successorCode: null,
+      successorOutcome: 'INVALID',
+      owner: 'UNRESOLVED',
+      focusExitReason: 'cooldown',
+    });
+  }
+
+  if (BASIS_REJECT_CODE_SET.has(rawCode)) {
+    const code = rawCode as BasisRejectCode;
+    return Object.freeze({
+      rawCode: code,
+      classification: 'CURRENT_SCANNER',
+      disposition: 'CURRENT',
+      successorCode: code,
+      successorOutcome: 'strategy_decision',
+      owner: 'BASIS',
+      focusExitReason: 'cooldown',
+    });
+  }
+
+  if (rawCode === 'intake_paused') {
+    return Object.freeze({
+      rawCode,
+      classification: 'CURRENT_ENGINE',
+      disposition: 'CURRENT',
+      successorCode: rawCode,
+      successorOutcome: 'strategy_decision',
+      owner: 'ENGINE',
+      focusExitReason: 'cooldown',
+    });
+  }
+
+  if (Object.prototype.hasOwnProperty.call(BASIS_HISTORICAL_REJECT_CODE_MAP, rawCode)) {
+    const code = rawCode as HistoricalBasisRejectCode;
+    const mapped = BASIS_HISTORICAL_REJECT_CODE_MAP[code];
+    return Object.freeze({
+      rawCode: code,
+      classification: 'HISTORICAL',
+      disposition: mapped.disposition,
+      successorCode: mapped.successorCode,
+      successorOutcome: mapped.successorOutcome,
+      owner: mapped.owner,
+      focusExitReason: mapped.successorOutcome === 'risk_rejected' ? 'risk_rejected' : 'cooldown',
+    });
+  }
+
+  return Object.freeze({
+    rawCode,
+    classification: 'INVALID',
+    disposition: 'INVALID',
+    successorCode: null,
+    successorOutcome: 'INVALID',
+    owner: 'UNRESOLVED',
+    focusExitReason: 'cooldown',
+  });
+}
 
 export interface BasisRejectVocabularySnapshot {
   readonly emitted: readonly BasisRejectCode[];

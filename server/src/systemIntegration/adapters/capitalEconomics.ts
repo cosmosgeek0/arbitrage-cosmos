@@ -30,9 +30,9 @@ import {
   type DataAuthority,
 } from '../../foundation/contracts/index.js';
 import {
-  MARGIN_ACCOUNT_MODES,
-  compareNonNegativeDecimals,
-  normalizeNonNegativeDecimal,
+  BORROW_EVIDENCE_KEYS,
+  validateBorrowTruthForConsumption,
+  type BorrowEvidenceAuthority,
   type BorrowScopeIdentity,
   type BorrowTruth,
 } from '../../foundation/borrow/index.js';
@@ -114,13 +114,6 @@ export interface CanonicalConservativeEconomicsProjection {
   readonly reasonCodes: readonly string[];
 }
 
-const BORROW_TRUTH_KEYS = Object.freeze([
-  'accountId', 'asset', 'evaluatedAtMs', 'expiresAtMs', 'freshness',
-  'hourlyRate', 'maxBorrowableAsset', 'borrowLimitAsset', 'mode',
-  'permissionId', 'positionBucket', 'provenance', 'reason', 'state', 'symbol',
-] as const);
-const BORROW_EVIDENCE_KEYS = Object.freeze(['account', 'maxBorrow', 'permission', 'rate'] as const);
-
 function boundedText(value: unknown, maximum = 256): value is string {
   return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= maximum;
 }
@@ -162,13 +155,12 @@ function authorityMatchesMode(
   return authority === 'DERIVED_LIVE';
 }
 
-function borrowEvidenceAuthorityMatchesMode(
+function borrowEvidenceAuthoritiesForMode(
   mode: ConservativeEconomicAdmissionMode,
-  authority: DataAuthority,
-): boolean {
-  if (mode === 'SYNTHETIC_TEST') return authority === 'SYNTHETIC_TEST';
-  if (mode === 'RECORDED_REPLAY') return authority === 'RECORDED_REPLAY';
-  return authority === 'LIVE_PRIVATE';
+): readonly BorrowEvidenceAuthority[] {
+  if (mode === 'SYNTHETIC_TEST') return Object.freeze(['SYNTHETIC_TEST'] as const);
+  if (mode === 'RECORDED_REPLAY') return Object.freeze(['RECORDED_REPLAY'] as const);
+  return Object.freeze(['LIVE_PRIVATE'] as const);
 }
 
 function sourceUsable(
@@ -240,59 +232,31 @@ function compatibleComponent(
     && component.observedAtMs === cut.truth.source.sourceTimeMs;
 }
 
-function validBorrowTruth(
+function validatedBorrowTruth(
   truth: unknown,
   expected: Readonly<BorrowScopeIdentity>,
   mode: ConservativeEconomicAdmissionMode,
   evaluatedAtMs: number,
   requireRate: boolean,
-): truth is Readonly<BorrowTruth> {
+): Readonly<BorrowTruth> | null {
   try {
-    if (!exactOwnKeys(truth, BORROW_TRUTH_KEYS)) return false;
-    const borrow = truth as BorrowTruth;
+    const validation = validateBorrowTruthForConsumption(truth, {
+      evaluatedAtMs,
+      acceptedAuthorities: borrowEvidenceAuthoritiesForMode(mode),
+      requireRate,
+    });
+    if (validation.truth === null || validation.issues.length > 0) return null;
+    const borrow = validation.truth;
     if (borrow.accountId !== expected.accountId
       || borrow.symbol !== expected.symbol
       || borrow.asset !== expected.asset
       || borrow.mode !== expected.mode
       || borrow.permissionId !== expected.permissionId
-      || !(MARGIN_ACCOUNT_MODES as readonly string[]).includes(borrow.mode)
       || borrow.state !== 'AVAILABLE'
-      || borrow.reason !== 'BORROW_AMOUNT_POSITIVE'
-      || borrow.positionBucket !== (borrow.mode === 'ISOLATED' ? 'MARGIN_ISOLATED' : 'MARGIN_CROSS')
-      || !isValidUtcMillis(borrow.evaluatedAtMs)
-      || borrow.evaluatedAtMs > evaluatedAtMs
-      || !isValidUtcMillis(borrow.expiresAtMs)
-      || borrow.expiresAtMs < evaluatedAtMs
-      || borrow.maxBorrowableAsset === null
-      || normalizeNonNegativeDecimal(borrow.maxBorrowableAsset) !== borrow.maxBorrowableAsset
-      || compareNonNegativeDecimals(borrow.maxBorrowableAsset, '0') <= 0
-      || (borrow.borrowLimitAsset !== null
-        && normalizeNonNegativeDecimal(borrow.borrowLimitAsset) !== borrow.borrowLimitAsset)
-      || (borrow.hourlyRate !== null
-        && normalizeNonNegativeDecimal(borrow.hourlyRate) !== borrow.hourlyRate)
-      || (requireRate && borrow.hourlyRate === null)
-      || !exactOwnKeys(borrow.provenance, BORROW_EVIDENCE_KEYS)
-      || !exactOwnKeys(borrow.freshness, BORROW_EVIDENCE_KEYS)) return false;
-
-    for (const key of BORROW_EVIDENCE_KEYS) {
-      const source = borrow.provenance[key];
-      const freshness = borrow.freshness[key];
-      const required = key !== 'rate' || requireRate;
-      if (source === null || freshness === null) {
-        if (required) return false;
-        continue;
-      }
-      if (validateSourcedTimestamp(source).length > 0
-        || source.completeness !== 'COMPLETE'
-        || !borrowEvidenceAuthorityMatchesMode(mode, source.authority)
-        || evaluateFreshness(source, evaluatedAtMs).state !== 'FRESH'
-        || freshness.state !== 'FRESH'
-        || freshness.evaluatedAt !== borrow.evaluatedAtMs
-        || freshness.effectiveAuthority !== source.authority) return false;
-    }
-    return true;
+    ) return null;
+    return borrow;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -494,17 +458,25 @@ export function projectCanonicalConservativeEconomics(
     evaluatedAtMs: input.evaluatedAtMs,
   });
   const requireRate = true;
-  if (borrow !== null && borrowComponentCompatible
-    && validBorrowTruth(borrow.borrowTruth, input.borrowScope, input.mode, input.evaluatedAtMs, requireRate)) {
+  const borrowTruth = borrow !== null && borrowComponentCompatible
+    ? validatedBorrowTruth(
+      borrow.borrowTruth,
+      input.borrowScope,
+      input.mode,
+      input.evaluatedAtMs,
+      requireRate,
+    )
+    : null;
+  if (borrow !== null && borrowComponentCompatible && borrowTruth !== null) {
     const provenanceIds = BORROW_EVIDENCE_KEYS.flatMap((key) => {
-      const source = borrow.borrowTruth.provenance[key];
+      const source = borrowTruth.provenance[key];
       return source === null ? [] : [source.sourceId];
     });
     const borrowEvidence = sortedUnique([...borrow.component.sourceIds, ...provenanceIds]);
     const borrowScope: ConservativeBorrowFactScope = Object.freeze({
       ...input.borrowScope,
-      truthEvaluatedAtMs: borrow.borrowTruth.evaluatedAtMs,
-      truthExpiresAtMs: borrow.borrowTruth.expiresAtMs as number,
+      truthEvaluatedAtMs: borrowTruth.evaluatedAtMs,
+      truthExpiresAtMs: borrowTruth.expiresAtMs as number,
     });
     borrowFact = makeFact({
       kind: 'BORROW',

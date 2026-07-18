@@ -79,6 +79,12 @@ function borrowTruth(scope = BORROW_SCOPE, authority = 'LIVE_PRIVATE', now = NOW
       ...base('foundation.borrow.rate'),
       hourlyRate: '0',
     },
+    liability: {
+      ...base('foundation.borrow.liability'),
+      currentBorrowedAsset: '1',
+      accruedInterestAsset: '0',
+    },
+    collateral: null,
   });
 }
 
@@ -429,7 +435,7 @@ test('synthetic owner cuts cannot establish production eligibility', () => {
   assert.equal(result.admissions[0].economics.capitalOpportunityFact, null);
 });
 
-test('BorrowTruth exact scope, permission, provenance and current freshness all fail closed', () => {
+test('BorrowTruth exact scope, permission, liability, provenance and current freshness all fail closed', () => {
   const good = borrowTruth();
   const badCases = [
     ['wrong account', { ...good, accountId: 'acct-other' }],
@@ -443,6 +449,12 @@ test('BorrowTruth exact scope, permission, provenance and current freshness all 
       provenance: { ...good.provenance, rate: null },
       freshness: { ...good.freshness, rate: null },
       hourlyRate: null,
+    }],
+    ['missing current liability', { ...good, currentBorrowedAsset: null }],
+    ['missing liability provenance', {
+      ...good,
+      provenance: { ...good.provenance, liability: null },
+      freshness: { ...good.freshness, liability: null },
     }],
     ['wrong private authority', {
       ...good,

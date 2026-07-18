@@ -15,11 +15,14 @@ import {
 } from '../contracts/index.js';
 import { compareNonNegativeDecimals, normalizeNonNegativeDecimal } from './decimal.js';
 import {
+  BORROW_COLLATERAL_PRODUCTS,
   BORROW_READ_STATUSES,
   MARGIN_ACCOUNT_MODES,
   type BorrowAccountEvidence,
+  type BorrowCollateralEvidence,
   type BorrowEvidenceProvenance,
   type BorrowFreshnessEvidence,
+  type BorrowLiabilityEvidence,
   type BorrowPermissionEvidence,
   type BorrowRateEvidence,
   type BorrowReadEvidenceBase,
@@ -46,7 +49,16 @@ const TIMESTAMP_KEYS = [
   'completeness',
   'sourceId',
 ] as const;
-const INPUT_KEYS = ['scope', 'nowMs', 'account', 'permission', 'maxBorrow', 'rate'] as const;
+const INPUT_KEYS = [
+  'scope',
+  'nowMs',
+  'account',
+  'permission',
+  'maxBorrow',
+  'rate',
+  'liability',
+  'collateral',
+] as const;
 const ACCOUNT_KEYS = [
   ...SCOPE_KEYS,
   'status',
@@ -65,15 +77,42 @@ const PERMISSION_KEYS = [
 ] as const;
 const MAX_BORROW_KEYS = [...SCOPE_KEYS, 'status', 'observedAt', 'amount', 'borrowLimit'] as const;
 const RATE_KEYS = [...SCOPE_KEYS, 'status', 'observedAt', 'hourlyRate'] as const;
+const LIABILITY_KEYS = [
+  ...SCOPE_KEYS,
+  'status',
+  'observedAt',
+  'currentBorrowedAsset',
+  'accruedInterestAsset',
+] as const;
+const COLLATERAL_KEYS = [
+  ...SCOPE_KEYS,
+  'status',
+  'observedAt',
+  'product',
+  'collateralAmount',
+  'collateralAsset',
+  'currentLtv',
+] as const;
 
-type EvidenceName = 'account' | 'permission' | 'maxBorrow' | 'rate';
-type AnyEvidence = BorrowAccountEvidence | BorrowPermissionEvidence | MaxBorrowEvidence | BorrowRateEvidence;
+type AnyEvidence =
+  | BorrowAccountEvidence
+  | BorrowPermissionEvidence
+  | MaxBorrowEvidence
+  | BorrowRateEvidence
+  | BorrowLiabilityEvidence
+  | BorrowCollateralEvidence;
+
+function isSupplied<T>(value: T | null): value is T {
+  return value !== null;
+}
 
 interface NormalizedEvidence {
   account: BorrowAccountEvidence | null;
   permission: BorrowPermissionEvidence | null;
   maxBorrow: MaxBorrowEvidence | null;
   rate: BorrowRateEvidence | null;
+  liability: BorrowLiabilityEvidence | null;
+  collateral: BorrowCollateralEvidence | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -267,6 +306,64 @@ function validateRate(value: unknown): BorrowRateEvidence | null {
   return Object.freeze({ ...base, hourlyRate });
 }
 
+function validateLiability(value: unknown): BorrowLiabilityEvidence | null {
+  assertExplicitNullable(value, 'liability');
+  if (value === null) return null;
+  assertExactDataRecord(value, LIABILITY_KEYS, 'liability');
+  const base = validateBase(value, 'liability');
+  const currentBorrowedAsset = normalizeNullableDecimal(
+    value.currentBorrowedAsset,
+    'liability.currentBorrowedAsset',
+  );
+  const accruedInterestAsset = normalizeNullableDecimal(
+    value.accruedInterestAsset,
+    'liability.accruedInterestAsset',
+  );
+  ensureNoPayloadOnFailedRead(
+    base.status,
+    [currentBorrowedAsset, accruedInterestAsset],
+    'liability',
+  );
+  return Object.freeze({ ...base, currentBorrowedAsset, accruedInterestAsset });
+}
+
+function validateCollateral(value: unknown): BorrowCollateralEvidence | null {
+  assertExplicitNullable(value, 'collateral');
+  if (value === null) return null;
+  assertExactDataRecord(value, COLLATERAL_KEYS, 'collateral');
+  const base = validateBase(value, 'collateral');
+  if (
+    typeof value.product !== 'string'
+    || !(BORROW_COLLATERAL_PRODUCTS as readonly string[]).includes(value.product)
+  ) {
+    throw new TypeError('collateral.product must be MARGIN_ACCOUNT; flexible-loan evidence requires a separate owner');
+  }
+  const collateralAmount = normalizeNullableDecimal(value.collateralAmount, 'collateral.collateralAmount');
+  const currentLtv = normalizeNullableDecimal(value.currentLtv, 'collateral.currentLtv');
+  const collateralAsset = value.collateralAsset;
+  if (collateralAsset !== null && (typeof collateralAsset !== 'string' || !ASSET.test(collateralAsset))) {
+    throw new TypeError('collateral.collateralAsset must be an uppercase venue asset or explicit null');
+  }
+  if ((collateralAmount === null) !== (collateralAsset === null)) {
+    throw new TypeError('collateral amount and asset must be supplied together');
+  }
+  if (currentLtv !== null && compareNonNegativeDecimals(currentLtv, '1') > 0) {
+    throw new TypeError('collateral.currentLtv must be a fractional ratio between 0 and 1');
+  }
+  ensureNoPayloadOnFailedRead(
+    base.status,
+    [collateralAmount, collateralAsset, currentLtv],
+    'collateral',
+  );
+  return Object.freeze({
+    ...base,
+    product: value.product as BorrowCollateralEvidence['product'],
+    collateralAmount,
+    collateralAsset,
+    currentLtv,
+  });
+}
+
 function compareCodeUnits(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -289,7 +386,14 @@ function identityOutcome(
   scope: BorrowScopeIdentity,
   evidence: NormalizedEvidence,
 ): { state: BorrowTruthState; reason: BorrowTruthReason } | null {
-  for (const item of [evidence.account, evidence.permission, evidence.maxBorrow, evidence.rate]) {
+  for (const item of [
+    evidence.account,
+    evidence.permission,
+    evidence.maxBorrow,
+    evidence.rate,
+    evidence.liability,
+    evidence.collateral,
+  ]) {
     if (item !== null && item.mode !== scope.mode) {
       return { state: 'ACCOUNT_MODE_MISMATCH', reason: 'MODE_IDENTITY_MISMATCH' };
     }
@@ -297,7 +401,14 @@ function identityOutcome(
   if (evidence.permission !== null && evidence.permission.permissionId !== scope.permissionId) {
     return { state: 'PERMISSION_MISSING', reason: 'PERMISSION_IDENTITY_MISMATCH' };
   }
-  for (const item of [evidence.account, evidence.permission, evidence.maxBorrow, evidence.rate]) {
+  for (const item of [
+    evidence.account,
+    evidence.permission,
+    evidence.maxBorrow,
+    evidence.rate,
+    evidence.liability,
+    evidence.collateral,
+  ]) {
     if (
       item !== null &&
       (item.accountId !== scope.accountId || item.symbol !== scope.symbol || item.asset !== scope.asset)
@@ -305,7 +416,13 @@ function identityOutcome(
       return { state: 'SOURCE_ERROR', reason: 'EVIDENCE_IDENTITY_MISMATCH' };
     }
   }
-  for (const item of [evidence.account, evidence.maxBorrow, evidence.rate]) {
+  for (const item of [
+    evidence.account,
+    evidence.maxBorrow,
+    evidence.rate,
+    evidence.liability,
+    evidence.collateral,
+  ]) {
     if (item !== null && item.permissionId !== scope.permissionId) {
       return { state: 'SOURCE_ERROR', reason: 'EVIDENCE_IDENTITY_MISMATCH' };
     }
@@ -335,17 +452,27 @@ function cloneReports(
     permission: evidence.permission?.observedAt ?? null,
     maxBorrow: evidence.maxBorrow?.observedAt ?? null,
     rate: evidence.rate?.observedAt ?? null,
+    liability: evidence.liability?.observedAt ?? null,
+    collateral: evidence.collateral?.observedAt ?? null,
   };
   const freshness: BorrowFreshnessEvidence = {
     account: evidence.account === null ? null : evaluateFreshness(evidence.account.observedAt, nowMs),
     permission: evidence.permission === null ? null : evaluateFreshness(evidence.permission.observedAt, nowMs),
     maxBorrow: evidence.maxBorrow === null ? null : evaluateFreshness(evidence.maxBorrow.observedAt, nowMs),
     rate: evidence.rate === null ? null : evaluateFreshness(evidence.rate.observedAt, nowMs),
+    liability: evidence.liability === null ? null : evaluateFreshness(evidence.liability.observedAt, nowMs),
+    collateral: evidence.collateral === null ? null : evaluateFreshness(evidence.collateral.observedAt, nowMs),
   };
   return {
     provenance: Object.freeze(provenance),
     freshness: Object.freeze(freshness),
-    reports: [freshness.account, freshness.permission, freshness.maxBorrow, freshness.rate].filter(
+    reports: [
+      freshness.account,
+      freshness.permission,
+      freshness.maxBorrow,
+      freshness.rate,
+      freshness.liability,
+    ].filter(
       (value): value is FreshnessReport => value !== null,
     ),
   };
@@ -360,9 +487,20 @@ function buildTruth(
   provenance: BorrowEvidenceProvenance,
   freshness: BorrowFreshnessEvidence,
 ): Readonly<BorrowTruth> {
-  const supplied = [evidence.account, evidence.permission, evidence.maxBorrow, evidence.rate].filter(
-    (value): value is AnyEvidence => value !== null,
-  );
+  const requiredSupplied = [
+    evidence.account,
+    evidence.permission,
+    evidence.maxBorrow,
+    evidence.rate,
+    evidence.liability,
+  ].filter(isSupplied);
+  const usableCollateral = evidence.collateral !== null
+    && exactlyMatchesScope(scope, evidence.collateral)
+    && evidence.collateral.status === 'OK'
+    && evidence.collateral.observedAt.completeness === 'COMPLETE'
+    && freshness.collateral?.state === 'FRESH'
+    ? evidence.collateral
+    : null;
   return Object.freeze({
     ...scope,
     state,
@@ -381,16 +519,44 @@ function buildTruth(
       evidence.rate !== null && exactlyMatchesScope(scope, evidence.rate)
         ? evidence.rate.hourlyRate
         : null,
+    currentBorrowedAsset:
+      evidence.liability !== null && exactlyMatchesScope(scope, evidence.liability)
+        ? evidence.liability.currentBorrowedAsset
+        : null,
+    accruedInterestAsset:
+      evidence.liability !== null && exactlyMatchesScope(scope, evidence.liability)
+        ? evidence.liability.accruedInterestAsset
+        : null,
+    collateralAmount:
+      usableCollateral !== null
+        ? usableCollateral.collateralAmount
+        : null,
+    collateralAsset:
+      usableCollateral !== null
+        ? usableCollateral.collateralAsset
+        : null,
+    currentLtv:
+      usableCollateral !== null
+        ? usableCollateral.currentLtv
+        : null,
     evaluatedAtMs: nowMs,
-    expiresAtMs: computeExpiry(supplied),
+    // ENGINE §11 makes collateral/LTV optional; it cannot shorten the
+    // availability lifetime of the required margin preflight cut.
+    expiresAtMs: computeExpiry(requiredSupplied),
     provenance,
     freshness,
   });
 }
 
 function sourceStatusOutcome(evidence: NormalizedEvidence): { state: BorrowTruthState; reason: BorrowTruthReason } | null {
-  const statuses = [evidence.account, evidence.permission, evidence.maxBorrow, evidence.rate]
-    .filter((item): item is AnyEvidence => item !== null)
+  const statuses = [
+    evidence.account,
+    evidence.permission,
+    evidence.maxBorrow,
+    evidence.rate,
+    evidence.liability,
+  ]
+    .filter(isSupplied)
     .map((item) => item.status);
   if (statuses.includes('SOURCE_ERROR')) return { state: 'SOURCE_ERROR', reason: 'SOURCE_REPORTED_ERROR' };
   if (statuses.includes('RATE_LIMITED')) return { state: 'RATE_LIMITED', reason: 'SOURCE_RATE_LIMITED' };
@@ -409,6 +575,8 @@ export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<Borro
     permission: validatePermission(input.permission),
     maxBorrow: validateMaxBorrow(input.maxBorrow),
     rate: validateRate(input.rate),
+    liability: validateLiability(input.liability),
+    collateral: validateCollateral(input.collateral),
   });
   const snapshots = cloneReports(evidence, input.nowMs);
   const finish = (state: BorrowTruthState, reason: BorrowTruthReason): Readonly<BorrowTruth> =>
@@ -417,7 +585,12 @@ export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<Borro
   const identity = identityOutcome(scope, evidence);
   if (identity !== null) return finish(identity.state, identity.reason);
 
-  if (evidence.account === null || evidence.permission === null || evidence.maxBorrow === null) {
+  if (
+    evidence.account === null
+    || evidence.permission === null
+    || evidence.maxBorrow === null
+    || evidence.liability === null
+  ) {
     return finish('UNKNOWN', 'REQUIRED_EVIDENCE_MISSING');
   }
 
@@ -435,8 +608,14 @@ export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<Borro
   if (sourceStatus !== null) return finish(sourceStatus.state, sourceStatus.reason);
 
   if (
-    [evidence.account, evidence.permission, evidence.maxBorrow, evidence.rate]
-      .filter((item): item is AnyEvidence => item !== null)
+    [
+      evidence.account,
+      evidence.permission,
+      evidence.maxBorrow,
+      evidence.rate,
+      evidence.liability,
+    ]
+      .filter(isSupplied)
       .some((item) => item.observedAt.completeness === 'PARTIAL')
   ) {
     return finish('UNKNOWN', 'EVIDENCE_PARTIAL');
@@ -470,6 +649,8 @@ export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<Borro
 
   if (evidence.maxBorrow.amount === null) return finish('UNKNOWN', 'BORROW_AMOUNT_UNKNOWN');
   if (evidence.maxBorrow.amount === '0') return finish('UNAVAILABLE', 'BORROW_AMOUNT_ZERO');
+  if (evidence.liability.currentBorrowedAsset === null) return finish('UNKNOWN', 'CURRENT_BORROW_UNKNOWN');
+  if (evidence.liability.accruedInterestAsset === null) return finish('UNKNOWN', 'ACCRUED_INTEREST_UNKNOWN');
   return finish('AVAILABLE', 'BORROW_AMOUNT_POSITIVE');
 }
 

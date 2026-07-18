@@ -50,10 +50,15 @@ function borrowTruth(overrides = {}) {
     maxBorrowableAsset: '0.1',
     borrowLimitAsset: '0.2',
     hourlyRate: '0.0001',
+    currentBorrowedAsset: '0.01',
+    accruedInterestAsset: '0.0002',
+    collateralAmount: '1000',
+    collateralAsset: 'USDT',
+    currentLtv: '0.25',
     evaluatedAtMs: NOW - 10,
     expiresAtMs: NOW + 1_000,
-    provenance: { account: null, permission: null, maxBorrow: null, rate: null },
-    freshness: { account: null, permission: null, maxBorrow: null, rate: null },
+    provenance: { account: null, permission: null, maxBorrow: null, rate: null, liability: null, collateral: null },
+    freshness: { account: null, permission: null, maxBorrow: null, rate: null, liability: null, collateral: null },
     ...overrides,
   };
 }
@@ -181,6 +186,37 @@ test('borrow capacity references Foundation truth but is not counted as owned al
     referenceIds: ['borrow-btc'],
   }]);
   assert.equal(result.borrowTruthReferences[0].truth.state, 'AVAILABLE');
+  assert.equal(result.borrowTruthReferences[0].truth.currentBorrowedAsset, '0.01');
+  assert.equal(result.borrowTruthReferences[0].truth.accruedInterestAsset, '0.0002');
+  assert.equal(result.borrowTruthReferences[0].truth.collateralAmount, '1000');
+  assert.equal(result.borrowTruthReferences[0].truth.currentLtv, '0.25');
+  assert.equal(result.allocatable.amount, '25897');
+});
+
+test('AVAILABLE borrow truth may omit ENGINE section 11 optional collateral and LTV facts', () => {
+  const result = deriveAccountCapitalProjection(completeInput({
+    borrowTruthReferences: [{
+      referenceId: 'borrow-no-collateral',
+      capacityPoolId: 'margin-cross-acct-1-btc',
+      requiredForNewAllocation: false,
+      truth: borrowTruth({
+        collateralAmount: null,
+        collateralAsset: null,
+        currentLtv: null,
+      }),
+    }],
+  }));
+  assert.equal(result.borrowTruthReferences[0].truth.state, 'AVAILABLE');
+  assert.equal(result.borrowTruthReferences[0].truth.collateralAmount, null);
+  assert.equal(result.borrowTruthReferences[0].truth.collateralAsset, null);
+  assert.equal(result.borrowTruthReferences[0].truth.currentLtv, null);
+  assert.deepEqual(result.borrowCapacityByAsset, [{
+    asset: 'BTC',
+    maxBorrowableAsset: '0.1',
+    conservativeValue: '5000',
+    capacityPoolIds: ['margin-cross-acct-1-btc'],
+    referenceIds: ['borrow-no-collateral'],
+  }]);
   assert.equal(result.allocatable.amount, '25897');
 });
 
@@ -432,6 +468,30 @@ test('conflicting truths for one borrow capacity pool are divergent and not proj
   assert.ok(result.allocatable.unavailableReasons.includes('BORROW_CAPACITY_POOL_DIVERGENT_margin-cross-acct-1-btc'));
 });
 
+test('different liability or collateral cuts for one capacity pool are divergent rather than silently merged', () => {
+  for (const override of [
+    { currentBorrowedAsset: '0.02' },
+    { accruedInterestAsset: '0.0003' },
+    { collateralAmount: '1100' },
+    { collateralAsset: 'USDC' },
+    { currentLtv: '0.3' },
+  ]) {
+    const result = deriveAccountCapitalProjection(completeInput({
+      borrowTruthReferences: [
+        {
+          referenceId: 'borrow-a', capacityPoolId: 'margin-cross-acct-1-btc', requiredForNewAllocation: false, truth: borrowTruth(),
+        },
+        {
+          referenceId: 'borrow-b', capacityPoolId: 'margin-cross-acct-1-btc', requiredForNewAllocation: false, truth: borrowTruth(override),
+        },
+      ],
+    }));
+    assert.equal(result.allocatable.status, 'UNAVAILABLE');
+    assert.deepEqual(result.borrowCapacityByAsset, []);
+    assert.ok(result.allocatable.unavailableReasons.includes('BORROW_CAPACITY_POOL_DIVERGENT_margin-cross-acct-1-btc'));
+  }
+});
+
 test('borrow truth is cloned and deeply frozen so caller mutation cannot rewrite projected evidence', () => {
   const mutableTruth = borrowTruth();
   const result = deriveAccountCapitalProjection(completeInput({
@@ -444,11 +504,13 @@ test('borrow truth is cloned and deeply frozen so caller mutation cannot rewrite
   }));
   mutableTruth.state = 'SOURCE_ERROR';
   mutableTruth.maxBorrowableAsset = '999';
+  mutableTruth.currentBorrowedAsset = '999';
   mutableTruth.provenance.account = source();
   const projected = result.borrowTruthReferences[0].truth;
   assert.notEqual(projected, mutableTruth);
   assert.equal(projected.state, 'AVAILABLE');
   assert.equal(projected.maxBorrowableAsset, '0.1');
+  assert.equal(projected.currentBorrowedAsset, '0.01');
   assert.equal(projected.provenance.account, null);
   assert.equal(result.borrowCapacityByAsset[0].maxBorrowableAsset, '0.1');
   assert.equal(Object.isFrozen(projected), true);

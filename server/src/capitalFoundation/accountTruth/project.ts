@@ -207,11 +207,32 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
   const hourlyRate = value.hourlyRate === null
     ? null
     : nonNegative(value.hourlyRate, `${path}.hourlyRate`);
+  const currentBorrowedAsset = value.currentBorrowedAsset === null
+    ? null
+    : nonNegative(value.currentBorrowedAsset, `${path}.currentBorrowedAsset`);
+  const accruedInterestAsset = value.accruedInterestAsset === null
+    ? null
+    : nonNegative(value.accruedInterestAsset, `${path}.accruedInterestAsset`);
+  const collateralAmount = value.collateralAmount === null
+    ? null
+    : nonNegative(value.collateralAmount, `${path}.collateralAmount`);
+  const collateralAsset = value.collateralAsset === null
+    ? null
+    : asset(value.collateralAsset, `${path}.collateralAsset`);
+  const currentLtv = value.currentLtv === null
+    ? null
+    : nonNegative(value.currentLtv, `${path}.currentLtv`);
   if (
     maxBorrowableAsset !== null && borrowLimitAsset !== null
     && compareExactDecimals(maxBorrowableAsset, borrowLimitAsset) > 0
   ) {
     throw new TypeError(`${path}.maxBorrowableAsset cannot exceed borrowLimitAsset`);
+  }
+  if ((collateralAmount === null) !== (collateralAsset === null)) {
+    throw new TypeError(`${path}.collateralAmount and collateralAsset must be supplied together`);
+  }
+  if (currentLtv !== null && compareExactDecimals(currentLtv, ONE) > 0) {
+    throw new TypeError(`${path}.currentLtv must be a fractional ratio between 0 and 1`);
   }
   if (!isValidUtcMillis(value.evaluatedAtMs)) throw new TypeError(`${path}.evaluatedAtMs is invalid`);
   if (value.expiresAtMs !== null && !isValidUtcMillis(value.expiresAtMs)) {
@@ -222,12 +243,16 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
     permission: cloneSourcedTimestamp(value.provenance.permission, `${path}.provenance.permission`),
     maxBorrow: cloneSourcedTimestamp(value.provenance.maxBorrow, `${path}.provenance.maxBorrow`),
     rate: cloneSourcedTimestamp(value.provenance.rate, `${path}.provenance.rate`),
+    liability: cloneSourcedTimestamp(value.provenance.liability, `${path}.provenance.liability`),
+    collateral: cloneSourcedTimestamp(value.provenance.collateral, `${path}.provenance.collateral`),
   });
   const freshness = Object.freeze({
     account: cloneFreshnessReport(value.freshness.account, `${path}.freshness.account`),
     permission: cloneFreshnessReport(value.freshness.permission, `${path}.freshness.permission`),
     maxBorrow: cloneFreshnessReport(value.freshness.maxBorrow, `${path}.freshness.maxBorrow`),
     rate: cloneFreshnessReport(value.freshness.rate, `${path}.freshness.rate`),
+    liability: cloneFreshnessReport(value.freshness.liability, `${path}.freshness.liability`),
+    collateral: cloneFreshnessReport(value.freshness.collateral, `${path}.freshness.collateral`),
   });
   return Object.freeze({
     accountId: identifier(value.accountId, `${path}.accountId`),
@@ -241,6 +266,11 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
     maxBorrowableAsset,
     borrowLimitAsset,
     hourlyRate,
+    currentBorrowedAsset,
+    accruedInterestAsset,
+    collateralAmount,
+    collateralAsset,
+    currentLtv,
     evaluatedAtMs: value.evaluatedAtMs,
     expiresAtMs: value.expiresAtMs,
     provenance,
@@ -690,6 +720,11 @@ function deriveBorrow(
       && left.maxBorrowableAsset === right.maxBorrowableAsset
       && left.borrowLimitAsset === right.borrowLimitAsset
       && left.hourlyRate === right.hourlyRate
+      && left.currentBorrowedAsset === right.currentBorrowedAsset
+      && left.accruedInterestAsset === right.accruedInterestAsset
+      && left.collateralAmount === right.collateralAmount
+      && left.collateralAsset === right.collateralAsset
+      && left.currentLtv === right.currentLtv
       && expected.current === reference.current
       && expected.usableForNewAllocation === reference.usableForNewAllocation;
     if (!samePoolFacts) {

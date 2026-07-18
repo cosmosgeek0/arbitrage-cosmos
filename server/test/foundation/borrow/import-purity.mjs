@@ -35,6 +35,9 @@ const forbidden = [
   ['capital-action function', /\bfunction\s+(?:borrow|repay|transfer)\s*\(/],
   ['capital-action method', /\b(?:borrow|repay|transfer)\s*\([^)]*\)\s*\{/],
   ['capital-action endpoint', /\/sapi\/v1\/margin\/(?:borrow-repay|transfer)/],
+  ['synthetic collateral source wiring', /fixture\.margin/],
+  ['flexible-loan source or endpoint', /binance\.loan|\/sapi\/v2\/loan/],
+  ['collateral margin-level relabelling', /collateralMarginLevel/],
 ];
 for (const [name, pattern] of forbidden) {
   const hits = sources.filter(([, source]) => pattern.test(source)).map(([file]) => file);

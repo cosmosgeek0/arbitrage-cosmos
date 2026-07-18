@@ -6,12 +6,16 @@ export {
 } from './decimal.js';
 export { deriveBorrowTruth, deriveBorrowTruthBatch } from './derive.js';
 export {
+  BORROW_COLLATERAL_PRODUCTS,
   BORROW_READ_STATUSES,
   BORROW_TRUTH_STATES,
   MARGIN_ACCOUNT_MODES,
   type BorrowAccountEvidence,
+  type BorrowCollateralProduct,
+  type BorrowCollateralEvidence,
   type BorrowEvidenceProvenance,
   type BorrowFreshnessEvidence,
+  type BorrowLiabilityEvidence,
   type BorrowPermissionEvidence,
   type BorrowRateEvidence,
   type BorrowReadEvidenceBase,

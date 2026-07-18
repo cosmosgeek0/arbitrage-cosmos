@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useStore } from '../store';
+import { resolveMarketFreshness, useStore } from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
@@ -250,8 +250,22 @@ export function Markets() {
   const top50Pulse = top50Weight > 0
     ? top50.reduce((sum, market) => sum + (market.change24hPct ?? 0) * (market.quoteVolume24h ?? 0), 0) / top50Weight
     : null;
-  const marketAgeMs = marketsUpdatedAt ? now - marketsUpdatedAt : null;
-  const live = connected && !marketsError && marketAgeMs !== null && marketAgeMs < Math.max(12_000, prefs.refreshSec * 2500);
+  const marketFreshness = resolveMarketFreshness({
+    connected,
+    error: marketsError,
+    sourceTimeMs: marketsUpdatedAt,
+    nowMs: now,
+    staleAfterMs: Math.max(12_000, prefs.refreshSec * 2500),
+  });
+  const marketFreshnessLabel = marketFreshness.status === 'ERROR'
+    ? 'Feed Error'
+    : marketFreshness.status === 'UNKNOWN'
+      ? 'Freshness Unknown'
+      : marketFreshness.status === 'LIVE'
+        ? `Live · ${fmtLiveAge(marketFreshness.ageMs)}`
+        : marketFreshness.status === 'STALE'
+          ? `Data Stale · ${fmtLiveAge(marketFreshness.ageMs)}`
+          : 'Reconnecting';
 
   const rows = useMemo(() => {
     let filtered = markets;
@@ -375,7 +389,7 @@ export function Markets() {
               <button key={item.id} type="button" role="tab" aria-selected={view === item.id} onClick={() => applyView(item.id)}>{item.label}</button>
             ))}
           </div>
-          <span className={`mkx-live ${live ? 'on' : ''}`}><i />{marketsError ? 'Feed Error' : live ? `Live · ${fmtLiveAge(marketAgeMs)}` : 'Reconnecting'}</span>
+          <span className={`mkx-live ${marketFreshness.live ? 'on' : ''}`}><i />{marketFreshnessLabel}</span>
         </nav>
 
         <div className="mkx-controls">

@@ -69,6 +69,39 @@ export function reduceCompatibilityStateTruth(
   });
 }
 
+export type MarketFreshnessStatus = 'ERROR' | 'UNKNOWN' | 'DISCONNECTED' | 'LIVE' | 'STALE';
+
+export type MarketFreshnessTruth = Readonly<{
+  status: MarketFreshnessStatus;
+  live: boolean;
+  ageMs: number | null;
+}>;
+
+export function normalizeMarketSourceTime(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+export function resolveMarketFreshness(input: Readonly<{
+  connected: boolean;
+  error: string | null;
+  sourceTimeMs: number | null;
+  nowMs: number;
+  staleAfterMs: number;
+}>): MarketFreshnessTruth {
+  if (input.error) return Object.freeze({ status: 'ERROR', live: false, ageMs: null });
+  const sourceTimeMs = normalizeMarketSourceTime(input.sourceTimeMs);
+  if (sourceTimeMs === null || !Number.isFinite(input.nowMs) || sourceTimeMs > input.nowMs) {
+    return Object.freeze({ status: 'UNKNOWN', live: false, ageMs: null });
+  }
+  const ageMs = input.nowMs - sourceTimeMs;
+  if (!input.connected) return Object.freeze({ status: 'DISCONNECTED', live: false, ageMs });
+  const staleAfterMs = Number.isFinite(input.staleAfterMs) && input.staleAfterMs > 0
+    ? input.staleAfterMs
+    : 0;
+  if (ageMs < staleAfterMs) return Object.freeze({ status: 'LIVE', live: true, ageMs });
+  return Object.freeze({ status: 'STALE', live: false, ageMs });
+}
+
 // Account detail ids render controlled, read-only Account subviews. Product
 // truth remains in ProductControlRoomProvider; this store owns navigation only.
 export type Page =
@@ -596,7 +629,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSuccess: (payload) => {
           if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
           setMarkets(payload.rows);
-          setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
+          setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
           setMarketsError(null);
       },
       onError: () => setMarketsError('market refresh failed'),
@@ -654,7 +687,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
       if (Array.isArray(payload.rows)) {
         setMarkets(payload.rows);
-        setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
+        setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
         setMarketsError(null);
       }
     } catch {

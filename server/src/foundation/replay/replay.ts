@@ -1,5 +1,5 @@
 /** Deterministic synchronous replay over an explicit virtual clock. */
-import { isValidUtcMillis, ok, type ContractResult } from '../contracts/index.js';
+import { isValidUtcMillis, observeRejectedThenable, ok, type ContractResult } from '../contracts/index.js';
 import { inspectReplayEnvelope } from './envelope.js';
 import { replayEventTimeMs } from './event.js';
 import { replayFailure, REPLAY_FAILURE_CODES } from './failures.js';
@@ -129,7 +129,8 @@ function replayInspectedEnvelope(
           ordinal: i,
         }),
       );
-      if (returned !== undefined) {
+      const returnedThenable = observeRejectedThenable(returned);
+      if (returnedThenable || returned !== undefined) {
         return replayFailure({
           stage: 'dispatchEvent',
           code: REPLAY_FAILURE_CODES.HANDLER_FAILED,

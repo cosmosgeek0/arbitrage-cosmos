@@ -207,6 +207,14 @@ export class VolumeRuntime {
     });
   }
 
+  setIntakePaused(paused: boolean): boolean {
+    return this.engine.setIntakePaused(paused);
+  }
+
+  intakePaused(): boolean {
+    return this.engine.intakePaused();
+  }
+
   private async refreshUniverse(generation: number): Promise<void> {
     if (!this.isActive(generation)) return;
     const config = this.readConfig();

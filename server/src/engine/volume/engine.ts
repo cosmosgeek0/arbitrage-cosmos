@@ -41,6 +41,7 @@ export class VolumeEngine {
   private decisionsRing: Decision[] = [];
   private ignoredDecisionCount = 0;
   private killSwitchOn = false;
+  private intakePausedValue = false;
   private running = false;
   private lastTickTs: number | null = null;
   private lastHeartbeatTs: number | null = null;
@@ -97,6 +98,25 @@ export class VolumeEngine {
 
   killSwitch(): boolean {
     return this.killSwitchOn;
+  }
+
+  /** Pause proposal formation only; all market observation and focus evidence continues. */
+  setIntakePaused(paused: boolean): boolean {
+    if (typeof paused !== 'boolean') throw new TypeError('volume intake posture must be boolean');
+    if (paused === this.intakePausedValue) return false;
+    this.intakePausedValue = paused;
+    this.sink.emit(makeEvent(
+      'heartbeat',
+      this.clock.now(),
+      newCorrelationId(this.clock, 've'),
+      `volume proposal intake ${paused ? 'paused' : 'resumed'}`,
+      { payload: { intakePaused: paused } },
+    ));
+    return true;
+  }
+
+  intakePaused(): boolean {
+    return this.intakePausedValue;
   }
 
   blockSymbol(symbol: string, blocked = true): void {
@@ -215,7 +235,16 @@ export class VolumeEngine {
         nowTs: now,
         correlationId: this.correlationFor(symbol),
       };
-      const d = this.detector.evaluate(f, ctx);
+      const evaluated = this.detector.evaluate(f, ctx);
+      const d: Decision = this.intakePausedValue && evaluated.kind === 'proposal'
+        ? {
+            ...evaluated,
+            kind: 'reject',
+            rejectCode: 'intake_paused',
+            humanReason: 'volume proposal intake is paused; observation remains active',
+            evidence: { ...evaluated.evidence, intakePaused: true },
+          }
+        : evaluated;
       if (d.kind === 'ignore') this.signalCorrelation.delete(symbol);
       this.recordDecision(d);
       this.focusMgr.noteDecision(d, priorityOf(f, this.cfg).score);

@@ -62,6 +62,7 @@ export class BasisEngine {
   private latestPriority = new Map<string, PriorityScore>();
   private running = false;
   private killSwitchOn = false;
+  private intakePausedValue = false;
   private blocked = new Set<string>();
   private lastTickTs: number | null = null;
   private lastHeartbeatTs: number | null = null;
@@ -118,6 +119,24 @@ export class BasisEngine {
 
   killSwitch(): boolean {
     return this.killSwitchOn;
+  }
+
+  /** Pause proposal formation only; market observation and supervision continue. */
+  setIntakePaused(paused: boolean): boolean {
+    if (typeof paused !== 'boolean') throw new TypeError('basis intake posture must be boolean');
+    if (paused === this.intakePausedValue) return false;
+    this.intakePausedValue = paused;
+    this.emitter.emit(
+      'heartbeat',
+      newCorrelationId(this.clock, 'basis_sys'),
+      `basis proposal intake ${paused ? 'paused' : 'resumed'}`,
+      { payload: { intakePaused: paused } },
+    );
+    return true;
+  }
+
+  intakePaused(): boolean {
+    return this.intakePausedValue;
   }
 
   /** Apply a validated config revision and invalidate state derived under old thresholds. */
@@ -248,7 +267,17 @@ export class BasisEngine {
         nowTs: now,
       };
 
-      const raw = this.scanner.evaluate(bf, ctx);
+      const evaluated = this.scanner.evaluate(bf, ctx);
+      const raw: Decision = this.intakePausedValue && evaluated.kind === 'proposal'
+        ? {
+            ...evaluated,
+            kind: 'reject',
+            rejectCode: 'intake_paused',
+            humanReason: 'basis proposal intake is paused; observation remains active',
+            evidence: { ...evaluated.evidence, intakePaused: true },
+            correlationId: evaluated.correlationId,
+          }
+        : evaluated;
       const corr =
         raw.kind === 'ignore'
           ? (this.lifecycle.get(symbol).correlationId ?? newCorrelationId(this.clock, 'basis_idle'))

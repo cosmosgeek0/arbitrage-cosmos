@@ -106,6 +106,8 @@ export const SYSTEM_CONTROL_COMMANDS = Object.freeze([
   'RESTART_COMPONENT',
   'CLEAR_DEPLOYMENT_FREEZE',
   'SET_PUBLIC_SOURCE_LIFECYCLE',
+  'SET_BASIS_INTAKE',
+  'SET_VOLUME_INTAKE',
 ] as const);
 
 export type SystemControlCommand = (typeof SYSTEM_CONTROL_COMMANDS)[number];

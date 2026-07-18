@@ -459,6 +459,8 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     RESTART_COMPONENT: ['command', 'componentId'],
     CLEAR_DEPLOYMENT_FREEZE: ['command', 'expectedObservedAtUtc'],
     SET_PUBLIC_SOURCE_LIFECYCLE: ['command', 'sourceId', 'action'],
+    SET_BASIS_INTAKE: ['command', 'paused'],
+    SET_VOLUME_INTAKE: ['command', 'paused'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -466,6 +468,8 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       if (!isSystemComponentId(mutation.componentId) || !isDesiredRuntimeState(mutation.desiredState)) issues.push(issue('mutation', 'COMPONENT_STATE_INVALID', 'component and desired state must be canonical'));
       break;
     case 'SET_INTAKE_PAUSED':
+    case 'SET_BASIS_INTAKE':
+    case 'SET_VOLUME_INTAKE':
       if (typeof mutation.paused !== 'boolean') issues.push(issue('mutation.paused', 'BOOLEAN_REQUIRED', 'paused must be boolean'));
       break;
     case 'SET_SAFE_MODE':

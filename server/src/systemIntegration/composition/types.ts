@@ -71,6 +71,18 @@ export type AdapterStartState = 'IDLE' | 'PENDING' | 'RESOLVED' | 'REJECTED';
 export type ManagedDrainOutcome = 'NOT_REQUESTED' | 'IN_PROGRESS' | 'CLEAN' | 'FAILED' | 'TIMED_OUT';
 export type ManagedRestartCompletionReadback = 'PENDING' | 'APPLIED' | 'FAILED' | 'UNKNOWN';
 
+export interface ManagedSubsystemRestartIdentity {
+  readonly correlationId: string;
+  readonly revision: number;
+  readonly targetComponentId: SystemComponentId;
+  readonly closureComponentIds: readonly SystemComponentId[];
+}
+
+export type ManagedSubsystemRestartResult = Readonly<
+  | { readonly ok: true; readonly identity: Readonly<ManagedSubsystemRestartIdentity> }
+  | { readonly ok: false; readonly code: string }
+>;
+
 export interface ManagedRestartCommandIdentity {
   readonly correlationId: string;
   readonly revision: number;
@@ -122,11 +134,15 @@ export interface ManagedCompositionControl {
   startPaused(): CommandResult;
   validate(): CommandResult;
   restart(): CommandResult;
+  restartComponent(componentId: SystemComponentId): ManagedSubsystemRestartResult;
   issue(command: ControlCommandRequest['command']): CommandResult;
   driveOnce(): Readonly<ManagedCompositionReadSnapshot>;
   drain(): Promise<Readonly<ManagedCompositionReadSnapshot>>;
   read(): Readonly<ManagedCompositionReadSnapshot>;
   readRestartCompletion(
     identity: Readonly<ManagedRestartCommandIdentity>,
+  ): ManagedRestartCompletionReadback;
+  readSubsystemRestart(
+    identity: Readonly<ManagedSubsystemRestartIdentity>,
   ): ManagedRestartCompletionReadback;
 }

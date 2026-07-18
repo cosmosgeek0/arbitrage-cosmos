@@ -1241,5 +1241,16 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
-  return Object.freeze({ sourceRegistry, runtimes, components, summaries });
+  const strategyIntake = Object.freeze({
+    basis: Object.freeze({
+      readPaused: () => input.basis.intakePaused(),
+      setPaused: (paused: boolean) => input.basis.setIntakePaused(paused),
+    }),
+    volume: Object.freeze({
+      readPaused: () => input.volume.intakePaused(),
+      setPaused: (paused: boolean) => input.volume.setIntakePaused(paused),
+    }),
+  });
+
+  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake });
 }

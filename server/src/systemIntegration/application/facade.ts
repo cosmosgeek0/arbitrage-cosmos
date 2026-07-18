@@ -23,6 +23,8 @@ import {
   type CoreRuntimePorts,
   type ManagedCompositionReadSnapshot,
   type ManagedRestartCommandIdentity,
+  type ManagedSubsystemRestartIdentity,
+  type ManagedSubsystemRestartResult,
   type RuntimeHealthEvidence,
   type ScheduledTask,
 } from '../composition/index.js';
@@ -92,6 +94,11 @@ const DEFAULT_RESTART_TRUTH_REFRESH_INTERVAL_MS = Math.floor(
   SYSTEM_PERSISTENCE_LIMITS.restartTruthMaximumAgeMs / 2,
 );
 
+type PendingRestartPublication = Readonly<
+  | { readonly kind: 'ROOT'; readonly identity: Readonly<ManagedRestartCommandIdentity> }
+  | { readonly kind: 'SUBSYSTEM'; readonly identity: Readonly<ManagedSubsystemRestartIdentity> }
+>;
+
 export type SystemIntegrationApplicationLifecycleOptions = SystemIntegrationApplicationOptions & Readonly<{
   lifecycleTruth?: SystemLifecycleTruthReadPort;
   restartTruthRefresh?: SystemRestartTruthRefreshEffectPort;
@@ -114,6 +121,8 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_SAFE_MODE') return mutation.safeMode === 'READ_ONLY';
   if (mutation.command === 'SET_KILL_SWITCH') return mutation.engaged === true;
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
+  if (mutation.command === 'SET_BASIS_INTAKE') return mutation.paused === true;
+  if (mutation.command === 'SET_VOLUME_INTAKE') return mutation.paused === true;
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -304,7 +313,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   private restartTruthRefreshEpoch = 0;
   private drainAdmissionInProgress = false;
   private readonly runtimePublicationEffects = new Map<string, SystemControlRuntimeEffectReadback>();
-  private readonly pendingRestartPublications = new Map<string, Readonly<ManagedRestartCommandIdentity>>();
+  private readonly pendingRestartPublications = new Map<string, PendingRestartPublication>();
   private persistedTraceCache: Readonly<{
     checkpointRevision: number;
     events: readonly Readonly<SystemTraceEvent>[];
@@ -783,13 +792,37 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     request: Readonly<SystemControlMutationRequest>,
     receipt: Readonly<SystemControlMutationReceipt>,
   ): Promise<SystemControlRuntimeEffectReadback> {
+    if (request.mutation.command === 'SET_BASIS_INTAKE') {
+      const owner = this.options.strategyIntake?.basis;
+      if (!owner || typeof owner.readPaused !== 'function') return 'UNKNOWN';
+      try {
+        const paused = owner.readPaused();
+        if (typeof paused !== 'boolean') return 'UNKNOWN';
+        return paused === request.mutation.paused ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function') return 'UNKNOWN';
+      try {
+        const paused = owner.readPaused();
+        if (typeof paused !== 'boolean') return 'UNKNOWN';
+        return paused === request.mutation.paused ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     const effectId = this.runtimePublicationEffectId(request, receipt);
     const local = this.runtimePublicationEffects.get(effectId);
     if (local !== undefined) return local;
     const pendingRestart = this.pendingRestartPublications.get(effectId);
     if (pendingRestart !== undefined) {
       if (request.mutation.command !== 'RESTART_COMPONENT') return 'UNKNOWN';
-      const completion = this.composition.readRestartCompletion(pendingRestart);
+      const completion = pendingRestart.kind === 'ROOT'
+        ? this.composition.readRestartCompletion(pendingRestart.identity)
+        : this.composition.readSubsystemRestart(pendingRestart.identity);
       if (completion === 'APPLIED') {
         this.pendingRestartPublications.delete(effectId);
         this.runtimePublicationEffects.set(effectId, 'APPLIED');
@@ -854,6 +887,38 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       }
       return this.decision(true, 'INTAKE_POSTURE_ACCEPTED', '', mutation.paused !== control.intakePaused, !mutation.paused);
     }
+    if (mutation.command === 'SET_BASIS_INTAKE') {
+      const owner = this.options.strategyIntake?.basis;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        return this.decision(false, 'BASIS_INTAKE_OWNER_NOT_WIRED', 'Canonical Basis intake owner is unavailable.', false);
+      }
+      let paused: boolean;
+      try {
+        paused = owner.readPaused();
+      } catch {
+        return this.decision(false, 'BASIS_INTAKE_READBACK_UNAVAILABLE', 'Canonical Basis intake readback is unavailable.', false);
+      }
+      if (typeof paused !== 'boolean') {
+        return this.decision(false, 'BASIS_INTAKE_READBACK_INVALID', 'Canonical Basis intake readback is invalid.', false);
+      }
+      return this.decision(true, 'BASIS_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
+    }
+    if (mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        return this.decision(false, 'VOLUME_INTAKE_OWNER_NOT_WIRED', 'Canonical Volume intake owner is unavailable.', false);
+      }
+      let paused: boolean;
+      try {
+        paused = owner.readPaused();
+      } catch {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_UNAVAILABLE', 'Canonical Volume intake readback is unavailable.', false);
+      }
+      if (typeof paused !== 'boolean') {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_INVALID', 'Canonical Volume intake readback is invalid.', false);
+      }
+      return this.decision(true, 'VOLUME_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -878,12 +943,19 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         : this.decision(false, mutation.command === 'REVOKE_APPROVAL' ? 'APPROVAL_NOT_FOUND' : 'RESERVATION_NOT_FOUND', 'The referenced active owner record was not found.', false);
     }
     if (mutation.command === 'RESTART_COMPONENT') {
-      if (mutation.componentId !== 'market-universe') {
-        return this.decision(false, 'INDIVIDUAL_RUNTIME_RESTART_NOT_SUPPORTED', 'Only the dependency-root managed runtime can restart as one graph.', false);
+      if (!managed.componentOrder.includes(mutation.componentId)) {
+        return this.decision(false, 'COMPONENT_NOT_IN_MANAGED_GRAPH', 'The requested component is not owned by the managed runtime graph.', false);
       }
       const blockers = await this.restartControlBlockers(this.options.clock.nowMs());
       return blockers.length === 0
-        ? this.decision(true, 'MANAGED_RUNTIME_RESTART_ACCEPTED', '', true)
+        ? this.decision(
+          true,
+          mutation.componentId === 'market-universe'
+            ? 'MANAGED_RUNTIME_RESTART_ACCEPTED'
+            : 'BOUNDED_SUBSYSTEM_RESTART_ACCEPTED',
+          '',
+          true,
+        )
         : this.decision(false, blockers[0], 'Managed restart requires current canonical strong-zero truth and proven-absent local mutation authority.', false);
     }
     if (mutation.command === 'SET_PUBLIC_SOURCE_LIFECYCLE') {
@@ -921,12 +993,23 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       ? this.runtimePublicationEffectId(request, receipt)
       : null;
     const restartGenerationBefore = mutation.command === 'RESTART_COMPONENT'
+      && mutation.componentId === 'market-universe'
       ? this.composition.read().supervisor.generation
       : null;
     let command: CommandResult | null = null;
+    let subsystemRestart: ManagedSubsystemRestartResult | null = null;
     try {
       if (mutation.command === 'RESTART_COMPONENT') {
-        command = this.composition.restart();
+        if (mutation.componentId === 'market-universe') command = this.composition.restart();
+        else subsystemRestart = this.composition.restartComponent(mutation.componentId);
+      } else if (mutation.command === 'SET_BASIS_INTAKE') {
+        const owner = this.options.strategyIntake?.basis;
+        if (!owner || typeof owner.setPaused !== 'function') throw new Error('BASIS_INTAKE_OWNER_NOT_WIRED');
+        owner.setPaused(mutation.paused);
+      } else if (mutation.command === 'SET_VOLUME_INTAKE') {
+        const owner = this.options.strategyIntake?.volume;
+        if (!owner || typeof owner.setPaused !== 'function') throw new Error('VOLUME_INTAKE_OWNER_NOT_WIRED');
+        owner.setPaused(mutation.paused);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -934,12 +1017,19 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           ? this.composition.issue('RESUME')
           : this.composition.start();
       } else if (mutation.command === 'CLEAR_DEPLOYMENT_FREEZE') {
+        if (_actor.source === 'canonical-alarm') {
+          throw new Error('DEPLOYMENT_FREEZE_CLEAR_ACTOR_INVALID');
+        }
         const result = await this.options.deploymentFreezeClear?.clear(Object.freeze({
           idempotencyKey: request.idempotencyKey,
           expectedObservedAtUtc: mutation.expectedObservedAtUtc,
           reason: request.reason,
           requestedAtMs: request.requestedAtMs,
-          actor: Object.freeze({ ..._actor }),
+          actor: Object.freeze({
+            id: _actor.id,
+            email: _actor.email,
+            source: _actor.source,
+          }),
         }));
         if (result?.ok !== true) throw new Error(result?.code ?? 'DEPLOYMENT_FREEZE_CLEAR_OWNER_NOT_WIRED');
         if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'APPLIED');
@@ -954,23 +1044,40 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
       throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
     }
-    if (runtimeEffectId !== null && command !== null) {
-      if (mutation.command === 'RESTART_COMPONENT') {
-        if (!command.ok || command.value.command !== 'RESTART' || !command.value.applied
-          || restartGenerationBefore === null) {
+    if (subsystemRestart !== null && !subsystemRestart.ok) {
+      if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'NOT_APPLIED');
+      this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+      throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
+    }
+    if (runtimeEffectId !== null) {
+      if (mutation.command === 'RESTART_COMPONENT' && mutation.componentId === 'market-universe') {
+        if (command === null || !command.ok || command.value.command !== 'RESTART'
+          || !command.value.applied || restartGenerationBefore === null) {
           this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
           throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
         }
         this.pendingRestartPublications.set(runtimeEffectId, Object.freeze({
-          correlationId: command.value.correlationId,
-          revision: command.value.revision,
-          targetGeneration: restartGenerationBefore + 1,
+          kind: 'ROOT',
+          identity: Object.freeze({
+            correlationId: command.value.correlationId,
+            revision: command.value.revision,
+            targetGeneration: restartGenerationBefore + 1,
+          }),
+        }));
+      } else if (mutation.command === 'RESTART_COMPONENT') {
+        if (subsystemRestart === null || !subsystemRestart.ok) {
+          this.controlPublicationFailureCode = 'CONTROL_COMMITTED_RUNTIME_PENDING';
+          throw new Error('CONTROL_COMMITTED_RUNTIME_PENDING');
+        }
+        this.pendingRestartPublications.set(runtimeEffectId, Object.freeze({
+          kind: 'SUBSYSTEM',
+          identity: subsystemRestart.identity,
         }));
       } else {
         this.runtimePublicationEffects.set(runtimeEffectId, 'APPLIED');
       }
     }
-    if (command !== null) this.controlPublicationFailureCode = null;
+    if (command !== null || subsystemRestart !== null) this.controlPublicationFailureCode = null;
   }
 
   async executeValidateOnly(

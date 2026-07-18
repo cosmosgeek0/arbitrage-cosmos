@@ -67,6 +67,16 @@ export function validateControlMutation(value: unknown): MutationValidation {
         return invalid('Intake mutation requires one boolean paused value.');
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_BASIS_INTAKE':
+      if (!exactKeys(value, ['command', 'paused']) || typeof value.paused !== 'boolean') {
+        return invalid('Basis intake mutation requires one boolean paused value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_VOLUME_INTAKE':
+      if (!exactKeys(value, ['command', 'paused']) || typeof value.paused !== 'boolean') {
+        return invalid('Volume intake mutation requires one boolean paused value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     case 'SET_SAFE_MODE':
       if (!exactKeys(value, ['command', 'safeMode']) || typeof value.safeMode !== 'string') {
         return invalid('Mode mutation requires one safeMode value.');

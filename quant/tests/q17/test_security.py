@@ -9,6 +9,10 @@ import pytest
 
 import quant_edge.final_proof.security as security_module
 from quant_edge.final_proof.security import (
+    DIRECTIVE_INPUT_LOCK_ACCEPTED_BYTE_LENGTH,
+    DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256,
+    DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH,
+    DIRECTIVE_INPUT_LOCK_CURRENT_SHA256,
     FROZEN_Q_LANE_FILES_SHA256,
     MAX_SOURCE_BYTES,
     FrozenFileIdentityV1,
@@ -18,6 +22,7 @@ from quant_edge.final_proof.security import (
     SecurityFindingV1,
     SecurityPolicyError,
     SecurityScanV1,
+    require_only_post_acceptance_directive_lock_drift,
     scan_python_bytes,
     scan_python_file,
     scan_python_files,
@@ -32,8 +37,8 @@ QUANT_ROOT = REPO_ROOT / "quant"
 SOURCE_ROOT = QUANT_ROOT / "src" / "quant_edge"
 Q16_TRANSPORT_SHA256 = "f3ab8e8a9a6cd29776c153ddd52cc673f627c9dcdd9fa9c01078c55cf8e44769"
 CLI_SHA256 = "56e110936b16370ca1e7cf1e0b9fd6668dce203f910f42d4370e12e0a716812f"
-BENCHMARK_SHA256 = "0f216c5de272ec1756b5b5cfd06aae73682aa7701529bb74ed7437cb6ea7f797"
-INPUT_LOCK_SHA256 = "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24"
+BENCHMARK_SHA256 = "5979dc6003301ba65df262e0de85f6a85ac9c8233a08fd072fc38b3e561153f4"
+Q16_SERVICE_SHA256 = "763e08352e201ce7173c16a6a72cd413c7feac58ca7e624a3d94dab4eb70fb68"
 
 
 def _scan(source: str, *, path: str = "candidate.py") -> SecurityScanV1:
@@ -194,6 +199,40 @@ def test_dynamic_execution_and_import_are_detected(source: str) -> None:
 def test_subprocess_shell_and_string_argv_are_detected(source: str) -> None:
     kinds = _kinds(_scan(source))
     assert kinds & {"SUBPROCESS_IMPORT", "SUBPROCESS_CALL", "SHELL_EXECUTION"}
+
+
+def test_q16_spawn_worker_exception_requires_exact_digest_and_bounded_reaping() -> None:
+    path = "inference/service.py"
+    source = (SOURCE_ROOT / path).read_bytes()
+
+    def result(raw: bytes, *, trusted: bool = True) -> SecurityScanV1:
+        trusted_digests = {path: hashlib.sha256(raw).hexdigest()} if trusted else None
+        return scan_python_bytes(
+            raw,
+            relative_path=path,
+            trusted_source_sha256=trusted_digests,
+        )
+
+    assert result(source).clean
+    assert "PROCESS_CONTROL_IMPORT" in _kinds(result(source, trusted=False))
+    mutations = (
+        source.replace(b'get_context("spawn")', b'get_context("fork")'),
+        source.replace(b"Pipe(duplex=False)", b"Pipe(duplex=True)"),
+        source.replace(b"target=_run_inference_worker", b"target=run_inference_pipeline"),
+        source.replace(b"daemon=True", b"daemon=False"),
+        source.replace(b"                process.terminate()\n", b""),
+        source.replace(b"        process.kill()\n", b""),
+        source.replace(
+            b"process.join(timeout=_WORKER_KILL_GRACE_SECONDS)",
+            b"process.join()",
+        ),
+    )
+    assert all(mutation != source and not result(mutation).clean for mutation in mutations)
+
+
+def test_unreviewed_fork_calls_are_process_control_findings() -> None:
+    result = _scan("import os\nos.fork()\n")
+    assert "SHELL_EXECUTION" in _kinds(result)
 
 
 @pytest.mark.parametrize(
@@ -692,6 +731,7 @@ def test_current_quant_source_tree_is_clean_with_exact_frozen_exceptions() -> No
         SOURCE_ROOT,
         trusted_source_sha256={
             "inference/transport.py": Q16_TRANSPORT_SHA256,
+            "inference/service.py": Q16_SERVICE_SHA256,
             "cli.py": CLI_SHA256,
             "final_proof/benchmark.py": BENCHMARK_SHA256,
         },
@@ -738,9 +778,9 @@ def test_frozen_verification_rejects_bad_expectations_and_paths(tmp_path: Path) 
         verify_frozen_files(tmp_path, {"folder": "0" * 64})
 
 
-def test_frozen_protocol_and_input_lock_match_current_repository() -> None:
+def test_frozen_protocol_preserves_historical_input_lock_and_reports_current_drift() -> None:
     report = verify_frozen_files(REPO_ROOT, FROZEN_Q_LANE_FILES_SHA256)
-    assert report.clean
+    assert not report.clean
     assert tuple(item.relative_path for item in report.files) == tuple(
         sorted(
             {
@@ -756,9 +796,37 @@ def test_frozen_protocol_and_input_lock_match_current_repository() -> None:
             }
         )
     )
-    lock = verify_directive_input_lock(REPO_ROOT, expected_sha256=INPUT_LOCK_SHA256)
-    assert lock.clean
-    assert lock.files[0].relative_path == "quant/DIRECTIVE_INPUTS.lock"
+    frozen_rows = {item.relative_path: item for item in report.files}
+    assert all(
+        item.matches
+        for relative_path, item in frozen_rows.items()
+        if relative_path != "quant/DIRECTIVE_INPUTS.lock"
+    )
+    lock_row = frozen_rows["quant/DIRECTIVE_INPUTS.lock"]
+    assert DIRECTIVE_INPUT_LOCK_ACCEPTED_BYTE_LENGTH == 1_568
+    assert lock_row.expected_sha256 == DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256
+    assert lock_row.observed_sha256 == DIRECTIVE_INPUT_LOCK_CURRENT_SHA256
+    assert lock_row.byte_length == DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH
+    assert not lock_row.matches
+    require_only_post_acceptance_directive_lock_drift(report)
+    with pytest.raises(SecurityPolicyError, match="drifted"):
+        report.require_clean()
+
+    lock = verify_directive_input_lock(
+        REPO_ROOT,
+        expected_sha256=DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256,
+    )
+    assert not lock.clean
+    assert lock.files == (lock_row,)
+    with pytest.raises(SecurityPolicyError, match="drifted"):
+        lock.require_clean()
+
+    wider_drift = dict(FROZEN_Q_LANE_FILES_SHA256)
+    wider_drift["EDGE_PROTOCOL_V1.md"] = "0" * 64
+    with pytest.raises(SecurityPolicyError, match="beyond"):
+        require_only_post_acceptance_directive_lock_drift(
+            verify_frozen_files(REPO_ROOT, wider_drift)
+        )
 
 
 def test_changed_path_scope_accepts_only_q17_exclusive_paths() -> None:

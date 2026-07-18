@@ -1,6 +1,6 @@
 # Q17 end-to-end proof, benchmark and lane acceptance design
 
-Status: `COMPLETE — READY_FOR_INDEPENDENT_COMMIT_VERIFICATION`
+Status: `HISTORICAL C17/A17 ACCEPTED — POST-ACCEPTANCE CORRECTIONS PENDING INDEPENDENT VERIFICATION`
 
 Date: 2026-07-13
 
@@ -9,6 +9,12 @@ replays the exact Q16 inference chain, exercises fail-closed faults, projects th
 accepted research evidence without promotion, records one measured local benchmark,
 and emits exact security/component/artifact evidence. It creates no strategy, model,
 calibration, registry, transport, capital, risk or execution owner.
+
+The current file also records post-acceptance correction projections. RB-13 changes
+Q16 worker isolation, while F-034/F-038/F-039 change money-truth bytes owned by
+Q02/Q05/Q08. Those fixes were integrated by director merge `5f887cf2…`, but none is
+covered by the historical phase or Q17 receipts. Current correction bytes and
+measurements remain `NOT_ACCEPTED` pending independent exact-commit verification.
 
 The final result is deliberately conservative:
 
@@ -67,9 +73,11 @@ execution authority.
 
 ## Accepted research-evidence projection
 
-Q17 verifies exact current bytes and keeps implementation, evidence and integration
-as separate axes. The result is `BUILT_AND_TESTED`, `SYNTHETIC_ONLY` and
-`NOT_CONFIGURED` respectively.
+Q17 verifies immutable receipt bytes, preserves historical accepted pins, verifies
+declared post-acceptance current bytes separately and keeps implementation,
+evidence and integration as separate axes. The historical result is
+`BUILT_AND_TESTED`, `SYNTHETIC_ONLY` and `NOT_CONFIGURED` respectively; current
+corrections do not inherit those acceptances.
 
 - Q10 transparent baselines/challengers are machinery results on synthetic evidence.
   Framework candidates remain `REFERENCE_ONLY`; real-evidence ablation remains
@@ -92,22 +100,25 @@ Therefore passing Q17 machinery does not establish either edge hypothesis.
 `benchmark.v1.json` is one immutable runtime observation, not a deterministic
 golden. It uses CPython 3.13.14 on Darwin arm64, three measured samples after two
 warmups, `time.perf_counter_ns()` deltas and nearest-rank ceiling percentiles.
-Measurements use the direct in-process handler with no JSON or socket cost.
+Measurements call the parent handler directly with no JSON or socket cost. Every
+assessment sample includes explicit `spawn` worker startup, one-shot IPC, inference,
+parent validation and bounded reap.
 
 | Shape | Rows/sample | p50 ns | p95 ns | p99 ns | Exact throughput evidence |
 | --- | ---: | ---: | ---: | ---: | --- |
-| cold object construction | 1 | 7,541 | 19,667 | 19,667 | `1,000,000,000 / 10,639` objects/s |
-| warm single | 1 | 3,349,209 | 3,423,041 | 3,423,041 | `12,000,000 / 40,219` items/s |
-| deep focus | 10 | 33,599,209 | 35,579,625 | 35,579,625 | `5,000,000,000 / 17,128,521` items/s |
-| focus | 25 | 89,467,750 | 90,022,959 | 90,022,959 | `4,687,500,000 / 16,652,737` items/s |
-| candidate | 128 | 464,945,042 | 467,334,083 | 467,334,083 | `122,880,000 / 445,549` items/s |
-| universe/watch | 452 | 1,614,296,000 | 1,625,076,209 | 1,625,076,209 | `5,424,000,000 / 19,412,539` items/s |
+| cold object construction | 1 | 9,000 | 25,709 | 25,709 | `1,500,000,000 / 20,167` objects/s |
+| warm single | 1 | 124,242,416 | 124,429,167 | 124,429,167 | `8,000,000 / 993,681` items/s |
+| deep focus | 10 | 159,596,125 | 160,847,667 | 160,847,667 | `1,875,000,000 / 29,974,237` items/s |
+| focus | 25 | 218,822,334 | 219,342,500 | 219,342,500 | `12,500,000,000 / 109,467,507` items/s |
+| candidate | 128 | 983,502,125 | 1,036,202,209 | 1,036,202,209 | `384,000,000,000 / 3,002,634,751` items/s |
+| universe/watch | 452 | 3,711,352,291 | 3,791,230,541 | 3,791,230,541 | `1,356,000,000,000 / 11,092,977,457` items/s |
 
-The bounded child reports self `ru_maxrss` as 66,551,808 bytes on Darwin, within
+The bounded child reports self `ru_maxrss` as 58,949,632 bytes on Darwin, within
 the provisional 8 GiB ceiling. Queue saturation is synchronized: three requests
 are admitted and completed, one overflow attempt returns queue-full, and service
-counters record exactly one queue rejection. The 708 ns close observation is only
-an in-process close-flag call and does not prove graceful transport shutdown.
+counters record exactly one queue rejection. The 2,750 ns close observation covers
+the parent close signal and an idle worker guard only; it does not prove graceful
+transport shutdown or active-worker termination latency.
 
 Benchmark limitations are acceptance facts:
 
@@ -117,23 +128,26 @@ Benchmark limitations are acceptance facts:
 - the universe and watch rows share one measurement;
 - three samples make p95 and p99 the observed maximum under the declared rule;
 - the numeric promotion latency target is `UNKNOWN`;
-- direct-handler latency excludes serialization, IPC, scheduling and transport;
+- direct-handler latency includes worker IPC and scheduling but excludes JSON and
+  socket transport;
 - the result proves neither production capacity nor profitable edge.
 
 ## Security, frozen inputs and scope
 
 The syntax-aware security scan covers 152 Python source files plus the Q17 campaign
 script and reports zero findings. Exact digest-bound exceptions exist only for the
-reviewed frozen protocol subprocess, Q16 local transport and Q17 bounded RSS child.
-Tests attack aliases, `getattr`, subscript access, dynamic imports, unsafe loaders,
-shell/string subprocesses, network clients and secret/account/order/money calls.
+reviewed frozen protocol subprocess, Q16 local transport, Q16 bounded spawn-worker
+lifecycle and Q17 bounded RSS child. Tests attack aliases, `getattr`, subscript
+access, dynamic imports, unsafe loaders, unbounded process cleanup, shell/string
+subprocesses, network clients and secret/account/order/money calls.
 
-Nine frozen files verify by exact SHA-256: the protocol document, root lock,
-protocol tests/schema/fixture, directive-input lock, hypothesis map, frozen registry
-and quant dependency lock. The generated scope artifact contains only the declared
-28-path expected C17 inventory. It truthfully labels actual staged/committed Git
-scope as `NOT_MEASURED_RESERVED_FOR_Q17_RECEIPT`; the immutable receipts must prove
-actual Git path and mode truth.
+Eight historical frozen identities still match exactly. The accepted directive-
+input lock identity remains pinned to `410010ef…` / 1,568 bytes, while the current
+post-acceptance file is explicitly reported as the known `d4bf318…` / 1,757-byte
+mismatch; it is not silently repinned or called clean. The generated scope artifact
+contains only the declared 28-path expected C17 inventory. It truthfully labels
+actual staged/committed Git scope as `NOT_MEASURED_RESERVED_FOR_Q17_RECEIPT`; the
+immutable receipts must prove actual Git path and mode truth.
 
 ## Generated final kit
 
@@ -148,10 +162,16 @@ actual Git path and mode truth.
 - `security_scope.v1.json`;
 - `artifact_manifest.v1.json`, which lists every other regular file exactly once.
 
-The component manifest binds Q00-Q16 implementation/acceptance identities, director
-Q13/Q15 merge evidence, base/protocol/frozen truth, Q17 activation and the exact
-current completed Q17 task. It labels C17/A17 as pending because generated evidence
-cannot self-reference future commits.
+The component manifest keeps historical Q02/Q05/Q08/Q16 identities and accepted
+source/evidence seals separate from live post-acceptance correction seals. Q02
+retains its unchanged accepted primary while verifying current F-039 source. Q05
+and Q08 retain accepted primary metadata while separately verifying current
+F-038/F-039 and F-034/F-038/F-039 source/evidence bytes. Every correction row is
+`NOT_ACCEPTED`, says immutable receipts do not attest corrected bytes, records exact
+fix/director-merge provenance where available, and leaves the amended commit/tree
+pending rather than self-referencing. The manifest also binds all other Q00-Q15
+identities, director Q13/Q15 merge evidence, base/protocol/frozen truth, Q17
+activation and the exact current Q17 task.
 
 ## Safe integration boundary
 

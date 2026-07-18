@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { fail, hasPlaceholder, isFullSha, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
+import { compileJsonSchemaFile } from '../json-schema.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
 if (!args.input || !args['max-age-sec'] || !args['expected-sha']) fail('--input, --max-age-sec, and --expected-sha are required');
@@ -8,6 +9,17 @@ if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only 
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
 const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
 const value = readJson(args.input, 'deployment readback');
+let structuralValidator;
+try {
+  structuralValidator = compileJsonSchemaFile(
+    new URL('../schemas/deployment-readback.schema.json', import.meta.url),
+    'deployment readback schema',
+  );
+} catch (error) {
+  fail(`deployment readback schema compilation failed: ${error instanceof Error ? error.message : String(error)}`);
+}
+const structuralResult = structuralValidator(value);
+if (!structuralResult.valid) fail(`deployment readback schema rejected input: ${structuralResult.error}`);
 requireKeys(value, [
   'testedSha', 'deployedSha', 'releaseId', 'schemaRevision', 'configRevision', 'modelRevision',
   'services', 'origin', 'tunnel', 'access', 'watchdog', 'lastBackup', 'lastRestoreDrill',

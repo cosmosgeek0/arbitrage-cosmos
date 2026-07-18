@@ -50,6 +50,7 @@ const BASELINE_INTERVAL_ANCHOR_MS: Readonly<Record<BaselineFixedInterval, number
 const DEFAULT_CONFIG = Object.freeze({
   maximumPlanItems: 10_000,
   maximumParallelism: 4,
+  historyRequestTimeoutMs: 8_000,
   pageLimit: 1_000,
   maximumPagesPerItem: 1_000,
   maximumRecordsPerItem: 100_000,
@@ -135,6 +136,7 @@ export function createBaselineBootstrapConfig(
   ])) as unknown as Omit<BaselineBootstrapConfig, 'configurationVersion'>;
   boundedInteger(raw.maximumPlanItems, 'maximumPlanItems', 1, 50_000);
   boundedInteger(raw.maximumParallelism, 'maximumParallelism', 1, 128);
+  boundedInteger(raw.historyRequestTimeoutMs, 'historyRequestTimeoutMs', 1, 120_000);
   boundedInteger(raw.pageLimit, 'pageLimit', 1, 1_000);
   boundedInteger(raw.maximumPagesPerItem, 'maximumPagesPerItem', 1, 100_000);
   boundedInteger(raw.maximumRecordsPerItem, 'maximumRecordsPerItem', 1, 10_000_000);

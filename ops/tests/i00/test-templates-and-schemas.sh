@@ -9,6 +9,11 @@ while IFS= read -r file; do
   JSON_COUNT=$((JSON_COUNT + 1))
 done < <(find "$REPO_ROOT/ops/templates/i00" "$I00_ROOT/schemas" -type f \( -name '*.json' -o -name '*.json.template' \) | LC_ALL=C sort)
 assert_eq "$JSON_COUNT" 15
+assert_failure node --input-type=module -e '
+  import { pathToFileURL } from "node:url";
+  const { compileJsonSchema } = await import(pathToFileURL(process.argv[1]));
+  compileJsonSchema({$schema:"https://json-schema.org/draft/2020-12/schema",type:"object",unknownKeyword:true});
+' "$I00_ROOT/json-schema.mjs"
 
 note "systemd ordering, credential, loopback, and honest Q placeholder"
 APP_DROPIN="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template")"
@@ -63,6 +68,7 @@ CF_ACCESS_AUD=audience_12345678
 I00_TESTED_SHA=0123456789abcdef0123456789abcdef01234567
 I00_CONFIG_REVISION=config-1
 I00_MODEL_REVISION=UNAVAILABLE
+I00_PUBLIC_SOURCE_STARTUP_EGRESS=1
 ENV
 assert_success node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime.env"
 sed 's/HOST=127.0.0.1/HOST=0.0.0.0/' "$TEST_TMP/runtime.env" > "$TEST_TMP/public.env"
@@ -78,6 +84,9 @@ cat > "$TEST_TMP/release-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RELEASE","releaseId":"i00-0123456789abcdef0123456789abcdef01234567","testedSha":"0123456789abcdef0123456789abcdef01234567","artifactManifestSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"VALIDATED_NOT_DEPLOYED","recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/release-receipt.json" --kind RELEASE
+cp "$TEST_TMP/release-receipt.json" "$TEST_TMP/release-extra-field.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.unexpected=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/release-extra-field.json"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/release-extra-field.json" --kind RELEASE
 
 EVIDENCE_ROOT="$TEST_TMP/evidence"
 mkdir -p "$EVIDENCE_ROOT/deployment" "$EVIDENCE_ROOT/rollback"
@@ -276,8 +285,20 @@ cat > "$TEST_TMP/restore-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RESTORE","backupId":"backup-1","isolated":true,"appInactive":false,"integrityCheck":"ok","foreignKeyViolations":0,"target":"/tmp/isolated","status":"ISOLATED_DRILL_PASS","authorizationReference":null,"recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/restore-receipt.json" --kind RESTORE
+cp "$TEST_TMP/restore-receipt.json" "$TEST_TMP/restore-wrong-type.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.appInactive="false";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/restore-wrong-type.json"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/restore-wrong-type.json" --kind RESTORE
+cp "$TEST_TMP/restore-receipt.json" "$TEST_TMP/restore-extra-field.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.unexpected=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/restore-extra-field.json"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/restore-extra-field.json" --kind RESTORE
 node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.status="PRODUCTION_RESTORE_PROVED";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/restore-receipt.json"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/restore-receipt.json" --kind RESTORE
+cat > "$TEST_TMP/backup-receipt.json" <<'JSON'
+{"schemaVersion":1,"kind":"BACKUP","backupId":"backup-1","sourceSha":"0123456789abcdef0123456789abcdef01234567","databaseSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","integrityCheck":"ok","foreignKeyViolations":0,"evidencePaths":[],"status":"BACKUP_VERIFIED","recordedAtUtc":"2026-07-13T00:00:00Z"}
+JSON
+assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/backup-receipt.json" --kind BACKUP
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.backupId=7;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/backup-receipt.json"
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/backup-receipt.json" --kind BACKUP
 cat > "$TEST_TMP/incident-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"INCIDENT","incidentId":"incident-1","fingerprint":"watchdog:host-1","severity":"CRITICAL","rootCause":"canonical watchdog missed","capitalRelevance":"UNKNOWN","firstSeenUtc":"2026-07-13T00:00:00Z","lastSeenUtc":"2026-07-13T00:01:00Z","status":"OPEN","operatorAction":"inspect target readback","correlationIds":["corr-1"]}
 JSON

@@ -5,6 +5,7 @@ import type {
 import type {
   BaselineCheckpointPort,
   RuntimeClock,
+  RuntimeScheduler,
 } from '../contracts/index.js';
 
 export const BASELINE_BOOTSTRAP_STATES = Object.freeze([
@@ -71,6 +72,7 @@ export interface BaselineBootstrapConfig {
   readonly configurationVersion: string;
   readonly maximumPlanItems: number;
   readonly maximumParallelism: number;
+  readonly historyRequestTimeoutMs: number;
   /** Kept at or below Spot's official maximum so one plan works on both public products. */
   readonly pageLimit: number;
   readonly maximumPagesPerItem: number;
@@ -145,8 +147,17 @@ export type HistoryFetchResult =
   | HistoryFetchTransientFailure
   | HistoryFetchUnavailable;
 
+export interface HistoryFetchContext {
+  readonly method: 'GET';
+  readonly signal: AbortSignal;
+  readonly deadlineAtMs: number;
+}
+
 export interface HistoryPort {
-  fetch(request: Readonly<HistoryFetchRequest>): Promise<Readonly<HistoryFetchResult>>;
+  fetch(
+    request: Readonly<HistoryFetchRequest>,
+    context: Readonly<HistoryFetchContext>,
+  ): Promise<Readonly<HistoryFetchResult>>;
 }
 
 export interface RestWeightReservationRequest {
@@ -176,7 +187,7 @@ export interface RestWeightSettlement {
   readonly requestId: string;
   readonly estimatedWeight: number;
   readonly actualWeight: number;
-  readonly outcome: HistoryFetchResult['kind'] | 'PORT_THROW' | 'DISPATCH_ABORTED';
+  readonly outcome: HistoryFetchResult['kind'] | 'PORT_THROW' | 'TIMEOUT' | 'DISPATCH_ABORTED';
   readonly observedAtMs: number;
 }
 
@@ -316,6 +327,7 @@ export interface BaselineTickInput {
 
 export interface BaselineBootstrapSchedulerOptions {
   readonly clock: RuntimeClock;
+  readonly deadlineScheduler: RuntimeScheduler;
   readonly history: HistoryPort;
   readonly weightBudget: RestWeightBudgetPort;
   readonly checkpoint: BaselineCheckpointPort;

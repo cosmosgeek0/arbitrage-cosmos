@@ -144,6 +144,13 @@ test('exact-candidate generator source is fail-closed and covers the locked card
   assert.match(source, /\['DEP-004', \{/);
   assert.match(source, /C9 baseline custody token, fresh final-verifier verdict/);
   assert.match(source, /OVERRIDE_ROW_MISSING/);
+  assert.match(source, /CANDIDATE_ABSENCE_AND_EXCLUSION_PROOFS/);
+  assert.match(source, /CANDIDATE_PATH_PREFIX_PRESENT/);
+  assert.match(source, /FRONTIER_REFERENCE_ANCESTRY/);
+  assert.match(
+    source,
+    /sha: '887221418345ad54d7b98881b359fab85a6188e6'[\s\S]{0,160}role: 'PARKED_FRONTIER_COORDINATOR_TIP'[\s\S]{0,120}expected_ancestor_of_candidate: false/,
+  );
   assert.match(verifierSource, /MATRIX_IDENTITY_SET/);
   assert.match(verifierSource, /MATRIX_DEPLOYMENT_RUNTIME_EVIDENCE/);
   assert.match(verifierSource, /INPUT_CONTENT_OID/);
@@ -152,6 +159,26 @@ test('exact-candidate generator source is fail-closed and covers the locked card
   assert.match(verifierSource, /SELECTION_REJECTED_C8/);
   assert.match(verifierSource, /SELECTION_REJECTION_HISTORY/);
   assert.match(verifierSource, /SELECTION_REJECTED_C5_DISPOSITION/);
+  assert.match(verifierSource, /CANDIDATE_ABSENCE_PROOF_PREFIXES/);
+  assert.match(verifierSource, /CANDIDATE_ABSENCE_PROOF_COUNT/);
+  assert.match(verifierSource, /FRONTIER_REFERENCE_ANCESTRY/);
+  assert.match(
+    verifierSource,
+    /sha: '887221418345ad54d7b98881b359fab85a6188e6'[\s\S]{0,160}role: 'PARKED_FRONTIER_COORDINATOR_TIP'[\s\S]{0,120}expected_ancestor_of_candidate: false/,
+  );
+  assert.match(
+    directiveMatrix,
+    /"AIO-008"[^\n]*generate-exact-candidate-evidence\.mjs; verification\/product-truth-20260716\/verify-exact-candidate-evidence\.mjs/,
+  );
+  assert.match(
+    directiveMatrix,
+    /"DEP-003"[^\n]*generate-exact-candidate-evidence\.mjs; verification\/product-truth-20260716\/verify-exact-candidate-evidence\.mjs/,
+  );
+  assert.match(
+    directiveMatrix,
+    /"FRT-000"[^\n]*generate-exact-candidate-evidence\.mjs; verification\/product-truth-20260716\/verify-exact-candidate-evidence\.mjs/,
+  );
+  assert.doesNotMatch(directiveMatrix, /generate-wave1-evidence\.mjs/);
   assert.match(censusSource, /REJECTED_CANDIDATE_RELABEL_ATTEMPT/);
   assert.match(censusSource, /EXACT_FROZEN_CANDIDATE_NOT_MUTABLE_EVIDENCE_DESCENDANT_HEAD/);
   assert.match(censusSource, /SORTED_PORCELAIN_RECORDS_WITH_TRUTH_A_HEAD_NORMALIZED_TO_EXACT_CANDIDATE/);

@@ -616,15 +616,65 @@ section('23. runtime symbol policy applies immediately without cooldown debt');
 section('24. external sink failures are contained');
 {
   const clock = new ManualClock(500_000);
+  let deliveryAttempts = 0;
+  let durableDeliveries = 0;
   const engine = new VolumeEngine(clock, TEST_CFG, {
-    emit: () => Promise.reject(new Error('synthetic sink failure')),
+    emit: () => {
+      deliveryAttempts += 1;
+      if (deliveryAttempts === 1) return Promise.reject(new Error('synthetic sink failure'));
+      durableDeliveries += 1;
+      return Promise.resolve();
+    },
   });
-  engine.setUniverse([symbolMeta('SINKUSDT')]);
-  engine.start();
+  const retryableEvent = {
+    kind: 'strategy_decision',
+    ts: clock.now(),
+    symbol: 'SINKUSDT',
+    strategy: 'volume_spike',
+    correlationId: 'sink-retry-correlation',
+    rejectCode: 'data_stale',
+    message: 'retry durable delivery',
+    payload: { proof: 'RB-01' },
+  };
+  engine.sink.emit(retryableEvent);
   await Promise.resolve();
   await Promise.resolve();
-  check('memory evidence remains available', engine.memSink.byKind('engine_started').length === 1);
+  engine.sink.emit(retryableEvent);
+  await Promise.resolve();
+  await Promise.resolve();
+  engine.sink.emit(retryableEvent);
+  check('memory evidence remains available exactly once',
+    engine.memSink.byKind('strategy_decision').filter((event) => event.correlationId === 'sink-retry-correlation').length === 1);
   check('async sink rejection recorded without escaping', engine.sinkFailures() >= 1);
+  check('failed async delivery is retried until one durable success',
+    deliveryAttempts === 2 && durableDeliveries === 1,
+    `attempts=${deliveryAttempts}, durable=${durableDeliveries}`);
+
+  let ledgerAttempts = 0;
+  let ledgerCommits = 0;
+  const runtime = new VolumeRuntime(
+    {
+      logEvent: () => {
+        ledgerAttempts += 1;
+        if (ledgerAttempts === 1) throw new Error('synthetic ledger failure');
+        ledgerCommits += 1;
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 3_000_000,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => [],
+  );
+  try { runtime.persistEvent(retryableEvent); } catch {}
+  runtime.persistEvent(retryableEvent);
+  runtime.persistEvent(retryableEvent);
+  check('runtime ledger dedupe records only committed delivery',
+    ledgerAttempts === 2 && ledgerCommits === 1,
+    `attempts=${ledgerAttempts}, committed=${ledgerCommits}`);
 }
 
 // ================================================================

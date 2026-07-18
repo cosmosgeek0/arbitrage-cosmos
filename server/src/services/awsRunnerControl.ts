@@ -4,15 +4,25 @@ import {
   GetCommandInvocationCommand,
   SendCommandCommand,
   SSMClient,
+  type DescribeInstanceInformationCommandOutput,
   type GetCommandInvocationCommandOutput,
+  type SendCommandCommandOutput,
 } from '@aws-sdk/client-ssm';
-import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
+import {
+  GetCallerIdentityCommand,
+  STSClient,
+  type GetCallerIdentityCommandOutput,
+} from '@aws-sdk/client-sts';
 import type { Ledger } from '../ledger.js';
 
 const CONFIG_KEY = 'aws-runner-control';
 const MAX_RUNNER_BYTES = 16_000;
 const MAX_COMMAND_OUTPUT_BYTES = 64_000;
 const MAX_STATUS_OUTPUT_BYTES = 4_000;
+const AWS_CONNECTION_TIMEOUT_MS = 5_000;
+const AWS_REQUEST_TIMEOUT_MS = 15_000;
+const AWS_PROBE_DEADLINE_MS = 15_000;
+const AWS_ACTION_GRACE_MS = 20_000;
 const TERMINAL = new Set(['Success', 'Cancelled', 'TimedOut', 'Failed', 'Cancelling']);
 const BASE64_RE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
@@ -63,6 +73,25 @@ export interface AwsRunnerFile {
   fetchedAt: number;
 }
 
+export interface AwsRunnerRuntime {
+  nowMs(): number;
+  schedule(delayMs: number, task: () => void): { cancel(): void };
+}
+
+export interface AwsRunnerControlOptions {
+  readonly runtime?: AwsRunnerRuntime;
+  readonly requestTimeoutMs?: number;
+}
+
+interface AwsActionScope {
+  readonly signal: AbortSignal;
+  readonly deadlineAtMs: number;
+  readonly expired: Promise<void>;
+  expire(): void;
+  close(): void;
+  isExpired(): boolean;
+}
+
 export class AwsRunnerControlError extends Error {
   constructor(public readonly statusCode: number, public readonly code: string, message: string) {
     super(message);
@@ -85,9 +114,13 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const SYSTEM_AWS_RUNNER_RUNTIME: AwsRunnerRuntime = Object.freeze({
+  nowMs: () => Date.now(),
+  schedule(delayMs: number, task: () => void) {
+    const handle = setTimeout(task, delayMs);
+    return Object.freeze({ cancel: () => clearTimeout(handle) });
+  },
+});
 
 function sha256(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
@@ -146,15 +179,142 @@ export class AwsRunnerControl {
   private readonly documentName = envText('AWS_CONTROL_DOCUMENT') || 'AWS-RunShellScript';
   private readonly validateCommand = envText('AWS_CONTROL_VALIDATE_COMMAND') || 'npm run build';
   private readonly ledger: Ledger;
+  private readonly runtime: AwsRunnerRuntime;
+  private readonly requestTimeoutMs: number;
   private gates: AwsRunnerGates;
   private ssm: SSMClient | null = null;
   private sts: STSClient | null = null;
   private probeCache: { ts: number; identityArn: string | null; accountId: string | null; instanceOnline: boolean | null } | null = null;
   private lastAction: AwsRunnerActionResult | null = null;
 
-  constructor(ledger: Ledger) {
+  constructor(ledger: Ledger, options: AwsRunnerControlOptions = {}) {
     this.ledger = ledger;
+    this.runtime = options.runtime ?? SYSTEM_AWS_RUNNER_RUNTIME;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? AWS_REQUEST_TIMEOUT_MS;
+    if (typeof this.runtime.nowMs !== 'function' || typeof this.runtime.schedule !== 'function') {
+      throw new TypeError('AWS runner runtime must provide nowMs and schedule');
+    }
+    if (!Number.isSafeInteger(this.requestTimeoutMs)
+      || this.requestTimeoutMs < 1
+      || this.requestTimeoutMs > AWS_REQUEST_TIMEOUT_MS) {
+      throw new RangeError(`AWS request timeout must be a safe integer in [1, ${AWS_REQUEST_TIMEOUT_MS}]`);
+    }
     this.gates = this.loadGates();
+  }
+
+  private now(): number {
+    const value = this.runtime.nowMs();
+    if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError('AWS runner clock must return positive UTC milliseconds');
+    return value;
+  }
+
+  private timeoutError(): AwsRunnerControlError {
+    return new AwsRunnerControlError(
+      504,
+      'AWS_ACTION_TIMEOUT',
+      'AWS action deadline expired; remote completion state is unknown.',
+    );
+  }
+
+  private actionScope(timeoutMs: number): AwsActionScope {
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) throw new RangeError('AWS action timeout must be positive');
+    const startedAtMs = this.now();
+    const deadlineAtMs = startedAtMs + timeoutMs;
+    if (!Number.isSafeInteger(deadlineAtMs)) throw new RangeError('AWS action deadline overflow');
+    const controller = new AbortController();
+    let expired = false;
+    let closed = false;
+    let resolveExpired!: () => void;
+    const expiredPromise = new Promise<void>((resolve) => { resolveExpired = resolve; });
+    let handle: { cancel(): void };
+    const expire = (): void => {
+      if (expired || closed) return;
+      expired = true;
+      controller.abort('AWS_ACTION_TIMEOUT');
+      resolveExpired();
+    };
+    try {
+      handle = this.runtime.schedule(timeoutMs, expire);
+    } catch {
+      expire();
+      handle = { cancel() {} };
+    }
+    return Object.freeze({
+      signal: controller.signal,
+      deadlineAtMs,
+      expired: expiredPromise,
+      expire,
+      close: () => {
+        if (closed) return;
+        closed = true;
+        try { handle.cancel(); } catch { /* closed action remains closed */ }
+      },
+      isExpired: () => expired,
+    });
+  }
+
+  private async sendAws<T>(
+    scope: AwsActionScope,
+    invoke: (options: { abortSignal: AbortSignal; requestTimeout: number }) => Promise<T>,
+  ): Promise<T> {
+    const remainingMs = scope.deadlineAtMs - this.now();
+    if (remainingMs <= 0 || scope.isExpired()) {
+      scope.expire();
+      throw this.timeoutError();
+    }
+    const requestTimeout = Math.min(this.requestTimeoutMs, remainingMs);
+    let requestDeadline: { cancel(): void };
+    try {
+      requestDeadline = this.runtime.schedule(requestTimeout, () => scope.expire());
+    } catch {
+      scope.expire();
+      throw this.timeoutError();
+    }
+    const work = Promise.resolve().then(() => invoke({
+      abortSignal: scope.signal,
+      requestTimeout,
+    }));
+    const outcome = await Promise.race([
+      work.then(
+        (value) => ({ kind: 'VALUE' as const, value }),
+        (error: unknown) => ({ kind: 'ERROR' as const, error }),
+      ),
+      scope.expired.then(() => ({ kind: 'TIMEOUT' as const })),
+    ]);
+    try { requestDeadline.cancel(); } catch { /* outcome remains authoritative */ }
+    if (outcome.kind === 'TIMEOUT') throw this.timeoutError();
+    if (outcome.kind === 'ERROR') {
+      const name = outcome.error instanceof Error ? outcome.error.name : '';
+      if (scope.isExpired() || name === 'AbortError' || name === 'TimeoutError') {
+        scope.expire();
+        throw this.timeoutError();
+      }
+      throw outcome.error;
+    }
+    return outcome.value;
+  }
+
+  private async waitForPoll(delayMs: number, scope: AwsActionScope): Promise<void> {
+    const remainingMs = scope.deadlineAtMs - this.now();
+    if (remainingMs <= 0 || scope.isExpired()) {
+      scope.expire();
+      throw this.timeoutError();
+    }
+    let resolveWait!: () => void;
+    const wait = new Promise<void>((resolve) => { resolveWait = resolve; });
+    let handle: { cancel(): void };
+    try {
+      handle = this.runtime.schedule(Math.min(delayMs, remainingMs), resolveWait);
+    } catch {
+      scope.expire();
+      throw this.timeoutError();
+    }
+    const outcome = await Promise.race([
+      wait.then(() => 'WAITED' as const),
+      scope.expired.then(() => 'TIMEOUT' as const),
+    ]);
+    try { handle.cancel(); } catch { /* wait outcome remains authoritative */ }
+    if (outcome === 'TIMEOUT') throw this.timeoutError();
   }
 
   private loadGates(): AwsRunnerGates {
@@ -198,8 +358,14 @@ export class AwsRunnerControl {
 
   private clients(): { ssm: SSMClient; sts: STSClient } {
     if (!this.configured()) throw new AwsRunnerControlError(409, 'AWS_NOT_CONFIGURED', `Missing secure runner configuration: ${this.missingConfig().join(', ')}`);
-    this.ssm ??= new SSMClient({ region: this.region });
-    this.sts ??= new STSClient({ region: this.region });
+    const requestHandler = {
+      connectionTimeout: Math.min(AWS_CONNECTION_TIMEOUT_MS, this.requestTimeoutMs),
+      requestTimeout: this.requestTimeoutMs,
+      socketTimeout: this.requestTimeoutMs,
+      throwOnRequestTimeout: true,
+    };
+    this.ssm ??= new SSMClient({ region: this.region, requestHandler });
+    this.sts ??= new STSClient({ region: this.region, requestHandler });
     return { ssm: this.ssm, sts: this.sts };
   }
 
@@ -253,14 +419,33 @@ export class AwsRunnerControl {
     let instanceOnline: boolean | null = this.probeCache?.instanceOnline ?? null;
     let channel: AwsRunnerStatus['channel'] = missing.length ? 'not_configured' : this.gates.connectionEnabled ? 'ready' : 'blocked';
     if (probe && operatorAuthorized && !missing.length && this.gates.connectionEnabled) {
+      const scope = this.actionScope(AWS_PROBE_DEADLINE_MS);
       try {
-        const now = Date.now();
+        const now = this.now();
         if (!this.probeCache || now - this.probeCache.ts > 15_000) {
           const { ssm, sts } = this.clients();
-          const [identity, instances] = await Promise.all([
-            sts.send(new GetCallerIdentityCommand({})),
-            ssm.send(new DescribeInstanceInformationCommand({ Filters: [{ Key: 'InstanceIds', Values: [this.instanceId] }] })),
+          const [identityResult, instancesResult] = await Promise.allSettled([
+            this.sendAws<GetCallerIdentityCommandOutput>(
+              scope,
+              (options) => sts.send(new GetCallerIdentityCommand({}), options),
+            ),
+            this.sendAws<DescribeInstanceInformationCommandOutput>(
+              scope,
+              (options) => ssm.send(new DescribeInstanceInformationCommand({
+                Filters: [{ Key: 'InstanceIds', Values: [this.instanceId] }],
+              }), options),
+            ),
           ]);
+          const timeoutFailure = [identityResult, instancesResult].find((result) => (
+            result.status === 'rejected'
+              && result.reason instanceof AwsRunnerControlError
+              && result.reason.code === 'AWS_ACTION_TIMEOUT'
+          ));
+          if (timeoutFailure?.status === 'rejected') throw timeoutFailure.reason;
+          if (identityResult.status === 'rejected') throw identityResult.reason;
+          if (instancesResult.status === 'rejected') throw instancesResult.reason;
+          const identity = identityResult.value;
+          const instances = instancesResult.value;
           const matched = instances.InstanceInformationList?.find((item) => item.InstanceId === this.instanceId);
           this.probeCache = {
             ts: now,
@@ -276,15 +461,20 @@ export class AwsRunnerControl {
       } catch (error) {
         channel = 'offline';
         instanceOnline = false;
+        const detail = error instanceof AwsRunnerControlError && error.code === 'AWS_ACTION_TIMEOUT'
+          ? error.code
+          : safeFailureDetail(error);
         this.lastAction = {
           commandId: null,
           action: 'probe',
           status: 'Failed',
           output: '',
-          error: `AWS probe failed (${safeFailureDetail(error)}).`,
-          startedAt: Date.now(),
-          finishedAt: Date.now(),
+          error: `AWS probe failed (${detail}).`,
+          startedAt: this.now(),
+          finishedAt: this.now(),
         };
+      } finally {
+        scope.close();
       }
     }
     return {
@@ -312,68 +502,85 @@ export class AwsRunnerControl {
 
   private async runShell(action: string, script: string, timeoutSeconds = 30): Promise<AwsRunnerActionResult> {
     this.requireConnection();
-    const startedAt = Date.now();
+    const startedAt = this.now();
     const { ssm } = this.clients();
-    let sent;
+    const remoteTimeoutSeconds = Math.max(30, Math.min(600, timeoutSeconds));
+    const scope = this.actionScope(remoteTimeoutSeconds * 1_000 + AWS_ACTION_GRACE_MS);
     try {
-      sent = await ssm.send(new SendCommandCommand({
-        DocumentName: this.documentName,
-        InstanceIds: [this.instanceId],
-        TimeoutSeconds: Math.max(30, Math.min(600, timeoutSeconds)),
-        Comment: `Cosmos runner control: ${action}`.slice(0, 100),
-        // AWS-RunShellScript starts commands with /bin/sh. Pipefail is a Bash
-        // feature, so invoke Bash explicitly and quote the whole script as one
-        // argument instead of relying on the instance's /bin/sh implementation.
-        Parameters: { commands: [`/usr/bin/env bash -lc ${shellQuote(`set -euo pipefail\n${script}`)}`] },
-      }));
-    } catch (error) {
-      throw new AwsRunnerControlError(502, 'AWS_COMMAND_DISPATCH_FAILED', `AWS command dispatch failed (${safeFailureDetail(error)}).`);
-    }
-    const commandId = sent.Command?.CommandId;
-    if (!commandId) throw new AwsRunnerControlError(502, 'AWS_COMMAND_ID_MISSING', 'AWS accepted no command identifier.');
-    const deadline = Date.now() + (timeoutSeconds + 20) * 1000;
-    let invocation: GetCommandInvocationCommandOutput | null = null;
-    let output = '';
-    let error = '';
-    let status = 'Pending';
-    while (Date.now() < deadline) {
+      let sent: SendCommandCommandOutput;
       try {
-        const result = await ssm.send(new GetCommandInvocationCommand({ CommandId: commandId, InstanceId: this.instanceId }));
-        invocation = result;
-        status = result.Status ?? 'Pending';
-        output = result.StandardOutputContent ?? '';
-        error = result.StandardErrorContent ?? '';
-        if (TERMINAL.has(status)) break;
-      } catch (pollError) {
-        const name = pollError instanceof Error ? pollError.name : '';
-        if (name !== 'InvocationDoesNotExist') {
-          throw new AwsRunnerControlError(502, 'AWS_COMMAND_POLL_FAILED', `AWS command status failed (${safeFailureDetail(pollError)}).`);
-        }
+        sent = await this.sendAws<SendCommandCommandOutput>(
+          scope,
+          (options) => ssm.send(new SendCommandCommand({
+            DocumentName: this.documentName,
+            InstanceIds: [this.instanceId],
+            TimeoutSeconds: remoteTimeoutSeconds,
+            Comment: `Cosmos runner control: ${action}`.slice(0, 100),
+            // AWS-RunShellScript starts commands with /bin/sh. Pipefail is a Bash
+            // feature, so invoke Bash explicitly and quote the whole script as one
+            // argument instead of relying on the instance's /bin/sh implementation.
+            Parameters: { commands: [`/usr/bin/env bash -lc ${shellQuote(`set -euo pipefail\n${script}`)}`] },
+          }), options),
+        );
+      } catch (error) {
+        if (error instanceof AwsRunnerControlError && error.code === 'AWS_ACTION_TIMEOUT') throw error;
+        throw new AwsRunnerControlError(502, 'AWS_COMMAND_DISPATCH_FAILED', `AWS command dispatch failed (${safeFailureDetail(error)}).`);
       }
-      await sleep(650);
+      const commandId = sent.Command?.CommandId;
+      if (!commandId) throw new AwsRunnerControlError(502, 'AWS_COMMAND_ID_MISSING', 'AWS accepted no command identifier.');
+      let invocation: GetCommandInvocationCommandOutput | null = null;
+      let output = '';
+      let error = '';
+      let status = 'Pending';
+      while (this.now() < scope.deadlineAtMs) {
+        try {
+          const result = await this.sendAws<GetCommandInvocationCommandOutput>(
+            scope,
+            (options) => ssm.send(new GetCommandInvocationCommand({
+              CommandId: commandId,
+              InstanceId: this.instanceId,
+            }), options),
+          );
+          invocation = result;
+          status = result.Status ?? 'Pending';
+          output = result.StandardOutputContent ?? '';
+          error = result.StandardErrorContent ?? '';
+          if (TERMINAL.has(status)) break;
+        } catch (pollError) {
+          if (pollError instanceof AwsRunnerControlError && pollError.code === 'AWS_ACTION_TIMEOUT') throw pollError;
+          const name = pollError instanceof Error ? pollError.name : '';
+          if (name !== 'InvocationDoesNotExist') {
+            throw new AwsRunnerControlError(502, 'AWS_COMMAND_POLL_FAILED', `AWS command status failed (${safeFailureDetail(pollError)}).`);
+          }
+        }
+        await this.waitForPoll(650, scope);
+      }
+      if (scope.isExpired()) throw this.timeoutError();
+      if (!invocation || !TERMINAL.has(status)) status = 'TimedOut';
+      const rawOutputBytes = Buffer.byteLength(output, 'utf8');
+      const result: AwsRunnerActionResult = {
+        commandId,
+        action,
+        status,
+        output: action === 'read_runner'
+          ? rawOutputBytes <= MAX_COMMAND_OUTPUT_BYTES ? output : ''
+          : redactText(output),
+        error: redactText(error),
+        startedAt,
+        finishedAt: this.now(),
+      };
+      this.lastAction = publicActionResult(result);
+      this.ledger.logEvent('aws_runner_action', null, {
+        action,
+        commandId,
+        status,
+        outputBytes: Buffer.byteLength(output),
+        error: redactText(error, 800),
+      });
+      return result;
+    } finally {
+      scope.close();
     }
-    if (!invocation || !TERMINAL.has(status)) status = 'TimedOut';
-    const rawOutputBytes = Buffer.byteLength(output, 'utf8');
-    const result: AwsRunnerActionResult = {
-      commandId,
-      action,
-      status,
-      output: action === 'read_runner'
-        ? rawOutputBytes <= MAX_COMMAND_OUTPUT_BYTES ? output : ''
-        : redactText(output),
-      error: redactText(error),
-      startedAt,
-      finishedAt: Date.now(),
-    };
-    this.lastAction = publicActionResult(result);
-    this.ledger.logEvent('aws_runner_action', null, {
-      action,
-      commandId,
-      status,
-      outputBytes: Buffer.byteLength(output),
-      error: redactText(error, 800),
-    });
-    return result;
   }
 
   async runCommand(input: string): Promise<AwsRunnerActionResult> {

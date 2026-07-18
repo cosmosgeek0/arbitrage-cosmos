@@ -11,6 +11,8 @@ function positiveSafeInteger(value, label) {
 
 export class ManualClock {
   #nowMs;
+  #nextDeadlineId = 1;
+  #deadlines = new Map();
 
   constructor(nowMs = 1_780_000_000_000) {
     if (!validUtcMs(nowMs)) throw new TypeError('ManualClock requires valid UTC milliseconds');
@@ -26,6 +28,7 @@ export class ManualClock {
     if (!validUtcMs(nowMs)) throw new TypeError('ManualClock.set requires valid UTC milliseconds');
     if (nowMs < this.#nowMs) throw new RangeError('ManualClock cannot move backwards');
     this.#nowMs = nowMs;
+    this.#runDeadlines();
     return this.#nowMs;
   }
 
@@ -36,7 +39,34 @@ export class ManualClock {
     const next = this.#nowMs + deltaMs;
     if (!validUtcMs(next)) throw new RangeError('ManualClock advance exceeds supported UTC range');
     this.#nowMs = next;
+    this.#runDeadlines();
     return this.#nowMs;
+  }
+
+  schedule(delayMs, task) {
+    positiveSafeInteger(delayMs, 'delayMs');
+    if (typeof task !== 'function') throw new TypeError('deadline task must be a function');
+    const dueAtMs = this.#nowMs + delayMs;
+    if (!validUtcMs(dueAtMs)) throw new RangeError('deadline exceeds supported UTC range');
+    const id = this.#nextDeadlineId++;
+    const deadline = { task, dueAtMs, cancelled: false };
+    this.#deadlines.set(id, deadline);
+    return Object.freeze({
+      cancel: () => {
+        deadline.cancelled = true;
+        this.#deadlines.delete(id);
+      },
+    });
+  }
+
+  #runDeadlines() {
+    const due = [...this.#deadlines.entries()]
+      .filter(([, deadline]) => !deadline.cancelled && deadline.dueAtMs <= this.#nowMs)
+      .sort((left, right) => left[1].dueAtMs - right[1].dueAtMs || left[0] - right[0]);
+    for (const [id, deadline] of due) {
+      this.#deadlines.delete(id);
+      if (!deadline.cancelled) deadline.task();
+    }
   }
 }
 

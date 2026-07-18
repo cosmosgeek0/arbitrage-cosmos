@@ -16,9 +16,22 @@ import {
 const T0 = 1_800_000_000_000;
 
 class ManualClock {
-  constructor(nowMs = T0) { this.value = nowMs; }
+  constructor(nowMs = T0) { this.value = nowMs; this.deadlines = []; }
   nowMs() { return this.value; }
-  set(nowMs) { this.value = nowMs; }
+  schedule(delayMs, task) {
+    const deadline = { dueAtMs: this.value + delayMs, task, cancelled: false, fired: false };
+    this.deadlines.push(deadline);
+    return { cancel: () => { deadline.cancelled = true; } };
+  }
+  set(nowMs) {
+    this.value = nowMs;
+    for (const deadline of this.deadlines) {
+      if (!deadline.cancelled && !deadline.fired && deadline.dueAtMs <= this.value) {
+        deadline.fired = true;
+        deadline.task();
+      }
+    }
+  }
 }
 
 const okPort = Object.freeze({ ok: true });

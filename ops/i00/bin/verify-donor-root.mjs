@@ -6,7 +6,7 @@ import { fail, parseArgs, readJson, sha256File } from '../lib.mjs';
 import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '05e5c817ab638c78b726a18708620dfb850e315779c73a5964db2ecb2f03a4d7';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '771432f1b2e794db6e126f782e4c0e27780d3adcd35c5779d43b8ce50f35fd2f';
 const args = parseArgs(process.argv.slice(2), new Set(['require-immutable', 'accepted-only']));
 if (!args.root) fail('--root is required');
 const here = dirname(fileURLToPath(import.meta.url));

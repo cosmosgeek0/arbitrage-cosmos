@@ -554,7 +554,7 @@ def test_inference_imports_have_no_private_network_money_or_unsafe_deserializati
         assert not any(token in lowered for token in forbidden_tokens), path
 
 
-def test_only_transport_imports_socket_and_os() -> None:
+def test_only_transport_or_worker_boundary_imports_operating_system_modules() -> None:
     root = QUANT_ROOT / "src" / "quant_edge" / "inference"
     for path in root.glob("*.py"):
         tree = ast.parse(path.read_text())
@@ -564,8 +564,10 @@ def test_only_transport_imports_socket_and_os() -> None:
             if isinstance(node, ast.Import)
             for alias in node.names
         }
-        if imports & {"os", "socket", "socketserver", "stat"}:
+        if imports & {"socket", "socketserver", "stat"}:
             assert path.name == "transport.py"
+        if "os" in imports:
+            assert path.name in {"service.py", "transport.py"}
 
 
 def test_campaign_truth_is_abstain_only_and_no_edge_claim() -> None:

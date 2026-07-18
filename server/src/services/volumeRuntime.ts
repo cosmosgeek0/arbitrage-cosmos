@@ -545,12 +545,6 @@ export class VolumeRuntime {
       return;
     }
     if (this.persistedEventKeys.has(key)) return;
-    this.persistedEventKeys.add(key);
-    this.persistedEventOrder.push(key);
-    if (this.persistedEventOrder.length > 5_000) {
-      const removed = this.persistedEventOrder.shift();
-      if (removed !== undefined) this.persistedEventKeys.delete(removed);
-    }
     const persisted = this.safeLog(event.kind, event.symbol, {
       strategy: event.strategy,
       correlationId: event.correlationId,
@@ -559,6 +553,12 @@ export class VolumeRuntime {
       ...event.payload,
     });
     if (!persisted) throw new Error('volume runtime ledger unavailable');
+    this.persistedEventKeys.add(key);
+    this.persistedEventOrder.push(key);
+    if (this.persistedEventOrder.length > 5_000) {
+      const removed = this.persistedEventOrder.shift();
+      if (removed !== undefined) this.persistedEventKeys.delete(removed);
+    }
   }
 
   private safeLog(kind: string, symbol: string | null, payload: Record<string, unknown>): boolean {

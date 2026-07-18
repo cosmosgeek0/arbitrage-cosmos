@@ -50,6 +50,12 @@ cat > "$TEST_TMP/readback.json" <<'JSON'
 JSON
 READBACK_ARGS=(--input "$TEST_TMP/readback.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z)
 assert_success node "$I00_ROOT/bin/verify-readback.mjs" "${READBACK_ARGS[@]}"
+cp "$TEST_TMP/readback.json" "$TEST_TMP/readback-extra-field.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.unexpected=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback-extra-field.json"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback-extra-field.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
+cp "$TEST_TMP/readback.json" "$TEST_TMP/readback-service-extra-field.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.services[0].unexpected=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback-service-extra-field.json"
+assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback-service-extra-field.json" --expected-sha "$EXPECTED_SHA" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
 assert_failure node "$I00_ROOT/bin/verify-readback.mjs" --input "$TEST_TMP/readback.json" --max-age-sec 60 --simulation-clock --now 2026-07-13T00:00:30Z
 cp "$TEST_TMP/readback.json" "$TEST_TMP/readback-alternate-tested.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.testedSha=process.argv[2];fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/readback-alternate-tested.json" "$ALTERNATE_SHA"

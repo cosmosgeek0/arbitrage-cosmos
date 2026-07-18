@@ -28,8 +28,13 @@ const POLICY = Object.freeze({ quantityTolerance: 1e-9, normalizedHedgeTolerance
 let proposalSequence = 0;
 
 class ManualClock {
-  constructor(nowMs = T0) { this.value = nowMs; }
+  constructor(nowMs = T0) { this.value = nowMs; this.deadlines = []; }
   nowMs() { return this.value; }
+  schedule(delayMs, task) {
+    const deadline = { dueAtMs: this.value + delayMs, task, cancelled: false, fired: false };
+    this.deadlines.push(deadline);
+    return { cancel: () => { deadline.cancelled = true; } };
+  }
 }
 
 const portFailure = (code) => ({

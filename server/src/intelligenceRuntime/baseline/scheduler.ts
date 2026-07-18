@@ -109,7 +109,7 @@ interface Dispatch {
 interface FetchOutcome {
   readonly dispatch: Dispatch;
   readonly result: Readonly<HistoryFetchResult> | null;
-  readonly portThrew: boolean;
+  readonly completionKind: 'RESULT' | 'PORT_THROW' | 'TIMEOUT';
   readonly completedAtMs: number;
 }
 
@@ -393,11 +393,16 @@ export class BaselineBootstrapScheduler {
   #activeFetchCount = 0;
   #focusedDispatchStreak = 0;
   #dispatchSequence = 0;
+  #deadlineSequence = 0;
   #totals: CheckpointTotals = { estimatedWeight: 0, actualWeight: 0, batches: 0 };
 
   constructor(options: BaselineBootstrapSchedulerOptions) {
     if (typeof options?.clock?.nowMs !== 'function') throw new TypeError('runtime clock is required');
     if (typeof options?.history?.fetch !== 'function') throw new TypeError('history port is required');
+    if (typeof options?.deadlineScheduler?.schedule !== 'function'
+      || typeof options?.deadlineScheduler?.cancel !== 'function') {
+      throw new TypeError('baseline deadline scheduler is required');
+    }
     if (typeof options?.weightBudget?.reserve !== 'function' || typeof options?.weightBudget?.settle !== 'function') {
       throw new TypeError('REST weight budget port is required');
     }
@@ -467,6 +472,68 @@ export class BaselineBootstrapScheduler {
     }
     this.#lastClockTimeMs = nowMs;
     return nowMs;
+  }
+
+  #fetchWithDeadline(dispatch: Dispatch): Promise<FetchOutcome> {
+    const timeoutMs = this.#config.historyRequestTimeoutMs;
+    const dispatchStartedAtMs = this.#now();
+    const deadlineAtMs = checkedAdd(dispatchStartedAtMs, timeoutMs, 'history request deadline');
+    this.#deadlineSequence = checkedAdd(this.#deadlineSequence, 1, 'history deadline sequence');
+    const deadlineId = stableId('baseline-history-deadline', {
+      requestId: dispatch.request.requestId,
+      sequence: this.#deadlineSequence,
+    });
+    const controller = new AbortController();
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (
+        completionKind: FetchOutcome['completionKind'],
+        result: Readonly<HistoryFetchResult> | null,
+        completedAtMs: number,
+      ): void => {
+        if (settled) return;
+        settled = true;
+        try { this.#options.deadlineScheduler.cancel(deadlineId); } catch { /* completed outcome remains authoritative */ }
+        resolve(Object.freeze({ dispatch, result, completionKind, completedAtMs }));
+      };
+      const expire = (): void => {
+        if (settled) return;
+        settled = true;
+        try { this.#options.deadlineScheduler.cancel(deadlineId); } catch { /* timeout remains authoritative */ }
+        controller.abort('HISTORY_FETCH_TIMEOUT');
+        resolve(Object.freeze({
+          dispatch,
+          result: null,
+          completionKind: 'TIMEOUT' as const,
+          completedAtMs: this.#now(),
+        }));
+      };
+      try {
+        this.#options.deadlineScheduler.schedule(deadlineId, timeoutMs, expire);
+      } catch {
+        settle('PORT_THROW', null, this.#now());
+        return;
+      }
+      let operation: Promise<Readonly<HistoryFetchResult>>;
+      try {
+        operation = this.#options.history.fetch(dispatch.request, {
+          method: 'GET',
+          signal: controller.signal,
+          deadlineAtMs,
+        });
+      } catch {
+        settle('PORT_THROW', null, this.#now());
+        return;
+      }
+      Promise.resolve(operation).then(
+        (result) => {
+          if (!settled) settle('RESULT', result, this.#now());
+        },
+        () => {
+          if (!settled) settle('PORT_THROW', null, this.#now());
+        },
+      );
+    });
   }
 
   #render(nowMs: number): void {
@@ -640,14 +707,7 @@ export class BaselineBootstrapScheduler {
     }
     if (dispatches.length === 0) return this.#snapshot as BaselineSchedulerSnapshot;
 
-    const outcomes = await Promise.all(dispatches.map(async (dispatch): Promise<FetchOutcome> => {
-      try {
-        const result = await this.#options.history.fetch(dispatch.request);
-        return { dispatch, result, portThrew: false, completedAtMs: this.#now() };
-      } catch {
-        return { dispatch, result: null, portThrew: true, completedAtMs: this.#now() };
-      }
-    }));
+    const outcomes = await Promise.all(dispatches.map((dispatch) => this.#fetchWithDeadline(dispatch)));
     let firstOutcomeError: unknown = null;
     let knowledgeTimeMs = nowMs;
     for (const outcome of outcomes) {
@@ -815,6 +875,8 @@ export class BaselineBootstrapScheduler {
   async #applyOutcome(outcome: FetchOutcome, knowledgeTimeMs: number): Promise<void> {
     const { dispatch } = outcome;
     const rawResult = outcome.result;
+    const timedOut = outcome.completionKind === 'TIMEOUT';
+    const portThrew = outcome.completionKind === 'PORT_THROW';
     const validKinds = ['SUCCESS', 'RATE_LIMITED', 'TRANSIENT_FAILURE', 'UNAVAILABLE'] as const;
     const validResultShape = rawResult !== null
       && isPlainRecord(rawResult)
@@ -838,9 +900,11 @@ export class BaselineBootstrapScheduler {
         observedAtMs = knowledgeTimeMs;
       }
     }
-    const settlementOutcome = outcome.portThrew || !validResultShape || invalidAccounting
-      ? 'PORT_THROW'
-      : rawResult.kind as HistoryFetchResult['kind'];
+    const settlementOutcome = timedOut
+      ? 'TIMEOUT'
+      : portThrew || !validResultShape || invalidAccounting
+        ? 'PORT_THROW'
+        : rawResult.kind as HistoryFetchResult['kind'];
     this.#totals.actualWeight = checkedAdd(this.#totals.actualWeight, actualWeight, 'actual weight total');
     dispatch.item.actualWeight = checkedAdd(dispatch.item.actualWeight, actualWeight, 'item actual weight');
     try {
@@ -858,7 +922,17 @@ export class BaselineBootstrapScheduler {
       this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'WEIGHT_SETTLEMENT_FAILURE', 'REST weight settlement failed after the history request');
       return;
     }
-    if (outcome.portThrew || rawResult === null) {
+    if (timedOut) {
+      this.#applyRetry(
+        dispatch.item,
+        knowledgeTimeMs,
+        null,
+        'HISTORY_FETCH_TIMEOUT',
+        'public history fetch exceeded its deterministic deadline',
+      );
+      return;
+    }
+    if (portThrew || rawResult === null) {
       this.#applyRetry(dispatch.item, knowledgeTimeMs, null, 'HISTORY_PORT_FAILURE', 'history port threw while fetching public completed candles');
       return;
     }

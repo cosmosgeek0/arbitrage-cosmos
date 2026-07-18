@@ -489,10 +489,12 @@ class FakeSsm {
     this.status = status;
     this.dispatchError = dispatchError;
     this.commands = [];
+    this.sendOptions = [];
   }
 
-  async send(command) {
+  async send(command, options) {
     this.commands.push(command);
+    this.sendOptions.push(options);
     if (command.constructor.name === 'SendCommandCommand') {
       if (this.dispatchError) throw this.dispatchError;
       return { Command: { CommandId: 'command-1' } };
@@ -505,6 +507,79 @@ class FakeSsm {
   }
 }
 
+class ManualAwsRuntime {
+  constructor(nowMs = 1_800_000_000_000) {
+    this.now = nowMs;
+    this.tasks = [];
+  }
+  nowMs() { return this.now; }
+  schedule(delayMs, task) {
+    const entry = { dueAtMs: this.now + delayMs, task, cancelled: false, fired: false };
+    this.tasks.push(entry);
+    return { cancel: () => { entry.cancelled = true; } };
+  }
+  pendingCount() {
+    return this.tasks.filter((entry) => !entry.cancelled && !entry.fired).length;
+  }
+  fireNext() {
+    const entry = this.tasks
+      .filter((candidate) => !candidate.cancelled && !candidate.fired)
+      .sort((left, right) => left.dueAtMs - right.dueAtMs)[0];
+    if (!entry) return false;
+    entry.fired = true;
+    this.now = entry.dueAtMs;
+    entry.task();
+    return true;
+  }
+}
+
+class NeverSettlingSsm extends FakeSsm {
+  async send(command, options) {
+    this.commands.push(command);
+    this.sendOptions.push(options);
+    return new Promise(() => {});
+  }
+}
+
+class NeverSettlingPollSsm extends FakeSsm {
+  async send(command, options) {
+    this.commands.push(command);
+    this.sendOptions.push(options);
+    if (command.constructor.name === 'SendCommandCommand') {
+      return { Command: { CommandId: 'command-poll-timeout' } };
+    }
+    return new Promise(() => {});
+  }
+}
+
+class NeverSettlingSts {
+  constructor() {
+    this.sendOptions = [];
+  }
+  async send(_command, options) {
+    this.sendOptions.push(options);
+    return new Promise(() => {});
+  }
+}
+
+class RejectingSts {
+  constructor() {
+    this.sendOptions = [];
+  }
+  async send(_command, options) {
+    this.sendOptions.push(options);
+    throw Object.assign(new Error('synthetic immediate provider rejection'), { name: 'CredentialsProviderError' });
+  }
+}
+
+async function waitForAwsDeadline(runtime, attempts = 20) {
+  for (let index = 0; index < attempts; index += 1) {
+    if (runtime.pendingCount() > 0) return true;
+    await Promise.resolve();
+  }
+  return runtime.pendingCount() > 0;
+}
+
 try {
   {
     const fakeLedger = new FakeLedger();
@@ -514,6 +589,103 @@ try {
     await control.runCommand('status');
     const command = ssm.commands[0]?.input?.Parameters?.commands?.[0] ?? '';
     check('SSM shell explicitly invokes Bash before pipefail', command.startsWith('/usr/bin/env bash -lc ') && command.includes('set -euo pipefail'));
+  }
+
+  {
+    const fakeLedger = new FakeLedger();
+    const runtime = new ManualAwsRuntime();
+    const control = new AwsRunnerControl(fakeLedger, { runtime, requestTimeoutMs: 15 });
+    const ssm = new NeverSettlingSsm();
+    const sts = new RejectingSts();
+    control.ssm = ssm;
+    control.sts = sts;
+    const pending = control.status(true, 'operator@example.com', true);
+    const scheduled = await waitForAwsDeadline(runtime);
+    check('mixed probe siblings retain their shared deadline after one provider rejects', scheduled
+      && sts.sendOptions.length === 1
+      && ssm.sendOptions.length === 1);
+    if (scheduled) {
+      runtime.fireNext();
+      const status = await pending;
+      check('mixed probe failure aborts the hanging sibling and settles offline', status.channel === 'offline'
+        && status.instanceOnline === false
+        && status.lastAction?.error.includes('AWS_ACTION_TIMEOUT')
+        && ssm.sendOptions[0]?.abortSignal === sts.sendOptions[0]?.abortSignal
+        && ssm.sendOptions[0]?.abortSignal?.aborted === true);
+      check('mixed probe failure clears all shared and per-request deadlines', runtime.pendingCount() === 0);
+    }
+  }
+
+  {
+    const fakeLedger = new FakeLedger();
+    const runtime = new ManualAwsRuntime();
+    const control = new AwsRunnerControl(fakeLedger, { runtime, requestTimeoutMs: 15 });
+    const ssm = new NeverSettlingSsm();
+    control.ssm = ssm;
+    let settled = false;
+    let caught = null;
+    const pending = control.runCommand('status').then(
+      () => { settled = true; },
+      (error) => { settled = true; caught = error; },
+    );
+    const scheduled = await waitForAwsDeadline(runtime);
+    check('never-settling SSM dispatch installs an enforceable deadline', scheduled);
+    if (scheduled) {
+      runtime.fireNext();
+      await pending;
+      check('SSM dispatch deadline settles with stable timeout truth', settled
+        && caught instanceof AwsRunnerControlError
+        && caught.code === 'AWS_ACTION_TIMEOUT'
+        && ssm.sendOptions[0]?.abortSignal?.aborted === true
+        && ssm.sendOptions[0]?.requestTimeout <= 15);
+      check('timed-out AWS action clears every scheduled handle', runtime.pendingCount() === 0);
+      control.ssm = new FakeSsm();
+      const recovered = await control.runCommand('status');
+      check('a later AWS action is not stranded by the prior deadline', recovered.status === 'Success' && runtime.pendingCount() === 0);
+    }
+  }
+
+  {
+    const fakeLedger = new FakeLedger();
+    const runtime = new ManualAwsRuntime();
+    const control = new AwsRunnerControl(fakeLedger, { runtime, requestTimeoutMs: 15 });
+    const ssm = new NeverSettlingPollSsm();
+    control.ssm = ssm;
+    let caught = null;
+    const pending = control.runCommand('status').catch((error) => { caught = error; });
+    const dispatchScheduled = await waitForAwsDeadline(runtime);
+    for (let index = 0; index < 20 && ssm.sendOptions.length < 2; index += 1) await Promise.resolve();
+    const pollScheduled = dispatchScheduled && runtime.pendingCount() > 0 && ssm.sendOptions.length === 2;
+    check('never-settling SSM invocation poll retains the action deadline', pollScheduled);
+    if (pollScheduled) {
+      runtime.fireNext();
+      await pending;
+      check('SSM poll timeout aborts the shared action and settles', caught?.code === 'AWS_ACTION_TIMEOUT'
+        && ssm.sendOptions[1]?.abortSignal?.aborted === true
+        && runtime.pendingCount() === 0);
+    }
+  }
+
+  {
+    const fakeLedger = new FakeLedger();
+    const runtime = new ManualAwsRuntime();
+    const control = new AwsRunnerControl(fakeLedger, { runtime, requestTimeoutMs: 15 });
+    const ssm = new FakeSsm();
+    const sts = new NeverSettlingSts();
+    control.ssm = ssm;
+    control.sts = sts;
+    const pending = control.status(true, 'operator@example.com', true);
+    const scheduled = await waitForAwsDeadline(runtime);
+    check('never-settling STS probe installs an enforceable shared deadline', scheduled);
+    if (scheduled) {
+      runtime.fireNext();
+      const status = await pending;
+      check('probe deadline aborts provider calls and fails closed offline', status.channel === 'offline'
+        && status.instanceOnline === false
+        && status.lastAction?.error.includes('AWS_ACTION_TIMEOUT')
+        && sts.sendOptions[0]?.abortSignal?.aborted === true
+        && runtime.pendingCount() === 0);
+    }
   }
 
   {

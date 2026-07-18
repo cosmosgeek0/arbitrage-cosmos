@@ -28,6 +28,8 @@ import {
   createExecutionPlanDefinition,
   recommendExecutionRecovery,
   type CreateExecutionPlanInput,
+  type ExecutionClock,
+  type ExecutionDeadlineScheduler,
   type ExecutionPlanDefinition,
 } from '../../foundation/execution/index.js';
 import {
@@ -66,6 +68,31 @@ const EMPTY_VENUE_AUDIT: Readonly<ValidateOnlyVenueAudit> = Object.freeze({
   reconciliationCalls: 0,
   callOrder: Object.freeze([]),
 });
+
+const SYSTEM_EXECUTION_TIMER: Readonly<ExecutionDeadlineScheduler> = Object.freeze({
+  schedule(delayMs: number, task: () => void) {
+    const handle = setTimeout(task, delayMs);
+    return Object.freeze({ cancel: () => clearTimeout(handle) });
+  },
+});
+
+export function createSystemExecutionClock(
+  nowMs: number,
+  timer: Readonly<ExecutionDeadlineScheduler> = SYSTEM_EXECUTION_TIMER,
+): Readonly<ExecutionClock> {
+  let logicalNowMs = nowMs;
+  return Object.freeze({
+    nowMs: () => logicalNowMs,
+    schedule(delayMs: number, task: () => void) {
+      const deadlineAtMs = logicalNowMs + delayMs;
+      if (!Number.isSafeInteger(deadlineAtMs)) throw new RangeError('execution deadline clock overflow');
+      return timer.schedule(delayMs, () => {
+        logicalNowMs = Math.max(logicalNowMs, deadlineAtMs);
+        task();
+      });
+    },
+  });
+}
 
 interface MutableOwnerInvocations {
   approvalEvaluations: number;
@@ -900,7 +927,7 @@ export class ValidateOnlyOrchestrator {
     let coordinator;
     try {
       calls.coordinatorsCreated += 1;
-      coordinator = createExecutionCoordinator(definitionInput, { nowMs: () => input.nowMs }, venue.ports);
+      coordinator = createExecutionCoordinator(definitionInput, createSystemExecutionClock(input.nowMs), venue.ports);
     } catch {
       const rejected = failure(input, 'coordinator', 'COORDINATOR_CREATION_FAILED', 'The VALIDATE_ONLY coordinator rejected the deterministic plan binding.', 'Inspect the plan identity and retry with the same owner records.');
       return this.persist(input, calls, baseSnapshot(input, calls, {

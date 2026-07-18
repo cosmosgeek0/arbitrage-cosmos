@@ -1,16 +1,109 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `39`
+State generation: `41`
 
-Updated: 2026-07-13T13:26:11+0530
+Updated: 2026-07-18T05:32:53+0530
 
-Status: `LANE_READY — PARKED FOR DIRECTOR AUDIT`. Q13 and Q15 are accepted and
-director-merged. Q16 and Q17 are exact-commit accepted. Exact C17 Git and clean-
-archive verification passed; the separate A17 acceptance receipt and this final
-state freeze the Q lane. No further builder action, merge or push is authorized.
+Status: `HISTORICAL LANE_READY — POST-ACCEPTANCE CORRECTIONS PENDING`.
+Historical Q02/Q05/Q08/Q16 and C17/A17 acceptance remains immutable. Money-truth
+F-034/F-038/F-039 and RB-13 change owner/projection bytes after those acceptances;
+the corrections do not inherit them. No immutable phase receipt attests the
+current corrected bytes, and independent exact-commit verification remains
+pending. No merge or push is authorized.
 
 Program: Q lane — deterministic research evidence, labels, models, calibration,
 uncertainty and advisory-only local inference.
+
+## Current Q02/Q05/Q08 money-truth correction truth
+
+- Corrections `MONEY_TRUTH_Q02_INSTRUMENT_UNIT_IDENTITY`,
+  `MONEY_TRUTH_Q05_DIRECTIONAL_LABEL_ECONOMICS` and
+  `MONEY_TRUTH_Q08_EXECUTABLE_BASIS_ECONOMICS` are implemented current bytes with
+  acceptance state `NOT_ACCEPTED`. Their re-attestation commit/tree deliberately
+  remains `PENDING_NOT_EMBEDDED`.
+- Q02 retains historical source seal `9d1429b33176e4f8726032243741af9e532ca36798610e08ea129eccc35bd64c`;
+  current F-039 source seal is `3d755d7255a030528008e22b590f33b8355d87f74ed68620825ba245c1ff9bfc`.
+  Its 3,198-byte primary fixture is unchanged at
+  `01b648ee6ae5f9d4dbba345b775d4f19b4d1ce2276036d9161554c73ab8f49ba`.
+- Q05 retains historical source seal `fb3fc6571a45e330499c52000672c9f6e6819f3b12e03f42506546e85b31fe12`
+  and 4,184-byte primary `f36a9b089fe2c935c08f6f67e8b7debcf40b8d67cde46ae73271835b725afe47`.
+  Current F-038/F-039 source and primary are
+  `d8c5709d1c1caace7c32e9d58c32648e940b14804ff18aaca5245ec6f538bed7`
+  and `c82cf92d68bebcfbc5d818de667b9ca50714e7cffbeac331fe06176899c6709e`.
+- Q08 retains historical source seal `0224276b1a356696eab857aea38d40d8956491761a9e0012a0298cb9e3448d74`
+  and 1,204-byte primary `d2054e47d0050ef521d91f653b9ab6f60411a2d2f0633933c7ec65e76145525b`.
+  Current F-034/F-038/F-039 source and primary are
+  `232ee05a6d2ab4a2645be9be5f466ce400004ec503298dcb2ca13e8e264bac06`
+  and `3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8`.
+- Exact fix commits are F-034 `19f674a35944f1f3fdd4fdafd396fba9df6fd255`,
+  F-038 `42e431fbc8ee8823cba826f759737ce3b3f52465` and F-039
+  `039c3866619c3e3af9533c651284af32a7bc114d`; current correction bytes match
+  the F-039 tree `6724c8fa53fb74df5ef840d37ca3de8364b7c64f`. Director merge
+  `5f887cf27ce246d80b7fc553eed470b015976963` / tree
+  `813a383df420e318dc97522c860d6b1e6b99aab4` integrates that chain without
+  creating new Q-phase acceptance.
+- Q17 component-manifest focused verification is `31 passed`; the complete Q17
+  suite is `389 passed`. The canonical campaign regenerated and validated all
+  eight current proof-kit artifacts; generated JSON was not hand-edited.
+
+## Current RB-13 post-acceptance correction truth
+
+- Correction: `RB13_QUANT_INFERENCE_WORKER_ISOLATION`; implementation state
+  `CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION`; acceptance state
+  `NOT_ACCEPTED`; amended commit/tree deliberately remain
+  `PENDING_NOT_EMBEDDED` to avoid self-reference.
+- Historical accepted Q16 source seal remains
+  `6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a`.
+  Current RB-13 inference source seal is
+  `2a2203a1e5a9e652d1bcc87b92b5983dc14aaa879ea9596dc4b7e49a7481a202`;
+  current service SHA-256 is
+  `763e08352e201ce7173c16a6a72cd413c7feac58ca7e624a3d94dab4eb70fb68`.
+- Each assessment now uses a disposable `spawn` child and an 80-byte atomic,
+  request-correlated header followed by a length- and SHA-256-bound body. The parent
+  reads the raw pipe descriptor nonblockingly while watching the child sentinel,
+  deadline and close signal. Partial, malformed, trailing or nonzero-exit results
+  are discarded and the child is boundedly terminated/killed/reaped before the
+  sole work slot is released.
+- Current regenerated Q16 inference-campaign SHA-256:
+  `b0f64f051934c5498aa343b9f3e7391f8f684749afa4fbdbf33d6b5e44b06d59`;
+  serving-manifest SHA-256:
+  `2318ad2028666cf50f019c75dfb12ae3f3eafb29289aeb8acb3f438927413f7a`;
+  protocol-kit-manifest SHA-256:
+  `f333d540306584d0c16945ad5e958242d98261debfadcf73c22097ae0e31c584`.
+- Current Q16 decision SHA-256:
+  `88332cc8ab64825363b3b9a4f6f89d2ca24d03f4a04e35179793836f832ae49b`;
+  current Q17 decision SHA-256:
+  `069309d64290cecc426334198c25b0d8cb4a6d689ff20c877c40ade76a1b9fda`;
+  current Q17 design SHA-256:
+  `773d6bf3d0570e4b1e68d205603545684f64fc33de98c9f1c502bc7a1aca6d5c`.
+- Current RB-13 benchmark observation: warm-single p50 `124,242,416 ns`,
+  focus-25 p50 `218,822,334 ns`, candidate-128 p50 `983,502,125 ns`,
+  universe/watch-452 p50 `3,711,352,291 ns`, child peak RSS `58,949,632`
+  bytes. These are fresh pending measurements, not historical A17 measurements.
+- Current combined-correction benchmark observation: warm-single p50
+  `135,971,209 ns`, focus-25 p50 `225,012,416 ns`, candidate-128 p50
+  `999,110,000 ns`, universe/watch-452 p50 `3,669,570,459 ns`, child peak RSS
+  `68,042,752` bytes. These are fresh pending measurements, not historical A17
+  measurements.
+- Current generated Q17 SHA-256 values: benchmark
+  `c69ab2d9e9ad19ff9a8404461bfdb8cca20f5203a8aaeb1a34879a93a61cd587`;
+  component manifest
+  `b773e8e7269c4bfb417f03c0fab84a82a39b643c031a633431525a84c9f30356`;
+  security scope
+  `c4a126b4d3ccbdc8758d8182654935acb6105ab99506e43f6a977e0507c5f394`;
+  self-excluding artifact manifest
+  `1bc912ac36193b17c803abf137cdbc692c366ece6cf1c9954ceeea97cfe9e4ce`.
+  The last digest is mutable pending-correction evidence, not an acceptance seal.
+- Historical directive-input lock acceptance remains
+  `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`
+  / 1,568 bytes. The current file is explicitly reported as the known
+  `d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24`
+  / 1,757-byte post-acceptance mismatch. The lock itself was not modified or
+  silently repinned; the current security scope is intentionally non-clean.
+- Prior RB-13 focused verification: Q16 `200 passed`, 96% combined branch coverage;
+  Q17 `389 passed`, 96% combined branch coverage. The hostile
+  regression writes a valid header and seven body bytes, stalls forever, and proves
+  deadline return, child termination/reap, work-slot recovery and subsequent health.
 
 ## Frozen launch and ancestry
 
@@ -93,9 +186,10 @@ uncertainty and advisory-only local inference.
 
 - Task: `quant/TASKS/Q16.md`; status complete; SHA-256
   `5b98e966af7fcc40ef540b20e9f22828d74c4b00dde7eaaaa407120e7c51b0d0`.
-- Decision: `quant/DECISIONS/Q16-001-LOCAL-INFERENCE.md`; authoritative C16
-  SHA-256
+- Historical C16 decision SHA-256:
   `eac813f4e07c72915e06ee3bd707b0d7a9c71951c1c9fb2bad9a387e345d2d`.
+  The current decision carries a clearly labeled RB-13 post-acceptance amendment;
+  its pending hash is recorded in the RB-13 section above.
 - Design: `quant/docs/Q16_INFERENCE_PROTOCOL_DESIGN.md`; SHA-256
   `a4e96d377cfe4f0557bd4ec6535f96b2be6d9549020ec246a97adcb1ab93e316`.
 - Generated raw fixture SHA-256:
@@ -105,10 +199,11 @@ uncertainty and advisory-only local inference.
 - Accepted source event and receive times come from Q04 truth. Cutoff, generation,
   injected evaluation time and expiry cannot rewrite them. Stale, future-ambiguous
   or expired consumption yields explicit safe abstention.
-- The serving manifest pins exact Q04/Q06/Q07/Q12/Q13/Q15/dependency identity,
-  the complete imported Q06/Q07 source closure and all eight Q16 inference source
-  files. Kind, media, path, schema, version, size and digest are verified against
-  current accepted bytes.
+- The historical accepted serving manifest pins exact
+  Q04/Q06/Q07/Q12/Q13/Q15/dependency identity, the complete imported Q06/Q07
+  source closure and all eight historical Q16 inference source files. RB-13
+  regenerates a separate current manifest; those bytes are verified but pending,
+  not relabeled as accepted.
 - Serving lineage is opaque and field-sealed. Original, copied, mutated or
   dataclass-replaced seals cannot create `AVAILABLE`, `ADVISORY`, calibration-ready
   or deep-pass truth.
@@ -120,9 +215,11 @@ uncertainty and advisory-only local inference.
   winner; cleanup is device/inode bound. Optional TCP permits only literal
   `127.0.0.1` or `::1`.
 - Local handlers, request bytes, response bytes, batch, queue, concurrency and time
-  are bounded. Request responses remain correlated. Late inference is quarantined
-  behind the concurrency semaphore; pre-frame handler creation is bounded; close
-  stops the server and performs identity-safe cleanup.
+  are bounded. Request responses remain correlated. Each assessment runs in a
+  disposable explicit-`spawn` worker with one-shot IPC; timeout or close performs
+  bounded join/terminate/kill/reap cleanup before releasing the sole work slot.
+  Pre-frame handler creation is bounded; close stops the server and performs
+  identity-safe cleanup.
 - Generated Python and Node clients preserve raw request bytes, reject unsafe
   object integers, apply I/O timeouts, strict decode, embedded frozen-schema
   validation and fail-closed assessment/health/error semantics.
@@ -139,9 +236,10 @@ uncertainty and advisory-only local inference.
   operation, timeout, shutdown and fail-closed integration instructions.
 - `protocol_kit_manifest.v1.json` hashes every generated Q16 file except itself.
 
-Exact current hashes are recorded in immutable `quant/RECEIPTS/Q16.md`, with its
-single stale decision-document hash corrected fail-closed by the immutable
-acceptance receipt. Implementation receipt SHA-256:
+Historical accepted hashes are recorded in immutable `quant/RECEIPTS/Q16.md`; that
+receipt does not attest current RB-13 source or generated bytes. Its single stale
+historical decision-document hash was corrected fail-closed by the immutable
+acceptance receipt. Historical implementation receipt SHA-256:
 `b3b08998bfc3450de2b3502defca482cb6759f6cfe44a4cbb9f2e95d43fea5d6`;
 Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 
@@ -159,9 +257,9 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
 - Task: `quant/TASKS/Q17.md`; status complete/ready for independent commit
   verification; SHA-256
   `03d489ce5b0583dab2ec2a96380519535a2547ee78743d1794622cfc4a30c80e`.
-- Decision SHA-256:
+- Historical accepted decision SHA-256:
   `93cb9448846e0eb8fcc5d9160e822cd3fffe55256651f3e18579b815a8dda612`.
-- End-to-end design SHA-256:
+- Historical accepted end-to-end design SHA-256:
   `bd5ce7d8f6be2a5f1b43cee111e10a85c6d890503e0ac6a9371ef70bc4f268fa`.
 - Non-self-referential implementation receipt SHA-256:
   `057617ed928bc61964a38efc22e185a65f2b5c4a14215928c8d228b4626db32f`.
@@ -178,18 +276,20 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
   `NOT_ESTABLISHED`. The Q10 receipt's quantile best-index `11` versus both machine
   artifacts' `7` is preserved as a documentary erratum. Q14 is its own synthetic
   fixture comparison, not Q10/Q11 validation. Q15 remains non-loadable.
-- One actual benchmark observation records three samples after two warmups. Warm
+- The historical A17 benchmark observation records three samples after two warmups. Warm
   single p50 is `3,349,209 ns`; focus-25 p50 is `89,467,750 ns`; candidate-128
   p50 is `464,945,042 ns`; universe/watch-452 p50 is `1,614,296,000 ns`.
   Child self peak RSS is `66,551,808` bytes within the provisional 8 GiB ceiling.
   The rows are copies of one synthetic BNBUSDT fixture; current universe, event
   trace and numeric latency promotion target remain `UNKNOWN`.
-- Syntax-aware scanning covers 152 source files plus the campaign with zero
-  findings. Nine frozen file identities match. The generated scope proof is a
+- Historical syntax-aware scanning covered 152 source files plus the campaign with
+  zero findings and nine matching frozen identities. Current RB-13 evidence keeps
+  the historical directive-lock pin and truthfully reports its one known mismatch,
+  as recorded above. The generated scope proof is a
   declared expected inventory only; actual Git scope is reserved for the C17/A17
   receipts.
 
-## Generated Q17 evidence
+## Historical accepted Q17 generated evidence
 
 - Accepted research projection SHA-256:
   `e9f2de26df495538edf7c57db0edbf334dc1929456a2d23128e32fada4f03a7c`.
@@ -207,10 +307,12 @@ Git blob `26d1c16390c9d7763969e5abb8eb42d8591af020`.
   `fb7affcb837349b5225e866ba301d4ef3bddaa9041667ff8119acf8f900ec229`.
 - Self-excluding artifact manifest SHA-256:
   `c5574c79cbd9450e6a890b67ade9a6c71e2f1fb9574e71c0eaec3057c545e1b2`;
-  it contains seven exact current rows.
-- Generated component evidence binds activation/current task truth separately and
-  truthfully marks C17/A17 pending because it predates those commits. Exact Git
-  inspection and the acceptance receipt provide the non-self-referential binding.
+  it contains seven exact rows from the historical A17 kit.
+- Historical generated component evidence bound activation/task truth separately
+  and marked C17/A17 pending because it predated those commits. Exact Git
+  inspection and the acceptance receipt provided the non-self-referential binding.
+  The current RB-13 component manifest instead separates historical Q16 acceptance
+  from the pending correction, as recorded above.
 
 ## Verification evidence
 

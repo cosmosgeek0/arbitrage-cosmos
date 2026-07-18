@@ -55,6 +55,42 @@ bench/               benchmark targets template + harness docs
 /usr/local/lib/cosmos-ops/bin/      these scripts, OUTSIDE the release path
 ```
 
+## DATA_DIR authority deployment precondition
+
+Every process or container that can mutate one physical `DATA_DIR` must run on
+the same host and share the same logical-lease runtime root, compatible mount
+view, and PID/liveness namespace. The lease record binds the Linux PID
+namespace identity before a PID probe; a mismatched namespace is unavailable
+and cannot be reclaimed as a dead owner. Separate PID namespaces remain an
+unsupported deployment topology, and no cross-namespace exclusion guarantee is
+claimed. The service therefore does not request a private PID namespace and pins
+`DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases` in `ExecStart`
+after `EnvironmentFile=` processing rather than using an overrideable
+`Environment=` directive. Every component of the normalized absolute requested
+`DATA_DIR` must be ASCII, and its logical lease identity uses ASCII lowercase;
+case aliases therefore share one lease while Unicode filesystem-folding aliases
+are rejected before the runtime lease root or data directory is created.
+The active physical and logical lease records use schema v2 names and records.
+During upgrade, an exact live v1 root/witness owner is rejected and an exact
+dead v1 chain is reclaimed; each v2 owner also holds a same-inode v1-name
+version interlock so a legacy binary fails closed instead of running beside it.
+
+`ICON_CACHE`, `LIQ_CACHE`, and `PROFILE_CACHE` are optional. When configured,
+their resolved physical parent and target must remain inside the exact physical
+`DATA_DIR`; external targets and parent-symlink escapes fail closed. Cache names
+use a conservative ASCII-only policy for every `DATA_DIR`-relative component,
+then compare with ASCII lowercase for both each component and the complete
+target. A read-only phase-zero validates the complete requested and prospective
+set before the logical lease root or absent `DATA_DIR` is created. Phase one
+recomputes physical/symlink targets before any cache parent is created. Both
+phases enforce containment, file type, and pairwise path collisions; existing
+regular-file leaves are also compared by device/inode against each other and
+reserved Ledger, journal, news, and lease owner files. Any non-ASCII relative
+component is rejected before parent creation. An ASCII requested path may still
+bind an existing Unicode physical root; only its `DATA_DIR`-relative cache names
+are constrained. No parent or leaf component can alias a reserved owner on a
+case-insensitive filesystem or through a hard link.
+
 ## Release contract
 
 A release source directory must contain `server/dist/index.js` and a

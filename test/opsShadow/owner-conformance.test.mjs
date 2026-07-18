@@ -58,12 +58,43 @@ test('descriptor-bound restore and report-last publication guards cannot regress
   assert(hasIssue(validateOwnerArtifacts(reportFirst), 'RESTORE_GUARD_MISSING'));
 });
 
-test('systemd public bind, inline secret, and weakened credential binding fail closed', () => {
+test('systemd public bind, lease-root precedence, PID namespace, secret, and credential regressions fail closed', () => {
   const publicBind = { ...owners, appService: `${owners.appService}\nEnvironment=HOST=0.0.0.0\n` };
   assert(hasIssue(validateOwnerArtifacts(publicBind), 'SYSTEMD_PUBLIC_BIND_FORBIDDEN'));
 
   const inlineSecret = { ...owners, appService: `${owners.appService}\nEnvironment=API_KEY=synthetic-forbidden\n` };
   assert(hasIssue(validateOwnerArtifacts(inlineSecret), 'SYSTEMD_INLINE_SECRET_FORBIDDEN'));
+
+  const overrideableLeaseRoot = {
+    ...owners,
+    appService: owners.appService.replace(
+      'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js',
+      'Environment=DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases\nExecStart=/usr/bin/node server/dist/index.js',
+    ),
+  };
+  const leaseRootIssues = validateOwnerArtifacts(overrideableLeaseRoot);
+  assert(hasIssue(leaseRootIssues, 'APP_LOGICAL_LEASE_ROOT_EXEC_PIN_MISSING'));
+  assert(hasIssue(leaseRootIssues, 'APP_LOGICAL_LEASE_ROOT_OVERRIDEABLE'));
+
+  const duplicateExecStart = {
+    ...owners,
+    appService: `${owners.appService}\nExecStart=/usr/bin/node server/dist/index.js\n`,
+  };
+  assert(hasIssue(
+    validateOwnerArtifacts(duplicateExecStart),
+    'APP_LOGICAL_LEASE_ROOT_EXEC_PIN_MISSING',
+  ));
+
+  for (const privatePidsValue of ['yes', 'true', 'on', '1']) {
+    const privatePids = {
+      ...owners,
+      appService: `${owners.appService}\nPrivatePIDs=${privatePidsValue}\n`,
+    };
+    assert(
+      hasIssue(validateOwnerArtifacts(privatePids), 'APP_PID_LIVENESS_NAMESPACE_UNSUPPORTED'),
+      `PrivatePIDs=${privatePidsValue}`,
+    );
+  }
 
   const weakCredential = {
     ...owners,

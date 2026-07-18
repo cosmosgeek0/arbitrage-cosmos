@@ -608,7 +608,9 @@ test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and e
 
 test('passive liquidation projection is restart-safe, bounded, and rejects malformed canonical prints', async () => {
   const cacheDir = mkdtempSync(path.join(tmpdir(), 'cosmos-liq-stream-test-'));
-  process.env.LIQ_CACHE = path.join(cacheDir, 'liquidations.json');
+  process.env.SKIP_DOTENV = '1';
+  process.env.DATA_DIR = path.join(cacheDir, 'data');
+  process.env.LIQ_CACHE = path.join(process.env.DATA_DIR, 'liquidations.json');
   const module = await import(`../src/binance/liquidations.ts?test=${Date.now()}`);
   const options = {
     maintenanceMs: 5_000,

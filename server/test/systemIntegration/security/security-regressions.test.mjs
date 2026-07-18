@@ -24,6 +24,7 @@ const DATA_DIR_LEASE_FS_CAPABILITIES = Object.freeze([
   'opendirSync',
   'openSync',
   'readSync',
+  'statSync',
   'unlinkSync',
   'writeSync',
 ].sort());

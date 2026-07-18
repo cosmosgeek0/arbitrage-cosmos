@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from quant_edge.errors import ContractValueError
-from quant_edge.features.fixedpoint import FixedPointV1, round_half_even
+from quant_edge.features.fixedpoint import MAX_FIXED_MANTISSA, FixedPointV1, round_half_even
 from quant_edge.lake.contracts import require_contract_id, require_strict_int
 from quant_edge.regime.contracts import (
     AlarmDirection,
@@ -181,8 +181,14 @@ class TwoSidedCusum:
             return self.__step(observation, status=StepStatus.WARMUP)
         deviation = observation.value.mantissa - self.__reference
         slack = self.__config.slack_k.mantissa
-        self.__s_up = max(0, self.__s_up + deviation - slack)
-        self.__s_down = max(0, self.__s_down - deviation - slack)
+        self.__s_up = min(
+            MAX_FIXED_MANTISSA,
+            max(0, self.__s_up + deviation - slack),
+        )
+        self.__s_down = min(
+            MAX_FIXED_MANTISSA,
+            max(0, self.__s_down - deviation - slack),
+        )
         threshold = self.__config.threshold_h.mantissa
         alarm_up = self.__s_up >= threshold
         alarm_down = self.__s_down >= threshold

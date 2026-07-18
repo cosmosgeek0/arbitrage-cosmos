@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from quant_edge.errors import ContractValueError
-from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, MAX_FIXED_MANTISSA, FixedPointV1
 from quant_edge.lake.contracts import QualityState
 from quant_edge.regime.contracts import AlarmDirection, ObservationV1, StepStatus
 from quant_edge.regime.cusum import CusumConfigV1, CusumStepV1, TwoSidedCusum
@@ -263,6 +263,30 @@ class TestCusumBehavior:
         assert step.alarm
         assert step.direction is AlarmDirection.DOWN
 
+    def test_extreme_deviation_saturates_before_alarm_output(self) -> None:
+        detector = TwoSidedCusum(
+            CusumConfigV1(
+                detector_id="cusum-extreme",
+                reference=FixedPointV1(-MAX_FIXED_MANTISSA),
+                warmup=0,
+                slack_k=FixedPointV1(0),
+                threshold_h=FixedPointV1(MAX_FIXED_MANTISSA),
+            )
+        )
+
+        step = detector.update(
+            ObservationV1(
+                event_time_ns=BASE_NS,
+                ordinal=0,
+                value=FixedPointV1(MAX_FIXED_MANTISSA),
+                quality=QualityState.SYNTHETIC,
+            )
+        )
+
+        assert step.alarm
+        assert step.direction is AlarmDirection.UP
+        assert step.statistic_up == FixedPointV1(MAX_FIXED_MANTISSA)
+
     def test_both_statistics_can_be_positive_without_alarm(self) -> None:
         # Slack zero and a huge threshold let both sides accumulate: the clamp at
         # zero lets a partial retracement leave mass on both sides.
@@ -460,6 +484,33 @@ class TestPageHinkleyBehavior:
             step = detector.update(_observation(index, 1_000 + 100 * (index % 2)))
             assert step.status is StepStatus.WARMUP
             assert not step.alarm
+
+    def test_extreme_warmup_statistics_saturate_without_crashing(self) -> None:
+        detector = TwoSidedPageHinkley(
+            PageHinkleyConfigV1(
+                detector_id="ph-extreme",
+                delta=FixedPointV1(0),
+                threshold_lambda=FixedPointV1(MAX_FIXED_MANTISSA),
+                warmup=3,
+            )
+        )
+
+        step: PageHinkleyStepV1 | None = None
+        for index, mantissa in enumerate(
+            (-MAX_FIXED_MANTISSA, MAX_FIXED_MANTISSA, MAX_FIXED_MANTISSA)
+        ):
+            step = detector.update(
+                ObservationV1(
+                    event_time_ns=BASE_NS + index * SECOND_NS,
+                    ordinal=index,
+                    value=FixedPointV1(mantissa),
+                    quality=QualityState.SYNTHETIC,
+                )
+            )
+
+        assert step is not None
+        assert step.status is StepStatus.WARMUP
+        assert step.statistic_up == FixedPointV1(MAX_FIXED_MANTISSA)
 
     def test_in_control_series_never_alarms(self) -> None:
         detector = _page_hinkley()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from quant_edge.errors import ContractValueError
-from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, MAX_FIXED_MANTISSA, FixedPointV1
 from quant_edge.lake.contracts import QualityState
 from quant_edge.regime.alphabet import AlphabetConfigV1
 from quant_edge.regime.anomaly import (
@@ -516,6 +516,31 @@ class TestRobustAnomalyScorer:
         assert step.exceeds
         assert step.score is None
         assert step.reasons == (AnomalyReason.ZERO_MAD_DEVIATION,)
+
+    def test_near_zero_mad_extreme_deviation_is_bounded_surprise(self) -> None:
+        scorer = self._scorer(window=3)
+        for index, mantissa in enumerate((-1, 0, 1)):
+            scorer.update(
+                ObservationV1(
+                    event_time_ns=BASE_NS + index * SECOND_NS,
+                    ordinal=index,
+                    value=FixedPointV1(mantissa),
+                    quality=QualityState.SYNTHETIC,
+                )
+            )
+
+        step = scorer.update(
+            ObservationV1(
+                event_time_ns=BASE_NS + 3 * SECOND_NS,
+                ordinal=3,
+                value=FixedPointV1(MAX_FIXED_MANTISSA),
+                quality=QualityState.SYNTHETIC,
+            )
+        )
+
+        assert step.exceeds
+        assert step.score is None
+        assert step.reasons == (AnomalyReason.THRESHOLD_EXCEEDED,)
 
     def test_stale_suppresses_and_gap_resets(self) -> None:
         scorer = self._scorer()

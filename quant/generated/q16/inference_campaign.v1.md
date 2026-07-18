@@ -1,7 +1,7 @@
 # Q16 local inference campaign (synthetic only)
 
 - Frozen protocol: `22/22` remains a separate required gate.
-- Serving manifest SHA-256: `2318ad2028666cf50f019c75dfb12ae3f3eafb29289aeb8acb3f438927413f7a`.
+- Serving manifest SHA-256: `2bcd1b5b19430e87229d8be28a73d8c1211e2d4a07a3dbae59512e52d0be06c6`.
 - Assessment SHA-256: `10d4a858ac08c29b03ab3df6476b7eb6830359581d00791a229ccd765b369329`.
 - Final action: `ABSTAIN_UNKNOWN`.
 - Health: `DEGRADED`; process readiness is safe-abstain-only.

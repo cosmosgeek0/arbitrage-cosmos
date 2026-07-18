@@ -6,7 +6,12 @@ from typing import Final, cast
 
 from quant_edge.errors import ContractValueError
 from quant_edge.features.baselines import RollingMedianMad
-from quant_edge.features.fixedpoint import FixedPointV1, fp_div, fp_sub
+from quant_edge.features.fixedpoint import (
+    FIXED_POINT_SCALE,
+    MAX_FIXED_MANTISSA,
+    FixedPointV1,
+    round_half_even,
+)
 from quant_edge.lake.contracts import QualityState, require_contract_id, require_strict_int
 from quant_edge.regime.contracts import (
     InputDisposition,
@@ -163,9 +168,9 @@ class RobustAnomalyScorer:
         median = cast(FixedPointV1, self.__baseline.median())
         mad = cast(FixedPointV1, self.__baseline.mad())
         self.__baseline.push(observation.value)
-        deviation = fp_sub(observation.value, median)
+        deviation = observation.value.mantissa - median.mantissa
         if mad.is_zero:
-            if deviation.is_zero:
+            if deviation == 0:
                 self.__persistence = 0
                 return self.__step(observation, status=StepStatus.OK, score=FixedPointV1(0))
             self.__persistence += 1
@@ -176,8 +181,15 @@ class RobustAnomalyScorer:
                 exceeds=True,
                 reasons=(AnomalyReason.ZERO_MAD_DEVIATION,),
             )
-        score = fp_div(deviation, mad)
-        if abs(score.mantissa) >= self.__config.z_threshold.mantissa:
+        magnitude_numerator = abs(deviation) * FIXED_POINT_SCALE
+        exceeds = magnitude_numerator >= self.__config.z_threshold.mantissa * mad.mantissa
+        score_magnitude = round_half_even(magnitude_numerator, mad.mantissa)
+        score = (
+            None
+            if score_magnitude > MAX_FIXED_MANTISSA
+            else FixedPointV1(-score_magnitude if deviation < 0 else score_magnitude)
+        )
+        if exceeds:
             self.__persistence += 1
             return self.__step(
                 observation,
@@ -186,6 +198,8 @@ class RobustAnomalyScorer:
                 exceeds=True,
                 reasons=(AnomalyReason.THRESHOLD_EXCEEDED,),
             )
+        # A non-exceeding ratio is bounded by the representable threshold.
+        assert score is not None
         self.__persistence = 0
         return self.__step(observation, status=StepStatus.OK, score=score)
 

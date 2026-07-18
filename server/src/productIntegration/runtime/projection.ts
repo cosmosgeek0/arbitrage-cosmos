@@ -165,6 +165,18 @@ function controlIds(component: Readonly<SystemComponentSnapshot>): readonly stri
   return Object.freeze(ids);
 }
 
+function restartState(
+  component: Readonly<SystemComponentSnapshot>,
+): ProductRuntimeComponentProjection['restartState'] {
+  const explicitlyRequired = component.blockerCodes.some((code) => (
+    code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
+  ));
+  if (explicitlyRequired) return 'RESTART_REQUIRED';
+  if (component.restartCount > 0) return 'RESTARTED';
+  if (component.generation > 0) return 'NEVER_RESTARTED';
+  return 'UNKNOWN';
+}
+
 function cloneDashboard(snapshot: Readonly<SystemSupervisorReadModel>): Readonly<SystemSupervisorReadModel> {
   const clone = JSON.parse(JSON.stringify(snapshot)) as SystemSupervisorReadModel;
   return Object.freeze(clone);
@@ -193,12 +205,32 @@ function components(
       lastAdvanceAtMs: component.componentId === meaningfulAdvance?.ownerComponentId
         ? meaningfulAdvance.observedAtMs
         : null,
+      freshnessState: component.freshness?.state ?? 'UNAVAILABLE',
       sourceAgeMs: component.freshness?.ageMs ?? age(nowMs, component.sourceTimestamp?.sourceTimeMs ?? null),
       eventAgeMs: age(nowMs, component.lastReceiveAtMs),
       processingAgeMs: age(nowMs, component.lastProcessAtMs),
+      processingLagMs: component.processingLagMs ?? null,
       queueDepth: component.queue?.depth ?? null,
       queueCapacity: component.queue?.capacity ?? null,
       droppedCount: component.queue?.dropped ?? null,
+      dataQualityState: component.dataQuality?.state ?? 'UNAVAILABLE',
+      dataQualityInvalidCount: component.dataQuality?.invalidCount ?? null,
+      dataQualityDuplicateCount: component.dataQuality?.duplicateCount ?? null,
+      dataQualityOutOfOrderCount: component.dataQuality?.outOfOrderCount ?? null,
+      dataQualitySequenceGapCount: component.dataQuality?.sequenceGapCount ?? null,
+      retryState: component.retry?.state ?? 'UNAVAILABLE',
+      retryAttempt: component.retry?.attempt ?? null,
+      retryCeiling: component.retry?.ceiling ?? null,
+      backoffMs: component.retry?.delayMs ?? null,
+      retryAtMs: component.retry?.retryAtMs ?? null,
+      cooldownUntilMs: component.retry?.cooldownUntilMs ?? null,
+      dependencyIds: Object.freeze([...component.dependencies]),
+      checkpointState: component.checkpoint?.state ?? 'UNAVAILABLE',
+      checkpointRevision: component.checkpoint?.revision ?? null,
+      checkpointPersistedAtMs: component.checkpoint?.persistedAtMs ?? null,
+      restartState: restartState(component),
+      generation: component.generation,
+      restartCount: component.restartCount,
       blockerCode: component.blockerCodes[0] ?? component.lastFailure?.code ?? null,
       rootCauseComponentId: root?.componentId ?? null,
       capitalRelevance: component.capitalExposed ? 'EXPOSED' : recovery ? 'RECOVERY'

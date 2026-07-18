@@ -218,12 +218,32 @@ export interface ProductComponentProjection {
   readonly capability: ProductCapability;
   readonly heartbeatAtMs: number | null;
   readonly lastAdvanceAtMs: number | null;
+  readonly freshnessState: 'FRESH' | 'STALE' | 'CLOCK_SKEWED' | 'UNAVAILABLE';
   readonly sourceAgeMs: number | null;
   readonly eventAgeMs: number | null;
   readonly processingAgeMs: number | null;
+  readonly processingLagMs: number | null;
   readonly queueDepth: number | null;
   readonly queueCapacity: number | null;
   readonly droppedCount: number | null;
+  readonly dataQualityState: 'GOOD' | 'DEGRADED' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly dataQualityInvalidCount: number | null;
+  readonly dataQualityDuplicateCount: number | null;
+  readonly dataQualityOutOfOrderCount: number | null;
+  readonly dataQualitySequenceGapCount: number | null;
+  readonly retryState: 'IDLE' | 'RETRYING' | 'BACKING_OFF' | 'COOLDOWN' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly retryAttempt: number | null;
+  readonly retryCeiling: number | null;
+  readonly backoffMs: number | null;
+  readonly retryAtMs: number | null;
+  readonly cooldownUntilMs: number | null;
+  readonly dependencyIds: readonly string[];
+  readonly checkpointState: 'CURRENT' | 'DIRTY' | 'STALE' | 'MISSING' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly checkpointRevision: string | null;
+  readonly checkpointPersistedAtMs: number | null;
+  readonly restartState: 'NEVER_RESTARTED' | 'RESTARTED' | 'RESTART_REQUIRED' | 'UNKNOWN';
+  readonly generation: number;
+  readonly restartCount: number;
   readonly blockerCode: string | null;
   readonly rootCauseComponentId: string | null;
   readonly capitalRelevance: 'NONE' | 'POTENTIAL' | 'EXPOSED' | 'RECOVERY';
@@ -1289,12 +1309,32 @@ function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenario
       capability: projectedCapability,
       heartbeatAtMs: nowMs - 1_000 - index * 20,
       lastAdvanceAtMs: nowMs - 800 - index * 20,
+      freshnessState: componentId.includes('source') ? 'FRESH' : 'UNAVAILABLE',
       sourceAgeMs: componentId.includes('source') ? 1_000 : null,
       eventAgeMs: 1_000 + index * 10,
       processingAgeMs: 200 + index * 5,
+      processingLagMs: null,
       queueDepth: index % 3,
       queueCapacity: 100,
       droppedCount: 0,
+      dataQualityState: 'UNAVAILABLE',
+      dataQualityInvalidCount: null,
+      dataQualityDuplicateCount: null,
+      dataQualityOutOfOrderCount: null,
+      dataQualitySequenceGapCount: null,
+      retryState: 'UNAVAILABLE',
+      retryAttempt: null,
+      retryCeiling: null,
+      backoffMs: null,
+      retryAtMs: null,
+      cooldownUntilMs: null,
+      dependencyIds: Object.freeze([]),
+      checkpointState: 'UNAVAILABLE',
+      checkpointRevision: null,
+      checkpointPersistedAtMs: null,
+      restartState: 'NEVER_RESTARTED',
+      generation: 1,
+      restartCount: 0,
       blockerCode: null,
       rootCauseComponentId: null,
       capitalRelevance: scenarioId === 'RECOVERY_REQUIRED_ONE_LEG' && componentId === 'reconciliation' ? 'RECOVERY' : 'NONE',
@@ -1768,9 +1808,60 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
           errors.push(`COMPONENT_CANONICAL_PRESENTATION_FALSE_GREEN:${component.componentId}`);
         }
       }
-      for (const field of ['heartbeatAtMs', 'lastAdvanceAtMs', 'sourceAgeMs', 'eventAgeMs', 'processingAgeMs', 'queueDepth', 'queueCapacity', 'droppedCount']) {
-        if (!isNonnegativeNumberOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
+      for (const field of ['heartbeatAtMs', 'lastAdvanceAtMs', 'retryAtMs', 'cooldownUntilMs', 'checkpointPersistedAtMs']) {
+        if (!isUtcMillisOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
       }
+      for (const field of ['sourceAgeMs', 'eventAgeMs', 'processingAgeMs', 'processingLagMs', 'queueDepth', 'queueCapacity', 'droppedCount', 'dataQualityInvalidCount', 'dataQualityDuplicateCount', 'dataQualityOutOfOrderCount', 'dataQualitySequenceGapCount', 'retryAttempt', 'retryCeiling', 'backoffMs']) {
+        if (!isNonnegativeSafeIntegerOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
+      }
+      if (!['FRESH', 'STALE', 'CLOCK_SKEWED', 'UNAVAILABLE'].includes(String(component.freshnessState))) errors.push('COMPONENT_FIELD_INVALID:freshnessState');
+      if (!['GOOD', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.dataQualityState))) errors.push('COMPONENT_FIELD_INVALID:dataQualityState');
+      if (!['IDLE', 'RETRYING', 'BACKING_OFF', 'COOLDOWN', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.retryState))) errors.push('COMPONENT_FIELD_INVALID:retryState');
+      if (!['CURRENT', 'DIRTY', 'STALE', 'MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.checkpointState))) errors.push('COMPONENT_FIELD_INVALID:checkpointState');
+      if (!['NEVER_RESTARTED', 'RESTARTED', 'RESTART_REQUIRED', 'UNKNOWN'].includes(String(component.restartState))) errors.push('COMPONENT_FIELD_INVALID:restartState');
+      if (!Number.isSafeInteger(component.generation) || Number(component.generation) < 0) errors.push('COMPONENT_FIELD_INVALID:generation');
+      if (!Number.isSafeInteger(component.restartCount) || Number(component.restartCount) < 0) errors.push('COMPONENT_FIELD_INVALID:restartCount');
+      if (!isStringArray(component.dependencyIds)
+        || component.dependencyIds.length > 200
+        || new Set(component.dependencyIds).size !== component.dependencyIds.length
+        || component.dependencyIds.includes(component.componentId)) errors.push('COMPONENT_FIELD_INVALID:dependencyIds');
+      if (component.checkpointRevision !== null
+        && (typeof component.checkpointRevision !== 'string'
+          || component.checkpointRevision.length === 0
+          || component.checkpointRevision.length > 256)) errors.push('COMPONENT_FIELD_INVALID:checkpointRevision');
+      const dataQualityCounts = ['dataQualityInvalidCount', 'dataQualityDuplicateCount', 'dataQualityOutOfOrderCount', 'dataQualitySequenceGapCount'];
+      if (['UNKNOWN', 'UNAVAILABLE'].includes(String(component.dataQualityState))
+        && dataQualityCounts.some((field) => component[field] !== null)) errors.push('COMPONENT_DATA_QUALITY_UNKNOWN_CONFLICT');
+      if (component.dataQualityState === 'GOOD') {
+        if (dataQualityCounts.some((field) => component[field] === null)) {
+          errors.push('COMPONENT_DATA_QUALITY_GOOD_EVIDENCE_REQUIRED');
+        } else if (dataQualityCounts.some((field) => component[field] !== 0)) {
+          errors.push('COMPONENT_DATA_QUALITY_GOOD_CONFLICT');
+        }
+      }
+      const retryDetails = ['retryAttempt', 'retryCeiling', 'backoffMs', 'retryAtMs', 'cooldownUntilMs'];
+      if (['UNKNOWN', 'UNAVAILABLE'].includes(String(component.retryState))
+        && retryDetails.some((field) => component[field] !== null)) errors.push('COMPONENT_RETRY_UNKNOWN_CONFLICT');
+      if (component.retryState === 'BACKING_OFF') {
+        const requiredRetryDetails = ['retryAttempt', 'retryCeiling', 'backoffMs', 'retryAtMs'];
+        if (requiredRetryDetails.some((field) => component[field] === null)) {
+          errors.push('COMPONENT_RETRY_BACKOFF_EVIDENCE_REQUIRED');
+        } else if (Number(component.retryAttempt) < 1
+          || Number(component.retryCeiling) < Number(component.retryAttempt)
+          || Number(component.backoffMs) < 1) {
+          errors.push('COMPONENT_RETRY_BACKOFF_EVIDENCE_INVALID');
+        }
+        if (typeof component.cooldownUntilMs === 'number' && typeof component.retryAtMs === 'number'
+          && component.cooldownUntilMs < component.retryAtMs) {
+          errors.push('COMPONENT_RETRY_COOLDOWN_ORDER_INVALID');
+        }
+      }
+      if (['MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.checkpointState))
+        && (component.checkpointRevision !== null || component.checkpointPersistedAtMs !== null)) errors.push('COMPONENT_CHECKPOINT_UNKNOWN_CONFLICT');
+      if (component.checkpointState === 'CURRENT' && component.checkpointRevision === null) errors.push('COMPONENT_CHECKPOINT_REVISION_MISSING');
+      if (component.restartState === 'RESTARTED' && !(Number(component.restartCount) > 0)) errors.push('COMPONENT_RESTART_STATE_CONFLICT');
+      if (component.restartState === 'NEVER_RESTARTED'
+        && (component.restartCount !== 0 || !(Number(component.generation) > 0))) errors.push('COMPONENT_RESTART_STATE_CONFLICT');
       if (typeof component.queueDepth === 'number' && typeof component.queueCapacity === 'number' && component.queueDepth > component.queueCapacity) errors.push('COMPONENT_QUEUE_INVALID');
       for (const field of ['blockerCode', 'rootCauseComponentId', 'correlationId']) {
         if (!isStringOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
@@ -2811,6 +2902,14 @@ function validateCanonicalOpsEnvelope(
 
 function isNonnegativeNumberOrNull(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
+function isNonnegativeSafeIntegerOrNull(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && Number(value) >= 0);
+}
+
+function isUtcMillisOrNull(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 4_102_444_800_000);
 }
 
 function isStringOrNull(value: unknown): value is string | null {

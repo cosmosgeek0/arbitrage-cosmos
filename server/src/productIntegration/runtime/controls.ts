@@ -101,7 +101,8 @@ function sourceLifecycleEntry(
 ): Readonly<ProductRuntimeControlRegistryEntry> {
   let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readSourceControlState']>> = null;
   try { state = owner?.readSourceControlState?.(sourceId) ?? null; } catch { state = null; }
-  const action = state?.desiredLifecycle === 'ISOLATED' ? 'RESTART' : 'ISOLATE';
+  const action = state?.pendingAction
+    ?? (state?.desiredLifecycle === 'ISOLATED' ? 'RESTART' : 'ISOLATE');
   const sourceLabel = sourceId === 'public-spot-source' ? 'Spot' : 'USD-M';
   const configured = ownerBlocker(owner, 'SET_PUBLIC_SOURCE_LIFECYCLE') === null;
   return entry(snapshot, owner, {

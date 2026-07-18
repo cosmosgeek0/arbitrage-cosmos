@@ -4,6 +4,7 @@ import type {
   IsolatablePublicSourceId,
   SourceIsolationAction,
   SourceIsolationOwnerPort,
+  SourceReceipt,
   SourceIsolationSnapshot,
 } from '../../intelligenceRuntime/lifecycle/index.js';
 import type { SystemControlMutation, SystemControlState } from '../../systemIntegration/contracts/index.js';
@@ -297,6 +298,41 @@ function validControlState(value: unknown): value is Readonly<SystemControlState
     && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.correlationId);
 }
 
+function sourceIdForControl(controlId: string): IsolatablePublicSourceId | null {
+  if (controlId === 'source.public-spot-source.lifecycle') return 'public-spot-source';
+  if (controlId === 'source.public-usdm-source.lifecycle') return 'public-usdm-source';
+  return null;
+}
+
+function validSourceSnapshot(value: unknown, sourceId: IsolatablePublicSourceId): value is Readonly<SourceIsolationSnapshot> {
+  if (!plainObject(value) || value.sourceId !== sourceId
+    || !Number.isSafeInteger(value.sourceRevision) || Number(value.sourceRevision) < 0
+    || (value.desiredLifecycle !== 'LIVE' && value.desiredLifecycle !== 'ISOLATED')
+    || !['LIVE', 'WARMING', 'DEGRADED', 'ISOLATED', 'FAILED', 'STOPPED'].includes(String(value.observedLifecycle))
+    || value.lifecycle !== value.observedLifecycle
+    || !Number.isSafeInteger(value.generation) || Number(value.generation) < 0) return false;
+  return true;
+}
+
+function resultFromSourceReceipt(
+  identity: Readonly<ProductRuntimeCommandResultIdentity>,
+  status: Extract<ProductRuntimeControlResultStatus, 'APPLIED' | 'ACCEPTED_ASYNC'>,
+  receipt: Readonly<SourceReceipt>,
+  snapshot: Readonly<SourceIsolationSnapshot>,
+): Readonly<ProductRuntimeControlResult> {
+  const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
+  return Object.freeze({
+    ...expected,
+    controlId: identity.controlId,
+    status,
+    before: stateText(receipt.before),
+    after: stateText(receipt.after ?? snapshot),
+    receiptId: receipt.receiptId,
+    completedAtMs: receipt.completedAtMs ?? receipt.requestedAtMs,
+    synthetic: false,
+  });
+}
+
 function mutationMatchesControl(controlId: string, value: unknown): boolean {
   if (!plainObject(value)) return false;
   if (controlId === 'global.safe-mode.read-only') {
@@ -418,6 +454,8 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       || typeof dependencies.sourceIsolation.apply !== 'function'
       || typeof dependencies.sourceIsolation.snapshot !== 'function'
       || typeof dependencies.sourceIsolation.readEffect !== 'function'
+      || typeof dependencies.sourceIsolation.pendingAction !== 'function'
+      || typeof dependencies.sourceIsolation.readResult !== 'function'
     )) throw new TypeError('Product command owner source lifecycle dependency is invalid.');
     this.controls = dependencies.controls;
     this.sourceIsolation = dependencies.sourceIsolation;
@@ -428,6 +466,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     sourceRevision: number;
     desiredLifecycle: 'LIVE' | 'ISOLATED';
     observedLifecycle: string;
+    pendingAction: SourceIsolationAction | null;
   }> | null {
     if (!this.sourceIsolation) return null;
     try {
@@ -436,6 +475,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
         sourceRevision: snapshot.sourceRevision,
         desiredLifecycle: snapshot.desiredLifecycle,
         observedLifecycle: snapshot.observedLifecycle,
+        pendingAction: this.sourceIsolation.pendingAction(sourceId),
       });
     } catch {
       return null;
@@ -590,6 +630,55 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
     if (!constantTimeTextEqual(identity.commandId, expected.commandId)) {
       return failClosedReadback('COMMAND_RESULT_IDENTITY_MISMATCH');
+    }
+
+    const sourceId = sourceIdForControl(identity.controlId);
+    if (sourceId !== null) {
+      if (!this.sourceIsolation) return failClosedReadback('SOURCE_RESULT_OWNER_NOT_CONFIGURED');
+      let sourceReadback;
+      try { sourceReadback = this.sourceIsolation.readResult(identity.idempotencyKey); } catch {
+        return failClosedReadback('SOURCE_RESULT_OWNER_UNAVAILABLE');
+      }
+      if (sourceReadback.state === 'NOT_FOUND') {
+        return Object.freeze({ state: 'NOT_FOUND' as const, result: null, failureCode: null });
+      }
+      if (sourceReadback.state === 'FAIL_CLOSED') {
+        return failClosedReadback(sourceReadback.failureCode);
+      }
+      const receipt = sourceReadback.receipt;
+      const snapshot = sourceReadback.snapshot;
+      if (receipt.idempotencyKey !== identity.idempotencyKey
+        || receipt.sourceId !== sourceId
+        || typeof receipt.receiptId !== 'string' || !/^source-control:sha256:[a-f0-9]{64}$/.test(receipt.receiptId)
+        || typeof receipt.requestDigest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(receipt.requestDigest)
+        || !utcMillis(receipt.requestedAtMs)
+        || !validSourceSnapshot(receipt.before, sourceId)
+        || !validSourceSnapshot(snapshot, sourceId)
+        || (sourceReadback.state === 'TERMINAL' && (
+          receipt.effectState !== 'APPLIED'
+          || receipt.after === null
+          || !validSourceSnapshot(receipt.after, sourceId)
+          || receipt.completedAtMs === null
+          || !utcMillis(receipt.completedAtMs)
+        ))
+        || (sourceReadback.state === 'PENDING' && (
+          receipt.effectState !== 'PENDING'
+          || receipt.after !== null
+          || receipt.completedAtMs !== null
+        ))) {
+        return failClosedReadback('DURABLE_SOURCE_RECEIPT_INVALID');
+      }
+      const readback = resultFromSourceReceipt(
+        identity,
+        sourceReadback.state === 'PENDING' ? 'ACCEPTED_ASYNC' : 'APPLIED',
+        receipt,
+        snapshot,
+      );
+      return Object.freeze({
+        state: sourceReadback.state,
+        result: readback,
+        failureCode: null,
+      });
     }
 
     let stored;

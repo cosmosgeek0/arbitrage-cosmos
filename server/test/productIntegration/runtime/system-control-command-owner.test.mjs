@@ -145,28 +145,35 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
     'public-spot-source': { lifecycle: 'LIVE', generation: 7 },
     'public-usdm-source': { lifecycle: 'LIVE', generation: 11 },
   };
+  let sourceEffectFailure = false;
+  const sourcePersistence = createSourceIsolationPersistence(ledger);
+  const sourcePhysicalPort = {
+    read(sourceId) { return Object.freeze({ ...sourcePhysical[sourceId] }); },
+    isolate(sourceId) {
+      if (sourceEffectFailure) throw new Error('deterministic source isolation failure');
+      sourcePhysical = {
+        ...sourcePhysical,
+        [sourceId]: { lifecycle: 'ISOLATED', generation: sourcePhysical[sourceId].generation + 1 },
+      };
+    },
+    restart(sourceId) {
+      if (sourceEffectFailure) throw new Error('deterministic source restart failure');
+      sourcePhysical = {
+        ...sourcePhysical,
+        [sourceId]: { lifecycle: 'WARMING', generation: sourcePhysical[sourceId].generation + 1 },
+      };
+    },
+  };
   const sourceIsolation = createSourceIsolationOwner({
     clock: { nowMs: () => T0 },
-    persistence: createSourceIsolationPersistence(ledger),
-    physical: {
-      read(sourceId) { return Object.freeze({ ...sourcePhysical[sourceId] }); },
-      isolate(sourceId) {
-        sourcePhysical = {
-          ...sourcePhysical,
-          [sourceId]: { lifecycle: 'ISOLATED', generation: sourcePhysical[sourceId].generation + 1 },
-        };
-      },
-      restart(sourceId) {
-        sourcePhysical = {
-          ...sourcePhysical,
-          [sourceId]: { lifecycle: 'WARMING', generation: sourcePhysical[sourceId].generation + 1 },
-        };
-      },
-    },
+    persistence: sourcePersistence,
+    physical: sourcePhysicalPort,
   });
   const owner = createProductRuntimeSystemControlCommandOwner({ controls, sourceIsolation });
   return {
     dataDir, ledger, persistence, composition, controls, owner, sourceIsolation,
+    sourcePersistence, sourcePhysicalPort,
+    setSourceEffectFailure: (value) => { sourceEffectFailure = value; },
     sourcePhysical: () => structuredClone(sourcePhysical), inspections, publications,
   };
 }
@@ -398,7 +405,7 @@ test('registered operator lifecycle control isolates and restarts one source wit
     assert.match(isolated.receiptId, /^source-control:sha256:[a-f0-9]{64}$/);
     assert.equal(world.sourcePhysical()['public-spot-source'].lifecycle, 'ISOLATED');
     assert.equal(world.sourcePhysical()['public-usdm-source'].lifecycle, 'LIVE');
-    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 1);
+    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 2);
 
     await assert.rejects(
       service.submitCommand(
@@ -422,10 +429,82 @@ test('registered operator lifecycle control isolates and restarts one source wit
     assert.equal(restarted.status, 'APPLIED');
     assert.equal(world.sourcePhysical()['public-spot-source'].lifecycle, 'WARMING');
     assert.equal(world.sourcePhysical()['public-usdm-source'].lifecycle, 'LIVE');
-    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 2);
+    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 4);
   } finally {
     world.ledger.close();
     rmSync(world.dataDir, { recursive: true, force: true });
+  }
+});
+
+test('source command result readback is durable, identity-bound, pending-aware, and recoverable', async () => {
+  const world = createWorld();
+  try {
+    const now = { value: T0 + 2_000 };
+    let service = runtime(world, now);
+    const intent = sourceControlIntent('public-usdm-source', 'ISOLATE', 0, now.value);
+    const preview = await service.previewCommand({
+      controlId: intent.controlId, expectedRevision: '0', operator: ACTOR,
+    });
+    const request = commandRequest(intent, preview, 'product.source.usdm.isolate.result.0001');
+    const submitted = await service.submitCommand(request, ACTOR);
+    const identity = resultIdentity(request.idempotencyKey, request.controlId);
+    const terminal = await service.readCommandResult(identity);
+    assert.equal(terminal.state, 'TERMINAL');
+    assert.equal(terminal.result.status, 'APPLIED');
+    assert.equal(terminal.result.receiptId, submitted.receiptId);
+    assert.equal(JSON.parse(terminal.result.after).observedLifecycle, 'ISOLATED');
+
+    const recoveredSourceOwner = createSourceIsolationOwner({
+      clock: { nowMs: () => T0 + 2_100 },
+      persistence: world.sourcePersistence,
+      physical: world.sourcePhysicalPort,
+    });
+    world.owner = createProductRuntimeSystemControlCommandOwner({
+      controls: world.controls,
+      sourceIsolation: recoveredSourceOwner,
+    });
+    service = runtime(world, now);
+    assert.deepEqual(await service.readCommandResult(identity), terminal);
+
+    const crossSource = await world.owner.readResult(resultIdentity(
+      request.idempotencyKey,
+      'source.public-spot-source.lifecycle',
+    ));
+    assert.equal(crossSource.state, 'FAIL_CLOSED');
+    assert.equal(crossSource.failureCode, 'DURABLE_SOURCE_RECEIPT_INVALID');
+  } finally {
+    world.ledger.close();
+    rmSync(world.dataDir, { recursive: true, force: true });
+  }
+
+  const pendingWorld = createWorld();
+  try {
+    pendingWorld.setSourceEffectFailure(true);
+    const now = { value: T0 + 3_000 };
+    const service = runtime(pendingWorld, now);
+    const intent = sourceControlIntent('public-spot-source', 'ISOLATE', 0, now.value);
+    const preview = await service.previewCommand({
+      controlId: intent.controlId, expectedRevision: '0', operator: ACTOR,
+    });
+    const request = commandRequest(intent, preview, 'product.source.spot.pending.result.0001');
+    const submitted = await service.submitCommand(request, ACTOR);
+    assert.equal(submitted.status, 'FAILED_ATTENTION_REQUIRED');
+    const identity = resultIdentity(request.idempotencyKey, request.controlId);
+    const pending = await service.readCommandResult(identity);
+    assert.equal(pending.state, 'PENDING');
+    assert.equal(pending.result.status, 'ACCEPTED_ASYNC');
+    assert.equal(JSON.parse(pending.result.after).observedLifecycle, 'LIVE');
+
+    pendingWorld.setSourceEffectFailure(false);
+    const recovered = await service.submitCommand(request, ACTOR);
+    assert.equal(recovered.status, 'ALREADY_APPLIED');
+    const terminal = await service.readCommandResult(identity);
+    assert.equal(terminal.state, 'TERMINAL');
+    assert.equal(terminal.result.status, 'APPLIED');
+    assert.equal(JSON.parse(terminal.result.after).observedLifecycle, 'ISOLATED');
+  } finally {
+    pendingWorld.ledger.close();
+    rmSync(pendingWorld.dataDir, { recursive: true, force: true });
   }
 });
 

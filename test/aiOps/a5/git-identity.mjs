@@ -74,4 +74,10 @@ export const AI_OPS_IDENTITY_REGRESSION_MATRIX = Object.freeze([
     expectedMode: 'DONOR',
     expectedTarget: 'SEALED_DONOR_HISTORY',
   }),
+  Object.freeze({
+    item: 'FIX-107',
+    environment: 'ALL_NAMED_DONOR_TIPS',
+    lanes: Object.freeze(['A1', 'A2', 'A5']),
+    heads: AI_OPS_DONOR_IDENTITIES,
+  }),
 ]);

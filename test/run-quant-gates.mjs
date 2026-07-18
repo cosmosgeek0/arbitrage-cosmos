@@ -18,8 +18,8 @@ const VENV = path.join(QUANT, '.venv');
 const BIN = process.platform === 'win32' ? path.join(VENV, 'Scripts') : path.join(VENV, 'bin');
 const PYTHON = path.join(BIN, process.platform === 'win32' ? 'python.exe' : 'python');
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
-const EXPECTED_PYTEST_FILES = 162;
-const EXPECTED_PYTEST_TESTS = 3_139;
+const EXPECTED_PYTEST_FILES = 163;
+const EXPECTED_PYTEST_TESTS = 3_150;
 
 const ALLOWED_SKIPS = new Map([
   [

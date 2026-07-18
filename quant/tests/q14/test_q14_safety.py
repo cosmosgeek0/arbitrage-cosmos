@@ -23,6 +23,7 @@ VALIDATION_SOURCES = tuple(
         "stress.py",
         "leakage.py",
         "comparison.py",
+        "feature_diagnostics.py",
     )
 )
 CAMPAIGN_SCRIPT = QUANT_ROOT / "tests" / "q14" / "q14_validation_campaign.py"

@@ -114,6 +114,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 21 | `FIX-107` | `BUILT_AND_TESTED` | A1, A2, and A5 now share the same exact commit/tree donor classifier instead of lane-specific branch assumptions. The all-lane assertion failed 2/3 on its parent and passes 3/3 with all three sealed donor identities registered. |
 | 22 | `FIX-108` | `BUILT_AND_TESTED` | Donor-history assertions activate only when both objects match the corresponding sealed donor; commit-only and tree-only near matches remain integrated current-tree mode. The new assertion failed 3/4 on its parent and passes 4/4 across both hostile near matches. |
 | 23 | `FIX-109` | `BUILT_AND_TESTED` | The donor guard follows the exact-object pattern used by accepted Quant donor checks: a donor-looking branch diagnostic with integrated commit/tree objects remains current-tree mode. The regression failed 4/5 on its parent and passes 5/5 after adding the hostile branch-name case. |
+| 24 | `FIX-110` | `BUILT_AND_TESTED` | Integrated AI-Ops mode binds its verification target to the exact current commit and tree objects, independent of branch attachment. The new parent-relative assertion failed 5/6 before the exact integrated fixture was registered and passes 6/6 after it. |
 
 ## Previous source evidence
 

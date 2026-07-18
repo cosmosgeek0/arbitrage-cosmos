@@ -45,6 +45,27 @@ from quant_edge.registry_ops.contracts import (
     mapping_digest,
 )
 from quant_edge.registry_ops.drift import evaluate_page_hinkley_drift
+from quant_edge.registry_ops.passive_fill_receipts import (
+    MAX_PASSIVE_FILL_CALIBRATION_RECEIPT_TTL_MS,
+    PASSIVE_FILL_CALIBRATION_OWNER_ID,
+    PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+    PassiveFillCalibrationCompleteness,
+    PassiveFillCalibrationMode,
+    PassiveFillHeldOutCalibrationReceiptV1,
+)
+from quant_edge.registry_ops.recorded_outcomes import (
+    CalibrationAuthority,
+    RecordedCalibrationPolicyV1,
+    RecordedCalibrationReportV1,
+    RecordedCalibrationSnapshotV1,
+    RecordedCalibrationStatus,
+    RecordedOutcomeAttestationV1,
+    RecordedOutcomeCorpusV1,
+    RecordedOutcomeV1,
+    RecordedPredictionRegistrationV1,
+    RecordedPredictionV1,
+    evaluate_recorded_calibration,
+)
 from quant_edge.registry_ops.store import (
     RegistryConflictError,
     RegistryError,
@@ -53,6 +74,9 @@ from quant_edge.registry_ops.store import (
 )
 
 __all__ = [
+    "MAX_PASSIVE_FILL_CALIBRATION_RECEIPT_TTL_MS",
+    "PASSIVE_FILL_CALIBRATION_OWNER_ID",
+    "PASSIVE_FILL_CALIBRATION_OWNER_REVISION",
     "Q10_CAMPAIGN_SCHEMA",
     "Q10_GOLDEN_SCHEMA",
     "Q11_CAMPAIGN_SCHEMA",
@@ -64,6 +88,7 @@ __all__ = [
     "ArtifactKind",
     "ArtifactManifestV1",
     "ArtifactRefV1",
+    "CalibrationAuthority",
     "ChampionSnapshotV1",
     "CommitStage",
     "DatasetCardV1",
@@ -81,7 +106,19 @@ __all__ = [
     "OutcomeDisposition",
     "OutcomeReality",
     "OwnerAnnotationV1",
+    "PassiveFillCalibrationCompleteness",
+    "PassiveFillCalibrationMode",
+    "PassiveFillHeldOutCalibrationReceiptV1",
     "PromotionGateV1",
+    "RecordedCalibrationPolicyV1",
+    "RecordedCalibrationReportV1",
+    "RecordedCalibrationSnapshotV1",
+    "RecordedCalibrationStatus",
+    "RecordedOutcomeAttestationV1",
+    "RecordedOutcomeCorpusV1",
+    "RecordedOutcomeV1",
+    "RecordedPredictionRegistrationV1",
+    "RecordedPredictionV1",
     "RegistryConflictError",
     "RegistryError",
     "RegistryIntegrityError",
@@ -95,6 +132,7 @@ __all__ = [
     "ValidationBindingV1",
     "digest_file",
     "evaluate_page_hinkley_drift",
+    "evaluate_recorded_calibration",
     "mapping_digest",
     "read_verified_artifact",
     "verify_json_artifact",

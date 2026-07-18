@@ -19,7 +19,7 @@ const BIN = process.platform === 'win32' ? path.join(VENV, 'Scripts') : path.joi
 const PYTHON = path.join(BIN, process.platform === 'win32' ? 'python.exe' : 'python');
 const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
 const EXPECTED_PYTEST_FILES = 163;
-const EXPECTED_PYTEST_TESTS = 3_188;
+const EXPECTED_PYTEST_TESTS = 3_194;
 
 const ALLOWED_SKIPS = new Map([
   [

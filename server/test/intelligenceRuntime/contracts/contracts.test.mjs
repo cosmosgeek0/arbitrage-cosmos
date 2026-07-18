@@ -216,6 +216,38 @@ test('backoff and rate-limit truth are caller supplied and bounded', () => {
   assert.equal(limited.rateBudget.retryAfterMs, 5_000);
 });
 
+test('accepted connection, message, and processing recovery clear active backoff truth', () => {
+  const clock = new ManualClock();
+  const tracker = new SourceLifecycleTracker(definition(), clock);
+  const generation = tracker.start();
+
+  tracker.backoff({ attempt: 1, delayMs: 100, retryAtMs: 1_100 });
+  assert.equal(tracker.snapshot().backoff.attempt, 1);
+  assert.equal(tracker.connected(generation), true);
+  assert.deepEqual(tracker.snapshot().backoff, {
+    attempt: 0, ceiling: 5, delayMs: null, retryAtMs: null, cooldownUntilMs: null,
+  });
+
+  tracker.backoff({ attempt: 2, delayMs: 200, retryAtMs: 1_200, cooldownUntilMs: 1_300 });
+  assert.equal(tracker.message({ generation, sourceTimeMs: 995, receiveTimeMs: 1_000 }), true);
+  assert.equal(tracker.snapshot().observedState, 'LIVE');
+  assert.deepEqual(tracker.snapshot().backoff, {
+    attempt: 0, ceiling: 5, delayMs: null, retryAtMs: null, cooldownUntilMs: null,
+  });
+
+  tracker.backoff({ attempt: 3, delayMs: 300, retryAtMs: 1_300 });
+  assert.equal(tracker.processed(generation), true);
+  const recovered = tracker.snapshot();
+  assert.equal(recovered.observedState, 'LIVE');
+  assert.deepEqual(recovered.backoff, {
+    attempt: 0, ceiling: 5, delayMs: null, retryAtMs: null, cooldownUntilMs: null,
+  });
+  assert.throws(
+    () => tracker.backoff({ attempt: 0, delayMs: 0, retryAtMs: 1_000 }),
+    /active and within the retry ceiling/,
+  );
+});
+
 test('stable serialization is independent of object access history', () => {
   const clock = new ManualClock();
   const left = new SourceLifecycleTracker(definition(), clock);

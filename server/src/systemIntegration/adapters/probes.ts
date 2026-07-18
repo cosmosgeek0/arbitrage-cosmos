@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 /**
  * Side-effect-free structural probes for production-owned component caches.
  * Ports expose reads only; no lifecycle, refresh, socket, or mutation method
@@ -43,6 +44,58 @@ import type {
   SystemTruthLabel,
 } from '../contracts/constants.js';
 import { validateSystemComponentSnapshot } from '../contracts/validation.js';
+
+const MAX_CAPTURE_DEPTH = 24;
+const MAX_CAPTURE_FIELDS = 20_000;
+
+/** Capture hostile owner data exactly once before any semantic projection. */
+function captureOwnerData<T>(value: T, name: string): Readonly<T> {
+  const copies = new Map<object, object>();
+  const visiting = new Set<object>();
+  let fields = 0;
+  const capture = (candidate: unknown, depth: number): unknown => {
+    if (depth > MAX_CAPTURE_DEPTH) throw new RangeError(`${name} exceeds the capture depth`);
+    if (candidate === null || candidate === undefined
+        || typeof candidate === 'string' || typeof candidate === 'number'
+        || typeof candidate === 'boolean') return candidate;
+    if (typeof candidate !== 'object' || utilTypes.isProxy(candidate)) {
+      throw new TypeError(`${name} must contain non-Proxy plain data only`);
+    }
+    if (visiting.has(candidate)) throw new TypeError(`${name} must not contain cycles`);
+    const prior = copies.get(candidate);
+    if (prior !== undefined) return prior;
+    const prototype = Object.getPrototypeOf(candidate);
+    const array = Array.isArray(candidate);
+    if ((array && prototype !== Array.prototype)
+        || (!array && prototype !== Object.prototype && prototype !== null)
+        || Object.getOwnPropertySymbols(candidate).length > 0) {
+      throw new TypeError(`${name} must contain ordinary string-keyed data only`);
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(candidate);
+    const keys = Object.keys(descriptors).filter((key) => !array || key !== 'length');
+    fields += keys.length;
+    if (fields > MAX_CAPTURE_FIELDS) throw new RangeError(`${name} exceeds the capture field bound`);
+    if (array && (keys.length !== candidate.length
+        || keys.some((key, index) => key !== String(index)))) {
+      throw new TypeError(`${name} arrays must be dense and contain no extra fields`);
+    }
+    const copy: Record<string, unknown> | unknown[] = array
+      ? []
+      : Object.create(prototype) as Record<string, unknown>;
+    copies.set(candidate, copy);
+    visiting.add(candidate);
+    for (const key of keys) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
+        throw new TypeError(`${name} forbids accessors and hidden fields`);
+      }
+      (copy as Record<string, unknown>)[key] = capture(descriptor.value, depth + 1);
+    }
+    visiting.delete(candidate);
+    return Object.freeze(copy);
+  };
+  return capture(value, 0) as Readonly<T>;
+}
 
 const COMPONENT = 'systemIntegration.adapters.probes';
 const MAX_OBSERVATION_ROWS = 16_384;
@@ -134,6 +187,10 @@ export interface StructuralComponentProbeReading {
   readonly lastReceiveAtMs: number | null;
   readonly lastProcessAtMs: number | null;
   readonly lastSuccessAtMs: number | null;
+  readonly processingLagMs?: number | null;
+  readonly retry?: NonNullable<SystemComponentSnapshot['retry']>;
+  readonly dataQuality?: NonNullable<SystemComponentSnapshot['dataQuality']>;
+  readonly checkpoint?: NonNullable<SystemComponentSnapshot['checkpoint']>;
   readonly queue: Readonly<SystemQueueSnapshot> | null;
   readonly lastFailure: Readonly<StructuredFailure> | null;
   readonly blockerCodes: readonly string[];
@@ -333,6 +390,57 @@ function sourceQueue(value: Readonly<SourceQueueProbeReading> | null): Readonly<
   });
 }
 
+function sourceRetry(snapshot: Readonly<RuntimeSourceSnapshot>): NonNullable<SystemComponentSnapshot['retry']> {
+  const state = snapshot.backoff.cooldownUntilMs !== null
+    ? 'COOLDOWN'
+    : snapshot.observedState === 'BACKING_OFF'
+      ? 'BACKING_OFF'
+      : snapshot.backoff.attempt > 0 && snapshot.backoff.retryAtMs !== null
+        ? 'RETRYING'
+        : 'IDLE';
+  return Object.freeze({ state, ...snapshot.backoff });
+}
+
+function sourceDataQuality(snapshot: Readonly<RuntimeSourceSnapshot>): NonNullable<SystemComponentSnapshot['dataQuality']> {
+  const degraded = snapshot.completeness !== 'COMPLETE'
+    || snapshot.invalidCount > 0
+    || snapshot.duplicateCount > 0
+    || snapshot.outOfOrderCount > 0
+    || snapshot.sequenceGapCount > 0;
+  return Object.freeze({
+    state: degraded ? 'DEGRADED' : 'GOOD',
+    invalidCount: snapshot.invalidCount,
+    duplicateCount: snapshot.duplicateCount,
+    outOfOrderCount: snapshot.outOfOrderCount,
+    sequenceGapCount: snapshot.sequenceGapCount,
+    observedAtMs: snapshot.snapshotTimeMs,
+  });
+}
+
+const UNAVAILABLE_RETRY = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  attempt: null,
+  ceiling: null,
+  delayMs: null,
+  retryAtMs: null,
+  cooldownUntilMs: null,
+});
+
+const UNAVAILABLE_DATA_QUALITY = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  invalidCount: null,
+  duplicateCount: null,
+  outOfOrderCount: null,
+  sequenceGapCount: null,
+  observedAtMs: null,
+});
+
+const UNAVAILABLE_CHECKPOINT = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  revision: null,
+  persistedAtMs: null,
+});
+
 export function probeRuntimeSource(
   input: RuntimeSourceProbeDescriptor,
 ): DialectTranslation<Readonly<RuntimeSourceProbeProjection>> {
@@ -342,7 +450,8 @@ export function probeRuntimeSource(
   }
   let reading: Readonly<RuntimeSourceProbeReading> | null;
   try {
-    reading = input.port.readRuntimeSourceProbe();
+    const ownerReading = input.port.readRuntimeSourceProbe();
+    reading = ownerReading === null ? null : captureOwnerData(ownerReading, 'runtime source probe');
   } catch {
     return reject(input, 'SOURCE_PROBE_READ_FAILED', 'Source probe read failed; owner detail remains at the source boundary.');
   }
@@ -366,6 +475,10 @@ export function probeRuntimeSource(
       lastReceiveAtMs: null,
       lastProcessAtMs: null,
       lastSuccessAtMs: null,
+      processingLagMs: null,
+      retry: UNAVAILABLE_RETRY,
+      dataQuality: UNAVAILABLE_DATA_QUALITY,
+      checkpoint: UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue: null,
       lastFailure: null,
@@ -454,6 +567,10 @@ export function probeRuntimeSource(
       lastSuccessAtMs: snapshot.observedState === 'LIVE' && effectiveAuthority !== 'UNAVAILABLE'
         ? snapshot.lastProcessedTimeMs
         : null,
+      processingLagMs: snapshot.processingLagMs,
+      retry: sourceRetry(snapshot),
+      dataQuality: sourceDataQuality(snapshot),
+      checkpoint: UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue,
       lastFailure: failureOrigin?.failure ?? null,
@@ -500,6 +617,10 @@ function unavailableComponent(input: StructuralComponentProbeDescriptor): Readon
     lastReceiveAtMs: null,
     lastProcessAtMs: null,
     lastSuccessAtMs: null,
+    processingLagMs: null,
+    retry: UNAVAILABLE_RETRY,
+    dataQuality: UNAVAILABLE_DATA_QUALITY,
+    checkpoint: UNAVAILABLE_CHECKPOINT,
     dependencies: Object.freeze([...input.dependencies]),
     queue: null,
     lastFailure: null,
@@ -517,7 +638,8 @@ export function probeSystemComponent(
 ): DialectTranslation<Readonly<SystemComponentSnapshot>> {
   let reading: Readonly<StructuralComponentProbeReading> | null;
   try {
-    reading = input.port.readComponentProbe();
+    const ownerReading = input.port.readComponentProbe();
+    reading = ownerReading === null ? null : captureOwnerData(ownerReading, 'component probe');
   } catch {
     return reject(input, 'COMPONENT_PROBE_READ_FAILED', 'Component probe read failed; owner detail remains at the component boundary.');
   }
@@ -569,6 +691,10 @@ export function probeSystemComponent(
       lastReceiveAtMs: reading.lastReceiveAtMs,
       lastProcessAtMs: reading.lastProcessAtMs,
       lastSuccessAtMs: reading.lastSuccessAtMs,
+      processingLagMs: reading.processingLagMs ?? null,
+      retry: reading.retry ?? UNAVAILABLE_RETRY,
+      dataQuality: reading.dataQuality ?? UNAVAILABLE_DATA_QUALITY,
+      checkpoint: reading.checkpoint ?? UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue: reading.queue,
       lastFailure: reading.lastFailure,

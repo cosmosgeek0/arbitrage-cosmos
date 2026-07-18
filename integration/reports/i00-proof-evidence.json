@@ -676,7 +676,7 @@
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
-            "line": 247,
+            "line": 295,
             "ruleId": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL"
           }
         ],
@@ -760,22 +760,22 @@
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 233,
+        "line": 281,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 238,
+        "line": 286,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 241,
+        "line": 289,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 247,
+        "line": 295,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3513,
+        "line": 3468,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1175,7 +1175,7 @@
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 357,
+        "line": 367,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -2756,19 +2756,19 @@
         "concept": "exchange-hand",
         "declaration": "type ExchangeUniverse",
         "file": "server/src/engine/marketData.ts",
-        "line": 2
+        "line": 5
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketPublicSourceId",
         "file": "server/src/engine/marketData.ts",
-        "line": 82
+        "line": 95
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketPublicSourceLifecycle",
         "file": "server/src/engine/marketData.ts",
-        "line": 83
+        "line": 96
       },
       {
         "concept": "semantic-source",
@@ -3356,73 +3356,79 @@
         "concept": "ledger-authority",
         "declaration": "type LedgerEvent",
         "file": "server/src/index.ts",
-        "line": 12
+        "line": 16
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type ProductionCapitalSummaryReadPort",
+        "file": "server/src/index.ts",
+        "line": 89
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 87
+        "line": 97
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 93
+        "line": 103
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 129
+        "line": 139
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 180
+        "line": 190
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 564
+        "line": 587
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 814
+        "line": 837
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1991
+        "line": 1990
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2000
+        "line": 1999
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2398
+        "line": 2353
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2410
+        "line": 2365
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2420
+        "line": 2375
       },
       {
         "concept": "semantic-source",
@@ -3698,7 +3704,7 @@
         "concept": "semantic-source",
         "declaration": "function serializeRuntimeSourceSnapshot",
         "file": "server/src/intelligenceRuntime/contracts/sourceLifecycle.ts",
-        "line": 440
+        "line": 457
       },
       {
         "concept": "semantic-source",
@@ -4256,79 +4262,133 @@
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 188
+        "line": 190
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface LedgerEventMetadataInput",
+        "file": "server/src/ledger.ts",
+        "line": 206
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 224
+        "line": 245
       },
       {
         "concept": "ledger-authority",
         "declaration": "type LedgerConfigCompareAndSetResult",
         "file": "server/src/ledger.ts",
-        "line": 230
+        "line": 251
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventRecord",
         "file": "server/src/ledger.ts",
-        "line": 241
+        "line": 262
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventPage",
         "file": "server/src/ledger.ts",
-        "line": 251
+        "line": 272
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerSchemaCompatibilityRow",
         "file": "server/src/ledger.ts",
-        "line": 260
+        "line": 281
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 266
+        "line": 287
       },
       {
         "concept": "ledger-authority",
         "declaration": "function readLegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 304
+        "line": 325
       },
       {
         "concept": "ledger-authority",
-        "declaration": "function upgradeLedgerVersion",
+        "declaration": "interface PreparedLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 486
+        "line": 655
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function prepareLedgerEventText",
+        "file": "server/src/ledger.ts",
+        "line": 681
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function prepareLedgerEventCreatedAt",
+        "file": "server/src/ledger.ts",
+        "line": 711
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function prepareLedgerEventMetadata",
+        "file": "server/src/ledger.ts",
+        "line": 722
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function snapshotLedgerEventMetadata",
+        "file": "server/src/ledger.ts",
+        "line": 737
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PreparedLedgerEventData",
+        "file": "server/src/ledger.ts",
+        "line": 752
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function prepareLedgerEventData",
+        "file": "server/src/ledger.ts",
+        "line": 757
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface StoredLedgerEventMetadata",
+        "file": "server/src/ledger.ts",
+        "line": 768
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function prepareStoredLedgerEventMetadata",
+        "file": "server/src/ledger.ts",
+        "line": 779
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerOptions",
         "file": "server/src/ledger.ts",
-        "line": 791
+        "line": 1564
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 796
+        "line": 1569
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 4037
+        "line": 4893
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 4043
+        "line": 4899
       },
       {
         "concept": "semantic-source",
@@ -6044,7 +6104,7 @@
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 1128
+        "line": 1168
       },
       {
         "concept": "control-authority",
@@ -6200,7 +6260,7 @@
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 623
+        "line": 644
       },
       {
         "concept": "control-authority",
@@ -6440,55 +6500,55 @@
         "concept": "semantic-source",
         "declaration": "type SourcedTimestamp",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 18
+        "line": 19
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceQueueProbeReading",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 51
+        "line": 104
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceObservationProbeReading",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 87
+        "line": 140
       },
       {
         "concept": "semantic-source",
         "declaration": "interface RuntimeSourceProbeReading",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 96
+        "line": 149
       },
       {
         "concept": "semantic-source",
         "declaration": "interface RuntimeSourceProbePort",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 102
+        "line": 155
       },
       {
         "concept": "semantic-source",
         "declaration": "interface RuntimeSourceProbeDescriptor",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 106
+        "line": 159
       },
       {
         "concept": "semantic-source",
         "declaration": "interface RuntimeSourceProbeProjection",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 119
+        "line": 172
       },
       {
         "concept": "semantic-source",
         "declaration": "function phaseForSource",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 203
+        "line": 260
       },
       {
         "concept": "semantic-source",
         "declaration": "function probeRuntimeSource",
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 336
+        "line": 444
       },
       {
         "concept": "semantic-source",
@@ -6572,13 +6632,13 @@
         "concept": "ledger-authority",
         "declaration": "type ProjectedLedgerSchemaCompatibility",
         "file": "server/src/systemIntegration/application/projection.ts",
-        "line": 513
+        "line": 514
       },
       {
         "concept": "ledger-authority",
         "declaration": "function projectLedgerSchemaCompatibility",
         "file": "server/src/systemIntegration/application/projection.ts",
-        "line": 518
+        "line": 519
       },
       {
         "concept": "control-authority",
@@ -6686,85 +6746,85 @@
         "concept": "control-authority",
         "declaration": "interface SystemControlState",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 227
+        "line": 271
       },
       {
         "concept": "control-authority",
         "declaration": "type SystemControlMutation",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 253
+        "line": 297
       },
       {
         "concept": "control-authority",
         "declaration": "interface SystemControlMutationRequest",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 285
+        "line": 329
       },
       {
         "concept": "control-authority",
         "declaration": "interface SystemControlMutationReceipt",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 294
+        "line": 338
       },
       {
         "concept": "control-authority",
         "declaration": "type SystemControlMutationResult",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 302
+        "line": 346
       },
       {
         "concept": "control-authority",
         "declaration": "interface SystemSupervisorSnapshot",
         "file": "server/src/systemIntegration/contracts/types.ts",
-        "line": 331
+        "line": 375
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourcedTimestamp",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 14
+        "line": 15
       },
       {
         "concept": "control-authority",
         "declaration": "type SystemControlCommand",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 35
+        "line": 36
       },
       {
         "concept": "semantic-source",
         "declaration": "function freshnessMatchesSource",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 165
+        "line": 166
       },
       {
         "concept": "control-authority",
         "declaration": "function isSystemControlCommand",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 196
+        "line": 197
       },
       {
         "concept": "semantic-source",
         "declaration": "function validateSystemSourceRegistryRecord",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 252
+        "line": 253
       },
       {
         "concept": "semantic-source",
         "declaration": "function validateSystemSourceRegistrySnapshot",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 297
+        "line": 298
       },
       {
         "concept": "semantic-source",
         "declaration": "function createSystemSourceRegistrySnapshot",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 318
+        "line": 319
       },
       {
         "concept": "control-authority",
         "declaration": "function validateSystemControlMutationRequest",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 437
+        "line": 567
       },
       {
         "concept": "control-authority",
@@ -7496,43 +7556,67 @@
         "concept": "semantic-source",
         "declaration": "type SourcedTimestamp",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 4
+        "line": 5
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 21
+        "line": 22
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceSlice",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 22
+        "line": 23
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceState",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 23
+        "line": 24
       },
       {
         "concept": "semantic-source",
         "declaration": "type PublicSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 75
+        "line": 78
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceProjectionEvidence",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 92
+        "line": 95
       },
       {
         "concept": "semantic-source",
         "declaration": "interface IntelligenceSourceCut",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 106
+        "line": 109
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type CapitalSummaryReadResult",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 280
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface CapitalReadGuard",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 285
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function safeCapitalSummary",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 290
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function unavailableCapitalRestartSummary",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 397
       },
       {
         "concept": "semantic-source",
@@ -7571,6 +7655,30 @@
         "line": 31
       },
       {
+        "concept": "capital-authority",
+        "declaration": "interface ProductionCapitalRestartSummaryCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 107
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface ProductionCapitalUnavailableSummaryCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 125
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type ProductionCapitalSummaryCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 131
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface ProductionCapitalSummaryReadPort",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 139
+      },
+      {
         "concept": "control-authority",
         "declaration": "type ParsedControlBody",
         "file": "server/src/systemIntegration/routes/validation.ts",
@@ -7592,13 +7700,13 @@
         "concept": "ledger-authority",
         "declaration": "function projectLedgerCapabilityTruth",
         "file": "server/src/systemIntegration/supervisor/projection.ts",
-        "line": 435
+        "line": 437
       },
       {
         "concept": "control-authority",
         "declaration": "function buildSystemSupervisorProjection",
         "file": "server/src/systemIntegration/supervisor/projection.ts",
-        "line": 568
+        "line": 570
       },
       {
         "concept": "control-authority",
@@ -7616,37 +7724,37 @@
         "concept": "capital-authority",
         "declaration": "interface SystemCapitalSummary",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 96
+        "line": 97
       },
       {
         "concept": "risk-authority",
         "declaration": "interface SystemRiskSummary",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 110
+        "line": 112
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface SystemLedgerSummary",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 153
+        "line": 155
       },
       {
         "concept": "control-authority",
         "declaration": "interface SystemSupervisorSummaries",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 167
+        "line": 169
       },
       {
         "concept": "control-authority",
         "declaration": "interface SystemSupervisorProjectionInput",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 212
+        "line": 214
       },
       {
         "concept": "control-authority",
         "declaration": "type SystemSupervisorReadModel",
         "file": "server/src/systemIntegration/supervisor/types.ts",
-        "line": 226
+        "line": 228
       },
       {
         "concept": "risk-authority",
@@ -7783,7 +7891,7 @@
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 3,
+        "line": 9,
         "target": "../ledger.js"
       },
       {
@@ -7793,17 +7901,17 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 12,
+        "line": 16,
         "target": "./ledger.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 94,
+        "line": 104,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 114,
+        "line": 124,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -7943,7 +8051,7 @@
       },
       {
         "file": "server/src/systemIntegration/adapters/probes.ts",
-        "line": 23,
+        "line": 24,
         "target": "../../intelligenceRuntime/contracts/index.js"
       },
       {
@@ -8013,17 +8121,17 @@
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 27,
+        "line": 28,
         "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 31,
+        "line": 32,
         "target": "../../intelligenceRuntime/universe/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 34,
+        "line": 35,
         "target": "../../foundation/control/index.js"
       },
       {
@@ -14642,5 +14750,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "589adeee3dfee7bea867c189b5069dd98512c0afa5e449ee4988d3cdc9dec775"
+  "evidenceSha256": "a7ff84344157bed8f8ab29e23428710b663c000f5f1ea246d3537820146505fa"
 }

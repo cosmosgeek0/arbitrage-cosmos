@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -334,6 +334,12 @@ test('legacy database files migrate in place and preserve prior durable rows', (
     INSERT INTO config (key, value) VALUES ('legacy.config', 'preserved');
   `);
   legacy.close();
+  writeFileSync(path.join(dataDir, 'journal-compat.json'), `${JSON.stringify({
+    dataSchema: 1,
+    rollbackFloor: 0,
+    updatedAtUtc: '2026-07-13T00:00:00Z',
+    updatedBy: 'product-persistence-test',
+  })}\n`);
 
   const migrated = new Ledger(dataDir);
   try {

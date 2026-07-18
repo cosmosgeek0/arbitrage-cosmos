@@ -11,6 +11,7 @@ import { PillSelect } from '../components/PillSelect';
 import { normalizeTvCandles, type TvCandle } from '../components/TradingViewChart';
 import { TradingViewWidget } from '../components/TradingViewWidget';
 import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
+import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { IconClose, IconMaximize } from '../components/Icons';
@@ -119,11 +120,10 @@ interface FuturesTelemetry {
   takerFlow: FuturesTakerFlowPoint[];
 }
 
-interface TimedCache<T> { value: T; updatedAt: number }
-
-const tokenCandleCache = new Map<string, TimedCache<TvCandle[]>>();
-const moneyFlowCache = new Map<string, TimedCache<MoneyFlow>>();
-const positioningCache = new Map<string, TimedCache<FuturesTelemetry>>();
+const TOKEN_DATA_CACHE_TTL_MS = 5 * 60_000;
+const tokenCandleCache = new BoundedTtlCache<string, TvCandle[]>({ maxEntries: 64, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
+const moneyFlowCache = new BoundedTtlCache<string, MoneyFlow>({ maxEntries: 32, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
+const positioningCache = new BoundedTtlCache<string, FuturesTelemetry>({ maxEntries: 32, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
 
 function nonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -336,14 +336,14 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
 
   useEffect(() => {
     const key = `${symbol}:${win}`;
-    setFlow(moneyFlowCache.get(key)?.value ?? null);
+    setFlow(moneyFlowCache.get(key) ?? null);
     setFlowError(null);
     const poll = createSettledPoll<MoneyFlow>({
       intervalMs: 60_000,
       request: (signal) => fetchJson(`/api/token/moneyflow?symbol=${symbol}&window=${win}`, { signal }),
       onSuccess: (next) => {
         if (!validMoneyFlow(next, symbol)) throw new Error('Money-flow payload is invalid');
-        moneyFlowCache.set(key, { value: next, updatedAt: Date.now() });
+        moneyFlowCache.set(key, next);
         setFlow(next);
         setFlowError(null);
       },
@@ -545,7 +545,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
       return;
     }
     const key = `${symbol}:${period}`;
-    setTelemetry(positioningCache.get(key)?.value ?? null);
+    setTelemetry(positioningCache.get(key) ?? null);
     setTelemetryError(null);
     const poll = createSettledPoll<FuturesTelemetry>({
       intervalMs: 60_000,
@@ -558,7 +558,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
           !Array.isArray(next.takerFlow) ||
           !validTelemetry(next, symbol)
         ) throw new Error('Positioning payload is invalid');
-        positioningCache.set(key, { value: next, updatedAt: Date.now() });
+        positioningCache.set(key, next);
         setTelemetry(next);
         setTelemetryError(null);
       },
@@ -806,9 +806,8 @@ interface IntelDataset {
   liqSince: number | null;
 }
 
-const intelCache = new Map<string, TimedCache<IntelDataset>>();
+const intelCache = new BoundedTtlCache<string, IntelDataset>({ maxEntries: 64, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
 const intelInflight = new Map<string, Promise<IntelDataset>>();
-const INTEL_CACHE_MS = 5 * 60_000;
 
 const intelKey = (symbol: string, tab: IntelTab, opt: string, hasPerp: boolean) =>
   `${symbol}:${hasPerp ? 'perp' : 'spot'}:${tab}:${opt}`;
@@ -880,18 +879,18 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
 function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, force = false, signal?: AbortSignal): Promise<IntelDataset> {
   const key = intelKey(symbol, tab, opt, hasPerp);
   const cached = intelCache.get(key);
-  if (!force && cached && Date.now() - cached.updatedAt < INTEL_CACHE_MS) return Promise.resolve(cached.value);
+  if (!force && cached) return Promise.resolve(cached);
   const pending = intelInflight.get(key);
-  // Only unowned warm-up requests are shared. A request carrying a component
+  // Only requests without a component owner are shared. A request carrying a
   // AbortSignal belongs to that poll generation and must never be reused by a
   // later tab/symbol generation after its owner aborts.
   if (!signal && pending) return pending;
   const request = fetchIntelDataset(symbol, tab, opt, hasPerp, signal)
     .then((value) => {
-      // An upstream warm-up failure must not become a five-minute blank chart.
+      // An upstream empty response must not become a five-minute blank chart.
       // Liquidations are the exception: an empty live bucket is valid data.
       if (value.points.length > 0 || tab === 'liq') {
-        intelCache.set(key, { value, updatedAt: Date.now() });
+        intelCache.set(key, value);
       }
       return value;
     })
@@ -921,7 +920,7 @@ const INTEL_TITLE: Record<IntelTab, string> = {
 
 function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
   const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
-  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp))?.value;
+  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp));
   const [tab, setTab] = useState<IntelTab>(initialTab);
   const [opt, setOpt] = useState(INTEL_DEFAULT[initialTab]);
   const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null });
@@ -933,11 +932,6 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
   const [chartBox, setChartBox] = useState({ width: 1160, height: 380 });
 
   useEffect(() => {
-    const tabs: IntelTab[] = hasPerp ? ['funding', 'oi', 'volume', 'liq', 'basis'] : ['volume'];
-    for (const next of tabs) void requestIntelDataset(symbol, next, INTEL_DEFAULT[next], hasPerp).catch(() => undefined);
-  }, [hasPerp, symbol]);
-
-  useEffect(() => {
     if (!hasPerp && tab !== 'volume') {
       setTab('volume');
       setOpt(INTEL_DEFAULT.volume);
@@ -946,7 +940,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
 
   useEffect(() => {
     const key = intelKey(symbol, tab, opt, hasPerp);
-    const cached = intelCache.get(key)?.value;
+    const cached = intelCache.get(key);
     if (cached) {
       setDataset(cached);
       setLoading(false);
@@ -995,7 +989,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
 
   const switchTab = (next: IntelTab) => {
     const nextOpt = INTEL_DEFAULT[next];
-    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp))?.value;
+    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp));
     if (cached) {
       setDataset(cached);
       setLoading(false);
@@ -1639,7 +1633,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   useEffect(() => {
     const { interval, limit } = effective;
     const cacheKey = `${symbol}:${src}:${interval}:${limit}`;
-    setCandles(tokenCandleCache.get(cacheKey)?.value ?? []);
+    setCandles(tokenCandleCache.get(cacheKey) ?? []);
     setCandleError(null);
     // The same-origin public-source owner hydrates and periodically reconciles
     // history. The browser never opens a second exchange transport.
@@ -1652,7 +1646,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           setCandleError('Candle source returned no usable rows.');
           return;
         }
-        tokenCandleCache.set(cacheKey, { value: next, updatedAt: Date.now() });
+        tokenCandleCache.set(cacheKey, next);
         setCandles(next);
         setCandleError(null);
       },

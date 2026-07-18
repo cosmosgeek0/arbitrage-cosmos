@@ -1232,6 +1232,13 @@ function TokenEvidenceWorkspace({
   borrowTruth: BorrowTruthState;
 }) {
   const thesis = intelligence?.bridge.thesis ?? null;
+  const usableThesisAtCut = thesis?.freshness === 'FRESH'
+    && thesis.completeness === 'COMPLETE'
+    ? thesis
+    : null;
+  const thesisCutState = thesis === null
+    ? 'MISSING'
+    : `${thesis.freshness === 'MISSING' ? 'MISSING' : `${thesis.freshness}_AT_CUT`} · ${thesis.completeness}`;
   const capabilities = new Map(
     (intelligence?.routing.capabilities ?? []).map((capability) => [capability.capability, capability]),
   );
@@ -1281,14 +1288,18 @@ function TokenEvidenceWorkspace({
 
       <div className="tkx-owner-thesis">
         <article>
-          <span>Changed First</span>
-          <strong>{thesis?.changedFirst ?? 'UNKNOWN'}</strong>
-          <small>Lead market {thesis?.leadMarket ?? 'UNKNOWN'}{thesis?.changedAtMs ? ` · ${timeAgo(thesis.changedAtMs)}` : ''}</small>
+          <span>Changed First · Latest At Cut</span>
+          <strong>{usableThesisAtCut?.changedFirst ?? 'UNKNOWN'}</strong>
+          <small>{usableThesisAtCut
+            ? `Latest owner thesis ${thesisCutState} · Lead market ${usableThesisAtCut.leadMarket} · cut ${timeAgo(usableThesisAtCut.evaluatedAtMs)}`
+            : `Latest owner thesis ${thesisCutState} · value withheld`}</small>
         </article>
         <article>
-          <span>Hypothesis</span>
-          <strong>{thesis?.hypothesis ?? 'UNKNOWN'}</strong>
-          <small>Stage {thesis?.stage ?? 'UNKNOWN'}</small>
+          <span>Hypothesis · Latest At Cut</span>
+          <strong>{usableThesisAtCut?.hypothesis ?? 'UNKNOWN'}</strong>
+          <small>{usableThesisAtCut
+            ? `Stage ${usableThesisAtCut.stage} · ${thesisCutState} · cut ${timeAgo(usableThesisAtCut.evaluatedAtMs)}`
+            : `Stage withheld · ${thesisCutState}`}</small>
         </article>
         <article>
           <span>Confidence</span>

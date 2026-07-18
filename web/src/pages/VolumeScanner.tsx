@@ -13,6 +13,13 @@ import { TokenIcon } from '../components/TokenIcon';
 import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
+import {
+  parseTokenIntelligence,
+  type TokenIntelligenceRead,
+} from '../lib/tokenIntelligence';
+import {
+  projectVolumeWorkspaceTruth,
+} from '../lib/volumeWorkspaceTruth';
 import { useStore } from '../store';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import './VolumeScanner.css';
@@ -151,6 +158,14 @@ function ratioLabel(value: number | null): string {
   return value === null ? '—' : Math.round(value * 100) + '% Buy';
 }
 
+function fundingLabel(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? (value * 100).toFixed(4) + '%' : '—';
+}
+
+function countLabel(value: number | null | undefined): string | number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : '—';
+}
+
 export function VolumeScanner() {
   const { state, openDetail, openLedger, toggleWatch } = useStore();
   const [snapshot, setSnapshot] = useState<VolumeSnapshot | null>(null);
@@ -158,6 +173,8 @@ export function VolumeScanner() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [expandedIntelligence, setExpandedIntelligence] = useState<TokenIntelligenceRead | null>(null);
+  const [expandedIntelligenceError, setExpandedIntelligenceError] = useState<string | null>(null);
 
   useEffect(() => {
     const poll = createSettledPoll<VolumeSnapshot>({
@@ -172,6 +189,36 @@ export function VolumeScanner() {
     poll.start();
     return poll.stop;
   }, []);
+
+  useEffect(() => {
+    setExpandedIntelligence(null);
+    setExpandedIntelligenceError(null);
+    if (expanded === null) return;
+    const symbol = expanded;
+    const poll = createSettledPoll<TokenIntelligenceRead>({
+      intervalMs: 2_000,
+      request: async (signal) => {
+        const raw = await fetchJson<unknown>(`/api/intelligence/token?symbol=${encodeURIComponent(symbol)}`, {
+          cache: 'no-store',
+          signal,
+        });
+        const parsed = parseTokenIntelligence(raw, symbol, Date.now());
+        if (parsed === null) throw new Error('Volume intelligence owner contract mismatch');
+        return parsed;
+      },
+      onSuccess: (next) => {
+        if (next.symbol !== symbol) return;
+        setExpandedIntelligence(next);
+        setExpandedIntelligenceError(null);
+      },
+      onError: (reason) => {
+        setExpandedIntelligence(null);
+        setExpandedIntelligenceError(apiErrorMessage(reason, 'Exact-symbol intelligence unavailable'));
+      },
+    });
+    poll.start();
+    return poll.stop;
+  }, [expanded]);
 
   const rows = snapshot?.rows ?? [];
   const query = search.trim().toUpperCase();
@@ -192,7 +239,7 @@ export function VolumeScanner() {
     return true;
   }), [filter, query, rows]);
 
-  const liveFeed = !error && snapshot?.status.streamState === 'open' && snapshot.status.bookState === 'fresh';
+  const engineFeedsCurrent = !error && snapshot?.status.streamState === 'open' && snapshot.status.bookState === 'fresh';
   const watchlist = state?.config.watchlist ?? [];
 
   return (
@@ -202,9 +249,9 @@ export function VolumeScanner() {
           <div className="volx-title">
             <img className="volx-page-mark" src="/volume-bars.png" alt="" aria-hidden="true" />
             <h1>Volume</h1>
-            <span className={'volx-live ' + (liveFeed ? 'active' : error ? 'degraded' : 'starting')}>
+            <span className={'volx-live ' + (engineFeedsCurrent ? 'active' : error ? 'degraded' : 'starting')}>
               <i aria-hidden="true" />
-              {liveFeed ? 'Live' : error ? 'Unavailable' : 'Starting'}
+              {engineFeedsCurrent ? 'Engine Feeds Current' : error ? 'Engine Feeds Unavailable' : 'Engine Feeds Starting'}
             </span>
             <span className="volx-updated">
               {snapshot ? 'Updated ' + timeAgo(snapshot.updatedAt) : 'Connecting'}
@@ -310,6 +357,10 @@ export function VolumeScanner() {
             const minute = row.windows['60s'];
             const isExpanded = expanded === row.symbol;
             const watching = watchlist.includes(row.symbol);
+            const ownerTruth = projectVolumeWorkspaceTruth(
+              expandedIntelligence?.symbol === row.symbol ? expandedIntelligence : null,
+              row.symbol,
+            );
             return (
               <div className="volx-item" role="rowgroup" key={row.symbol}>
                 <button
@@ -336,7 +387,7 @@ export function VolumeScanner() {
                     <span><em>1m</em><strong>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
                   </span>
                   <span className="volx-tape" role="cell">
-                    <strong>{five?.tradeCount ?? 0} Trades</strong>
+                    <strong>{countLabel(five?.tradeCount)} Trades</strong>
                     <small>{ratioLabel(row.takerBuyRatio)} · {fmtMoney(five?.avgTradeSize ?? null)} Avg</small>
                   </span>
                   <span className="volx-quality" role="cell">
@@ -364,11 +415,11 @@ export function VolumeScanner() {
                     <dl className="volx-facts">
                       <div><dt>Baseline</dt><dd>{row.baseline.samples}/{snapshot.thresholds.baselineMinutes} min</dd></div>
                       <div><dt>Normal Volume</dt><dd>{fmtMoney(row.baseline.quotePerMinMedian)}/min</dd></div>
-                      <div><dt>1s Trades</dt><dd>{one?.tradeCount ?? 0}</dd></div>
+                      <div><dt>1s Trades</dt><dd>{countLabel(one?.tradeCount)}</dd></div>
                       <div><dt>5s Trade Multiple</dt><dd>{multiple(row.tradeCountMultiple['5s'])}</dd></div>
                       <div><dt>Average Trade</dt><dd>{fmtMoney(five?.avgTradeSize ?? null)}</dd></div>
                       <div><dt>Taker Aggression</dt><dd>{ratioLabel(row.takerBuyRatio)}</dd></div>
-                      <div><dt>Large Trades · 1m</dt><dd>{minute?.largeTradeCount ?? 0}</dd></div>
+                      <div><dt>Large Trades · 1m</dt><dd>{countLabel(minute?.largeTradeCount)}</dd></div>
                       <div><dt>Depth Score</dt><dd>{numberOrDash(row.depthScore, 2)}</dd></div>
                       <div><dt>Depth Vs Norm</dt><dd>{row.depthVsNorm === null ? '—' : Math.round(row.depthVsNorm * 100) + '%'}</dd></div>
                       <div><dt>Focus Reason</dt><dd>{row.focusReason ? titleCase(row.focusReason) : 'Not Focused'}</dd></div>
@@ -382,6 +433,87 @@ export function VolumeScanner() {
                       </button>
                       <button type="button" onClick={() => openLedger(row.symbol)}><BookOpen size={14} />Open Logs</button>
                     </div>
+                    <section className="volx-owner-evidence" aria-label={`${row.symbol} Volume Intelligence Evidence`}>
+                      <header>
+                        <span><strong>Canonical Intelligence Evidence</strong><small>Exact symbol · MarketEngine → router → Bridge</small></span>
+                        <em className={ownerTruth?.projectionState === 'ACTIVE' ? 'fresh' : ownerTruth ? 'degraded' : 'missing'}>
+                          {ownerTruth?.projectionState ?? (expandedIntelligenceError ? 'UNAVAILABLE' : 'READING')}
+                        </em>
+                      </header>
+                      {ownerTruth ? (
+                        <>
+                          <div className="volx-owner-grid">
+                            <article>
+                              <span>Latest Owner Thesis · Stage</span>
+                              <strong>{ownerTruth.stage.marketStage ?? 'UNKNOWN'}</strong>
+                              <small>{ownerTruth.stage.freshness === 'MISSING' ? 'MISSING' : ownerTruth.stage.freshness + '_AT_CUT'} · {ownerTruth.stage.completeness} · {ownerTruth.stage.hypothesis ?? 'stage withheld'} · {ownerTruth.stage.evaluatedAtMs === null ? 'cut unknown' : timeAgo(ownerTruth.stage.evaluatedAtMs)}</small>
+                            </article>
+                            <article>
+                              <span>Cross-market Capability</span>
+                              <strong>{ownerTruth.leadership.leadMarket}</strong>
+                              <small>{ownerTruth.leadership.freshness} · {ownerTruth.leadership.completeness} · {ownerTruth.leadership.lastEvidenceTimeMs === null ? 'source time missing' : timeAgo(ownerTruth.leadership.lastEvidenceTimeMs)}</small>
+                            </article>
+                            <article>
+                              <span>Latest Owner Thesis Lead</span>
+                              <strong>{ownerTruth.stage.leadMarket}</strong>
+                              <small>{ownerTruth.stage.freshness === 'MISSING' ? 'MISSING' : ownerTruth.stage.freshness + '_AT_CUT'} · {ownerTruth.stage.completeness} · {ownerTruth.stage.evaluatedAtMs === null ? 'cut unknown' : timeAgo(ownerTruth.stage.evaluatedAtMs)}</small>
+                            </article>
+                            <article>
+                              <span>Open Interest</span>
+                              <strong>{fmtMoney(ownerTruth.openInterest.value?.quoteUsd)}</strong>
+                              <small>{ownerTruth.openInterest.state} · {ownerTruth.openInterest.value?.changePct === null || ownerTruth.openInterest.value?.changePct === undefined ? 'change unknown' : fmtPct(ownerTruth.openInterest.value.changePct, 2)}</small>
+                            </article>
+                            <article>
+                              <span>Funding</span>
+                              <strong>{fundingLabel(ownerTruth.markFunding.value?.fundingRate)}</strong>
+                              <small>{ownerTruth.markFunding.state} · {ownerTruth.markFunding.dataset}</small>
+                            </article>
+                            <article>
+                              <span>Sampled Liquidations · 15m</span>
+                              <strong>{fmtMoney(ownerTruth.liquidation.value?.total15mUsd)}</strong>
+                              <small>{ownerTruth.liquidation.state} · latest-per-symbol lower bound</small>
+                            </article>
+                            <article>
+                              <span>Wash-Like Churn Score</span>
+                              <strong>{numberOrDash(row.washScore, 2)}</strong>
+                              <small>Scanner owner heuristic · not Bridge forensics or an empirical outcome</small>
+                            </article>
+                            <article>
+                              <span>Latest Owner Forensics</span>
+                              <strong>{ownerTruth.forensics
+                                ? (ownerTruth.forensics.freshness === 'MISSING' ? 'MISSING' : ownerTruth.forensics.freshness + '_AT_CUT') + ' · ' + ownerTruth.forensics.state
+                                : 'UNAVAILABLE'}</strong>
+                              <small>{ownerTruth.forensics
+                                ? ownerTruth.forensics.checkCount + ' checks · ' + ownerTruth.forensics.blockingCheckCount + ' blocking · ' + ownerTruth.forensics.unknownRequiredCheckCount + ' unknown required'
+                                : 'No current exact-symbol Bridge artifact'}</small>
+                            </article>
+                            <article>
+                              <span>Retained Evidence Timeline</span>
+                              <strong>{ownerTruth.retainedEvidence.count} records</strong>
+                              <small>{ownerTruth.retainedEvidence.state} · history count is not outcome truth</small>
+                            </article>
+                            <article>
+                              <span>Production Outcomes</span>
+                              <strong>{ownerTruth.outcomeOwner.state}</strong>
+                              <small>Pre-move freeze and empirical false-positive outcome owner not mounted</small>
+                            </article>
+                          </div>
+                          <div className="volx-capabilities" aria-label={`${row.symbol} Intelligence Capabilities`}>
+                            {ownerTruth.capabilities.map((entry) => (
+                              <span key={entry.capability}>
+                                <strong>{titleCase(entry.capability)}</strong>
+                                <em className={entry.freshness.toLowerCase()}>{entry.freshness}</em>
+                                <small>{entry.completeness} · {entry.sourceIds.length ? entry.sourceIds.join(', ') : entry.reasonCodes.join(', ') || 'NO APPROVED SOURCE'}</small>
+                              </span>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="volx-owner-unavailable">
+                          {expandedIntelligenceError ?? 'Reading the exact-symbol owner contract. No evidence value is inferred while it is unavailable.'}
+                        </p>
+                      )}
+                    </section>
                   </div>
                 ) : null}
               </div>

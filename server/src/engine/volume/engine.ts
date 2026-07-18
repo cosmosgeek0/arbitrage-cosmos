@@ -25,6 +25,13 @@ import type {
   VolumeProposalRiskCut,
   WakeupSnapshot,
 } from './types.js';
+import {
+  OBSERVED_ORDER_FOCUS_MAX_AGE_MS,
+  inspectObservedOrderFocusSnapshot,
+  observedOrderFocusFingerprint,
+  type ObservedOrderFocusApplyResult,
+  type ObservedOrderFocusSnapshot,
+} from './observedOrderFocus.js';
 import type { SeedMinute } from './rolling.js';
 import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol, positive, validSymbolMeta } from './validation.js';
 
@@ -206,6 +213,133 @@ export class VolumeEngine {
     }
   }
 
+  /**
+   * Consume only a pure owner projection. No route, client, credential,
+   * refresh, or exchange capability crosses this boundary.
+   */
+  applyObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    const inspection = inspectObservedOrderFocusSnapshot(snapshot);
+    if (inspection.snapshot === null) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, inspection.reasonCodes);
+    }
+    const safe = inspection.snapshot;
+
+    const now = this.clock.now();
+    if (safe.state === 'UNAVAILABLE') {
+      const expired = this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback(
+        expired ? 'UNAVAILABLE_EXPIRED' : 'UNAVAILABLE_RETAINED',
+        false,
+        safe.reasonCodes,
+      );
+    }
+    if (safe.validUntilMs === null || safe.openSymbols === null || now > safe.validUntilMs) {
+      this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback('REJECTED_EXPIRED', false, ['OBSERVED_ORDER_FOCUS_CUT_EXPIRED']);
+    }
+    if ((safe.observedAtMs as number) > now + 5_000
+      || safe.validUntilMs - (safe.observedAtMs as number) > OBSERVED_ORDER_FOCUS_MAX_AGE_MS) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_TIME_INVALID']);
+    }
+
+    const cut = this.focusMgr.applyObservedOpenOrderCut(
+      safe.openSymbols,
+      safe.observedAtMs as number,
+      safe.validUntilMs,
+      observedOrderFocusFingerprint(safe),
+    );
+    if (cut.status === 'REJECTED_NON_MONOTONIC' || cut.status === 'REJECTED_CONFLICT') {
+      return this.observedOrderFocusReadback(cut.status, false, [
+        cut.status === 'REJECTED_NON_MONOTONIC'
+          ? 'OBSERVED_ORDER_FOCUS_CUT_NON_MONOTONIC'
+          : 'OBSERVED_ORDER_FOCUS_CUT_CONFLICT',
+      ]);
+    }
+
+    this.promoteObservedOpenOrderSymbols(safe.openSymbols, now);
+    return this.observedOrderFocusReadback(cut.status, true, []);
+  }
+
+  /**
+   * Install the sole Ledger checkpoint during startup or CAS reconciliation.
+   * Expired checkpoints restore only the monotonic high-water mark and never
+   * resurrect protection.
+   */
+  restoreObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    const inspection = inspectObservedOrderFocusSnapshot(snapshot);
+    if (inspection.snapshot === null) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, inspection.reasonCodes);
+    }
+    const safe = inspection.snapshot;
+    if (safe.state !== 'AVAILABLE' || safe.observedAtMs === null
+        || safe.validUntilMs === null || safe.openSymbols === null) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CUT_INVALID'],
+      );
+    }
+
+    const now = this.clock.now();
+    if (safe.observedAtMs > now + 5_000) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CLOCK_CONFLICT'],
+      );
+    }
+    const cut = this.focusMgr.restoreObservedOpenOrderCut(
+      safe.openSymbols,
+      safe.observedAtMs,
+      safe.validUntilMs,
+      observedOrderFocusFingerprint(safe),
+    );
+    if (cut.status === 'REJECTED_NON_MONOTONIC') {
+      return this.observedOrderFocusReadback(
+        cut.status, false, ['OBSERVED_ORDER_FOCUS_MEMORY_NEWER_THAN_DURABLE'],
+      );
+    }
+    if (now > safe.validUntilMs) {
+      this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback(
+        'REJECTED_EXPIRED', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CUT_EXPIRED'],
+      );
+    }
+    this.promoteObservedOpenOrderSymbols(safe.openSymbols, now);
+    return this.observedOrderFocusReadback(cut.status, true, []);
+  }
+
+  private promoteObservedOpenOrderSymbols(symbols: readonly string[], now: number): void {
+    for (const symbol of symbols) {
+      if (!this.universeMap.get(symbol)?.eligible || !this.features.observe(symbol)) continue;
+      if (!this.focusMgr.isFocused(symbol)) {
+        this.focusMgr.promote(symbol, 'open_order', 0, this.correlationFor(symbol), now);
+      }
+    }
+  }
+
+  /** Passive result projection used when durable admission fails pre-mutation. */
+  observedOrderFocusReadback(
+    status: ObservedOrderFocusApplyResult['status'],
+    applied: boolean,
+    reasonCodes: readonly string[],
+  ): Readonly<ObservedOrderFocusApplyResult> {
+    const open = this.focusMgr.observedOpenOrderSymbols();
+    const focused: string[] = [];
+    const unfocused: string[] = [];
+    const untracked: string[] = [];
+    for (const symbol of open) {
+      if (!this.universeMap.get(symbol)?.eligible) untracked.push(symbol);
+      else if (this.focusMgr.isFocused(symbol)) focused.push(symbol);
+      else unfocused.push(symbol);
+    }
+    return Object.freeze({
+      status,
+      applied,
+      focusedOpenSymbols: Object.freeze(focused),
+      unfocusedOpenSymbols: Object.freeze(unfocused),
+      untrackedOpenSymbols: Object.freeze(untracked),
+      reasonCodes: Object.freeze([...new Set(reasonCodes)].sort((left, right) =>
+        left < right ? -1 : left > right ? 1 : 0)),
+    });
+  }
+
   setUniverse(metas: SymbolMeta[]): void {
     const next = new Map<string, SymbolMeta>();
     for (const m of metas.slice(0, MAX_ENGINE_SYMBOLS * 2)) {
@@ -228,6 +362,12 @@ export class VolumeEngine {
     }
     this.decisionsRing = this.decisionsRing.filter((decision) => eligible.has(decision.symbol));
     this.universeMap = next;
+
+    for (const symbol of this.focusMgr.observedOpenOrderSymbols()) {
+      if (eligible.has(symbol) && !this.focusMgr.isFocused(symbol)) {
+        this.focusMgr.promote(symbol, 'open_order', 0, this.correlationFor(symbol), this.clock.now());
+      }
+    }
 
     if (nextKey === this.universeKey) return;
     this.universeKey = nextKey;

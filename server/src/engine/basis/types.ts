@@ -56,6 +56,83 @@ export type BasisDirection = Extract<
   'long_spot_short_perp' | 'short_spot_long_perp'
 >;
 
+export type BasisCausalMarket = 'SPOT' | 'PERPETUAL' | 'UNKNOWN';
+export type BasisGapTrend = 'RISING' | 'FALLING' | 'UNKNOWN';
+export type BasisGapCausalQuadrant =
+  | 'RISING_SPOT_LED'
+  | 'RISING_PERPETUAL_LED'
+  | 'FALLING_SPOT_LED'
+  | 'FALLING_PERPETUAL_LED'
+  | 'UNKNOWN';
+
+/**
+ * Causal classification of one executable-gap move. UNKNOWN is structural:
+ * it is retained for missing/tied/reversed/stale evidence rather than
+ * guessing from the latest pair of prices.
+ */
+export interface BasisGapCausality {
+  quadrant: BasisGapCausalQuadrant;
+  trend: BasisGapTrend;
+  initiatingMarket: BasisCausalMarket;
+  initiatingSourceTs: number | null;
+  initiatingSourceSequence: number | null;
+  acceptedEventSequence: number | null;
+}
+
+/**
+ * Basis-local book envelope. `ts` remains the local acceptance/receipt time
+ * used by the frozen v0 freshness contract. Exchange chronology is carried
+ * separately and is nullable because the Spot REST book-ticker snapshot does
+ * not publish an event clock or a sequence.
+ */
+export interface BasisBookObservation extends BookTicker {
+  sourceEventTimeMs?: number | null;
+  sourceSequence?: number | null;
+}
+
+export interface BasisBookPair {
+  spot: BookTicker | null;
+  perpetual: BookTicker | null;
+}
+
+export type BasisBookChronology =
+  | 'EXACT_SOURCE_ORDER'
+  | 'SINGLE_CHANGED_LEG';
+
+/** One immutable before/after cut from an accepted Basis book observation. */
+export interface AcceptedBasisBookEvent {
+  kind: 'ACCEPTED';
+  symbol: string;
+  market: Exclude<BasisCausalMarket, 'UNKNOWN'>;
+  /** Exact exchange event time when the producer exposes one; never receipt fallback. */
+  sourceEventTimeMs: number | null;
+  /** Exact source sequence when the producer exposes one; never a local counter. */
+  sourceSequence: number | null;
+  acceptedAtMs: number;
+  /** Local deterministic acceptance order, separate from source chronology. */
+  acceptedEventSequence: number;
+  chronology: BasisBookChronology;
+  before: BasisBookPair;
+  after: BasisBookPair;
+}
+
+/** A rejected observation that invalidates continuity without changing price truth. */
+export interface BasisBookDiscontinuity {
+  kind: 'DISCONTINUITY';
+  symbol: string;
+  market: BasisCausalMarket;
+  reason:
+    | 'SOURCE_CLOCK_REVERSAL'
+    | 'SOURCE_SEQUENCE_REVERSAL'
+    | 'RECEIPT_CLOCK_REVERSAL'
+    | 'SOURCE_REPLAY_CONFLICT'
+    | 'INVALID_OR_STALE_BOOK'
+    | 'MISSING_PAIRED_LEG'
+    | 'AMBIGUOUS_PAIRED_CHANGE';
+}
+
+export type BasisBookIngestResult = AcceptedBasisBookEvent | BasisBookDiscontinuity;
+
 /** Rolling state of one executable gap (one symbol, one direction). */
 export interface GapState {
   direction: BasisDirection;
@@ -71,6 +148,8 @@ export interface GapState {
   stabilityCv: number | null;
   /** samples in the tracking window */
   samples: number;
+  /** initiating-market classification owned by this gap tracker */
+  causality: BasisGapCausality;
 }
 
 // ---------- funding ----------
@@ -232,8 +311,8 @@ export interface BasisProposal extends EngineProposal {
 // ---------- replay runner ----------
 
 export type ReplayEvent =
-  | { type: 'spotBook'; tick: BookTicker }
-  | { type: 'perpBook'; tick: BookTicker }
+  | { type: 'spotBook'; tick: BasisBookObservation }
+  | { type: 'perpBook'; tick: BasisBookObservation }
   | { type: 'markFunding'; tick: MarkFunding }
   | { type: 'spotDepth'; ladder: DepthLadder }
   | { type: 'perpDepth'; ladder: DepthLadder }

@@ -22,10 +22,31 @@ import type {
 import type { VolumeConfig } from './config.js';
 import { makeEvent } from './events.js';
 import { projectVolumeRejectDisposition } from './rejectVocabulary.js';
+import type { ObservedOrderFocusApplyStatus } from './observedOrderFocus.js';
 import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol } from './validation.js';
 
 interface FocusEntry extends FocusSession {
   lastSignalTs: number;
+}
+
+interface ObservedOrderCut {
+  observedAtMs: number;
+  validUntilMs: number;
+  fingerprint: string;
+  expired: boolean;
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+export interface ObservedOrderCutResult {
+  readonly status: Extract<
+    ObservedOrderFocusApplyStatus,
+    'APPLIED' | 'IDEMPOTENT' | 'REJECTED_NON_MONOTONIC' | 'REJECTED_CONFLICT'
+  >;
+  readonly addedSymbols: readonly string[];
+  readonly removedSymbols: readonly string[];
 }
 
 export class FocusManager {
@@ -34,6 +55,8 @@ export class FocusManager {
   private cooldownUntil = new Map<string, number>();
   private pinnedSet = new Set<string>();
   private openPositions = new Set<string>();
+  private observedOpenOrders = new Set<string>();
+  private lastObservedOrderCut: ObservedOrderCut | null = null;
   private closedSessions: FocusSession[] = [];
   private proposedSet = new Set<string>();
 
@@ -70,8 +93,117 @@ export class FocusManager {
     if (f) f.pinned = this.isProtected(symbol);
   }
 
+  /** Apply one already-validated, complete owner cut. */
+  applyObservedOpenOrderCut(
+    symbols: readonly string[],
+    observedAtMs: number,
+    validUntilMs: number,
+    fingerprint: string,
+  ): Readonly<ObservedOrderCutResult> {
+    const prior = this.lastObservedOrderCut;
+    if (prior !== null && observedAtMs < prior.observedAtMs) {
+      return Object.freeze({
+        status: 'REJECTED_NON_MONOTONIC',
+        addedSymbols: Object.freeze([]),
+        removedSymbols: Object.freeze([]),
+      });
+    }
+    if (prior !== null && observedAtMs === prior.observedAtMs) {
+      return Object.freeze({
+        status: fingerprint === prior.fingerprint ? 'IDEMPOTENT' : 'REJECTED_CONFLICT',
+        addedSymbols: Object.freeze([]),
+        removedSymbols: Object.freeze([]),
+      });
+    }
+
+    return this.installObservedOpenOrderCut(symbols, observedAtMs, validUntilMs, fingerprint);
+  }
+
+  /**
+   * Restore canonical Ledger truth. A same-time divergent in-memory fragment
+   * is overwritten by the durable checkpoint; a genuinely newer memory cut
+   * still rejects rollback.
+   */
+  restoreObservedOpenOrderCut(
+    symbols: readonly string[],
+    observedAtMs: number,
+    validUntilMs: number,
+    fingerprint: string,
+  ): Readonly<ObservedOrderCutResult> {
+    const prior = this.lastObservedOrderCut;
+    if (prior !== null && observedAtMs < prior.observedAtMs) {
+      return Object.freeze({
+        status: 'REJECTED_NON_MONOTONIC',
+        addedSymbols: Object.freeze([]),
+        removedSymbols: Object.freeze([]),
+      });
+    }
+    if (prior !== null && observedAtMs === prior.observedAtMs && fingerprint === prior.fingerprint) {
+      return Object.freeze({
+        status: 'IDEMPOTENT',
+        addedSymbols: Object.freeze([]),
+        removedSymbols: Object.freeze([]),
+      });
+    }
+    return this.installObservedOpenOrderCut(symbols, observedAtMs, validUntilMs, fingerprint);
+  }
+
+  private installObservedOpenOrderCut(
+    symbols: readonly string[],
+    observedAtMs: number,
+    validUntilMs: number,
+    fingerprint: string,
+  ): Readonly<ObservedOrderCutResult> {
+    const next = new Set(symbols);
+    const added = symbols.filter((symbol) => !this.observedOpenOrders.has(symbol));
+    const removed = [...this.observedOpenOrders]
+      .filter((symbol) => !next.has(symbol))
+      .sort(compareText);
+    this.observedOpenOrders = next;
+    this.lastObservedOrderCut = { observedAtMs, validUntilMs, fingerprint, expired: false };
+    for (const symbol of [...added, ...removed]) {
+      const focus = this.focus.get(symbol);
+      if (focus) focus.pinned = this.isProtected(symbol);
+    }
+    return Object.freeze({
+      status: 'APPLIED',
+      addedSymbols: Object.freeze([...added]),
+      removedSymbols: Object.freeze(removed),
+    });
+  }
+
+  /** Unknown truth never clears a still-current cut; time expiry does. */
+  expireObservedOpenOrderProtection(now: number): boolean {
+    if (this.lastObservedOrderCut === null || now <= this.lastObservedOrderCut.validUntilMs) return false;
+    if (!this.lastObservedOrderCut.expired) {
+      const prior = [...this.observedOpenOrders];
+      this.observedOpenOrders.clear();
+      this.lastObservedOrderCut.expired = true;
+      for (const symbol of prior) {
+        const focus = this.focus.get(symbol);
+        if (focus) focus.pinned = this.isProtected(symbol);
+      }
+    }
+    return true;
+  }
+
+  observedOpenOrderSymbols(): readonly string[] {
+    return Object.freeze([...this.observedOpenOrders].sort(compareText));
+  }
+
+  observedOrderCut(): Readonly<{ observedAtMs: number; validUntilMs: number }> | null {
+    return this.lastObservedOrderCut === null
+      ? null
+      : Object.freeze({
+          observedAtMs: this.lastObservedOrderCut.observedAtMs,
+          validUntilMs: this.lastObservedOrderCut.validUntilMs,
+        });
+  }
+
   private isProtected(symbol: string): boolean {
-    return this.pinnedSet.has(symbol) || this.openPositions.has(symbol);
+    return this.pinnedSet.has(symbol)
+      || this.openPositions.has(symbol)
+      || this.observedOpenOrders.has(symbol);
   }
 
   // ---- queries ----
@@ -102,7 +234,11 @@ export class FocusManager {
   }
 
   focusSessions(): FocusSession[] {
-    return [...this.focus.values()].sort((a, b) => b.score - a.score);
+    return [...this.focus.values()].sort((a, b) =>
+      b.score - a.score
+      || a.enteredTs - b.enteredTs
+      || (a.symbol < b.symbol ? -1 : a.symbol > b.symbol ? 1 : 0)
+    );
   }
 
   closedFocusSessions(limit = 100): FocusSession[] {
@@ -281,7 +417,13 @@ export class FocusManager {
     const entry: FocusEntry = {
       symbol,
       enteredTs: now,
-      reason: isProtected ? (this.openPositions.has(symbol) ? 'open_position' : 'user_pin') : reason,
+      reason: isProtected
+        ? this.openPositions.has(symbol)
+          ? 'open_position'
+          : this.observedOpenOrders.has(symbol)
+            ? 'open_order'
+            : 'user_pin'
+        : reason,
       score,
       pinned: isProtected,
       exitedTs: null,
@@ -326,6 +468,7 @@ export class FocusManager {
   /** Periodic housekeeping: candidate TTL, focus max age. */
   tick(): void {
     const now = this.clock.now();
+    this.expireObservedOpenOrderProtection(now);
     for (const [symbol, c] of this.candidates) {
       if (now - c.openedTs > this.cfg.candidateTtlMs) {
         this.candidates.delete(symbol);

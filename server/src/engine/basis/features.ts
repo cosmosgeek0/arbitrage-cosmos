@@ -47,15 +47,23 @@ export class BasisFeatureBuilder implements FeatureSource {
     const meta = this.market.meta(symbol);
     if (!spot && !perp && !mark) return null;
 
+    const spotStale = this.market.spotStalenessMs(symbol);
+    const perpStale = this.market.perpStalenessMs(symbol);
+    const legSkewMs = this.market.legSkewMs(symbol);
+    const causalUsable = spot !== null && perp !== null &&
+      spotStale !== null && perpStale !== null &&
+      spotStale <= this.cfg.staleMs && perpStale <= this.cfg.staleMs &&
+      legSkewMs !== null && legSkewMs <= this.cfg.maxLegSkewMs;
+
     // --- executable gaps, both directions, from real bid/ask only ---
     const rawGapA = spot && perp ? gapLongSpotShortPerpPct(spot.ask, perp.bid) : null;
     const rawGapB = spot && perp ? gapShortSpotLongPerpPct(spot.bid, perp.ask) : null;
     const gapA = observe
-      ? this.gaps.observe(symbol, 'long_spot_short_perp', rawGapA)
-      : this.gaps.state(symbol, 'long_spot_short_perp', rawGapA);
+      ? this.gaps.observe(symbol, 'long_spot_short_perp', rawGapA, causalUsable)
+      : this.gaps.state(symbol, 'long_spot_short_perp', rawGapA, causalUsable);
     const gapB = observe
-      ? this.gaps.observe(symbol, 'short_spot_long_perp', rawGapB)
-      : this.gaps.state(symbol, 'short_spot_long_perp', rawGapB);
+      ? this.gaps.observe(symbol, 'short_spot_long_perp', rawGapB, causalUsable)
+      : this.gaps.state(symbol, 'short_spot_long_perp', rawGapB, causalUsable);
 
     // --- funding, per direction (sign flips meaning) ---
     const history = this.market.fundingHistory(symbol);
@@ -82,13 +90,11 @@ export class BasisFeatureBuilder implements FeatureSource {
     );
 
     // --- data quality (shared across directions) ---
-    const spotStale = this.market.spotStalenessMs(symbol);
-    const perpStale = this.market.perpStalenessMs(symbol);
     const dq = assessDataQuality({
       spotStalenessMs: spotStale,
       perpStalenessMs: perpStale,
       markStalenessMs: markStale,
-      legSkewMs: this.market.legSkewMs(symbol),
+      legSkewMs,
       perpBook: perp,
       markPrice: mark?.markPrice ?? null,
       ladderBacked: liqA.ladderBacked,

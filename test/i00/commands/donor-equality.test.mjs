@@ -108,6 +108,14 @@ test('required-last L proof pins exact merge, parents, and authorized post-L top
     OBSERVATION.mergeWindow.topologyAuthority.correction.observedParents,
     POST_L_TOPOLOGY_AUTHORITY.correction.parents,
   );
+  assert.deepEqual(
+    OBSERVATION.mergeWindow.topologyAuthority.receiptAuthorizedLaterMerges,
+    PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
+  );
+  assert.deepEqual(
+    OBSERVATION.mergeWindow.topologyAuthority.graphLaterMergesThroughCut,
+    PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
+  );
   assert.deepEqual(proof.requiredLast, {
     merge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
     firstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
@@ -115,7 +123,7 @@ test('required-last L proof pins exact merge, parents, and authorized post-L top
     authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
     postLTopologyExact: true,
   });
-  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 17);
+  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 21);
   assert.equal(
     proof.mergeWindow.authorizedLaterMerges.at(-1),
     POST_L_TOPOLOGY_AUTHORITY.landing.commit,
@@ -203,6 +211,16 @@ test('wrong merge parent, extra phase merge, or non-allowlisted post-L topology 
     value.mergeWindow.topologyAuthority.observedSha256 = '0'.repeat(64);
   });
   assertBlocked(forgedTopologyReceipt, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
+
+  const narrowedReceiptAllowlist = hostile((value) => {
+    value.mergeWindow.topologyAuthority.receiptAuthorizedLaterMerges.pop();
+  });
+  assertBlocked(narrowedReceiptAllowlist, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
+
+  const substitutedCutGraph = hostile((value) => {
+    value.mergeWindow.topologyAuthority.graphLaterMergesThroughCut[0] = '0'.repeat(40);
+  });
+  assertBlocked(substitutedCutGraph, 'POST_L_TOPOLOGY_AUTHORITY_INVALID');
 
   const substitutedTopologyCut = hostile((value) => {
     value.mergeWindow.topologyCut = '0'.repeat(40);

@@ -39,8 +39,8 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
   requiredLastMerge: 'ec82bc51d5311dfb3f505216bfb3fa41733f038c',
   requiredLastFirstParent: '139d2cf07ffd3167bd54a3c14c0fc6671c2f02e9',
   requiredLastDonor: 'df6b472993ca9659ce09cf5f72004981c6835f0d',
-  // Exact authorized post-L merge topology through the D-LAUNCH-66 landing.
-  // The collector re-derives this sequence from the receipt-pinned landing
+  // Exact authorized post-L merge topology through the staging deploy-blockers landing.
+  // The collector re-derives this sequence from the receipt-pinned topology cut
   // object; these merges remain outside the original 16-donor equality count.
   authorizedLaterMerges: deepFreeze([
     '449350d60ab30a385edeccdf4d91716ef8550537',
@@ -60,6 +60,10 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
     '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
     '995904ada86e86ef4214bea596331b978a332da0',
     'dae131726ddb3bb69c75c8a3e5f4259119b84350',
+    '7381290c576d97b76ea441455e9c03288f23a501',
+    '5f887cf27ce246d80b7fc553eed470b015976963',
+    '4dbb0f11f032cd5d10058b18c193d844508dc92a',
+    '90947e7e094751b4baa9a6ae4969150822ad39d6',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -326,18 +330,21 @@ export const RECEIPT_BOUND_AUTHORITY = deepFreeze({
 });
 
 export const POST_L_TOPOLOGY_AUTHORITY = deepFreeze({
-  sourceCommit: '06b24ca10c5e2db73b2e6bea6121252d47fd7812',
-  sourceTree: 'dc88d8eede5a14d7fd676961f19f36c706e25089',
-  sourceParents: deepFreeze(['dae131726ddb3bb69c75c8a3e5f4259119b84350']),
-  path: 'QL_DIRECTOR_STATE.md',
-  blobSha: '1694eba5de66372827613b47cc4809938a4e15a1',
-  sha256: 'ac8eaf7061b9863dceea18eec9002d7ea1d69151ad0c791df01219314cded383',
+  sourceCommit: '5811e8cdc815f4ece25e3c9f4e0f7e68d25d8c4d',
+  sourceTree: 'b9c3a4a99bc1adca17ef24e513124718c46abb5b',
+  sourceParents: deepFreeze(['90947e7e094751b4baa9a6ae4969150822ad39d6']),
+  path: 'docs/archive/i00-phase4/STAGING_POST_L_TOPOLOGY_RECEIPT.v1.json',
+  blobSha: 'da4025628731c922e2cedbdc5870c32812979c76',
+  sha256: 'fb0fe5659af81c74f2db5b09cd448d3d4e449575cc98117db9fe9f431ae15dbf',
+  receiptSchemaVersion: 'i00.post-l-topology-receipt.v1',
+  receiptStatus: 'AUTHORIZED_POST_L_TOPOLOGY',
+  receiptScope: 'RECEIPT_BOUND_DONOR_EQUALITY_ONLY',
   landing: deepFreeze({
-    commit: 'dae131726ddb3bb69c75c8a3e5f4259119b84350',
-    tree: '1da28eb2dcc03a0545fc2bc51e2a735e88826014',
+    commit: '90947e7e094751b4baa9a6ae4969150822ad39d6',
+    tree: 'f0c30338b4e536baaad75a51c24cf682376039e0',
     parents: deepFreeze([
-      '68c7d1c9547803417781fdab5a06bad2e314b503',
-      'd8a86f722689ed82ad40f9ec44bbbc19c2347646',
+      '1484992e62207d5de72669b3aa7b1b713f6071f0',
+      'b7e2e1fdde2eeb213969f9c29c195ce9b3b0d0d2',
     ]),
   }),
   correction: deepFreeze({
@@ -524,15 +531,48 @@ function parseReceiptBoundAuthority(bytes) {
 }
 
 function parsePostLTopologyReceipt(bytes) {
-  const text = bytes.toString('utf8');
-  const matches = [...text.matchAll(
-    /`current-main` landing commit is `([a-f0-9]{40})`\. Its tree `([a-f0-9]{40})` is byte-identical to verified C9 `([a-f0-9]{40})`; its parents are prior `current-main` `([a-f0-9]{40})` and C9, in that order\./gu,
-  )];
-  if (matches.length !== 1) throw new Error('POST_L_TOPOLOGY_RECEIPT_MARKER_INVALID');
-  const [, commit, tree, correction, priorMain] = matches[0];
+  let document;
+  try {
+    document = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw new Error('POST_L_TOPOLOGY_RECEIPT_JSON_INVALID');
+  }
+  const exactKeys = (value, keys) => value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && exactJson(sorted(Object.keys(value)), sorted(keys));
+  if (!exactKeys(document, [
+    'authorizedLaterMerges',
+    'historicalCorrection',
+    'requiredLastMerge',
+    'schemaVersion',
+    'scope',
+    'status',
+    'topologyCut',
+  ])
+    || document.schemaVersion !== POST_L_TOPOLOGY_AUTHORITY.receiptSchemaVersion
+    || document.status !== POST_L_TOPOLOGY_AUTHORITY.receiptStatus
+    || document.scope !== POST_L_TOPOLOGY_AUTHORITY.receiptScope
+    || document.requiredLastMerge !== PHASE2_GRAPH_BOUNDARY.requiredLastMerge
+    || !exactKeys(document.topologyCut, ['commit', 'parents', 'tree'])
+    || !exactKeys(document.historicalCorrection, ['commit', 'parents', 'tree'])
+    || ![document.topologyCut.commit, document.topologyCut.tree,
+      document.historicalCorrection.commit, document.historicalCorrection.tree,
+      ...document.topologyCut.parents, ...document.historicalCorrection.parents]
+      .every((value) => FULL_SHA.test(value))
+    || !Array.isArray(document.authorizedLaterMerges)
+    || document.authorizedLaterMerges.length !== new Set(document.authorizedLaterMerges).size
+    || !document.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
+    throw new Error('POST_L_TOPOLOGY_RECEIPT_SCHEMA_INVALID');
+  }
   return {
-    landing: { commit, tree, parents: [priorMain, correction] },
-    correction: { commit: correction, tree },
+    schemaVersion: document.schemaVersion,
+    status: document.status,
+    scope: document.scope,
+    requiredLastMerge: document.requiredLastMerge,
+    landing: structuredClone(document.topologyCut),
+    correction: structuredClone(document.historicalCorrection),
+    authorizedLaterMerges: [...document.authorizedLaterMerges],
   };
 }
 
@@ -601,6 +641,10 @@ function validateManifest() {
     '55b456e19dbbd97548d9beb601dfc8cc7d3c57b7',
     '995904ada86e86ef4214bea596331b978a332da0',
     'dae131726ddb3bb69c75c8a3e5f4259119b84350',
+    '7381290c576d97b76ea441455e9c03288f23a501',
+    '5f887cf27ce246d80b7fc553eed470b015976963',
+    '4dbb0f11f032cd5d10058b18c193d844508dc92a',
+    '90947e7e094751b4baa9a6ae4969150822ad39d6',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }
@@ -847,7 +891,7 @@ function collectReceiptBackedPostLTopology(repoRoot, candidateSha) {
   const objectSpec = `${source}:${POST_L_TOPOLOGY_AUTHORITY.path}`;
   const bytes = gitBytes(repoRoot, ['show', objectSpec]);
   const receipt = parsePostLTopologyReceipt(bytes);
-  const authorizedLaterMerges = gitLines(repoRoot, [
+  const graphLaterMergesThroughCut = gitLines(repoRoot, [
     'rev-list', '--reverse', '--min-parents=2',
     `${PHASE2_GRAPH_BOUNDARY.requiredLastMerge}..${receipt.landing.commit}`,
   ]);
@@ -870,6 +914,12 @@ function collectReceiptBackedPostLTopology(repoRoot, candidateSha) {
       observedBlobSha: gitText(repoRoot, ['rev-parse', objectSpec]),
       expectedSha256: POST_L_TOPOLOGY_AUTHORITY.sha256,
       observedSha256: sha256(bytes),
+      receiptSchemaVersion: receipt.schemaVersion,
+      receiptStatus: receipt.status,
+      receiptScope: receipt.scope,
+      receiptRequiredLastMerge: receipt.requiredLastMerge,
+      receiptAuthorizedLaterMerges: receipt.authorizedLaterMerges,
+      graphLaterMergesThroughCut,
       landing: {
         receiptCommit: receipt.landing.commit,
         receiptTree: receipt.landing.tree,
@@ -889,7 +939,7 @@ function collectReceiptBackedPostLTopology(repoRoot, candidateSha) {
     },
     cut: receipt.landing.commit,
     cutAncestorOfCandidate: isAncestor(repoRoot, receipt.landing.commit, candidateSha),
-    authorizedLaterMerges,
+    authorizedLaterMerges: receipt.authorizedLaterMerges,
     laterMerges,
   };
 }
@@ -910,6 +960,12 @@ function postLTopologyAuthorityValid(authority) {
     && authority.observedBlobSha === POST_L_TOPOLOGY_AUTHORITY.blobSha
     && authority.expectedSha256 === POST_L_TOPOLOGY_AUTHORITY.sha256
     && authority.observedSha256 === POST_L_TOPOLOGY_AUTHORITY.sha256
+    && authority.receiptSchemaVersion === POST_L_TOPOLOGY_AUTHORITY.receiptSchemaVersion
+    && authority.receiptStatus === POST_L_TOPOLOGY_AUTHORITY.receiptStatus
+    && authority.receiptScope === POST_L_TOPOLOGY_AUTHORITY.receiptScope
+    && authority.receiptRequiredLastMerge === PHASE2_GRAPH_BOUNDARY.requiredLastMerge
+    && exactJson(authority.receiptAuthorizedLaterMerges, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges)
+    && exactJson(authority.graphLaterMergesThroughCut, PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges)
     && landing.receiptCommit === POST_L_TOPOLOGY_AUTHORITY.landing.commit
     && landing.receiptTree === POST_L_TOPOLOGY_AUTHORITY.landing.tree
     && exactJson(landing.receiptParents, POST_L_TOPOLOGY_AUTHORITY.landing.parents)
@@ -921,8 +977,7 @@ function postLTopologyAuthorityValid(authority) {
     && correction.receiptTree === POST_L_TOPOLOGY_AUTHORITY.correction.tree
     && correction.objectType === 'commit'
     && correction.observedTree === POST_L_TOPOLOGY_AUTHORITY.correction.tree
-    && exactJson(correction.observedParents, POST_L_TOPOLOGY_AUTHORITY.correction.parents)
-    && landing.observedTree === correction.observedTree;
+    && exactJson(correction.observedParents, POST_L_TOPOLOGY_AUTHORITY.correction.parents);
 }
 
 export function collectReceiptBoundDonorEqualityEvidence({

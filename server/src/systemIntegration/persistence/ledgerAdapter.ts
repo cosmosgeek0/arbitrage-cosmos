@@ -10,6 +10,7 @@ import type {
   SystemControlState,
   SystemTraceEvent,
 } from '../contracts/types.js';
+import { SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR } from '../controls/types.js';
 import type { OperatorApprovalState } from '../../capitalFoundation/approvals/index.js';
 import {
   RECOVERY_ACTIONS,
@@ -492,7 +493,7 @@ export interface PersistenceShutdownInput {
 export interface ControlPersistenceActor {
   readonly id: string;
   readonly email: string | null;
-  readonly source: 'loopback' | 'cloudflare-access';
+  readonly source: 'loopback' | 'cloudflare-access' | 'canonical-alarm';
 }
 
 export interface ControlPersistenceCommit {
@@ -559,7 +560,7 @@ interface StoredControlReceipt extends Record<string, SystemJsonValue> {
   readonly command: string;
   readonly mutation: SystemJsonValue;
   readonly actorIdDigest: string;
-  readonly actorSource: 'loopback' | 'cloudflare-access';
+  readonly actorSource: 'loopback' | 'cloudflare-access' | 'canonical-alarm';
   readonly reasonDigest: string;
   readonly runtimePublication: ControlRuntimePublicationState;
   readonly before: SystemJsonValue;
@@ -2239,7 +2240,13 @@ export class SystemLedgerPersistenceAdapter {
       || !CORRELATION_ID.test(commit.request.correlationId)
       || !validUtcMillis(commit.request.requestedAtMs)
       || !validActorId(commit.actor.id)
-      || !['loopback', 'cloudflare-access'].includes(commit.actor.source)
+      || !['loopback', 'cloudflare-access', 'canonical-alarm'].includes(commit.actor.source)
+      || (commit.actor.source === 'canonical-alarm' && (
+        commit.actor.id !== SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR.id
+        || commit.actor.email !== null
+        || commit.request.mutation.command !== 'SET_KILL_SWITCH'
+        || commit.request.mutation.engaged !== true
+      ))
       || !(SYSTEM_CONTROL_COMMANDS as readonly string[]).includes(commit.request.mutation.command)
       || !REASON_CODE.test(commit.code)) {
       throw new TypeError('control persistence commit is invalid');
@@ -2432,7 +2439,11 @@ export class SystemLedgerPersistenceAdapter {
       || !CORRELATION_ID.test(audit.correlationId)
       || !validUtcMillis(audit.occurredAtMs)
       || !validActorId(audit.actor.id)
-      || !['loopback', 'cloudflare-access'].includes(audit.actor.source)
+      || !['loopback', 'cloudflare-access', 'canonical-alarm'].includes(audit.actor.source)
+      || (audit.actor.source === 'canonical-alarm' && (
+        audit.actor.id !== SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR.id
+        || audit.actor.email !== null
+      ))
       || audit.applied !== false) {
       throw new TypeError('control rejection audit is invalid');
     }

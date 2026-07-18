@@ -439,7 +439,7 @@ export function validateCheckpointState(value: unknown): string[] {
       if (!boundedIdentifier(entry.correlationId, 128)) issues.push(`$.controlRejections[${index}].correlationId:INVALID`);
       if (!utcMillis(entry.occurredAtMs)) issues.push(`$.controlRejections[${index}].occurredAtMs:INVALID`);
       if (!CHECKSUM.test(String(entry.actorIdDigest))) issues.push(`$.controlRejections[${index}].actorIdDigest:INVALID`);
-      if (!['loopback', 'cloudflare-access'].includes(String(entry.actorSource))) issues.push(`$.controlRejections[${index}].actorSource:INVALID`);
+      if (!['loopback', 'cloudflare-access', 'canonical-alarm'].includes(String(entry.actorSource))) issues.push(`$.controlRejections[${index}].actorSource:INVALID`);
       if (!safeInteger(entry.checkpointRevision) || (safeInteger(value.revision) && (entry.checkpointRevision as number) > (value.revision as number))) issues.push(`$.controlRejections[${index}].checkpointRevision:INVALID`);
     },
   );

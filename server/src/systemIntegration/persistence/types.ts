@@ -526,7 +526,7 @@ export interface PersistedControlRejectionReceipt {
   readonly correlationId: string;
   readonly occurredAtMs: number;
   readonly actorIdDigest: string;
-  readonly actorSource: 'loopback' | 'cloudflare-access';
+  readonly actorSource: 'loopback' | 'cloudflare-access' | 'canonical-alarm';
   readonly checkpointRevision: number;
 }
 

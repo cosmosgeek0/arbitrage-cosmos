@@ -8,12 +8,22 @@ import type {
   SystemControlState,
 } from '../contracts/index.js';
 
-/** Server-derived operator identity. Request bodies never supply this value. */
+/**
+ * Server-derived control actor identity. Request bodies never supply this
+ * value; the canonical alarm actor is additionally command-scoped by both the
+ * service and persistence owner.
+ */
 export interface SystemControlActor {
   readonly id: string;
   readonly email: string | null;
-  readonly source: 'loopback' | 'cloudflare-access';
+  readonly source: 'loopback' | 'cloudflare-access' | 'canonical-alarm';
 }
+
+export const SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR = Object.freeze({
+  id: 'system:canonical-alarm-router',
+  email: null,
+  source: 'canonical-alarm',
+} as const satisfies SystemControlActor);
 
 export interface SystemControlCompositionDecision {
   readonly ok: boolean;

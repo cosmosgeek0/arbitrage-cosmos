@@ -25,7 +25,8 @@ Current accepted truth is deliberately conservative:
 `quant_edge.final_proof` owns only final verification evidence:
 
 - replay/fault proof over accepted Q04/Q16 owners;
-- exact-current projection of accepted research reports;
+- projection of historical accepted research reports alongside separately pinned,
+  explicitly `NOT_ACCEPTED` current correction evidence;
 - measured local benchmark/resource evidence;
 - syntax-aware security and frozen/scope evidence;
 - generated manifests and integration instructions.
@@ -62,10 +63,10 @@ ceiling. Child execution uses fixed argv, no shell, a timeout and kill/communica
 cleanup. Host metadata excludes hostname, serial number, hardware UUID, credentials
 and environment values. No numeric latency acceptance SLO is invented.
 
-RB-13 is a post-A17 correction, not accepted Q17 history. Its current benchmark and
-generated proof-kit projection include the disposable-worker correction and are
-recorded as pending evidence. They do not replace the historical C17/A17
-measurements or inherit those commits' acceptance.
+RB-13 and the final-hunt Q06/Q07/Q09/Q11/Q12/Q14/Q15/Q16 changes are post-A17
+corrections, not accepted Q17 history. The current benchmark and generated
+proof-kit projection include those corrections as pending evidence. They do not
+replace the historical C17/A17 measurements or inherit those commits' acceptance.
 
 The current Q02, Q05 and Q08 owner bytes also contain post-acceptance money-truth
 corrections. F-034, F-038 and F-039 were director-integrated by `5f887cf2…`, but
@@ -92,10 +93,12 @@ No generic module or self-computed digest is trusted. The generator pins expecte
 digests after the reviewed sources are frozen. A changed exception source fails the
 scan until explicitly reviewed and repinned.
 
-The historical directive-input lock pin remains `410010ef…` / 1,568 bytes. RB-13
-does not repin it to the current 1,757-byte file: security evidence records the
-exact `d4bf318…` mismatch, remains non-clean, and accepts only that declared
-post-acceptance drift while rejecting any additional frozen-file change.
+The historical directive-input lock pin remains `410010ef…` / 1,568 bytes and the
+historical package-lock pin remains `3c97820f…` / 147,793 bytes. Current security
+evidence reports the exact `d4bf318…` / 1,757-byte directive-lock and
+`59e41511…` / 147,256-byte package-lock mismatches, remains non-clean, and accepts
+only those two declared post-acceptance drifts while rejecting incomplete
+inventory, changed historical expectations or any additional drift.
 
 ## Decision 4 — exact artifacts outrank stale receipt prose, without rewriting history
 
@@ -132,6 +135,15 @@ and director-integration provenance. Each correction remains `NOT_ACCEPTED`, its
 implementation commit/tree stays `PENDING_NOT_EMBEDDED`, and the historical
 receipts explicitly do not attest the corrected bytes.
 
+The final-hunt corrections use the same historical/current split for Q06, Q07,
+Q09, Q11, Q12, Q14, Q15 and Q16. Q12's historical accepted campaign/golden pins
+remain `ad9d9b1f…` / `88382d29…`; its current lineage-corrected bytes are
+`3230b579…` / `28d657a8…`. Q15's historical campaign/cards remain
+`24debb2a…` / `0457f22f…`; its current exact-evaluation-unit bytes are
+`1b93c4ce…` / `88554771…`. Current source/evidence is verified exactly but every
+row remains `NOT_ACCEPTED`, with commit/tree identity pending independent
+verification and no historical receipt attesting the corrected bytes.
+
 Q14's synthetic `IMPROVES`, Q12's healthy-fixture `WATCH`, and Q15's synthetic
 champion are not current edge or advisory truth. Q14 validates its own synthetic
 baseline/challenger campaign; it is not retroactively described as a validation of
@@ -147,11 +159,11 @@ itself, exactly once, in sorted safe POSIX-path order with byte size and SHA-256
 Missing, extra, duplicate, unsafe or symlink entries fail closed.
 
 The component manifest pins Q00-Q16 implementation/acceptance identities and the
-Q17 activation commit. Historical accepted references remain distinct from
-Q02/Q05/Q08 money-truth and Q16 RB-13 post-acceptance correction references. It
-cannot self-reference a pending correction re-attestation or pending C17/A17
-commit. The immutable C17 receipt later binds the component/artifact bytes; the
-separate A17 receipt binds exact C17 and freezes final HEAD.
+Q17 activation commit. Historical accepted references remain distinct from every
+Q02/Q05/Q06/Q07/Q08/Q09/Q11/Q12/Q14/Q15/Q16 post-acceptance correction reference.
+It cannot self-reference a pending correction re-attestation or pending historical
+C17/A17 commit. The immutable historical C17/A17 receipts remain the acceptance
+authority; they do not attest the current correction kit.
 
 ## Consequences and rejected shortcuts
 
@@ -165,6 +177,6 @@ separate A17 receipt binds exact C17 and freezes final HEAD.
 - Broad grep-based security scans, ambient environment capture, shell commands,
   unsafe loaders, network access, model retraining, new stores and money paths are
   rejected.
-- Final status can become `LANE_READY` only after exact C17 clean-archive proof and
-  separate A17 acceptance. `LANE_READY` means parked for director integration audit,
-  never pushed or live.
+- Historical C17/A17 `LANE_READY` remains immutable and means parked evidence,
+  never pushed or live. Current correction bytes remain `NOT_ACCEPTED` until a
+  separate independent exact-commit verification and director disposition.

@@ -82,6 +82,24 @@ def test_projector_verifies_exact_evidence_and_preserves_fail_closed_axes() -> N
     assert erratum["documentaryBestTrialIndex"] == 11
     q14 = next(row for row in claims if row["claimId"] == "q14.synthetic-validation-factory")
     assert q14["status"] == "Q14_FIXTURE_COMPARISON_ONLY_NOT_Q10_OR_Q11_VALIDATION"
+    correction_claims = {
+        row["claimId"]: row
+        for row in claims
+        if row["claimId"]
+        in {
+            "q12.post-acceptance-correction",
+            "q15.post-acceptance-correction",
+        }
+    }
+    assert set(correction_claims) == {
+        "q12.post-acceptance-correction",
+        "q15.post-acceptance-correction",
+    }
+    assert all(
+        row["classification"] == "UNKNOWN"
+        and row["status"] == "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED"
+        for row in correction_claims.values()
+    )
     assert canonical_json_bytes(first)
 
 
@@ -95,6 +113,131 @@ def test_projection_rows_pin_every_path_size_and_digest() -> None:
         raw = path.read_bytes()
         assert len(raw) == row["byteLength"]
         assert hashlib.sha256(raw).hexdigest() == row["sha256"]
+
+
+def test_projection_preserves_historical_acceptance_without_promoting_current_corrections() -> None:
+    projection = project_research_evidence(REPO_ROOT)
+    artifact_rows = {
+        cast(str, row["artifactId"]): row
+        for row in cast(list[dict[str, object]], projection["artifacts"])
+    }
+    corrections = cast(list[dict[str, object]], projection["postAcceptanceCorrections"])
+    expected = {
+        "Q12": {
+            "correctionId": "Q12_RESEARCH_INTEGRITY_LINEAGE_CORRECTION",
+            "historical": {
+                "q12.ensemble-campaign.v1": (
+                    2_376,
+                    "ad9d9b1f6ba9ffe3fc59450075f5221792f6c900403775f6820e2da763c28bb2",
+                ),
+                "q12.ensemble-golden.v1": (
+                    153_049,
+                    "88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77",
+                ),
+            },
+            "current": {
+                "q12.ensemble-campaign.v1": (
+                    2_376,
+                    "3230b579cf7d8262761591209bad5dbc024214a3cd5c5fd22fff82e72c3f9863",
+                ),
+                "q12.ensemble-golden.v1": (
+                    153_683,
+                    "28d657a80b4c0328529c62e6dccf8631c2cb3574cc399ff27108b192677a942e",
+                ),
+            },
+        },
+        "Q15": {
+            "correctionId": "Q15_RESEARCH_INTEGRITY_EVALUATION_UNIT_CORRECTION",
+            "historical": {
+                "q15.registry-campaign.v1": (
+                    4_322,
+                    "24debb2a96b91338d937b67878c75be2ef38615880c9c0ad8cd30590ac0bd11b",
+                ),
+                "q15.registry-cards.v1": (
+                    16_676,
+                    "0457f22f9b713955f654d99b7dcfe9795d84c71c7ec8baf5a927e007d5a08fb5",
+                ),
+            },
+            "current": {
+                "q15.registry-campaign.v1": (
+                    4_425,
+                    "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d",
+                ),
+                "q15.registry-cards.v1": (
+                    16_676,
+                    "88554771ed8f570721bf55c2a28ef8fa5370c3ec34bcfcbf191763d3aed6e844",
+                ),
+            },
+        },
+    }
+
+    assert [row["phase"] for row in corrections] == ["Q12", "Q15"]
+    for correction in corrections:
+        phase = cast(str, correction["phase"])
+        phase_expected = expected[phase]
+        assert correction["acceptanceState"] == "NOT_ACCEPTED"
+        assert correction["correctionId"] == phase_expected["correctionId"]
+        assert correction["historicalReceipts"] == "DOES_NOT_ATTEST_CORRECTED_BYTES"
+        assert correction["implementationCommit"] == "PENDING_NOT_EMBEDDED"
+        assert correction["implementationState"] == (
+            "CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
+        )
+        assert correction["implementationTree"] == "PENDING_NOT_EMBEDDED"
+        assert correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
+
+        current_rows = {
+            cast(str, row["artifactId"]): row
+            for row in cast(list[dict[str, object]], correction["currentArtifacts"])
+        }
+        historical_rows = {
+            cast(str, row["artifactId"]): row
+            for row in cast(list[dict[str, object]], correction["historicalAcceptedArtifacts"])
+        }
+        assert (
+            set(current_rows)
+            == set(historical_rows)
+            == set(cast(dict[str, tuple[int, str]], phase_expected["current"]))
+        )
+        for artifact_id, current_row in current_rows.items():
+            current_bytes, current_sha256 = cast(
+                dict[str, tuple[int, str]], phase_expected["current"]
+            )[artifact_id]
+            historical_bytes, historical_sha256 = cast(
+                dict[str, tuple[int, str]], phase_expected["historical"]
+            )[artifact_id]
+            assert current_row == artifact_rows[artifact_id]
+            assert (current_row["byteLength"], current_row["sha256"]) == (
+                current_bytes,
+                current_sha256,
+            )
+            raw = (REPO_ROOT / cast(str, current_row["relativePath"])).read_bytes()
+            assert len(raw) == current_bytes
+            assert hashlib.sha256(raw).hexdigest() == current_sha256
+            assert (
+                historical_rows[artifact_id]["byteLength"],
+                historical_rows[artifact_id]["sha256"],
+            ) == (historical_bytes, historical_sha256)
+            assert historical_sha256 != current_sha256
+
+
+def test_projection_validator_rejects_correction_promotion_and_historical_relabeling() -> None:
+    projection = project_research_evidence(REPO_ROOT)
+    promoted = deepcopy(projection)
+    promoted_corrections = cast(list[dict[str, object]], promoted["postAcceptanceCorrections"])
+    promoted_corrections[0]["acceptanceState"] = "ACCEPTED"
+    with pytest.raises(EvidenceVerificationError, match="accepted semantic"):
+        validate_research_evidence_projection(promoted)
+
+    relabeled = deepcopy(projection)
+    relabeled_corrections = cast(list[dict[str, object]], relabeled["postAcceptanceCorrections"])
+    current = cast(list[dict[str, object]], relabeled_corrections[0]["currentArtifacts"])
+    historical = cast(
+        list[dict[str, object]],
+        relabeled_corrections[0]["historicalAcceptedArtifacts"],
+    )
+    historical[0]["sha256"] = current[0]["sha256"]
+    with pytest.raises(EvidenceVerificationError, match="accepted truth"):
+        validate_research_evidence_projection(relabeled)
 
 
 def test_projection_validator_returns_fresh_exact_projection() -> None:
@@ -607,6 +750,14 @@ def test_semantic_validators_reject_ambiguous_or_promoted_truth() -> None:
     cards.append(deepcopy(next(row for row in cards if row["modelId"] == "logistic:v1")))
     with pytest.raises(EvidenceVerificationError, match="ambiguous"):
         evidence._validate_q15(ambiguous_q15)
+
+    inflated_q15 = deepcopy(values)
+    evaluation_counts = cast(
+        dict[str, object], inflated_q15["q15.registry-campaign.v1"]["shadowEvaluationCounts"]
+    )
+    evaluation_counts["evaluationUnitCount"] = 2
+    with pytest.raises(EvidenceVerificationError, match="accepted semantic"):
+        evidence._validate_q15(inflated_q15)
 
 
 def test_low_level_type_and_key_guards_reject_hostile_values() -> None:

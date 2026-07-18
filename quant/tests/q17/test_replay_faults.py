@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Callable
 from copy import deepcopy
@@ -20,6 +21,7 @@ from quant_edge.final_proof.replay import (
     EXPECTED_AMBIGUOUS_EVALUATION_TIME_MS,
     EXPECTED_ASSESSMENT_SHA256,
     EXPECTED_BLOCKERS,
+    EXPECTED_CAMPAIGN_SHA256,
     EXPECTED_EVALUATION_TIME_MS,
     EXPECTED_EXPIRED_ASSESSMENT_SHA256,
     EXPECTED_EXPIRED_EVALUATION_TIME_MS,
@@ -124,6 +126,20 @@ def _build(
         expired_evaluation_time_ms=expired_evaluation_time_ms,
         ambiguous_evaluation_time_ms=ambiguous_evaluation_time_ms,
     )
+
+
+def test_current_q16_campaign_repin_preserves_pipeline_and_assessment() -> None:
+    campaign_bytes = (QUANT_ROOT / CAMPAIGN_RELATIVE_PATH).read_bytes()
+    campaign = strict_json_object(campaign_bytes, maximum_bytes=262_144)
+    assessment_bytes = (QUANT_ROOT / ASSESSMENT_RELATIVE_PATH).read_bytes()
+
+    assert hashlib.sha256(campaign_bytes).hexdigest() == EXPECTED_CAMPAIGN_SHA256
+    assert (
+        hashlib.sha256(canonical_json_bytes(_mapping(campaign["pipeline"]))).hexdigest()
+        == EXPECTED_PIPELINE_SHA256
+    )
+    assert hashlib.sha256(assessment_bytes).hexdigest() == EXPECTED_ASSESSMENT_SHA256
+    assert campaign["assessmentSha256"] == EXPECTED_ASSESSMENT_SHA256
 
 
 def test_campaign_binds_two_runs_and_every_committed_q16_identity(

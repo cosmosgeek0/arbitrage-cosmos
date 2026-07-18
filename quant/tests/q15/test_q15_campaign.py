@@ -23,6 +23,11 @@ def test_campaign_records_exact_champion_demotion_and_mismatch() -> None:
     assert final["posture"] == "ABSTAIN_UNKNOWN"
     assert campaign["q14IdentityMismatchRejected"] is True
     assert campaign["feedbackState"] == "MATURED"
+    assert campaign["shadowEvaluationCounts"] == {
+        "distinctEventCount": 1,
+        "evaluationUnitCount": 1,
+        "slotId": "transition-binary",
+    }
     assert campaign["transitionCount"] == 2
     assert cards["schema"] == "Q15RegistryCardsV1"
     assert b"Q15SyntheticPromotionReportV1" in synthetic

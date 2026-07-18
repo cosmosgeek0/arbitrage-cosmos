@@ -11,10 +11,11 @@ and emits exact security/component/artifact evidence. It creates no strategy, mo
 calibration, registry, transport, capital, risk or execution owner.
 
 The current file also records post-acceptance correction projections. RB-13 changes
-Q16 worker isolation, while F-034/F-038/F-039 change money-truth bytes owned by
-Q02/Q05/Q08. Those fixes were integrated by director merge `5f887cf2…`, but none is
-covered by the historical phase or Q17 receipts. Current correction bytes and
-measurements remain `NOT_ACCEPTED` pending independent exact-commit verification.
+Q16 worker isolation, F-034/F-038/F-039 change money-truth bytes owned by
+Q02/Q05/Q08, and the final hunt changes Q06/Q07/Q09/Q11/Q12/Q14/Q15/Q16 source or
+evidence. None is covered by the historical phase or Q17 receipts. Current
+correction bytes and measurements remain `NOT_ACCEPTED` pending independent
+exact-commit verification.
 
 The final result is deliberately conservative:
 
@@ -85,13 +86,18 @@ corrections do not inherit those acceptances.
 - Q10 has a documentary erratum: its immutable implementation receipt says the
   quantile best-trial index is `11`, while both accepted machine artifacts say `7`.
   Exact machine artifacts control; immutable Q10 evidence is not rewritten.
-- Q12 calibration/uncertainty is synthetic-only evidence.
+- Q12 calibration/uncertainty is synthetic-only evidence. Historical accepted
+  campaign/golden pins remain `ad9d9b1f…` / `88382d29…`; current lineage-corrected
+  bytes `3230b579…` / `28d657a8…` are separately pinned and `NOT_ACCEPTED`.
 - Q13 remains `FAIL_DATA_INSUFFICIENT`; measured compute budget remains `UNKNOWN`.
 - Q14 compares its own synthetic random baseline and informative challenger. It
   does not validate or promote Q10/Q11. Temporal and implausible-skill negative
   controls are rejected as intended.
 - Q15 proves the synthetic registry mechanism, but every accepted model card lacks
-  a loadable payload. Champion inference readiness is `UNAVAILABLE_NONLOADABLE`.
+  a loadable payload. Historical campaign/cards remain `24debb2a…` /
+  `0457f22f…`; current exact-evaluation-unit bytes `1b93c4ce…` / `88554771…`
+  remain `NOT_ACCEPTED`. Champion inference readiness is
+  `UNAVAILABLE_NONLOADABLE`.
 
 Therefore passing Q17 machinery does not establish either edge hypothesis.
 
@@ -106,17 +112,17 @@ parent validation and bounded reap.
 
 | Shape | Rows/sample | p50 ns | p95 ns | p99 ns | Exact throughput evidence |
 | --- | ---: | ---: | ---: | ---: | --- |
-| cold object construction | 1 | 9,000 | 25,709 | 25,709 | `1,500,000,000 / 20,167` objects/s |
-| warm single | 1 | 124,242,416 | 124,429,167 | 124,429,167 | `8,000,000 / 993,681` items/s |
-| deep focus | 10 | 159,596,125 | 160,847,667 | 160,847,667 | `1,875,000,000 / 29,974,237` items/s |
-| focus | 25 | 218,822,334 | 219,342,500 | 219,342,500 | `12,500,000,000 / 109,467,507` items/s |
-| candidate | 128 | 983,502,125 | 1,036,202,209 | 1,036,202,209 | `384,000,000,000 / 3,002,634,751` items/s |
-| universe/watch | 452 | 3,711,352,291 | 3,791,230,541 | 3,791,230,541 | `1,356,000,000,000 / 11,092,977,457` items/s |
+| cold object construction | 1 | 9,375 | 25,042 | 25,042 | `8,000,000 / 107` objects/s |
+| warm single | 1 | 159,886,333 | 162,220,125 | 162,220,125 | `3,000,000,000 / 481,743,583` items/s |
+| deep focus | 10 | 196,308,500 | 199,747,458 | 199,747,458 | `2,500,000,000 / 49,189,743` items/s |
+| focus | 25 | 257,686,709 | 261,094,833 | 261,094,833 | `18,750,000,000 / 193,717,573` items/s |
+| candidate | 128 | 1,144,647,667 | 1,162,526,292 | 1,162,526,292 | `384,000,000,000 / 3,451,485,709` items/s |
+| universe/watch | 452 | 4,099,078,000 | 4,148,820,833 | 4,148,820,833 | `339,000,000,000 / 3,084,197,323` items/s |
 
-The bounded child reports self `ru_maxrss` as 58,949,632 bytes on Darwin, within
+The bounded child reports self `ru_maxrss` as 67,813,376 bytes on Darwin, within
 the provisional 8 GiB ceiling. Queue saturation is synchronized: three requests
 are admitted and completed, one overflow attempt returns queue-full, and service
-counters record exactly one queue rejection. The 2,750 ns close observation covers
+counters record exactly one queue rejection. The 2,916 ns close observation covers
 the parent close signal and an idle worker guard only; it does not prove graceful
 transport shutdown or active-worker termination latency.
 
@@ -141,10 +147,11 @@ lifecycle and Q17 bounded RSS child. Tests attack aliases, `getattr`, subscript
 access, dynamic imports, unsafe loaders, unbounded process cleanup, shell/string
 subprocesses, network clients and secret/account/order/money calls.
 
-Eight historical frozen identities still match exactly. The accepted directive-
-input lock identity remains pinned to `410010ef…` / 1,568 bytes, while the current
-post-acceptance file is explicitly reported as the known `d4bf318…` / 1,757-byte
-mismatch; it is not silently repinned or called clean. The generated scope artifact
+Seven historical frozen identities still match exactly. The accepted directive-
+input lock and package-lock identities remain pinned to `410010ef…` / 1,568 bytes
+and `3c97820f…` / 147,793 bytes. Current evidence explicitly reports the exact
+`d4bf318…` / 1,757-byte directive-lock and `59e41511…` / 147,256-byte package-lock
+mismatches; neither is silently repinned or called clean. The generated scope artifact
 contains only the declared 28-path expected C17 inventory. It truthfully labels
 actual staged/committed Git scope as `NOT_MEASURED_RESERVED_FOR_Q17_RECEIPT`; the
 immutable receipts must prove actual Git path and mode truth.
@@ -162,14 +169,17 @@ immutable receipts must prove actual Git path and mode truth.
 - `security_scope.v1.json`;
 - `artifact_manifest.v1.json`, which lists every other regular file exactly once.
 
-The component manifest keeps historical Q02/Q05/Q08/Q16 identities and accepted
+The component manifest keeps historical
+Q02/Q05/Q06/Q07/Q08/Q09/Q11/Q12/Q14/Q15/Q16 identities and accepted
 source/evidence seals separate from live post-acceptance correction seals. Q02
 retains its unchanged accepted primary while verifying current F-039 source. Q05
 and Q08 retain accepted primary metadata while separately verifying current
 F-038/F-039 and F-034/F-038/F-039 source/evidence bytes. Every correction row is
 `NOT_ACCEPTED`, says immutable receipts do not attest corrected bytes, records exact
 fix/director-merge provenance where available, and leaves the amended commit/tree
-pending rather than self-referencing. The manifest also binds all other Q00-Q15
+pending rather than self-referencing. Q06/Q07/Q09/Q11/Q12/Q14/Q15/Q16 current
+source/evidence rows are exact-pinned, `NOT_ACCEPTED`, and carry no invented commit
+identity. The manifest also binds all other Q00-Q15
 identities, director Q13/Q15 merge evidence, base/protocol/frozen truth, Q17
 activation and the exact current Q17 task.
 
@@ -182,7 +192,7 @@ honor `ABSTAIN_UNKNOWN`. There is no permission to enable external networking,
 secrets, private exchange APIs, orders, test orders, borrow/repay, transfers,
 withdrawals, leverage/margin mutation, capital, risk, approval or execution.
 
-`LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced. Q17 completion means evidence is
-ready for exact C17 verification; it is not yet lane acceptance. Only a separate
-clean-archive A17 receipt may mark `LANE_READY` and park the branch for director
-audit.
+`LIVE_EXECUTION_NOT_IMPLEMENTED` remains enforced. Historical C17/A17 acceptance is
+immutable and parks that evidence for audit. The current correction kit remains
+`NOT_ACCEPTED`; only an independent exact-commit verification and director
+disposition may change that state.

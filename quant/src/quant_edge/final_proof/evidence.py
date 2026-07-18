@@ -34,6 +34,14 @@ class _ArtifactSpec:
     top_level_keys: tuple[str, ...] | None
 
 
+@dataclass(frozen=True, slots=True)
+class _PostAcceptanceCorrectionSpec:
+    phase: str
+    correction_id: str
+    current_artifact_ids: tuple[str, ...]
+    historical_accepted_artifacts: tuple[_ArtifactSpec, ...]
+
+
 _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q10.implementation-receipt.v1",
@@ -78,7 +86,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q12.ensemble-campaign.v1",
         "quant/generated/q12/ensemble_campaign.v1.json",
-        "ad9d9b1f6ba9ffe3fc59450075f5221792f6c900403775f6820e2da763c28bb2",
+        "3230b579cf7d8262761591209bad5dbc024214a3cd5c5fd22fff82e72c3f9863",
         2_376,
         "application/json",
         "Q12EnsembleCampaignV1",
@@ -102,8 +110,8 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q12.ensemble-golden.v1",
         "quant/fixtures/q12_ensemble_golden_v1.json",
-        "88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77",
-        153_049,
+        "28d657a80b4c0328529c62e6dccf8631c2cb3574cc399ff27108b192677a942e",
+        153_683,
         "application/json",
         "Q12EnsembleGoldenFixtureV1",
         1,
@@ -186,8 +194,8 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-campaign.v1",
         "quant/generated/q15/registry_campaign.v1.json",
-        "24debb2a96b91338d937b67878c75be2ef38615880c9c0ad8cd30590ac0bd11b",
-        4_322,
+        "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d",
+        4_425,
         "application/json",
         "Q15RegistryCampaignV1",
         1,
@@ -207,6 +215,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
             "shadowBatchSha256",
             "shadowComparison",
             "shadowComparisonSha256",
+            "shadowEvaluationCounts",
             "transitionCount",
             "version",
         ),
@@ -214,7 +223,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-cards.v1",
         "quant/generated/q15/registry_cards.v1.json",
-        "0457f22f9b713955f654d99b7dcfe9795d84c71c7ec8baf5a927e007d5a08fb5",
+        "88554771ed8f570721bf55c2a28ef8fa5370c3ec34bcfcbf191763d3aed6e844",
         16_676,
         "application/json",
         "Q15RegistryCardsV1",
@@ -227,6 +236,63 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
             "registrations",
             "schema",
             "version",
+        ),
+    ),
+)
+
+_POST_ACCEPTANCE_CORRECTIONS: Final[tuple[_PostAcceptanceCorrectionSpec, ...]] = (
+    _PostAcceptanceCorrectionSpec(
+        phase="Q12",
+        correction_id="Q12_RESEARCH_INTEGRITY_LINEAGE_CORRECTION",
+        current_artifact_ids=("q12.ensemble-campaign.v1", "q12.ensemble-golden.v1"),
+        historical_accepted_artifacts=(
+            _ArtifactSpec(
+                "q12.ensemble-campaign.v1",
+                "quant/generated/q12/ensemble_campaign.v1.json",
+                "ad9d9b1f6ba9ffe3fc59450075f5221792f6c900403775f6820e2da763c28bb2",
+                2_376,
+                "application/json",
+                "Q12EnsembleCampaignV1",
+                1,
+                None,
+            ),
+            _ArtifactSpec(
+                "q12.ensemble-golden.v1",
+                "quant/fixtures/q12_ensemble_golden_v1.json",
+                "88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77",
+                153_049,
+                "application/json",
+                "Q12EnsembleGoldenFixtureV1",
+                1,
+                None,
+            ),
+        ),
+    ),
+    _PostAcceptanceCorrectionSpec(
+        phase="Q15",
+        correction_id="Q15_RESEARCH_INTEGRITY_EVALUATION_UNIT_CORRECTION",
+        current_artifact_ids=("q15.registry-campaign.v1", "q15.registry-cards.v1"),
+        historical_accepted_artifacts=(
+            _ArtifactSpec(
+                "q15.registry-campaign.v1",
+                "quant/generated/q15/registry_campaign.v1.json",
+                "24debb2a96b91338d937b67878c75be2ef38615880c9c0ad8cd30590ac0bd11b",
+                4_322,
+                "application/json",
+                "Q15RegistryCampaignV1",
+                1,
+                None,
+            ),
+            _ArtifactSpec(
+                "q15.registry-cards.v1",
+                "quant/generated/q15/registry_cards.v1.json",
+                "0457f22f9b713955f654d99b7dcfe9795d84c71c7ec8baf5a927e007d5a08fb5",
+                16_676,
+                "application/json",
+                "Q15RegistryCardsV1",
+                1,
+                None,
+            ),
         ),
     ),
 )
@@ -667,6 +733,19 @@ def _validate_q14(values: dict[str, dict[str, object]]) -> None:
 def _validate_q15(values: dict[str, dict[str, object]]) -> None:
     campaign = values["q15.registry-campaign.v1"]
     cards = values["q15.registry-cards.v1"]
+    evaluation_counts = _require_mapping(
+        campaign.get("shadowEvaluationCounts"), path="q15.shadowEvaluationCounts"
+    )
+    _exact_keys(
+        evaluation_counts,
+        ("distinctEventCount", "evaluationUnitCount", "slotId"),
+        path="q15.shadowEvaluationCounts",
+    )
+    _expect(
+        evaluation_counts,
+        {"distinctEventCount": 1, "evaluationUnitCount": 1, "slotId": "transition-binary"},
+        path="q15.shadowEvaluationCounts",
+    )
     champion = _require_mapping(campaign.get("finalChampion"), path="q15.finalChampion")
     _expect(champion.get("modelId"), "logistic:v1", path="q15.finalChampion.modelId")
     _expect(champion.get("modelRevision"), "q10.golden.v1", path="q15.finalChampion.revision")
@@ -684,19 +763,58 @@ def _validate_q15(values: dict[str, dict[str, object]]) -> None:
     _expect(card.get("loadableModelPayload"), False, path="q15.championCard.loadable")
 
 
+def _artifact_row(spec: _ArtifactSpec) -> dict[str, object]:
+    return {
+        "artifactId": spec.artifact_id,
+        "byteLength": spec.byte_length,
+        "mediaType": spec.media_type,
+        "relativePath": spec.relative_path,
+        "schemaName": spec.schema_name,
+        "schemaVersion": spec.schema_version,
+        "sha256": spec.sha256,
+    }
+
+
 def _artifact_rows() -> list[dict[str, object]]:
-    return [
-        {
-            "artifactId": spec.artifact_id,
-            "byteLength": spec.byte_length,
-            "mediaType": spec.media_type,
-            "relativePath": spec.relative_path,
-            "schemaName": spec.schema_name,
-            "schemaVersion": spec.schema_version,
-            "sha256": spec.sha256,
-        }
-        for spec in _ARTIFACTS
-    ]
+    return [_artifact_row(spec) for spec in _ARTIFACTS]
+
+
+def _post_acceptance_correction_rows() -> list[dict[str, object]]:
+    current_by_id = {spec.artifact_id: spec for spec in _ARTIFACTS}
+    rows: list[dict[str, object]] = []
+    for correction in _POST_ACCEPTANCE_CORRECTIONS:
+        try:
+            current = [
+                current_by_id[artifact_id] for artifact_id in correction.current_artifact_ids
+            ]
+        except KeyError as error:
+            raise EvidenceVerificationError(
+                "post-acceptance correction references unavailable current evidence"
+            ) from error
+        historical_ids = tuple(
+            spec.artifact_id for spec in correction.historical_accepted_artifacts
+        )
+        if historical_ids != correction.current_artifact_ids:
+            raise EvidenceVerificationError(
+                "post-acceptance correction historical and current identities differ"
+            )
+        rows.append(
+            {
+                "acceptanceState": "NOT_ACCEPTED",
+                "correctionId": correction.correction_id,
+                "currentArtifacts": [_artifact_row(spec) for spec in current],
+                "historicalAcceptedArtifacts": [
+                    _artifact_row(spec) for spec in correction.historical_accepted_artifacts
+                ],
+                "historicalReceipts": "DOES_NOT_ATTEST_CORRECTED_BYTES",
+                "implementationCommit": "PENDING_NOT_EMBEDDED",
+                "implementationState": ("CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"),
+                "implementationTree": "PENDING_NOT_EMBEDDED",
+                "phase": correction.phase,
+                "verificationState": "PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION",
+            }
+        )
+    return rows
 
 
 def _expected_projection() -> dict[str, object]:
@@ -746,6 +864,12 @@ def _expected_projection() -> dict[str, object]:
                 "status": "SYNTHETIC_ONLY",
             },
             {
+                "claimId": "q12.post-acceptance-correction",
+                "classification": "UNKNOWN",
+                "sourceArtifactIds": ["q12.ensemble-campaign.v1", "q12.ensemble-golden.v1"],
+                "status": "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
+            },
+            {
                 "claimId": "q13.deep-data-gate",
                 "classification": "DATA_INSUFFICIENT",
                 "sourceArtifactIds": ["q13.data-sufficiency.v1"],
@@ -776,6 +900,12 @@ def _expected_projection() -> dict[str, object]:
                 "status": "SYNTHETIC_ONLY",
             },
             {
+                "claimId": "q15.post-acceptance-correction",
+                "classification": "UNKNOWN",
+                "sourceArtifactIds": ["q15.registry-campaign.v1", "q15.registry-cards.v1"],
+                "status": "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
+            },
+            {
                 "claimId": "q15.champion-inference-readiness",
                 "classification": "REJECTED",
                 "sourceArtifactIds": ["q15.registry-campaign.v1", "q15.registry-cards.v1"],
@@ -789,6 +919,7 @@ def _expected_projection() -> dict[str, object]:
             "executionAuthority": False,
             "overallClassification": "DATA_INSUFFICIENT",
         },
+        "postAcceptanceCorrections": _post_acceptance_correction_rows(),
         "schema": "Q17AcceptedResearchEvidenceV1",
         "version": 1,
     }
@@ -806,7 +937,15 @@ def validate_research_evidence_projection(value: object) -> dict[str, object]:
         raise EvidenceVerificationError("research evidence projection is not JSON-safe") from error
     _exact_keys(
         mapping,
-        ("artifacts", "axes", "claims", "conclusion", "schema", "version"),
+        (
+            "artifacts",
+            "axes",
+            "claims",
+            "conclusion",
+            "postAcceptanceCorrections",
+            "schema",
+            "version",
+        ),
         path="$",
     )
     claims = _require_list(mapping.get("claims"), path="$.claims")
@@ -815,6 +954,21 @@ def validate_research_evidence_projection(value: object) -> dict[str, object]:
         classification = claim.get("classification")
         if classification not in _CLASSIFICATIONS:
             raise EvidenceVerificationError("research evidence classification is not allowlisted")
+    corrections = _require_list(
+        mapping.get("postAcceptanceCorrections"), path="$.postAcceptanceCorrections"
+    )
+    for index, row in enumerate(corrections):
+        correction = _require_mapping(row, path=f"$.postAcceptanceCorrections[{index}]")
+        _expect(
+            correction.get("acceptanceState"),
+            "NOT_ACCEPTED",
+            path=f"$.postAcceptanceCorrections[{index}].acceptanceState",
+        )
+        _expect(
+            correction.get("historicalReceipts"),
+            "DOES_NOT_ATTEST_CORRECTED_BYTES",
+            path=f"$.postAcceptanceCorrections[{index}].historicalReceipts",
+        )
     expected = _expected_projection()
     if observed_bytes != canonical_json_bytes(expected):
         raise EvidenceVerificationError("research evidence projection differs from accepted truth")

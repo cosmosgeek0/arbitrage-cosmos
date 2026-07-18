@@ -1,11 +1,12 @@
 """Exact-current Q00-Q17 component inventory for the final Q-lane proof.
 
-The manifest is a projection of already accepted receipts and artifacts.  It does
-not ask Git what is current at runtime and it does not infer acceptance from a
-directory merely existing.  Commit identities are pinned constants; accepted
-phase references, the current Q17 task and every accepted package tree are
-reverified from current regular, non-symlink bytes.  Q17 activation-task metadata
-is explicitly historical and is never relabeled as the current task reference.
+The manifest projects accepted receipts and artifacts alongside explicitly
+unaccepted current correction bytes.  It does not ask Git what is current at
+runtime and it does not infer acceptance from a directory merely existing.
+Commit identities and historical acceptance seals remain pinned constants;
+current Q17 task and correction bytes are reverified from regular, non-symlink
+paths.  Q17 activation-task metadata is explicitly historical and is never
+relabeled as the current task reference.
 """
 
 from __future__ import annotations
@@ -33,8 +34,6 @@ _SHA256_LENGTH: Final = 64
 _POST_ACCEPTANCE_IMPLEMENTATION_STATE: Final = (
     "CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
 )
-_Q16_RB13_CORRECTION_ID: Final = "RB13_QUANT_INFERENCE_WORKER_ISOLATION"
-_Q16_RB13_IMPLEMENTATION_STATE: Final = _POST_ACCEPTANCE_IMPLEMENTATION_STATE
 _Q16_HISTORICAL_SERVICE_SHA256: Final = (
     "9531d45a513d28c08945adffbb51f149dc3e27afbc897f09bf66d660bf43f59f"
 )
@@ -96,6 +95,7 @@ class _PostAcceptanceCorrectionSpec:
     current_source: _SourceSpec
     current_primary_evidence: _ArtifactSpec | None
     fix_commits: tuple[str, ...]
+    correction_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,17 +369,10 @@ _SOURCE_SPECS: Final[tuple[_SourceSpec, ...]] = (
     ),
 )
 
-# C16/A16 accepted the source seal above.  RB-13 changes those bytes after that
-# acceptance, so its live source and service bytes are verified separately and
-# stay explicitly pending independent commit verification.  These pins are
-# regenerated with the post-acceptance correction; they are never projected as
-# evidence for the immutable C16/A16 identities or receipts.
-_Q16_RB13_SOURCE_SPEC: Final = _SourceSpec(
-    "quant/src/quant_edge/inference",
-    "src/quant_edge/inference",
-    8,
-    "2a2203a1e5a9e652d1bcc87b92b5983dc14aaa879ea9596dc4b7e49a7481a202",
-)
+# C16/A16 accepted the historical source seal above.  The RB-13 service source
+# remains an independently pinned part of Q16's cumulative current correction;
+# neither it nor later Q16 correction bytes attest the immutable C16/A16
+# identities or receipts.
 _Q16_RB13_SERVICE_SPEC: Final = _ArtifactSpec(
     "q16.rb13-inference-service-source.v1",
     "quant/src/quant_edge/inference/service.py",
@@ -390,10 +383,11 @@ _Q16_RB13_SERVICE_SPEC: Final = _ArtifactSpec(
     1,
 )
 
-# F-034/F-038/F-039 changed already accepted Q02/Q05/Q08 owner bytes.  Their
-# accepted source/evidence pins above remain immutable.  These specs verify the
-# exact current money-truth correction bytes without promoting them into the
-# historical phase identities or receipts.
+# These specs verify exact current correction bytes without promoting them into
+# historical phase identities or receipts.  The original accepted source and
+# evidence pins above are immutable.  ``fix_commits`` is populated only where a
+# prior independently named correction history exists; final-hunt bytes instead
+# carry stable correction references while exact commit verification is pending.
 _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = {
     "Q02": _PostAcceptanceCorrectionSpec(
         "MONEY_TRUTH_Q02_INSTRUMENT_UNIT_IDENTITY",
@@ -443,6 +437,145 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             1,
         ),
         (_F034_COMMIT, _F038_COMMIT, _F039_COMMIT),
+    ),
+    "Q06": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q06_NUMERICAL_DOMAIN_BOUNDS",
+        _SourceSpec(
+            "quant/src/quant_edge/features",
+            "src/quant_edge/features",
+            9,
+            "67f64bffa5319cb2ac17245b8a744a0a057fdc57ce112cfc244c16e1a5fc18dd",
+        ),
+        None,
+        (),
+        ("QUANT_HUNT_19",),
+    ),
+    "Q07": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q07_CROSS_STREAM_ORDERING",
+        _SourceSpec(
+            "quant/src/quant_edge/micro",
+            "src/quant_edge/micro",
+            7,
+            "f7e0cdf5790fef4b0d0b552195822d716b5d7544687e91ff1837ad5ec19d7c2f",
+        ),
+        _ArtifactSpec(
+            "q07.final-hunt-micro-golden.v1",
+            "quant/fixtures/q07_micro_golden_v1.json",
+            26_326,
+            "6b5ad2e2b43b3574240ae649eaede07962cb67963359b5df2ab685022acd580c",
+            "application/json",
+            "Q07MicroGoldenFixtureV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_09",),
+    ),
+    "Q09": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q09_TRUTH_AND_NUMERICAL_BOUNDS",
+        _SourceSpec(
+            "quant/src/quant_edge/regime",
+            "src/quant_edge/regime",
+            13,
+            "2592c0abccec3dfb510a0755fda9d7858c974890a768de5940fff1b0b109075a",
+        ),
+        None,
+        (),
+        ("QUANT_HUNT_08", "QUANT_HUNT_10", "QUANT_HUNT_19"),
+    ),
+    "Q11": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q11_SURVIVAL_SUPPORT_AND_IDENTITY",
+        _SourceSpec(
+            "quant/src/quant_edge/survival",
+            "src/quant_edge/survival",
+            8,
+            "5d9d0e2c918e82c3b2b4670ee3e11f06df81c1def9677b1babd46813586fef47",
+        ),
+        _ArtifactSpec(
+            "q11.final-hunt-survival-campaign.v1",
+            "quant/generated/q11/survival_campaign.v1.json",
+            18_709,
+            "6d35ef2d42d627c1cf3a95a7ca77be50daea64655c8366d46b0382f59a9582c1",
+            "application/json",
+            "Q11SurvivalCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_13", "QUANT_HUNT_14"),
+    ),
+    "Q12": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q12_SPLIT_AND_PREDICTION_LINEAGE",
+        _SourceSpec(
+            "quant/src/quant_edge/ensemble",
+            "src/quant_edge/ensemble",
+            7,
+            "284a22a9f71849c8485c3b1b933d544eaa87cef2159b8a35033f4b78af4dd87e",
+        ),
+        _ArtifactSpec(
+            "q12.final-hunt-ensemble-campaign.v1",
+            "quant/generated/q12/ensemble_campaign.v1.json",
+            2_376,
+            "3230b579cf7d8262761591209bad5dbc024214a3cd5c5fd22fff82e72c3f9863",
+            "application/json",
+            "Q12EnsembleCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_07", "Q12_LINEAGE_CASCADE_FROM_QUANT_HUNT_01"),
+    ),
+    "Q14": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q14_VALIDATION_TRUTH",
+        _SourceSpec(
+            "quant/src/quant_edge/validation",
+            "src/quant_edge/validation",
+            12,
+            "5f537f1bbdaed1f88e726fce58dfb05f13d0050bb990b318ac71e4a21eee804f",
+        ),
+        None,
+        (),
+        (
+            "QUANT_HUNT_01",
+            "QUANT_HUNT_03",
+            "QUANT_HUNT_04",
+            "QUANT_HUNT_07",
+            "QUANT_HUNT_12",
+        ),
+    ),
+    "Q15": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q15_REGISTRY_EXACTNESS",
+        _SourceSpec(
+            "quant/src/quant_edge/registry_ops",
+            "src/quant_edge/registry_ops",
+            7,
+            "0e7a58f1298b2b2cfe67c0ac00dad8f41f14eba9e654a2862c7f7b3ccdb6b6cf",
+        ),
+        _ArtifactSpec(
+            "q15.final-hunt-registry-campaign.v1",
+            "quant/generated/q15/registry_campaign.v1.json",
+            4_425,
+            "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d",
+            "application/json",
+            "Q15RegistryCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_11", "QUANT_HUNT_21"),
+    ),
+    "Q16": _PostAcceptanceCorrectionSpec(
+        "Q16_CUMULATIVE_POST_ACCEPTANCE_CORRECTION",
+        _SourceSpec(
+            "quant/src/quant_edge/inference",
+            "src/quant_edge/inference",
+            8,
+            "b16710dfdeaf1d2792d0b62d2805f91c425ce4db5c9f13a6a4282f74b407a20d",
+        ),
+        None,
+        (),
+        (
+            "RB13_QUANT_INFERENCE_WORKER_ISOLATION",
+            "QUANT_HUNT_20",
+            "QUANT_HUNT_21",
+            "Q16_REGENERATION_CASCADE_FROM_Q12_CURRENT_EVIDENCE",
+        ),
     ),
 }
 
@@ -1168,12 +1301,7 @@ def _phase_specs() -> tuple[_PhaseSpec, ...]:
         if phase in _POST_ACCEPTANCE_CORRECTIONS:
             limitations.append(f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_{phase}_RECEIPTS")
         if phase == "Q16":
-            limitations.extend(
-                (
-                    "SAFE_ABSTAIN_ONLY",
-                    "POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_Q16_RECEIPTS",
-                )
-            )
+            limitations.append("SAFE_ABSTAIN_ONLY")
         result.append(
             _PhaseSpec(
                 phase,
@@ -1224,10 +1352,10 @@ def _phase_mapping(
             sha256=spec.acceptance_receipt_sha256,
         ),
     )
-    money_truth_correction = _POST_ACCEPTANCE_CORRECTIONS.get(spec.phase)
+    post_acceptance_spec = _POST_ACCEPTANCE_CORRECTIONS.get(spec.phase)
     if (
-        money_truth_correction is not None
-        and money_truth_correction.current_primary_evidence is not None
+        post_acceptance_spec is not None
+        and post_acceptance_spec.current_primary_evidence is not None
     ):
         primary_ref = _pinned_artifact_mapping(spec.primary_evidence)
         parsed_primary = None
@@ -1241,10 +1369,7 @@ def _phase_mapping(
         {"commit": correction.commit, "role": correction.role, "tree": correction.tree}
         for correction in spec.corrections
     ]
-    is_q16_post_acceptance_correction = spec.phase == "Q16"
-    is_post_acceptance_correction = (
-        money_truth_correction is not None or is_q16_post_acceptance_correction
-    )
+    is_post_acceptance_correction = post_acceptance_spec is not None
     post_acceptance_correction: dict[str, object] | None = None
     source: dict[str, object] | None
     if is_post_acceptance_correction:
@@ -1252,49 +1377,37 @@ def _phase_mapping(
             raise ComponentManifestError("historical correction source metadata is unavailable")
         source = _pinned_source_mapping(spec.source)
 
-    if is_q16_post_acceptance_correction:
-        current_source = _source_mapping(repo_root, root_before, _Q16_RB13_SOURCE_SPEC)
-        current_service = _verified_python_source_mapping(
-            repo_root,
-            root_before,
-            _Q16_RB13_SERVICE_SPEC,
-        )
-        post_acceptance_correction = {
-            "acceptanceState": "NOT_ACCEPTED",
-            "correctionId": _Q16_RB13_CORRECTION_ID,
-            "currentServiceSource": current_service,
-            "currentSourceRoot": current_source,
-            "historicalAcceptedServiceSha256": _Q16_HISTORICAL_SERVICE_SHA256,
-            "historicalReceipts": "DOES_NOT_ATTEST_CORRECTED_BYTES",
-            "implementationCommit": PENDING,
-            "implementationState": _Q16_RB13_IMPLEMENTATION_STATE,
-            "implementationTree": PENDING,
-            "verificationState": "PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION",
-        }
-    elif money_truth_correction is not None:
+    if post_acceptance_spec is not None:
         current_source = _source_mapping(
             repo_root,
             root_before,
-            money_truth_correction.current_source,
+            post_acceptance_spec.current_source,
         )
-        if money_truth_correction.current_primary_evidence is None:
+        if post_acceptance_spec.current_primary_evidence is None:
             current_primary = primary_ref
         else:
             current_primary, _ = _artifact_mapping(
                 repo_root,
                 root_before,
-                money_truth_correction.current_primary_evidence,
+                post_acceptance_spec.current_primary_evidence,
             )
-        post_acceptance_correction = {
-            "acceptanceState": "NOT_ACCEPTED",
-            "correctionId": money_truth_correction.correction_id,
-            "currentBytesProvenance": {
+        if post_acceptance_spec.fix_commits:
+            current_bytes_provenance: dict[str, object] = {
                 "directorIntegrationCommit": _MONEY_TRUTH_DIRECTOR_INTEGRATION_COMMIT,
                 "directorIntegrationTree": _MONEY_TRUTH_DIRECTOR_INTEGRATION_TREE,
-                "fixCommits": list(money_truth_correction.fix_commits),
+                "fixCommits": list(post_acceptance_spec.fix_commits),
                 "tipCommit": _MONEY_TRUTH_FIX_TIP_COMMIT,
                 "tipTree": _MONEY_TRUTH_FIX_TIP_TREE,
-            },
+            }
+        else:
+            current_bytes_provenance = {
+                "correctionRefs": list(post_acceptance_spec.correction_refs),
+                "identityPosture": "CURRENT_BYTES_PINNED_EXACT_COMMIT_PENDING",
+            }
+        post_acceptance_correction = {
+            "acceptanceState": "NOT_ACCEPTED",
+            "correctionId": post_acceptance_spec.correction_id,
+            "currentBytesProvenance": current_bytes_provenance,
             "currentPrimaryEvidence": current_primary,
             "currentSourceRoot": current_source,
             "historicalAcceptedPrimaryEvidenceSha256": spec.primary_evidence.sha256,
@@ -1304,25 +1417,32 @@ def _phase_mapping(
             "implementationTree": PENDING,
             "verificationState": "PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION",
         }
+        if spec.phase == "Q16":
+            post_acceptance_correction.update(
+                {
+                    "currentServiceSource": _verified_python_source_mapping(
+                        repo_root,
+                        root_before,
+                        _Q16_RB13_SERVICE_SPEC,
+                    ),
+                    "historicalAcceptedServiceSha256": _Q16_HISTORICAL_SERVICE_SHA256,
+                }
+            )
     else:
         source = (
             None if spec.source is None else _source_mapping(repo_root, root_before, spec.source)
         )
-    if is_q16_post_acceptance_correction:
+    if post_acceptance_spec is not None:
+        disposition_scope = (
+            f"{spec.phase}_MONEY_TRUTH_CORRECTION"
+            if post_acceptance_spec.fix_commits
+            else f"{spec.phase}_POST_ACCEPTANCE_CORRECTION"
+        )
         dispositions = [
             "HISTORICAL_IMPLEMENTATION_ACCEPTED",
             "HISTORICAL_EXACT_COMMIT_ACCEPTED",
-            "RB13_CORRECTION_IMPLEMENTED",
-            "RB13_CORRECTION_PENDING_INDEPENDENT_VERIFICATION",
-            "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
-            "NOT_ACCEPTED",
-        ]
-    elif money_truth_correction is not None:
-        dispositions = [
-            "HISTORICAL_IMPLEMENTATION_ACCEPTED",
-            "HISTORICAL_EXACT_COMMIT_ACCEPTED",
-            f"{spec.phase}_MONEY_TRUTH_CORRECTION_IMPLEMENTED",
-            f"{spec.phase}_MONEY_TRUTH_CORRECTION_PENDING_INDEPENDENT_VERIFICATION",
+            f"{disposition_scope}_IMPLEMENTED",
+            f"{disposition_scope}_PENDING_INDEPENDENT_VERIFICATION",
             "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
             "NOT_ACCEPTED",
         ]

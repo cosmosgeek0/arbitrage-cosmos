@@ -5,7 +5,15 @@
  */
 import type { BookTicker, Clock, MarkFunding, SymbolMeta } from '../v0/types.js';
 import { basisConfig, type BasisConfig } from './config.js';
-import type { BorrowInfo, DepthLadder, FundingHistoryPoint, LadderLevel } from './types.js';
+import type {
+  BasisBookIngestResult,
+  BasisBookPair,
+  BasisCausalMarket,
+  BorrowInfo,
+  DepthLadder,
+  FundingHistoryPoint,
+  LadderLevel,
+} from './types.js';
 
 interface SymbolBucket {
   meta: SymbolMeta;
@@ -18,6 +26,8 @@ interface SymbolBucket {
   spotDepth: DepthLadder | null;
   perpDepth: DepthLadder | null;
   fundingHistory: FundingHistoryPoint[];
+  acceptedBookSequence: number;
+  lastAcceptedBookSourceTs: number | null;
 }
 
 const SYMBOL_RE = /^[A-Z0-9]{2,32}$/;
@@ -75,6 +85,8 @@ function emptyBucket(meta: SymbolMeta): SymbolBucket {
     spotDepth: null,
     perpDepth: null,
     fundingHistory: [],
+    acceptedBookSequence: 0,
+    lastAcceptedBookSourceTs: null,
   };
 }
 
@@ -128,28 +140,12 @@ export class BasisMarketState {
     }
   }
 
-  onSpotBook(tick: BookTicker): void {
-    const bucket = this.buckets.get(tick.symbol);
-    if (!bucket || this.outOfOrder(tick.ts, bucket.spotBook?.ts)) return;
-    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) {
-      bucket.spotBook = null;
-      bucket.spotSeenTs = null;
-      return;
-    }
-    bucket.spotBook = { ...tick };
-    bucket.spotSeenTs = this.clock.now();
+  onSpotBook(tick: BookTicker): BasisBookIngestResult | null {
+    return this.onBook(tick, 'SPOT');
   }
 
-  onPerpBook(tick: BookTicker): void {
-    const bucket = this.buckets.get(tick.symbol);
-    if (!bucket || this.outOfOrder(tick.ts, bucket.perpBook?.ts)) return;
-    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) {
-      bucket.perpBook = null;
-      bucket.perpSeenTs = null;
-      return;
-    }
-    bucket.perpBook = { ...tick };
-    bucket.perpSeenTs = this.clock.now();
+  onPerpBook(tick: BookTicker): BasisBookIngestResult | null {
+    return this.onBook(tick, 'PERPETUAL');
   }
 
   onMarkFunding(tick: MarkFunding): void {
@@ -298,6 +294,63 @@ export class BasisMarketState {
       finitePositive(tick.askQty) &&
       tick.bid <= tick.ask
     );
+  }
+
+  private onBook(
+    tick: BookTicker,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+  ): BasisBookIngestResult | null {
+    const bucket = this.buckets.get(tick.symbol);
+    if (!bucket) return null;
+    const previous = market === 'SPOT' ? bucket.spotBook : bucket.perpBook;
+    if (this.outOfOrder(tick.ts, previous?.ts)) {
+      return { kind: 'DISCONTINUITY', symbol: tick.symbol, market, reason: 'SOURCE_CLOCK_REVERSAL' };
+    }
+    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) {
+      if (market === 'SPOT') {
+        bucket.spotBook = null;
+        bucket.spotSeenTs = null;
+      } else {
+        bucket.perpBook = null;
+        bucket.perpSeenTs = null;
+      }
+      return { kind: 'DISCONTINUITY', symbol: tick.symbol, market, reason: 'INVALID_OR_STALE_BOOK' };
+    }
+
+    const before = this.bookPair(bucket);
+    const lastSourceTs = bucket.lastAcceptedBookSourceTs;
+    const chronology = lastSourceTs === null || tick.ts > lastSourceTs
+      ? 'ORDERED'
+      : tick.ts === lastSourceTs
+        ? 'TIE'
+        : 'REVERSAL';
+    if (market === 'SPOT') {
+      bucket.spotBook = { ...tick };
+      bucket.spotSeenTs = this.clock.now();
+    } else {
+      bucket.perpBook = { ...tick };
+      bucket.perpSeenTs = this.clock.now();
+    }
+    bucket.acceptedBookSequence += 1;
+    bucket.lastAcceptedBookSourceTs = lastSourceTs === null ? tick.ts : Math.max(lastSourceTs, tick.ts);
+    return {
+      kind: 'ACCEPTED',
+      symbol: tick.symbol,
+      market,
+      sourceTs: tick.ts,
+      acceptedAtMs: this.clock.now(),
+      acceptedEventSequence: bucket.acceptedBookSequence,
+      chronology,
+      before,
+      after: this.bookPair(bucket),
+    };
+  }
+
+  private bookPair(bucket: SymbolBucket): BasisBookPair {
+    return {
+      spot: bucket.spotBook ? { ...bucket.spotBook } : null,
+      perpetual: bucket.perpBook ? { ...bucket.perpBook } : null,
+    };
   }
 
   private validBorrow(info: BorrowInfo): boolean {

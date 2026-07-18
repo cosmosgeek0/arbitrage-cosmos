@@ -216,11 +216,11 @@ export class BasisEngine {
   }
 
   onSpotBook(t: BookTicker): void {
-    this.market.onSpotBook(t);
+    this.gaps.onBookIngest(this.market.onSpotBook(t));
   }
 
   onPerpBook(t: BookTicker): void {
-    this.market.onPerpBook(t);
+    this.gaps.onBookIngest(this.market.onPerpBook(t));
   }
 
   onMarkFunding(t: MarkFunding): void {

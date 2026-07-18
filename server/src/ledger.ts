@@ -717,15 +717,25 @@ interface BrowserSessionDbRow {
   requests: number;
 }
 
+export interface LedgerOptions {
+  /** Synchronous fail-closed authority check immediately before any fs/DB mutation. */
+  readonly beforeMutation?: () => void;
+}
+
 export class Ledger extends EventEmitter {
   private db: Database.Database;
   private healthProbeCache: { checkedAt: number; writable: boolean } | null = null;
   private closed = false;
 
-  constructor(dataDir = path.resolve(process.cwd(), 'data')) {
+  constructor(
+    dataDir = path.resolve(process.cwd(), 'data'),
+    options: Readonly<LedgerOptions> = {},
+  ) {
     super();
+    const databasePath = path.join(dataDir, 'cosmos.db');
+    options.beforeMutation?.();
     mkdirSync(dataDir, { recursive: true });
-    this.db = new Database(path.join(dataDir, 'cosmos.db'));
+    this.db = new Database(databasePath);
     try {
       const startupSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
       if (!Number.isSafeInteger(startupSchemaVersion) || (startupSchemaVersion as number) < 0) {

@@ -6,11 +6,15 @@
  * the global dominance snapshot refresh hourly. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveDataDirAuthority } from '../bootstrap/environment.js';
+import {
+  assertDataDirCachePathHeld,
+  resolveDataDirAuthority,
+} from '../bootstrap/environment.js';
 import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
-const { profileCache: DISK } = resolveDataDirAuthority();
+const DATA_DIR_AUTHORITY = resolveDataDirAuthority();
+const { profileCache: DISK } = DATA_DIR_AUTHORITY;
 const PROFILE_TTL = 60 * 60 * 1000; // 1h
 const CALL_GAP_MS = 2_500; // keyless CG throttles hard; stay polite
 const FETCH_TIMEOUT_MS = 12_000;
@@ -518,8 +522,11 @@ function enqueueProfilePersist(): Promise<void> {
     .then(async () => {
       const temp = `${DISK}.${process.pid}.${Date.now()}.${++persistSequence}.tmp`;
       try {
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.mkdir(path.dirname(DISK), { recursive: true });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.writeFile(temp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx', flush: true });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.rename(temp, DISK);
       } finally {
         await fs.promises.unlink(temp).catch(() => undefined);

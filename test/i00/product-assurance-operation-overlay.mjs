@@ -42,7 +42,7 @@ const ASSESSMENT_SITE_IDS = Object.freeze([
 ].sort());
 
 const NEWS_CONTEXT_PATH = 'server/src/services/newsContext.ts';
-const NEWS_CONTEXT_SOURCE_SHA256 = 'b41d9d54b2eac621810f7629dd6131fa76a35c0b1793863c4be374f04f767cb6';
+const NEWS_CONTEXT_SOURCE_SHA256 = '691109a948e0da6dd953326e995a0f889a7be70cf472999e5dcf8e0ec3e7e9b8';
 const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
 
 export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
@@ -57,7 +57,7 @@ export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
   operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
   siteId: NEWS_CONTEXT_SITE_ID,
   path: NEWS_CONTEXT_PATH,
-  line: 2312,
+  line: 2319,
   column: 25,
   rawKind: OPERATION_KINDS.MUTATION_CALL,
   rawSymbol: 'fetch:DYNAMIC_METHOD',
@@ -66,7 +66,7 @@ export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
 });
 
 const PROFILE_PATH = 'server/src/binance/profile.ts';
-const PROFILE_SOURCE_SHA256 = 'e87d976c450182cc2adccad3e6c080133045fdb78ad13f0c13d24394ea4285c6';
+const PROFILE_SOURCE_SHA256 = '07dae80c72e88b8334c54d7632931e61253adf0eb90dc7d309368e012d84947b';
 const PROFILE_SITE_IDS = Object.freeze([
   'OPSITE_5EA03340B3E6E86C7930',
 ].sort());

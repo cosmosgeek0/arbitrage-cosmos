@@ -258,13 +258,19 @@ check(
     /const\s+chain\s*=\s*\[resolved\]\.filter\(Boolean\)/.test(tokenIconSource)
 );
 check(
-  'browser campaign public caches share the process-bound physical DATA_DIR authority',
+  'browser campaign caches share dual DATA_DIR authority and pinned physical parents',
   [profileSource, iconSource, liquidationSource, newsContextSource].every((source) => (
-    /resolveDataDirAuthority\(\)/.test(source)
+    /resolveDataDirAuthority\(\)/.test(source) &&
+      /assertDataDirCachePathHeld\(/.test(source)
   )) && /environment\.DATA_DIR/.test(environmentSource) &&
     /PROCESS_DATA_DIR_AUTHORITY/.test(environmentSource) &&
+    /DATA_DIR_LOGICAL_LEASE_ROOT/.test(environmentSource) &&
+    /const\s+logicalBinding\s*=\s*acquireLogicalLease/.test(environmentSource) &&
+    /const\s+physicalLease\s*=\s*new\s+DataDirLease/.test(environmentSource) &&
+    /assertDataDirCachePathHeld/.test(environmentSource) &&
     /realpathSync\.native/.test(environmentSource) &&
-    /assertDataDirAuthorityHeld\(DATA_DIR_AUTHORITY\)/.test(serverIndex) &&
+    /const\s+dataDirLease\s*=\s*DATA_DIR_LEASE/.test(serverIndex) &&
+    /beforeMutation:\s*\(\)\s*=>\s*dataDirLease\.assertHeld\(\)/.test(serverIndex) &&
     /icon_cache\.json/.test(environmentSource) &&
     /profile_cache\.json/.test(environmentSource) &&
     /liquidations\.json/.test(environmentSource)

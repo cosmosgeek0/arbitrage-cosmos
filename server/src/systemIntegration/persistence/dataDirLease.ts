@@ -9,7 +9,7 @@ import {
   linkSync,
   lstatSync,
   openSync,
-  readdirSync,
+  opendirSync,
   readSync,
   type Stats,
   unlinkSync,
@@ -379,16 +379,23 @@ export class DataDirLease {
   }
 
   private rejectOrScavengeWitnesses(nowMs: number): void {
-    let names: string[];
+    const names: string[] = [];
+    let directory: ReturnType<typeof opendirSync> | null = null;
     try {
-      names = readdirSync(this.dataDir)
-        .filter((name) => name.startsWith(LEASE_WITNESS_PREFIX))
-        .sort();
-    } catch {
+      directory = opendirSync(this.dataDir);
+      for (let entry = directory.readSync(); entry !== null; entry = directory.readSync()) {
+        if (!entry.name.startsWith(LEASE_WITNESS_PREFIX)) continue;
+        if (names.length === MAX_WITNESSES) {
+          throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR witness bound is exceeded');
+        }
+        names.push(entry.name);
+      }
+      names.sort();
+    } catch (error) {
+      if (error instanceof DataDirLeaseError) throw error;
       throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR witnesses are unreadable');
-    }
-    if (names.length > MAX_WITNESSES) {
-      throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR witness bound is exceeded');
+    } finally {
+      try { directory?.closeSync(); } catch { /* Preserve the scan result. */ }
     }
     const witnesses = names.map((name) => {
       if (!new RegExp(`^${LEASE_WITNESS_PREFIX}[0-9a-f]{64}$`, 'u').test(name)) {

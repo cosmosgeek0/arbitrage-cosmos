@@ -25,6 +25,7 @@ import {
   type ProductIdentityReferencePersistenceInput,
   type ProductIdentityReferenceRecord,
   type ProductIncidentPersistenceInput,
+  type ProductIncidentRecord,
   type ProductPersistenceAuditRecord,
   type ProductPersistenceMutationResult,
   type LedgerSchemaCompatibilityReadback,
@@ -74,6 +75,8 @@ const PRODUCT_PERSISTENCE_QUERY_MAX = 2_000;
 const PRODUCT_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const PRODUCT_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PRODUCT_DOMAIN_STATE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
+const PRODUCT_INCIDENT_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const);
+const PRODUCT_INCIDENT_STATES = Object.freeze(['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] as const);
 const PRODUCT_DIGEST = /^(?:sha256:)?[a-f0-9]{16,128}$/i;
 const PRODUCT_COMMIT = /^[a-f0-9]{40,64}$/i;
 const PRODUCT_SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
@@ -2433,7 +2436,8 @@ export class Ledger extends EventEmitter {
   }
 
   /**
-   * Persists an incident projection with an exact event-count CAS. Grouping,
+   * Persists an incident projection with an exact sole-Ledger event revision
+   * CAS. `eventCount` is incident evidence, never a version token. Grouping,
    * severity, acknowledgement, and resolution remain supplied owner truth.
    */
   compareAndTransitionProductIncident(
@@ -2443,20 +2447,16 @@ export class Ledger extends EventEmitter {
     assertProductIdentifier(input.incidentId, 'product incidentId');
     assertProductIdentifier(input.fingerprint, 'product incident fingerprint');
     assertProductIdentifier(input.rootComponentId, 'product incident rootComponentId');
-    assertProductDomainState(input.severity, 'product incident severity');
+    assertProductIncidentSeverity(input.severity, 'product incident severity');
     if (typeof input.capitalRelevant !== 'boolean') throw new TypeError('product incident capitalRelevant is invalid');
-    if (input.expectedEventCount !== null) {
-      assertProductPositiveInteger(input.expectedEventCount, 'product incident expectedEventCount');
+    if (input.expectedLedgerEventId !== null) {
+      assertProductPositiveInteger(input.expectedLedgerEventId, 'product incident expectedLedgerEventId');
     }
-    assertProductDomainState(input.state, 'product incident state');
+    assertProductIncidentState(input.state, 'product incident state');
     assertProductUtcMillis(input.firstSeenAtMs, 'product incident firstSeenAtMs');
     assertProductUtcMillis(input.lastSeenAtMs, 'product incident lastSeenAtMs');
     if (input.lastSeenAtMs < input.firstSeenAtMs) throw new TypeError('product incident lastSeenAtMs precedes firstSeenAtMs');
     assertProductPositiveInteger(input.eventCount, 'product incident eventCount');
-    const expectedNextCount = input.expectedEventCount === null ? 1 : input.expectedEventCount + 1;
-    if (!Number.isSafeInteger(expectedNextCount) || input.eventCount !== expectedNextCount) {
-      throw new TypeError('product incident eventCount must advance exactly once');
-    }
     if ((input.acknowledgedAtMs === null) !== (input.acknowledgedByOperatorId === null)) {
       throw new TypeError('product incident acknowledgement fields must be paired');
     }
@@ -2469,6 +2469,15 @@ export class Ledger extends EventEmitter {
       assertProductUtcMillis(input.resolvedAtMs, 'product incident resolvedAtMs');
       if (input.resolvedAtMs < input.firstSeenAtMs) throw new TypeError('product incident resolution precedes first sighting');
     }
+    if (!validProductIncidentLifecycle(
+      input.state,
+      input.lastSeenAtMs,
+      input.acknowledgedAtMs,
+      input.acknowledgedByOperatorId,
+      input.resolvedAtMs,
+    )) {
+      throw new TypeError('product incident state fields are inconsistent');
+    }
     assertProductIdentifier(input.correlationId, 'product incident correlationId');
     const audit = prepareProductPersistenceAudit(input.audit);
 
@@ -2479,6 +2488,9 @@ export class Ledger extends EventEmitter {
         ORDER BY CASE WHEN incident_id = ? THEN 0 ELSE 1 END
         LIMIT 1
       `).get(input.incidentId, input.fingerprint, input.incidentId) as ProductIncidentDbRow | undefined;
+      if (existing) {
+        productIncidentRecord(existing, this.readProductPersistenceAudit(existing.ledger_event_id));
+      }
       if (existing && exactProductIncidentRow(existing, input)) {
         return frozenProductPersistenceResult(
           'IDEMPOTENT_REPLAY',
@@ -2489,17 +2501,34 @@ export class Ledger extends EventEmitter {
       if (existing && (existing.incident_id !== input.incidentId || existing.fingerprint !== input.fingerprint)) {
         return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, String(existing.event_count));
       }
-      const currentCount = existing?.event_count ?? null;
-      if (currentCount !== input.expectedEventCount) {
+      const currentRevision = existing?.ledger_event_id ?? null;
+      if (currentRevision !== input.expectedLedgerEventId) {
         return frozenProductPersistenceResult(
           'VERSION_CONFLICT',
           null,
-          currentCount === null ? null : String(currentCount),
+          currentRevision === null ? null : String(currentRevision),
         );
+      }
+      if (!existing && input.eventCount !== 1) {
+        throw new TypeError('new product incident eventCount must equal one');
+      }
+      if (!existing && input.state !== 'OPEN') {
+        throw new TypeError('new product incident must begin OPEN');
+      }
+      if (existing && input.eventCount !== existing.event_count
+        && input.eventCount !== existing.event_count + 1) {
+        throw new TypeError('product incident eventCount may stay fixed or advance exactly once');
       }
       if (existing && (existing.first_seen_at_ms !== input.firstSeenAtMs
         || input.lastSeenAtMs < existing.last_seen_at_ms)) {
         throw new TypeError('product incident transition cannot rewrite first sighting or move last sighting backwards');
+      }
+      if (existing && (existing.root_component_id !== input.rootComponentId
+        || existing.correlation_id !== input.correlationId)) {
+        throw new TypeError('product incident transition cannot rewrite owner identity');
+      }
+      if (existing && !validProductIncidentTransition(existing, input)) {
+        throw new TypeError('product incident lifecycle transition is invalid');
       }
       const event = this.appendProductPersistenceAudit(audit);
       this.db.prepare(`
@@ -2539,9 +2568,19 @@ export class Ledger extends EventEmitter {
         input.correlationId,
         event.id,
       );
-      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(input.eventCount));
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
     });
     return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Reads one exact incident projection and verifies its immutable audit row. */
+  readProductIncident(incidentId: string): Readonly<ProductIncidentRecord> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const row = this.db.prepare(`
+      SELECT * FROM product_incidents WHERE incident_id = ? LIMIT 1
+    `).get(incidentId) as ProductIncidentDbRow | undefined;
+    if (!row) return null;
+    return productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id));
   }
 
   /**
@@ -3223,6 +3262,59 @@ function assertProductDomainState(value: unknown, label: string): asserts value 
   }
 }
 
+function assertProductIncidentSeverity(
+  value: unknown,
+  label: string,
+): asserts value is (typeof PRODUCT_INCIDENT_SEVERITIES)[number] {
+  if (typeof value !== 'string'
+    || !PRODUCT_INCIDENT_SEVERITIES.includes(value as (typeof PRODUCT_INCIDENT_SEVERITIES)[number])) {
+    throw new TypeError(`${label} must be CRITICAL, HIGH, MEDIUM, or LOW`);
+  }
+}
+
+function assertProductIncidentState(
+  value: unknown,
+  label: string,
+): asserts value is (typeof PRODUCT_INCIDENT_STATES)[number] {
+  if (typeof value !== 'string'
+    || !PRODUCT_INCIDENT_STATES.includes(value as (typeof PRODUCT_INCIDENT_STATES)[number])) {
+    throw new TypeError(`${label} must be OPEN, ACKNOWLEDGED, or RESOLVED`);
+  }
+}
+
+function validProductIncidentLifecycle(
+  state: string,
+  lastSeenAtMs: number,
+  acknowledgedAtMs: number | null,
+  acknowledgedByOperatorId: string | null,
+  resolvedAtMs: number | null,
+): boolean {
+  const acknowledgementAbsent = acknowledgedAtMs === null && acknowledgedByOperatorId === null;
+  const acknowledgementPresent = acknowledgedAtMs !== null && acknowledgedByOperatorId !== null;
+  if (state === 'OPEN') return acknowledgementAbsent && resolvedAtMs === null;
+  if (state === 'ACKNOWLEDGED') return acknowledgementPresent && resolvedAtMs === null;
+  return state === 'RESOLVED'
+    && (acknowledgementAbsent || acknowledgementPresent)
+    && resolvedAtMs !== null
+    && resolvedAtMs === lastSeenAtMs
+    && (acknowledgedAtMs === null || acknowledgedAtMs <= resolvedAtMs);
+}
+
+function validProductIncidentTransition(
+  existing: Readonly<ProductIncidentDbRow>,
+  input: Readonly<ProductIncidentPersistenceInput>,
+): boolean {
+  if (existing.state === 'RESOLVED') return false;
+  if (existing.state === 'ACKNOWLEDGED' && input.state === 'OPEN') return false;
+  if (existing.acknowledged_at_ms !== null) {
+    if (input.acknowledgedAtMs !== existing.acknowledged_at_ms
+      || input.acknowledgedByOperatorId !== existing.acknowledged_by_operator_id) return false;
+  } else if (input.acknowledgedAtMs !== null && input.state !== 'ACKNOWLEDGED') {
+    return false;
+  }
+  return true;
+}
+
 function assertProductUtcMillis(value: unknown, label: string): asserts value is number {
   if (!validProductUtcMillis(value)) throw new TypeError(`${label} must be valid UTC milliseconds`);
 }
@@ -3391,6 +3483,75 @@ function exactProductIncidentRow(
     && row.correlation_id === input.correlationId
     && Number.isSafeInteger(row.ledger_event_id)
     && row.ledger_event_id > 0;
+}
+
+function productIncidentRecord(
+  row: Readonly<ProductIncidentDbRow>,
+  audit: Readonly<LedgerEvent>,
+): Readonly<ProductIncidentRecord> {
+  if (!Number.isSafeInteger(row.ledger_event_id) || row.ledger_event_id < 1
+    || audit.id !== row.ledger_event_id) {
+    throw new Error('durable product incident audit reference is invalid');
+  }
+  assertProductIdentifier(row.incident_id, 'durable product incidentId');
+  assertProductIdentifier(row.fingerprint, 'durable product incident fingerprint');
+  assertProductIdentifier(row.root_component_id, 'durable product incident rootComponentId');
+  assertProductIncidentSeverity(row.severity, 'durable product incident severity');
+  assertProductIncidentState(row.state, 'durable product incident state');
+  if (row.capital_relevant !== 0 && row.capital_relevant !== 1) {
+    throw new Error('durable product incident capital relevance is invalid');
+  }
+  assertProductUtcMillis(row.first_seen_at_ms, 'durable product incident firstSeenAtMs');
+  assertProductUtcMillis(row.last_seen_at_ms, 'durable product incident lastSeenAtMs');
+  assertProductPositiveInteger(row.event_count, 'durable product incident eventCount');
+  if (row.last_seen_at_ms < row.first_seen_at_ms) throw new Error('durable product incident chronology is invalid');
+  if ((row.acknowledged_at_ms === null) !== (row.acknowledged_by_operator_id === null)) {
+    throw new Error('durable product incident acknowledgement is invalid');
+  }
+  if (row.acknowledged_at_ms !== null) {
+    assertProductUtcMillis(row.acknowledged_at_ms, 'durable product incident acknowledgedAtMs');
+    if (row.acknowledged_at_ms < row.first_seen_at_ms) throw new Error('durable product incident acknowledgement chronology is invalid');
+  }
+  assertProductOptionalIdentifier(row.acknowledged_by_operator_id, 'durable product incident acknowledgedByOperatorId');
+  if (row.resolved_at_ms !== null) {
+    assertProductUtcMillis(row.resolved_at_ms, 'durable product incident resolvedAtMs');
+    if (row.resolved_at_ms < row.first_seen_at_ms) throw new Error('durable product incident resolution chronology is invalid');
+  }
+  if (!validProductIncidentLifecycle(
+    row.state,
+    row.last_seen_at_ms,
+    row.acknowledged_at_ms,
+    row.acknowledged_by_operator_id,
+    row.resolved_at_ms,
+  )) {
+    throw new Error('durable product incident state fields are inconsistent');
+  }
+  assertProductIdentifier(row.correlation_id, 'durable product incident correlationId');
+  return Object.freeze({
+    incidentId: row.incident_id,
+    fingerprint: row.fingerprint,
+    rootComponentId: row.root_component_id,
+    severity: row.severity,
+    capitalRelevant: row.capital_relevant === 1,
+    state: row.state,
+    firstSeenAtMs: row.first_seen_at_ms,
+    lastSeenAtMs: row.last_seen_at_ms,
+    eventCount: row.event_count,
+    acknowledgedAtMs: row.acknowledged_at_ms,
+    acknowledgedByOperatorId: row.acknowledged_by_operator_id,
+    resolvedAtMs: row.resolved_at_ms,
+    correlationId: row.correlation_id,
+    ledgerEventId: row.ledger_event_id,
+    lastAudit: Object.freeze({
+      id: audit.id,
+      ts: audit.ts,
+      kind: audit.kind,
+      symbol: audit.symbol,
+      data: audit.data === null
+        ? null
+        : JSON.parse(canonicalProductPersistenceJson(audit.data, 'durable product incident audit data')) as SystemJsonValue,
+    }),
+  });
 }
 
 function exactProductBootReleaseRow(

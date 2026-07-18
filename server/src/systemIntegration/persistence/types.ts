@@ -192,7 +192,11 @@ export interface ProductIncidentPersistenceInput {
   readonly rootComponentId: string;
   readonly severity: string;
   readonly capitalRelevant: boolean;
-  readonly expectedEventCount: number | null;
+  /**
+   * Exact sole-Ledger revision. `eventCount` is incident evidence and must
+   * never be reused as a compare-and-set token.
+   */
+  readonly expectedLedgerEventId: number | null;
   readonly state: string;
   readonly firstSeenAtMs: number;
   readonly lastSeenAtMs: number;
@@ -202,6 +206,30 @@ export interface ProductIncidentPersistenceInput {
   readonly resolvedAtMs: number | null;
   readonly correlationId: string;
   readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIncidentRecord {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly rootComponentId: string;
+  readonly severity: string;
+  readonly capitalRelevant: boolean;
+  readonly state: string;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly eventCount: number;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+  readonly lastAudit: Readonly<{
+    readonly id: number;
+    readonly ts: number;
+    readonly kind: string;
+    readonly symbol: string | null;
+    readonly data: SystemJsonValue | null;
+  }>;
 }
 
 export interface ProductBootReleasePersistenceInput {
@@ -321,6 +349,9 @@ export interface LedgerPersistencePort {
   compareAndTransitionProductIncident?(
     input: Readonly<ProductIncidentPersistenceInput>,
   ): ProductPersistenceMutationResult;
+  readProductIncident?(
+    incidentId: string,
+  ): Readonly<ProductIncidentRecord> | null;
   compareAndSetProductBootReleaseRevision?(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): ProductPersistenceMutationResult;

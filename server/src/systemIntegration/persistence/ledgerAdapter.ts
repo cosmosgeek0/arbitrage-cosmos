@@ -68,6 +68,7 @@ import {
   type ProductIdentityReferencePersistenceInput,
   type ProductIdentityReferenceRecord,
   type ProductIncidentPersistenceInput,
+  type ProductIncidentRecord,
   type ProductPersistenceMutationResult,
   type RestartBarrierProjection,
 } from './types.js';
@@ -1442,6 +1443,24 @@ export class SystemLedgerPersistenceAdapter {
     return this.invokeProductPersistenceMutation(
       () => this.ledger.compareAndTransitionProductIncident!(input),
     );
+  }
+
+  readProductIncident(
+    incidentId: string,
+  ): PersistenceResult<Readonly<ProductIncidentRecord> | null> {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    if (typeof this.ledger.readProductIncident !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product incident read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductIncident(incidentId) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product incident query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product incident query failed'));
+    }
   }
 
   compareAndSetProductBootReleaseRevision(

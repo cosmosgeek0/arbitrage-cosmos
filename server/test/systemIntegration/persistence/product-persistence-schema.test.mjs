@@ -115,9 +115,9 @@ function incident(overrides = {}) {
     incidentId: 'incident.product.one',
     fingerprint: 'fingerprint.product.one',
     rootComponentId: 'basis-engine',
-    severity: 'WARNING',
+    severity: 'MEDIUM',
     capitalRelevant: true,
-    expectedEventCount: null,
+    expectedLedgerEventId: null,
     state: 'OPEN',
     firstSeenAtMs: T0 + 4,
     lastSeenAtMs: T0 + 4,
@@ -435,9 +435,9 @@ test('incident and boot/release transitions are CAS evidence only and survive re
     const firstIncident = ledger.compareAndTransitionProductIncident(incident());
     assert.equal(firstIncident.disposition, 'COMMITTED_NEW');
     const secondIncidentInput = incident({
-      expectedEventCount: 1,
+      expectedLedgerEventId: firstIncident.ledgerEvent.id,
       lastSeenAtMs: T0 + 10,
-      eventCount: 2,
+      eventCount: 1,
       state: 'ACKNOWLEDGED',
       acknowledgedAtMs: T0 + 9,
       acknowledgedByOperatorId: 'operator.digest.one',
@@ -461,7 +461,7 @@ test('incident and boot/release transitions are CAS evidence only and survive re
 
     ledger = new Ledger(dataDir);
     assert.deepEqual(ledger.db.prepare('SELECT event_count, state FROM product_incidents').get(), {
-      event_count: 2,
+      event_count: 1,
       state: 'ACKNOWLEDGED',
     });
     assert.deepEqual(ledger.db.prepare('SELECT completed_at_ms, clean FROM product_boot_release_revisions').get(), {

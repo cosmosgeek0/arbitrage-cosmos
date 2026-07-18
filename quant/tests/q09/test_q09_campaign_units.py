@@ -350,7 +350,7 @@ class TestZeroCorrelationOrdering:
             cutoff_ns=BASE_NS + 10 * HOUR_NS + SECOND_NS,
             embargo_ns=0,
             values=tuple(FixedPointV1(value * HUNDREDTH) for value in (500, 510, 500, 510)),
-            event_id=None,
+            event_id="event-query-zero",
         )
 
         def record(record_id: str, deltas: tuple[int, ...]) -> AnalogRecordV1:
@@ -361,10 +361,13 @@ class TestZeroCorrelationOrdering:
                 feature_id="window-v1",
                 start_ns=BASE_NS + HOUR_NS - SECOND_NS,
                 end_ns=BASE_NS + HOUR_NS,
+                outcome_start_ns=BASE_NS + HOUR_NS,
+                outcome_end_ns=BASE_NS + HOUR_NS + SECOND_NS,
+                label_available_ns=BASE_NS + HOUR_NS + 2 * SECOND_NS,
                 values=tuple(FixedPointV1((500 + delta) * HUNDREDTH) for delta in deltas),
                 outcome_label="UNKNOWN",
                 completeness=QualityState.SYNTHETIC,
-                event_id=None,
+                event_id=f"event-{record_id}",
             )
 
         orthogonal_a = record("analog-orthogonal-a", (0, 0, 10, 10))

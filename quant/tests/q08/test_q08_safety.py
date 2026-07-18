@@ -23,6 +23,7 @@ LIBRARY_MODULES = (
     "bar_features.py",
     "statespace.py",
     "convergence.py",
+    "cross_market.py",
     "leadlag.py",
 )
 CAMPAIGN_MODULE = DERIVATIVES_DIR / "campaign.py"

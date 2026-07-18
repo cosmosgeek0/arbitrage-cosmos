@@ -1,6 +1,6 @@
 # Cosmos Arbitrage Control Room
 
-Private Binance account cockpit and arbitrage/intelligence operating machine, operated behind Cloudflare Access. Not a public dashboard, not a retail demo: an operator-grade control room for full-universe surveillance, Basis/Volume strategy engines, capital supervision, risk, dry-run execution, ledger truth, and system health.
+Keyless Binance public-market surveillance and arbitrage/intelligence control room, operated behind Cloudflare Access. Not a public dashboard, not a retail demo: the current composition provides public-universe surveillance, Basis/Volume strategy evidence, validate-only capital and risk supervision, dry-run evaluation, durable history, and system health. Private account data and signed exchange capability remain `NOT_CONFIGURED`/`OWNER_GATED`.
 
 **Current posture:** one composed validate-only system. Live execution is mechanically blocked (`LIVE_EXECUTION_NOT_IMPLEMENTED`); there are no withdrawal or transfer-out routes anywhere.
 
@@ -46,7 +46,7 @@ service switch, systemd, AWS, deployment, private exchange access, or signed cal
 ## Hard laws
 
 - No withdrawals or transfer-out code/UI. No autonomous live execution.
-- Binance keys server-side only; no secrets in frontend, Git, logs, or prompts.
+- The current composition accepts no Binance credentials; no secrets in frontend, Git, logs, screenshots, or prompts.
 - Kill switch is visible, checked first, and fail-closed for new risk.
 - Every financial intent and outcome is ledgered, including unknown outcomes.
 - Manual money mutations (if ever enabled) fail closed behind account, permission, control-mode, kill-switch, live-arm, risk, and confirmation gates.

@@ -200,6 +200,13 @@ export interface OperatorFocusPinReadback {
   pinCapacity: number;
 }
 
+/** Canonical attention-owner counts for downstream read-only projection. */
+export interface AttentionFocusCountSummary {
+  focusRequestedCount: number;
+  focusActiveCount: number;
+  observedAtMs: number;
+}
+
 export interface BridgeIntelligenceArtifact {
   id: string;
   candidateId: string;

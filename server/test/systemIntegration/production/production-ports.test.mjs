@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,14 @@ import {
 import {
   SourceObservationTracker,
 } from '../../../dist/systemIntegration/production/temporal.js';
+import {
+  defaultApplicationSummaries,
+  mergeApplicationSummaries,
+} from '../../../dist/systemIntegration/application/projection.js';
+import {
+  createEmptyCapitalCheckpointState,
+  projectRestartSafety,
+} from '../../../dist/capitalFoundation/checkpoint/index.js';
 
 const START = Date.UTC(2026, 6, 12, 12, 0, 0);
 
@@ -58,7 +67,25 @@ function proposal(strategy, ts, suffix) {
   };
 }
 
-function createWorld() {
+function capitalSummaryCut(projection) {
+  return Object.freeze({
+    availability: 'AVAILABLE',
+    checkpoint: Object.freeze({
+      id: projection.checkpointId,
+      revision: projection.checkpointState.revision,
+    }),
+    safety: Object.freeze({
+      canOpenOrIncrease: projection.safety.canOpenOrIncrease,
+      supervisionContinues: projection.safety.supervisionContinues,
+      visiblePositionIds: Object.freeze([...projection.safety.visiblePositionIds]),
+      recoveryRequiredPositionIds: Object.freeze([...projection.safety.recoveryRequiredPositionIds]),
+      effectiveActiveReservationIds: Object.freeze([...projection.safety.effectiveActiveReservationIds]),
+      reasonCodes: Object.freeze([...projection.safety.reasonCodes]),
+    }),
+  });
+}
+
+function createWorld({ capitalSummary } = {}) {
   const clock = new ManualClock();
   const calls = {
     marketInit: 0,
@@ -93,6 +120,7 @@ function createWorld() {
     lastTickTs: null,
     decisions: [],
     proposals: [],
+    ownerSummary: { candidateCount: 0, opportunityCount: 0, cooldownCount: 0 },
   };
   const basis = {
     async start() { calls.basisStart += 1; basisStatus.running = true; },
@@ -113,6 +141,7 @@ function createWorld() {
     lastTickTs: null,
     decisions: [],
     proposals: [],
+    ownerSummary: { candidateCount: 0, opportunityCount: 0, cooldownCount: 0 },
   };
   const volume = {
     async start() { calls.volumeStart += 1; volumeStatus.running = true; },
@@ -125,6 +154,7 @@ function createWorld() {
     market,
     basis,
     volume,
+    capitalSummary,
     sourceMaxAgeMs: 10_000,
   });
   const ctx = () => ({
@@ -408,6 +438,36 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
   assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), []);
   assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
+});
+
+test('focus counts come from the canonical attention summary and disappear with owner truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+
+  const broad = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual([broad.truthLabel, broad.focusRequestedCount, broad.focusActiveCount], ['LIVE_PUBLIC', 0, 0]);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  const focused = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual([focused.focusRequestedCount, focused.focusActiveCount], [1, 1]);
+
+  world.market.feeds['futures-markprice'] = 'closed';
+  const unavailable = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual(
+    [unavailable.truthLabel, unavailable.focusRequestedCount, unavailable.focusActiveCount],
+    ['UNAVAILABLE', null, null],
+  );
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
@@ -720,6 +780,7 @@ test('strategy summaries count exact owner records without recomputing scores or
     decision('proposal', START - 200, 'basis-proposal'),
   );
   world.basisSnapshot.proposals.push(proposal('basis', START - 200, 'basis-one'));
+  world.basisSnapshot.ownerSummary = { candidateCount: 7, opportunityCount: 3, cooldownCount: 2 };
 
   world.volumeStatus.lastBookTs = START - 120;
   world.volumeStatus.lastTradeTs = START - 140;
@@ -732,13 +793,15 @@ test('strategy summaries count exact owner records without recomputing scores or
     decision('proposal', START - 250, 'volume-proposal'),
   );
   world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 250, 'volume-one'));
+  world.volumeSnapshot.ownerSummary = { candidateCount: 5, opportunityCount: 4, cooldownCount: 1 };
 
   const summaries = world.ports.summaries.readSupervisorSummaries().strategies;
   assert.deepEqual(summaries.basis, {
     truthLabel: 'LIVE_PUBLIC',
     heartbeatAtMs: START - 50,
-    candidateCount: 2,
-    proposalCount: 1,
+    candidateCount: 7,
+    proposalCount: 3,
+    cooldownCount: 2,
     rejectionCount: 1,
     acceptedCount: 1,
     lastDecisionAtMs: START - 200,
@@ -747,12 +810,312 @@ test('strategy summaries count exact owner records without recomputing scores or
   assert.deepEqual(summaries.volume, {
     truthLabel: 'LIVE_PUBLIC',
     heartbeatAtMs: START - 60,
-    candidateCount: 0,
-    proposalCount: 1,
+    candidateCount: 5,
+    proposalCount: 4,
+    cooldownCount: 1,
     rejectionCount: 1,
     acceptedCount: 1,
     lastDecisionAtMs: START - 250,
     sourceRevision: null,
   });
   assert.equal(JSON.stringify(summaries).includes(String(START + 9_999_999)), false);
+});
+
+test('missing or malformed strategy owner counts remain null instead of becoming synthetic zero', async () => {
+  const world = createWorld();
+  await world.ports.runtimes.basis.start();
+  await world.ports.runtimes.volume.start();
+  world.basisStatus.lastBookTs = START - 100;
+  world.basisStatus.lastMarkTs = START - 150;
+  world.volumeStatus.lastBookTs = START - 120;
+  world.volumeStatus.lastTradeTs = START - 140;
+  world.volumeStatus.streamState = 'open';
+  world.volumeStatus.streamConnections = 1;
+  world.volumeStatus.openConnections = 1;
+  world.basisSnapshot.decisions.push(decision('watch', START - 100, 'basis-raw'));
+  world.basisSnapshot.proposals.push(proposal('basis', START - 100, 'basis-raw'));
+  world.volumeSnapshot.decisions.push(decision('focus', START - 100, 'volume-raw'));
+  world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 100, 'volume-raw'));
+  world.basisSnapshot.ownerSummary = null;
+  world.volumeSnapshot.ownerSummary = { candidateCount: 0, opportunityCount: 0, cooldownCount: -1 };
+
+  const summaries = world.ports.summaries.readSupervisorSummaries().strategies;
+  assert.deepEqual(
+    [summaries.basis.candidateCount, summaries.basis.proposalCount, summaries.basis.cooldownCount],
+    [null, null, null],
+  );
+  assert.deepEqual(
+    [summaries.volume.candidateCount, summaries.volume.proposalCount, summaries.volume.cooldownCount],
+    [null, null, null],
+  );
+});
+
+test('production summaries bind active-exposure and recovery counts to exact Capital owner cuts', () => {
+  const state = createEmptyCapitalCheckpointState('capital:production-summary:test');
+  const restart = projectRestartSafety(state, {
+    nowMs: START,
+    correlationId: 'capital-production-summary',
+    accountTruth: null,
+    reconciliationTruth: null,
+    reconciliationReferences: [],
+  });
+  const world = createWorld({
+    capitalSummary: Object.freeze({ readCapitalSummary: () => capitalSummaryCut(restart) }),
+  });
+
+  assert.deepEqual(world.ports.summaries.readSupervisorSummaries().capital, {
+    truthLabel: 'RECORDED_REPLAY',
+    accountTruthState: 'RESTART_TRUTH_BLOCKED',
+    allocatableAmount: null,
+    reservedAmount: null,
+    activeExposureAmount: null,
+    eligibleCount: null,
+    reservationCount: 0,
+    stagedMandateCount: null,
+    activeExposureCount: 0,
+    recoveryCount: 0,
+    checkpointRevision: '0',
+    blockerCodes: [
+      'RESTART_ACCOUNT_TRUTH_NOT_FRESH',
+      'RESTART_RECONCILIATION_TRUTH_NOT_FRESH',
+    ],
+  });
+});
+
+test('unavailable or malformed Capital restart truth keeps production counts null', () => {
+  const unavailable = createWorld();
+  assert.deepEqual(
+    [
+      unavailable.ports.summaries.readSupervisorSummaries().capital.activeExposureCount,
+      unavailable.ports.summaries.readSupervisorSummaries().capital.recoveryCount,
+    ],
+    [null, null],
+  );
+
+  const ownerGated = createWorld({
+    capitalSummary: Object.freeze({
+      readCapitalSummary: () => Object.freeze({
+        availability: 'UNAVAILABLE',
+        accountTruthState: 'OWNER_GATED',
+        reasonCodes: Object.freeze(['NO_CANONICAL_ACTIVE_L12_SUBJECT']),
+      }),
+    }),
+  }).ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [ownerGated.activeExposureCount, ownerGated.recoveryCount, ownerGated.accountTruthState],
+    [null, null, 'OWNER_GATED'],
+  );
+  assert.deepEqual(ownerGated.blockerCodes, ['NO_CANONICAL_ACTIVE_L12_SUBJECT']);
+
+  const malformed = createWorld({
+    capitalSummary: Object.freeze({
+      readCapitalSummary: () => ({
+        availability: 'AVAILABLE',
+        checkpoint: { id: 'cchk-malformed', revision: 4 },
+        safety: {
+          canOpenOrIncrease: false,
+          supervisionContinues: true,
+          visiblePositionIds: [],
+          recoveryRequiredPositionIds: ['position-not-visible'],
+          effectiveActiveReservationIds: [],
+          reasonCodes: [],
+        },
+      }),
+    }),
+  });
+  const summary = malformed.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual([summary.activeExposureCount, summary.recoveryCount, summary.checkpointRevision], [null, null, null]);
+  assert.deepEqual(summary.blockerCodes, ['CAPITAL_SUMMARY_OWNER_MALFORMED']);
+});
+
+test('the real server entrypoint binds canonical L12 evidence through the lazy Capital summary port', () => {
+  const source = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
+  const declaration = source.indexOf('let canonicalOwnerEvidence: CanonicalOwnerEvidenceReadPort | null = null;');
+  const construction = source.indexOf('const systemIntegrationProduction = createProductionSystemIntegrationPorts({');
+  const assignment = source.indexOf('canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({');
+  assert.ok(declaration >= 0 && declaration < construction && construction < assignment);
+  assert.match(source, /readCapitalSummary: \(\) => \{[\s\S]*readCanonicalOwnerEvidence\(\)\.l12/u);
+  assert.match(source, /capitalSummary: capitalSummaryReadPort/u);
+  assert.doesNotMatch(source, /createEmptyCapitalCheckpointState/u);
+});
+
+test('Capital summary reads are lazy, exact, deeply snapshotted, and fail closed on hostile input', () => {
+  let cut = null;
+  let reads = 0;
+  const port = Object.freeze({
+    readCapitalSummary() {
+      reads += 1;
+      return cut;
+    },
+  });
+  const world = createWorld({ capitalSummary: port });
+  assert.equal(reads, 0);
+  assert.equal(world.ports.summaries.readSupervisorSummaries().capital.activeExposureCount, null);
+  assert.equal(reads, 1);
+
+  cut = {
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:restored:7', revision: 7 },
+    safety: {
+      canOpenOrIncrease: false,
+      supervisionContinues: true,
+      visiblePositionIds: ['position-1', 'position-2'],
+      recoveryRequiredPositionIds: ['position-2'],
+      effectiveActiveReservationIds: ['reservation-1'],
+      reasonCodes: ['RESTART_RECOVERY_REQUIRED'],
+    },
+  };
+  const summary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.reservationCount, summary.checkpointRevision],
+    [2, 1, 1, '7'],
+  );
+  cut.safety.visiblePositionIds.push('position-after-read');
+  cut.safety.reasonCodes.push('AFTER_READ');
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.reservationCount, summary.blockerCodes],
+    [2, 1, 1, ['RESTART_RECOVERY_REQUIRED']],
+  );
+
+  let getterReads = 0;
+  const getterSafety = {};
+  Object.defineProperties(getterSafety, {
+    canOpenOrIncrease: { enumerable: true, get() { getterReads += 1; return true; } },
+    supervisionContinues: { enumerable: true, value: false },
+    visiblePositionIds: { enumerable: true, value: [] },
+    recoveryRequiredPositionIds: { enumerable: true, value: [] },
+    effectiveActiveReservationIds: { enumerable: true, value: [] },
+    reasonCodes: { enumerable: true, value: [] },
+  });
+  cut = {
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:getter', revision: 8 },
+    safety: getterSafety,
+  };
+  const getterSummary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.equal(getterReads, 0);
+  assert.deepEqual(
+    [getterSummary.activeExposureCount, getterSummary.recoveryCount, getterSummary.checkpointRevision],
+    [null, null, null],
+  );
+
+  cut = new Proxy({
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:proxy', revision: 9 },
+    safety: {
+      canOpenOrIncrease: true,
+      supervisionContinues: false,
+      visiblePositionIds: [], recoveryRequiredPositionIds: [],
+      effectiveActiveReservationIds: [], reasonCodes: [],
+    },
+  }, {});
+  assert.equal(world.ports.summaries.readSupervisorSummaries().capital.activeExposureCount, null);
+});
+
+test('Capital summary reentrancy and READY/blocker contradictions invalidate the whole cut', () => {
+  let world;
+  let reenter = true;
+  const port = Object.freeze({
+    readCapitalSummary() {
+      if (reenter) {
+        reenter = false;
+        world.ports.summaries.readSupervisorSummaries();
+      }
+      return {
+        availability: 'AVAILABLE',
+        checkpoint: { id: 'capital:reentrant', revision: 1 },
+        safety: {
+          canOpenOrIncrease: true,
+          supervisionContinues: false,
+          visiblePositionIds: [], recoveryRequiredPositionIds: [],
+          effectiveActiveReservationIds: [], reasonCodes: ['CONTRADICTORY_BLOCKER'],
+        },
+      };
+    },
+  });
+  world = createWorld({ capitalSummary: port });
+  const summary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.checkpointRevision],
+    [null, null, null],
+  );
+  assert.deepEqual(summary.blockerCodes, ['CAPITAL_SUMMARY_OWNER_MALFORMED']);
+});
+
+test('strategy owner summaries reject Proxy/accessor records and snapshot exact own data once', async () => {
+  const world = createWorld();
+  await world.ports.runtimes.basis.start();
+  world.basisStatus.lastBookTs = START - 100;
+  world.basisStatus.lastMarkTs = START - 100;
+  world.basis.integrationSnapshot = () => ({
+    capturedAtMs: world.basisSnapshot.capturedAtMs,
+    lastTickTs: world.basisSnapshot.lastTickTs,
+    decisions: world.basisSnapshot.decisions,
+    proposals: world.basisSnapshot.proposals,
+    ownerSummary: world.basisSnapshot.ownerSummary,
+  });
+
+  world.basisSnapshot.ownerSummary = new Proxy({
+    candidateCount: 3, opportunityCount: 2, cooldownCount: 1,
+  }, {});
+  let summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [null, null, null]);
+
+  let getterReads = 0;
+  const getterSummary = {};
+  Object.defineProperties(getterSummary, {
+    candidateCount: { enumerable: true, get() { getterReads += 1; return 3; } },
+    opportunityCount: { enumerable: true, value: 2 },
+    cooldownCount: { enumerable: true, value: 1 },
+  });
+  world.basisSnapshot.ownerSummary = getterSummary;
+  summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  assert.equal(getterReads, 0);
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [null, null, null]);
+
+  const owned = { candidateCount: 4, opportunityCount: 3, cooldownCount: 2 };
+  world.basisSnapshot.ownerSummary = owned;
+  summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  owned.candidateCount = 999;
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [4, 3, 2]);
+  assert.equal(Object.isFrozen(summary), true);
+});
+
+test('active exposure and recovery counts are owner facts, never validate-only synthetic zeros', () => {
+  const defaults = defaultApplicationSummaries(null, true, null);
+  const ownerCapital = Object.freeze({
+    ...defaults.capital,
+    truthLabel: 'RECORDED_REPLAY',
+    accountTruthState: 'OWNER_READBACK',
+    activeExposureCount: 3,
+    recoveryCount: 2,
+    blockerCodes: Object.freeze([]),
+  });
+  const projected = mergeApplicationSummaries(defaults, { capital: ownerCapital }, null);
+  assert.equal(projected.capital, ownerCapital);
+  assert.deepEqual([projected.capital.activeExposureCount, projected.capital.recoveryCount], [3, 2]);
+
+  const projectedDuringValidateOnly = mergeApplicationSummaries(defaults, { capital: ownerCapital }, {
+    disposition: 'RISK_REJECTED',
+    riskVerdict: null,
+    executionState: null,
+    reconciliation: null,
+  });
+  assert.equal(projectedDuringValidateOnly.capital, ownerCapital);
+  assert.deepEqual(
+    [projectedDuringValidateOnly.capital.activeExposureCount, projectedDuringValidateOnly.capital.recoveryCount],
+    [3, 2],
+  );
+
+  const validateOnlyWithoutCapitalOwner = mergeApplicationSummaries(defaults, null, {
+    disposition: 'RISK_REJECTED',
+    riskVerdict: null,
+    executionState: null,
+    reconciliation: null,
+  });
+  assert.deepEqual(
+    [validateOnlyWithoutCapitalOwner.capital.activeExposureCount, validateOnlyWithoutCapitalOwner.capital.recoveryCount],
+    [null, null],
+  );
+  assert.ok(validateOnlyWithoutCapitalOwner.capital.blockerCodes.includes('CAPITAL_EXPOSURE_OWNER_UNAVAILABLE'));
 });

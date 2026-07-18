@@ -27,6 +27,11 @@ export interface BasisRuntimeIntegrationSnapshot {
   config: BasisConfig;
   decisions: Decision[];
   proposals: BasisProposal[];
+  ownerSummary: {
+    candidateCount: number;
+    opportunityCount: number;
+    cooldownCount: number;
+  };
 }
 
 // The basis quality gate intentionally decays inside the 5s stale window.
@@ -173,6 +178,11 @@ export class BasisRuntime {
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.openProposals(),
+      ownerSummary: {
+        candidateCount: this.engine.lifecycle.candidateList().length,
+        opportunityCount: this.engine.openProposals().length,
+        cooldownCount: this.engine.lifecycle.activeCooldownCount(),
+      },
     });
   }
 

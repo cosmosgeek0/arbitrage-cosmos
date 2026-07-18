@@ -48,6 +48,12 @@ export interface ProductionStrategySnapshot {
   readonly lastTickTs: number | null;
   readonly decisions: readonly Readonly<Decision>[];
   readonly proposals: readonly Readonly<EngineProposal>[];
+  /** Exact strategy-owner counts; integration must not recount raw records. */
+  readonly ownerSummary: Readonly<{
+    readonly candidateCount: number;
+    readonly opportunityCount: number;
+    readonly cooldownCount: number;
+  }>;
 }
 
 export interface ProductionBasisConnectionStatus {
@@ -98,11 +104,49 @@ export interface ProductionVolumeRuntimePort {
   setStrategyThreshold(value: string): boolean;
 }
 
+export interface ProductionCapitalRestartSummaryCut {
+  readonly availability: 'AVAILABLE';
+  /** The minimum exact checkpoint identity needed by the supervisor summary. */
+  readonly checkpoint: Readonly<{
+    readonly id: string;
+    readonly revision: number;
+  }>;
+  /** Already-projected Capital owner truth; this adapter never replays state. */
+  readonly safety: Readonly<{
+    readonly canOpenOrIncrease: boolean;
+    readonly supervisionContinues: boolean;
+    readonly visiblePositionIds: readonly string[];
+    readonly recoveryRequiredPositionIds: readonly string[];
+    readonly effectiveActiveReservationIds: readonly string[];
+    readonly reasonCodes: readonly string[];
+  }>;
+}
+
+export interface ProductionCapitalUnavailableSummaryCut {
+  readonly availability: 'UNAVAILABLE';
+  readonly accountTruthState: 'OWNER_GATED' | 'UNAVAILABLE' | 'UNKNOWN';
+  readonly reasonCodes: readonly string[];
+}
+
+export type ProductionCapitalSummaryCut =
+  | ProductionCapitalRestartSummaryCut
+  | ProductionCapitalUnavailableSummaryCut;
+
+/**
+ * Lazy, passive readback from canonical L12/Capital owner evidence. The port
+ * exposes no checkpoint mutation, capital-policy method, or private source.
+ */
+export interface ProductionCapitalSummaryReadPort {
+  readCapitalSummary(): Readonly<ProductionCapitalSummaryCut> | null;
+}
+
 export interface ProductionSystemIntegrationInput {
   readonly clock: UtcClock;
   readonly market: ProductionMarketEnginePort;
   readonly basis: ProductionBasisRuntimePort;
   readonly volume: ProductionVolumeRuntimePort;
+  /** Omitted while canonical L12/Capital owner evidence is not mounted. */
+  readonly capitalSummary?: ProductionCapitalSummaryReadPort | null;
   /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */

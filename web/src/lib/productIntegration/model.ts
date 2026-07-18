@@ -2716,7 +2716,7 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
   else for (const id of ['basis', 'volume']) {
     const strategy = strategies[id];
     if (!isRecord(strategy) || !isSystemTruthLabel(strategy.truthLabel)
-      || !fieldsAreNullableNumbers(strategy, ['heartbeatAtMs', 'candidateCount', 'proposalCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs'])
+      || !fieldsAreNullableNumbers(strategy, ['heartbeatAtMs', 'candidateCount', 'proposalCount', 'cooldownCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs'])
       || !isStringOrNull(strategy.sourceRevision)) errors.push(`DASHBOARD_SUMMARY_INVALID:strategies.${id}`);
   }
   const intelligence = value.intelligence;
@@ -2726,7 +2726,7 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
   if (!isRecord(capital) || !isSystemTruthLabel(capital.truthLabel)
     || typeof capital.accountTruthState !== 'string'
     || !fieldsAreStringOrNull(capital, ['allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'checkpointRevision'])
-    || !fieldsAreNullableNumbers(capital, ['eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount'])
+    || !fieldsAreNullableNumbers(capital, ['eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'recoveryCount'])
     || !isStringArray(capital.blockerCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:capital');
   const risk = value.risk;
   let riskValid = false;

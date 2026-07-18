@@ -55,7 +55,10 @@ import {
   OrdinaryShutdownAdmission,
   type SystemIntegrationApplicationFacade,
 } from './systemIntegration/application/index.js';
-import { createCanonicalOwnerEvidenceReadPort } from './systemIntegration/adapters/index.js';
+import {
+  createCanonicalOwnerEvidenceReadPort,
+  type CanonicalOwnerEvidenceReadPort,
+} from './systemIntegration/adapters/index.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
 import {
   deriveI00MeaningfulAdvanceEvidence,
@@ -77,7 +80,10 @@ import {
   type ProductIncidentRotationInput,
   type ProductPersistenceAuditRecord,
 } from './systemIntegration/persistence/index.js';
-import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
+import {
+  createProductionSystemIntegrationPorts,
+  type ProductionCapitalSummaryReadPort,
+} from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import {
   createCanonicalSupervisorOpsReadback,
@@ -213,11 +219,24 @@ if (!bootReleaseStart.ok) {
   console.error('boot/release persistence started fail-closed:', bootReleaseStart.code);
 }
 const systemIntegrationScheduler = createNodeRepeatingScheduler();
+let canonicalOwnerEvidence: CanonicalOwnerEvidenceReadPort | null = null;
+const capitalSummaryReadPort: ProductionCapitalSummaryReadPort = Object.freeze({
+  readCapitalSummary: () => {
+    const l12 = canonicalOwnerEvidence?.readCanonicalOwnerEvidence().l12;
+    if (l12 === undefined) return null;
+    return Object.freeze({
+      availability: 'UNAVAILABLE' as const,
+      accountTruthState: l12.privateTruthState,
+      reasonCodes: Object.freeze([...l12.reasonCodes]),
+    });
+  },
+});
 const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   clock: systemIntegrationClock,
   market: engine,
   basis: basisRuntime,
   volume: volumeRuntime,
+  capitalSummary: capitalSummaryReadPort,
 });
 const liveEdgeMutationJournal = new LiveEdgeMutationJournalPersistenceAdapter(
   ledger,
@@ -232,7 +251,7 @@ const liveEdgeControlBinding = createLiveEdgeControlProductionBinding({
   ledger,
   clock: systemIntegrationClock,
 });
-const canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
+canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
   clock: systemIntegrationClock,
   components: systemIntegrationProduction.components,
   mutationJournal: liveEdgeMutationJournal,

@@ -57,6 +57,18 @@ export class LifecycleManager {
     return [...this.activeFocus.values(), ...this.focusHistory];
   }
 
+  /** Current owner truth; a caller need not run tick() before reading it. */
+  activeCooldownCount(): number {
+    const now = this.clock.now();
+    let count = 0;
+    for (const lifecycle of this.lifecycles.values()) {
+      if (lifecycle.state === 'COOLDOWN'
+          && lifecycle.cooldownUntilTs !== null
+          && lifecycle.cooldownUntilTs > now) count += 1;
+    }
+    return count;
+  }
+
   activeFocusCount(): number {
     return this.activeFocus.size;
   }

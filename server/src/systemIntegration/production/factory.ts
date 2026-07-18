@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import {
   evaluateFreshness,
   isValidUtcMillis,
@@ -44,6 +45,8 @@ import type {
   RuntimeHealthEvidence,
 } from '../composition/types.js';
 import type {
+  SystemCapitalSummary,
+  SystemIntelligenceSummary,
   SystemStrategyRuntimeSummary,
   SystemSupervisorSummaries,
 } from '../supervisor/types.js';
@@ -192,6 +195,220 @@ function safeStrategySnapshot(runtime: {
   } catch {
     return null;
   }
+}
+
+function safeStrategyOwnerSummary(
+  snapshot: Readonly<ProductionStrategySnapshot>,
+): Readonly<ProductionStrategySnapshot['ownerSummary']> | null {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || utilTypes.isProxy(snapshot)) return null;
+    const snapshotDescriptor = Object.getOwnPropertyDescriptor(snapshot, 'ownerSummary');
+    if (!snapshotDescriptor || !Object.hasOwn(snapshotDescriptor, 'value')) return null;
+    const summary = snapshotDescriptor.value as unknown;
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)
+        || utilTypes.isProxy(summary)
+        || Object.getPrototypeOf(summary) !== Object.prototype
+        || Object.getOwnPropertySymbols(summary).length !== 0) return null;
+    const expected = ['candidateCount', 'cooldownCount', 'opportunityCount'];
+    const descriptors = Object.getOwnPropertyDescriptors(summary);
+    const keys = Object.keys(descriptors).sort();
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) return null;
+    const values: Record<string, number> = {};
+    for (const key of expected) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')
+          || !descriptor.enumerable) return null;
+      const value = descriptor.value;
+      if (!Number.isSafeInteger(value) || value < 0 || value > MAX_MARKET_ROWS) return null;
+      values[key] = value as number;
+    }
+    return Object.freeze({
+      candidateCount: values.candidateCount as number,
+      opportunityCount: values.opportunityCount as number,
+      cooldownCount: values.cooldownCount as number,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function exactDataRecord(
+  value: unknown,
+  expected: readonly string[],
+): Readonly<Record<string, unknown>> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) return null;
+  try {
+    if (Object.getPrototypeOf(value) !== Object.prototype
+        || Object.getOwnPropertySymbols(value).length !== 0) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const keys = Object.keys(descriptors).sort();
+    const wanted = [...expected].sort();
+    if (keys.length !== wanted.length || keys.some((key, index) => key !== wanted[index])) return null;
+    const snapshot: Record<string, unknown> = {};
+    for (const key of wanted) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) return null;
+      snapshot[key] = descriptor.value;
+    }
+    return Object.freeze(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+function boundedUniqueStrings(value: unknown, maximum: number, maximumLength: number): readonly string[] | null {
+  if (!Array.isArray(value) || utilTypes.isProxy(value) || value.length > maximum
+      || Object.getPrototypeOf(value) !== Array.prototype
+      || Object.getOwnPropertySymbols(value).length !== 0) return null;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = Object.keys(descriptors).filter((key) => key !== 'length');
+  if (keys.length !== value.length) return null;
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) return null;
+    const entry = descriptor.value;
+    if (typeof entry !== 'string' || entry.length === 0 || entry.length > maximumLength
+        || entry.trim() !== entry || seen.has(entry)) return null;
+    seen.add(entry);
+    result.push(entry);
+  }
+  return Object.freeze(result);
+}
+
+type CapitalSummaryReadResult = Readonly<{
+  kind: 'AVAILABLE' | 'UNAVAILABLE' | 'MALFORMED';
+  summary: Readonly<SystemCapitalSummary> | null;
+}>;
+
+interface CapitalReadGuard {
+  active: boolean;
+  reentered: boolean;
+}
+
+function safeCapitalSummary(
+  owner: ProductionSystemIntegrationInput['capitalSummary'],
+  guard: CapitalReadGuard,
+): CapitalSummaryReadResult {
+  if (!owner) return Object.freeze({ kind: 'UNAVAILABLE', summary: null });
+  if (guard.active) {
+    guard.reentered = true;
+    return Object.freeze({ kind: 'MALFORMED', summary: null });
+  }
+  guard.active = true;
+  guard.reentered = false;
+  try {
+    const port = exactDataRecord(owner, ['readCapitalSummary']);
+    const read = port?.readCapitalSummary;
+    if (typeof read !== 'function') return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const raw = Reflect.apply(read, owner, []) as unknown;
+    if (guard.reentered) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    if (raw === null) return Object.freeze({ kind: 'UNAVAILABLE', summary: null });
+    if (typeof raw !== 'object' || utilTypes.isProxy(raw)) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const availability = Object.getOwnPropertyDescriptor(raw, 'availability');
+    const cut = exactDataRecord(raw, availability && Object.hasOwn(availability, 'value')
+      && availability.value === 'UNAVAILABLE'
+      ? ['availability', 'accountTruthState', 'reasonCodes']
+      : ['availability', 'checkpoint', 'safety']);
+    if (!cut) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    if (cut.availability === 'UNAVAILABLE') {
+      const blockers = boundedUniqueStrings(cut.reasonCodes, 256, 256);
+      if (!['OWNER_GATED', 'UNAVAILABLE', 'UNKNOWN'].includes(String(cut.accountTruthState))
+          || blockers === null || blockers.length === 0) {
+        return Object.freeze({ kind: 'MALFORMED', summary: null });
+      }
+      return Object.freeze({
+        kind: 'UNAVAILABLE',
+        summary: Object.freeze({
+          truthLabel: 'UNAVAILABLE',
+          accountTruthState: cut.accountTruthState as string,
+          allocatableAmount: null,
+          reservedAmount: null,
+          activeExposureAmount: null,
+          eligibleCount: null,
+          reservationCount: null,
+          stagedMandateCount: null,
+          activeExposureCount: null,
+          recoveryCount: null,
+          checkpointRevision: null,
+          blockerCodes: blockers,
+        }),
+      });
+    }
+    if (cut.availability !== 'AVAILABLE') return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const checkpoint = exactDataRecord(cut.checkpoint, ['id', 'revision']);
+    const safety = exactDataRecord(cut.safety, [
+      'canOpenOrIncrease', 'supervisionContinues', 'visiblePositionIds',
+      'recoveryRequiredPositionIds', 'effectiveActiveReservationIds', 'reasonCodes',
+    ]);
+    if (!checkpoint || !safety) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const checkpointId = checkpoint.id;
+    const revision = checkpoint.revision;
+    if (typeof checkpointId !== 'string' || checkpointId.length === 0 || checkpointId.length > 256
+        || checkpointId.trim() !== checkpointId
+        || !Number.isSafeInteger(revision) || (revision as number) < 0
+        || typeof safety.canOpenOrIncrease !== 'boolean'
+        || typeof safety.supervisionContinues !== 'boolean') {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const visible = boundedUniqueStrings(safety.visiblePositionIds, MAX_MARKET_ROWS, 256);
+    const recovery = boundedUniqueStrings(safety.recoveryRequiredPositionIds, MAX_MARKET_ROWS, 256);
+    const activeReservations = boundedUniqueStrings(safety.effectiveActiveReservationIds, MAX_MARKET_ROWS, 256);
+    const blockers = boundedUniqueStrings(safety.reasonCodes, 256, 256);
+    if (visible === null || recovery === null || activeReservations === null || blockers === null) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const visibleIds = new Set(visible);
+    if (recovery.some((id) => !visibleIds.has(id))) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    if ((safety.canOpenOrIncrease && blockers.length > 0)
+        || (!safety.canOpenOrIncrease && blockers.length === 0)
+        || (safety.supervisionContinues !== (visible.length > 0))) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    return Object.freeze({
+      kind: 'AVAILABLE',
+      summary: Object.freeze({
+        truthLabel: 'RECORDED_REPLAY',
+        accountTruthState: safety.canOpenOrIncrease ? 'RESTART_TRUTH_READY' : 'RESTART_TRUTH_BLOCKED',
+        allocatableAmount: null,
+        reservedAmount: null,
+        activeExposureAmount: null,
+        eligibleCount: null,
+        reservationCount: activeReservations.length,
+        stagedMandateCount: null,
+        activeExposureCount: visible.length,
+        recoveryCount: recovery.length,
+        checkpointRevision: String(revision),
+        blockerCodes: blockers,
+      }),
+    });
+  } catch {
+    return Object.freeze({ kind: 'MALFORMED', summary: null });
+  } finally {
+    guard.active = false;
+  }
+}
+
+function unavailableCapitalRestartSummary(reason: string): Readonly<SystemCapitalSummary> {
+  return Object.freeze({
+    truthLabel: 'UNAVAILABLE',
+    accountTruthState: 'UNAVAILABLE',
+    allocatableAmount: null,
+    reservedAmount: null,
+    activeExposureAmount: null,
+    eligibleCount: null,
+    reservationCount: null,
+    stagedMandateCount: null,
+    activeExposureCount: null,
+    recoveryCount: null,
+    checkpointRevision: null,
+    blockerCodes: Object.freeze([reason]),
+  });
 }
 
 class MarketEvidenceReader {
@@ -692,6 +909,20 @@ class PublicIntelligenceLifecycle {
     return this.bridge.operatorFocusPins();
   }
 
+  readSummary(nowMs: number): Readonly<SystemIntelligenceSummary> {
+    const summary = this.focusTruthCurrent(nowMs) ? this.bridge.attentionFocusSummary() : null;
+    return Object.freeze({
+      truthLabel: summary === null ? 'UNAVAILABLE' : 'LIVE_PUBLIC',
+      evidenceCount: null,
+      attentionCount: null,
+      focusRequestedCount: summary?.focusRequestedCount ?? null,
+      focusActiveCount: summary?.focusActiveCount ?? null,
+      thesisCount: null,
+      insufficientEvidenceCount: null,
+      lastUpdateAtMs: summary?.observedAtMs ?? null,
+    });
+  }
+
   readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
     const readback = this.bridge.focusPinState(symbol);
     if (this.focusTruthCurrent()) return readback;
@@ -794,12 +1025,12 @@ class PublicIntelligenceLifecycle {
     this.lastEvidenceReady = false;
   }
 
-  private focusTruthCurrent(): boolean {
+  private focusTruthCurrent(evaluatedAtMs?: number): boolean {
     if (!this.runtimeActive || !this.intelligenceActive
         || !this.lastUniverseReady || !this.lastEvidenceReady
         || this.lastProjectedSpotTimestamp === null || this.lastProjectedUsdmTimestamp === null) return false;
     try {
-      const nowMs = this.clock.nowMs();
+      const nowMs = evaluatedAtMs ?? this.clock.nowMs();
       return isValidUtcMillis(nowMs)
         && this.market.feeds['spot-miniticker'] === 'open'
         && this.market.feeds['futures-markprice'] === 'open'
@@ -1158,6 +1389,7 @@ function strategySummary(
       heartbeatAtMs: null,
       candidateCount: null,
       proposalCount: null,
+      cooldownCount: null,
       rejectionCount: null,
       acceptedCount: null,
       lastDecisionAtMs: null,
@@ -1169,11 +1401,13 @@ function strategySummary(
     .filter((value): value is number => value !== null);
   const freshness = health.timestamp ? evaluateFreshness(health.timestamp, nowMs) : null;
   const live = health.running && freshness?.state === 'FRESH';
+  const ownerSummary = safeStrategyOwnerSummary(snapshot);
   return Object.freeze({
     truthLabel: live ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
     heartbeatAtMs: validUtcOrNull(snapshot.lastTickTs),
-    candidateCount: snapshot.decisions.filter((decision) => decision.kind === 'watch' || decision.kind === 'focus').length,
-    proposalCount: snapshot.proposals.length,
+    candidateCount: ownerSummary?.candidateCount ?? null,
+    proposalCount: ownerSummary?.opportunityCount ?? null,
+    cooldownCount: ownerSummary?.cooldownCount ?? null,
     rejectionCount: snapshot.decisions.filter((decision) => decision.kind === 'reject').length,
     acceptedCount: snapshot.decisions.filter((decision) => decision.kind === 'proposal').length,
     lastDecisionAtMs: timestamps.length > 0 ? Math.max(...timestamps) : null,
@@ -1210,6 +1444,7 @@ export function createProductionSystemIntegrationPorts(
       ? createAcceptedQAbstentionBinding()
       : input.qAdvisory,
   });
+  const capitalReadGuard: CapitalReadGuard = { active: false, reentered: false };
 
   const runtimes = Object.freeze({
     market: Object.freeze({
@@ -1275,7 +1510,12 @@ export function createProductionSystemIntegrationPorts(
       });
       const basisHealth = basisLifecycle.health(ctx);
       const volumeHealth = volumeLifecycle.health(ctx);
-      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies'>> = {
+      const capitalRead = safeCapitalSummary(input.capitalSummary, capitalReadGuard);
+      const capital = capitalRead.summary
+        ?? unavailableCapitalRestartSummary(capitalRead.kind === 'MALFORMED'
+          ? 'CAPITAL_SUMMARY_OWNER_MALFORMED'
+          : 'CAPITAL_SUMMARY_OWNER_UNAVAILABLE');
+      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies' | 'intelligence' | 'capital'>> = {
         sourceCoverage: Object.freeze({
           truthLabel: marketLive ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
           universeSymbols: facts.universeSymbols,
@@ -1290,6 +1530,8 @@ export function createProductionSystemIntegrationPorts(
           basis: strategySummary(safeStrategySnapshot(input.basis), basisHealth, nowMs),
           volume: strategySummary(safeStrategySnapshot(input.volume), volumeHealth, nowMs),
         }),
+        intelligence: publicIntelligence.readSummary(nowMs),
+        capital,
       };
       return Object.freeze(result);
     },

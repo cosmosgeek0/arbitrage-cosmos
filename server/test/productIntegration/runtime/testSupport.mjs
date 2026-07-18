@@ -135,11 +135,11 @@ export function makeSupervisor(overrides = {}) {
     summaries: Object.freeze({
       sourceCoverage: Object.freeze({ truthLabel: 'LIVE_PUBLIC', universeSymbols: 10, spotCoveredSymbols: 10, usdMCoveredSymbols: 10, quietSymbolsRetained: 10, materialGapCount: 0, rateLimitedSourceCount: 0, lastMaterialGapAtMs: null }),
       strategies: Object.freeze({
-        basis: Object.freeze({ truthLabel: 'DRY_RUN', heartbeatAtMs: T0 - 500, candidateCount: 1, proposalCount: 0, rejectionCount: 1, acceptedCount: 0, lastDecisionAtMs: T0 - 500, sourceRevision: 'basis-1' }),
-        volume: Object.freeze({ truthLabel: 'DRY_RUN', heartbeatAtMs: T0 - 500, candidateCount: 1, proposalCount: 0, rejectionCount: 1, acceptedCount: 0, lastDecisionAtMs: T0 - 500, sourceRevision: 'volume-1' }),
+        basis: Object.freeze({ truthLabel: 'DRY_RUN', heartbeatAtMs: T0 - 500, candidateCount: 1, proposalCount: 0, cooldownCount: 0, rejectionCount: 1, acceptedCount: 0, lastDecisionAtMs: T0 - 500, sourceRevision: 'basis-1' }),
+        volume: Object.freeze({ truthLabel: 'DRY_RUN', heartbeatAtMs: T0 - 500, candidateCount: 1, proposalCount: 0, cooldownCount: 0, rejectionCount: 1, acceptedCount: 0, lastDecisionAtMs: T0 - 500, sourceRevision: 'volume-1' }),
       }),
       intelligence: Object.freeze({ truthLabel: 'LIVE_PUBLIC', evidenceCount: 2, attentionCount: 0, focusRequestedCount: 0, focusActiveCount: 0, thesisCount: 0, insufficientEvidenceCount: 0, lastUpdateAtMs: T0 - 500 }),
-      capital: Object.freeze({ truthLabel: 'DRY_RUN', accountTruthState: 'NOT_CONFIGURED', allocatableAmount: null, reservedAmount: null, activeExposureAmount: '0.00 USDT', eligibleCount: 0, reservationCount: 0, stagedMandateCount: 0, activeExposureCount: 0, checkpointRevision: 'capital-1', blockerCodes: Object.freeze([]) }),
+      capital: Object.freeze({ truthLabel: 'DRY_RUN', accountTruthState: 'NOT_CONFIGURED', allocatableAmount: null, reservedAmount: null, activeExposureAmount: '0.00 USDT', eligibleCount: 0, reservationCount: 0, stagedMandateCount: 0, activeExposureCount: 0, recoveryCount: 0, checkpointRevision: 'capital-1', blockerCodes: Object.freeze([]) }),
       risk: Object.freeze({ truthLabel: 'DRY_RUN', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: Object.freeze([]), rejectionCount: 0, reasonCodes: Object.freeze(['LIVE_EXECUTION_NOT_IMPLEMENTED']) }),
       execution: Object.freeze({ truthLabel: 'DRY_RUN', mode: 'VALIDATE_ONLY', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED', planId: null, planLifecycle: null, coordinatorState: 'VALIDATE_ONLY', legCount: 0, recoveryState: null, lastTransitionAtMs: null }),
       reconciliation: Object.freeze({ truthLabel: 'DRY_RUN', status: 'EXACT', blocksNewExposure: false, recommendation: null, checkpointId: 'recon-1', evaluatedAtMs: T0 - 500, reasonCodes: Object.freeze([]) }),

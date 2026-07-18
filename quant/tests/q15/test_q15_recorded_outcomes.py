@@ -23,10 +23,12 @@ from quant_edge.registry_ops.recorded_outcomes import (
     RecordedCalibrationPolicyV1,
     RecordedCalibrationReportV1,
     RecordedCalibrationStatus,
+    RecordedComparisonVerdict,
     RecordedOutcomeAttestationV1,
     RecordedOutcomeCorpusV1,
     RecordedOutcomeV1,
     RecordedPredictionRegistrationV1,
+    compare_recorded_calibrations,
     evaluate_recorded_calibration,
 )
 from quant_edge.registry_ops.store import (
@@ -57,7 +59,7 @@ def policy(
         maximum_brier_micros=20_000,
         maximum_absolute_bias_micros=60_000,
         maximum_mean_absolute_residual_micros=100_000,
-        maximum_absolute_cost_residual_micros=100,
+        maximum_mean_absolute_cost_residual_micros=100,
         required_cost_unit="quote-notional-micros.v1",
         required_cost_valuation_asset="USDT",
     )
@@ -232,7 +234,7 @@ def test_replay_residuals_are_exact_and_promote_only_research_head(tmp_path: Pat
     assert result.brier_micros == 10_000
     assert result.bias_micros == 50_000
     assert result.mean_absolute_residual_micros == 100_000
-    assert result.mean_cost_residual_micros == 10
+    assert result.mean_absolute_cost_residual_micros == 10
     assert result.report_revision.startswith("sha256:")
 
     with ResearchRegistryStore(tmp_path) as store:
@@ -714,6 +716,184 @@ def test_store_owned_chronological_receipt_is_the_only_passive_fill_promotion_pa
             )
             == receipt
         )
+
+
+def test_generation_two_passive_fill_requires_exact_receipt_and_persisted_comparison(
+    tmp_path: Path,
+) -> None:
+    now = [NOW + 100]
+    training = passive_fill_training_observations()
+    baseline_challenger = passive_fill_challenger(training)
+    baseline_corpus = passive_fill_corpus()
+    baseline_report = passive_fill_report(baseline_corpus)
+    second_model_revision = "l065.passive-fill.v2"
+    second_challenger = fit_passive_fill_challenger(
+        training,
+        replace(
+            baseline_challenger.config,
+            model_revision=second_model_revision,
+            grid=TimeGridV1(
+                "l065.passive-fill.grid.v2",
+                baseline_challenger.config.grid.times_ns,
+            ),
+        ),
+    )
+    second_corpus = replace(
+        baseline_corpus,
+        corpus_id="l110.passive-fill-heldout.generation-two",
+        corpus_revision="l110.passive-fill-heldout.generation-two.v1",
+        records=tuple(
+            replace(
+                item,
+                prediction_id=f"{item.prediction_id}.generation-two",
+                model_revision=second_model_revision,
+                prediction_micros=item.outcome_micros,
+            )
+            for item in baseline_corpus.records
+        ),
+    )
+    second_report = evaluate_recorded_calibration(
+        report_id="l110.passive-fill-report.generation-two.v1",
+        slot_id=baseline_report.slot_id,
+        corpus=second_corpus,
+        policy=baseline_report.policy,
+    )
+    comparison = compare_recorded_calibrations(
+        comparison_id="l110.passive-fill-comparison.generation-two.v1",
+        baseline=baseline_report,
+        challenger=second_report,
+    )
+    assert comparison.verdict is RecordedComparisonVerdict.PASS
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as store:
+        store.record_recorded_calibration_report(baseline_report, corpus=baseline_corpus)
+        baseline_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.generation-one.v1",
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+            transition_id="l110.passive-fill-promote.generation-one.v1",
+            expected_generation=0,
+        )
+        first = store.promote_passive_fill_challenger(
+            receipt_revision=baseline_receipt.receipt_revision,
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+        )
+        assert first.generation == 1
+
+        now[0] = NOW + 101
+        store.record_recorded_calibration_report(second_report, corpus=second_corpus)
+        second_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.generation-two.v1",
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            transition_id="l110.passive-fill-promote.generation-two.v1",
+            expected_generation=first.generation,
+        )
+
+        with pytest.raises(RegistryConflictError, match="held-out calibration receipt"):
+            store.promote_recorded_calibration(
+                report=second_report,
+                transition_id=second_receipt.transition_id,
+                expected_generation=second_receipt.expected_generation,
+                now_ms=now[0],
+                comparison=comparison,
+            )
+        with pytest.raises(RegistryConflictError, match="does not bind the exact evidence"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=baseline_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+        with pytest.raises(RegistryConflictError, match="requires comparison evidence"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+            )
+        assert store.current_recorded_calibration(second_report.slot_id) == first
+        with pytest.raises(RegistryConflictError, match="does not authorize revision"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+        assert store.current_recorded_calibration(second_report.slot_id) == first
+
+        store.record_recorded_calibration_comparison(
+            comparison,
+            baseline=baseline_report,
+            challenger=second_report,
+        )
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as restarted:
+        second = restarted.promote_passive_fill_challenger(
+            receipt_revision=second_receipt.receipt_revision,
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            comparison=comparison,
+        )
+        assert second.generation == 2
+        assert second.report_revision == second_report.report_revision
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as replayed:
+        assert (
+            replayed.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+            == second
+        )
+        links = (
+            replayed._require_open()
+            .execute(
+                "SELECT comparison_revision FROM "
+                "recorded_calibration_transition_comparisons WHERE transition_id=?",
+                (second_receipt.transition_id,),
+            )
+            .fetchall()
+        )
+        assert [row["comparison_revision"] for row in links] == [
+            f"sha256:{comparison.content_digest.hexdigest}"
+        ]
 
 
 def test_passive_fill_receipt_rejects_foreign_partial_stale_and_overlapping_evidence(

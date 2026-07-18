@@ -951,7 +951,11 @@
   .sdx-summary-cell { border-right: 0; }
   .sdx-control-row { flex-direction: column; align-items: flex-start; }
   .sdx-chain-row { grid-template-columns: 84px minmax(0, 1fr); }
-  .sdx-chain-end { display: none; }
+  .sdx-chain-end {
+    grid-column: 2;
+    justify-self: start;
+    flex-wrap: wrap;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

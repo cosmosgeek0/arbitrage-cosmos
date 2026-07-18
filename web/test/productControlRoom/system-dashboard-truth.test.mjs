@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CapitalPanel } from '../../src/features/systemDashboard/components/CapitalPanel.tsx';
 import { ExposureBanner } from '../../src/features/systemDashboard/components/PostureStrip.tsx';
 import { RiskExecutionPanel } from '../../src/features/systemDashboard/components/RiskExecutionPanel.tsx';
+import { TraceDrilldown } from '../../src/features/systemDashboard/components/TraceDrilldown.tsx';
 import { fixtureById } from '../../src/features/systemDashboard/fixtures/index.ts';
 import {
   exposureVerdict,
@@ -70,4 +72,27 @@ test('reconciliation is clear only when current available evidence explicitly co
       : component),
   };
   assert.equal(reconciliationVerdict(stale), 'UNKNOWN');
+});
+
+test('narrow trace layout preserves failure and provenance truth', () => {
+  const now = 1_800_000_000_000;
+  const snapshot = fixtureById('healthy').build(now);
+  const failedTrace = snapshot.recentCorrelatedDecisions.find((trace) => trace.failureCode !== null);
+  assert.ok(failedTrace);
+  const markup = renderToStaticMarkup(React.createElement(TraceDrilldown, {
+    snapshot,
+    nowMs: now,
+    selectedCorrelationId: failedTrace.correlationId,
+    onSelect: () => {},
+  }));
+  assert.match(markup, new RegExp(failedTrace.failureCode));
+  assert.match(markup, new RegExp(failedTrace.truthLabel.replaceAll('_', ' ')));
+
+  const css = readFileSync(new URL(
+    '../../src/features/systemDashboard/styles/systemDashboard.css',
+    import.meta.url,
+  ), 'utf8');
+  const narrowRule = css.match(/@container \(max-width: 660px\) \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.doesNotMatch(narrowRule, /\.sdx-chain-end\s*\{[^}]*display\s*:\s*none/);
+  assert.match(narrowRule, /\.sdx-chain-end\s*\{[^}]*grid-column\s*:\s*2/);
 });

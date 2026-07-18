@@ -41,8 +41,32 @@ const ASSESSMENT_SITE_IDS = Object.freeze([
   'OPSITE_3EC04308A744BC59E87E',
 ].sort());
 
+const NEWS_CONTEXT_PATH = 'server/src/services/newsContext.ts';
+const NEWS_CONTEXT_SOURCE_SHA256 = 'b41d9d54b2eac621810f7629dd6131fa76a35c0b1793863c4be374f04f767cb6';
+const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
+
+export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
+  sourceCommit: '2651710fffa7a453162097f04ba60792151912a4',
+  sourceBlob: 'ab7e5c0301f02b4a2a3fdfcdab041203fc972926',
+  sourceDigestAlgorithm: 'sha256',
+  sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
+  rulingCommit: 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6',
+  ownerId: 'EXISTING_NEWS_CONTEXT_SERVICE',
+  disposition: 'KEEP_CANONICAL',
+  operationClass: 'PURE_READ',
+  operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
+  siteId: NEWS_CONTEXT_SITE_ID,
+  path: NEWS_CONTEXT_PATH,
+  line: 2312,
+  column: 25,
+  rawKind: OPERATION_KINDS.MUTATION_CALL,
+  rawSymbol: 'fetch:DYNAMIC_METHOD',
+  effectiveKind: OPERATION_KINDS.NETWORK_HTTP_REQUEST,
+  effectiveSymbol: 'fetch:GET',
+});
+
 const PROFILE_PATH = 'server/src/binance/profile.ts';
-const PROFILE_SOURCE_SHA256 = '518efea8d27b649c34fb0b12789ab787572eff4573e38bdf7657eb66dfa4cdc5';
+const PROFILE_SOURCE_SHA256 = 'e87d976c450182cc2adccad3e6c080133045fdb78ad13f0c13d24394ea4285c6';
 const PROFILE_SITE_IDS = Object.freeze([
   'OPSITE_5EA03340B3E6E86C7930',
 ].sort());
@@ -75,6 +99,15 @@ const ASSESSMENT_RULE = Object.freeze({
   symbolPattern: '^(?:new:BoundedInboundQueue|this\\.#queue\\.(?:offer|shift))$',
 });
 
+const NEWS_CONTEXT_RULE = Object.freeze({
+  ruleId: 'i00-news-context-explicit-public-get-v2',
+  operationId: NEWS_CONTEXT_OVERLAY_AUTHORITY.operationId,
+  pathExact: Object.freeze([NEWS_CONTEXT_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.MUTATION_CALL]),
+  symbolPattern: '^fetch:DYNAMIC_METHOD$',
+});
+
 const PROFILE_RULE = Object.freeze({
   ruleId: 'robustness-token-profile-bounded-queue-v1',
   operationId: 'OP_RUNTIME_IN_MEMORY_QUEUE',
@@ -94,6 +127,7 @@ const DATA_DIR_LEASE_RULE = Object.freeze({
 });
 
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
+  NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
   PROFILE_RULE,
@@ -105,12 +139,23 @@ function exactMembers(actual, expected) {
     && actual.every((value, index) => value === expected[index]);
 }
 
+export function verifyNewsContextOverlayAuthority(candidate) {
+  return candidate !== null
+    && typeof candidate === 'object'
+    && !Array.isArray(candidate)
+    && exactMembers(Object.keys(candidate).sort(), Object.keys(NEWS_CONTEXT_OVERLAY_AUTHORITY).sort())
+    && Object.entries(NEWS_CONTEXT_OVERLAY_AUTHORITY)
+      .every(([key, value]) => candidate[key] === value);
+}
+
 function exactSites(report, {
   path,
   sourceSha256,
   siteIds,
   kindSet,
   symbolSet,
+  line = null,
+  column = null,
   operationId = null,
   mappingRuleId = null,
 }) {
@@ -121,6 +166,8 @@ function exactSites(report, {
   const observedIds = sites.map((site) => site.siteId).sort();
   return exactMembers(observedIds, siteIds)
     && sites.every((site) => site.sourceSha256 === sourceSha256)
+    && sites.every((site) => line === null || site.line === line)
+    && sites.every((site) => column === null || site.column === column)
     && sites.every((site) => site.operationId === operationId)
     && sites.every((site) => site.mappingRuleId === mappingRuleId);
 }
@@ -128,6 +175,7 @@ function exactSites(report, {
 function verifyBaseUncovered(report) {
   const observed = report.uncoveredSites.map((site) => site.siteId).sort();
   const expected = [
+    NEWS_CONTEXT_SITE_ID,
     ...TWIN_SITE_IDS,
     ...ASSESSMENT_SITE_IDS,
     ...PROFILE_SITE_IDS,
@@ -136,6 +184,15 @@ function verifyBaseUncovered(report) {
   if (!exactMembers(observed, expected)) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
   }
+  if (!exactSites(report, {
+    path: NEWS_CONTEXT_PATH,
+    sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
+    siteIds: [NEWS_CONTEXT_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['fetch:DYNAMIC_METHOD']),
+    line: NEWS_CONTEXT_OVERLAY_AUTHORITY.line,
+    column: NEWS_CONTEXT_OVERLAY_AUTHORITY.column,
+  })) throw new Error('I00_OPERATION_OVERLAY_NEWS_SOURCE_DRIFT');
   if (!exactSites(report, {
     path: TWIN_PATH,
     sourceSha256: TWIN_SOURCE_SHA256,
@@ -171,6 +228,17 @@ function verifyBaseUncovered(report) {
 }
 
 function verifyIntegratedMappings(report) {
+  if (!exactSites(report, {
+    path: NEWS_CONTEXT_PATH,
+    sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
+    siteIds: [NEWS_CONTEXT_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.MUTATION_CALL]),
+    symbolSet: new Set(['fetch:DYNAMIC_METHOD']),
+    line: NEWS_CONTEXT_OVERLAY_AUTHORITY.line,
+    column: NEWS_CONTEXT_OVERLAY_AUTHORITY.column,
+    operationId: NEWS_CONTEXT_RULE.operationId,
+    mappingRuleId: NEWS_CONTEXT_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_NEWS_MAPPING_DRIFT');
   if (!exactSites(report, {
     path: TWIN_PATH,
     sourceSha256: TWIN_SOURCE_SHA256,
@@ -224,6 +292,9 @@ function verifyIntegratedMappings(report) {
  * command, persistence, exchange, or money authority.
  */
 export function scanIntegratedProductionOperations(options = {}) {
+  if (!verifyNewsContextOverlayAuthority(
+    options.newsContextAuthority ?? NEWS_CONTEXT_OVERLAY_AUTHORITY,
+  )) throw new Error('I00_OPERATION_OVERLAY_NEWS_AUTHORITY_DRIFT');
   const baseReport = scanProductionOperations({
     repositoryRoot: options.repositoryRoot,
     registry: OPERATION_MAPPING_REGISTRY,

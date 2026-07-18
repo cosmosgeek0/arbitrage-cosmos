@@ -99,7 +99,7 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
 | `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 558 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 565 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
 
 ## Real-gap campaign state
 
@@ -110,7 +110,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires one atomic PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. The hostile lease suite is 4/4, System Integration is 412/412, and live competitors exit before a second boot revision while dead same-host ownership recovers atomically. |
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
 | 3 | `FIX-005` | `BUILT_AND_TESTED` | The named merged-scope audit mounts FIX-031 then FIX-017, preserves the first child failure exit, and cannot report success until both residual finding regressions pass. Its command-contract suite is 3/3 and the live two-finding audit exits 0. |
-| 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap now loads `.env` before path-owning modules, and one resolver owns the canonical data directory plus icon, liquidation, profile, and news archive paths. The fresh-process regression imports all four owners with a `.env`-only `DATA_DIR` and proves their exact shared authority. |
+| 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap now loads `.env` before path-owning modules, and one resolver owns the canonical data directory plus icon, liquidation, profile, and news archive paths. The fresh-process regression imports all four owners with a `.env`-only `DATA_DIR` and proves their exact shared authority. The existing reviewed public-news GET disposition is pinned to the resulting exact source location and SHA-256 without widening its owner, method, or network authority. |
 | 5 | `FIX-171` | `BUILT_AND_TESTED` | All ten Foundation import-purity wrappers install one deterministic synchronous fetch denial instead of forwarding to ambient transport. A shared negative control performs an actual hostile fetch attempt and proves the exact fail-closed code before every import check. |
 | 6 | `FIX-170` | `BUILT_AND_TESTED` | Routine pull-request CI now has separate bounded canonical-full and local-ops jobs. The full job installs exact Node, Python 3.13.14, uv 0.11.28, all locked Quant groups/extras, then runs `test:all`; the ops job runs both fail-preserving local aggregates. The hostile workflow contract is 2/2, and staging/private/signed commands remain outside routine CI. |
 | 11 | `L-011` | `BUILT_AND_TESTED` | The canonical validate-only orchestrator now yields an exact `DATABASE_FAILURE_BEFORE_SEND` owner witness only when persistence fails before approval, risk, coordinator, reconciliation, or any sealed-venue call. The focused hostile regression proves one database read failure, one fail-closed durable result attempt, zero venue/submission calls, no execution plan, and no execution authority. |
@@ -142,7 +142,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 | Evidence | Measured result |
 | --- | --- |
 | Root deterministic/CI command `npm test` | Exit 0; typecheck, build, engines, focused security, Product Assurance, and I00 acceptance contract green; deterministic egress attempts 0. |
-| Product Assurance | 555 scanned files; 205/205 operation sites covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+| Product Assurance | 565 scanned files; 226/226 operation sites covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
 | Safety invariant focus | 17/17 catalog families; pass, missing-fact `UNKNOWN`, and false-fact `FAIL` paths verified. |
 | Live-edge mutation journal adapter | 22/22; bounded Worker lifecycle, atomic race, restart, corruption, count capacity, and 512 KiB capacity proofs. |
 | Candidate report parity | Historical pre-C4 acceptance was 44/44. Exact C4 was rejected at 42/44 because its machine report was stale; exact-C9 measurement occurs only after the containing source commit is frozen. |
@@ -154,7 +154,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - CI hotfix `6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd` is in Main and candidate ancestry. Hotfix #2 `53c6da81` is `REFERENCE_ONLY`; its useful behavior was independently adapted without admitting its stale branch assumptions.
 - The candidate has exact second-parent merges for egress, A1-A5, observability, operations, replay, runbooks, A-FORMAL, and S2. Their sealed donor tips are candidate ancestors.
 - The Product Assurance historical merge-cut proof remains 193/193 blobs. Current source records seven explicit post-integration replacements, leaving 186 donor-identical HEAD blobs.
-- Product Assurance now scans 558 files and exactly 226 discovered operations with zero uncovered sites.
+- Product Assurance now scans 565 files and exactly 226 discovered operations with zero uncovered sites.
 - The five protected owner-directive root files are absent from this clean candidate checkout. Their exact committed verifier bundle remains verification-only and cannot impersonate live owner input.
 - The retired Role 3 C2 receipt is historical `REFERENCE_ONLY` evidence for C2R. The campaign preserves its exact untracked bytes in a tracked evidence-only descendant; it does not reclassify that receipt as current-candidate verification.
 

@@ -14,3 +14,11 @@ test('FIX-092 detached integrated identity is selected only from exact commit an
   assert.equal(result.mode, scenario.expectedMode);
   assert.equal(result.verificationTarget, scenario.expectedTarget);
 });
+
+test('FIX-105 donor expectation is conditional on the exact donor commit and tree', () => {
+  const scenario = AI_OPS_IDENTITY_REGRESSION_MATRIX.find((row) => row.item === 'FIX-105');
+  assert.ok(scenario);
+  const result = classifyAiOpsGitIdentity(scenario.head, AI_OPS_DONOR_IDENTITIES[scenario.lane]);
+  assert.equal(result.mode, 'DONOR');
+  assert.equal(result.verificationTarget, 'SEALED_DONOR_HISTORY');
+});

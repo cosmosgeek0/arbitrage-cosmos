@@ -109,6 +109,9 @@ interface Store {
   marketsUpdatedAt: number | null;
   marketsError: string | null;
   mutationError: ApiFailure | null;
+  fxTruth: FxTruth;
+  fxBusy: boolean;
+  refreshFx: () => void;
   connected: boolean;
   dataNonce: number;
   refresh: () => Promise<RefreshResult>;
@@ -126,6 +129,71 @@ interface Store {
 }
 
 const StoreContext = createContext<Store | null>(null);
+
+export const FX_MAX_SOURCE_AGE_MS = 30 * 60_000;
+export type FxTruthStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+export type FxTruth = Readonly<{
+  status: FxTruthStatus;
+  rates: Readonly<Record<string, number>>;
+  sourceTimeMs: number | null;
+  lastSuccessAtMs: number | null;
+  error: string | null;
+}>;
+export type FxTruthEvent =
+  | Readonly<{ kind: 'SUCCESS'; observedAtMs: number; payload: Readonly<{ rates?: Record<string, number>; fetchedAt?: number }> }>
+  | Readonly<{ kind: 'FAILURE'; observedAtMs: number; error: string }>;
+
+export const INITIAL_FX_TRUTH: FxTruth = Object.freeze({
+  status: 'LOADING', rates: Object.freeze({}), sourceTimeMs: null, lastSuccessAtMs: null, error: null,
+});
+
+export function reduceFxTruth(current: FxTruth, event: FxTruthEvent): FxTruth {
+  if (event.kind === 'FAILURE') {
+    return Object.freeze({
+      ...current,
+      status: current.lastSuccessAtMs === null ? 'UNAVAILABLE' : 'STALE',
+      error: event.error.trim() || 'FX refresh failed.',
+    });
+  }
+  const observedAtMs = Number.isFinite(event.observedAtMs) ? event.observedAtMs : 0;
+  const sourceTimeMs = Number.isFinite(event.payload.fetchedAt) && Number(event.payload.fetchedAt) > 0
+    ? Number(event.payload.fetchedAt)
+    : null;
+  const rates = Object.fromEntries(Object.entries(event.payload.rates ?? {}).filter(([, rate]) => Number.isFinite(rate) && rate > 0));
+  const fresh = sourceTimeMs !== null
+    && sourceTimeMs <= observedAtMs
+    && observedAtMs - sourceTimeMs <= FX_MAX_SOURCE_AGE_MS
+    && Object.keys(rates).length > 0;
+  return Object.freeze({
+    status: fresh ? 'CURRENT' : Object.keys(rates).length > 0 ? 'STALE' : 'UNAVAILABLE',
+    rates: Object.freeze(rates),
+    sourceTimeMs,
+    lastSuccessAtMs: fresh ? observedAtMs : current.lastSuccessAtMs,
+    error: fresh ? null : 'FX source is stale or invalid.',
+  });
+}
+
+export function resolveFxRate(
+  truth: FxTruth,
+  currency: string,
+  nowMs: number,
+): Readonly<{ status: FxTruthStatus; rate: number | null }> {
+  if (currency === 'USD') return Object.freeze({ status: 'CURRENT', rate: 1 });
+  const rate = truth.rates[currency];
+  const current = truth.status === 'CURRENT'
+    && truth.sourceTimeMs !== null
+    && nowMs >= truth.sourceTimeMs
+    && nowMs - truth.sourceTimeMs <= FX_MAX_SOURCE_AGE_MS
+    && Number.isFinite(rate)
+    && rate > 0;
+  if (current) return Object.freeze({ status: 'CURRENT', rate });
+  const status = truth.status === 'LOADING'
+    ? 'LOADING'
+    : truth.lastSuccessAtMs !== null || Number.isFinite(rate)
+      ? 'STALE'
+      : 'UNAVAILABLE';
+  return Object.freeze({ status, rate: null });
+}
 
 // ---- live order-book stream (Token Detail) -------------------------------
 // Rides the same /ws socket as canonical invalidations and material-event
@@ -279,6 +347,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
   const [marketsError, setMarketsError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<ApiFailure | null>(null);
+  const [fxTruth, setFxTruth] = useState<FxTruth>(INITIAL_FX_TRUTH);
+  const [fxBusy, setFxBusy] = useState(false);
   const [connected, setConnected] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => {
     applyPrefs();
@@ -299,33 +369,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
   const [, bumpFx] = useState(0);
+  const fxPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
 
-  // Display currency → live FX rate (USD base). USD is identity; others fetch.
+  // One FX owner feeds both global formatters and the operator sheet. Cached
+  // rates remain diagnostic evidence after failure, but never current truth.
+  useEffect(() => {
+    const poll = createSettledPoll<{ rates?: Record<string, number>; fetchedAt?: number }>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1_000,
+      request: (signal) => {
+        setFxBusy(true);
+        return fetchJson('/api/fx', { signal });
+      },
+      onSuccess: (d) => {
+        setFxTruth((current) => reduceFxTruth(current, { kind: 'SUCCESS', observedAtMs: Date.now(), payload: d }));
+        setFxBusy(false);
+      },
+      onError: (cause) => {
+        setFxTruth((current) => reduceFxTruth(current, {
+          kind: 'FAILURE', observedAtMs: Date.now(), error: mutationFailure(cause).message,
+        }));
+        setFxBusy(false);
+      },
+    });
+    fxPollRef.current = poll;
+    poll.start();
+    return () => {
+      if (fxPollRef.current === poll) fxPollRef.current = null;
+      poll.stop();
+    };
+  }, [prefs.dataCadence?.fx]);
+
   useEffect(() => {
     const cur = prefs.currency || 'USD';
     const sym = CURRENCIES[cur]?.symbol ?? '$';
-    if (cur === 'USD') {
-      setFxRate(1, '$');
-      bumpFx((n) => n + 1);
-      return;
-    }
-    const poll = createSettledPoll<{ rates?: Record<string, number> }>({
-      intervalMs: Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1_000,
-      request: (signal) => fetchJson('/api/fx', { signal }),
-      onSuccess: (d) => {
-        if (!d?.rates) return;
-        const rate = d.rates[cur];
-        if (rate) {
-          setFxRate(rate, sym);
-          bumpFx((n) => n + 1);
-        }
-      },
-    });
-    poll.start();
-    return poll.stop;
-  }, [prefs.currency, prefs.dataCadence?.fx]);
+    const resolved = resolveFxRate(fxTruth, cur, Date.now());
+    setFxRate(resolved.rate, sym, resolved.status === 'CURRENT');
+    bumpFx((n) => n + 1);
+    if (fxTruth.status !== 'CURRENT' || fxTruth.sourceTimeMs === null) return;
+    const delayMs = Math.max(0, fxTruth.sourceTimeMs + FX_MAX_SOURCE_AGE_MS - Date.now() + 1);
+    const timer = window.setTimeout(() => {
+      setFxTruth((current) => current.status === 'CURRENT' && current.sourceTimeMs === fxTruth.sourceTimeMs
+        ? reduceFxTruth(current, { kind: 'FAILURE', observedAtMs: Date.now(), error: 'FX source expired.' })
+        : current);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [fxTruth, prefs.currency]);
+
+  const refreshFx = useCallback(() => {
+    if (!fxPollRef.current) return;
+    setFxBusy(true);
+    fxPollRef.current.refresh();
+  }, []);
 
   useEffect(() => onPrefs((p) => {
     setPrefs(p);
@@ -585,6 +681,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     marketsUpdatedAt,
     marketsError,
     mutationError,
+    fxTruth,
+    fxBusy,
+    refreshFx,
     connected,
     dataNonce,
     refresh,

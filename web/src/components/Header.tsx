@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { useStore, useResolvedTheme, type Page } from '../store';
+import { resolveFxRate, useStore, useResolvedTheme, type Page } from '../store';
 import type { LedgerEvent } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
@@ -1325,7 +1325,10 @@ function AwsOwnerGatedSheet() {
 }
 
 function SharedTopBar() {
-  const { state, connected, page, prefs, updatePref, setPage } = useStore();
+  const {
+    state, connected, page, prefs, updatePref, setPage,
+    fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
+  } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
@@ -1369,27 +1372,10 @@ function SharedTopBar() {
     error: string | null;
   }>({ status: 'LOADING', lastSuccessAt: null, error: null });
   const notifLiveCursor = useRef(0);
-  const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
-  const [currencyBusy, setCurrencyBusy] = useState(false);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
-  useEffect(() => {
-    if (active !== 'currency') return;
-    let alive = true;
-    setCurrencyBusy(true);
-    fetch('/api/fx')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
-        if (!alive) return;
-        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
-        else setCurrencyFx((x) => ({ ...x, ok: false }));
-      })
-      .catch(() => { if (alive) setCurrencyFx((x) => ({ ...x, ok: false })); })
-      .finally(() => { if (alive) setCurrencyBusy(false); });
-    return () => { alive = false; };
-  }, [active]);
   useEffect(() => {
     let bootstrapped = false;
     const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
@@ -1564,19 +1550,19 @@ function SharedTopBar() {
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
   const curInfo = CURRENCIES[cur] ?? CURRENCIES.USD;
   const curSymbol = curInfo.symbol.trim() || cur;
-  const curRate = cur === 'USD' ? 1 : currencyFx.rates[cur] ?? null;
-  const curTone = cur === 'USD' || curRate ? 'ok' : currencyFx.ok === false ? 'bad' : 'warn';
+  const curFx = resolveFxRate(fxTruth, cur, now.getTime());
+  const curRate = curFx.rate;
+  const curTone = curFx.status === 'CURRENT' ? 'ok' : curFx.status === 'LOADING' ? 'warn' : 'bad';
   const curRateText = cur === 'USD'
     ? '1.0000'
     : curRate
       ? curRate.toLocaleString('en-US', { maximumFractionDigits: curRate >= 100 ? 2 : 4 })
-      : currencyFx.ok === false
-        ? 'Unavailable'
-        : 'Loading';
+      : curFx.status === 'STALE' ? 'Stale' : curFx.status === 'UNAVAILABLE' ? 'Unavailable' : 'Loading';
   const currencyRateText = (code: string) => {
     if (code === 'USD') return '1.0000';
-    const r = currencyFx.rates[code];
-    if (!r) return currencyFx.ok === false ? 'OFF' : 'FX';
+    const resolved = resolveFxRate(fxTruth, code, now.getTime());
+    const r = resolved.rate;
+    if (!r) return resolved.status === 'STALE' ? 'STALE' : resolved.status === 'UNAVAILABLE' ? 'OFF' : 'FX';
     return r.toLocaleString('en-US', { maximumFractionDigits: r >= 100 ? 2 : 4 });
   };
   const formatCurrencyPanelValue = (code: string, amount: number) => {
@@ -1599,18 +1585,6 @@ function SharedTopBar() {
     : curTone === 'bad'
       ? 'Unavailable'
       : 'Loading';
-  const refreshCurrencyFx = () => {
-    if (currencyBusy) return;
-    setCurrencyBusy(true);
-    fetch('/api/fx')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
-        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
-        else setCurrencyFx((x) => ({ ...x, ok: false }));
-      })
-      .catch(() => setCurrencyFx((x) => ({ ...x, ok: false })))
-      .finally(() => setCurrencyBusy(false));
-  };
   const basisIsBps = prefs.basisUnit === 'bps';
   const basisIsDecimal = prefs.basisUnit === 'decimal';
   const formatBasisPct = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(Math.abs(value) < 0.1 ? 3 : 2)}%`;
@@ -2597,7 +2571,9 @@ function SharedTopBar() {
             <OpsSheetHeader
               icon={<PopupSourceMark tone="#69c634" brand><CurrencyDollarIdentityMark size={40} /></PopupSourceMark>}
               title="Display Currency"
-              subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
+              subtitle={fxTruth.sourceTimeMs
+                ? `${fxTruth.status} · source ${timeAgo(fxTruth.sourceTimeMs)}`
+                : fxTruth.error ?? 'Loading FX source truth'}
               status={cur}
               tone={statusTone(curTone)}
             />

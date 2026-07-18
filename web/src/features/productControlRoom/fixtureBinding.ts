@@ -132,6 +132,17 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     : component.desiredState === 'PAUSED' ? 'PAUSED' : 'READY';
   const observedLifecycle = component.readiness;
   const projectedCapability = component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC';
+  const restartBlocker = component.blockerCodes.find((code) => (
+    code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
+  ));
+  if (restartBlocker === undefined && component.restartCount > 0 && component.generation === 0) {
+    throw new TypeError('restart count requires a nonzero runtime generation');
+  }
+  const restartState: ProductComponentProjection['restartState'] = restartBlocker !== undefined
+    ? 'RESTART_REQUIRED'
+    : component.restartCount > 0
+      ? 'RESTARTED'
+      : component.generation > 0 ? 'NEVER_RESTARTED' : 'UNKNOWN';
   return Object.freeze({
     componentId: component.componentId,
     owner: component.ownerPath || component.owner,
@@ -149,10 +160,35 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     processingAgeMs: component.lastReceiveAtMs !== null && component.lastProcessAtMs !== null
       ? Math.max(0, component.lastProcessAtMs - component.lastReceiveAtMs)
       : null,
+    processingLagMs: component.processingLagMs ?? null,
     queueDepth: component.queue?.depth ?? null,
     queueCapacity: component.queue?.capacity ?? null,
     droppedCount: component.queue?.dropped ?? null,
-    blockerCode: component.blockerCodes[0] ?? null,
+    freshnessState: component.freshness?.state === 'FRESH'
+      || component.freshness?.state === 'STALE'
+      || component.freshness?.state === 'CLOCK_SKEWED'
+      ? component.freshness.state
+      : 'UNAVAILABLE',
+    dataQualityState: component.dataQuality?.state ?? 'UNAVAILABLE',
+    dataQualityInvalidCount: component.dataQuality?.invalidCount ?? null,
+    dataQualityDuplicateCount: component.dataQuality?.duplicateCount ?? null,
+    dataQualityOutOfOrderCount: component.dataQuality?.outOfOrderCount ?? null,
+    dataQualitySequenceGapCount: component.dataQuality?.sequenceGapCount ?? null,
+    dataQualityObservedAtMs: component.dataQuality?.observedAtMs ?? null,
+    retryState: component.retry?.state ?? 'UNAVAILABLE',
+    retryAttempt: component.retry?.attempt ?? null,
+    retryCeiling: component.retry?.ceiling ?? null,
+    backoffMs: component.retry?.delayMs ?? null,
+    retryAtMs: component.retry?.retryAtMs ?? null,
+    cooldownUntilMs: component.retry?.cooldownUntilMs ?? null,
+    dependencyIds: Object.freeze([...component.dependencies]),
+    checkpointState: component.checkpoint?.state ?? 'UNAVAILABLE',
+    checkpointRevision: component.checkpoint?.revision ?? null,
+    checkpointPersistedAtMs: component.checkpoint?.persistedAtMs ?? null,
+    restartState,
+    generation: component.generation,
+    restartCount: component.restartCount,
+    blockerCode: restartBlocker ?? component.blockerCodes[0] ?? null,
     rootCauseComponentId: component.blockerCodes.length ? component.componentId : null,
     capitalRelevance: component.capitalExposed ? 'EXPOSED' : 'NONE',
     supportedControlIds: Object.freeze([...component.supportedControls]),

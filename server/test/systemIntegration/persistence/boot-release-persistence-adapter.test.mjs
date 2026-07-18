@@ -68,7 +68,7 @@ test('missing and malformed composition identity remains explicit UNKNOWN', () =
     assert.equal(readback.latest?.deployedCommit, null);
     assert.equal(readback.latest?.configRevision, null);
     assert.equal(readback.latest?.modelRevision, null);
-    assert.equal(readback.latest?.schemaRevision, '2');
+    assert.equal(readback.latest?.schemaRevision, '3');
     assert.equal(readback.latest?.blockerCode, 'TESTED_COMMIT_UNKNOWN');
     assert.deepEqual(readback.latest?.identityIssues, [
       'TESTED_COMMIT_UNKNOWN',

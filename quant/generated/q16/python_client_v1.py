@@ -2,8 +2,10 @@
 from __future__ import annotations
 import json
 import math
+import os
 import re
 import socket
+import stat
 from pathlib import Path
 
 MAXIMUM_SAFE_INTEGER = 9007199254740991
@@ -414,6 +416,53 @@ def request_bytes(
         raise ValueError("local inference server returned multiple frames")
     return _parse(bytes(received[:-1]))
 
+def _file_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+def _read_request_file(payload_path: Path, maximum_bytes: int) -> bytes:
+    if not isinstance(payload_path, Path):
+        raise ValueError("payload_path must be pathlib.Path")
+    if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= MAXIMUM_SAFE_INTEGER:
+        raise ValueError("maximum_bytes must be a positive safe integer")
+    before = os.lstat(payload_path)
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError("raw request path must resolve to a regular file")
+    if not 1 <= before.st_size <= maximum_bytes:
+        raise ValueError("raw request file exceeds the bounded local protocol frame")
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    non_blocking = getattr(os, "O_NONBLOCK", None)
+    if not isinstance(no_follow, int) or not isinstance(non_blocking, int):
+        raise ValueError("safe raw request file admission is unsupported on this platform")
+    flags = os.O_RDONLY | no_follow | non_blocking | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(payload_path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("raw request path must resolve to a regular file")
+        if _file_identity(before) != _file_identity(opened):
+            raise ValueError("raw request file changed during admission")
+        raw = bytearray()
+        remaining = opened.st_size + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            raw.extend(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if _file_identity(opened) != _file_identity(after) or len(raw) != opened.st_size:
+        raise ValueError("raw request file changed during admission")
+    return bytes(raw)
+
 def request_file(
     socket_path: Path,
     payload_path: Path,
@@ -423,7 +472,7 @@ def request_file(
 ) -> dict[str, object]:
     return request_bytes(
         socket_path,
-        payload_path.read_bytes(),
+        _read_request_file(payload_path, maximum_bytes),
         maximum_bytes=maximum_bytes,
         timeout_seconds=timeout_seconds,
     )

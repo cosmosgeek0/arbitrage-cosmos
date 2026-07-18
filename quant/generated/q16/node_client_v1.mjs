@@ -489,8 +489,63 @@ export function requestBytes(socketPath, payloadBytes, maximumBytes = 262144, ti
   });
 }
 
+function sameFileIdentity(left, right) {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.ctimeNs === right.ctimeNs;
+}
+
+function readRequestFile(payloadPath, maximumBytes) {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0) {
+    fail('maximumBytes must be a positive safe integer');
+  }
+  const before = fs.lstatSync(payloadPath, { bigint: true });
+  if (!before.isFile()) fail('raw request path must resolve to a regular file');
+  if (before.size <= 0n || before.size > BigInt(maximumBytes)) {
+    fail('raw request file exceeds bounded local frame');
+  }
+  const noFollow = fs.constants.O_NOFOLLOW;
+  const nonBlocking = fs.constants.O_NONBLOCK;
+  if (!Number.isInteger(noFollow) || !Number.isInteger(nonBlocking)) {
+    fail('safe raw request file admission is unsupported on this platform');
+  }
+  let descriptor;
+  try {
+    descriptor = fs.openSync(payloadPath, fs.constants.O_RDONLY | noFollow | nonBlocking);
+  } catch (error) {
+    throw new Error(`raw request file changed during admission: ${error}`);
+  }
+  try {
+    const opened = fs.fstatSync(descriptor, { bigint: true });
+    if (!opened.isFile()) fail('raw request path must resolve to a regular file');
+    if (!sameFileIdentity(before, opened)) fail('raw request file changed during admission');
+    const raw = Buffer.alloc(Number(opened.size) + 1);
+    let total = 0;
+    while (total < raw.length) {
+      const count = fs.readSync(descriptor, raw, total, raw.length - total, null);
+      if (count === 0) break;
+      total += count;
+    }
+    const after = fs.fstatSync(descriptor, { bigint: true });
+    if (!sameFileIdentity(opened, after) || total !== Number(opened.size)) {
+      fail('raw request file changed during admission');
+    }
+    return raw.subarray(0, total);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 export function requestFile(socketPath, payloadPath, maximumBytes = 262144, timeoutMs = 2000) {
-  return requestBytes(socketPath, fs.readFileSync(payloadPath), maximumBytes, timeoutMs);
+  return requestBytes(
+    socketPath,
+    readRequestFile(payloadPath, maximumBytes),
+    maximumBytes,
+    timeoutMs,
+  );
 }
 
 export function request(socketPath, payload, maximumBytes = 262144, timeoutMs = 2000) {

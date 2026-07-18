@@ -209,6 +209,8 @@ function fixture(options = {}) {
     options.volumeStopThrows ?? false,
     options.volumeStartThrowsAtCall ?? null,
   );
+  const strategyIntakeState = { basis: false, volume: false };
+  const strategyIntakeOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -221,6 +223,30 @@ function fixture(options = {}) {
       basis: basis.port,
       volume: volume.port,
     },
+    strategyIntake: Object.freeze({
+      basis: Object.freeze({
+        readPaused: () => strategyIntakeState.basis,
+        setPaused: (paused) => {
+          strategyIntakeOrder.push(`basis:${paused}`);
+          order.push(`intake:set:basis:${paused}`);
+          if (options.strategyIntakeRestoreThrows === 'basis') throw new Error('deterministic Basis intake restore failure');
+          const changed = strategyIntakeState.basis !== paused;
+          strategyIntakeState.basis = paused;
+          return changed;
+        },
+      }),
+      volume: Object.freeze({
+        readPaused: () => strategyIntakeState.volume,
+        setPaused: (paused) => {
+          strategyIntakeOrder.push(`volume:${paused}`);
+          order.push(`intake:set:volume:${paused}`);
+          if (options.strategyIntakeRestoreThrows === 'volume') throw new Error('deterministic Volume intake restore failure');
+          const changed = strategyIntakeState.volume !== paused;
+          strategyIntakeState.volume = paused;
+          return changed;
+        },
+      }),
+    }),
     ...(options.traces ? { traces: options.traces } : {}),
     lifecycleTruth: {
       ...(options.restartTruth !== undefined || options.restartTruthThrows === true
@@ -308,6 +334,8 @@ function fixture(options = {}) {
     setOrdinaryDrainTruth(value) { ordinaryDrainTruth = value; },
     setControlRuntimeEffect(effectId, value) { controlRuntimeEffects.set(effectId, value); },
     setVolumeStopThrows(value) { volume.setStopThrows(value); },
+    strategyIntakeState,
+    strategyIntakeOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -393,6 +421,46 @@ test('application shell persists startup before any data component and reads nev
   }
   assert.ok(supervisor.components.find((entry) => entry.componentId === 'engine-supervisor')
     .blockerCodes.includes('EFFECTIVE_KILL_SWITCH_ENGAGED'));
+});
+
+test('MIS-072 restores each durable strategy intake posture before managed runtimes start and fails closed on effect loss', async () => {
+  const first = fixture();
+  assert.equal(first.app.start().ok, true);
+  const paused = await first.app.controls.mutate(validControlRequest(
+    first,
+    { command: 'SET_BASIS_INTAKE', paused: true },
+    'basis-intake-durable-restore',
+  ), ACTOR);
+  assert.equal(paused.ok, true);
+  assert.equal(first.strategyIntakeState.basis, true);
+  assert.equal(first.strategyIntakeState.volume, false);
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.strategyIntake, { basisPaused: true, volumePaused: false });
+
+  const recovered = fixture({ ledger: first.ledger });
+  const recoveredStart = recovered.app.start();
+  assert.equal(recoveredStart.ok, true);
+  assert.deepEqual(recovered.strategyIntakeOrder.slice(0, 2), ['basis:true', 'volume:false']);
+  assert.equal(recovered.strategyIntakeState.basis, true);
+  assert.equal(recovered.strategyIntakeState.volume, false);
+  await drive(recovered, 4);
+  assert.ok(
+    recovered.order.indexOf('runtime:start:basis') > recovered.order.indexOf('intake:set:basis:true'),
+    'managed Basis runtime must start only after the durable posture restore completed',
+  );
+  assert.deepEqual(recovered.app.strategyIntakeState('basis'), {
+    strategy: 'basis', desiredPaused: true, effectivePaused: true,
+    controlRevision: 1, state: 'APPLIED',
+  });
+
+  const failed = fixture({ ledger: first.ledger, strategyIntakeRestoreThrows: 'basis' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+  assert.equal(failed.states.basis.starts, 0);
+  assert.equal(failed.states.volume.starts, 0);
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {

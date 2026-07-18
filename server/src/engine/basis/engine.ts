@@ -120,6 +120,25 @@ export class BasisEngine {
     return this.killSwitchOn;
   }
 
+  /** Pause proposal formation only; market observation and supervision continue. */
+  setIntakePaused(paused: boolean): boolean {
+    if (typeof paused !== 'boolean') throw new TypeError('basis intake posture must be boolean');
+    if (paused === this.intakePausedValue) return false;
+    this.intakePausedValue = paused;
+    if (paused) this.proposals.expireAll('intake_paused');
+    this.emitter.emit(
+      'heartbeat',
+      newCorrelationId(this.clock, 'basis_sys'),
+      `basis proposal intake ${paused ? 'paused' : 'resumed'}`,
+      { payload: { intakePaused: paused } },
+    );
+    return true;
+  }
+
+  intakePaused(): boolean {
+    return this.intakePausedValue;
+  }
+
   /** Apply a validated config revision and invalidate state derived under old thresholds. */
   updateConfig(partial: Partial<BasisConfig>): boolean {
     const merged = { ...this.cfg, ...partial };
@@ -308,6 +327,16 @@ export class BasisEngine {
     const expired = this.proposals.sweep((symbol) => this.features.build(symbol, false));
     for (const item of expired) this.lifecycle.onProposalExpired(item.symbol, item.why);
     const p = this.proposals.get(proposalId);
+
+    if (this.intakePausedValue) {
+      if (p && (p.status === 'open' || p.status === 'updated')) this.proposals.expire(p.id, 'intake_paused');
+      const corr = p?.correlationId ?? newCorrelationId(this.clock, 'basis_sys');
+      return {
+        blocked: true,
+        verdict: { allowed: false, reasons: ['intake_paused'], correlationId: corr, ts: now },
+        intents: [],
+      };
+    }
 
     if (!p || (p.status !== 'open' && p.status !== 'updated')) {
       const corr = p?.correlationId ?? newCorrelationId(this.clock, 'basis_sys');

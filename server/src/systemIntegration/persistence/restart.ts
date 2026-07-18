@@ -71,6 +71,10 @@ export function createInitialCheckpointState(
     revision: 0,
     generation: 0,
     control,
+    strategyIntake: {
+      basisPaused: false,
+      volumePaused: false,
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

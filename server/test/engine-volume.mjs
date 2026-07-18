@@ -316,6 +316,13 @@ section('9. kill switch ⇒ blocked from execution path');
   check('kill switch blocks intent minting', blocked.ok === false && blocked.reason === 'kill_switch_on');
   check('block ledgered as risk_rejected/kill_switch_on',
     live.engine.memSink.byKind('risk_rejected').some((e) => e.rejectCode === 'kill_switch_on'));
+  live.engine.setKillSwitch(false);
+  live.engine.setIntakePaused(true);
+  const intakeBlocked = live.engine.intentFor(p.id);
+  check('paused Volume intake blocks an already-open proposal at the final intent bridge',
+    intakeBlocked.ok === false && intakeBlocked.reason === 'intake_paused');
+  check('pausing Volume invalidates the pre-existing proposal',
+    live.engine.proposalStore.all().find((proposal) => proposal.id === p.id)?.status === 'expired');
   globalThis.__live = live; // reused by case 10
 }
 

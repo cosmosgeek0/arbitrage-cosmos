@@ -41,6 +41,10 @@ function ownerBlocker(
   if (command === 'SET_PUBLIC_SOURCE_LIFECYCLE' && typeof owner.readSourceControlState !== 'function') {
     return 'SOURCE_CONTROL_READBACK_NOT_PROVEN';
   }
+  if ((command === 'SET_BASIS_INTAKE' || command === 'SET_VOLUME_INTAKE')
+      && typeof owner.readStrategyIntakeControlState !== 'function') {
+    return 'STRATEGY_INTAKE_READBACK_NOT_PROVEN';
+  }
   if (command === 'RESTART_COMPONENT' && capability.managedRestartComponentId !== 'engine-supervisor') {
     return 'MANAGED_ROOT_RESTART_NOT_PROVEN';
   }
@@ -81,6 +85,8 @@ function entry(
     owner: blocker === null ? owner!.capability.ownerId : 'systemIntegration canonical control owner',
     group: input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
       ? 'Source Lifecycle'
+      : input.backendCommandId === 'SET_BASIS_INTAKE' || input.backendCommandId === 'SET_VOLUME_INTAKE'
+        ? 'Strategy Intake'
       : input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
     authority: blocker === null ? 'SERVER_DERIVED_OPERATOR' : 'NOT_CONFIGURED',
     requiredPosture: input.backendCommandId === 'RESTART_COMPONENT' ? 'NO_CAPITAL_EXPOSED' : 'PROCESS_ALIVE',
@@ -89,6 +95,51 @@ function entry(
     disabledReason: blocker === null ? null : blocker,
     preview: null,
     latestResult: null,
+  });
+}
+
+function strategyIntakeEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  strategy: 'basis' | 'volume',
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readStrategyIntakeControlState']>> = null;
+  try { state = owner?.readStrategyIntakeControlState?.(strategy) ?? null; } catch { state = null; }
+  const command = strategy === 'basis' ? 'SET_BASIS_INTAKE' : 'SET_VOLUME_INTAKE';
+  const paused = state?.desiredPaused !== true;
+  const strategyLabel = strategy === 'basis' ? 'Basis' : 'Volume';
+  const configured = ownerBlocker(owner, command) === null;
+  return entry(snapshot, owner, {
+    controlId: `strategy.${strategy}.intake`,
+    backendCommandId: command,
+    targetType: 'COMPONENT',
+    targetId: `${strategy}-engine`,
+    payload: Object.freeze({ paused }),
+    payloadSchema: '{ paused: boolean }',
+    payloadEnumeration: Object.freeze([true, false]),
+    defaultValue: true,
+    label: `${paused ? 'Pause' : 'Resume'} ${strategyLabel} Intake`,
+    explanation: paused
+      ? `Stops only new ${strategyLabel} proposals while observation, supervision, reconciliation, and risk reduction continue.`
+      : `Resumes only ${strategyLabel} proposal intake after every stricter global and restart gate passes.`,
+    safeBounds: `${strategyLabel} proposal intake only`,
+    currentDesiredValue: state === null ? 'UNKNOWN' : state.desiredPaused ? 'PAUSED' : 'OPEN',
+    currentEffectiveValue: state?.effectivePaused === null || state === null
+      ? 'UNKNOWN'
+      : state.effectivePaused ? 'PAUSED' : 'OPEN',
+    effect: 'IMMEDIATE',
+    reversibility: 'The inverse transition requires the next exact canonical control revision.',
+    invariants: Object.freeze([
+      'The other strategy is unchanged.',
+      'Observation, supervision, reconciliation, and risk-reducing activity remain available.',
+      'Resume never bypasses global kill, global intake, or restart admission.',
+    ]),
+    effectTelemetry: Object.freeze(['desired intake posture', 'effective owner readback', 'control revision', 'durable receipt']),
+    confirmationText: `Confirm ${paused ? 'pause' : 'resume'} for ${strategyLabel} proposal intake.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.controlRevision),
+    ...(configured && (state === null || state.state !== 'APPLIED')
+      ? { forcedBlocker: state?.state ?? 'STRATEGY_INTAKE_STATE_UNAVAILABLE' }
+      : {}),
   });
 }
 
@@ -134,7 +185,7 @@ function sourceLifecycleEntry(
   });
 }
 
-/** Six bounded non-money controls; fail-safe or source-local lifecycle directions only. */
+/** Eight bounded non-money controls; global, source-local, or strategy-local only. */
 export function buildProductRuntimeControlRegistry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner?: Readonly<ProductRuntimeCommandOwnerPort>,
@@ -174,6 +225,8 @@ export function buildProductRuntimeControlRegistry(
     }),
     sourceLifecycleEntry(snapshot, owner, 'public-spot-source'),
     sourceLifecycleEntry(snapshot, owner, 'public-usdm-source'),
+    strategyIntakeEntry(snapshot, owner, 'basis'),
+    strategyIntakeEntry(snapshot, owner, 'volume'),
   ]);
 }
 
@@ -181,11 +234,19 @@ function findWiredControl(
   registry: readonly Readonly<ProductRuntimeControlRegistryEntry>[],
   controlId: string,
 ): Readonly<ProductRuntimeControlRegistryEntry> {
-  const control = registry.find((candidate) => candidate.controlId === controlId);
-  if (!control) throw new ProductRuntimeError('CONTROL_NOT_FOUND', 'The requested control is not registered.', 404);
+  const control = findControl(registry, controlId);
   if (control.wiringState !== 'WIRED_LIVE') {
     throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', control.disabledReason ?? 'The control owner is not configured.', 409);
   }
+  return control;
+}
+
+function findControl(
+  registry: readonly Readonly<ProductRuntimeControlRegistryEntry>[],
+  controlId: string,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  const control = registry.find((candidate) => candidate.controlId === controlId);
+  if (!control) throw new ProductRuntimeError('CONTROL_NOT_FOUND', 'The requested control is not registered.', 404);
   return control;
 }
 
@@ -202,6 +263,25 @@ function intent(
     targetId: control.targetId,
     payload: control.payload,
     expectedRevision,
+    nowMs,
+    operator,
+  });
+}
+
+function requestBoundIntent(
+  request: Readonly<ProductRuntimeCommandRequest>,
+  nowMs: number,
+  operator: Readonly<ProductRuntimeOperator>,
+): Readonly<ProductRuntimeCommandIntent> | null {
+  if (!PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.includes(request.backendCommandId as ProductRuntimeSafeBackendCommand)
+      || !['SYSTEM', 'COMPONENT'].includes(request.targetType)) return null;
+  return Object.freeze({
+    controlId: request.controlId,
+    backendCommandId: request.backendCommandId as ProductRuntimeSafeBackendCommand,
+    targetType: request.targetType as ProductRuntimeCommandIntent['targetType'],
+    targetId: request.targetId,
+    payload: request.payload,
+    expectedRevision: request.expectedRevision,
     nowMs,
     operator,
   });
@@ -291,16 +371,40 @@ export async function submitProductRuntimeControl(input: Readonly<{
   nowMs: number;
   operator: Readonly<ProductRuntimeOperator>;
 }>): Promise<Readonly<ProductRuntimeControlResult>> {
-  const control = findWiredControl(input.registry, input.request.controlId);
+  const control = findControl(input.registry, input.request.controlId);
   if (!input.owner) throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', 'The canonical command owner is not configured.', 409);
-  if (input.request.expiresAtMs <= input.nowMs) throw new ProductRuntimeError('EXPIRED', 'Command preview has expired.', 409);
-  if (input.request.backendCommandId !== control.backendCommandId
+  const expired = input.request.expiresAtMs <= input.nowMs;
+  const currentControlMismatch = input.request.backendCommandId !== control.backendCommandId
       || input.request.targetType !== control.targetType || input.request.targetId !== control.targetId
       || input.request.currentRevision !== input.request.expectedRevision
-      || !samePayload(input.request.payload, control.payload)) {
+      || !samePayload(input.request.payload, control.payload);
+  const currentControlAccepted = control.wiringState === 'WIRED_LIVE'
+    && !expired
+    && !currentControlMismatch;
+  let ownerIntent = currentControlAccepted
+    ? intent(control, input.request.expectedRevision, input.nowMs, input.operator)
+    : requestBoundIntent(input.request, input.nowMs, input.operator);
+  let pendingReplay = false;
+  if (!currentControlAccepted && ownerIntent !== null && typeof input.owner.authorizePendingReplay === 'function') {
+    try {
+      pendingReplay = await input.owner.authorizePendingReplay(Object.freeze({
+        request: input.request,
+        intent: ownerIntent,
+      }));
+    } catch {
+      pendingReplay = false;
+    }
+  }
+  if (!currentControlAccepted && !pendingReplay) {
+    if (control.wiringState !== 'WIRED_LIVE') {
+      throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', control.disabledReason ?? 'The control owner is not configured.', 409);
+    }
+    if (expired) throw new ProductRuntimeError('EXPIRED', 'Command preview has expired.', 409);
     throw new ProductRuntimeError('REJECTED_STALE_REVISION', 'Command is not bound to the current registered control.', 409);
   }
-  const ownerIntent = intent(control, input.request.expectedRevision, input.nowMs, input.operator);
+  if (ownerIntent === null) {
+    throw new ProductRuntimeError('REJECTED_SCHEMA', 'Command is not a bounded Product control intent.', 400);
+  }
   let result: Readonly<ProductRuntimeControlResult>;
   try {
     result = await input.owner.submit(Object.freeze({ request: input.request, intent: ownerIntent }));

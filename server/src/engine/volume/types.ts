@@ -139,7 +139,8 @@ export type InvalidationReason =
   | 'move_exhausted'
   | 'ttl_expired'
   | 'universe_removed'
-  | 'capacity_pruned';
+  | 'capacity_pruned'
+  | 'intake_paused';
 
 export interface InvalidationRule {
   /** 60s volume multiple at/below this ⇒ volume_normalized */

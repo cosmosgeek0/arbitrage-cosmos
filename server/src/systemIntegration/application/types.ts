@@ -83,6 +83,14 @@ export interface SystemIntegrationApplicationOptions {
   readonly restartTruthRefreshIntervalMs?: number;
 }
 
+export interface StrategyIntakeControlReadback {
+  readonly strategy: 'basis' | 'volume';
+  readonly desiredPaused: boolean;
+  readonly effectivePaused: boolean | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
 export type SystemApplicationPhase =
   | 'CREATED'
   | 'STARTING'
@@ -148,6 +156,7 @@ export interface SystemIntegrationApplicationFacade {
   managedRuntime(): Readonly<ManagedCompositionReadSnapshot>;
   supervisor(): Readonly<SystemSupervisorReadModel>;
   controlState(): Readonly<SystemControlState>;
+  strategyIntakeState(strategy: 'basis' | 'volume'): Readonly<StrategyIntakeControlReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

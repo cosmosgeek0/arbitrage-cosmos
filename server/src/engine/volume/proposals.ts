@@ -14,7 +14,7 @@ import { boundedEvidence, makeEvent } from './events.js';
 
 export type IntentResult =
   | { ok: true; intent: OrderIntentStub }
-  | { ok: false; reason: 'kill_switch_on' | 'proposal_not_open' | 'proposal_unknown' };
+  | { ok: false; reason: 'kill_switch_on' | 'intake_paused' | 'proposal_not_open' | 'proposal_unknown' };
 
 interface StoredProposal extends EngineProposal {
   rule: InvalidationRule;
@@ -42,6 +42,21 @@ export class ProposalStore {
     private clock: Clock,
     private sink: EventSink,
   ) {}
+
+  expireAll(why: InvalidationReason): void {
+    const now = this.clock.now();
+    for (const p of this.proposals.values()) {
+      if (p.status !== 'open' && p.status !== 'updated') continue;
+      p.status = 'expired';
+      p.updatedTs = now;
+      p.invalidatedBy = why;
+      this.openBySymbol.delete(p.symbol);
+      this.sink.emit(makeEvent('proposal_expired', now, p.correlationId, `proposal invalidated: ${why}`, {
+        symbol: p.symbol,
+        payload: { id: p.id, invalidatedBy: why },
+      }));
+    }
+  }
 
   /** Create or refresh the open proposal for a symbol from a proposal decision. */
   upsertFromDecision(d: Decision, f: WakeupSnapshot): EngineProposal {
@@ -207,9 +222,13 @@ export class ProposalStore {
    * The ONLY path toward execution: mint a stub for the existing risk gate.
    * Kill switch blocks it here regardless of what upstream believed.
    */
-  intentFor(proposalId: string, killSwitch: boolean): IntentResult {
+  intentFor(proposalId: string, killSwitch: boolean, intakePaused = false): IntentResult {
     const p = this.proposals.get(proposalId);
     if (!p) return { ok: false, reason: 'proposal_unknown' };
+    if (intakePaused) {
+      if (p.status === 'open' || p.status === 'updated') this.expireAll('intake_paused');
+      return { ok: false, reason: 'intake_paused' };
+    }
     if (p.status !== 'open' && p.status !== 'updated') return { ok: false, reason: 'proposal_not_open' };
     if (killSwitch) {
       this.sink.emit(

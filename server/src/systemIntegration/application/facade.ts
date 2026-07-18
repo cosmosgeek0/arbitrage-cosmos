@@ -80,6 +80,7 @@ import type {
   SystemApplicationStartResult,
   SystemIntegrationApplicationFacade,
   SystemIntegrationApplicationOptions,
+  StrategyIntakeControlReadback,
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
@@ -592,6 +593,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreStrategyIntake(current.value.strategyIntake)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_INTAKE_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -854,6 +871,70 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       }
       return this.decision(true, 'INTAKE_POSTURE_ACCEPTED', '', mutation.paused !== control.intakePaused, !mutation.paused);
     }
+    if (mutation.command === 'SET_BASIS_INTAKE') {
+      const owner = this.options.strategyIntake?.basis;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        return this.decision(false, 'BASIS_INTAKE_OWNER_NOT_WIRED', 'Canonical Basis intake owner is unavailable.', false);
+      }
+      let paused: boolean;
+      try {
+        paused = owner.readPaused();
+      } catch {
+        return this.decision(false, 'BASIS_INTAKE_READBACK_UNAVAILABLE', 'Canonical Basis intake readback is unavailable.', false);
+      }
+      if (typeof paused !== 'boolean') {
+        return this.decision(false, 'BASIS_INTAKE_READBACK_INVALID', 'Canonical Basis intake readback is invalid.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'BASIS_INTAKE_DESIRED_STATE_UNAVAILABLE', 'Durable Basis intake posture is unavailable.', false);
+      }
+      if (!mutation.paused && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'Basis intake cannot resume while a stricter global posture is active.', false);
+      }
+      if (!mutation.paused && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'Basis intake cannot resume until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'BASIS_INTAKE_ACCEPTED',
+        '',
+        persisted.strategyIntake.basisPaused !== mutation.paused || paused !== mutation.paused,
+        !mutation.paused,
+      );
+    }
+    if (mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        return this.decision(false, 'VOLUME_INTAKE_OWNER_NOT_WIRED', 'Canonical Volume intake owner is unavailable.', false);
+      }
+      let paused: boolean;
+      try {
+        paused = owner.readPaused();
+      } catch {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_UNAVAILABLE', 'Canonical Volume intake readback is unavailable.', false);
+      }
+      if (typeof paused !== 'boolean') {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_INVALID', 'Canonical Volume intake readback is invalid.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'VOLUME_INTAKE_DESIRED_STATE_UNAVAILABLE', 'Durable Volume intake posture is unavailable.', false);
+      }
+      if (!mutation.paused && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'Volume intake cannot resume while a stricter global posture is active.', false);
+      }
+      if (!mutation.paused && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'Volume intake cannot resume until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'VOLUME_INTAKE_ACCEPTED',
+        '',
+        persisted.strategyIntake.volumePaused !== mutation.paused || paused !== mutation.paused,
+        !mutation.paused,
+      );
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -1001,6 +1082,69 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   controlState(): Readonly<SystemControlState> {
     return this.effectiveControlState();
+  }
+
+  strategyIntakeState(strategy: 'basis' | 'volume'): Readonly<StrategyIntakeControlReadback> {
+    const checkpoint = this.checkpoint();
+    const desiredPaused = checkpoint === null
+      ? true
+      : strategy === 'basis'
+        ? checkpoint.strategyIntake.basisPaused
+        : checkpoint.strategyIntake.volumePaused;
+    const owner = this.options.strategyIntake?.[strategy];
+    if (!owner || typeof owner.readPaused !== 'function') {
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused: null,
+        controlRevision: this.controls.snapshot().revision,
+        state: 'OWNER_NOT_WIRED',
+      });
+    }
+    const pendingPublications = this.persistence.readPendingControlRuntimePublications();
+    const publicationKnown = pendingPublications.ok && pendingPublications.value.length === 0;
+    try {
+      const effectivePaused = owner.readPaused();
+      if (typeof effectivePaused !== 'boolean') throw new TypeError('strategy intake readback must be boolean');
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused,
+        controlRevision: this.controls.snapshot().revision,
+        state: publicationKnown && effectivePaused === desiredPaused ? 'APPLIED' : 'EFFECT_UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused: null,
+        controlRevision: this.controls.snapshot().revision,
+        state: 'EFFECT_UNAVAILABLE',
+      });
+    }
+  }
+
+  private restoreStrategyIntake(
+    posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
+  ): boolean {
+    for (const strategy of ['basis', 'volume'] as const) {
+      const owner = this.options.strategyIntake?.[strategy];
+      const desiredPaused = strategy === 'basis' ? posture.basisPaused : posture.volumePaused;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        // A legacy/test composition with no strategy owner may start only when
+        // there is no durable effect to restore. A persisted pause still fails
+        // closed because pretending it applied would reopen proposal intake.
+        if (desiredPaused) return false;
+        continue;
+      }
+      try {
+        owner.setPaused(desiredPaused);
+        if (owner.readPaused() !== desiredPaused) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
   }
 
   private externalKillSwitchEngaged(): boolean {

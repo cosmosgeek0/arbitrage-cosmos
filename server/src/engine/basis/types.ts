@@ -59,6 +59,9 @@ export type BasisDirection = Extract<
 
 export type BasisCausalMarket = 'SPOT' | 'PERPETUAL' | 'UNKNOWN';
 export type BasisGapTrend = 'RISING' | 'FALLING' | 'UNKNOWN';
+export type BasisCausalSource = 'SPOT_BOOK' | 'PERPETUAL_BOOK' | 'UNKNOWN';
+export type BasisFollowerConfirmation = 'PENDING' | 'CONFIRMED' | 'UNKNOWN';
+export type BasisGapEvolution = 'GROWING' | 'DECAYING' | 'UNKNOWN';
 export type BasisGapCausalQuadrant =
   | 'RISING_SPOT_LED'
   | 'RISING_PERPETUAL_LED'
@@ -75,8 +78,19 @@ export interface BasisGapCausality {
   quadrant: BasisGapCausalQuadrant;
   trend: BasisGapTrend;
   initiatingMarket: BasisCausalMarket;
+  source: BasisCausalSource;
   initiatingSourceTs: number | null;
   acceptedEventSequence: number | null;
+  initiatingPriceTrend: BasisGapTrend;
+  ageMs: number | null;
+  persistenceEvents: number;
+  slopePctPerMin: number | null;
+  evolution: BasisGapEvolution;
+  followerMarket: BasisCausalMarket;
+  followerConfirmation: BasisFollowerConfirmation;
+  followerSourceTs: number | null;
+  lastSourceTs: number | null;
+  lastAcceptedEventSequence: number | null;
 }
 
 export interface BasisBookPair {

@@ -14,15 +14,23 @@ import type {
   BasisCausalMarket,
   BasisDirection,
   BasisGapCausality,
+  BasisGapEvolution,
   BasisGapTrend,
   GapState,
 } from './types.js';
+
+interface CausalLifecycle {
+  publicState: BasisGapCausality;
+  baselineGapPct: number;
+  initiatingPriceTrend: BasisGapTrend;
+  samples: Array<{ ts: number; v: number }>;
+}
 
 interface TrackerBucket {
   samples: Array<{ ts: number; v: number }>;
   openedTs: number | null; // when the gap first crossed watchGapPct
   persistTicks: number; // consecutive ticks ≥ watchGapPct
-  causality: BasisGapCausality;
+  lifecycle: CausalLifecycle | null;
 }
 
 function unknownCausality(): BasisGapCausality {
@@ -30,8 +38,19 @@ function unknownCausality(): BasisGapCausality {
     quadrant: 'UNKNOWN',
     trend: 'UNKNOWN',
     initiatingMarket: 'UNKNOWN',
+    source: 'UNKNOWN',
     initiatingSourceTs: null,
     acceptedEventSequence: null,
+    initiatingPriceTrend: 'UNKNOWN',
+    ageMs: null,
+    persistenceEvents: 0,
+    slopePctPerMin: null,
+    evolution: 'UNKNOWN',
+    followerMarket: 'UNKNOWN',
+    followerConfirmation: 'UNKNOWN',
+    followerSourceTs: null,
+    lastSourceTs: null,
+    lastAcceptedEventSequence: null,
   };
 }
 
@@ -51,7 +70,7 @@ export class GapTracker {
     const k = this.key(symbol, direction);
     let b = this.buckets.get(k);
     if (!b) {
-      b = { samples: [], openedTs: null, persistTicks: 0, causality: unknownCausality() };
+      b = { samples: [], openedTs: null, persistTicks: 0, lifecycle: null };
       if (this.buckets.size < this.cfg.maxUniverseSize * 2) this.buckets.set(k, b);
     }
     return b;
@@ -98,16 +117,16 @@ export class GapTracker {
       } else {
         b.openedTs = null;
         b.persistTicks = 0;
-        b.causality = unknownCausality();
+        b.lifecycle = null;
       }
     } else {
       // no data → the gap cannot be said to persist
       b.openedTs = null;
       b.persistTicks = 0;
-      b.causality = unknownCausality();
+      b.lifecycle = null;
     }
 
-    if (!causalUsable) b.causality = unknownCausality();
+    if (!causalUsable || this.expired(b, now)) b.lifecycle = null;
 
     return this.state(symbol, direction, gapPct, causalUsable);
   }
@@ -126,7 +145,7 @@ export class GapTracker {
       slopePctPerMin: slopePerMinute(b.samples),
       stabilityCv: recent.length >= 3 ? coefficientOfVariation(recent) : null,
       samples: b.samples.length,
-      causality: causalUsable ? { ...b.causality } : unknownCausality(),
+      causality: causalUsable ? this.publicCausality(b, now) : unknownCausality(),
     };
   }
 
@@ -143,19 +162,189 @@ export class GapTracker {
     const prior = this.gap(direction, before);
     const current = this.gap(direction, after);
     if (prior === null || current === null || current < this.cfg.watchGapPct) {
-      bucket.causality = unknownCausality();
+      bucket.lifecycle = null;
       return;
     }
     const delta = current - prior;
-    if (!Number.isFinite(delta) || Math.abs(delta) < this.cfg.causalMoveThresholdPct) return;
-    const trend: Exclude<BasisGapTrend, 'UNKNOWN'> = delta > 0 ? 'RISING' : 'FALLING';
-    bucket.causality = {
-      quadrant: `${trend}_${market === 'PERPETUAL' ? 'PERPETUAL' : 'SPOT'}_LED`,
-      trend,
-      initiatingMarket: market,
-      initiatingSourceTs: sourceTs,
-      acceptedEventSequence,
+    if (!Number.isFinite(delta)) {
+      bucket.lifecycle = null;
+      return;
+    }
+    const significant = Math.abs(delta) >= this.cfg.causalMoveThresholdPct;
+    const trend: BasisGapTrend = delta > 0 ? 'RISING' : delta < 0 ? 'FALLING' : 'UNKNOWN';
+    const priceTrend = this.executableQuoteTrend(direction, market, before, after);
+    const lifecycle = bucket.lifecycle;
+    if (lifecycle && this.resolved(lifecycle, current)) {
+      bucket.lifecycle = null;
+      return;
+    }
+    if (!lifecycle || this.expired(bucket, this.clock.now())) {
+      if (!significant || trend === 'UNKNOWN') {
+        bucket.lifecycle = null;
+        return;
+      }
+      this.startLifecycle(bucket, market, trend, priceTrend, prior, current, before, sourceTs, acceptedEventSequence);
+      return;
+    }
+
+    const state = lifecycle.publicState;
+    const decaying = this.distanceFromBaseline(lifecycle, current) < this.distanceFromBaseline(lifecycle, prior);
+    if (
+      market !== state.initiatingMarket &&
+      lifecycle.initiatingPriceTrend !== 'UNKNOWN' &&
+      priceTrend === lifecycle.initiatingPriceTrend &&
+      decaying
+    ) {
+      state.followerConfirmation = 'CONFIRMED';
+      state.followerSourceTs = sourceTs;
+      this.advanceLifecycle(bucket, lifecycle, current, sourceTs, acceptedEventSequence, 'DECAYING');
+      return;
+    }
+
+    if (!significant || trend === 'UNKNOWN') {
+      if (delta !== 0) {
+        this.advanceLifecycle(
+          bucket,
+          lifecycle,
+          current,
+          sourceTs,
+          acceptedEventSequence,
+          decaying ? 'DECAYING' : 'GROWING',
+        );
+      }
+      return;
+    }
+
+    if (market === state.initiatingMarket) {
+      const sourcePriceFlipped = lifecycle.initiatingPriceTrend !== 'UNKNOWN' &&
+        priceTrend !== lifecycle.initiatingPriceTrend;
+      if (trend !== state.trend || sourcePriceFlipped) {
+        this.startLifecycle(bucket, market, trend, priceTrend, prior, current, before, sourceTs, acceptedEventSequence);
+        return;
+      }
+      this.advanceLifecycle(bucket, lifecycle, current, sourceTs, acceptedEventSequence, 'GROWING');
+      return;
+    }
+
+    // An opposite-market move that does not confirm the initiator becomes a
+    // new source cut; prior source/persistence never leak across the flip.
+    this.startLifecycle(bucket, market, trend, priceTrend, prior, current, before, sourceTs, acceptedEventSequence);
+  }
+
+  private startLifecycle(
+    bucket: TrackerBucket,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    trend: Exclude<BasisGapTrend, 'UNKNOWN'>,
+    priceTrend: BasisGapTrend,
+    prior: number,
+    current: number,
+    before: BasisBookPair,
+    sourceTs: number,
+    acceptedEventSequence: number,
+  ): void {
+    const baselineTs = Math.max(before.spot?.ts ?? 0, before.perpetual?.ts ?? 0);
+    const samples = baselineTs > 0 && baselineTs < sourceTs
+      ? [{ ts: baselineTs, v: prior }, { ts: sourceTs, v: current }]
+      : [{ ts: sourceTs, v: current }];
+    const followerMarket = market === 'SPOT' ? 'PERPETUAL' : 'SPOT';
+    const slope = slopePerMinute(samples);
+    if (slope === null || !Number.isFinite(slope)) {
+      bucket.lifecycle = null;
+      return;
+    }
+    bucket.lifecycle = {
+      baselineGapPct: prior,
+      initiatingPriceTrend: priceTrend,
+      samples,
+      publicState: {
+        quadrant: `${trend}_${market === 'PERPETUAL' ? 'PERPETUAL' : 'SPOT'}_LED`,
+        trend,
+        initiatingMarket: market,
+        source: market === 'SPOT' ? 'SPOT_BOOK' : 'PERPETUAL_BOOK',
+        initiatingSourceTs: sourceTs,
+        acceptedEventSequence,
+        initiatingPriceTrend: priceTrend,
+        ageMs: null,
+        persistenceEvents: 1,
+        slopePctPerMin: slope,
+        evolution: 'GROWING',
+        followerMarket,
+        followerConfirmation: priceTrend === 'UNKNOWN' ? 'UNKNOWN' : 'PENDING',
+        followerSourceTs: null,
+        lastSourceTs: sourceTs,
+        lastAcceptedEventSequence: acceptedEventSequence,
+      },
     };
+  }
+
+  private advanceLifecycle(
+    bucket: TrackerBucket,
+    lifecycle: CausalLifecycle,
+    current: number,
+    sourceTs: number,
+    acceptedEventSequence: number,
+    evolution: Exclude<BasisGapEvolution, 'UNKNOWN'>,
+  ): void {
+    lifecycle.samples.push({ ts: sourceTs, v: current });
+    if (lifecycle.samples.length > this.cfg.gapWindowSize) {
+      lifecycle.samples.splice(0, lifecycle.samples.length - this.cfg.gapWindowSize);
+    }
+    const slope = slopePerMinute(lifecycle.samples);
+    if (slope === null || !Number.isFinite(slope)) {
+      bucket.lifecycle = null;
+      return;
+    }
+    lifecycle.publicState.persistenceEvents = Math.min(
+      this.cfg.gapWindowSize,
+      lifecycle.publicState.persistenceEvents + 1,
+    );
+    lifecycle.publicState.slopePctPerMin = slope;
+    lifecycle.publicState.evolution = evolution;
+    lifecycle.publicState.lastSourceTs = sourceTs;
+    lifecycle.publicState.lastAcceptedEventSequence = acceptedEventSequence;
+  }
+
+  private executableQuoteTrend(
+    direction: BasisDirection,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    before: BasisBookPair,
+    after: BasisBookPair,
+  ): BasisGapTrend {
+    const prior = market === 'SPOT' ? before.spot : before.perpetual;
+    const current = market === 'SPOT' ? after.spot : after.perpetual;
+    if (!prior || !current) return 'UNKNOWN';
+    const useBid = direction === 'long_spot_short_perp'
+      ? market === 'PERPETUAL'
+      : market === 'SPOT';
+    const priorQuote = useBid ? prior.bid : prior.ask;
+    const currentQuote = useBid ? current.bid : current.ask;
+    if (!(priorQuote > 0) || !(currentQuote > 0)) return 'UNKNOWN';
+    return currentQuote > priorQuote ? 'RISING' : currentQuote < priorQuote ? 'FALLING' : 'UNKNOWN';
+  }
+
+  private publicCausality(bucket: TrackerBucket, now: number): BasisGapCausality {
+    if (!bucket.lifecycle || this.expired(bucket, now)) return unknownCausality();
+    const initiated = bucket.lifecycle.publicState.initiatingSourceTs;
+    const ageMs = initiated !== null && Number.isSafeInteger(now) && now >= initiated
+      ? now - initiated
+      : null;
+    return { ...bucket.lifecycle.publicState, ageMs };
+  }
+
+  private expired(bucket: TrackerBucket, now: number): boolean {
+    const initiated = bucket.lifecycle?.publicState.initiatingSourceTs;
+    return initiated !== null && initiated !== undefined &&
+      (!Number.isSafeInteger(now) || now < initiated || now - initiated > this.cfg.causalExpiryMs);
+  }
+
+  private resolved(lifecycle: CausalLifecycle, current: number): boolean {
+    return lifecycle.publicState.trend === 'RISING'
+      ? current <= lifecycle.baselineGapPct
+      : current >= lifecycle.baselineGapPct;
+  }
+
+  private distanceFromBaseline(lifecycle: CausalLifecycle, current: number): number {
+    return Math.abs(current - lifecycle.baselineGapPct);
   }
 
   private gap(direction: BasisDirection, pair: BasisBookPair): number | null {
@@ -177,7 +366,7 @@ export class GapTracker {
   private resetCausality(symbol: string): void {
     for (const direction of ['long_spot_short_perp', 'short_spot_long_perp'] as const) {
       const bucket = this.buckets.get(this.key(symbol, direction));
-      if (bucket) bucket.causality = unknownCausality();
+      if (bucket) bucket.lifecycle = null;
     }
   }
 

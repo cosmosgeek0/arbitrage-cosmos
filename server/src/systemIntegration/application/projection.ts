@@ -505,6 +505,7 @@ function unavailableStrategy() {
   return Object.freeze({
     truthLabel: 'UNAVAILABLE' as const,
     heartbeatAtMs: null, candidateCount: null, proposalCount: null,
+    cooldownCount: null,
     rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null,
     sourceRevision: null,
   });
@@ -589,6 +590,7 @@ export function defaultApplicationSummaries(
       truthLabel: 'UNAVAILABLE', accountTruthState: 'UNAVAILABLE', allocatableAmount: null,
       reservedAmount: null, activeExposureAmount: null, eligibleCount: null,
       reservationCount: null, stagedMandateCount: null, activeExposureCount: null,
+      recoveryCount: null,
       checkpointRevision: null, blockerCodes: Object.freeze(['CAPITAL_OWNER_RECORD_UNAVAILABLE']),
     }),
     risk: Object.freeze({
@@ -635,12 +637,15 @@ export function mergeApplicationSummaries(
   let execution = defaults.execution;
   let reconciliation = defaults.reconciliation;
   if (run && run.disposition !== 'MODE_BLOCKED' && run.disposition !== 'PERSISTENCE_FAILED') {
-    capital = Object.freeze({
-      truthLabel: 'SYNTHETIC_ONLY', accountTruthState: 'SYNTHETIC_FIXTURE',
-      allocatableAmount: null, reservedAmount: null, activeExposureAmount: null,
-      eligibleCount: 1, reservationCount: 1, stagedMandateCount: 1,
-      activeExposureCount: 0, checkpointRevision: null, blockerCodes: Object.freeze([]),
-    });
+    if (!owner?.capital) {
+      capital = Object.freeze({
+        truthLabel: 'SYNTHETIC_ONLY', accountTruthState: 'SYNTHETIC_FIXTURE',
+        allocatableAmount: null, reservedAmount: null, activeExposureAmount: null,
+        eligibleCount: 1, reservationCount: 1, stagedMandateCount: 1,
+        activeExposureCount: null, recoveryCount: null,
+        checkpointRevision: null, blockerCodes: Object.freeze(['CAPITAL_EXPOSURE_OWNER_UNAVAILABLE']),
+      });
+    }
     risk = run.riskVerdict ? Object.freeze({
       truthLabel: 'DRY_RUN', latestVerdict: run.riskVerdict.decision === 'APPROVED'
         ? 'APPROVE' as const

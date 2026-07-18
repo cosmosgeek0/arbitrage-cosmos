@@ -86,11 +86,11 @@ const warming: DashboardFixture = {
     summaries: {
       sourceCoverage: { truthLabel: 'LIVE_PUBLIC', universeSymbols: 128, spotCoveredSymbols: 128, usdMCoveredSymbols: null, quietSymbolsRetained: null, materialGapCount: null },
       strategies: {
-        basis: { heartbeatAtMs: null, candidateCount: null, proposalCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
-        volume: { heartbeatAtMs: null, candidateCount: null, proposalCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
+        basis: { heartbeatAtMs: null, candidateCount: null, proposalCount: null, cooldownCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
+        volume: { heartbeatAtMs: null, candidateCount: null, proposalCount: null, cooldownCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
       },
       intelligence: { evidenceCount: 214, attentionCount: null, focusRequestedCount: null, focusActiveCount: null, thesisCount: null, insufficientEvidenceCount: null, lastUpdateAtMs: null },
-      capital: { allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, checkpointRevision: null, accountTruthState: 'REPLAYING' },
+      capital: { allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, recoveryCount: null, checkpointRevision: null, accountTruthState: 'REPLAYING' },
       risk: { latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: [], rejectionCount: null, reasonCodes: [], truthLabel: 'UNAVAILABLE' },
       execution: { planId: null, planLifecycle: null, coordinatorState: 'NOT_STARTED', legCount: null, lastTransitionAtMs: null, truthLabel: 'UNAVAILABLE' },
       reconciliation: { status: 'NOT_EVALUATED', checkpointId: null, evaluatedAtMs: null, truthLabel: 'UNAVAILABLE' },
@@ -286,7 +286,7 @@ const blocked: DashboardFixture = {
       sourceCoverage: { truthLabel: 'LIVE_PUBLIC' },
       strategies: { basis: { truthLabel: 'LIVE_PUBLIC' }, volume: { truthLabel: 'LIVE_PUBLIC' } },
       intelligence: { truthLabel: 'LIVE_PUBLIC' },
-      capital: { truthLabel: 'UNAVAILABLE', accountTruthState: 'CHECKPOINT_REJECTED', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, checkpointRevision: 'cap-ckpt-311', blockerCodes: ['CHECKPOINT_DIGEST_MISMATCH'] },
+      capital: { truthLabel: 'UNAVAILABLE', accountTruthState: 'CHECKPOINT_REJECTED', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, recoveryCount: null, checkpointRevision: 'cap-ckpt-311', blockerCodes: ['CHECKPOINT_DIGEST_MISMATCH'] },
       risk: { truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: now - 22 * MINUTE, latestVerdictId: 'verdict-01J9F2', correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: [], rejectionCount: null, reasonCodes: ['CAPITAL_TRUTH_UNAVAILABLE'] },
       execution: { truthLabel: 'UNAVAILABLE', planId: null, planLifecycle: null, coordinatorState: 'HELD', legCount: null, lastTransitionAtMs: now - 22 * MINUTE },
       reconciliation: { truthLabel: 'UNAVAILABLE', status: 'HELD', blocksNewExposure: true, recommendation: 'Blocked pending capital truth.', evaluatedAtMs: now - 22 * MINUTE, reasonCodes: ['CAPITAL_TRUTH_UNAVAILABLE'] },
@@ -475,11 +475,11 @@ const unavailable: DashboardFixture = {
     summaries: {
       sourceCoverage: { truthLabel: 'UNKNOWN', universeSymbols: null, spotCoveredSymbols: null, usdMCoveredSymbols: null, quietSymbolsRetained: null, materialGapCount: null, rateLimitedSourceCount: null, lastMaterialGapAtMs: null },
       strategies: {
-        basis: { truthLabel: 'UNKNOWN', heartbeatAtMs: null, candidateCount: null, proposalCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
-        volume: { truthLabel: 'UNKNOWN', heartbeatAtMs: null, candidateCount: null, proposalCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
+        basis: { truthLabel: 'UNKNOWN', heartbeatAtMs: null, candidateCount: null, proposalCount: null, cooldownCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
+        volume: { truthLabel: 'UNKNOWN', heartbeatAtMs: null, candidateCount: null, proposalCount: null, cooldownCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null },
       },
       intelligence: { truthLabel: 'UNKNOWN', evidenceCount: null, attentionCount: null, focusRequestedCount: null, focusActiveCount: null, thesisCount: null, insufficientEvidenceCount: null, lastUpdateAtMs: null },
-      capital: { truthLabel: 'UNKNOWN', accountTruthState: 'UNKNOWN', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, checkpointRevision: null, blockerCodes: [] },
+      capital: { truthLabel: 'UNKNOWN', accountTruthState: 'UNKNOWN', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, recoveryCount: null, checkpointRevision: null, blockerCodes: [] },
       risk: { truthLabel: 'UNKNOWN', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: [], rejectionCount: null, reasonCodes: [] },
       execution: { truthLabel: 'UNKNOWN', planId: null, planLifecycle: null, coordinatorState: 'UNKNOWN', legCount: null, recoveryState: null, lastTransitionAtMs: null },
       reconciliation: { truthLabel: 'UNKNOWN', status: 'UNKNOWN', blocksNewExposure: true, recommendation: null, checkpointId: null, evaluatedAtMs: null, reasonCodes: [] },

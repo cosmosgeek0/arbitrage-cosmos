@@ -25,6 +25,11 @@ export interface VolumeRuntimeIntegrationSnapshot {
   config: VolumeConfig;
   decisions: Decision[];
   proposals: EngineProposal[];
+  ownerSummary: {
+    candidateCount: number;
+    opportunityCount: number;
+    cooldownCount: number;
+  };
 }
 
 const STREAM_CHUNK = 140;
@@ -205,6 +210,11 @@ export class VolumeRuntime {
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
+      ownerSummary: {
+        candidateCount: this.engine.focusMgr.candidateList().length,
+        opportunityCount: this.engine.proposalStore.openProposals().length,
+        cooldownCount: this.engine.focusMgr.activeCooldownCount(),
+      },
     });
   }
 

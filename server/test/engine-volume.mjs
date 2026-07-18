@@ -435,10 +435,12 @@ section('15. cooldown blocks re-entry, then a real wakeup re-arms cleanly');
   const firstReject = engine.decisions(2000).find((d) => d.rejectCode === 'one_print_spike');
   check('fake spike rejected first', !!firstReject);
   check('cooldown active', engine.focusMgr.stateOf(SYM) === 'COOLDOWN');
+  check('owner summary counts the active cooldown', engine.focusMgr.activeCooldownCount() === 1);
   const proposalsBefore = engine.proposalStore.all().length;
   runner.play([{ symbol: SYM, trades: cleanBurst(rand, { durationMs: 10_000 }), books: burstBooks() }], 12_000);
   check('genuine burst during cooldown still ignored', engine.proposalStore.all().length === proposalsBefore);
   runner.play([], 65_000); // cooldown lapses AND the 60s window drains past the mid-cooldown burst
+  check('owner summary excludes elapsed cooldowns', engine.focusMgr.activeCooldownCount() === 0);
   runner.play([{ symbol: SYM, trades: cleanBurst(rand), books: burstBooks() }], 16_000);
   const p = engine.proposalStore.all()[0];
   check('post-cooldown wakeup proposes', !!p);

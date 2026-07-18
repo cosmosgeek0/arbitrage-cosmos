@@ -3542,7 +3542,7 @@
         "concept": "semantic-source",
         "declaration": "interface BaselineHistorySourceDefinition",
         "file": "server/src/intelligenceRuntime/baseline/config.ts",
-        "line": 67
+        "line": 68
       },
       {
         "concept": "capital-authority",
@@ -3554,13 +3554,13 @@
         "concept": "capital-authority",
         "declaration": "interface RestWeightReservationRequest",
         "file": "server/src/intelligenceRuntime/baseline/types.ts",
-        "line": 152
+        "line": 163
       },
       {
         "concept": "capital-authority",
         "declaration": "type RestWeightReservation",
         "file": "server/src/intelligenceRuntime/baseline/types.ts",
-        "line": 161
+        "line": 172
       },
       {
         "concept": "capital-authority",
@@ -5916,15 +5916,21 @@
       },
       {
         "concept": "control-authority",
+        "declaration": "interface AwsRunnerControlOptions",
+        "file": "server/src/services/awsRunnerControl.ts",
+        "line": 81
+      },
+      {
+        "concept": "control-authority",
         "declaration": "class AwsRunnerControlError",
         "file": "server/src/services/awsRunnerControl.ts",
-        "line": 66
+        "line": 95
       },
       {
         "concept": "control-authority",
         "declaration": "class AwsRunnerControl",
         "file": "server/src/services/awsRunnerControl.ts",
-        "line": 140
+        "line": 173
       },
       {
         "concept": "semantic-source",
@@ -7286,37 +7292,37 @@
         "concept": "risk-authority",
         "declaration": "type RiskEvaluationInput",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 37
+        "line": 39
       },
       {
         "concept": "capital-authority",
         "declaration": "function hasOwnerSuppliedCapitalDialect",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 108
+        "line": 135
       },
       {
         "concept": "risk-authority",
         "declaration": "function privateRiskEvidenceIsSynthetic",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 256
+        "line": 283
       },
       {
         "concept": "risk-authority",
         "declaration": "function boundRiskDecision",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 559
+        "line": 586
       },
       {
         "concept": "risk-authority",
         "declaration": "function bindRiskToPlan",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 601
+        "line": 628
       },
       {
         "concept": "risk-authority",
         "declaration": "function planMatchesRiskIntent",
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 646
+        "line": 673
       },
       {
         "concept": "capital-authority",
@@ -7456,7 +7462,7 @@
       },
       {
         "file": "server/src/services/awsRunnerControl.ts",
-        "line": 10,
+        "line": 16,
         "target": "../ledger.js"
       },
       {
@@ -7596,17 +7602,17 @@
       },
       {
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 32,
+        "line": 34,
         "target": "../../foundation/execution/index.js"
       },
       {
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 38,
+        "line": 40,
         "target": "../../foundation/risk/index.js"
       },
       {
         "file": "server/src/systemIntegration/verticalSlice/orchestrator.ts",
-        "line": 39,
+        "line": 41,
         "target": "../../foundation/reconciliation/index.js"
       },
       {
@@ -14182,5 +14188,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "8ad8e85dc4e527b1bb5c25dc06d0d018dfdd1363cbceb64bda6310e6745be186"
+  "evidenceSha256": "6973ba273dfe637b5442c0f07b69a36dced100001abcc5443c2b6a06dd51f082"
 }

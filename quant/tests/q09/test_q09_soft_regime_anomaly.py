@@ -4,6 +4,7 @@ import pytest
 
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.labels.rational import make_ratio
 from quant_edge.lake.contracts import QualityState
 from quant_edge.regime.alphabet import AlphabetConfigV1
 from quant_edge.regime.anomaly import (
@@ -18,6 +19,14 @@ from quant_edge.regime.anomaly import (
     fuse_disorder,
 )
 from quant_edge.regime.contracts import ObservationV1, StepStatus
+from quant_edge.regime.ood_challengers import (
+    AUTOENCODER_BLOCKER,
+    OodBenchmarkSpecV1,
+    OodChallengerResultV1,
+    OodMethod,
+    OodStatus,
+    benchmark_ood_challengers,
+)
 from quant_edge.regime.soft_regime import (
     RegimeSpecV1,
     RegimeStepV1,
@@ -29,6 +38,173 @@ BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
 HUNDREDTH = FIXED_POINT_SCALE // 100
 THOUSANDTH = FIXED_POINT_SCALE // 1_000
+
+
+def _ood_spec(*, max_samples: int = 128) -> OodBenchmarkSpecV1:
+    return OodBenchmarkSpecV1(
+        seed=20260718,
+        max_samples=max_samples,
+        max_features=4,
+        contamination=make_ratio(1, 4),
+        isolation_estimators=16,
+        half_space_trees=8,
+        half_space_depth=4,
+    )
+
+
+def _ood_fixture() -> tuple[
+    tuple[tuple[FixedPointV1, ...], ...], tuple[tuple[FixedPointV1, ...], ...]
+]:
+    training = tuple(
+        (
+            FixedPointV1(((index % 7) - 3) * HUNDREDTH),
+            FixedPointV1((((index * 3) % 11) - 5) * HUNDREDTH),
+        )
+        for index in range(40)
+    )
+    assessment = (
+        (FixedPointV1(0), FixedPointV1(0)),
+        (FixedPointV1(10 * FIXED_POINT_SCALE), FixedPointV1(10 * FIXED_POINT_SCALE)),
+    )
+    return training, assessment
+
+
+class TestOodChallengerBenchmark:
+    def test_catalog_evaluates_seven_methods_and_blocks_autoencoder(self) -> None:
+        training, assessment = _ood_fixture()
+
+        results = benchmark_ood_challengers(
+            training,
+            assessment,
+            labels=(False, True),
+            spec=_ood_spec(),
+        )
+
+        assert tuple(result.method for result in results) == tuple(OodMethod)
+        assert sum(result.status is OodStatus.EVALUATED_RESEARCH_ONLY for result in results) == 7
+        autoencoder = results[-1]
+        assert autoencoder.method is OodMethod.AUTOENCODER
+        assert autoencoder.status is OodStatus.BLOCKED_DATA
+        assert autoencoder.reason == AUTOENCODER_BLOCKER
+        assert autoencoder.scores == ()
+
+    def test_scores_and_digests_are_deterministic_and_fixed_point(self) -> None:
+        training, assessment = _ood_fixture()
+        first = benchmark_ood_challengers(
+            training, assessment, labels=(False, True), spec=_ood_spec()
+        )
+        second = benchmark_ood_challengers(
+            training, assessment, labels=(False, True), spec=_ood_spec()
+        )
+
+        assert first == second
+        for result in first[:-1]:
+            assert result.score_digest is not None
+            assert len(result.scores) == 2
+            assert all(isinstance(score, FixedPointV1) for score in result.scores)
+
+    def test_obvious_synthetic_outlier_is_recalled_by_the_bounded_battery(self) -> None:
+        training, assessment = _ood_fixture()
+
+        results = benchmark_ood_challengers(
+            training, assessment, labels=(False, True), spec=_ood_spec()
+        )
+
+        recalls = tuple(
+            result.top_k_recall
+            for result in results
+            if result.status is OodStatus.EVALUATED_RESEARCH_ONLY
+        )
+        assert len(recalls) == 7
+        assert sum(recall == make_ratio(1, 1) for recall in recalls) >= 5
+
+    def test_robust_pca_resists_bounded_training_contamination(self) -> None:
+        clean = tuple(
+            (
+                FixedPointV1((index - 16) * FIXED_POINT_SCALE // 40),
+                FixedPointV1(
+                    (index - 16) * FIXED_POINT_SCALE // 40
+                    + ((index % 3) - 1) * FIXED_POINT_SCALE // 1_000
+                ),
+            )
+            for index in range(32)
+        )
+        contamination = tuple(
+            (
+                FixedPointV1(value * FIXED_POINT_SCALE),
+                FixedPointV1(-value * FIXED_POINT_SCALE),
+            )
+            for value in (10, -10, 12, -12, 9, -9, 11, -11)
+        )
+        assessment = (
+            (
+                FixedPointV1(35 * FIXED_POINT_SCALE // 100),
+                FixedPointV1(35 * FIXED_POINT_SCALE // 100),
+            ),
+            (
+                FixedPointV1(35 * FIXED_POINT_SCALE // 100),
+                FixedPointV1(-35 * FIXED_POINT_SCALE // 100),
+            ),
+        )
+
+        def robust_pca(
+            training: tuple[tuple[FixedPointV1, ...], ...],
+        ) -> OodChallengerResultV1:
+            return next(
+                result
+                for result in benchmark_ood_challengers(
+                    training,
+                    assessment,
+                    labels=(False, True),
+                    spec=_ood_spec(),
+                )
+                if result.method is OodMethod.ROBUST_PCA
+            )
+
+        uncontaminated = robust_pca(clean)
+        contaminated = robust_pca(clean + contamination)
+
+        assert contaminated.status is OodStatus.EVALUATED_RESEARCH_ONLY
+        assert contaminated.scores == uncontaminated.scores
+        assert contaminated.score_digest == uncontaminated.score_digest
+        assert contaminated.scores[1].mantissa > contaminated.scores[0].mantissa
+        assert contaminated.top_k_recall == make_ratio(1, 1)
+
+    def test_absent_labels_never_fabricate_recall(self) -> None:
+        training, assessment = _ood_fixture()
+
+        results = benchmark_ood_challengers(training, assessment, labels=None, spec=_ood_spec())
+
+        assert all(result.top_k_recall is None for result in results)
+
+    def test_capacity_width_and_label_mismatches_fail_closed(self) -> None:
+        training, assessment = _ood_fixture()
+        with pytest.raises(ContractValueError, match="bounded by max_samples"):
+            benchmark_ood_challengers(
+                training, assessment, labels=None, spec=_ood_spec(max_samples=8)
+            )
+        with pytest.raises(ContractValueError, match="feature widths must match"):
+            benchmark_ood_challengers(
+                training,
+                ((FixedPointV1(0),),),
+                labels=None,
+                spec=_ood_spec(),
+            )
+        with pytest.raises(ContractValueError, match="labels must align"):
+            benchmark_ood_challengers(training, assessment, labels=(True,), spec=_ood_spec())
+
+    def test_invalid_contamination_and_non_fixed_inputs_are_rejected(self) -> None:
+        with pytest.raises(ContractValueError, match=r"\(0, 0.5\)"):
+            OodBenchmarkSpecV1(1, 8, 2, make_ratio(1, 2), 8, 4, 2)
+        training, assessment = _ood_fixture()
+        malformed = (*training[:-1], (FixedPointV1(0), 0))
+        with pytest.raises(ContractValueError, match="must contain FixedPointV1"):
+            benchmark_ood_challengers(
+                malformed,  # type: ignore[arg-type]
+                assessment,
+                labels=None,
+                spec=_ood_spec(),
+            )
 
 
 def _observation(

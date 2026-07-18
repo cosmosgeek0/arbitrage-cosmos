@@ -141,6 +141,10 @@ export class SourceLifecycleTracker {
     this.#backoff = { ...ZERO_BACKOFF, ceiling: definition.retryCeiling };
   }
 
+  #clearBackoff(): void {
+    this.#backoff = { ...ZERO_BACKOFF, ceiling: this.#definition.retryCeiling };
+  }
+
   start(): number {
     if (this.#desiredState === 'RUNNING') return this.#connectionGeneration;
     this.#desiredState = 'RUNNING';
@@ -166,6 +170,7 @@ export class SourceLifecycleTracker {
     }
     this.#connectedAtMs = connectedAtMs;
     this.#observedState = 'WARMING';
+    this.#clearBackoff();
     return true;
   }
 
@@ -196,6 +201,7 @@ export class SourceLifecycleTracker {
     this.#observedState = 'LIVE';
     this.#completeness = 'COMPLETE';
     this.#lastError = null;
+    this.#clearBackoff();
     return true;
   }
 
@@ -212,6 +218,14 @@ export class SourceLifecycleTracker {
       throw new TypeError('processedAtMs regressed within the active connection generation');
     }
     this.#lastProcessedTimeMs = processedAtMs;
+    if (this.#lastMessageReceiveTimeMs !== null) {
+      this.#observedState = 'LIVE';
+      this.#completeness = 'COMPLETE';
+      this.#lastError = null;
+    } else if (this.#connectedAtMs !== null) {
+      this.#observedState = 'WARMING';
+    }
+    this.#clearBackoff();
     return true;
   }
 
@@ -233,7 +247,10 @@ export class SourceLifecycleTracker {
     nonNegativeSafeInteger(input.delayMs, 'delayMs');
     nonNegativeSafeInteger(input.retryAtMs, 'retryAtMs');
     optionalTime(input.cooldownUntilMs ?? null, 'cooldownUntilMs');
-    if (input.attempt > this.#definition.retryCeiling) throw new TypeError('backoff attempt exceeds retry ceiling');
+    if (input.attempt < 1 || input.attempt > this.#definition.retryCeiling) {
+      throw new TypeError('backoff attempt must be active and within the retry ceiling');
+    }
+    if (input.delayMs < 1) throw new TypeError('backoff delayMs must describe an active delay');
     const now = nonNegativeSafeInteger(this.#clock.nowMs(), 'clock.nowMs');
     if (input.retryAtMs < now || input.retryAtMs - now !== input.delayMs) {
       throw new TypeError('backoff retryAtMs must equal the injected clock plus delayMs');
@@ -354,7 +371,7 @@ export class SourceLifecycleTracker {
     this.#desiredState = 'STOPPED';
     this.#observedState = 'STOPPED';
     this.#connectedAtMs = null;
-    this.#backoff = { ...ZERO_BACKOFF, ceiling: this.#definition.retryCeiling };
+    this.#clearBackoff();
     this.#completeness = 'MISSING';
   }
 

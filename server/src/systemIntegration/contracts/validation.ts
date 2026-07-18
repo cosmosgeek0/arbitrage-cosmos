@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import {
   evaluateFreshness,
   isCompleteness,
@@ -77,7 +78,7 @@ function issue(path: string, code: string, message: string): ValidationIssue {
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || utilTypes.isProxy(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
   if (Object.getOwnPropertySymbols(value).length > 0) return false;
@@ -340,7 +341,8 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   const allowed = [
     'componentId', 'owner', 'ownerPath', 'releaseStatuses', 'truthLabel', 'desiredState', 'phase',
     'domainObservedState', 'sourceLifecycle', 'readiness', 'authority', 'completeness', 'sourceTimestamp',
-    'freshness', 'lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs', 'dependencies', 'queue',
+    'freshness', 'lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs', 'processingLagMs',
+    'retry', 'dataQuality', 'checkpoint', 'dependencies', 'queue',
     'lastFailure', 'blockerCodes', 'generation', 'restartCount', 'supportedControls', 'capitalExposed',
     'operatorAttentionRequired',
   ];
@@ -377,6 +379,134 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   }
   for (const field of ['lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs'] as const) {
     if (value[field] !== null && !isValidUtcMillis(value[field])) issues.push(issue(field, 'UTC_MILLIS_INVALID', `${field} must be null or UTC ms`));
+  }
+  if (value.processingLagMs !== undefined
+      && value.processingLagMs !== null
+      && !validCount(value.processingLagMs)) {
+    issues.push(issue('processingLagMs', 'LAG_INVALID', 'processingLagMs must be a non-negative safe integer or null'));
+  }
+  if (value.retry !== undefined) {
+    if (!plainRecord(value.retry)) {
+      issues.push(issue('retry', 'RETRY_INVALID', 'retry must be a plain operational snapshot'));
+    } else {
+      const retry = value.retry;
+      issues.push(...exactFields(retry, ['state', 'attempt', 'ceiling', 'delayMs', 'retryAtMs', 'cooldownUntilMs'], 'retry'));
+      if (!['IDLE', 'RETRYING', 'BACKING_OFF', 'COOLDOWN', 'UNKNOWN', 'UNAVAILABLE'].includes(String(retry.state))) {
+        issues.push(issue('retry.state', 'RETRY_STATE_INVALID', 'retry state is unknown'));
+      }
+      for (const field of ['attempt', 'ceiling', 'delayMs'] as const) {
+        if (retry[field] !== null && !validCount(retry[field])) {
+          issues.push(issue(`retry.${field}`, 'COUNTER_INVALID', `${field} must be a non-negative safe integer or null`));
+        }
+      }
+      for (const field of ['retryAtMs', 'cooldownUntilMs'] as const) {
+        if (retry[field] !== null && !isValidUtcMillis(retry[field])) {
+          issues.push(issue(`retry.${field}`, 'UTC_MILLIS_INVALID', `${field} must be null or UTC ms`));
+        }
+      }
+      const state = String(retry.state);
+      const allNull = ['attempt', 'ceiling', 'delayMs', 'retryAtMs', 'cooldownUntilMs']
+        .every((field) => retry[field] === null);
+      const attempt = retry.attempt;
+      const ceiling = retry.ceiling;
+      const activeAttempt = validCount(attempt) && attempt > 0;
+      const boundedCeiling = validCount(ceiling)
+        && activeAttempt && ceiling >= attempt;
+      const scheduled = validCount(retry.delayMs) && retry.retryAtMs !== null;
+      if ((state === 'UNKNOWN' || state === 'UNAVAILABLE') && !allNull) {
+        issues.push(issue('retry', 'RETRY_UNKNOWN_CONFLICT', 'unknown or unavailable retry truth cannot carry invented values'));
+      } else if (state === 'IDLE'
+          && (retry.attempt !== 0 || !validCount(retry.ceiling)
+            || retry.delayMs !== null || retry.retryAtMs !== null || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_IDLE_CONFLICT', 'idle retry truth requires attempt zero, a bounded ceiling, and no active schedule'));
+      } else if (state === 'RETRYING'
+          && (!activeAttempt || !boundedCeiling || !scheduled || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_ACTIVE_EVIDENCE_REQUIRED', 'retrying truth requires one bounded active attempt and schedule without cooldown'));
+      } else if (state === 'BACKING_OFF'
+          && (!activeAttempt || !boundedCeiling || !scheduled || (retry.delayMs as number) < 1
+            || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_BACKOFF_EVIDENCE_REQUIRED', 'backing-off truth requires one bounded delayed attempt without cooldown'));
+      } else if (state === 'COOLDOWN') {
+        if (!activeAttempt || !boundedCeiling || !scheduled || retry.cooldownUntilMs === null) {
+          issues.push(issue('retry', 'RETRY_COOLDOWN_EVIDENCE_REQUIRED', 'cooldown truth requires one bounded attempt, retry schedule, and cooldown end'));
+        } else if (typeof retry.retryAtMs === 'number'
+            && typeof retry.cooldownUntilMs === 'number'
+            && retry.cooldownUntilMs < retry.retryAtMs) {
+          issues.push(issue('retry.cooldownUntilMs', 'RETRY_COOLDOWN_ORDER_INVALID', 'cooldown cannot end before the scheduled retry'));
+        }
+      }
+      if (value.sourceLifecycle === 'LIVE' && state !== 'IDLE') {
+        issues.push(issue('retry.state', 'RETRY_LIVE_CONFLICT', 'a live source cannot retain an active retry schedule'));
+      }
+      if (value.sourceLifecycle === 'BACKING_OFF' && state !== 'BACKING_OFF' && state !== 'COOLDOWN') {
+        issues.push(issue('retry.state', 'RETRY_LIFECYCLE_CONFLICT', 'a backing-off source requires matching retry evidence'));
+      }
+    }
+  }
+  if (value.dataQuality !== undefined) {
+    if (!plainRecord(value.dataQuality)) {
+      issues.push(issue('dataQuality', 'DATA_QUALITY_INVALID', 'dataQuality must be a plain operational snapshot'));
+    } else {
+      const quality = value.dataQuality;
+      issues.push(...exactFields(quality, ['state', 'invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount', 'observedAtMs'], 'dataQuality'));
+      if (!['GOOD', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE'].includes(String(quality.state))) {
+        issues.push(issue('dataQuality.state', 'DATA_QUALITY_STATE_INVALID', 'data quality state is unknown'));
+      }
+      for (const field of ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount'] as const) {
+        if (quality[field] !== null && !validCount(quality[field])) {
+          issues.push(issue(`dataQuality.${field}`, 'COUNTER_INVALID', `${field} must be a non-negative safe integer or null`));
+        }
+      }
+      if (quality.observedAtMs !== null && !isValidUtcMillis(quality.observedAtMs)) {
+        issues.push(issue('dataQuality.observedAtMs', 'UTC_MILLIS_INVALID', 'observedAtMs must be null or UTC ms'));
+      }
+      const qualityValues = ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount', 'observedAtMs'];
+      const qualityUnknown = qualityValues.every((field) => quality[field] === null);
+      const qualityComplete = quality.observedAtMs !== null
+        && ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount']
+          .every((field) => validCount(quality[field]));
+      if ((quality.state === 'UNKNOWN' || quality.state === 'UNAVAILABLE') && !qualityUnknown) {
+        issues.push(issue('dataQuality', 'DATA_QUALITY_UNKNOWN_CONFLICT', 'unknown or unavailable quality cannot carry invented values'));
+      }
+      if (quality.state === 'GOOD') {
+        const counters = ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount'] as const;
+        if (!qualityComplete) {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_EVIDENCE_REQUIRED', 'good quality requires observed-at evidence and every quality counter'));
+        } else if (counters.some((field) => quality[field] !== 0)) {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_CONFLICT', 'good quality cannot carry nonzero fault counters'));
+        }
+        if (value.completeness !== 'COMPLETE') {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_COMPLETENESS_CONFLICT', 'good quality requires complete owner truth'));
+        }
+      } else if (quality.state === 'DEGRADED' && !qualityComplete) {
+        issues.push(issue('dataQuality', 'DATA_QUALITY_DEGRADED_EVIDENCE_REQUIRED', 'degraded quality requires observed-at evidence and every quality counter'));
+      }
+    }
+  }
+  if (value.checkpoint !== undefined) {
+    if (!plainRecord(value.checkpoint)) {
+      issues.push(issue('checkpoint', 'CHECKPOINT_INVALID', 'checkpoint must be a plain operational snapshot'));
+    } else {
+      const checkpoint = value.checkpoint;
+      issues.push(...exactFields(checkpoint, ['state', 'revision', 'persistedAtMs'], 'checkpoint'));
+      if (!['CURRENT', 'DIRTY', 'STALE', 'MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(checkpoint.state))) {
+        issues.push(issue('checkpoint.state', 'CHECKPOINT_STATE_INVALID', 'checkpoint state is unknown'));
+      }
+      if (!validOptionalText(checkpoint.revision, 256)) {
+        issues.push(issue('checkpoint.revision', 'CHECKPOINT_REVISION_INVALID', 'revision must be null or bounded'));
+      }
+      if (checkpoint.persistedAtMs !== null && !isValidUtcMillis(checkpoint.persistedAtMs)) {
+        issues.push(issue('checkpoint.persistedAtMs', 'UTC_MILLIS_INVALID', 'persistedAtMs must be null or UTC ms'));
+      }
+      if ((checkpoint.state === 'UNKNOWN' || checkpoint.state === 'UNAVAILABLE' || checkpoint.state === 'MISSING')
+          && (checkpoint.revision !== null || checkpoint.persistedAtMs !== null)) {
+        issues.push(issue('checkpoint', 'CHECKPOINT_UNKNOWN_CONFLICT', 'missing, unknown, or unavailable checkpoint cannot carry invented values'));
+      }
+      if ((checkpoint.state === 'CURRENT' || checkpoint.state === 'DIRTY' || checkpoint.state === 'STALE')
+          && (checkpoint.revision === null || checkpoint.persistedAtMs === null)) {
+        issues.push(issue('checkpoint', 'CHECKPOINT_EVIDENCE_REQUIRED', 'current, dirty, or stale checkpoint truth requires revision and persistence time'));
+      }
+    }
   }
   if (!Array.isArray(value.dependencies) || value.dependencies.some((entry) => !isSystemComponentId(entry))
       || !unique(value.dependencies as string[]) || value.dependencies.includes(value.componentId)) {

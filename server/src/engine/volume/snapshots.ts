@@ -14,6 +14,10 @@ import type {
 } from '../v0/types.js';
 import type { WakeupSnapshot } from './types.js';
 import type { VolumeEngine } from './engine.js';
+import {
+  volumeRejectVocabularySnapshot,
+  type VolumeRejectVocabularySnapshot,
+} from './rejectVocabulary.js';
 
 export class VolumeSnapshots implements EngineSnapshots {
   constructor(private engine: VolumeEngine) {}
@@ -62,5 +66,9 @@ export class VolumeSnapshots implements EngineSnapshots {
   /** Extra beyond the frozen contract: per-symbol wakeup features for the UI. */
   featuresOf(symbol: string): WakeupSnapshot | null {
     return this.engine.featureSnapshot(symbol);
+  }
+
+  rejectVocabulary(): Readonly<VolumeRejectVocabularySnapshot> {
+    return volumeRejectVocabularySnapshot();
   }
 }

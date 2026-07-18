@@ -13,11 +13,12 @@
  * premature reject; past the grace they reject with their named code.
  * Every exit carries decisive numbers in evidence. Nothing here buys.
  */
-import type { Decision, FeatureSnapshot, RejectCode, ScanContext, Scanner } from '../v0/types.js';
+import type { Decision, FeatureSnapshot, ScanContext, Scanner } from '../v0/types.js';
 import { newCorrelationId } from '../v0/clock.js';
 import type { VolumeDetailCode, WakeupSnapshot } from './types.js';
 import { DETAIL_TO_V0 } from './types.js';
 import type { VolumeConfig } from './config.js';
+import type { VolumeRejectCode } from './rejectVocabulary.js';
 
 /** Structural extension — still assignable to the frozen ScanContext. */
 export interface VolumeScanContext extends ScanContext {
@@ -43,7 +44,7 @@ export class WakeupDetector implements Scanner {
     };
     const mk = (
       kind: Decision['kind'],
-      rejectCode: RejectCode | null,
+      rejectCode: VolumeRejectCode | null,
       humanReason: string,
       evidence: Decision['evidence'],
       detailCode?: VolumeDetailCode,
@@ -55,7 +56,7 @@ export class WakeupDetector implements Scanner {
       evidence: detailCode ? { ...evidence, detailCode } : evidence,
     });
     const reject = (
-      code: RejectCode,
+      code: VolumeRejectCode,
       humanReason: string,
       evidence: Decision['evidence'],
       detailCode?: VolumeDetailCode,
@@ -97,7 +98,7 @@ export class WakeupDetector implements Scanner {
     };
     /** soft check failed: reject after grace, keep watching inside it */
     const soft = (
-      code: RejectCode,
+      code: VolumeRejectCode,
       humanReason: string,
       extra: Decision['evidence'],
       detailCode?: VolumeDetailCode,

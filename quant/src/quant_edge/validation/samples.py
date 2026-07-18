@@ -190,12 +190,33 @@ class PredictionV1:
 
 
 @dataclass(frozen=True, slots=True)
+class PredictionLineageV1:
+    """Immutable identities of the pre-cutoff features and fitted model receipt."""
+
+    feature_artifact_digest: DigestV1
+    fit_receipt_digest: DigestV1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.feature_artifact_digest, DigestV1):
+            raise ContractValueError("feature_artifact_digest must be DigestV1")
+        if not isinstance(self.fit_receipt_digest, DigestV1):
+            raise ContractValueError("fit_receipt_digest must be DigestV1")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "featureArtifactDigest": self.feature_artifact_digest.hexdigest,
+            "fitReceiptDigest": self.fit_receipt_digest.hexdigest,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionSetV1:
     """Digest-bound predictions of one model over one sample set."""
 
     model_id: str
     dataset_digest: DigestV1
     predictions: tuple[PredictionV1, ...]
+    lineage: PredictionLineageV1 | None = None
 
     def __post_init__(self) -> None:
         require_contract_id(self.model_id, field="model_id")
@@ -203,6 +224,8 @@ class PredictionSetV1:
             raise ContractValueError("dataset_digest must be DigestV1")
         if not isinstance(self.predictions, tuple) or not self.predictions:
             raise ContractValueError("predictions must be a non-empty tuple")
+        if self.lineage is not None and not isinstance(self.lineage, PredictionLineageV1):
+            raise ContractValueError("lineage must be PredictionLineageV1 or None")
         if len(self.predictions) > MAX_SAMPLES:
             raise ContractValueError("prediction count exceeds MAX_SAMPLES")
         previous_id: str | None = None
@@ -220,13 +243,16 @@ class PredictionSetV1:
         raise ContractValueError(f"no prediction for sample id: {sample_id}")
 
     def as_mapping(self) -> dict[str, object]:
-        return {
+        mapping: dict[str, object] = {
             "datasetDigest": self.dataset_digest.hexdigest,
             "modelId": self.model_id,
             "predictionCount": len(self.predictions),
             "predictions": [prediction.as_mapping() for prediction in self.predictions],
             "schema": "Q14PredictionSetV1",
         }
+        if self.lineage is not None:
+            mapping["lineage"] = self.lineage.as_mapping()
+        return mapping
 
     def digest(self) -> DigestV1:
         return DigestV1(
@@ -273,6 +299,7 @@ def restrict_predictions(
         model_id=predictions.model_id,
         dataset_digest=samples.digest(),
         predictions=kept,
+        lineage=predictions.lineage,
     )
 
 
@@ -295,6 +322,7 @@ def rebind_predictions(predictions: PredictionSetV1, samples: SampleSetV1) -> Pr
         model_id=predictions.model_id,
         dataset_digest=samples.digest(),
         predictions=predictions.predictions,
+        lineage=predictions.lineage,
     )
 
 

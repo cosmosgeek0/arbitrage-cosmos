@@ -10,7 +10,12 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from q14_fixtures import informative_predictions, make_sample_set, predictions_from_scores
+from q14_fixtures import (
+    informative_predictions,
+    make_sample_set,
+    outcome_derived_predictions,
+    predictions_from_scores,
+)
 
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FixedPointV1
@@ -85,9 +90,23 @@ def test_acceptance_deliberately_leaked_model_is_detected_and_rejected() -> None
     assert mapping["schema"] == "Q14LeakageAssessmentV1"
     assert mapping["verdict"] == "ACCEPTED_FOR_COMPARISON"
 
-    # A skilled-but-imperfect model also survives; skill alone is not leakage.
+    # A skilled model with immutable pre-cutoff feature and fit lineage survives.
     skilled = assess_leakage(samples, informative_predictions(samples), spec)
     assert skilled.verdict is LeakageVerdict.ACCEPTED_FOR_COMPARISON
+
+    # Imperfect outcome-derived controls at several strengths exceed the
+    # predeclared permutation/null envelope but carry no feature/fit lineage.
+    # They must remain explicit rejected controls rather than comparison evidence.
+    for positive, negative, flip_modulus in ((6, 4, 4), (7, 3, 5), (8, 2, 6)):
+        outcome_derived = outcome_derived_predictions(
+            samples,
+            positive_score=make_ratio(positive, 10),
+            negative_score=make_ratio(negative, 10),
+            flip_modulus=flip_modulus,
+        )
+        rejected = assess_leakage(samples, outcome_derived, spec)
+        assert rejected.verdict is LeakageVerdict.REJECTED_UNVERIFIED_SKILL
+        assert rejected.band is not None
 
 
 def test_temporal_audit_law() -> None:

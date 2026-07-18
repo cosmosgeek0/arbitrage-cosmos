@@ -1,7 +1,7 @@
 # Q12 ensemble, calibration and abstention campaign (synthetic only)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77`
+- Golden fixture SHA-256: `28d657a80b4c0328529c62e6dccf8631c2cb3574cc399ff27108b192677a942e`
 - Q10 WAITING_Q14 seams closed: `5/5`
 - Selected chronological calibration: `PLATT_CHRONOLOGICAL`
 - Coverage monitor: `AVAILABLE`

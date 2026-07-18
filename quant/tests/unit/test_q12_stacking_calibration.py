@@ -292,6 +292,9 @@ def test_oof_matrix_stacker_and_bound_prediction_identity() -> None:
         fold_ids=matrix.fold_ids[2:3],
     )
     assert later_predictions.dataset_digest == later_samples.digest()
+    assert later_predictions.lineage is not None
+    assert later_predictions.lineage.feature_artifact_digest == matrix.digest()
+    assert later_predictions.lineage.fit_receipt_digest == fitted.digest()
     assert f"fit-{fitted.digest().hexdigest[:16]}" in later_predictions.model_id
     assert all(
         0 <= row.score.numerator <= row.score.denominator for row in later_predictions.predictions

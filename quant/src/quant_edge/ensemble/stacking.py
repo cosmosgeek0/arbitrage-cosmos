@@ -23,6 +23,7 @@ from quant_edge.models.contracts import ProbabilitySemantics
 from quant_edge.validation import (
     FoldStatus,
     PlanStatus,
+    PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
@@ -606,5 +607,9 @@ def stack_predictions_for_folds(
             model_id=_bound_stack_model_id(fitted),
             dataset_digest=subset.digest(),
             predictions=tuple(sorted(predictions, key=lambda item: item.sample_id)),
+            lineage=PredictionLineageV1(
+                feature_artifact_digest=matrix.digest(),
+                fit_receipt_digest=fitted.digest(),
+            ),
         ),
     )

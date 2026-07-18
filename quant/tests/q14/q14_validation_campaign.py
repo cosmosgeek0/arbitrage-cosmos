@@ -22,7 +22,7 @@ from pathlib import Path
 from quant_edge.canonical import canonical_json_bytes
 from quant_edge.features.fixedpoint import FixedPointV1
 from quant_edge.labels.rational import ExactRatioV1, make_ratio
-from quant_edge.lake.contracts import EvidencePosture, QualityState
+from quant_edge.lake.contracts import DigestV1, EvidencePosture, QualityState
 from quant_edge.randomness import DeterministicRandom
 from quant_edge.validation.bootstrap import BootstrapSpecV1, block_bootstrap_interval
 from quant_edge.validation.comparison import (
@@ -46,6 +46,7 @@ from quant_edge.validation.multiplicity import (
     pbo_cscv,
 )
 from quant_edge.validation.samples import (
+    PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
@@ -74,7 +75,8 @@ ZERO = make_ratio(0, 1)
 def _dataset(rng: DeterministicRandom, *, dataset_id: str, count: int) -> SampleSetV1:
     samples: list[ValidationSampleV1] = []
     for index in range(count):
-        outcome = rng.next_u64() % 3 == 0
+        synthetic_signal = rng.next_u64() % 3 == 0
+        outcome = synthetic_signal != (index % 5 == 0)
         horizon = (1 + int(rng.next_u64() % 3)) * (HOUR_NS // 4)
         samples.append(
             ValidationSampleV1(
@@ -83,7 +85,10 @@ def _dataset(rng: DeterministicRandom, *, dataset_id: str, count: int) -> Sample
                 group_id=f"g-{index:04d}",
                 cutoff_ns=BASE_NS + index * HOUR_NS,
                 label_end_ns=BASE_NS + index * HOUR_NS + horizon,
-                strata=(("liquidity", "mid"),),
+                strata=(
+                    ("liquidity", "mid"),
+                    ("syntheticSignal", "positive" if synthetic_signal else "negative"),
+                ),
                 binary_outcome=outcome,
                 gross_edge_ratio=make_ratio(2 + int(rng.next_u64() % 4), 1_000),
                 base_cost_ratio=make_ratio(1, 1_000),
@@ -99,10 +104,18 @@ def _dataset(rng: DeterministicRandom, *, dataset_id: str, count: int) -> Sample
 
 def _informative(samples: SampleSetV1, *, model_id: str) -> PredictionSetV1:
     predictions = []
-    for position, sample in enumerate(sorted(samples.samples, key=lambda sample: sample.sample_id)):
-        noisy = position % 5 == 0
-        skilled = bool(sample.binary_outcome) != noisy
-        score = make_ratio(7, 10) if skilled else make_ratio(3, 10)
+    feature_rows: list[dict[str, object]] = []
+    for sample in sorted(samples.samples, key=lambda sample: sample.sample_id):
+        strata = dict(sample.strata)
+        synthetic_signal = strata["syntheticSignal"] == "positive"
+        score = make_ratio(7, 10) if synthetic_signal else make_ratio(3, 10)
+        feature_rows.append(
+            {
+                "asOfNs": str(sample.cutoff_ns),
+                "sampleId": sample.sample_id,
+                "syntheticSignal": synthetic_signal,
+            }
+        )
         predictions.append(
             PredictionV1(
                 sample_id=sample.sample_id,
@@ -110,10 +123,28 @@ def _informative(samples: SampleSetV1, *, model_id: str) -> PredictionSetV1:
                 max_feature_asof_ns=sample.cutoff_ns,
             )
         )
+    feature_digest = DigestV1(
+        hexdigest=hashlib.sha256(canonical_json_bytes(feature_rows)).hexdigest()
+    )
+    fit_digest = DigestV1(
+        hexdigest=hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "featureArtifactDigest": feature_digest.hexdigest,
+                    "modelId": model_id,
+                    "trainingRule": "synthetic-signal:v1",
+                }
+            )
+        ).hexdigest()
+    )
     return PredictionSetV1(
         model_id=model_id,
         dataset_digest=samples.digest(),
         predictions=tuple(predictions),
+        lineage=PredictionLineageV1(
+            feature_artifact_digest=feature_digest,
+            fit_receipt_digest=fit_digest,
+        ),
     )
 
 

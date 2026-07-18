@@ -89,6 +89,7 @@ from quant_edge.validation.normal import (
     normal_quantile,
 )
 from quant_edge.validation.samples import (
+    PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
@@ -150,6 +151,7 @@ __all__ = [
     "PboReportV1",
     "PboStatus",
     "PlanStatus",
+    "PredictionLineageV1",
     "PredictionSetV1",
     "PredictionV1",
     "PrimaryMetricSpecV1",

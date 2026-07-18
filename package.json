@@ -40,6 +40,7 @@
     "test:deterministic:built": "node server/test/run-deterministic-network-free.mjs",
     "test:ai-ops:built": "node server/test/run-ai-ops.mjs",
     "test:quant:built": "node test/run-quant-gates.mjs",
+    "test:real-gaps:fix-005": "node test/realGaps/run-fix-005-merged-regression.mjs",
     "test:gate-coverage:built": "node test/run-gate-coverage.mjs",
     "test:server:built": "npm run test:deterministic:built",
     "test:server": "npm run build && npm run test:server:built",

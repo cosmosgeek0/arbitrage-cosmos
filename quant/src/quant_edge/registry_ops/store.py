@@ -49,6 +49,7 @@ from quant_edge.registry_ops.contracts import (
 )
 
 SCHEMA_VERSION = 1
+_MICROS_PER_UNIT = 1_000_000
 
 
 class RegistryError(QuantEdgeError):
@@ -64,6 +65,24 @@ class RegistryIntegrityError(RegistryError):
 
 
 FaultHook = Callable[[CommitStage], None]
+
+
+def _derive_exact_brier_comparison(
+    champion_squared_errors: list[int],
+    challenger_squared_errors: list[int],
+) -> tuple[int, int, str]:
+    if not champion_squared_errors or len(champion_squared_errors) != len(
+        challenger_squared_errors
+    ):
+        raise RegistryIntegrityError("shadow comparison metric support is inconsistent")
+    champion_exact_sum = sum(champion_squared_errors)
+    challenger_exact_sum = sum(challenger_squared_errors)
+    # Every row has the same probability scale: rank exact numerators, then project once.
+    display_denominator = len(champion_squared_errors) * _MICROS_PER_UNIT
+    champion_metric_micros = champion_exact_sum // display_denominator
+    challenger_metric_micros = challenger_exact_sum // display_denominator
+    verdict = "PASS" if challenger_exact_sum < champion_exact_sum else "FAIL"
+    return champion_metric_micros, challenger_metric_micros, verdict
 
 
 def _require_reason(value: object, *, field: str) -> str:
@@ -256,8 +275,8 @@ def _verify_persisted_shadow_lineage(
     ):
         raise RegistryIntegrityError("shadow comparison lineage lists are malformed")
     observed_feedback: list[str] = []
-    champion_losses: list[int] = []
-    challenger_losses: list[int] = []
+    champion_squared_errors: list[int] = []
+    challenger_squared_errors: list[int] = []
     for batch_id in batch_ids:
         if not isinstance(batch_id, str):
             raise RegistryIntegrityError("shadow batch identity is malformed")
@@ -338,12 +357,13 @@ def _verify_persisted_shadow_lineage(
             raise RegistryIntegrityError("shadow metric values are not digest-bound")
         champion_error = cast(int, champion_score) - cast(int, outcome)
         challenger_error = cast(int, challenger_score) - cast(int, outcome)
-        champion_losses.append((champion_error * champion_error) // 1_000_000)
-        challenger_losses.append((challenger_error * challenger_error) // 1_000_000)
+        champion_squared_errors.append(champion_error * champion_error)
+        challenger_squared_errors.append(challenger_error * challenger_error)
         observed_feedback.append(str(feedback_row["body_sha"]))
-    derived_champion = sum(champion_losses) // len(champion_losses)
-    derived_challenger = sum(challenger_losses) // len(challenger_losses)
-    derived_verdict = "PASS" if derived_challenger < derived_champion else "FAIL"
+    derived_champion, derived_challenger, derived_verdict = _derive_exact_brier_comparison(
+        champion_squared_errors,
+        challenger_squared_errors,
+    )
     if (
         sorted(observed_feedback) != sorted(str(value) for value in feedback_hashes)
         or comparison.get("metricId") != "brier_loss_micros:v1"
@@ -1799,8 +1819,8 @@ class ResearchRegistryStore:
                 self._finish(connection, None)
                 return comparison.content_digest
             observed_feedback: list[str] = []
-            champion_losses: list[int] = []
-            challenger_losses: list[int] = []
+            champion_squared_errors: list[int] = []
+            challenger_squared_errors: list[int] = []
             for batch_id in comparison.batch_ids:
                 row = connection.execute(
                     "SELECT body_sha,body,feedback_id FROM shadow_batches WHERE batch_id=?",
@@ -1872,15 +1892,16 @@ class ResearchRegistryStore:
                     )
                 champion_error = cast(int, champion_score) - cast(int, outcome)
                 challenger_error = cast(int, challenger_score) - cast(int, outcome)
-                champion_losses.append((champion_error * champion_error) // 1_000_000)
-                challenger_losses.append((challenger_error * challenger_error) // 1_000_000)
+                champion_squared_errors.append(champion_error * champion_error)
+                challenger_squared_errors.append(challenger_error * challenger_error)
                 observed_feedback.append(str(feedback["body_sha"]))
             expected_feedback = [item.hexdigest for item in comparison.feedback_digests]
             if sorted(observed_feedback) != expected_feedback:
                 raise RegistryConflictError("shadow comparison feedback digests mismatch")
-            derived_champion = sum(champion_losses) // len(champion_losses)
-            derived_challenger = sum(challenger_losses) // len(challenger_losses)
-            derived_verdict = "PASS" if derived_challenger < derived_champion else "FAIL"
+            derived_champion, derived_challenger, derived_verdict = _derive_exact_brier_comparison(
+                champion_squared_errors,
+                challenger_squared_errors,
+            )
             if (
                 comparison.metric_id != "brier_loss_micros:v1"
                 or comparison.champion_metric_micros != derived_champion

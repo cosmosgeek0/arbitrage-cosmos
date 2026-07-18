@@ -15,7 +15,7 @@ from quant_edge.registry_ops.bundle import (
     synthetic_promotion_binding,
     synthetic_shadow_records,
 )
-from quant_edge.registry_ops.contracts import CommitStage
+from quant_edge.registry_ops.contracts import CommitStage, mapping_digest
 from quant_edge.registry_ops.store import (
     RegistryConflictError,
     RegistryIntegrityError,
@@ -149,9 +149,11 @@ def test_promotion_and_rollback_reverify_bytes_without_mutating_on_failure(tmp_p
     store.close()
 
 
-def test_forged_shadow_metrics_and_missing_comparison_cannot_promote(tmp_path: Path) -> None:
+def test_shadow_metrics_require_exact_order_and_restart_from_same_evidence(
+    tmp_path: Path,
+) -> None:
     store, bundle, champion = populated_registry(tmp_path)
-    comparison = synthetic_shadow_records(bundle, champion)[2]
+    base_batch, base_feedback, comparison = synthetic_shadow_records(bundle, champion)
     forged = replace(
         comparison,
         comparison_id="q15.forged-comparison.v1",
@@ -175,7 +177,111 @@ def test_forged_shadow_metrics_and_missing_comparison_cannot_promote(tmp_path: P
             artifact_root=REPO_ROOT,
         )
     assert store.current_champion(champion.slot_id) == champion
+
+    def persist_score_pair(
+        *,
+        prefix: str,
+        champion_scores: tuple[int, int],
+        challenger_scores: tuple[int, int],
+    ) -> tuple[tuple[str, ...], tuple[DigestV1, ...], int, int]:
+        batch_ids: list[str] = []
+        feedback_digests: list[DigestV1] = []
+        for ordinal, (champion_score, challenger_score) in enumerate(
+            zip(champion_scores, challenger_scores, strict=True),
+            start=1,
+        ):
+            batch_id = f"q15.{prefix}.batch.{ordinal}"
+            event_id = f"q15.{prefix}.event.{ordinal}"
+            batch = replace(
+                base_batch,
+                batch_id=batch_id,
+                event_id=event_id,
+                feature_cutoff_ms=base_batch.feature_cutoff_ms + ordinal,
+                champion=replace(
+                    base_batch.champion,
+                    output_digest=mapping_digest({"scoreMicros": str(champion_score)}),
+                    score_micros=champion_score,
+                ),
+                challengers=(
+                    replace(
+                        base_batch.challengers[0],
+                        output_digest=mapping_digest({"scoreMicros": str(challenger_score)}),
+                        score_micros=challenger_score,
+                    ),
+                ),
+            )
+            feedback = replace(
+                base_feedback,
+                feedback_id=f"q15.{prefix}.feedback.{ordinal}",
+                batch_id=batch_id,
+                event_id=event_id,
+                source_revision=f"q15.{prefix}.outcome.v1",
+                observed_at_ms=batch.matures_at_ms,
+                outcome_digest=mapping_digest({"outcomeMicros": "0"}),
+                outcome_micros=0,
+            )
+            store.record_shadow_batch(batch)
+            store.attach_delayed_feedback(feedback)
+            batch_ids.append(batch_id)
+            feedback_digests.append(feedback.content_digest)
+        return (
+            tuple(batch_ids),
+            tuple(sorted(feedback_digests, key=lambda digest: digest.hexdigest)),
+            sum(score * score for score in champion_scores),
+            sum(score * score for score in challenger_scores),
+        )
+
+    reversal_batches, reversal_feedback, champion_sum, challenger_sum = persist_score_pair(
+        prefix="exact-reversal",
+        champion_scores=(1_000, 1_000),
+        challenger_scores=(1_414, 999),
+    )
+    assert champion_sum == 2_000_000
+    assert challenger_sum == 2_997_397
+    assert challenger_sum > champion_sum
+    exact_reversal = replace(
+        comparison,
+        comparison_id="q15.exact-reversal-comparison.v1",
+        batch_ids=reversal_batches,
+        feedback_digests=reversal_feedback,
+        champion_metric_micros=1,
+        challenger_metric_micros=1,
+        verdict="FAIL",
+    )
+    assert store.record_shadow_comparison(exact_reversal) == exact_reversal.content_digest
+
+    pass_batches, pass_feedback, pass_champion_sum, pass_challenger_sum = persist_score_pair(
+        prefix="exact-restart",
+        champion_scores=(2_000, 2_000),
+        challenger_scores=(1_414, 999),
+    )
+    assert pass_champion_sum == 8_000_000
+    assert pass_challenger_sum == 2_997_397
+    exact_pass = replace(
+        comparison,
+        comparison_id="q15.exact-restart-comparison.v1",
+        batch_ids=pass_batches,
+        feedback_digests=pass_feedback,
+        champion_metric_micros=4,
+        challenger_metric_micros=1,
+        verdict="PASS",
+    )
+    assert store.record_shadow_comparison(exact_pass) == exact_pass.content_digest
+    promoted = store.promote_challenger(
+        slot_id=champion.slot_id,
+        candidate_model_id=bundle.q10_registration.model_id,
+        candidate_model_revision=bundle.q10_registration.model_revision,
+        transition_id="q15.promote.exact-brier.v1",
+        policy_revision="q15.policy.exact-brier.v1",
+        evidence=replace(binding, shadow_report_sha256=exact_pass.content_digest),
+        reason="Exact aggregate Brier evidence",
+        now_ms=FIXED_TIME_MS + 2,
+        expected_generation=champion.generation,
+        artifact_root=REPO_ROOT,
+    )
     store.close()
+    with ResearchRegistryStore(tmp_path) as restarted:
+        assert restarted.restore_champion(champion.slot_id, artifact_root=REPO_ROOT) == promoted
 
 
 def test_hook_exception_rolls_back_and_connection_remains_usable(tmp_path: Path) -> None:

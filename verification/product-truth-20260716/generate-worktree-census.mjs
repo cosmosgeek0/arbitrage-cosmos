@@ -13,9 +13,9 @@ import {
   REQUIRED_C2_PARENT,
 } from './campaign-input-registry.mjs';
 
-const MAIN = '/Users/cosmosgeek/Desktop/Main';
+const EXECUTING_CHECKOUT = resolve(process.cwd());
 const OUTPUT = resolve(
-  process.cwd(),
+  EXECUTING_CHECKOUT,
   'verification/product-truth-20260716/WORKTREE_CENSUS.json',
 );
 const REQUIRED_LIVE_WORKTREE_COUNT = 96;
@@ -472,7 +472,7 @@ function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
   if (unexplainedSourceDirt.length > 0) return 'ACTIVE_DIRTY';
   if (
     CANDIDATE_ADMISSION_LANES.has(name) &&
-    run('git', ['-C', MAIN, 'merge-base', '--is-ancestor', head, candidateSha], {
+    run('git', ['-C', EXECUTING_CHECKOUT, 'merge-base', '--is-ancestor', head, candidateSha], {
       allowFailure: true,
     }).status === 0
   ) {
@@ -481,11 +481,11 @@ function classificationFor(name, head, candidateSha, dirtyTracked, untracked) {
   if (name === 'truth-a') {
     const candidateIsAncestor = run(
       'git',
-      ['-C', MAIN, 'merge-base', '--is-ancestor', candidateSha, head],
+      ['-C', EXECUTING_CHECKOUT, 'merge-base', '--is-ancestor', candidateSha, head],
       { allowFailure: true },
     ).status === 0;
     const committedDelta = candidateIsAncestor
-      ? nulList(git(MAIN, 'diff', '--name-only', '-z', `${candidateSha}..${head}`).stdout)
+      ? nulList(git(EXECUTING_CHECKOUT, 'diff', '--name-only', '-z', `${candidateSha}..${head}`).stdout)
       : [];
     const exactEvidenceDescendant = committedDelta.length === 0
       || exactStringList(committedDelta, EXACT_EVIDENCE_PATHS);
@@ -622,7 +622,7 @@ function untrackedDisposition(name, path) {
 function firstReflogSha(branch) {
   const result = run(
     'git',
-    ['-C', MAIN, 'reflog', 'show', '--format=%H', `refs/heads/${branch}`],
+    ['-C', EXECUTING_CHECKOUT, 'reflog', 'show', '--format=%H', `refs/heads/${branch}`],
     { allowFailure: true },
   );
   if (result.status !== 0) return null;
@@ -631,7 +631,7 @@ function firstReflogSha(branch) {
 }
 
 function commitExists(sha) {
-  return run('git', ['-C', MAIN, 'cat-file', '-e', `${sha}^{commit}`], {
+  return run('git', ['-C', EXECUTING_CHECKOUT, 'cat-file', '-e', `${sha}^{commit}`], {
     allowFailure: true,
   }).status === 0;
 }
@@ -642,7 +642,7 @@ function resolveBase(name, branch, head) {
   }
   const override = BASE_OVERRIDES[name];
   if (override) {
-    const sha = text(MAIN, 'rev-parse', `${override}^{commit}`);
+    const sha = text(EXECUTING_CHECKOUT, 'rev-parse', `${override}^{commit}`);
     return { sha, state: 'VERIFIED', method: 'campaign_or_director_cut' };
   }
   if (!branch) return { sha: head, state: 'VERIFIED', method: 'detached_head' };
@@ -654,7 +654,7 @@ function resolveBase(name, branch, head) {
 }
 
 function compareRefs(left, right) {
-  const [leftOnly, rightOnly] = text(MAIN, 'rev-list', '--left-right', '--count', `${left}...${right}`)
+  const [leftOnly, rightOnly] = text(EXECUTING_CHECKOUT, 'rev-list', '--left-right', '--count', `${left}...${right}`)
     .split(/\s+/)
     .map(Number);
   return { reference_only: leftOnly, worktree_only: rightOnly };
@@ -672,13 +672,13 @@ function branchTracking(branch, head) {
     };
   }
   const upstream = text(
-    MAIN,
+    EXECUTING_CHECKOUT,
     'for-each-ref',
     '--format=%(upstream:short)',
     `refs/heads/${branch}`,
   );
   const remoteRef = `refs/remotes/origin/${branch}`;
-  const remoteExists = run('git', ['-C', MAIN, 'show-ref', '--verify', '--quiet', remoteRef], {
+  const remoteExists = run('git', ['-C', EXECUTING_CHECKOUT, 'show-ref', '--verify', '--quiet', remoteRef], {
     allowFailure: true,
   }).status === 0;
   let aheadBehind = { state: 'NOT_CONFIGURED', ahead: null, behind: null };
@@ -712,17 +712,17 @@ function receiptObject(name, path, head, receiptPath) {
       bytes: null,
     };
   }
-  const tracked = run('git', ['-C', MAIN, 'cat-file', '-e', `${head}:${receiptPath}`], {
+  const tracked = run('git', ['-C', EXECUTING_CHECKOUT, 'cat-file', '-e', `${head}:${receiptPath}`], {
     allowFailure: true,
   }).status === 0;
   if (tracked) {
-    const bytes = git(MAIN, 'show', `${head}:${receiptPath}`).stdout;
+    const bytes = git(EXECUTING_CHECKOUT, 'show', `${head}:${receiptPath}`).stdout;
     return {
       path: receiptPath,
       integrity_state: 'SEALED',
       historical_claimed_terminal_state: HISTORICAL_RECEIPT_TERMINALS[name] ?? 'SEALED',
       tracked: true,
-      git_blob: text(MAIN, 'rev-parse', `${head}:${receiptPath}`),
+      git_blob: text(EXECUTING_CHECKOUT, 'rev-parse', `${head}:${receiptPath}`),
       sha256: sha256(bytes),
       bytes: Buffer.byteLength(bytes),
     };
@@ -754,11 +754,11 @@ function receiptObject(name, path, head, receiptPath) {
 function selectiveReceiptObject(name, candidateSha) {
   const receiptPath = SELECTIVE_RECEIPTS[name];
   if (!receiptPath) return { exists: false, path: null, git_blob: null, sha256: null };
-  const bytes = git(MAIN, 'show', `${candidateSha}:${receiptPath}`).stdout;
+  const bytes = git(EXECUTING_CHECKOUT, 'show', `${candidateSha}:${receiptPath}`).stdout;
   return {
     exists: true,
     path: receiptPath,
-    git_blob: text(MAIN, 'rev-parse', `${candidateSha}:${receiptPath}`),
+    git_blob: text(EXECUTING_CHECKOUT, 'rev-parse', `${candidateSha}:${receiptPath}`),
     sha256: sha256(bytes),
   };
 }
@@ -780,7 +780,7 @@ function diffIdentity(base, head) {
       path_blob_manifest_sha256: null,
     };
   }
-  const changed = nulList(git(MAIN, 'diff', '--name-only', '-z', `${base}..${head}`).stdout);
+  const changed = nulList(git(EXECUTING_CHECKOUT, 'diff', '--name-only', '-z', `${base}..${head}`).stdout);
   if (changed.length === 0) {
     return {
       changed_path_count: 0,
@@ -788,10 +788,10 @@ function diffIdentity(base, head) {
       path_blob_manifest_sha256: null,
     };
   }
-  const binaryDiff = git(MAIN, 'diff', '--binary', '--full-index', `${base}..${head}`).stdout;
+  const binaryDiff = git(EXECUTING_CHECKOUT, 'diff', '--binary', '--full-index', `${base}..${head}`).stdout;
   const manifest = changed
     .map((path) => {
-      const entry = git(MAIN, 'ls-tree', head, '--', path).stdout.trim();
+      const entry = git(EXECUTING_CHECKOUT, 'ls-tree', head, '--', path).stdout.trim();
       return `${path}\0${entry || 'DELETED'}`;
     })
     .sort()
@@ -805,18 +805,18 @@ function diffIdentity(base, head) {
 
 function verifiedDLaunch65Authority(candidateSha) {
   const authorityCommit = text(
-    MAIN,
+    EXECUTING_CHECKOUT,
     'rev-parse',
     `${D_LAUNCH_65_AUTHORITY.commit}^{commit}`,
   );
-  const authorityTree = text(MAIN, 'rev-parse', `${authorityCommit}^{tree}`);
-  const authorityParents = text(MAIN, 'rev-list', '--parents', '-n', '1', authorityCommit)
+  const authorityTree = text(EXECUTING_CHECKOUT, 'rev-parse', `${authorityCommit}^{tree}`);
+  const authorityParents = text(EXECUTING_CHECKOUT, 'rev-list', '--parents', '-n', '1', authorityCommit)
     .split(/\s+/u)
     .slice(1);
   const authoritySpec = `${authorityCommit}:${D_LAUNCH_65_AUTHORITY.path}`;
-  const authorityType = text(MAIN, 'cat-file', '-t', authoritySpec);
-  const authorityBlob = text(MAIN, 'rev-parse', authoritySpec);
-  const authorityBytes = run('git', ['-C', MAIN, 'show', authoritySpec], {
+  const authorityType = text(EXECUTING_CHECKOUT, 'cat-file', '-t', authoritySpec);
+  const authorityBlob = text(EXECUTING_CHECKOUT, 'rev-parse', authoritySpec);
+  const authorityBytes = run('git', ['-C', EXECUTING_CHECKOUT, 'show', authoritySpec], {
     encoding: null,
   }).stdout;
   const authoritySha256 = sha256(authorityBytes);
@@ -842,13 +842,13 @@ function verifiedDLaunch65Authority(candidateSha) {
   }
 
   const archiveCommit = text(
-    MAIN,
+    EXECUTING_CHECKOUT,
     'rev-parse',
     `${D_LAUNCH_65_AUTHORITY.archive_source_commit}^{commit}`,
   );
-  const archiveTree = text(MAIN, 'rev-parse', `${archiveCommit}^{tree}`);
+  const archiveTree = text(EXECUTING_CHECKOUT, 'rev-parse', `${archiveCommit}^{tree}`);
   const archiveSubtree = text(
-    MAIN,
+    EXECUTING_CHECKOUT,
     'rev-parse',
     `${archiveCommit}:docs/archive/campaign-detail-20260716/shard-receipts`,
   );
@@ -863,11 +863,11 @@ function verifiedDLaunch65Authority(candidateSha) {
     D_LAUNCH_65_PAYLOAD_SPEC.payloadRelativePath,
   ].join('/');
   const candidatePayloadSpec = `${candidateSha}:${candidatePayloadPath}`;
-  const candidatePayloadType = text(process.cwd(), 'cat-file', '-t', candidatePayloadSpec);
-  const candidatePayloadBlob = text(process.cwd(), 'rev-parse', candidatePayloadSpec);
+  const candidatePayloadType = text(EXECUTING_CHECKOUT, 'cat-file', '-t', candidatePayloadSpec);
+  const candidatePayloadBlob = text(EXECUTING_CHECKOUT, 'rev-parse', candidatePayloadSpec);
   const candidatePayloadBytes = run(
     'git',
-    ['-C', process.cwd(), 'show', candidatePayloadSpec],
+    ['-C', EXECUTING_CHECKOUT, 'show', candidatePayloadSpec],
     { encoding: null },
   ).stdout;
   const candidatePayloadSha256 = sha256(candidatePayloadBytes);
@@ -881,12 +881,12 @@ function verifiedDLaunch65Authority(candidateSha) {
 
   const currentMainResult = run(
     'git',
-    ['-C', MAIN, 'rev-parse', '--verify', 'refs/heads/current-main'],
+    ['-C', EXECUTING_CHECKOUT, 'rev-parse', '--verify', 'refs/heads/current-main'],
     { allowFailure: true },
   );
   const originCurrentMainResult = run(
     'git',
-    ['-C', MAIN, 'rev-parse', '--verify', 'refs/remotes/origin/current-main'],
+    ['-C', EXECUTING_CHECKOUT, 'rev-parse', '--verify', 'refs/remotes/origin/current-main'],
     { allowFailure: true },
   );
   const currentMainSha = currentMainResult.status === 0 ? currentMainResult.stdout.trim() : null;
@@ -927,16 +927,16 @@ function verifiedDLaunch65Authority(candidateSha) {
 function verifiedArchivedOutput(candidateSha, output) {
   const sourceSpec = `${D_LAUNCH_65_AUTHORITY.archive_source_commit}:${output.source_path}`;
   const candidateSpec = `${candidateSha}:${output.candidate_path}`;
-  const sourceBytes = run('git', ['-C', MAIN, 'show', sourceSpec], { encoding: null }).stdout;
+  const sourceBytes = run('git', ['-C', EXECUTING_CHECKOUT, 'show', sourceSpec], { encoding: null }).stdout;
   const candidateBytes = run(
     'git',
-    ['-C', process.cwd(), 'show', candidateSpec],
+    ['-C', EXECUTING_CHECKOUT, 'show', candidateSpec],
     { encoding: null },
   ).stdout;
-  const sourceBlob = text(MAIN, 'rev-parse', sourceSpec);
-  const candidateBlob = text(process.cwd(), 'rev-parse', candidateSpec);
-  const sourceType = text(MAIN, 'cat-file', '-t', sourceSpec);
-  const candidateType = text(process.cwd(), 'cat-file', '-t', candidateSpec);
+  const sourceBlob = text(EXECUTING_CHECKOUT, 'rev-parse', sourceSpec);
+  const candidateBlob = text(EXECUTING_CHECKOUT, 'rev-parse', candidateSpec);
+  const sourceType = text(EXECUTING_CHECKOUT, 'cat-file', '-t', sourceSpec);
+  const candidateType = text(EXECUTING_CHECKOUT, 'cat-file', '-t', candidateSpec);
   const sourceSha256 = sha256(sourceBytes);
   const candidateSha256 = sha256(candidateBytes);
   const sourceBytesLength = Buffer.byteLength(sourceBytes);
@@ -1019,27 +1019,42 @@ function removedSafeTombstones(candidateSha, authorityBinding) {
   });
 }
 
+const executingCheckoutArg = process.argv.indexOf('--executing-checkout');
+if (executingCheckoutArg < 0 || !process.argv[executingCheckoutArg + 1]) {
+  throw new Error('EXECUTING_CHECKOUT_ARGUMENT_REQUIRED');
+}
+const requiredExecutingCheckout = resolve(process.argv[executingCheckoutArg + 1]);
+const discoveredExecutingCheckout = resolve(
+  text(EXECUTING_CHECKOUT, 'rev-parse', '--show-toplevel'),
+);
+if (requiredExecutingCheckout !== EXECUTING_CHECKOUT
+    || discoveredExecutingCheckout !== EXECUTING_CHECKOUT) {
+  throw new Error(
+    `EXECUTING_CHECKOUT_MISMATCH: required=${requiredExecutingCheckout} process=${EXECUTING_CHECKOUT} git=${discoveredExecutingCheckout}`,
+  );
+}
+
 const candidateArg = process.argv[2];
 if (!/^[a-f0-9]{40}$/u.test(candidateArg ?? '')) {
   throw new Error('EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 }
-const candidateSha = text(process.cwd(), 'rev-parse', `${candidateArg}^{commit}`);
+const candidateSha = text(EXECUTING_CHECKOUT, 'rev-parse', `${candidateArg}^{commit}`);
 if (candidateSha !== candidateArg) {
   throw new Error('CANDIDATE_ARGUMENT_MUST_NAME_THE_EXACT_COMMIT_OBJECT');
 }
 if (REJECTED_CANDIDATE_SHAS.includes(candidateSha)) {
   throw new Error(`REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidateSha}`);
 }
-const candidateRootState = text(process.cwd(), 'show', `${candidateSha}:STATE.md`);
+const candidateRootState = text(EXECUTING_CHECKOUT, 'show', `${candidateSha}:STATE.md`);
 if (!candidateRootState.includes('| Account A correction candidate C9 |')) {
   throw new Error('C9_SOURCE_STATE_MARKER_MISSING');
 }
-const candidateTree = text(process.cwd(), 'rev-parse', `${candidateSha}^{tree}`);
+const candidateTree = text(EXECUTING_CHECKOUT, 'rev-parse', `${candidateSha}^{tree}`);
 if (!/^[a-f0-9]{40}$/u.test(candidateTree)) {
   throw new Error('EXACT_FULL_CANDIDATE_TREE_REQUIRED');
 }
 const candidateParentLine = text(
-  process.cwd(),
+  EXECUTING_CHECKOUT,
   'rev-list',
   '--parents',
   '-n',
@@ -1055,11 +1070,11 @@ if (candidateParentLine[0] !== candidateSha
   );
 }
 const candidateCommitTime = new Date(
-  text(process.cwd(), 'show', '-s', '--format=%cI', candidateSha),
+  text(EXECUTING_CHECKOUT, 'show', '-s', '--format=%cI', candidateSha),
 ).toISOString();
 const censusStartedAt = candidateCommitTime;
 const dLaunch65Authority = verifiedDLaunch65Authority(candidateSha);
-const rawWorktrees = git(MAIN, 'worktree', 'list', '--porcelain', '-z').stdout;
+const rawWorktrees = git(EXECUTING_CHECKOUT, 'worktree', 'list', '--porcelain', '-z').stdout;
 const records = parseWorktrees(rawWorktrees);
 const normalizedInventorySha256 = sha256(JSON.stringify(
   normalizedWorktreeInventory(records, candidateSha),
@@ -1132,7 +1147,7 @@ const rows = records.map((record) => {
         ? head
         : null;
   const inCandidate = acceptedDonorSha
-    ? run('git', ['-C', MAIN, 'merge-base', '--is-ancestor', acceptedDonorSha, candidateSha], {
+    ? run('git', ['-C', EXECUTING_CHECKOUT, 'merge-base', '--is-ancestor', acceptedDonorSha, candidateSha], {
         allowFailure: true,
       }).status === 0
     : null;
@@ -1297,7 +1312,7 @@ const document = {
   actor_role: 'ACCOUNT_A',
   account_b_reasoning_or_artifacts_read: false,
   account_b_status_scope: 'HEAD and Git status metadata only, required by campaign §5',
-  source_command: 'git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z',
+  source_command: `git -C ${EXECUTING_CHECKOUT} worktree list --porcelain -z`,
   source_command_sha256: normalizedInventorySha256,
   source_command_sha256_basis:
     'SORTED_PORCELAIN_RECORDS_WITH_TRUTH_A_HEAD_NORMALIZED_TO_EXACT_CANDIDATE',
@@ -1340,7 +1355,7 @@ const document = {
   receipt: {
     exact_candidate_sha: candidateSha,
     command_or_operator_action:
-      'git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z plus per-tree status, ancestry, receipt, and diff probes',
+      `git -C ${EXECUTING_CHECKOUT} worktree list --porcelain -z plus per-tree status, ancestry, receipt, and diff probes`,
     environment_toolchain_digest_sha256:
       '8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca',
     dependency_lock_sha256:

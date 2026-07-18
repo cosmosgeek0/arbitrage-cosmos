@@ -188,3 +188,21 @@ test('exact-candidate generator source is fail-closed and covers the locked card
   assert.doesNotMatch(censusSource, /D-LAUNCH-65 is not in both current-main authority refs/);
   assert.doesNotMatch(source, /SOURCE_COMMIT_CANNOT_SELF_NAME/);
 });
+
+test('worktree census is bound to the executing checkout without a machine-local path', () => {
+  const generatorSource = readFileSync(
+    path.join(CAMPAIGN, 'generate-exact-candidate-evidence.mjs'),
+    'utf8',
+  );
+  const censusSource = readFileSync(
+    path.join(CAMPAIGN, 'generate-worktree-census.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(censusSource, /\/Users\/cosmosgeek\/Desktop\/Main/u);
+  assert.match(generatorSource, /EXECUTING_CHECKOUT_ROOT_REQUIRED/u);
+  assert.match(generatorSource, /--executing-checkout/u);
+  assert.match(censusSource, /EXECUTING_CHECKOUT_ARGUMENT_REQUIRED/u);
+  assert.match(censusSource, /EXECUTING_CHECKOUT_MISMATCH/u);
+  assert.match(censusSource, /git -C \$\{EXECUTING_CHECKOUT\} worktree list/u);
+});

@@ -23,7 +23,7 @@ import {
   WAVE_ARCHIVE_ORIGINS,
 } from './campaign-input-registry.mjs';
 
-const repo = process.cwd();
+const repo = resolve(process.cwd());
 const rootRelative = 'verification/product-truth-20260716';
 const root = resolve(repo, rootRelative);
 const candidateArg = process.argv.indexOf('--candidate');
@@ -303,6 +303,8 @@ if (selfTest) {
   process.exit(0);
 }
 
+const executingCheckout = resolve(gitText('rev-parse', '--show-toplevel'));
+assert(executingCheckout === repo, 'EXECUTING_CHECKOUT_ROOT_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(candidate ?? ''), 'EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(requiredParent ?? ''), 'EXACT_FULL_REQUIRED_PARENT_SHA_REQUIRED');
 assert(requiredParent === REQUIRED_C2_PARENT, 'IMMUTABLE_C2_PARENT_MISMATCH');
@@ -317,7 +319,12 @@ const candidateRootState = candidateText('STATE.md');
 assert(candidateRootState.includes('| Account A correction candidate C9 |'), 'C9_SOURCE_STATE_MARKER_MISSING');
 
 // The census must observe a clean custody bridge before any other evidence file is changed.
-run(process.execPath, [resolve(root, 'generate-worktree-census.mjs'), candidate]);
+run(process.execPath, [
+  resolve(root, 'generate-worktree-census.mjs'),
+  candidate,
+  '--executing-checkout',
+  executingCheckout,
+]);
 const exactCensus = readJson('WORKTREE_CENSUS.json');
 
 const seedLock = candidateJson(campaignPath('INPUTS.lock'));

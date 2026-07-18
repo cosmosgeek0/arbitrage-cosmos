@@ -115,6 +115,7 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_KILL_SWITCH') return mutation.engaged === true;
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_INTAKE') return mutation.paused === true;
+  if (mutation.command === 'SET_VOLUME_INTAKE') return mutation.paused === true;
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -795,6 +796,17 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         return 'UNKNOWN';
       }
     }
+    if (request.mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function') return 'UNKNOWN';
+      try {
+        const paused = owner.readPaused();
+        if (typeof paused !== 'boolean') return 'UNKNOWN';
+        return paused === request.mutation.paused ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     const effectId = this.runtimePublicationEffectId(request, receipt);
     const local = this.runtimePublicationEffects.get(effectId);
     if (local !== undefined) return local;
@@ -879,6 +891,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       }
       return this.decision(true, 'BASIS_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
     }
+    if (mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        return this.decision(false, 'VOLUME_INTAKE_OWNER_NOT_WIRED', 'Canonical Volume intake owner is unavailable.', false);
+      }
+      let paused: boolean;
+      try {
+        paused = owner.readPaused();
+      } catch {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_UNAVAILABLE', 'Canonical Volume intake readback is unavailable.', false);
+      }
+      if (typeof paused !== 'boolean') {
+        return this.decision(false, 'VOLUME_INTAKE_READBACK_INVALID', 'Canonical Volume intake readback is invalid.', false);
+      }
+      return this.decision(true, 'VOLUME_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -935,6 +963,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       } else if (mutation.command === 'SET_BASIS_INTAKE') {
         const owner = this.options.strategyIntake?.basis;
         if (!owner || typeof owner.setPaused !== 'function') throw new Error('BASIS_INTAKE_OWNER_NOT_WIRED');
+        owner.setPaused(mutation.paused);
+      } else if (mutation.command === 'SET_VOLUME_INTAKE') {
+        const owner = this.options.strategyIntake?.volume;
+        if (!owner || typeof owner.setPaused !== 'function') throw new Error('VOLUME_INTAKE_OWNER_NOT_WIRED');
         owner.setPaused(mutation.paused);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');

@@ -51,7 +51,8 @@ function digest(value: unknown): string {
 function requiresRuntimePublication(mutation: Readonly<SystemControlMutation>): boolean {
   return mutation.command === 'RESTART_COMPONENT'
     || mutation.command === 'SET_COMPONENT_STATE'
-    || mutation.command === 'SET_BASIS_INTAKE';
+    || mutation.command === 'SET_BASIS_INTAKE'
+    || mutation.command === 'SET_VOLUME_INTAKE';
 }
 
 export function controlRequestDigest(request: Readonly<SystemControlMutationRequest>): string {

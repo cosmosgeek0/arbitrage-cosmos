@@ -243,7 +243,8 @@ export type SystemControlMutation =
   | { readonly command: 'REVOKE_APPROVAL'; readonly approvalId: string }
   | { readonly command: 'REVOKE_RESERVATION'; readonly reservationId: string }
   | { readonly command: 'RESTART_COMPONENT'; readonly componentId: SystemComponentId }
-  | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean };
+  | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean }
+  | { readonly command: 'SET_VOLUME_INTAKE'; readonly paused: boolean };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

@@ -79,6 +79,10 @@ export interface SystemIntegrationApplicationOptions {
       readPaused(): boolean;
       setPaused(paused: boolean): boolean;
     }>;
+    volume?: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
   }>;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;

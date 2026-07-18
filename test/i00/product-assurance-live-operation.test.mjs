@@ -14,6 +14,12 @@ import { verifyProductAssuranceOperationReport } from './git-provenance.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const manifest = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/i00/product-assurance-manifest.v1.json'), 'utf8'));
+const DATABASE_KINDS = new Set([
+  OPERATION_KINDS.DATABASE_OPEN,
+  OPERATION_KINDS.DATABASE_QUERY,
+  OPERATION_KINDS.DATABASE_MUTATION,
+  OPERATION_KINDS.DATABASE_TRANSACTION,
+]);
 
 test('assembled production operation scan matches the final manifest denominator with zero uncovered sites', () => {
   assert.equal(verifyNewsContextOverlayAuthority(NEWS_CONTEXT_OVERLAY_AUTHORITY), true);
@@ -57,4 +63,16 @@ test('assembled production operation scan matches the final manifest denominator
   assert.equal(report.discovered, report.covered);
   assert.equal(report.uncovered, 0);
   assert.deepEqual(report.uncoveredSites, []);
+  const databaseSites = report.sites.filter((site) => DATABASE_KINDS.has(site.rawKind));
+  assert.ok(databaseSites.length > 0, 'the canonical Ledger database denominator must be present');
+  assert.equal(
+    databaseSites.every((site) => site.path === 'server/src/ledger.ts'),
+    true,
+    JSON.stringify(databaseSites.filter((site) => site.path !== 'server/src/ledger.ts')),
+  );
+  assert.equal(
+    databaseSites.every((site) => site.operationId === 'OP_LEDGER_SQLITE'),
+    true,
+    JSON.stringify(databaseSites.filter((site) => site.operationId !== 'OP_LEDGER_SQLITE')),
+  );
 });

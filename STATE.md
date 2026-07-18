@@ -99,7 +99,7 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
 | `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 565 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 565 files / 225 discovered | 225/225 covered; 0 uncovered; all 116 database sites resolve only to `server/src/ledger.ts` / `OP_LEDGER_SQLITE`; 802 behavior checks and 4 provenance checks. |
 
 ## Real-gap campaign state
 
@@ -107,7 +107,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 
 | Rank | Item | State | Focused proof |
 | ---: | --- | --- | --- |
-| 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires one atomic PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. The hostile lease suite is 4/4, System Integration is 412/412, and live competitors exit before a second boot revision while dead same-host ownership recovers atomically. |
+| 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires a mode-0600, fsynced hard-link compare-and-link PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. No integration database, WAL, or SHM file exists: all 116 database operation sites remain solely in the canonical Ledger owner. The hostile lease suite is 6/6 and System Integration is 419/419; it proves pre-boot live contention, exactly one synchronized successor after a real owner is killed, later reacquisition, fatal root-inode replacement, and remote/corrupt/future fail-closed state. |
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
 | 3 | `FIX-005` | `BUILT_AND_TESTED` | The named merged-scope audit mounts FIX-031 then FIX-017, preserves the first child failure exit, and cannot report success until both residual finding regressions pass. Its command-contract suite is 3/3 and the live two-finding audit exits 0. |
 | 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap now loads `.env` before path-owning modules, and one resolver owns the canonical data directory plus icon, liquidation, profile, and news archive paths. The fresh-process regression imports all four owners with a `.env`-only `DATA_DIR` and proves their exact shared authority. The existing reviewed public-news GET disposition is pinned to the resulting exact source location and SHA-256 without widening its owner, method, or network authority. |

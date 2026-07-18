@@ -1,11 +1,36 @@
-import Database from 'better-sqlite3';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  constants,
+  fchmodSync,
+  fstatSync,
+  fsyncSync,
+  futimesSync,
+  linkSync,
+  lstatSync,
+  openSync,
+  readSync,
+  type Stats,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { hostname } from 'node:os';
 import path from 'node:path';
 
-const LEASE_DATABASE = 'cosmos.lease.db';
+const LEASE_ROOT = '.cosmos-data-dir.lease.v1';
 const HEARTBEAT_INTERVAL_MS = 2_000;
 const MAX_UTC_MS = 4_102_444_800_000;
+const MAX_RECORD_BYTES = 1_024;
+const MAX_CHAIN_DEPTH = 64;
+const LEASE_MODE = 0o600;
+const RECORD_KEYS = Object.freeze([
+  'acquiredAtMs',
+  'hostname',
+  'ownerToken',
+  'pid',
+  'predecessorToken',
+  'schemaVersion',
+].sort());
 
 export type DataDirLeaseErrorCode =
   | 'DATA_DIR_LEASE_HELD'
@@ -15,12 +40,24 @@ export type DataDirLeaseErrorCode =
   | 'DATA_DIR_LEASE_LOST'
   | 'DATA_DIR_LEASE_RELEASE_FAILED';
 
-interface DataDirLeaseRow {
-  readonly owner_token: string;
+interface DataDirLeaseRecord {
+  readonly schemaVersion: 1;
+  readonly ownerToken: string;
+  readonly predecessorToken: string | null;
   readonly pid: number;
   readonly hostname: string;
-  readonly acquired_at_ms: number;
-  readonly heartbeat_at_ms: number;
+  readonly acquiredAtMs: number;
+}
+
+interface LeaseLink {
+  readonly path: string;
+  readonly record: DataDirLeaseRecord;
+  readonly stat: Stats;
+}
+
+interface LeaseChain {
+  readonly root: LeaseLink;
+  readonly tail: LeaseLink;
 }
 
 export interface DataDirLeaseOptions {
@@ -58,19 +95,138 @@ function leaseFailure(
   return new DataDirLeaseError(code, message);
 }
 
+function sameInode(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function exactMembers(actual: readonly string[], expected: readonly string[]): boolean {
+  return actual.length === expected.length
+    && actual.every((value, index) => value === expected[index]);
+}
+
+function validOwnerToken(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length >= 36
+    && value.length <= 128
+    && /^[A-Za-z0-9:._-]+$/u.test(value);
+}
+
+function parseRecord(bytes: Buffer): DataDirLeaseRecord {
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(bytes.toString('utf8'));
+  } catch {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease record is corrupt');
+  }
+  if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease record is not an object');
+  }
+  const record = candidate as Record<string, unknown>;
+  if (!exactMembers(Object.keys(record).sort(), RECORD_KEYS)
+      || record.schemaVersion !== 1
+      || !validOwnerToken(record.ownerToken)
+      || !(record.predecessorToken === null || validOwnerToken(record.predecessorToken))
+      || !Number.isSafeInteger(record.pid)
+      || (record.pid as number) < 1
+      || typeof record.hostname !== 'string'
+      || record.hostname.length < 1
+      || record.hostname.length > 255
+      || !validUtcMillis(record.acquiredAtMs as number)) {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease record is invalid');
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    ownerToken: record.ownerToken,
+    predecessorToken: record.predecessorToken,
+    pid: record.pid,
+    hostname: record.hostname,
+    acquiredAtMs: record.acquiredAtMs,
+  }) as DataDirLeaseRecord;
+}
+
+function readRecordFromFd(fd: number): { readonly record: DataDirLeaseRecord; readonly stat: Stats } {
+  const stat = fstatSync(fd);
+  if (!stat.isFile()
+      || stat.size < 1
+      || stat.size > MAX_RECORD_BYTES
+      || (stat.mode & 0o777) !== LEASE_MODE) {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease inode is invalid');
+  }
+  const bytes = Buffer.alloc(stat.size);
+  let offset = 0;
+  while (offset < bytes.length) {
+    const count = readSync(fd, bytes, offset, bytes.length - offset, offset);
+    if (count === 0) {
+      throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease record is truncated');
+    }
+    offset += count;
+  }
+  return Object.freeze({ record: parseRecord(bytes), stat });
+}
+
+function readLink(linkPath: string): LeaseLink | null {
+  let pathStat: Stats;
+  try {
+    pathStat = lstatSync(linkPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease path is unreadable');
+  }
+  if (!pathStat.isFile() || pathStat.isSymbolicLink()) {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease path is not a regular file');
+  }
+  let fd = -1;
+  try {
+    fd = openSync(linkPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const observed = readRecordFromFd(fd);
+    if (!sameInode(pathStat, observed.stat)) {
+      throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease path changed while read');
+    }
+    return Object.freeze({ path: linkPath, record: observed.record, stat: observed.stat });
+  } catch (error) {
+    if (error instanceof DataDirLeaseError) throw error;
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease path could not be opened safely');
+  } finally {
+    if (fd >= 0) closeSync(fd);
+  }
+}
+
+function recordBytes(record: DataDirLeaseRecord): Buffer {
+  const bytes = Buffer.from(`${JSON.stringify(record)}\n`, 'utf8');
+  if (bytes.length > MAX_RECORD_BYTES) {
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease record exceeds its bound');
+  }
+  return bytes;
+}
+
+function recordEquals(left: DataDirLeaseRecord, right: DataDirLeaseRecord): boolean {
+  return left.schemaVersion === right.schemaVersion
+    && left.ownerToken === right.ownerToken
+    && left.predecessorToken === right.predecessorToken
+    && left.pid === right.pid
+    && left.hostname === right.hostname
+    && left.acquiredAtMs === right.acquiredAtMs;
+}
+
 /**
- * System Integration's fail-closed writer lease for the canonical DATA_DIR. SQLite supplies
- * the atomic cross-process compare-and-set; the OS PID probe prevents a live
- * same-host owner from being stolen even if its event loop stops heartbeating.
- * Remote-host leases are never stolen because their process liveness cannot be
- * proven locally.
+ * System Integration's fail-closed writer lease for the canonical DATA_DIR.
+ * A mode-0600, fsynced immutable inode is admitted by an atomic hard link. A
+ * dead owner's deterministic successor link is the compare-and-link recovery
+ * slot, so concurrent contenders never need an unlink/create replacement gap.
+ * The OS PID probe prevents a live same-host owner from being stolen; remote,
+ * corrupt, future-dated, or unsupported filesystem state remains unavailable.
  */
 export class DataDirLease {
-  private readonly database: Database.Database;
+  private readonly dataDir: string;
+  private readonly rootPath: string;
   private readonly ownerToken: string;
   private readonly ownerPid = process.pid;
   private readonly ownerHostname = hostname();
   private readonly onLost: DataDirLeaseOptions['onLost'];
+  private ownerRecord: DataDirLeaseRecord | null = null;
+  private ownerFd = -1;
+  private ownedEntryPath: string | null = null;
+  private rootStat: Stats | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private held = false;
 
@@ -79,85 +235,172 @@ export class DataDirLease {
     if (!validUtcMillis(nowMs)) {
       throw leaseFailure('DATA_DIR_LEASE_CLOCK_INVALID', 'DATA_DIR lease clock is invalid');
     }
+    this.dataDir = path.resolve(dataDir);
+    this.rootPath = path.join(this.dataDir, LEASE_ROOT);
     this.ownerToken = `${this.ownerPid}:${nowMs}:${randomUUID()}`;
     this.onLost = options.onLost;
-    this.database = new Database(path.join(path.resolve(dataDir), LEASE_DATABASE));
+
+    let candidatePath: string | null = null;
+    let linkedPath: string | null = null;
     try {
-      this.database.pragma('busy_timeout = 0');
-      this.database.pragma('journal_mode = WAL');
-      this.database.exec(`
-        CREATE TABLE IF NOT EXISTS data_dir_lease (
-          singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
-          owner_token TEXT NOT NULL,
-          pid INTEGER NOT NULL,
-          hostname TEXT NOT NULL,
-          acquired_at_ms INTEGER NOT NULL,
-          heartbeat_at_ms INTEGER NOT NULL
-        )
-      `);
-      const acquire = this.database.transaction(() => this.acquire(nowMs));
-      acquire.immediate();
-      this.held = true;
-      this.heartbeatTimer = setInterval(() => this.heartbeat(), HEARTBEAT_INTERVAL_MS);
-      this.heartbeatTimer.unref?.();
-    } catch (error) {
+      const chain = this.readChain(nowMs);
+      let predecessorToken: string | null = null;
+      if (chain !== null) {
+        const current = chain.tail.record;
+        if (current.hostname !== this.ownerHostname) {
+          throw leaseFailure(
+            'DATA_DIR_LEASE_REMOTE_HOST',
+            'canonical DATA_DIR is leased by an owner on another host',
+          );
+        }
+        if (processIsAlive(current.pid)) {
+          throw leaseFailure('DATA_DIR_LEASE_HELD', 'canonical DATA_DIR already has a live writer');
+        }
+        predecessorToken = current.ownerToken;
+      }
+
+      const ownerRecord: DataDirLeaseRecord = Object.freeze({
+        schemaVersion: 1,
+        ownerToken: this.ownerToken,
+        predecessorToken,
+        pid: this.ownerPid,
+        hostname: this.ownerHostname,
+        acquiredAtMs: nowMs,
+      });
+      candidatePath = path.join(
+        this.dataDir,
+        `.cosmos-data-dir.lease.candidate-${this.digest(this.ownerToken)}`,
+      );
+      this.ownerFd = openSync(candidatePath, 'wx+', LEASE_MODE);
+      fchmodSync(this.ownerFd, LEASE_MODE);
+      const bytes = recordBytes(ownerRecord);
+      let written = 0;
+      while (written < bytes.length) {
+        written += writeSync(this.ownerFd, bytes, written, bytes.length - written, written);
+      }
+      fsyncSync(this.ownerFd);
+
+      linkedPath = predecessorToken === null
+        ? this.rootPath
+        : this.successorPath(predecessorToken);
       try {
-        this.database.close();
+        linkSync(candidatePath, linkedPath);
       } catch {
-        // Preserve the exact acquisition failure.
+        throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease changed during acquisition');
+      }
+      unlinkSync(candidatePath);
+      candidatePath = null;
+
+      this.ownerRecord = ownerRecord;
+      this.ownedEntryPath = linkedPath;
+      const acquiredChain = this.readChain(Date.now());
+      if (acquiredChain === null) {
+        throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease disappeared during acquisition');
+      }
+      this.rootStat = acquiredChain.root.stat;
+      this.verifyOwnership(Date.now());
+      this.held = true;
+      this.startHeartbeat();
+    } catch (error) {
+      if (linkedPath !== null && this.ownerFd >= 0) this.unlinkOwnedPathIfExact(linkedPath);
+      if (candidatePath !== null) {
+        try { unlinkSync(candidatePath); } catch { /* Preserve the acquisition failure. */ }
+      }
+      if (this.ownerFd >= 0) {
+        try { closeSync(this.ownerFd); } catch { /* Preserve the acquisition failure. */ }
+        this.ownerFd = -1;
       }
       if (error instanceof DataDirLeaseError) throw error;
       throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease could not be acquired');
     }
   }
 
-  private acquire(nowMs: number): void {
-    const current = this.database.prepare(`
-      SELECT owner_token, pid, hostname, acquired_at_ms, heartbeat_at_ms
-      FROM data_dir_lease WHERE singleton = 1
-    `).get() as DataDirLeaseRow | undefined;
-    if (current !== undefined) {
-      if (current.hostname !== this.ownerHostname) {
-        throw leaseFailure(
-          'DATA_DIR_LEASE_REMOTE_HOST',
-          'canonical DATA_DIR is leased by an owner on another host',
-        );
-      }
-      if (processIsAlive(current.pid)) {
-        throw leaseFailure('DATA_DIR_LEASE_HELD', 'canonical DATA_DIR already has a live writer');
-      }
-      const heartbeatAgeMs = nowMs - current.heartbeat_at_ms;
-      if (!validUtcMillis(current.heartbeat_at_ms)
-          || !Number.isSafeInteger(heartbeatAgeMs)
-          || heartbeatAgeMs < 0) {
-        throw leaseFailure(
-          'DATA_DIR_LEASE_HELD',
-          'canonical DATA_DIR lease heartbeat is invalid for safe stale recovery',
-        );
-      }
-      const replaced = this.database.prepare(`
-        UPDATE data_dir_lease
-        SET owner_token = ?, pid = ?, hostname = ?, acquired_at_ms = ?, heartbeat_at_ms = ?
-        WHERE singleton = 1 AND owner_token = ? AND heartbeat_at_ms = ?
-      `).run(
-        this.ownerToken,
-        this.ownerPid,
-        this.ownerHostname,
-        nowMs,
-        nowMs,
-        current.owner_token,
-        current.heartbeat_at_ms,
+  private digest(value: string): string {
+    return createHash('sha256').update(value, 'utf8').digest('hex');
+  }
+
+  private successorPath(ownerToken: string): string {
+    return path.join(this.dataDir, `.cosmos-data-dir.lease.next-${this.digest(ownerToken)}`);
+  }
+
+  private validateTime(link: LeaseLink, nowMs: number): void {
+    if (!validUtcMillis(link.record.acquiredAtMs)
+        || link.record.acquiredAtMs > nowMs
+        || !Number.isFinite(link.stat.mtimeMs)
+        || link.stat.mtimeMs < 0
+        || link.stat.mtimeMs > MAX_UTC_MS
+        || Math.floor(link.stat.mtimeMs) > nowMs) {
+      throw leaseFailure(
+        'DATA_DIR_LEASE_HELD',
+        'canonical DATA_DIR lease time is invalid for safe recovery',
       );
-      if (replaced.changes !== 1) {
-        throw leaseFailure('DATA_DIR_LEASE_BUSY', 'stale DATA_DIR lease changed during recovery');
-      }
-      return;
     }
-    this.database.prepare(`
-      INSERT INTO data_dir_lease
-        (singleton, owner_token, pid, hostname, acquired_at_ms, heartbeat_at_ms)
-      VALUES (1, ?, ?, ?, ?, ?)
-    `).run(this.ownerToken, this.ownerPid, this.ownerHostname, nowMs, nowMs);
+  }
+
+  private readChain(nowMs: number): LeaseChain | null {
+    const root = readLink(this.rootPath);
+    if (root === null) return null;
+    if (root.record.predecessorToken !== null) {
+      throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease root has an invalid predecessor');
+    }
+    const tokens = new Set<string>();
+    const inodes = new Set<string>();
+    let tail = root;
+    for (let depth = 0; depth < MAX_CHAIN_DEPTH; depth += 1) {
+      this.validateTime(tail, nowMs);
+      const inodeKey = `${tail.stat.dev}:${tail.stat.ino}`;
+      if (tokens.has(tail.record.ownerToken) || inodes.has(inodeKey)) {
+        throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease chain contains a cycle');
+      }
+      tokens.add(tail.record.ownerToken);
+      inodes.add(inodeKey);
+      const successor = readLink(this.successorPath(tail.record.ownerToken));
+      if (successor === null) return Object.freeze({ root, tail });
+      if (successor.record.predecessorToken !== tail.record.ownerToken) {
+        throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease successor is invalid');
+      }
+      tail = successor;
+    }
+    throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR lease chain exceeds its bound');
+  }
+
+  private verifyOwnership(nowMs: number): void {
+    if (this.ownerRecord === null
+        || this.ownedEntryPath === null
+        || this.rootStat === null
+        || this.ownerFd < 0) {
+      throw leaseFailure('DATA_DIR_LEASE_LOST', 'canonical DATA_DIR lease ownership is incomplete');
+    }
+    const chain = this.readChain(nowMs);
+    const fdState = readRecordFromFd(this.ownerFd);
+    if (chain === null
+        || !sameInode(chain.root.stat, this.rootStat)
+        || chain.tail.path !== this.ownedEntryPath
+        || !sameInode(chain.tail.stat, fdState.stat)
+        || !recordEquals(chain.tail.record, this.ownerRecord)
+        || !recordEquals(fdState.record, this.ownerRecord)) {
+      throw leaseFailure('DATA_DIR_LEASE_LOST', 'canonical DATA_DIR lease ownership changed');
+    }
+  }
+
+  private unlinkOwnedPathIfExact(linkPath: string): void {
+    try {
+      const link = readLink(linkPath);
+      const fdState = this.ownerFd >= 0 ? readRecordFromFd(this.ownerFd) : null;
+      if (link !== null
+          && fdState !== null
+          && sameInode(link.stat, fdState.stat)
+          && link.record.ownerToken === this.ownerToken) {
+        unlinkSync(linkPath);
+      }
+    } catch {
+      // Cleanup is exact-owner only and never replaces the original failure.
+    }
+  }
+
+  private startHeartbeat(): void {
+    this.heartbeatTimer = setInterval(() => this.heartbeat(), HEARTBEAT_INTERVAL_MS);
+    this.heartbeatTimer.unref?.();
   }
 
   private heartbeat(): void {
@@ -168,11 +411,9 @@ export class DataDirLease {
       return;
     }
     try {
-      const result = this.database.prepare(`
-        UPDATE data_dir_lease SET heartbeat_at_ms = ?
-        WHERE singleton = 1 AND owner_token = ? AND pid = ? AND hostname = ?
-      `).run(nowMs, this.ownerToken, this.ownerPid, this.ownerHostname);
-      if (result.changes !== 1) this.markLost();
+      this.verifyOwnership(nowMs);
+      futimesSync(this.ownerFd, new Date(nowMs), new Date(nowMs));
+      this.verifyOwnership(Date.now());
     } catch {
       this.markLost();
     }
@@ -183,6 +424,10 @@ export class DataDirLease {
     this.held = false;
     if (this.heartbeatTimer !== null) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
+    if (this.ownerFd >= 0) {
+      try { closeSync(this.ownerFd); } catch { /* Lease is already lost. */ }
+      this.ownerFd = -1;
+    }
     if (wasHeld) this.onLost?.('DATA_DIR_LEASE_LOST');
   }
 
@@ -199,16 +444,18 @@ export class DataDirLease {
     if (this.heartbeatTimer !== null) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
     try {
-      const release = this.database.transaction(() => this.database.prepare(`
-        DELETE FROM data_dir_lease
-        WHERE singleton = 1 AND owner_token = ? AND pid = ? AND hostname = ?
-      `).run(this.ownerToken, this.ownerPid, this.ownerHostname));
-      const result = release.immediate();
-      if (result.changes !== 1) {
-        throw leaseFailure('DATA_DIR_LEASE_LOST', 'canonical DATA_DIR lease ownership changed');
+      const nowMs = Date.now();
+      if (!validUtcMillis(nowMs)) {
+        throw leaseFailure('DATA_DIR_LEASE_CLOCK_INVALID', 'DATA_DIR lease clock is invalid');
       }
+      this.verifyOwnership(nowMs);
+      if (this.ownedEntryPath === null) {
+        throw leaseFailure('DATA_DIR_LEASE_LOST', 'canonical DATA_DIR lease path is unavailable');
+      }
+      unlinkSync(this.ownedEntryPath);
       this.held = false;
-      this.database.close();
+      closeSync(this.ownerFd);
+      this.ownerFd = -1;
     } catch (error) {
       if (error instanceof DataDirLeaseError) throw error;
       throw leaseFailure('DATA_DIR_LEASE_RELEASE_FAILED', 'canonical DATA_DIR lease release failed');

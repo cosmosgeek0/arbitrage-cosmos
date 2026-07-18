@@ -211,7 +211,18 @@ function ChangeCell({ value }: { value: number | null | undefined }) {
 }
 
 export function Markets() {
-  const { markets, marketsUpdatedAt, marketsError, connected, state, prefs, openDetail, toggleWatch } = useStore();
+  const {
+    markets,
+    marketStatus,
+    marketsLastSuccessAtMs,
+    marketsUpdatedAt,
+    marketsError,
+    connected,
+    state,
+    prefs,
+    openDetail,
+    toggleWatch,
+  } = useStore();
   const initialView = readMarketView();
   const [view, setView] = useState<View>(initialView);
   const [filter, setFilter] = useState<Filter>('all');
@@ -224,6 +235,7 @@ export function Markets() {
 
   const watchlist = state?.config.watchlist ?? [];
   const feesPct = state?.config.feesPct ?? 0;
+  const marketReadSucceeded = marketsLastSuccessAtMs !== null;
   const iconBases = useMemo(() => [...new Set(markets.map((market) => market.base))], [markets]);
 
   useEffect(() => { primeIcons(iconBases); }, [iconBases]);
@@ -257,15 +269,21 @@ export function Markets() {
     nowMs: now,
     staleAfterMs: Math.max(12_000, prefs.refreshSec * 2500),
   });
-  const marketFreshnessLabel = marketFreshness.status === 'ERROR'
-    ? 'Feed Error'
-    : marketFreshness.status === 'UNKNOWN'
-      ? 'Freshness Unknown'
-      : marketFreshness.status === 'LIVE'
-        ? `Live · ${fmtLiveAge(marketFreshness.ageMs)}`
-        : marketFreshness.status === 'STALE'
-          ? `Data Stale · ${fmtLiveAge(marketFreshness.ageMs)}`
-          : 'Reconnecting';
+  const marketFreshnessLabel = marketStatus === 'LOADING'
+    ? 'Feed Loading'
+    : marketStatus === 'UNAVAILABLE'
+      ? 'Feed Unavailable'
+      : marketStatus === 'STALE'
+        ? 'STALE LAST-KNOWN'
+        : marketFreshness.status === 'ERROR'
+          ? 'Feed Error'
+          : marketFreshness.status === 'UNKNOWN'
+            ? 'Freshness Unknown'
+            : marketFreshness.status === 'LIVE'
+              ? `Live · ${fmtLiveAge(marketFreshness.ageMs)}`
+              : marketFreshness.status === 'STALE'
+                ? `Data Stale · ${fmtLiveAge(marketFreshness.ageMs)}`
+                : 'Reconnecting';
 
   const rows = useMemo(() => {
     let filtered = markets;
@@ -375,10 +393,10 @@ export function Markets() {
         </header>
 
         <div className="mkx-summary" aria-label="Market Summary">
-          <article><span>Tracked Markets</span><strong>{markets.length.toLocaleString('en-US')}</strong><small>USDT Universe</small></article>
-          <article><span>Spot + Perp</span><strong>{pairedCount.toLocaleString('en-US')}</strong><small>{executableCount.toLocaleString('en-US')} Executable Books</small></article>
-          <article><span>24h Volume</span><strong>{fmtMoney(totalVolume)}</strong><small>Binance Spot Quote</small></article>
-          <article><span>Market Breadth</span><strong>{gainers.toLocaleString('en-US')} / {losers.toLocaleString('en-US')}</strong><small className={top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
+          <article><span>Tracked Markets</span><strong>{marketReadSucceeded ? markets.length.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'USDT Universe' : 'Awaiting source read'}</small></article>
+          <article><span>Spot + Perp</span><strong>{marketReadSucceeded ? pairedCount.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? `${executableCount.toLocaleString('en-US')} Executable Books` : 'Awaiting source read'}</small></article>
+          <article><span>24h Volume</span><strong>{marketReadSucceeded ? fmtMoney(totalVolume) : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'Binance Spot Quote' : 'Awaiting source read'}</small></article>
+          <article><span>Market Breadth</span><strong>{marketReadSucceeded ? `${gainers.toLocaleString('en-US')} / ${losers.toLocaleString('en-US')}` : 'UNKNOWN'}</strong><small className={!marketReadSucceeded || top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{!marketReadSucceeded ? 'Awaiting source read' : top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
         </div>
 
         <ProductSurfaceAdapter surfaceId="markets" />
@@ -398,7 +416,7 @@ export function Markets() {
             <PillSelect value={String(pageSize)} options={[25, 50, 100].map((count) => ({ id: String(count), label: `${count} Rows` }))} onChange={(value) => setPageSize(Number(value))} ariaLabel="Rows Per Page" testId="markets-page-size" />
             {filtersActive && <button type="button" className="mkx-reset" onClick={() => { setFilter('all'); setSearch(''); }}>Reset</button>}
           </div>
-          <span>{rows.length.toLocaleString('en-US')} Markets · {visibleStart}-{visibleEnd}</span>
+          <span>{marketReadSucceeded ? `${rows.length.toLocaleString('en-US')} Markets · ${visibleStart}-${visibleEnd}` : 'UNKNOWN Markets'}</span>
         </div>
 
         <div className="mkx-table-wrap">
@@ -426,7 +444,8 @@ export function Markets() {
               })}
             </tbody>
           </table>
-          {rows.length === 0 && <EmptyState title="No Markets Found">{filter === 'watchlist' ? 'Star markets to build the watchlist.' : 'Change the filter or search.'}</EmptyState>}
+          {!marketReadSucceeded && <EmptyState title={marketStatus === 'LOADING' ? 'Markets Loading' : 'Markets Unavailable'}>No market summary is asserted until a source read succeeds.</EmptyState>}
+          {marketReadSucceeded && rows.length === 0 && <EmptyState title="No Markets Found">{filter === 'watchlist' ? 'Star markets to build the watchlist.' : 'Change the filter or search.'}</EmptyState>}
         </div>
 
         <footer className="mkx-footer">

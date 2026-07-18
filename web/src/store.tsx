@@ -69,6 +69,26 @@ export function reduceCompatibilityStateTruth(
   });
 }
 
+export type MarketStateTruth = CompatibilityStateTruth;
+export type MarketStateTruthEvent = CompatibilityStateTruthEvent;
+
+export const INITIAL_MARKET_STATE_TRUTH: MarketStateTruth = Object.freeze({
+  status: 'LOADING',
+  lastSuccessAtMs: null,
+  error: null,
+});
+
+export function reduceMarketStateTruth(
+  current: Readonly<MarketStateTruth>,
+  event: Readonly<MarketStateTruthEvent>,
+): MarketStateTruth {
+  const reduced = reduceCompatibilityStateTruth(current, event);
+  if (event.kind === 'FAILURE' && reduced.error === 'Compatibility state refresh failed.') {
+    return Object.freeze({ ...reduced, error: 'Market refresh failed.' });
+  }
+  return reduced;
+}
+
 export type MarketFreshnessStatus = 'ERROR' | 'UNKNOWN' | 'DISCONNECTED' | 'LIVE' | 'STALE';
 
 export type MarketFreshnessTruth = Readonly<{
@@ -139,6 +159,8 @@ interface Store {
   stateLastSuccessAtMs: number | null;
   stateError: string | null;
   markets: MarketRow[];
+  marketStatus: CompatibilityStateStatus;
+  marketsLastSuccessAtMs: number | null;
   marketsUpdatedAt: number | null;
   marketsError: string | null;
   mutationError: ApiFailure | null;
@@ -377,6 +399,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     INITIAL_COMPATIBILITY_STATE_TRUTH,
   );
   const [markets, setMarkets] = useState<MarketRow[]>([]);
+  const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
   const [marketsError, setMarketsError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<ApiFailure | null>(null);
@@ -631,8 +654,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setMarkets(payload.rows);
           setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
           setMarketsError(null);
+          setMarketTruth((current) => reduceMarketStateTruth(current, {
+            kind: 'SUCCESS',
+            observedAtMs: Date.now(),
+          }));
       },
-      onError: () => setMarketsError('market refresh failed'),
+      onError: (cause) => {
+        const error = mutationFailure(cause).message || 'Market refresh failed.';
+        setMarketsError(error);
+        setMarketTruth((current) => reduceMarketStateTruth(current, {
+          kind: 'FAILURE',
+          observedAtMs: Date.now(),
+          error,
+        }));
+      },
     });
     poll.start();
     return poll.stop;
@@ -685,13 +720,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     try {
       const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
-      if (Array.isArray(payload.rows)) {
-        setMarkets(payload.rows);
-        setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
-        setMarketsError(null);
-      }
-    } catch {
+      if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
+      setMarkets(payload.rows);
+      setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
+      setMarketsError(null);
+      setMarketTruth((current) => reduceMarketStateTruth(current, {
+        kind: 'SUCCESS',
+        observedAtMs: Date.now(),
+      }));
+    } catch (cause) {
       issues.push('Market refresh failed');
+      const error = mutationFailure(cause).message || 'Market refresh failed.';
+      setMarketsError(error);
+      setMarketTruth((current) => reduceMarketStateTruth(current, {
+        kind: 'FAILURE',
+        observedAtMs: Date.now(),
+        error,
+      }));
     }
     // Rebuild only the browser's cockpit socket, then re-attach any active
     // token-book subscription. No server runtime is restarted here.
@@ -711,6 +756,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
     markets,
+    marketStatus: marketTruth.status,
+    marketsLastSuccessAtMs: marketTruth.lastSuccessAtMs,
     marketsUpdatedAt,
     marketsError,
     mutationError,

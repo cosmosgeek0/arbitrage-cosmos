@@ -48,6 +48,12 @@ export interface ProductionStrategySnapshot {
   readonly lastTickTs: number | null;
   readonly decisions: readonly Readonly<Decision>[];
   readonly proposals: readonly Readonly<EngineProposal>[];
+  /** Exact strategy-owner counts; integration must not recount raw records. */
+  readonly ownerSummary: Readonly<{
+    readonly candidateCount: number;
+    readonly opportunityCount: number;
+    readonly cooldownCount: number;
+  }>;
 }
 
 export interface ProductionBasisConnectionStatus {

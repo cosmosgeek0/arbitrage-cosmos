@@ -262,6 +262,9 @@ section('6. stale data ⇒ data_stale, then cooldown suppresses the symbol');
   const r3 = h.run([{ atMs: T0 + 14_000, events: [] }]);
   check('cooldown: symbol skipped next tick', r3.decisions.length === 0);
   check('lifecycle state is COOLDOWN', h.engine.lifecycle.get(SYM).state === 'COOLDOWN');
+  check('owner summary counts the active cooldown', h.engine.lifecycle.activeCooldownCount() === 1);
+  h.clock.advance(BASIS_DEFAULTS.cooldownMs);
+  check('owner summary excludes an expired cooldown without requiring another tick', h.engine.lifecycle.activeCooldownCount() === 0);
 }
 
 // =====================================================================

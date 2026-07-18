@@ -62,6 +62,7 @@ import type {
   IntelligenceBridgeOptions,
   IntelligenceBridgeSnapshot,
   InstrumentQualityOverride,
+  AttentionFocusCountSummary,
   OperatorFocusPinReadback,
   PublicAttentionProjection,
 } from './types.js';
@@ -374,6 +375,23 @@ export class IntelligenceRuntimeBridge {
 
   operatorFocusPins(): readonly string[] {
     return Object.freeze([...this.#operatorFocusPins].sort(codePointCompare));
+  }
+
+  /**
+   * Exact summary owned by the canonical attention plan. Consumers project
+   * these values verbatim and must not infer focus from hints or raw rows.
+   */
+  attentionFocusSummary(): Readonly<AttentionFocusCountSummary> | null {
+    const plan = this.#attentionPlan;
+    if (plan === null) return null;
+    const focusRequestedCount = plan.allocations.filter(
+      (allocation) => allocation.desiredTier === 'FOCUS' || allocation.desiredTier === 'DEEP_FOCUS',
+    ).length;
+    return deepFreeze({
+      focusRequestedCount,
+      focusActiveCount: plan.tierCounts.FOCUS + plan.tierCounts.DEEP_FOCUS,
+      observedAtMs: plan.atMs,
+    });
   }
 
   restoreOperatorFocusPins(symbols: readonly string[]): boolean {

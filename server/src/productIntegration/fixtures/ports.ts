@@ -317,13 +317,13 @@ function validDashboardSummaries(value: unknown): boolean {
   const summaryKeys: Record<string, readonly string[]> = {
     sourceCoverage: ['truthLabel', 'universeSymbols', 'spotCoveredSymbols', 'usdMCoveredSymbols', 'quietSymbolsRetained', 'materialGapCount', 'rateLimitedSourceCount', 'lastMaterialGapAtMs'],
     intelligence: ['truthLabel', 'evidenceCount', 'attentionCount', 'focusRequestedCount', 'focusActiveCount', 'thesisCount', 'insufficientEvidenceCount', 'lastUpdateAtMs'],
-    capital: ['truthLabel', 'accountTruthState', 'allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'checkpointRevision', 'blockerCodes'],
+    capital: ['truthLabel', 'accountTruthState', 'allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'recoveryCount', 'checkpointRevision', 'blockerCodes'],
     risk: ['truthLabel', 'latestVerdict', 'latestVerdictAtMs', 'latestVerdictId', 'correlationId', 'maxAllowedSize', 'requiredConfirmation', 'decisiveInputSnapshot', 'rejectionCount', 'reasonCodes'],
     execution: ['truthLabel', 'mode', 'barrier', 'planId', 'planLifecycle', 'coordinatorState', 'legCount', 'recoveryState', 'lastTransitionAtMs'],
     reconciliation: ['truthLabel', 'status', 'blocksNewExposure', 'recommendation', 'checkpointId', 'evaluatedAtMs', 'reasonCodes'],
     ledger: ['truthLabel', 'writable', 'lastEventId', 'lastPersistedAtMs', 'checkpointRevision', 'recentTraceCount', 'lastCleanShutdownAtMs'],
   };
-  const strategyKeys = ['truthLabel', 'heartbeatAtMs', 'candidateCount', 'proposalCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs', 'sourceRevision'];
+  const strategyKeys = ['truthLabel', 'heartbeatAtMs', 'candidateCount', 'proposalCount', 'cooldownCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs', 'sourceRevision'];
   const risk = value.risk;
   const validRiskShape = exactRecord(risk, summaryKeys.risk)
     && typeof risk.latestVerdict === 'string'

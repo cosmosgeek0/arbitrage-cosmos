@@ -71,6 +71,7 @@ export interface SystemStrategyRuntimeSummary {
   readonly heartbeatAtMs: number | null;
   readonly candidateCount: number | null;
   readonly proposalCount: number | null;
+  readonly cooldownCount: number | null;
   readonly rejectionCount: number | null;
   readonly acceptedCount: number | null;
   readonly lastDecisionAtMs: number | null;
@@ -103,6 +104,7 @@ export interface SystemCapitalSummary {
   readonly reservationCount: number | null;
   readonly stagedMandateCount: number | null;
   readonly activeExposureCount: number | null;
+  readonly recoveryCount: number | null;
   readonly checkpointRevision: string | null;
   readonly blockerCodes: readonly string[];
 }

@@ -250,6 +250,7 @@ function validateStrategy(name: string, summary: SystemStrategyRuntimeSummary): 
   optionalTimestamp(`${name}.lastDecisionAtMs`, summary.lastDecisionAtMs);
   nonNegativeCount(`${name}.candidateCount`, summary.candidateCount);
   nonNegativeCount(`${name}.proposalCount`, summary.proposalCount);
+  nonNegativeCount(`${name}.cooldownCount`, summary.cooldownCount);
   nonNegativeCount(`${name}.rejectionCount`, summary.rejectionCount);
   nonNegativeCount(`${name}.acceptedCount`, summary.acceptedCount);
   optionalString(`${name}.sourceRevision`, summary.sourceRevision, 256);
@@ -297,6 +298,7 @@ function validateSummaries(summaries: SystemSupervisorSummaries): void {
   nonNegativeCount('capital.reservationCount', capital.reservationCount);
   nonNegativeCount('capital.stagedMandateCount', capital.stagedMandateCount);
   nonNegativeCount('capital.activeExposureCount', capital.activeExposureCount);
+  nonNegativeCount('capital.recoveryCount', capital.recoveryCount);
   optionalString('capital.checkpointRevision', capital.checkpointRevision, 256);
   codes('capital.blockerCodes', capital.blockerCodes);
 

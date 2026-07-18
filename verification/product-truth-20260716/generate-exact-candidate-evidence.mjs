@@ -2,14 +2,21 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   CAMPAIGN_BRANCH,
   C9_CORRECTION_GRANTS,
   D_LAUNCH_65_AUTHORITY,
+  EXACT_C9_CANDIDATE,
+  EXACT_C9_TREE,
+  EXACT_EVIDENCE_DESCENDANT_FILES,
   EXACT_EVIDENCE_OUTPUTS,
+  EXACT_EVIDENCE_PROOF_REFERENCES,
+  EXACT_EVIDENCE_TOOLING_FILES,
   EXTERNAL_INPUT_SPECS,
+  HUMAN_EVIDENCE_ARTIFACT_SPECS,
   LOCK_INVENTORY_MATRIX_REQUIREMENT_ID,
   PREDECESSOR_CANDIDATE,
   PREDECESSOR_TREE,
@@ -19,11 +26,16 @@ import {
   REJECTED_SELECTION_HISTORY,
   REQUIRED_C2_PARENT,
   REQUIRED_MATRIX_COUNTS,
+  SAME_TREE_LANDING_COMMIT,
+  SEALED_C9_EVIDENCE_COMMIT,
+  SEALED_C9_EVIDENCE_TREE,
   VFINAL5_AUTHORITY,
   WAVE_ARCHIVE_ORIGINS,
 } from './campaign-input-registry.mjs';
+import { renderCanonicalHumanArtifact } from './human-evidence-renderer.mjs';
 
 const repo = process.cwd();
+const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const rootRelative = 'verification/product-truth-20260716';
 const root = resolve(repo, rootRelative);
 const candidateArg = process.argv.indexOf('--candidate');
@@ -84,7 +96,14 @@ const FRONTIER_REFERENCE_COMMITS = Object.freeze([
 
 function fail(message) { throw new Error(message); }
 function assert(condition, message) { if (!condition) fail(message); }
+assert(resolve(scriptRoot) === root, 'GENERATOR_MUST_RUN_FROM_TARGET_REPOSITORY_TOOLING');
 function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
+function gitBlobOid(bytes) {
+  return createHash('sha1')
+    .update(Buffer.from(`blob ${bytes.length}\0`, 'utf8'))
+    .update(bytes)
+    .digest('hex');
+}
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -115,11 +134,53 @@ function candidateBytes(path) { return gitBytes('show', `${candidate}:${path}`);
 function candidateText(path) { return candidateBytes(path).toString('utf8'); }
 function candidateJson(path) { return JSON.parse(candidateText(path)); }
 function candidateBlob(path) { return gitText('rev-parse', `${candidate}:${path}`); }
+function sealedEvidenceBytes(path) {
+  return gitBytes('show', `${SEALED_C9_EVIDENCE_COMMIT}:${campaignPath(path)}`);
+}
+function sealedEvidenceText(path) { return sealedEvidenceBytes(path).toString('utf8'); }
+function sealedEvidenceJson(path) { return JSON.parse(sealedEvidenceText(path)); }
 function writeJson(name, value) {
   writeFileSync(resolve(root, name), `${JSON.stringify(value, null, 2)}\n`);
 }
 function readJson(name) { return JSON.parse(readFileSync(resolve(root, name), 'utf8')); }
 function campaignPath(name) { return `${rootRelative}/${name}`; }
+
+function toolingBinding(name) {
+  const bytes = readFileSync(resolve(root, name));
+  return {
+    path: name,
+    sha256: sha256(bytes),
+    git_blob: gitBlobOid(bytes),
+    byte_length: bytes.length,
+  };
+}
+
+function verifiedProofReference(reference) {
+  assert(/^[A-Z0-9_]+$/u.test(reference.proof_reference_id), `PROOF_REFERENCE_ID_INVALID:${reference.proof_reference_id}`);
+  assert(gitText('rev-parse', `${reference.commit}^{commit}`) === reference.commit, `PROOF_REFERENCE_COMMIT:${reference.proof_reference_id}`);
+  const bytes = gitBytes('show', `${reference.commit}:${reference.path}`);
+  assert(candidateBlobFor(reference.commit, reference.path) === reference.git_blob, `PROOF_REFERENCE_BLOB:${reference.proof_reference_id}`);
+  assert(sha256(bytes) === reference.sha256, `PROOF_REFERENCE_SHA256:${reference.proof_reference_id}`);
+  assert(bytes.length === reference.byte_length, `PROOF_REFERENCE_LENGTH:${reference.proof_reference_id}`);
+  const text = bytes.toString('utf8');
+  for (const symbol of reference.required_symbols) {
+    assert(text.includes(symbol), `PROOF_REFERENCE_SYMBOL:${reference.proof_reference_id}:${symbol}`);
+  }
+  return {
+    proof_reference_id: reference.proof_reference_id,
+    source_commit: reference.commit,
+    source_path: reference.path,
+    source_git_blob: reference.git_blob,
+    source_sha256: reference.sha256,
+    source_byte_length: reference.byte_length,
+    required_symbols: [...reference.required_symbols],
+    validation: 'GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED',
+  };
+}
+
+function candidateBlobFor(ref, relativePath) {
+  return gitText('rev-parse', `${ref}:${relativePath}`);
+}
 
 function treeBlobMap(ref) {
   const records = gitBytes('ls-tree', '-r', '-z', ref).toString('utf8').split('\0').filter(Boolean);
@@ -242,7 +303,7 @@ function normalizeExactMatrixText(value) {
 }
 
 function generateMatrix(name, expectedCount, candidateColumn, idColumns, allInputIds, rowOverrides = new Map()) {
-  const rows = parseCsv(candidateText(campaignPath(name)));
+  const rows = parseCsv(sealedEvidenceText(name));
   assert(rows.length === expectedCount + 1, `${name}_ROW_COUNT:${rows.length - 1}`);
   const header = rows[0];
   const candidateIndex = header.indexOf(candidateColumn);
@@ -291,11 +352,22 @@ function generateMatrix(name, expectedCount, candidateColumn, idColumns, allInpu
 
 function registrySelfTest() {
   assert(REQUIRED_C2_PARENT === requiredParent, 'SELF_TEST_PARENT_DRIFT');
+  assert(EXACT_C9_CANDIDATE.length === 40 && EXACT_C9_TREE.length === 40, 'SELF_TEST_C9_IDENTITY');
+  assert(EXACT_EVIDENCE_OUTPUTS.length === 21, 'SELF_TEST_OUTPUT_COUNT');
+  assert(EXACT_EVIDENCE_TOOLING_FILES.length === 5, 'SELF_TEST_TOOLING_COUNT');
+  assert(EXACT_EVIDENCE_DESCENDANT_FILES.length === 26, 'SELF_TEST_DESCENDANT_PATH_COUNT');
+  assert(new Set(EXACT_EVIDENCE_DESCENDANT_FILES).size === 26, 'SELF_TEST_DESCENDANT_PATH_DUPLICATE');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.length === 6, 'SELF_TEST_HUMAN_ARTIFACT_COUNT');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => /^[a-f0-9]{64}$/u.test(row.sha256)), 'SELF_TEST_HUMAN_ARTIFACT_SHA256');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => /^[a-f0-9]{40}$/u.test(row.git_blob)), 'SELF_TEST_HUMAN_ARTIFACT_GIT_BLOB');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => Number.isSafeInteger(row.byte_length) && row.byte_length > 0), 'SELF_TEST_HUMAN_ARTIFACT_LENGTH');
+  assert(new Set(EXACT_EVIDENCE_PROOF_REFERENCES.map((row) => row.proof_reference_id)).size
+    === EXACT_EVIDENCE_PROOF_REFERENCES.length, 'SELF_TEST_PROOF_REFERENCE_IDS');
   assert(EXTERNAL_INPUT_SPECS.length === 23, 'SELF_TEST_EXTERNAL_COUNT');
   assert(new Set(EXTERNAL_INPUT_SPECS.map((row) => row.inputId)).size === 23, 'SELF_TEST_EXTERNAL_IDS');
   assert(Object.values(REQUIRED_MATRIX_COUNTS).slice(0, 3).reduce((sum, count) => sum + count, 0) === 354, 'SELF_TEST_MATRIX_TOTAL');
   assert(D_LAUNCH_65_AUTHORITY.commit.length === 40, 'SELF_TEST_D65');
-  process.stdout.write(`${JSON.stringify({ self_test: true, external_inputs: 23, locked_inputs: 61, matrix_cells: 354 })}\n`);
+  process.stdout.write(`${JSON.stringify({ self_test: true, external_inputs: 23, locked_inputs: 61, matrix_cells: 354, generated_outputs: 21, bound_tooling_files: 5, exact_descendant_paths: 26, human_artifacts: 6 })}\n`);
 }
 
 if (selfTest) {
@@ -306,19 +378,36 @@ if (selfTest) {
 assert(/^[a-f0-9]{40}$/u.test(candidate ?? ''), 'EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(requiredParent ?? ''), 'EXACT_FULL_REQUIRED_PARENT_SHA_REQUIRED');
 assert(requiredParent === REQUIRED_C2_PARENT, 'IMMUTABLE_C2_PARENT_MISMATCH');
+assert(candidate === EXACT_C9_CANDIDATE, `EXACT_C9_CANDIDATE_REQUIRED:${candidate}`);
 assert(!REJECTED_CANDIDATE_SHAS.includes(candidate), `REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidate}`);
 assert(gitText('rev-parse', `${candidate}^{commit}`) === candidate, 'CANDIDATE_COMMIT_MISSING');
 const parents = gitText('show', '-s', '--format=%P', candidate).split(/\s+/u).filter(Boolean);
 assert(parents.length === 1, `CANDIDATE_PARENT_COUNT:${parents.length}`);
 assert(parents[0] === requiredParent, `CANDIDATE_DIRECT_PARENT:${parents[0]}`);
 const candidateTree = gitText('rev-parse', `${candidate}^{tree}`);
+assert(candidateTree === EXACT_C9_TREE, `EXACT_C9_TREE_MISMATCH:${candidateTree}`);
+assert(gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}^{commit}`) === SEALED_C9_EVIDENCE_COMMIT, 'SEALED_C9_EVIDENCE_COMMIT_MISSING');
+assert(gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}^{tree}`) === SEALED_C9_EVIDENCE_TREE, 'SEALED_C9_EVIDENCE_TREE_MISMATCH');
+assert(gitText('rev-parse', `${SAME_TREE_LANDING_COMMIT}^{tree}`) === EXACT_C9_TREE, 'SAME_TREE_LANDING_TREE_MISMATCH');
 const candidateTreeBlobs = treeBlobMap(candidate);
 const candidateRootState = candidateText('STATE.md');
 assert(candidateRootState.includes('| Account A correction candidate C9 |'), 'C9_SOURCE_STATE_MARKER_MISSING');
+const exactProofReferences = EXACT_EVIDENCE_PROOF_REFERENCES.map(verifiedProofReference);
+assert(new Set(exactProofReferences.map((row) => row.proof_reference_id)).size === exactProofReferences.length, 'PROOF_REFERENCE_ID_DUPLICATE');
+const exactToolingBindings = EXACT_EVIDENCE_TOOLING_FILES.map(toolingBinding);
+assert(new Set(exactToolingBindings.map((row) => row.path)).size === EXACT_EVIDENCE_TOOLING_FILES.length, 'TOOLING_BINDING_PATH_DUPLICATE');
+const exactToolingBundleSha256 = sha256(Buffer.from(canonicalJson(exactToolingBindings), 'utf8'));
 
-// The census must observe a clean custody bridge before any other evidence file is changed.
-run(process.execPath, [resolve(root, 'generate-worktree-census.mjs'), candidate]);
-const exactCensus = readJson('WORKTREE_CENSUS.json');
+// C9 is historical and immutable. Refresh only from the sealed C9 machine artifacts;
+// never recensus the mutable live workstation while rebuilding this evidence package.
+const exactCensus = sealedEvidenceJson('WORKTREE_CENSUS.json');
+assert(exactCensus.candidate_sha === candidate, 'SEALED_CENSUS_CANDIDATE');
+assert(exactCensus.candidate_tree_sha === candidateTree, 'SEALED_CENSUS_TREE');
+const exactCensusTruthA = exactCensus.rows.find((row) => row.worktree_name === 'truth-a');
+assert(exactCensusTruthA, 'SEALED_CENSUS_TRUTH_A_MISSING');
+exactCensusTruthA.exact_candidate_custody_normalization =
+  'SEALED_HEAD_WAS_EXACT_CANDIDATE_OR_EXACT_15_PATH_EVIDENCE_DESCENDANT; V4_DESCENDANT_ALLOWLIST_IS_EXACT_21_GENERATED_PLUS_5_BOUND_TOOLING_WITHOUT_LIVE_RECENSUS';
+writeJson('WORKTREE_CENSUS.json', exactCensus);
 
 const seedLock = candidateJson(campaignPath('INPUTS.lock'));
 const sourcePayloadMetadata = candidateJson(campaignPath('LOCKED_INPUT_PAYLOADS.json'));
@@ -536,7 +625,7 @@ const candidateAbsenceAndExclusionProofs = {
   }),
 };
 
-const proofSeed = candidateJson(campaignPath('C2_PROOF_BINDING.json'));
+const proofSeed = sealedEvidenceJson('C2_PROOF_BINDING.json');
 const proof = {
   ...proofSeed,
   schema: 'product-truth-c9-proof-binding.v2',
@@ -564,31 +653,7 @@ const proof = {
 };
 writeJson('C2_PROOF_BINDING.json', proof);
 
-writeJson('EVIDENCE_SELECTION.json', {
-  schema: 'product-truth-c9-evidence-selection.v2',
-  source_candidate: candidate,
-  source_candidate_tree: candidateTree,
-  source_candidate_parent: requiredParent,
-  source_candidate_branch: CAMPAIGN_BRANCH,
-  candidate_embedded_package: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
-  selection_rule: 'Select only this exact C9 candidate and an evidence descendant whose post-C9 diff equals the exact generated-output allowlist and whose manifest verifies byte-for-byte.',
-  valid_chain: 'C2 -> C9; custody bridge/evidence descendants may follow but cannot alter C9',
-  post_candidate_path_allowlist: EXACT_EVIDENCE_OUTPUTS.map((name) => campaignPath(name)),
-  required_binding: 'MANIFEST.json plus MANIFEST.sha256',
-  final_verifier_handoff: 'READY_FOR_FRESH_FINAL_VERIFIER_AFTER_BASELINE_GATE',
-  rejected_candidate_history: REJECTED_SELECTION_HISTORY,
-  prior_candidate_sha: REJECTED_C8_CANDIDATE,
-  prior_candidate_tree: REJECTED_C8_TREE,
-  prior_candidate_disposition: 'C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT',
-  c7_candidate_sha: 'a283eb859ec1142aadecbd64e0b84959535f6216',
-  c7_candidate_disposition: 'C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT',
-  c6_candidate_sha: '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
-  c6_candidate_disposition: 'C6_REJECTED_BY_CANONICAL_SECURITY_GATE',
-  vfinal5_candidate_sha: VFINAL5_AUTHORITY.candidate,
-  vfinal5_candidate_disposition: 'C5_REJECTED_BY_VFINAL5',
-});
-
-const provenanceSeed = candidateJson(campaignPath('MERGE_PROVENANCE.json'));
+const provenanceSeed = sealedEvidenceJson('MERGE_PROVENANCE.json');
 const provenance = replaceExact(provenanceSeed);
 provenance.schema = 'product-truth-merge-provenance.v3';
 provenance.candidate_sha = candidate;
@@ -730,7 +795,7 @@ const directiveOverrides = new Map([
     disposition: 'Exact C9 census is candidate-bound; no historical census is relabeled',
   }],
   ['CAMP-07-PASS0', {
-    runtime_evidence: 'C9 correction source frozen directly on immutable C2; exact output-only evidence regenerated',
+    runtime_evidence: 'C9 correction source frozen directly on immutable C2; exact self-contained evidence descendant regenerated from its committed tooling',
     status: 'INTEGRATED',
     blocker: 'NONE',
     disposition: 'C9 is immutable; any later source correction is C10',
@@ -797,14 +862,15 @@ provenance.receipt = {
 writeJson('MERGE_PROVENANCE.json', provenance);
 
 for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', 'PRODUCT_ASSURANCE_C2_DISPOSITION.json']) {
-  const value = replaceExact(candidateJson(campaignPath(name)));
+  const value = replaceExact(sealedEvidenceJson(name));
   value.candidate_sha = candidate;
   value.candidate_tree = candidateTree;
   value.candidate_parent = requiredParent;
   value.binding = 'EXACT_CANDIDATE';
   if (name === 'AI_OPS_C2_DISPOSITION.json') {
     value.schema = 'ai-ops-c9-acceptance-disposition.v2';
-    value.c9_baseline_acceptance = value.c2_baseline_acceptance?.replaceAll('C2', 'C9');
+    value.c9_baseline_acceptance = value.c9_baseline_acceptance
+      ?? value.c2_baseline_acceptance?.replaceAll('C2', 'C9');
     delete value.c2_baseline_acceptance;
   } else if (name === 'INDEPENDENT_FINDINGS.json') {
     value.schema = 'product-truth-c9-independent-findings.v3';
@@ -819,7 +885,7 @@ for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', '
     value.schema = 'product-assurance-c9-disposition.v2';
     for (const artifact of value.artifacts ?? []) {
       artifact.prior_generator_artifact = String(artifact.prior_generator_artifact).replaceAll('C2', 'C9');
-      artifact.c9_disposition = artifact.c2_disposition;
+      artifact.c9_disposition = artifact.c9_disposition ?? artifact.c2_disposition;
       delete artifact.c2_disposition;
       artifact.reason = 'FRESH_FINAL_VERIFIER_PENDING_EXACT_C9_PRODUCT_ASSURANCE_CLOSURE_NOT_CLAIMED';
     }
@@ -827,9 +893,93 @@ for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', '
   writeJson(name, value);
 }
 
-writeFileSync(resolve(root, 'STATE.md'), `# Product-truth campaign state\n\n- Exact frozen candidate: \`${candidate}\`\n- Candidate tree: \`${candidateTree}\`\n- Sole direct parent: \`${requiredParent}\`\n- Candidate topology: **PASS** (C9^ == immutable C2; parent count 1)\n- Locked inputs: **61/61** have explicit source, disposition, and matrix linkage.\n- External inputs: **23/23** have candidate-tracked payload bytes that a single-branch clone can independently rehash.\n- Matrix binding: **354/354** candidate cells (153 directive + 23 capability + 178 cockpit) name exact C9.\n- Payload metadata: exact-bound inventory checksum and payload-set checksum independently reverify.\n- Provenance: all lane match counts, candidate blobs, aggregate mismatches, and landed-core adaptation rows are remeasured from exact C9.\n- Census contract: **96 live + 5 REMOVED_SAFE tombstones = 101 durable entries**.\n- D-LAUNCH-65 is byte-bound in \`INPUTS.lock\`; ambient \`current-main\` is not evidence.\n- WATCHMAN law: local refresh action state cannot supersede canonical health.\n- Execution authority: none; \`LIVE_EXECUTION_NOT_IMPLEMENTED\` remains enforced.\n- Final independent verdict: pending fresh verifier.\n`);
+const humanArtifacts = HUMAN_EVIDENCE_ARTIFACT_SPECS.map((spec) => {
+  const rendered = renderCanonicalHumanArtifact({
+    spec,
+    proofReferences: exactProofReferences,
+    candidateSha: candidate,
+    candidateTree,
+    candidateParent: requiredParent,
+    candidateCommitTime,
+  });
+  const bytes = Buffer.from(rendered, 'utf8');
+  assert(sha256(bytes) === spec.sha256, `HUMAN_ARTIFACT_CANONICAL_SHA256:${spec.path}`);
+  assert(gitBlobOid(bytes) === spec.git_blob, `HUMAN_ARTIFACT_CANONICAL_GIT_BLOB:${spec.path}`);
+  assert(bytes.length === spec.byte_length, `HUMAN_ARTIFACT_CANONICAL_LENGTH:${spec.path}`);
+  writeFileSync(resolve(root, spec.path), bytes);
+  return {
+    schema: 'product-truth-human-evidence-artifact.v1',
+    selection_id: spec.selection_id,
+    path: spec.path,
+    candidate_sha: candidate,
+    candidate_tree: candidateTree,
+    candidate_parent: requiredParent,
+    state: spec.state,
+    actor: spec.actor,
+    candidate_write_authority: spec.candidate_write_authority,
+    proof_reference_ids: [...spec.proof_reference_ids],
+    sha256: spec.sha256,
+    git_blob: spec.git_blob,
+    byte_length: spec.byte_length,
+    receipt: {
+      command_or_operator_action: 'DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS',
+      start_time_utc: candidateCommitTime,
+      end_time_utc: candidateCommitTime,
+      timestamp_basis: 'EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC',
+      artifact_generation_state: spec.state,
+      candidate_source_write_authority: false,
+      live_worktree_census_performed: false,
+    },
+  };
+});
 
-run(process.execPath, [resolve(root, 'generate-manifest.mjs'), '--candidate', candidate]);
+writeJson('EVIDENCE_SELECTION.json', {
+  schema: 'product-truth-c9-evidence-selection.v4',
+  binding: 'EXACT_CANDIDATE_GENERATED_ARTIFACTS_AND_SELF_CONTAINED_TOOLING',
+  source_candidate: candidate,
+  source_candidate_tree: candidateTree,
+  source_candidate_parent: requiredParent,
+  source_candidate_branch: CAMPAIGN_BRANCH,
+  sealed_machine_evidence_source: {
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    tree: SEALED_C9_EVIDENCE_TREE,
+    state: 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE',
+  },
+  same_tree_landing: {
+    commit: SAME_TREE_LANDING_COMMIT,
+    tree: EXACT_C9_TREE,
+    disposition: 'NOT_CANDIDATE_TRUTH_SAME_TREE_COMMIT_IDENTITY_IS_INSUFFICIENT',
+  },
+  candidate_embedded_package: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+  selection_rule: 'Select only the registry-bound exact C9 commit and a sole evidence descendant whose post-C9 diff equals 21 generated artifacts plus the exact five-file executable tooling package; generation and verification must run from that descendant tooling.',
+  valid_chain: 'C2 -> exact C9 -> sole self-contained evidence descendant; candidate source stays immutable',
+  post_candidate_path_allowlist: EXACT_EVIDENCE_DESCENDANT_FILES.map((name) => campaignPath(name)),
+  exact_generated_output_count: EXACT_EVIDENCE_OUTPUTS.length,
+  exact_generated_outputs: [...EXACT_EVIDENCE_OUTPUTS],
+  exact_tooling_file_count: EXACT_EVIDENCE_TOOLING_FILES.length,
+  exact_tooling_files: [...EXACT_EVIDENCE_TOOLING_FILES],
+  exact_descendant_path_count: EXACT_EVIDENCE_DESCENDANT_FILES.length,
+  tooling_bindings: exactToolingBindings,
+  tooling_bundle_sha256: exactToolingBundleSha256,
+  required_binding: 'product-truth-manifest.v4 plus MANIFEST.sha256 plus exact tooling bundle',
+  final_verifier_handoff: 'PENDING_FRESH_VERIFIER',
+  proof_references: exactProofReferences,
+  human_artifacts: humanArtifacts,
+  rejected_candidate_history: REJECTED_SELECTION_HISTORY,
+  prior_candidate_sha: REJECTED_C8_CANDIDATE,
+  prior_candidate_tree: REJECTED_C8_TREE,
+  prior_candidate_disposition: 'C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT',
+  c7_candidate_sha: 'a283eb859ec1142aadecbd64e0b84959535f6216',
+  c7_candidate_disposition: 'C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT',
+  c6_candidate_sha: '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
+  c6_candidate_disposition: 'C6_REJECTED_BY_CANONICAL_SECURITY_GATE',
+  vfinal5_candidate_sha: VFINAL5_AUTHORITY.candidate,
+  vfinal5_candidate_disposition: 'C5_REJECTED_BY_VFINAL5',
+});
+
+writeFileSync(resolve(root, 'STATE.md'), `# Product-truth campaign state\n\n- Exact frozen candidate: \`${candidate}\`\n- Candidate tree: \`${candidateTree}\`\n- Sole direct parent: \`${requiredParent}\`\n- Candidate topology: **PASS** (C9^ == immutable C2; parent count 1)\n- Locked inputs: **61/61** have explicit source, disposition, and matrix linkage.\n- External inputs: **23/23** have candidate-tracked payload bytes that a single-branch clone can independently rehash.\n- Matrix binding: **354/354** candidate cells (153 directive + 23 capability + 178 cockpit) name exact C9.\n- Evidence descendant: **21 generated artifacts + 5 executable tooling files = 26 exact paths**; generation and verification run only from the descendant's committed tooling.\n- Payload metadata: exact-bound inventory checksum and payload-set checksum independently reverify.\n- Provenance: all lane match counts, candidate blobs, aggregate mismatches, and landed-core adaptation rows are remeasured from exact C9.\n- Census contract: **96 live + 5 REMOVED_SAFE tombstones = 101 durable entries**.\n- D-LAUNCH-65 is byte-bound in \`INPUTS.lock\`; ambient \`current-main\` is not evidence.\n- WATCHMAN law: local refresh action state cannot supersede canonical health.\n- Execution authority: none; \`LIVE_EXECUTION_NOT_IMPLEMENTED\` remains enforced.\n- Final independent verdict: pending fresh verifier.\n`);
+
+run(process.execPath, [resolve(scriptRoot, 'generate-manifest.mjs'), '--candidate', candidate]);
 
 process.stdout.write(`${JSON.stringify({
   generated: true,
@@ -839,4 +989,8 @@ process.stdout.write(`${JSON.stringify({
   locked_inputs: inputs.length,
   external_payloads: externalInputs.length,
   matrix_candidate_cells: REQUIRED_MATRIX_COUNTS.total,
+  generated_outputs: EXACT_EVIDENCE_OUTPUTS.length,
+  bound_tooling_files: EXACT_EVIDENCE_TOOLING_FILES.length,
+  exact_descendant_paths: EXACT_EVIDENCE_DESCENDANT_FILES.length,
+  human_artifacts: humanArtifacts.length,
 })}\n`);

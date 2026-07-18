@@ -1,0 +1,446 @@
+{
+  "schema": "product-truth-manifest.v4",
+  "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+  "candidate_tree_sha": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+  "candidate_parent_sha": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "candidate_parent_count": 1,
+  "required_direct_parent_sha": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "scope": "verification/product-truth-20260716/** tracked files at generation time",
+  "exclusions": [
+    "MANIFEST.json",
+    "MANIFEST.sha256"
+  ],
+  "compatibility_manifest": "MANIFEST.sha256",
+  "exact_generated_output_count": 21,
+  "exact_generated_outputs": [
+    "AI_OPS_C2_DISPOSITION.json",
+    "AUTHORITY_RESOLUTION.md",
+    "C2_PROOF_BINDING.json",
+    "CAPABILITY_TRUTH_MATRIX.csv",
+    "CLEAN_CLONE_ACCEPTANCE.md",
+    "COCKPIT_BINDING_MATRIX.csv",
+    "COMPOSED_RUNTIME_RECEIPT.md",
+    "DIRECTIVE_COVERAGE_MATRIX.csv",
+    "EVIDENCE_SELECTION.json",
+    "FINAL_VERDICT.md",
+    "INDEPENDENT_FINDINGS.json",
+    "INPUTS.lock",
+    "LOCKED_INPUT_PAYLOADS.json",
+    "MANIFEST.json",
+    "MANIFEST.sha256",
+    "MERGE_PROVENANCE.json",
+    "PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+    "STAGING_OPERATIONAL_RECEIPT.md",
+    "STATE.md",
+    "UNMERGED_DELTA_REPORT.md",
+    "WORKTREE_CENSUS.json"
+  ],
+  "exact_tooling_file_count": 5,
+  "exact_tooling_files": [
+    "campaign-input-registry.mjs",
+    "generate-exact-candidate-evidence.mjs",
+    "generate-manifest.mjs",
+    "human-evidence-renderer.mjs",
+    "verify-exact-candidate-evidence.mjs"
+  ],
+  "exact_descendant_path_count": 26,
+  "exact_descendant_paths": [
+    "AI_OPS_C2_DISPOSITION.json",
+    "AUTHORITY_RESOLUTION.md",
+    "C2_PROOF_BINDING.json",
+    "CAPABILITY_TRUTH_MATRIX.csv",
+    "CLEAN_CLONE_ACCEPTANCE.md",
+    "COCKPIT_BINDING_MATRIX.csv",
+    "COMPOSED_RUNTIME_RECEIPT.md",
+    "DIRECTIVE_COVERAGE_MATRIX.csv",
+    "EVIDENCE_SELECTION.json",
+    "FINAL_VERDICT.md",
+    "INDEPENDENT_FINDINGS.json",
+    "INPUTS.lock",
+    "LOCKED_INPUT_PAYLOADS.json",
+    "MANIFEST.json",
+    "MANIFEST.sha256",
+    "MERGE_PROVENANCE.json",
+    "PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+    "STAGING_OPERATIONAL_RECEIPT.md",
+    "STATE.md",
+    "UNMERGED_DELTA_REPORT.md",
+    "WORKTREE_CENSUS.json",
+    "campaign-input-registry.mjs",
+    "generate-exact-candidate-evidence.mjs",
+    "generate-manifest.mjs",
+    "human-evidence-renderer.mjs",
+    "verify-exact-candidate-evidence.mjs"
+  ],
+  "tooling_bundle_sha256": "61be26553a0aac1a1d0ebb89cea1ec09bd30b64bb958c2ff4d78e67162ae025b",
+  "entry_count": 61,
+  "inventory_sha256": "bd280603d6bb15a26baa869fd2f6ec4fc9d1890b21d328c2e394485c299f43dd",
+  "entries": [
+    {
+      "path": "AI_OPS_C2_DISPOSITION.json",
+      "sha256": "504a44ff5cb271a808e6dda7d17a00bf0c92e5fd112cd38b254cba620ead9863",
+      "byte_length": 697,
+      "git_blob": "6c8c73e7bfd2eb02f53a37d4191a8b3baf5e11f2"
+    },
+    {
+      "path": "AUTHORITY_RESOLUTION.md",
+      "sha256": "fce15e57e2bda56c8992ed8fc5c1bbcd9598397e032037bb280b0615cf486e15",
+      "byte_length": 1861,
+      "git_blob": "f2efdcbc80c56812cdaba03fb04b547a73eb955b"
+    },
+    {
+      "path": "C2_PROOF_BINDING.json",
+      "sha256": "d158bc81615cd6cb87f73306b99728942baaccd13eafa673cdb024a11d256be6",
+      "byte_length": 7297,
+      "git_blob": "e11b280026bf72bd3163630e6996be2c614c000f"
+    },
+    {
+      "path": "CAPABILITY_TRUTH_MATRIX.csv",
+      "sha256": "3c6ead62687ded73f583bdd5e0ec79dbda06cf304511da21cc539ed2e20c2944",
+      "byte_length": 6455,
+      "git_blob": "266953b6a2a01d2939e77a47dfb2f1d71bdc94c6"
+    },
+    {
+      "path": "CLEAN_CLONE_ACCEPTANCE.md",
+      "sha256": "c02ba1c3834a8c427b22c4d62a4dd883b322742280f15f40d037b85e7eed1d71",
+      "byte_length": 1535,
+      "git_blob": "d25aeca6f6641cf970dc0c358d11fcc78f9d3ba3"
+    },
+    {
+      "path": "COCKPIT_BINDING_MATRIX.csv",
+      "sha256": "7cf343bcbc2fcb0d764b4d7130b935eaeaa703df49e676d3c3824bca3eadce5c",
+      "byte_length": 193954,
+      "git_blob": "27d9e4db00bcd752481a6b87e4f842083b8b379e"
+    },
+    {
+      "path": "COMPOSED_RUNTIME_RECEIPT.md",
+      "sha256": "542d1a7c980c91506c84cad742912a01afc1410f092726336dd756519224d1e0",
+      "byte_length": 1612,
+      "git_blob": "c0bdc25af0dc664221fba287fad60ac3291b5800"
+    },
+    {
+      "path": "DIRECTIVE_COVERAGE_MATRIX.csv",
+      "sha256": "b2eedb0471496c96fc6c9f4f107de85303031a11681749d90d16149372671aa8",
+      "byte_length": 113807,
+      "git_blob": "66ae1f76aaad934ef229ec6276ed9a46be57ba27"
+    },
+    {
+      "path": "D_LAUNCH_61_CUSTODY_RECEIPT.json",
+      "sha256": "cc7b8f022325b98df77a87648e2965c5de95547fe5bf9236b551c4fce364bea0",
+      "byte_length": 5814,
+      "git_blob": "67b80e1c96550f995f0a3808d67663d5c3dcff35"
+    },
+    {
+      "path": "EVIDENCE_SELECTION.json",
+      "sha256": "f2c5277d834e828040f577b6f4c1d73bdf93047949b856eff6c809de75142dc5",
+      "byte_length": 21409,
+      "git_blob": "cbccf054c03713171c73dd52ed85a1f9c5149906"
+    },
+    {
+      "path": "FINAL_VERDICT.md",
+      "sha256": "d44c5b2dbd44e26295b67c1c58b66b771ee558e103f346238cdc798325fe9b3f",
+      "byte_length": 3256,
+      "git_blob": "472658f3c3977f4a07b4b51d5f1eaed20ab270aa"
+    },
+    {
+      "path": "INDEPENDENT_FINDINGS.json",
+      "sha256": "17f5a99f433a81310ab5cadcdde06962c3eb2a80c4a5ec8fa271adf0b00b06a6",
+      "byte_length": 8465,
+      "git_blob": "53eb697f7ac9048c4679b39b4d125395d9656d0f"
+    },
+    {
+      "path": "INPUTS.lock",
+      "sha256": "f66f5021d13fc18b822d3d31f021c880ace0453f26ee7505361e507bccd107d8",
+      "byte_length": 67109,
+      "git_blob": "b64de79756b5f2d2a8df7e6b41344edc9d64cc29"
+    },
+    {
+      "path": "LOCKED_INPUT_PAYLOADS.json",
+      "sha256": "f7eddcc9180bd6333b1453370be99a12726b67f437ddf2bdb7be7e04ab1e9728",
+      "byte_length": 21336,
+      "git_blob": "6c768cef77f93cbfd5170b680a30ebf098f7666d"
+    },
+    {
+      "path": "MERGE_PROVENANCE.json",
+      "sha256": "9c4039e90424d92274e7f0a5cb990ce57fd21ed4d08801ba62d317debe0613b7",
+      "byte_length": 71232,
+      "git_blob": "751ce7a6e02f6895cdc3a99969914527dc72e7c4"
+    },
+    {
+      "path": "MONEY_PATH_AUTHORITY_EVIDENCE.json",
+      "sha256": "3d6f6510fd0e93b51cc89084ef65a87fe6115629258c3e7c8122d520bd85e7d2",
+      "byte_length": 5942,
+      "git_blob": "b480c13178bd5247475e40a323ff052acea0c2d7"
+    },
+    {
+      "path": "PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+      "sha256": "a02540e684a52f918e9896c0196d2e46b050d841612a1248a177edfe2a037654",
+      "byte_length": 4152,
+      "git_blob": "71720f5e2d43735b2125022c44a2973b65b86056"
+    },
+    {
+      "path": "ROLE3_C2_RECEIPT.md",
+      "sha256": "5d8c0ff9d80d6926a63dd0fac3070c4aabc240844c0ebf686e3ad1b672f79e2d",
+      "byte_length": 28079,
+      "git_blob": "eedc6699ee4f751cc3eb7ba807d07fe231d21b92"
+    },
+    {
+      "path": "STAGING_OPERATIONAL_RECEIPT.md",
+      "sha256": "d7bab7360c0f5dcae594875b118c34cd7c4ea62bd427dc3152acb151ea811144",
+      "byte_length": 1677,
+      "git_blob": "08bc75d86fb221851a07ece9f3a8684a194d0ee9"
+    },
+    {
+      "path": "STATE.md",
+      "sha256": "e1b055a195957435ea897fe1ffa36d0dc1196cbaefc3d76674efe234d3e91906",
+      "byte_length": 1396,
+      "git_blob": "c482d44bebf371489819b354254ffd3b03b34dab"
+    },
+    {
+      "path": "UNMERGED_DELTA_REPORT.md",
+      "sha256": "8681c89fb1301a413911a532cc1e6d577bdac418618fdaa28663d410a464d22f",
+      "byte_length": 1729,
+      "git_blob": "a907335807ace4241a1683a6990454583624dc2d"
+    },
+    {
+      "path": "WAVE1_FINDING_ADJUDICATION.json",
+      "sha256": "4921792ddcaef367e3eda1d89dac2abb91c0989dcb39eb2edd627ba93306164f",
+      "byte_length": 7500,
+      "git_blob": "636328334689473e410d46a631625953f94fdac3"
+    },
+    {
+      "path": "WORKTREE_CENSUS.json",
+      "sha256": "1d1b55fa936924f33118694e2174c0be9e76dcd1620af2f5debbafc4b95e4403",
+      "byte_length": 311343,
+      "git_blob": "44eaa8c9748ea18bf0fd09fb23352e2ee900a7f5"
+    },
+    {
+      "path": "campaign-input-registry.mjs",
+      "sha256": "433f57d42cda4222f0ff76c85d4950d821ffe24944110ac172530f62e10ba80e",
+      "byte_length": 20615,
+      "git_blob": "a28cc0fab91112a77816f2c659baf266e0cf7732"
+    },
+    {
+      "path": "generate-exact-candidate-evidence.mjs",
+      "sha256": "8f1014c9e32ce8e434defed88efee1bdfcbc3604e3a9f56c4089fe775f4247ec",
+      "byte_length": 47120,
+      "git_blob": "b458dfce36fa7731666291563157d24b6b5aa184"
+    },
+    {
+      "path": "generate-final-evidence.mjs",
+      "sha256": "69ed3a21b22fb82c6ac8ac89b63dbb4c892f6fecabe462e3a04861831e157bad",
+      "byte_length": 186,
+      "git_blob": "41ae69d7f5571d6dd8ee59ff27bba6c8fd24a084"
+    },
+    {
+      "path": "generate-manifest.mjs",
+      "sha256": "46c31ec5b2545a2533d8250f763e87e4745e4a360a8c28b6340f02ff4fd7cc93",
+      "byte_length": 15374,
+      "git_blob": "f4c41347dd16cffbc33c2ce5bdf10b165eb16ecb"
+    },
+    {
+      "path": "generate-wave1-evidence.mjs",
+      "sha256": "6f68a89028a7f843d20416524cbc07f94e371a08e6e3f501f22f8893ede054e6",
+      "byte_length": 182,
+      "git_blob": "7c9eb7f86e9abe2cf06fb4637c0a28dde99555b1"
+    },
+    {
+      "path": "generate-worktree-census.mjs",
+      "sha256": "7e847d912ada71de54faeea5c68052c1eb58ad36e78a167fc1bd211a096bcb8b",
+      "byte_length": 53881,
+      "git_blob": "d928a8a166dc2f2fcca23c2eb86d71b6e3c48c41"
+    },
+    {
+      "path": "human-evidence-renderer.mjs",
+      "sha256": "dd81b0f18c8f6998e3c47a2adc15037e54cc06cbc104d84d03c1573bea4cc9a4",
+      "byte_length": 4500,
+      "git_blob": "97691e1dbc0c1f77be252552808f41a53c1ec1f9"
+    },
+    {
+      "path": "locked-input-payloads/01-CAMPAIGN.md",
+      "sha256": "ae9638ba0b8539711d9dc67bab7ef0cd7b3539b0636fc5d78dd172a6c96c4d1b",
+      "byte_length": 33800,
+      "git_blob": "af3643bcff14dd216ebddb4728ebe528f813b5d3"
+    },
+    {
+      "path": "locked-input-payloads/02-SAFETY_AMENDMENT.txt",
+      "sha256": "45c83f3c7cd6b29ad86fcd33500d530da01ed2484610fed52f23b734d2e1fb61",
+      "byte_length": 9936,
+      "git_blob": "4499892e65143625dae622568528f59a64edd05d"
+    },
+    {
+      "path": "locked-input-payloads/03-ROLE_CORRECTION.TXT",
+      "sha256": "17eb023994a64b917afe6023886226d419dc070e093f5d49e234266c65b1eea5",
+      "byte_length": 2090,
+      "git_blob": "a24433aeb11581fd2c3ee1eac85d9aa7de2e6e5f"
+    },
+    {
+      "path": "locked-input-payloads/04-FRONTIER_ACCELERATION.md",
+      "sha256": "6abdfe61f3b6aea71cd9fc2cbe02e5d0d7be2deb38cf9e63d1910c9184d93ed4",
+      "byte_length": 12484,
+      "git_blob": "7c74bb2890fda78a39b058a5d9ffe94f57960032"
+    },
+    {
+      "path": "locked-input-payloads/05-Q_L_LAUNCH.md",
+      "sha256": "26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06",
+      "byte_length": 20763,
+      "git_blob": "587c1b83e8f9d32b9097d88df7fea40d9829b68e"
+    },
+    {
+      "path": "locked-input-payloads/06-Q_DIRECTIVE.md",
+      "sha256": "198f131d4b04c1edab728b85ea6a5e5c5f7f80875866e407a3c93a24aafa5ab4",
+      "byte_length": 71415,
+      "git_blob": "eebe7b0c751c065e06d0bf817b86c144541adff3"
+    },
+    {
+      "path": "locked-input-payloads/07-L_DIRECTIVE.md",
+      "sha256": "40de1feb6678d8741bd38f7538b2c6f25304c0f64195a596961fdb2539a3b037",
+      "byte_length": 73919,
+      "git_blob": "53fea2b71b06702b30527e807755a54683b2dbd2"
+    },
+    {
+      "path": "locked-input-payloads/08-I00.md",
+      "sha256": "9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5",
+      "byte_length": 76656,
+      "git_blob": "58e6fbfb1369b4721e0fcd2f94495221ec67f30d"
+    },
+    {
+      "path": "locked-input-payloads/09-IP_RUNTIME.md",
+      "sha256": "6e93016e3177db69a26844c12e6449d9afac1700e9946570a243051645565810",
+      "byte_length": 5490,
+      "git_blob": "430a2727e0e74712f6b67c2148961075e2fe86b8"
+    },
+    {
+      "path": "locked-input-payloads/10-IP_CONTROL.md",
+      "sha256": "5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278",
+      "byte_length": 4923,
+      "git_blob": "63df166f8d61fa3b84faf061e4c78dd9a31736c7"
+    },
+    {
+      "path": "locked-input-payloads/11-IP_OPS.md",
+      "sha256": "2af8348906f9306765a0d0d57f21b01349767e6115f04f43ce00fa6328f1b779",
+      "byte_length": 4280,
+      "git_blob": "a25cbd1d1a695296c635560c962840d579a16a04"
+    },
+    {
+      "path": "locked-input-payloads/12-IP_PROOF.md",
+      "sha256": "e59d516ba9acb9a7bb1ce63ca149ce662f308a0fd0900b72db3d2fe2e8bb93b6",
+      "byte_length": 5122,
+      "git_blob": "a72e951378584735655c7a1a2a625527dbfee1f8"
+    },
+    {
+      "path": "locked-input-payloads/13-POST_I00.md",
+      "sha256": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
+      "byte_length": 132787,
+      "git_blob": "38389c6de313dc26c50b6412be265114fa26f5ee"
+    },
+    {
+      "path": "locked-input-payloads/14-POST_I00_CORRECTION.txt",
+      "sha256": "4d938de306fb7577d8ff143677e30fb21fc3192da16d554c3a578b59566fb590",
+      "byte_length": 4979,
+      "git_blob": "7e88a64f01ffea31faf8e79e01acc22d674bacbb"
+    },
+    {
+      "path": "locked-input-payloads/15-FRONTIER.md",
+      "sha256": "4bb325b23c70e56103ee1553f0ea4396774ce0950d7abc9c73faa01f7006e1ad",
+      "byte_length": 83408,
+      "git_blob": "089a57473f26b1731e55b583c3e9152edc546c79"
+    },
+    {
+      "path": "locked-input-payloads/16-FRONTIER_WRAPPER.txt",
+      "sha256": "7adf1cd6f841c417ea71da5a29f438640622df2bad2b89c11461348484e2bec0",
+      "byte_length": 2316,
+      "git_blob": "c62dee720a57297138b5816463c9a8bf85120b5e"
+    },
+    {
+      "path": "locked-input-payloads/17-CAMPAIGN_BRIEFING.md",
+      "sha256": "d0741f52a87d6b422e5d2a9b6da041ee884829ab060bd4224c84493e7478005a",
+      "byte_length": 29518,
+      "git_blob": "df68546cb3f9f85e10df091555bb6c76081180e3"
+    },
+    {
+      "path": "locked-input-payloads/18-ORGAN_PORTFOLIO_PARALLEL_BUILD_md.md",
+      "sha256": "b2a9116e49e3d2e89c291a2907e51af217993e638b02d33af469d84dad51aa41",
+      "byte_length": 24774,
+      "git_blob": "ae5afb488dbddecda96c0025aea1ac2f2f801dc3"
+    },
+    {
+      "path": "locked-input-payloads/19-PARALLEL_CAPABILITY_FOUNDRY_AND_SENSE_PACKS_md.md",
+      "sha256": "47ece80df0e4f5f5d25bc02bfd5f2fbf30a8eff0ae1be78e97df3238d9b506f8",
+      "byte_length": 32048,
+      "git_blob": "163a53bff22488745d4269e8138abd55443d00da"
+    },
+    {
+      "path": "locked-input-payloads/20-new_txt.txt",
+      "sha256": "71a2df2e14835148f93310c70fc61c0829ad4ea6e54f7b56c26d405a2418b998",
+      "byte_length": 2628,
+      "git_blob": "c82d7012a4a2f5666337375f008d0e95688f152d"
+    },
+    {
+      "path": "locked-input-payloads/21-cmd_txt.txt",
+      "sha256": "90dcac299155695f02c232646b23fc78cf4f3febce5ee2e781113896ae5d0da9",
+      "byte_length": 4109,
+      "git_blob": "50130feab8f66af081ab5bc6e665281299b525f8"
+    },
+    {
+      "path": "locked-input-payloads/22-OWNER_TIME_OPTIMIZATION_AMENDMENT_txt.txt",
+      "sha256": "46549feced327d805c6057ecedffc8b65469c6537e5ce64b8c0a4f559eb1da30",
+      "byte_length": 4118,
+      "git_blob": "f58992990984fbcc6f6d0b187579b2625435441c"
+    },
+    {
+      "path": "locked-input-payloads/23-DIRECTOR_FINAL_ASSURANCE_HANDOFF_md.md",
+      "sha256": "da38896c8e7bb42c29afba2094ce48856792da17348cd4cc78904469e199728d",
+      "byte_length": 13809,
+      "git_blob": "d6ffe63f7ece61c6ef061e4ad1dc1d0275950aeb"
+    },
+    {
+      "path": "locked-input-payloads/authority-D_LAUNCH_65-QL_DIRECTOR_STATE.md",
+      "sha256": "9471fef43baf638d7cc8bd958c2e45b881405cc14178cdfb24c78ebec1ed6ffb",
+      "byte_length": 73589,
+      "git_blob": "e8fb856c19a14c4a5278e4c7c8f7e2cd51a85b12"
+    },
+    {
+      "path": "locked-input-payloads/authority-VFINAL5_RECEIPT.md",
+      "sha256": "12f7e1ee77f7340e32d6d77242a8b5f190fc5c7225c546fbc74d2977d1266f72",
+      "byte_length": 20403,
+      "git_blob": "8fa803e7ee5e40bf93432105e4a819429ada940b"
+    },
+    {
+      "path": "prepare-locked-input-payloads.mjs",
+      "sha256": "f315fa243aafcce54842e779456a6d32b0cd3be4824381e644d41eab6a33a709",
+      "byte_length": 7388,
+      "git_blob": "6caaeb0cb6f7b6927f20c85c60eb39d017c08b59"
+    },
+    {
+      "path": "verify-exact-candidate-evidence.mjs",
+      "sha256": "cdc9e73cf510df00065fb0c086f1e25bfce00d172b09d607f0d517b24226508e",
+      "byte_length": 78667,
+      "git_blob": "7e9f522e4cbe05f477e87ccd671c545e306ccc64"
+    },
+    {
+      "path": "wave1-inputs/ACTIVATION_RUNBOOK_DRAFT.md",
+      "sha256": "81b516dc6b69fe482bdaded03f6ce424de9a89b080bd03c2287d87a9176d1b00",
+      "byte_length": 32859,
+      "git_blob": "a7b50c724659891834ed05e0198a209ac8b841a9"
+    },
+    {
+      "path": "wave1-inputs/CANARY_PRECHECK.json",
+      "sha256": "02c4181f49385a2f8d9620babeead4a4a94506e7586dae1e6613ae944d623f92",
+      "byte_length": 10577,
+      "git_blob": "6dc2b74e408742c93a068ec7d1e669d4ce0f94bd"
+    },
+    {
+      "path": "wave1-inputs/CLEAN_CLONE_FINDINGS.json",
+      "sha256": "0c8c59354486db404334107470865d4255ce0049dfcd38701fe0eb163c23250c",
+      "byte_length": 26371,
+      "git_blob": "e00120964c3fdb89d9d6999a676a1e89d830455d"
+    },
+    {
+      "path": "wave1-inputs/PROV_FINDINGS.json",
+      "sha256": "b0e06ead6b8280545c36ab7b8d5f58de75819dfa653c51dde7c09f720efe71fc",
+      "byte_length": 39646,
+      "git_blob": "25db7293f197f771c9aca5c5d16551c0d15709e0"
+    }
+  ]
+}

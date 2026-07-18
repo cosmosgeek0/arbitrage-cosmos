@@ -1,7 +1,7 @@
 {
-  "schema": "ai-ops-c2-acceptance-disposition.v1",
-  "candidate_sha": null,
-  "candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
+  "schema": "ai-ops-c9-acceptance-disposition.v2",
+  "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+  "candidate_token": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
   "source": "INTEGRATED",
   "route": "UNWIRED",
   "provider": "NOT_CONFIGURED",
@@ -9,6 +9,9 @@
   "sentinel": "NOT_CONFIGURED",
   "paging": "NOT_CONFIGURED",
   "root_test_mount": "NOT_CONFIGURED",
-  "c2_baseline_acceptance": "EXCLUDED_FROM_C2_BASELINE",
-  "note": "A green npm test or npm run test:all is not AI-Ops acceptance evidence."
+  "note": "A green npm test or npm run test:all is not AI-Ops acceptance evidence.",
+  "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+  "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "binding": "EXACT_CANDIDATE",
+  "c9_baseline_acceptance": "EXCLUDED_FROM_C9_BASELINE"
 }

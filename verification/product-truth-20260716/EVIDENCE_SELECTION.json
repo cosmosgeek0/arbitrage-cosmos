@@ -1,15 +1,454 @@
 {
-  "schema": "product-truth-c2-evidence-selection.v1",
-  "source_candidate": null,
-  "source_candidate_token": "SELF_COMMIT_UNBOUND_USE_EXACT_EVIDENCE_DESCENDANT",
-  "candidate_embedded_package": "SOURCE_UNBOUND",
-  "selection_rule": "The candidate source commit cannot self-name. Select only a campaign evidence descendant whose manifest hashes C2_EVIDENCE_BINDING.json, whose ancestry contains exact C2, and whose post-C2 diff is confined to verification/product-truth-20260716/**. Reject old-C acceptance identifiers and ambiguous descendants.",
-  "valid_chain": "C2 -> campaign evidence child",
-  "post_c2_path_allowlist": [
-    "verification/product-truth-20260716/**"
+  "schema": "product-truth-c9-evidence-selection.v4",
+  "binding": "EXACT_CANDIDATE_GENERATED_ARTIFACTS_AND_SELF_CONTAINED_TOOLING",
+  "source_candidate": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+  "source_candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+  "source_candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+  "source_candidate_branch": "truth-campaign-20260716",
+  "sealed_machine_evidence_source": {
+    "commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+    "tree": "762143c25a77390d5b24e23b8f81c49a26b9d7d4",
+    "state": "HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE"
+  },
+  "same_tree_landing": {
+    "commit": "bcb3e76b274b7f459af0f85545d38ca117c1f0bd",
+    "tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+    "disposition": "NOT_CANDIDATE_TRUTH_SAME_TREE_COMMIT_IDENTITY_IS_INSUFFICIENT"
+  },
+  "candidate_embedded_package": "verification/product-truth-20260716/LOCKED_INPUT_PAYLOADS.json",
+  "selection_rule": "Select only the registry-bound exact C9 commit and a sole evidence descendant whose post-C9 diff equals 21 generated artifacts plus the exact five-file executable tooling package; generation and verification must run from that descendant tooling.",
+  "valid_chain": "C2 -> exact C9 -> sole self-contained evidence descendant; candidate source stays immutable",
+  "post_candidate_path_allowlist": [
+    "verification/product-truth-20260716/AI_OPS_C2_DISPOSITION.json",
+    "verification/product-truth-20260716/AUTHORITY_RESOLUTION.md",
+    "verification/product-truth-20260716/C2_PROOF_BINDING.json",
+    "verification/product-truth-20260716/CAPABILITY_TRUTH_MATRIX.csv",
+    "verification/product-truth-20260716/CLEAN_CLONE_ACCEPTANCE.md",
+    "verification/product-truth-20260716/COCKPIT_BINDING_MATRIX.csv",
+    "verification/product-truth-20260716/COMPOSED_RUNTIME_RECEIPT.md",
+    "verification/product-truth-20260716/DIRECTIVE_COVERAGE_MATRIX.csv",
+    "verification/product-truth-20260716/EVIDENCE_SELECTION.json",
+    "verification/product-truth-20260716/FINAL_VERDICT.md",
+    "verification/product-truth-20260716/INDEPENDENT_FINDINGS.json",
+    "verification/product-truth-20260716/INPUTS.lock",
+    "verification/product-truth-20260716/LOCKED_INPUT_PAYLOADS.json",
+    "verification/product-truth-20260716/MANIFEST.json",
+    "verification/product-truth-20260716/MANIFEST.sha256",
+    "verification/product-truth-20260716/MERGE_PROVENANCE.json",
+    "verification/product-truth-20260716/PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+    "verification/product-truth-20260716/STAGING_OPERATIONAL_RECEIPT.md",
+    "verification/product-truth-20260716/STATE.md",
+    "verification/product-truth-20260716/UNMERGED_DELTA_REPORT.md",
+    "verification/product-truth-20260716/WORKTREE_CENSUS.json",
+    "verification/product-truth-20260716/campaign-input-registry.mjs",
+    "verification/product-truth-20260716/generate-exact-candidate-evidence.mjs",
+    "verification/product-truth-20260716/generate-manifest.mjs",
+    "verification/product-truth-20260716/human-evidence-renderer.mjs",
+    "verification/product-truth-20260716/verify-exact-candidate-evidence.mjs"
   ],
-  "required_binding": "C2_EVIDENCE_BINDING.json hashed by MANIFEST.sha256",
-  "final_verifier_handoff": "BLOCKED_PENDING_WAVE1B",
-  "old_candidate": "41752d6a87dc1cb1b933bb4460c9cabfc15ff694",
-  "old_candidate_disposition": "REJECTED_FOR_FINAL_HANDOFF_CRITICAL_FINDINGS"
+  "exact_generated_output_count": 21,
+  "exact_generated_outputs": [
+    "AI_OPS_C2_DISPOSITION.json",
+    "AUTHORITY_RESOLUTION.md",
+    "C2_PROOF_BINDING.json",
+    "CAPABILITY_TRUTH_MATRIX.csv",
+    "CLEAN_CLONE_ACCEPTANCE.md",
+    "COCKPIT_BINDING_MATRIX.csv",
+    "COMPOSED_RUNTIME_RECEIPT.md",
+    "DIRECTIVE_COVERAGE_MATRIX.csv",
+    "EVIDENCE_SELECTION.json",
+    "FINAL_VERDICT.md",
+    "INDEPENDENT_FINDINGS.json",
+    "INPUTS.lock",
+    "LOCKED_INPUT_PAYLOADS.json",
+    "MANIFEST.json",
+    "MANIFEST.sha256",
+    "MERGE_PROVENANCE.json",
+    "PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+    "STAGING_OPERATIONAL_RECEIPT.md",
+    "STATE.md",
+    "UNMERGED_DELTA_REPORT.md",
+    "WORKTREE_CENSUS.json"
+  ],
+  "exact_tooling_file_count": 5,
+  "exact_tooling_files": [
+    "campaign-input-registry.mjs",
+    "generate-exact-candidate-evidence.mjs",
+    "generate-manifest.mjs",
+    "human-evidence-renderer.mjs",
+    "verify-exact-candidate-evidence.mjs"
+  ],
+  "exact_descendant_path_count": 26,
+  "tooling_bindings": [
+    {
+      "path": "campaign-input-registry.mjs",
+      "sha256": "433f57d42cda4222f0ff76c85d4950d821ffe24944110ac172530f62e10ba80e",
+      "git_blob": "a28cc0fab91112a77816f2c659baf266e0cf7732",
+      "byte_length": 20615
+    },
+    {
+      "path": "generate-exact-candidate-evidence.mjs",
+      "sha256": "8f1014c9e32ce8e434defed88efee1bdfcbc3604e3a9f56c4089fe775f4247ec",
+      "git_blob": "b458dfce36fa7731666291563157d24b6b5aa184",
+      "byte_length": 47120
+    },
+    {
+      "path": "generate-manifest.mjs",
+      "sha256": "46c31ec5b2545a2533d8250f763e87e4745e4a360a8c28b6340f02ff4fd7cc93",
+      "git_blob": "f4c41347dd16cffbc33c2ce5bdf10b165eb16ecb",
+      "byte_length": 15374
+    },
+    {
+      "path": "human-evidence-renderer.mjs",
+      "sha256": "dd81b0f18c8f6998e3c47a2adc15037e54cc06cbc104d84d03c1573bea4cc9a4",
+      "git_blob": "97691e1dbc0c1f77be252552808f41a53c1ec1f9",
+      "byte_length": 4500
+    },
+    {
+      "path": "verify-exact-candidate-evidence.mjs",
+      "sha256": "cdc9e73cf510df00065fb0c086f1e25bfce00d172b09d607f0d517b24226508e",
+      "git_blob": "7e9f522e4cbe05f477e87ccd671c545e306ccc64",
+      "byte_length": 78667
+    }
+  ],
+  "tooling_bundle_sha256": "61be26553a0aac1a1d0ebb89cea1ec09bd30b64bb958c2ff4d78e67162ae025b",
+  "required_binding": "product-truth-manifest.v4 plus MANIFEST.sha256 plus exact tooling bundle",
+  "final_verifier_handoff": "PENDING_FRESH_VERIFIER",
+  "proof_references": [
+    {
+      "proof_reference_id": "C9_SOURCE_STATE",
+      "source_commit": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "source_path": "STATE.md",
+      "source_git_blob": "2241a8f018e349ec7a7b49564c8dcca3ec03159b",
+      "source_sha256": "7bbdb6d892394405e8ab0cb8a81ac4ba6096582175ce07dd6682cab22bd50b3e",
+      "source_byte_length": 17412,
+      "required_symbols": [
+        "| Account A correction candidate C9 |"
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_PROOF_BINDING",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/C2_PROOF_BINDING.json",
+      "source_git_blob": "b9381b3ae7366f1d1a6822363dde08c01b4ee8c7",
+      "source_sha256": "f4e80fc5742d0031c831041befddb9c76cceb108be3c54534d2c6e787fc52cf2",
+      "source_byte_length": 4089,
+      "required_symbols": [
+        "\"schema\": \"product-truth-c9-proof-binding.v2\"",
+        "\"candidate_sha\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_INPUT_LOCK",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/INPUTS.lock",
+      "source_git_blob": "b64de79756b5f2d2a8df7e6b41344edc9d64cc29",
+      "source_sha256": "f66f5021d13fc18b822d3d31f021c880ace0453f26ee7505361e507bccd107d8",
+      "source_byte_length": 67109,
+      "required_symbols": [
+        "\"schema\": \"product-truth-inputs-lock.v4\"",
+        "\"candidate\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_SELECTION_V2",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/EVIDENCE_SELECTION.json",
+      "source_git_blob": "d742ee7ac15e352fb281177111fe2bd20fd0e4b6",
+      "source_sha256": "186ef8ba0fac457ad60738fac57c662745cf32f367f6cc706558f0ccbc9fdc01",
+      "source_byte_length": 4312,
+      "required_symbols": [
+        "\"schema\": \"product-truth-c9-evidence-selection.v2\"",
+        "\"source_candidate\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_MANIFEST_V2",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/MANIFEST.json",
+      "source_git_blob": "c6b9bd8e63d14613b21284589975addb463ae3d3",
+      "source_sha256": "d931ad1383f4b7a91700220b62b006c53316e4fe41102a7279884857bfcfead5",
+      "source_byte_length": 14957,
+      "required_symbols": [
+        "\"schema\": \"product-truth-manifest.v2\"",
+        "\"candidate_sha\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_PROVENANCE",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/MERGE_PROVENANCE.json",
+      "source_git_blob": "751ce7a6e02f6895cdc3a99969914527dc72e7c4",
+      "source_sha256": "9c4039e90424d92274e7f0a5cb990ce57fd21ed4d08801ba62d317debe0613b7",
+      "source_byte_length": 71232,
+      "required_symbols": [
+        "\"schema\": \"product-truth-merge-provenance.v3\"",
+        "\"candidate_sha\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_CENSUS",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/WORKTREE_CENSUS.json",
+      "source_git_blob": "8b71a2f4383184e52fe87871c9542c61739da47f",
+      "source_sha256": "104347b7ae72b71acd09a82d8c034a3dd89f155674d97dc989bbc0012e810846",
+      "source_byte_length": 311293,
+      "required_symbols": [
+        "\"schema\": \"product-truth-worktree-census.v2\"",
+        "\"candidate_sha\": \"d8a86f722689ed82ad40f9ec44bbbc19c2347646\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_FINDINGS",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/INDEPENDENT_FINDINGS.json",
+      "source_git_blob": "53eb697f7ac9048c4679b39b4d125395d9656d0f",
+      "source_sha256": "17f5a99f433a81310ab5cadcdde06962c3eb2a80c4a5ec8fa271adf0b00b06a6",
+      "source_byte_length": 8465,
+      "required_symbols": [
+        "\"schema\": \"product-truth-c9-independent-findings.v3\"",
+        "\"wave1b\": \"C9_SOURCE_FIXED_FRESH_FINAL_VERIFIER_PENDING\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    },
+    {
+      "proof_reference_id": "SEALED_C9_PRODUCT_ASSURANCE",
+      "source_commit": "5fd74604082420fbe46d98e408ef4ca0d1b57711",
+      "source_path": "verification/product-truth-20260716/PRODUCT_ASSURANCE_C2_DISPOSITION.json",
+      "source_git_blob": "71720f5e2d43735b2125022c44a2973b65b86056",
+      "source_sha256": "a02540e684a52f918e9896c0196d2e46b050d841612a1248a177edfe2a037654",
+      "source_byte_length": 4152,
+      "required_symbols": [
+        "\"schema\": \"product-assurance-c9-disposition.v2\"",
+        "\"binding\": \"EXACT_CANDIDATE\""
+      ],
+      "validation": "GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED"
+    }
+  ],
+  "human_artifacts": [
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_AUTHORITY_PENDING_FRESH_VERIFIER",
+      "path": "AUTHORITY_RESOLUTION.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "PENDING_FRESH_VERIFIER",
+      "actor": "CAMPAIGN_EVIDENCE_GENERATOR",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "C9_SOURCE_STATE",
+        "SEALED_C9_INPUT_LOCK",
+        "SEALED_C9_PROVENANCE"
+      ],
+      "sha256": "fce15e57e2bda56c8992ed8fc5c1bbcd9598397e032037bb280b0615cf486e15",
+      "git_blob": "f2efdcbc80c56812cdaba03fb04b547a73eb955b",
+      "byte_length": 1861,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "PENDING_FRESH_VERIFIER",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    },
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_CLEAN_CLONE_NOT_RUN",
+      "path": "CLEAN_CLONE_ACCEPTANCE.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "NOT_RUN",
+      "actor": "ACCOUNT_A_BUILDER_EVIDENCE_ONLY",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "C9_SOURCE_STATE",
+        "SEALED_C9_MANIFEST_V2"
+      ],
+      "sha256": "c02ba1c3834a8c427b22c4d62a4dd883b322742280f15f40d037b85e7eed1d71",
+      "git_blob": "d25aeca6f6641cf970dc0c358d11fcc78f9d3ba3",
+      "byte_length": 1535,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "NOT_RUN",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    },
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_COMPOSED_RUNTIME_NOT_RUN",
+      "path": "COMPOSED_RUNTIME_RECEIPT.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "NOT_RUN",
+      "actor": "CAMPAIGN_EVIDENCE_GENERATOR",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "SEALED_C9_PROOF_BINDING",
+        "SEALED_C9_FINDINGS"
+      ],
+      "sha256": "542d1a7c980c91506c84cad742912a01afc1410f092726336dd756519224d1e0",
+      "git_blob": "c0bdc25af0dc664221fba287fad60ac3291b5800",
+      "byte_length": 1612,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "NOT_RUN",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    },
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_FINAL_VERDICT_PENDING_FRESH_VERIFIER",
+      "path": "FINAL_VERDICT.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "PENDING_FRESH_VERIFIER",
+      "actor": "NO_FINAL_VERIFIER_ASSIGNED",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "SEALED_C9_SELECTION_V2",
+        "SEALED_C9_FINDINGS",
+        "SEALED_C9_PRODUCT_ASSURANCE"
+      ],
+      "sha256": "d44c5b2dbd44e26295b67c1c58b66b771ee558e103f346238cdc798325fe9b3f",
+      "git_blob": "472658f3c3977f4a07b4b51d5f1eaed20ab270aa",
+      "byte_length": 3256,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "PENDING_FRESH_VERIFIER",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    },
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_STAGING_NOT_CONFIGURED",
+      "path": "STAGING_OPERATIONAL_RECEIPT.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "NOT_CONFIGURED",
+      "actor": "NO_STAGING_OPERATOR_ASSIGNED",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "SEALED_C9_PROOF_BINDING",
+        "SEALED_C9_PRODUCT_ASSURANCE"
+      ],
+      "sha256": "d7bab7360c0f5dcae594875b118c34cd7c4ea62bd427dc3152acb151ea811144",
+      "git_blob": "08bc75d86fb221851a07ece9f3a8684a194d0ee9",
+      "byte_length": 1677,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "NOT_CONFIGURED",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    },
+    {
+      "schema": "product-truth-human-evidence-artifact.v1",
+      "selection_id": "C9_DELTA_REVIEW_BLOCKED_PENDING_FRESH_VERIFIER",
+      "path": "UNMERGED_DELTA_REPORT.md",
+      "candidate_sha": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+      "candidate_tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+      "candidate_parent": "dea2d2a5c2b5e83d3aea75b0e368f0a478596561",
+      "state": "BLOCKED:FRESH_FINAL_VERIFIER_PENDING",
+      "actor": "CAMPAIGN_EVIDENCE_GENERATOR",
+      "candidate_write_authority": false,
+      "proof_reference_ids": [
+        "SEALED_C9_CENSUS",
+        "SEALED_C9_PROVENANCE"
+      ],
+      "sha256": "8681c89fb1301a413911a532cc1e6d577bdac418618fdaa28663d410a464d22f",
+      "git_blob": "a907335807ace4241a1683a6990454583624dc2d",
+      "byte_length": 1729,
+      "receipt": {
+        "command_or_operator_action": "DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS",
+        "start_time_utc": "2026-07-17T14:43:20+05:30",
+        "end_time_utc": "2026-07-17T14:43:20+05:30",
+        "timestamp_basis": "EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC",
+        "artifact_generation_state": "BLOCKED:FRESH_FINAL_VERIFIER_PENDING",
+        "candidate_source_write_authority": false,
+        "live_worktree_census_performed": false
+      }
+    }
+  ],
+  "rejected_candidate_history": [
+    {
+      "label": "C3",
+      "sha": "78f708d6cdb9d1618c53d3f08f71097b4320a63b",
+      "tree": "9e54ae92bd3cc4d30d3114590d7da6d81e019f16",
+      "disposition": "REJECTED_FINAL_VERIFICATION",
+      "reason": "SIX_FINAL_VERIFIER_FINDINGS_AND_INELIGIBLE_ANCESTRY"
+    },
+    {
+      "label": "C4",
+      "sha": "4c9143a0bcc331aa170e9e26b741240b39df8b9e",
+      "tree": "164c5e812f609364ce6cd3fa37fb91530a226db2",
+      "disposition": "REJECTED_REPORT_PARITY",
+      "reason": "CANONICAL_AND_SINGLE_BRANCH_REPORT_PARITY_42_OF_44_STALE_MACHINE_REPORT"
+    },
+    {
+      "label": "C5",
+      "sha": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+      "tree": "28d3d9922cc1201333775a458919afe9158e6dc2",
+      "disposition": "REJECTED_FINAL_VERIFICATION",
+      "reason": "VFINAL5_UNBOUND_GENERATOR_INCOMPLETE_INPUT_MAP_STALE_CENSUS_LEDGER_WATCHMAN_FALSE_GREEN"
+    },
+    {
+      "label": "C6",
+      "sha": "89cd7e066b97f2f33d730d1e0adf291ebe7c4f64",
+      "tree": "2dd6399ff0aa2fb21c3b4632815333cf015c053a",
+      "disposition": "REJECTED_CANONICAL_SECURITY_GATE",
+      "reason": "CAMPAIGN_CONTRACT_TEST_USED_FORBIDDEN_CHILD_PROCESS_AND_ENVIRONMENT_ACCESS"
+    },
+    {
+      "label": "C7",
+      "sha": "a283eb859ec1142aadecbd64e0b84959535f6216",
+      "tree": "ffe2be1f1c4504fbb17228d2a905fe8b763af5e6",
+      "disposition": "REJECTED_EXACT_EVIDENCE_INTEGRITY",
+      "reason": "STALE_PAYLOAD_INVENTORY_CHECKSUM_AND_FALSE_PROVENANCE_BLOB_COUNT"
+    },
+    {
+      "label": "C8",
+      "sha": "6ab02a82931ae8234456c0710cca41b94fdc12c9",
+      "tree": "4dbb427b357b87b9c58bfe97d06a584bd5c973ef",
+      "disposition": "REJECTED_EXACT_CENSUS_NON_IDEMPOTENT",
+      "reason": "POST_EVIDENCE_GENERATOR_PASS_REWROTE_CUSTODY_HEAD_DERIVED_CENSUS_FIELDS"
+    }
+  ],
+  "prior_candidate_sha": "6ab02a82931ae8234456c0710cca41b94fdc12c9",
+  "prior_candidate_tree": "4dbb427b357b87b9c58bfe97d06a584bd5c973ef",
+  "prior_candidate_disposition": "C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT",
+  "c7_candidate_sha": "a283eb859ec1142aadecbd64e0b84959535f6216",
+  "c7_candidate_disposition": "C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT",
+  "c6_candidate_sha": "89cd7e066b97f2f33d730d1e0adf291ebe7c4f64",
+  "c6_candidate_disposition": "C6_REJECTED_BY_CANONICAL_SECURITY_GATE",
+  "vfinal5_candidate_sha": "959a5f9900e25f53414710bbfb3464c3ccb67a5d",
+  "vfinal5_candidate_disposition": "C5_REJECTED_BY_VFINAL5"
 }

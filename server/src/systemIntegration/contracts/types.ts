@@ -301,6 +301,12 @@ export type SystemControlMutation =
       readonly command: 'REDUCE_SIZE_CEILING';
       readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
       readonly maximumNotionalUsd: string;
+    }
+  | {
+      readonly command: 'SET_STRATEGY_THRESHOLD';
+      readonly strategy: 'BASIS' | 'VOLUME';
+      readonly threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+      readonly value: string;
     };
 
 export interface SystemControlMutationRequest {

@@ -601,6 +601,14 @@ section('22. SAFETY: universe/config reconciliation prunes derived state');
   check('config revision is detected', revised.engine.updateConfig({ persistTicks: 4 }) === true);
   check('config revision invalidates old proposal', proposal?.status === 'expired' && proposal.reason.includes('config_changed'));
   check('config revision clears signal-derived priorities', revised.engine.priorityOf(SYM) === null);
+  const thresholdRevision = createReplayHarness(CFG, T0);
+  thresholdRevision.run([initStep(T0), ...gapSeries([0.78, 0.78, 0.78])]);
+  const thresholdProposal = thresholdRevision.engine.proposals.open()[0];
+  check('MIN_NET_BASIS_PCT mutation invalidates state derived under the old threshold',
+    thresholdRevision.engine.updateConfig({ minNetBasisPct: 0.5 }) === true
+      && thresholdProposal?.status === 'expired'
+      && thresholdProposal.reason.includes('config_changed')
+      && thresholdRevision.engine.priorityOf(SYM) === null);
   check('downward Basis size ceiling reaches the proposal owner',
     revised.engine.setSuggestedNotionalUsd(5) === true && revised.engine.cfg.suggestedNotionalUsd === 5);
   let invalidConfigRejected = false;

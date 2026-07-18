@@ -84,6 +84,10 @@ export function createInitialCheckpointState(
       basis: null,
       volume: null,
     },
+    strategyThresholds: {
+      basisMinNetPct: null,
+      volume1sMultiple: null,
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

@@ -681,6 +681,18 @@ section('23. runtime symbol policy applies immediately without cooldown debt');
   }, feature);
   check('downward Volume size ceiling invalidates proposals sized under the prior ceiling',
     engine.setSuggestedNotionalUsd(5) === true && resized.status === 'expired' && engine.cfg.suggestedNotionalUsd === 5);
+  const thresholdProposal = engine.proposalStore.upsertFromDecision({
+    symbol: 'POLICYUSDT', ts: clock.now(), strategy: 'volume_spike', kind: 'proposal', rejectCode: null,
+    humanReason: 'threshold invalidation proof', correlationId: 'threshold-correlation',
+    evidence: { direction: 'long', confidence: 0.7 },
+  }, engine.featureSnapshot('POLICYUSDT'));
+  engine.pin('POLICYUSDT');
+  check('VOLUME_1S_MULTIPLE mutation expires proposals and clears threshold-derived focus while preserving raw observations',
+    engine.setVolume1sMultiple(4) === true
+      && thresholdProposal.status === 'expired'
+      && thresholdProposal.invalidatedBy === 'config_changed'
+      && !engine.focusMgr.isFocused('POLICYUSDT')
+      && engine.featureSnapshot('POLICYUSDT') !== null);
 }
 
 // ================================================================

@@ -361,6 +361,11 @@ export interface PersistedSizeCeilings {
   readonly volume: string | null;
 }
 
+export interface PersistedStrategyThresholds {
+  readonly basisMinNetPct: string | null;
+  readonly volume1sMultiple: string | null;
+}
+
 /**
  * Opaque owner reference. Persistence preserves identity and revision but does
  * not infer proposal, mandate, configuration, or position policy semantics.
@@ -582,6 +587,7 @@ export interface SystemIntegrationCheckpointState {
   readonly strategyIntake: Readonly<PersistedStrategyIntakePosture>;
   readonly strategySymbolPolicy: Readonly<PersistedStrategySymbolPolicy>;
   readonly sizeCeilings: Readonly<PersistedSizeCeilings>;
+  readonly strategyThresholds: Readonly<PersistedStrategyThresholds>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];

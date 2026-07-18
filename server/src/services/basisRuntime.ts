@@ -78,6 +78,7 @@ export class BasisRuntime {
   private universePolicyKey = '';
   private lastErrorLogAttemptTs = 0;
   private eventLastLogged = new Map<string, { ts: number; symbol: string | null }>();
+  private operatorMinNetBasisPct: number | null = null;
 
   constructor(
     private readonly ledger: Ledger,
@@ -217,6 +218,21 @@ export class BasisRuntime {
     return this.engine.setSuggestedNotionalUsd(numeric);
   }
 
+  strategyThreshold(): string | null {
+    try { return normalizeNonNegativeExactDecimal(String(this.engine.cfg.minNetBasisPct)); } catch { return null; }
+  }
+
+  setStrategyThreshold(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    const numeric = Number(canonical);
+    if (canonical !== value || !Number.isFinite(numeric) || numeric < 0.01 || numeric > 100 || String(numeric) !== canonical) {
+      throw new RangeError('Basis minimum-net threshold is invalid or inexact at the legacy boundary');
+    }
+    const ownerChanged = this.operatorMinNetBasisPct !== numeric;
+    this.operatorMinNetBasisPct = numeric;
+    return this.engine.updateConfig({ minNetBasisPct: numeric }) || ownerChanged;
+  }
+
   private onEngineEvent(event: EngineEvent): void {
     const decisionKind = typeof event.payload.kind === 'string' ? event.payload.kind : null;
     if (event.kind === 'strategy_decision' && decisionKind === 'ignore') return;
@@ -255,7 +271,7 @@ export class BasisRuntime {
       const config = this.getConfig();
       this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,
@@ -319,7 +335,7 @@ export class BasisRuntime {
       let config = this.getConfig();
       const configChanged = this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,
@@ -339,7 +355,7 @@ export class BasisRuntime {
       config = this.getConfig();
       const changedDuringFetch = this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,

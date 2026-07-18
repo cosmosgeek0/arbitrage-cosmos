@@ -62,6 +62,10 @@ export function parseControlBody(value: unknown): ParsedControlBody {
       allowed = ['command', 'expectedRevision', 'reason', 'scope', 'maximumNotionalUsd'];
       mutation = { command: value.command, scope: value.scope, maximumNotionalUsd: value.maximumNotionalUsd };
       break;
+    case 'SET_STRATEGY_THRESHOLD':
+      allowed = ['command', 'expectedRevision', 'reason', 'strategy', 'threshold', 'value'];
+      mutation = { command: value.command, strategy: value.strategy, threshold: value.threshold, value: value.value };
+      break;
     case 'SET_SAFE_MODE':
       allowed = ['command', 'expectedRevision', 'reason', 'safeMode'];
       mutation = { command: value.command, safeMode: value.safeMode };

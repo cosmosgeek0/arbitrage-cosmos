@@ -310,6 +310,7 @@ systemIntegration = createSystemIntegrationApplication({
     BASIS: systemIntegrationProduction.sizeCeilings.BASIS,
     VOLUME: systemIntegrationProduction.sizeCeilings.VOLUME,
   }),
+  strategyThresholds: systemIntegrationProduction.strategyThresholds,
   traces: canonicalOwnerEvidence,
   ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({

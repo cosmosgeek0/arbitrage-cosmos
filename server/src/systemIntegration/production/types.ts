@@ -69,6 +69,8 @@ export interface ProductionBasisRuntimePort {
   symbolAllowedByPolicy(symbol: string): boolean;
   sizeCeiling(): string | null;
   setSizeCeiling(value: string): boolean;
+  strategyThreshold(): string | null;
+  setStrategyThreshold(value: string): boolean;
 }
 
 export interface ProductionVolumeConnectionStatus {
@@ -92,6 +94,8 @@ export interface ProductionVolumeRuntimePort {
   symbolAllowedByPolicy(symbol: string): boolean;
   sizeCeiling(): string | null;
   setSizeCeiling(value: string): boolean;
+  strategyThreshold(): string | null;
+  setStrategyThreshold(value: string): boolean;
 }
 
 export interface ProductionSystemIntegrationInput {
@@ -137,5 +141,9 @@ export interface ProductionSystemIntegrationPorts {
   readonly sizeCeilings: Readonly<{
     BASIS: Readonly<{ readCeiling(): string | null; setCeiling(value: string): boolean }>;
     VOLUME: Readonly<{ readCeiling(): string | null; setCeiling(value: string): boolean }>;
+  }>;
+  readonly strategyThresholds: Readonly<{
+    BASIS: Readonly<{ readThreshold(): string | null; setThreshold(value: string): boolean }>;
+    VOLUME: Readonly<{ readThreshold(): string | null; setThreshold(value: string): boolean }>;
   }>;
 }

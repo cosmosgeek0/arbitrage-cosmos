@@ -1276,5 +1276,18 @@ export function createProductionSystemIntegrationPorts(
     }),
   });
 
-  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings });
+  const strategyThresholds = Object.freeze({
+    BASIS: Object.freeze({
+      readThreshold: () => input.basis.strategyThreshold(),
+      setThreshold: (value: string) => input.basis.setStrategyThreshold(value),
+    }),
+    VOLUME: Object.freeze({
+      readThreshold: () => input.volume.strategyThreshold(),
+      setThreshold: (value: string) => input.volume.setStrategyThreshold(value),
+    }),
+  });
+
+  return Object.freeze({
+    sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds,
+  });
 }

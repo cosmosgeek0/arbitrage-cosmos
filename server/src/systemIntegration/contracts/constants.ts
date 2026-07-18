@@ -111,6 +111,7 @@ export const SYSTEM_CONTROL_COMMANDS = Object.freeze([
   'SET_BASIS_SYMBOL_POLICY',
   'SET_VOLUME_SYMBOL_POLICY',
   'REDUCE_SIZE_CEILING',
+  'SET_STRATEGY_THRESHOLD',
 ] as const);
 
 export type SystemControlCommand = (typeof SYSTEM_CONTROL_COMMANDS)[number];

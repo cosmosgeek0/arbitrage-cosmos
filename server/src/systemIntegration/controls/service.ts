@@ -57,7 +57,8 @@ function requiresRuntimePublication(mutation: Readonly<SystemControlMutation>): 
     || mutation.command === 'SET_VOLUME_INTAKE'
     || mutation.command === 'SET_BASIS_SYMBOL_POLICY'
     || mutation.command === 'SET_VOLUME_SYMBOL_POLICY'
-    || mutation.command === 'REDUCE_SIZE_CEILING';
+    || mutation.command === 'REDUCE_SIZE_CEILING'
+    || mutation.command === 'SET_STRATEGY_THRESHOLD';
 }
 
 export function controlRequestDigest(request: Readonly<SystemControlMutationRequest>): string {

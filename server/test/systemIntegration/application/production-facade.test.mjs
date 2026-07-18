@@ -1413,6 +1413,57 @@ test('RESTART_COMPONENT stays pending until its exact supervisor correlation and
   assert.equal(f.app.restartBarrier().reasonCodes.includes('CONTROL_COMMITTED_RUNTIME_PENDING'), false);
 });
 
+test('bounded subsystem restart publishes only after exact dependent-closure readback', async () => {
+  const f = fixture({
+    externalKill: false,
+    localMutationAuthority: 'PROVEN_ABSENT',
+    ordinaryDrainTruth: canonicalDrainTruth({
+      exposureState: 'NONE', ambiguityState: 'NONE', recoveryState: 'NONE',
+    }),
+  });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 8);
+  const initialStarts = structuredClone(f.states);
+  const lifecycleStart = f.order.length;
+  const request = validControlRequest(f, {
+    command: 'RESTART_COMPONENT', componentId: 'market-intelligence',
+  }, 'bounded-subsystem-restart');
+
+  const pendingResult = await f.app.controls.mutate(request, ACTOR);
+  assert.equal(pendingResult.ok, false);
+  assert.equal(pendingResult.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  const pending = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(pending.ok, true);
+  assert.equal(pending.value.idempotencyReceipts.find(
+    (entry) => entry.idempotencyKey === request.idempotencyKey,
+  ).receipt.runtimePublication, 'PENDING');
+
+  await drive(f, 8);
+  assert.deepEqual(
+    f.order.slice(lifecycleStart).filter((entry) => entry.startsWith('runtime:stop:') || entry.startsWith('runtime:start:')),
+    [
+      'runtime:stop:volume', 'runtime:stop:basis', 'runtime:stop:market-intelligence',
+      'runtime:start:market-intelligence', 'runtime:start:basis', 'runtime:start:volume',
+    ],
+  );
+  assert.equal(f.states.market.starts, initialStarts.market.starts, 'upstream market owner must remain running');
+  assert.equal(
+    f.states.intelligenceRuntime.starts,
+    initialStarts.intelligenceRuntime.starts,
+    'upstream intelligence runtime must remain running',
+  );
+
+  const startsAfterCompletion = structuredClone(f.states);
+  const published = await f.app.controls.mutate(request, ACTOR);
+  assert.equal(published.ok, true);
+  assert.deepEqual(f.states, startsAfterCompletion, 'durable replay must not reissue the restart');
+  const completed = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(completed.ok, true);
+  assert.equal(completed.value.idempotencyReceipts.find(
+    (entry) => entry.idempotencyKey === request.idempotencyKey,
+  ).receipt.runtimePublication, 'PUBLISHED');
+});
+
 test('failed asynchronous restart never becomes published and exact replay never reissues it', async () => {
   const f = fixture({
     externalKill: false,

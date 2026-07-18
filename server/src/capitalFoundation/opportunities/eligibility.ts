@@ -192,6 +192,11 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
   if (valuationAsset === 'UNKNOWN') missing.add('valuationAsset');
   const exactSourceIds = sortedUnique((Array.isArray(source?.exactSourceIds) ? source.exactSourceIds : []).filter(nonEmpty));
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
+  const sourceIds = (name: 'fundingSourceIds' | 'borrowSourceIds' | 'capitalOpportunitySourceIds'): readonly string[] => {
+    const ids = sortedUnique((Array.isArray(source?.[name]) ? source[name] : []).filter(nonEmpty));
+    if (ids.length === 0) missing.add(name);
+    return ids;
+  };
   const economics = Object.freeze({
     valuationAsset,
     requestedCapital: unsigned('requestedCapital'),
@@ -202,7 +207,14 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
     estimatedBorrowCost: unsigned('estimatedBorrowCost'),
     estimatedSpreadCost: unsigned('estimatedSpreadCost'),
     estimatedSlippage: unsigned('estimatedSlippage'),
+    estimatedLatencyCost: unsigned('estimatedLatencyCost'),
+    estimatedAdverseSelectionCost: unsigned('estimatedAdverseSelectionCost'),
+    estimatedRecoveryCost: unsigned('estimatedRecoveryCost'),
+    estimatedCapitalOpportunityCost: unsigned('estimatedCapitalOpportunityCost'),
     liquidityCapacity: unsigned('liquidityCapacity'),
+    fundingSourceIds: sourceIds('fundingSourceIds'),
+    borrowSourceIds: sourceIds('borrowSourceIds'),
+    capitalOpportunitySourceIds: sourceIds('capitalOpportunitySourceIds'),
     exactSourceIds,
     missingFields: sortedUnique([...missing]),
   });

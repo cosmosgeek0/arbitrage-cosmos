@@ -99,7 +99,7 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
 | `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 556 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 558 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
 
 ## Real-gap campaign state
 
@@ -130,6 +130,10 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 38 | `MIS-079` | `BUILT_AND_TESTED` | `RESTART_COMPONENT` now accepts a managed non-root target only after canonical strong-zero restart admission, stops its dependent closure in reverse order, restarts it in forward order with bounded injected-clock deadlines, and leaves upstream owners running. The existing durable control receipt remains `PENDING` until exact correlation/revision/closure readback is `APPLIED`; a rejected child restart quiesces the closure and records `FAILED`. The focused composition proof is 2/2, the application facade proof is 51/51, and System Integration is 417/417. |
 | 45 | `MIS-044` | `BUILT_AND_TESTED` | Canonical component truth now preserves producer-reported processing lag, retry/backoff, data-quality counters, checkpoint availability, dependencies, generation, and restart count; legacy or absent owner evidence materializes explicit `UNKNOWN`/`UNAVAILABLE` values. The focused hostile regression is 3/3 and the adjacent contracts/source/supervisor slice is 49/49. |
 | 46 | `MIS-063` | `BUILT_AND_TESTED` | Product Integration now carries canonical per-component freshness, processing lag, backlog/drop, retry/backoff, data-quality, dependency, checkpoint, generation, and restart truth into System Health. Absent legacy evidence stays explicit `UNKNOWN`/`UNAVAILABLE`, while `BLOCKED` alone never fabricates restart necessity. Focused hostile/render regressions are 5/5, Product Integration is 114/114, Product Control Room is 108/108, and the rendered table passed the 1440/1920, light/dark, 100%/125%, internal-canvas, Refresh, console, and ordered page-chain ship gates. |
+| 54 | `L-066` | `BUILT_AND_TESTED` | Capital eligibility now admits all-in economics only with exact fee, spread/depth, slippage, latency, adverse-selection, funding, borrow, recovery, and capital-opportunity inputs. Funding, borrow, and capital-opportunity values carry dedicated canonical owner source bindings; null values or absent bindings remain named blockers. The hostile opportunity suite is 37/37. |
+| 55 | `ARC-ENG-026` | `BUILT_AND_TESTED` | Basis now exports and snapshots one exact 16-code emitted reject vocabulary. Historical `borrow_required` maps to `borrow_unknown`; `risk_blocked` moves to the Foundation `risk_rejected` event; `account_not_connected` moves to Capital `ACCOUNT_TRUTH_BLOCKED`. Scanner types exclude all three retired spellings. The Basis proof is 121/121. |
+| 56 | `ARC-ENG-031` | `BUILT_AND_TESTED` | Volume now exports and snapshots one exact 12-code detector vocabulary. Historical `volume_not_abnormal` is explicitly a non-reject `ignore` outcome, and `risk_blocked` moves to the Foundation `risk_rejected` event; detector types exclude both retired spellings. The Volume proof is 130/130. |
+| 57 | `ARC-ENG-032` | `BUILT_AND_TESTED` | Volume proposals now expose the owner-supplied baseline-minute volume, current rolling one-minute volume, decisive trade-count multiple, and a nullable attached risk-bridge result. Evidence refresh clears stale attached risk, correlation-mismatched results fail closed, and snapshots serialize the fields without recomputation. The Volume proof is 135/135. |
 
 ## Previous source evidence
 
@@ -150,7 +154,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - CI hotfix `6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd` is in Main and candidate ancestry. Hotfix #2 `53c6da81` is `REFERENCE_ONLY`; its useful behavior was independently adapted without admitting its stale branch assumptions.
 - The candidate has exact second-parent merges for egress, A1-A5, observability, operations, replay, runbooks, A-FORMAL, and S2. Their sealed donor tips are candidate ancestors.
 - The Product Assurance historical merge-cut proof remains 193/193 blobs. Current source records seven explicit post-integration replacements, leaving 186 donor-identical HEAD blobs.
-- Product Assurance now scans 556 files and exactly 226 discovered operations with zero uncovered sites.
+- Product Assurance now scans 558 files and exactly 226 discovered operations with zero uncovered sites.
 - The five protected owner-directive root files are absent from this clean candidate checkout. Their exact committed verifier bundle remains verification-only and cannot impersonate live owner input.
 - The retired Role 3 C2 receipt is historical `REFERENCE_ONLY` evidence for C2R. The campaign preserves its exact untracked bytes in a tracked evidence-only descendant; it does not reclassify that receipt as current-candidate verification.
 

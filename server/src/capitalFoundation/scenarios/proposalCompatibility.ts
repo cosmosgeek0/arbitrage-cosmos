@@ -152,6 +152,13 @@ function exactEconomics(
   const estimatedBorrowCost = canonicalUnsigned(input.estimatedBorrowCost, 'estimatedBorrowCost');
   const estimatedSpreadCost = canonicalUnsigned(input.estimatedSpreadCost, 'estimatedSpreadCost');
   const estimatedSlippage = canonicalUnsigned(input.estimatedSlippage, 'estimatedSlippage');
+  const estimatedLatencyCost = canonicalUnsigned(input.estimatedLatencyCost, 'estimatedLatencyCost');
+  const estimatedAdverseSelectionCost = canonicalUnsigned(input.estimatedAdverseSelectionCost, 'estimatedAdverseSelectionCost');
+  const estimatedRecoveryCost = canonicalUnsigned(input.estimatedRecoveryCost, 'estimatedRecoveryCost');
+  const estimatedCapitalOpportunityCost = canonicalUnsigned(
+    input.estimatedCapitalOpportunityCost,
+    'estimatedCapitalOpportunityCost',
+  );
   const liquidityCapacity = canonicalUnsigned(input.liquidityCapacity, 'liquidityCapacity');
   const values = {
     requestedCapital,
@@ -162,6 +169,10 @@ function exactEconomics(
     estimatedBorrowCost,
     estimatedSpreadCost,
     estimatedSlippage,
+    estimatedLatencyCost,
+    estimatedAdverseSelectionCost,
+    estimatedRecoveryCost,
+    estimatedCapitalOpportunityCost,
     liquidityCapacity,
   } as const;
   for (const [field, value] of Object.entries(values)) {
@@ -169,9 +180,18 @@ function exactEconomics(
   }
   const exactSourceIds = sortedUnique(input.exactSourceIds);
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
+  const boundSourceIds = (name: 'fundingSourceIds' | 'borrowSourceIds' | 'capitalOpportunitySourceIds') => {
+    if (!Array.isArray(input[name])) throw new TypeError(`${name} must be an array`);
+    const ids = sortedUnique(input[name]);
+    if (ids.length === 0) missing.add(name);
+    return ids;
+  };
   return cloneAndFreeze({
     valuationAsset: input.valuationAsset,
     ...values,
+    fundingSourceIds: boundSourceIds('fundingSourceIds'),
+    borrowSourceIds: boundSourceIds('borrowSourceIds'),
+    capitalOpportunitySourceIds: boundSourceIds('capitalOpportunitySourceIds'),
     exactSourceIds,
     missingFields: [...missing].sort(),
   });

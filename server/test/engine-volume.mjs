@@ -20,6 +20,8 @@ import {
   steadyBooks,
   mapAggTrade,
   miniTickerDelta,
+  VOLUME_HISTORICAL_REJECT_CODE_MAP,
+  VOLUME_REJECT_CODES,
 } from '../dist/engine/volume/index.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
@@ -166,6 +168,31 @@ section('2. sustained volume + trade-count activation ⇒ focus → proposal');
   check('proposal direction long (taker-buy pressure)', p?.direction === 'long', p?.direction);
   check('proposal open/updated', p?.status === 'open' || p?.status === 'updated', p?.status);
   check('confidence in (0,1]', typeof p?.confidence === 'number' && p.confidence > 0 && p.confidence <= 1, `c=${p?.confidence?.toFixed(3)}`);
+  check('proposal exposes baseline/current 1m volume and trade-count multiple from owner features',
+    typeof p?.baselineVolume === 'number' && p.baselineVolume > 0
+      && typeof p.currentVolume1m === 'number' && p.currentVolume1m > 0
+      && typeof p.tradeCountMultiple === 'number' && p.tradeCountMultiple > 0);
+  check('proposal starts with no fabricated risk result', p?.riskResult === null);
+  const riskResult = {
+    allowed: false,
+    reasons: ['VALIDATE_ONLY_REVIEW_REQUIRED'],
+    correlationId: p?.correlationId,
+    ts: runner.clock.now(),
+  };
+  check('correlation-mismatched risk result is rejected',
+    typeof engine.recordRiskResult === 'function'
+      && engine.recordRiskResult(p.id, { ...riskResult, correlationId: 'wrong-correlation' }) === false
+      && engine.proposalStore.byId(p.id)?.riskResult === null);
+  const attached = typeof engine.recordRiskResult === 'function'
+    && engine.recordRiskResult(p.id, riskResult);
+  check('canonical risk result attaches without recomputation', attached === true
+    && engine.proposalStore.byId(p.id)?.riskResult?.reasons[0] === 'VALIDATE_ONLY_REVIEW_REQUIRED');
+  const serialized = JSON.parse(JSON.stringify(new VolumeSnapshots(engine).proposals()[0]));
+  check('proposal serialization preserves the explicit fields and risk result',
+    serialized.baselineVolume === p.baselineVolume
+      && serialized.currentVolume1m === p.currentVolume1m
+      && serialized.tradeCountMultiple === p.tradeCountMultiple
+      && serialized.riskResult?.allowed === false);
   check('invalidation metadata present', typeof p?.invalidation === 'string' && p.invalidation.includes('volume multiple'));
   check('state is PROPOSED', engine.focusMgr.stateOf(SYM) === 'PROPOSED', engine.focusMgr.stateOf(SYM));
   check('no automatic order anywhere', engine.memSink.all().every((e) => !/order/.test(e.kind)));
@@ -366,6 +393,18 @@ section('11. snapshots return contract-shaped data');
   check('per-symbol features exposed', snap.featuresOf(SYM)?.baselineReady === true);
   check('ignore decisions counted, not stored', engine.ignoredCount() > 0 &&
     engine.decisions(2000).every((d) => d.kind !== 'ignore'));
+  const vocabulary = snap.rejectVocabulary();
+  check('volume_not_abnormal retires to a non-reject ignore outcome',
+    VOLUME_HISTORICAL_REJECT_CODE_MAP.volume_not_abnormal.successorOutcome === 'ignore'
+      && VOLUME_HISTORICAL_REJECT_CODE_MAP.volume_not_abnormal.successorCode === null);
+  check('risk_blocked moves to the canonical risk_rejected event',
+    VOLUME_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorOutcome === 'risk_rejected'
+      && VOLUME_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorCode === null);
+  check('retired Volume spellings cannot appear in the detector vocabulary',
+    ['volume_not_abnormal', 'risk_blocked'].every((code) => !VOLUME_REJECT_CODES.includes(code)));
+  check('snapshot exposes exact Volume vocabulary and historical map',
+    JSON.stringify(vocabulary.emitted) === JSON.stringify(VOLUME_REJECT_CODES)
+      && vocabulary.historical.volume_not_abnormal.successorOutcome === 'ignore');
 }
 
 // ================================================================

@@ -69,7 +69,15 @@ export interface ConservativeEconomicInputs {
   readonly estimatedBorrowCost: NonNegativeDecimal | null;
   readonly estimatedSpreadCost: NonNegativeDecimal | null;
   readonly estimatedSlippage: NonNegativeDecimal | null;
+  readonly estimatedLatencyCost: NonNegativeDecimal | null;
+  readonly estimatedAdverseSelectionCost: NonNegativeDecimal | null;
+  readonly estimatedRecoveryCost: NonNegativeDecimal | null;
+  readonly estimatedCapitalOpportunityCost: NonNegativeDecimal | null;
   readonly liquidityCapacity: NonNegativeDecimal | null;
+  /** Canonical owner facts bound per private/public economic component. */
+  readonly fundingSourceIds: readonly string[];
+  readonly borrowSourceIds: readonly string[];
+  readonly capitalOpportunitySourceIds: readonly string[];
   readonly exactSourceIds: readonly string[];
   readonly missingFields: readonly string[];
 }

@@ -8,6 +8,7 @@ import type {
   Clock,
   Decision,
   EventSink,
+  RiskVerdictBridge,
   SymbolMeta,
   TradeTick,
 } from '../v0/types.js';
@@ -214,6 +215,10 @@ export class VolumeEngine {
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----
   intentFor(proposalId: string): IntentResult {
     return this.proposalStore.intentFor(proposalId, this.killSwitchOn);
+  }
+
+  recordRiskResult(proposalId: string, verdict: Readonly<RiskVerdictBridge>): boolean {
+    return this.proposalStore.recordRiskResult(proposalId, verdict);
   }
 
   // ---- core tick ----

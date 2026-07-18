@@ -6,9 +6,9 @@
  * kill switch is on. Every lifecycle step is ledgered with the signal's
  * correlationId.
  */
-import type { Clock, Decision, EngineProposal, EventSink, OrderIntentStub } from '../v0/types.js';
+import type { Clock, Decision, EventSink, OrderIntentStub, RiskVerdictBridge } from '../v0/types.js';
 import { newCorrelationId } from '../v0/clock.js';
-import type { InvalidationReason, InvalidationRule, WakeupSnapshot } from './types.js';
+import type { InvalidationReason, InvalidationRule, VolumeProposal, WakeupSnapshot } from './types.js';
 import type { VolumeConfig } from './config.js';
 import { boundedEvidence, makeEvent } from './events.js';
 
@@ -16,7 +16,7 @@ export type IntentResult =
   | { ok: true; intent: OrderIntentStub }
   | { ok: false; reason: 'kill_switch_on' | 'proposal_not_open' | 'proposal_unknown' };
 
-interface StoredProposal extends EngineProposal {
+interface StoredProposal extends VolumeProposal {
   rule: InvalidationRule;
   invalidatedBy: InvalidationReason | null;
 }
@@ -28,8 +28,19 @@ function proposalFingerprint(
   confidence: number | null,
   reason: string,
   evidence: Record<string, number | string | boolean | null>,
+  baselineVolume: number | null,
+  currentVolume1m: number | null,
+  tradeCountMultiple: number | null,
 ): string {
-  return JSON.stringify({ direction, confidence, reason, evidence });
+  return JSON.stringify({
+    direction,
+    confidence,
+    reason,
+    evidence,
+    baselineVolume,
+    currentVolume1m,
+    tradeCountMultiple,
+  });
 }
 
 export class ProposalStore {
@@ -44,14 +55,30 @@ export class ProposalStore {
   ) {}
 
   /** Create or refresh the open proposal for a symbol from a proposal decision. */
-  upsertFromDecision(d: Decision, f: WakeupSnapshot): EngineProposal {
+  upsertFromDecision(d: Decision, f: WakeupSnapshot): VolumeProposal {
     const now = this.clock.now();
     const direction = d.evidence.direction === 'short' ? 'short' : 'long';
     const confidence = typeof d.evidence.confidence === 'number' && Number.isFinite(d.evidence.confidence)
       ? Math.max(0, Math.min(1, d.evidence.confidence))
       : null;
     const evidence = boundedEvidence(d.evidence);
-    const fingerprint = proposalFingerprint(direction, confidence, d.humanReason, evidence);
+    const baselineVolume = Number.isFinite(f.baseline.quotePerMinMedian) && f.baseline.quotePerMinMedian >= 0
+      ? f.baseline.quotePerMinMedian : null;
+    const currentVolume1m = Number.isFinite(f.windows['60s']?.quoteVolume)
+      && (f.windows['60s']?.quoteVolume ?? -1) >= 0
+      ? f.windows['60s']!.quoteVolume : null;
+    const tradeCountMultiple = typeof d.evidence.tcMult5s === 'number'
+      && Number.isFinite(d.evidence.tcMult5s) && d.evidence.tcMult5s >= 0
+      ? d.evidence.tcMult5s : null;
+    const fingerprint = proposalFingerprint(
+      direction,
+      confidence,
+      d.humanReason,
+      evidence,
+      baselineVolume,
+      currentVolume1m,
+      tradeCountMultiple,
+    );
     const refPrice = f.spotAsk ?? f.spotBid ?? 0;
     const existingId = this.openBySymbol.get(d.symbol);
     const existing = existingId ? this.proposals.get(existingId) : undefined;
@@ -63,6 +90,10 @@ export class ProposalStore {
       existing.confidence = confidence;
       existing.evidence = evidence;
       existing.reason = d.humanReason;
+      existing.baselineVolume = baselineVolume;
+      existing.currentVolume1m = currentVolume1m;
+      existing.tradeCountMultiple = tradeCountMultiple;
+      existing.riskResult = null;
       this.fingerprintById.set(existing.id, fingerprint);
       this.sink.emit(
         makeEvent('proposal_updated', now, existing.correlationId, `proposal refreshed: ${d.humanReason}`, {
@@ -98,6 +129,10 @@ export class ProposalStore {
       confidence,
       invalidation: `invalid if 60s volume multiple < ${rule.volumeNormalizedBelowMultiple}×, spread > ${rule.spreadBlownOutBps}bps, |move| from ${refPrice} > ${rule.moveExhaustedPct}%, or ${this.cfg.proposalTtlMs / 60000}min TTL`,
       evidence,
+      baselineVolume,
+      currentVolume1m,
+      tradeCountMultiple,
+      riskResult: null,
       rule,
       invalidatedBy: null,
     };
@@ -212,6 +247,12 @@ export class ProposalStore {
     if (!p) return { ok: false, reason: 'proposal_unknown' };
     if (p.status !== 'open' && p.status !== 'updated') return { ok: false, reason: 'proposal_not_open' };
     if (killSwitch) {
+      p.riskResult = Object.freeze({
+        allowed: false,
+        reasons: Object.freeze(['kill_switch_on']),
+        correlationId: p.correlationId,
+        ts: this.clock.now(),
+      });
       this.sink.emit(
         makeEvent('risk_rejected', this.clock.now(), p.correlationId, 'intent blocked: kill switch is ON', {
           symbol: p.symbol,
@@ -234,19 +275,41 @@ export class ProposalStore {
     };
   }
 
-  openProposals(): EngineProposal[] {
+  /** Attach the canonical risk bridge result without recomputing risk. */
+  recordRiskResult(proposalId: string, verdict: Readonly<RiskVerdictBridge>): boolean {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal || (proposal.status !== 'open' && proposal.status !== 'updated')) return false;
+    if (
+      !verdict
+      || typeof verdict.allowed !== 'boolean'
+      || verdict.correlationId !== proposal.correlationId
+      || !Number.isSafeInteger(verdict.ts)
+      || verdict.ts < 0
+      || !Array.isArray(verdict.reasons)
+      || verdict.reasons.some((reason) => typeof reason !== 'string' || reason.length === 0 || reason.length > 256)
+    ) return false;
+    proposal.riskResult = Object.freeze({
+      allowed: verdict.allowed,
+      reasons: Object.freeze([...verdict.reasons]),
+      correlationId: verdict.correlationId,
+      ts: verdict.ts,
+    });
+    return true;
+  }
+
+  openProposals(): VolumeProposal[] {
     return [...this.proposals.values()].filter((p) => p.status === 'open' || p.status === 'updated');
   }
 
-  all(): EngineProposal[] {
+  all(): VolumeProposal[] {
     return [...this.proposals.values()];
   }
 
-  byId(id: string): EngineProposal | undefined {
+  byId(id: string): VolumeProposal | undefined {
     return this.proposals.get(id);
   }
 
-  openFor(symbol: string): EngineProposal | undefined {
+  openFor(symbol: string): VolumeProposal | undefined {
     const id = this.openBySymbol.get(symbol);
     return id ? this.proposals.get(id) : undefined;
   }

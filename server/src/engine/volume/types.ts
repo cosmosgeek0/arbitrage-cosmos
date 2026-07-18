@@ -5,10 +5,12 @@
  * and flagged for Director reconciliation in the lane report.
  */
 import type {
+  EngineProposal,
   FeatureSnapshot,
-  RejectCode,
+  RiskVerdictBridge,
   WindowKey,
 } from '../v0/types.js';
+import type { VolumeRejectCode } from './rejectVocabulary.js';
 
 // ---------- extended reject vocabulary ----------
 
@@ -27,13 +29,13 @@ export type VolumeDetailCode =
   | 'aggregate_single_print'; // one aggTrade aggregating a single raw print
 
 /** Map a detail code to the closest frozen v0 code (contract-safe). */
-export const DETAIL_TO_V0: Record<VolumeDetailCode, RejectCode> = {
+export const DETAIL_TO_V0 = {
   wash_uniformity_suspect: 'taker_imbalance_missing',
   imbalance_weak: 'taker_imbalance_missing',
   depth_vanished: 'depth_too_thin',
-  confirmation_pending: 'volume_not_abnormal',
+  confirmation_pending: null,
   aggregate_single_print: 'one_print_spike',
-};
+} as const satisfies Record<VolumeDetailCode, VolumeRejectCode | null>;
 
 // ---------- tape / raw trade forensics ----------
 
@@ -129,6 +131,18 @@ export interface PriorityBreakdown {
   spreadQuality: number;
   depthQuality: number;
   focusAgePenalty: number;
+}
+
+/** Volume-owned proposal fields copied from the decisive feature cut. */
+export interface VolumeProposal extends EngineProposal {
+  /** Robust completed-minute median supplied by the baseline owner. */
+  baselineVolume: number | null;
+  /** Current rolling 60-second quote volume supplied by the window owner. */
+  currentVolume1m: number | null;
+  /** Detector's decisive 5-second trade-count multiple. */
+  tradeCountMultiple: number | null;
+  /** Attached result from the existing risk bridge; null until supplied. */
+  riskResult: Readonly<Omit<RiskVerdictBridge, 'reasons'> & { readonly reasons: readonly string[] }> | null;
 }
 
 // ---------- proposal invalidation ----------

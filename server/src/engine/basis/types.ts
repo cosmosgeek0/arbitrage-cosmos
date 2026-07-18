@@ -14,6 +14,7 @@ import type {
   SymbolMeta,
   SymbolState,
 } from '../v0/types.js';
+import type { BasisRejectCode } from './rejectVocabulary.js';
 
 // ---------- market inputs beyond v0 ----------
 
@@ -165,7 +166,7 @@ export interface BorrowVerdict {
   /** v0 proposal-facing status */
   status: 'not_needed' | 'unknown' | 'available' | 'unavailable';
   ok: boolean;
-  rejectCode: RejectCode | null;
+  rejectCode: Extract<BasisRejectCode, 'borrow_unknown' | 'borrow_unavailable' | 'borrow_too_small' | 'borrow_cost_too_high'> | null;
   human: string;
   /** interest over the expected hold, pct of notional (0 when not borrowing) */
   costPctOverHold: number;

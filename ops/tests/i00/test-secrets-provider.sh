@@ -15,7 +15,7 @@ cp "$TEST_DIR/fixtures/fake-aws.sh" "$SIMULATION_ROOT/fakes/aws-fixture.sh"
 chmod +x "$SIMULATION_ROOT/fakes/aws-fixture.sh"
 node "$I00_ROOT/bin/seal-simulation-root.mjs" --root "$SIMULATION_ROOT" --commands "$SIMULATION_ROOT/fakes/aws-fixture.sh" >/dev/null
 cat > "$TEST_TMP/provider.json" <<'JSON'
-{"schemaVersion":1,"secretArn":"arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd","region":"ap-south-1","targetHost":"ip-10-0-0-10.internal","environment":"production","resultReceiptTarget":"/var/lib/cosmos/receipts/auth-secret-materialization-20260713-001.result.json","reconciliationReceiptTarget":"/var/lib/cosmos/receipts/auth-secret-materialization-20260713-001.reconciliation.json","requiredKeys":["BINANCE_API_KEY","BINANCE_API_SECRET"]}
+{"schemaVersion":2,"secretArn":"arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd","region":"ap-south-1","targetHost":"ip-10-0-0-10.internal","environment":"production","operator":"ops-owner-17","deployedSha":"0123456789abcdef0123456789abcdef01234567","configVersion":"config-i00-production-17","riskVersion":"risk-i00-production-9","authorizationNonce":"9f2c712dba93ab3274f6f71be245a76761957cd7d7a557676354264138b8f10e","serverPreviewDigest":"sha256:3aa38a96963e373aafce346d961eb0f631c5b0863cbf6f99a1e169a51cabfe89","resultReceiptTarget":"/var/lib/cosmos/receipts/auth-secret-materialization-20260713-001.result.json","reconciliationReceiptTarget":"/var/lib/cosmos/receipts/auth-secret-materialization-20260713-001.reconciliation.json","requiredKeys":["BINANCE_API_KEY","BINANCE_API_SECRET"]}
 JSON
 
 note "fake exact-ARN provider materializes without stdout disclosure"
@@ -65,7 +65,10 @@ cat > "$TEST_TMP/auth.json" <<'JSON'
   "startsAtUtc": "2026-07-13T00:15:00Z",
   "expiresAtUtc": "2026-07-13T01:00:00Z",
   "allowedCommands": ["secrets-provider"],
-  "allowedEndpoints": ["arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd"],
+  "allowedEndpoints": [
+    "arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd",
+    "/var/lib/cosmos/runtime/app-secrets.json"
+  ],
   "allowedProducts": ["AWS Secrets Manager"],
   "allowedCredentials": {
     "types": ["AWS_INSTANCE_PROFILE_ROLE"],
@@ -91,12 +94,19 @@ cat > "$TEST_TMP/auth.json" <<'JSON'
 }
 JSON
 AUTH_CLOCK=(--simulation-clock --now 2026-07-13T00:30:00Z)
-AUTH_BASE=(--input "$TEST_TMP/auth.json" --class SECRET_MATERIALIZATION "${AUTH_CLOCK[@]}" --command secrets-provider --expected-host ip-10-0-0-10.internal --expected-environment production)
-assert_success node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}"
-assert_success node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" \
+AUTH_BASE=(--input "$TEST_TMP/auth.json" --class SECRET_MATERIALIZATION "${AUTH_CLOCK[@]}" --command secrets-provider \
+  --expected-operator ops-owner-17 \
+  --expected-deployed-sha 0123456789abcdef0123456789abcdef01234567 \
+  --expected-config-version config-i00-production-17 \
+  --expected-risk-version risk-i00-production-9 \
+  --expected-nonce 9f2c712dba93ab3274f6f71be245a76761957cd7d7a557676354264138b8f10e \
+  --expected-server-preview-digest sha256:3aa38a96963e373aafce346d961eb0f631c5b0863cbf6f99a1e169a51cabfe89 \
+  --expected-host ip-10-0-0-10.internal \
+  --expected-environment production \
   --expected-scope cosmos-production-secret-materialization \
   --expected-account aws:123456789012 \
   --expected-endpoint arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd \
+  --expected-endpoint /var/lib/cosmos/runtime/app-secrets.json \
   --expected-product "AWS Secrets Manager" \
   --expected-credential-type AWS_INSTANCE_PROFILE_ROLE \
   --expected-permission secretsmanager:GetSecretValue \
@@ -104,7 +114,9 @@ assert_success node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}"
   --expected-reconciliation-receipt /var/lib/cosmos/receipts/auth-secret-materialization-20260713-001.reconciliation.json \
   --expected-maximum-capital ZERO \
   --expected-maximum-notional ZERO \
-  --expected-maximum-effect "read one exact secret version into one 0600 runtime credential"
+  --expected-maximum-effect "read one exact secret version into one 0600 runtime credential")
+assert_success node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}"
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" --input "$TEST_TMP/auth.json" --class SECRET_MATERIALIZATION "${AUTH_CLOCK[@]}" --command secrets-provider --expected-host ip-10-0-0-10.internal --expected-environment production
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" --input "$TEST_TMP/auth.json" --class SERVICE_RELEASE_SWITCH "${AUTH_CLOCK[@]}" --command release-switch --expected-host ip-10-0-0-10.internal --expected-environment production
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" --input "$TEST_TMP/auth.json" --class SECRET_MATERIALIZATION --simulation-clock --now 2026-07-13T02:00:00Z --command secrets-provider --expected-host ip-10-0-0-10.internal --expected-environment production
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" --input "$TEST_TMP/auth.json" --class SECRET_MATERIALIZATION "${AUTH_CLOCK[@]}" --command secrets-provider --expected-host other-host.internal --expected-environment production
@@ -144,10 +156,38 @@ assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$
 mutate_auth "$TEST_TMP/auth-withdrawal.json" 'value.allowedCredentials.permissions=["exchange:Withdraw"];'
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-withdrawal.json}"
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-account aws:999999999999
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-operator another-operator
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-deployed-sha fedcba9876543210fedcba9876543210fedcba98
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-config-version config-i00-production-18
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-risk-version risk-i00-production-10
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-nonce aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-server-preview-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+MISSING_ENDPOINT_BASE=("${AUTH_BASE[@]}")
+MISSING_ENDPOINT_BASE=()
+for ((index = 0; index < ${#AUTH_BASE[@]}; index += 1)); do
+  if [ "${AUTH_BASE[$index]}" = --expected-endpoint ] \
+    && [ "${AUTH_BASE[$((index + 1))]}" = /var/lib/cosmos/runtime/app-secrets.json ]; then
+    index=$((index + 1))
+    continue
+  fi
+  MISSING_ENDPOINT_BASE+=("${AUTH_BASE[$index]}")
+done
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${MISSING_ENDPOINT_BASE[@]}"
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-endpoint arn:aws:secretsmanager:ap-south-1:123456789012:secret:some-other-secret
+mutate_auth "$TEST_TMP/auth-extra-endpoint.json" 'value.allowedEndpoints.push("/unreviewed/path");'
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-extra-endpoint.json}"
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-product "Cloudflare Tunnel"
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-credential-type AWS_STATIC_ACCESS_KEY
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-permission secretsmanager:PutSecretValue
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-result-receipt /tmp/reused-result.json
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-maximum-effect "read any secret"
+
+note "all six external action callers supply one complete independent expectation set"
+for caller in release-switch.sh rollback-switch.sh install-ops-bundle.sh backup-verify.sh restore-drill-verify.sh secrets-provider.mjs; do
+  SOURCE="$(cat "$I00_ROOT/bin/$caller")"
+  for binding in --expected-operator --expected-deployed-sha --expected-config-version --expected-risk-version --expected-nonce --expected-server-preview-digest --expected-endpoint; do
+    assert_contains "$SOURCE" "$binding"
+  done
+  assert_eq "$(grep -c 'validate-authorization\.mjs' "$I00_ROOT/bin/$caller")" 1
+done
 finish

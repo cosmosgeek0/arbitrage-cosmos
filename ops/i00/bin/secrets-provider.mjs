@@ -11,7 +11,8 @@ for (const key of ['config', 'output']) if (!args[key]) fail(`--${key} is requir
 const config = readJson(args.config, 'Secrets Manager provider config');
 requireKeys(config, [
   'schemaVersion', 'secretArn', 'region', 'requiredKeys', 'targetHost', 'environment',
-  'resultReceiptTarget', 'reconciliationReceiptTarget',
+  'operator', 'deployedSha', 'configVersion', 'riskVersion', 'authorizationNonce',
+  'serverPreviewDigest', 'resultReceiptTarget', 'reconciliationReceiptTarget',
 ], 'Secrets Manager provider config');
 if (hasPlaceholder(config.secretArn) || !/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[A-Za-z0-9/_+=.@-]+-[A-Za-z0-9]{6}$/.test(config.secretArn)) {
   fail('secretArn must be one exact, fully suffixed Secrets Manager ARN');
@@ -30,6 +31,12 @@ if (!args.simulation) {
     '--input', args.authorization, '--class', 'SECRET_MATERIALIZATION',
     '--command', 'secrets-provider', '--expected-host', config.targetHost,
     '--expected-environment', config.environment,
+    '--expected-operator', config.operator,
+    '--expected-deployed-sha', config.deployedSha,
+    '--expected-config-version', config.configVersion,
+    '--expected-risk-version', config.riskVersion,
+    '--expected-nonce', config.authorizationNonce,
+    '--expected-server-preview-digest', config.serverPreviewDigest,
     '--expected-scope', 'cosmos-production-secret-materialization',
     '--expected-account', `aws:${account}`,
     '--expected-product', 'AWS Secrets Manager',
@@ -40,10 +47,12 @@ if (!args.simulation) {
     '--expected-maximum-capital', 'ZERO', '--expected-maximum-notional', 'ZERO',
     '--expected-maximum-effect', 'read one exact secret version into one exact 0600 runtime credential',
   ];
-  for (const endpoint of [config.secretArn, resolve(args.output)]) {
-    const check = spawnSync(process.execPath, [...authorizationBase, '--expected-endpoint', endpoint], { encoding: 'utf8' });
-    if (check.status !== 0) fail('external authorization rejected for exact secret materialization scope');
-  }
+  const check = spawnSync(process.execPath, [
+    ...authorizationBase,
+    '--expected-endpoint', config.secretArn,
+    '--expected-endpoint', resolve(args.output),
+  ], { encoding: 'utf8' });
+  if (check.status !== 0) fail('external authorization rejected for exact secret materialization scope');
 }
 
 let aws = process.env.AWS_CLI;

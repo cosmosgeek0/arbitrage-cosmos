@@ -7,6 +7,7 @@ I00_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 DONOR_ROOT="${DONOR_ROOT:-$I00_ROOT/accepted-ops-live}"
 
 RELEASE="" ENV_FILE="" RUNTIME_ENV="" HOST="" SUPERVISOR="" AUTHORIZATION="" RESULT_RECEIPT="" RECONCILIATION_RECEIPT="" EVIDENCE_ROOT="" NOW="" SIMULATION_ROOT="" SIMULATION=0
+OPERATOR="" CONFIG_VERSION="" RISK_VERSION="" AUTHORIZATION_NONCE="" SERVER_PREVIEW_DIGEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --release) RELEASE="${2:?--release needs a value}"; shift 2 ;;
@@ -15,6 +16,11 @@ while [ $# -gt 0 ]; do
     --host) HOST="${2:?--host needs a value}"; shift 2 ;;
     --supervisor) SUPERVISOR="${2:?--supervisor needs a value}"; shift 2 ;;
     --authorization) AUTHORIZATION="${2:?--authorization needs a value}"; shift 2 ;;
+    --operator) OPERATOR="${2:?--operator needs a value}"; shift 2 ;;
+    --config-version) CONFIG_VERSION="${2:?--config-version needs a value}"; shift 2 ;;
+    --risk-version) RISK_VERSION="${2:?--risk-version needs a value}"; shift 2 ;;
+    --authorization-nonce) AUTHORIZATION_NONCE="${2:?--authorization-nonce needs a value}"; shift 2 ;;
+    --server-preview-digest) SERVER_PREVIEW_DIGEST="${2:?--server-preview-digest needs a value}"; shift 2 ;;
     --result-receipt) RESULT_RECEIPT="${2:?--result-receipt needs a value}"; shift 2 ;;
     --reconciliation-receipt) RECONCILIATION_RECEIPT="${2:?--reconciliation-receipt needs a value}"; shift 2 ;;
     --evidence-root) EVIDENCE_ROOT="${2:?--evidence-root needs a value}"; shift 2 ;;
@@ -52,8 +58,10 @@ if [ "$SIMULATION" = 1 ]; then
   mkdir -p "$SIMULATION_ROOT/home" "$SIMULATION_ROOT/tmp"
   EFFECTIVE_NOW="$NOW"
 else
-  [ -n "$AUTHORIZATION" ] && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] && [ -n "$EVIDENCE_ROOT" ] \
-    || { printf 'I00_OPS_BLOCKED: real rollback requires authorization and exact result/reconciliation receipt targets\n' >&2; exit 1; }
+  [ -n "$AUTHORIZATION" ] && [ -n "$OPERATOR" ] && [ -n "$CONFIG_VERSION" ] && [ -n "$RISK_VERSION" ] \
+    && [ -n "$AUTHORIZATION_NONCE" ] && [ -n "$SERVER_PREVIEW_DIGEST" ] && [ -n "$RESULT_RECEIPT" ] \
+    && [ -n "$RECONCILIATION_RECEIPT" ] && [ -n "$EVIDENCE_ROOT" ] \
+    || { printf 'I00_OPS_BLOCKED: real rollback requires authorization, independent operator/revision/nonce/preview truth, and exact receipt targets\n' >&2; exit 1; }
   [ -z "$NOW" ] || { printf 'I00_OPS_BLOCKED: real rollback does not accept a caller clock\n' >&2; exit 1; }
   EFFECTIVE_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   TARGET_HOST="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.targetHost)' "$HOST")"
@@ -61,16 +69,14 @@ else
   TARGET_ACCOUNT="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.account)' "$HOST")"
   MANIFEST_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$RELEASE/artifact-manifest.json")"
   TRUSTED_BUILD_KEY_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}")"
-  AUTH_BASE=(--input "$AUTHORIZATION" --class SERVICE_ROLLBACK --command rollback-switch --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-rollback --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 immutable release" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission systemd:RestartExactCosmosAppUnit --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "switch to one exact schema-compatible immutable rollback release and restart one exact application unit")
-  for endpoint in "release-sha:$CANDIDATE_SHA" "artifact-manifest-sha256:$MANIFEST_SHA" "trusted-builder-public-key-sha256:$TRUSTED_BUILD_KEY_SHA" "release-path:$(cd "$RELEASE" && pwd -P)"; do
-    node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-endpoint "$endpoint" >/dev/null
-  done
+  AUTH_BASE=(--input "$AUTHORIZATION" --class SERVICE_ROLLBACK --command rollback-switch --expected-operator "$OPERATOR" --expected-deployed-sha "$CANDIDATE_SHA" --expected-config-version "$CONFIG_VERSION" --expected-risk-version "$RISK_VERSION" --expected-nonce "$AUTHORIZATION_NONCE" --expected-server-preview-digest "$SERVER_PREVIEW_DIGEST" --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-rollback --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 immutable release" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission systemd:RestartExactCosmosAppUnit --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "switch to one exact schema-compatible immutable rollback release and restart one exact application unit")
+  AUTH_ENDPOINTS=(--expected-endpoint "release-sha:$CANDIDATE_SHA" --expected-endpoint "artifact-manifest-sha256:$MANIFEST_SHA" --expected-endpoint "trusted-builder-public-key-sha256:$TRUSTED_BUILD_KEY_SHA" --expected-endpoint "release-path:$(cd "$RELEASE" && pwd -P)")
   SANITIZED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i00-rollback-switch.XXXXXX")"
   chmod 700 "$SANITIZED_DIR"
   DELEGATE_ENV="$SANITIZED_DIR/rollback.env"
   node "$SCRIPT_DIR/sanitize-donor-env.mjs" --env "$ENV_FILE" --output "$DELEGATE_ENV" --profile deploy >/dev/null
   DELEGATE_ENV_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$DELEGATE_ENV")"
-  node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-endpoint "donor-env-sha256:$DELEGATE_ENV_SHA" >/dev/null
+  node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" "${AUTH_ENDPOINTS[@]}" --expected-endpoint "donor-env-sha256:$DELEGATE_ENV_SHA" >/dev/null
 fi
 cleanup_delegate_env() {
   rm -f "${DELEGATE_ENV:-}"

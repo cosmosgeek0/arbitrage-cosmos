@@ -64,4 +64,4 @@ all money controls remain blocked.
 
 Server binds to `127.0.0.1` unless `HOST` is set. Remote API/WebSocket access requires a verified Cloudflare Access JWT (issuer, audience, signature, subject, email matching `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, `CONTROL_ROOM_OPERATOR_EMAIL`); state-changing remote requests also require exact HTTPS same-origin.
 
-Declared private-deploy target (verify against the real environment): `https://arbitrage.cosmosgeek.org` · EC2 `/opt/arbitrage-cosmos` · local origin `127.0.0.1:8080` · tunnel `cosmosgeek-arbitrage`.
+Declared private-deploy target (verify against the real environment): `https://arbitrage.cosmosgeek.org` · EC2 `/opt/cosmos/current` · local origin `127.0.0.1:8080` · tunnel `cosmosgeek-arbitrage`.

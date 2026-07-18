@@ -47,11 +47,17 @@ rm -rf "$MALICIOUS_ROOT"
 note "authorization scope and expiry are exact"
 cat > "$TEST_TMP/auth.json" <<'JSON'
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authorizationId": "auth-secret-materialization-20260713-001",
+  "operator": "ops-owner-17",
   "status": "APPROVED",
   "actionClasses": ["SECRET_MATERIALIZATION"],
   "scope": "cosmos-production-secret-materialization",
+  "deployedSha": "0123456789abcdef0123456789abcdef01234567",
+  "configVersion": "config-i00-production-17",
+  "riskVersion": "risk-i00-production-9",
+  "nonce": "9f2c712dba93ab3274f6f71be245a76761957cd7d7a557676354264138b8f10e",
+  "serverPreviewDigest": "sha256:3aa38a96963e373aafce346d961eb0f631c5b0863cbf6f99a1e169a51cabfe89",
   "account": "aws:123456789012",
   "environment": "production",
   "host": "ip-10-0-0-10.internal",
@@ -113,6 +119,18 @@ mutate_auth "$TEST_TMP/auth-missing.json" 'delete value.receiptTargets;'
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-missing.json}"
 mutate_auth "$TEST_TMP/auth-missing-start.json" 'delete value.startsAtUtc;'
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-missing-start.json}"
+for field in operator deployedSha configVersion riskVersion nonce serverPreviewDigest; do
+  mutate_auth "$TEST_TMP/auth-missing-$field.json" "delete value.$field;"
+  assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-missing-$field.json}"
+done
+mutate_auth "$TEST_TMP/auth-extra.json" 'value.unreviewedBinding="forbidden";'
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-extra.json}"
+mutate_auth "$TEST_TMP/auth-short-sha.json" 'value.deployedSha="0123456789abcdef";'
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-short-sha.json}"
+mutate_auth "$TEST_TMP/auth-short-nonce.json" 'value.nonce="deadbeef";'
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-short-nonce.json}"
+mutate_auth "$TEST_TMP/auth-bad-preview.json" 'value.serverPreviewDigest="sha256:abcd";'
+assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-bad-preview.json}"
 mutate_auth "$TEST_TMP/auth-empty.json" 'value.preconditions=[];'
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$TEST_TMP\/auth.json/$TEST_TMP\/auth-empty.json}"
 mutate_auth "$TEST_TMP/auth-placeholder.json" 'value.account="REPLACE_ME_ACCOUNT";'

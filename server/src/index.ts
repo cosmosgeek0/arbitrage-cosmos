@@ -93,6 +93,7 @@ import { createProductRuntimeSystemControlCommandOwner } from './productIntegrat
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
+import { DataDirLease } from './systemIntegration/persistence/dataDirLease.js';
 
 // Minimal .env loader (no dependency). Never logs values.
 // SKIP_DOTENV lets the gates harness boot deterministically keyless, ignoring
@@ -133,9 +134,28 @@ const sourceLogoCache = new Map<string, SourceLogoEntry>();
 const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
 const sourceLogoFailures = new Map<string, number>();
 
-const ledger = new Ledger(
-  process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
-);
+const canonicalDataDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.resolve(process.cwd(), 'data');
+fs.mkdirSync(canonicalDataDir, { recursive: true });
+// This process lease is acquired before the Ledger, boot-generation mutation,
+// listeners, timers, transports, or any owner runtime can start. Lease loss is
+// a fatal fail-closed condition: continuing with uncertain writer ownership is
+// less safe than an immediate nonzero process exit.
+const dataDirLease = new DataDirLease(canonicalDataDir, Object.freeze({
+  onLost: () => {
+    console.error('canonical DATA_DIR writer lease lost; exiting fail-closed');
+    process.exit(1);
+  },
+}));
+const ledger = (() => {
+  try {
+    return new Ledger(canonicalDataDir);
+  } catch (error) {
+    try { dataDirLease.release(); } catch { /* Preserve the Ledger startup failure. */ }
+    throw error;
+  }
+})();
 const config = loadConfig(ledger);
 Object.assign(config, {
   liveTradingEnabled: false,
@@ -3741,6 +3761,15 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     const finalization = finalizeSystemBootReleaseCleanShutdown(bootReleasePersistence, ledger);
     if (!finalization.ok) {
       console.error('control-room shutdown failed after listener closure:', finalization.code);
+      return 'SHUTDOWN_FAILED' as const;
+    }
+    try {
+      dataDirLease.release();
+    } catch (error) {
+      console.error(
+        'control-room shutdown failed to release DATA_DIR lease:',
+        error instanceof Error ? error.message : String(error),
+      );
       return 'SHUTDOWN_FAILED' as const;
     }
     console.log('control-room shutdown complete');

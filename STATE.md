@@ -99,7 +99,15 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
 | `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 555 files / 225 discovered | 225/225 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 556 files / 226 discovered | 226/226 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
+
+## Real-gap campaign state
+
+This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.md` in exact order. Each row is independently committed with a focused hostile regression; full mounted denominators are remeasured only after the ranked list is complete.
+
+| Rank | Item | State | Focused proof |
+| ---: | --- | --- | --- |
+| 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires one atomic PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. The hostile lease suite is 4/4, System Integration is 412/412, and live competitors exit before a second boot revision while dead same-host ownership recovers atomically. |
 
 ## Previous source evidence
 
@@ -120,7 +128,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - CI hotfix `6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd` is in Main and candidate ancestry. Hotfix #2 `53c6da81` is `REFERENCE_ONLY`; its useful behavior was independently adapted without admitting its stale branch assumptions.
 - The candidate has exact second-parent merges for egress, A1-A5, observability, operations, replay, runbooks, A-FORMAL, and S2. Their sealed donor tips are candidate ancestors.
 - The Product Assurance historical merge-cut proof remains 193/193 blobs. Current source records seven explicit post-integration replacements, leaving 186 donor-identical HEAD blobs.
-- Product Assurance now scans 555 files and exactly 225 discovered operations with zero uncovered sites.
+- Product Assurance now scans 556 files and exactly 226 discovered operations with zero uncovered sites.
 - The five protected owner-directive root files are absent from this clean candidate checkout. Their exact committed verifier bundle remains verification-only and cannot impersonate live owner input.
 - The retired Role 3 C2 receipt is historical `REFERENCE_ONLY` evidence for C2R. The campaign preserves its exact untracked bytes in a tracked evidence-only descendant; it does not reclassify that receipt as current-candidate verification.
 

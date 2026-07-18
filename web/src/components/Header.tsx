@@ -6,7 +6,7 @@ import {
   type CompatibilityStateStatus,
   type Page,
 } from '../store';
-import type { LedgerEvent, MarketRow } from '../types';
+import type { MarketRow } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
@@ -14,6 +14,7 @@ import { curateNotifications, groupNotifications, notificationEnabled } from '..
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
+import { useNotificationFeed } from '../lib/notificationFeed';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
@@ -1470,6 +1471,7 @@ function SharedTopBar() {
     fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
   } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
+  const notificationFeedState = useNotificationFeed();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
@@ -1505,101 +1507,10 @@ function SharedTopBar() {
   const [now, setNow] = useState(() => new Date());
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
-  const [notifLiveEvents, setNotifLiveEvents] = useState<LedgerEvent[]>([]);
-  const [notificationFeedState, setNotificationFeedState] = useState<{
-    status: 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
-    lastSuccessAt: number | null;
-    error: string | null;
-  }>({ status: 'LOADING', lastSuccessAt: null, error: null });
-  const notifLiveCursor = useRef(0);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
-  useEffect(() => {
-    let bootstrapped = false;
-    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-    const readEventRows = async (url: string, signal: AbortSignal): Promise<LedgerEvent[]> => {
-      const rows = await fetchJson<LedgerEvent[]>(url, { cache: 'no-store', signal }, 10_000);
-      if (!Array.isArray(rows)) throw new Error('events payload is invalid');
-      return rows;
-    };
-    let pendingBootstrapKinds = [...relevantKinds];
-    let bootstrapHighWater: number | null = null;
-    const bootstrapSince = Date.now() - 24 * 60 * 60_000;
-    const notificationPoll = createSettledPoll<{
-      items: LedgerEvent[];
-      bootstrapFailures: number;
-      bootstrapSuccesses: number;
-    }>({
-      intervalMs: 5_000,
-      timeoutMs: 15_000,
-      request: async (signal) => {
-        let items: LedgerEvent[] = [];
-        let bootstrapFailures = 0;
-        let bootstrapSuccesses = 0;
-        if (!bootstrapped) {
-          if (bootstrapHighWater === null) {
-            const head = await readEventRows('/api/events?limit=1', signal);
-            bootstrapHighWater = head[0]?.id ?? 0;
-          }
-          const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
-          const attemptedKinds = pendingBootstrapKinds;
-          const bootstrapReads = await Promise.allSettled(attemptedKinds.map((kind) => readEventRows(
-            `/api/events?since=${bootstrapSince}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
-            signal,
-          )));
-          if (signal.aborted) throw signal.reason;
-          items = bootstrapReads.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
-          pendingBootstrapKinds = attemptedKinds.filter((_, index) => bootstrapReads[index]?.status === 'rejected');
-          bootstrapFailures = pendingBootstrapKinds.length;
-          bootstrapSuccesses = attemptedKinds.length - bootstrapFailures;
-          if (bootstrapFailures === 0) {
-            notifLiveCursor.current = Math.max(notifLiveCursor.current, bootstrapHighWater);
-            bootstrapped = true;
-          }
-        } else {
-          let afterId = notifLiveCursor.current;
-          for (let page = 0; page < 5; page += 1) {
-            const rows = await readEventRows(`/api/events?afterId=${afterId}&limit=2000`, signal);
-            items.push(...rows);
-            if (rows.length < 2_000) break;
-            afterId = Math.max(afterId, ...rows.map((item) => item.id));
-          }
-        }
-        return { items, bootstrapFailures, bootstrapSuccesses };
-      },
-      onSuccess: ({ items, bootstrapFailures, bootstrapSuccesses }) => {
-        if (items.length > 0) {
-          notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
-          setNotifLiveEvents((current) => {
-            const merged = new Map<number, LedgerEvent>();
-            for (const item of current) merged.set(item.id, item);
-            for (const item of items) merged.set(item.id, item);
-            return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
-          });
-        }
-        if (bootstrapFailures > 0) {
-          setNotificationFeedState((current) => ({
-            status: current.lastSuccessAt === null && bootstrapSuccesses === 0 ? 'UNAVAILABLE' : 'STALE',
-            lastSuccessAt: bootstrapSuccesses > 0 ? Date.now() : current.lastSuccessAt,
-            error: `${bootstrapFailures} notification history ${bootstrapFailures === 1 ? 'stream is' : 'streams are'} unavailable; retrying only failed streams.`,
-          }));
-          return;
-        }
-        setNotificationFeedState({ status: 'CURRENT', lastSuccessAt: Date.now(), error: null });
-      },
-      onError: (error) => {
-        setNotificationFeedState((current) => ({
-          status: current.lastSuccessAt === null ? 'UNAVAILABLE' : 'STALE',
-          lastSuccessAt: current.lastSuccessAt,
-          error: apiErrorMessage(error, 'Notification feed unavailable'),
-        }));
-      },
-    });
-    notificationPoll.start();
-    return notificationPoll.stop;
-  }, []);
 
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
   const computeGeo = (k: MK) => {
@@ -1706,7 +1617,7 @@ function SharedTopBar() {
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
   const accountTone = 'off';
   const accountSub = 'OWNER GATED · NOT CONFIGURED';
-  const events = state?.events ?? [];
+  const events = notificationFeedState.archive.events;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
@@ -1769,7 +1680,7 @@ function SharedTopBar() {
   const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
   const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
-  const compactSource = notifLiveEvents.length ? notifLiveEvents : events;
+  const compactSource = events.filter((item) => item.ts >= now.getTime() - 24 * 60 * 60_000);
   // Collapse state transitions before applying category preferences. Otherwise
   // disabling routine health notices drops a recovery while leaving its older
   // critical outage visible as if it were still active.

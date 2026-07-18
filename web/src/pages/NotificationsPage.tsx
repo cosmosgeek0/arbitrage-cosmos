@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   IconActivity,
   IconAlert,
@@ -16,12 +16,17 @@ import { useProductControlRoomContext } from '../features/productControlRoom/Pro
 import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
 import { curateNotifications, groupNotifications, notificationEnabled, type CuratedNotification } from '../lib/notifications';
+import {
+  NOTIFICATION_ARCHIVE_LIMIT,
+  retainNotificationArchive,
+  useNotificationFeed,
+  type NotificationArchiveState,
+} from '../lib/notificationFeed';
 import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
-import type { LedgerEvent } from '../types';
 import './LiveIntelligence.css';
 import './NotificationsPage.css';
 
@@ -54,28 +59,8 @@ const FILTERS: { id: NotificationFilter; label: string }[] = [
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
 
-export const NOTIFICATION_ARCHIVE_LIMIT = 10_000;
-
-export interface NotificationArchiveState {
-  events: LedgerEvent[];
-  droppedCount: number;
-}
-
-export function retainNotificationArchive(
-  current: NotificationArchiveState,
-  incoming: readonly LedgerEvent[],
-  cutoff: number,
-): NotificationArchiveState {
-  const merged = new Map<number, LedgerEvent>();
-  current.events.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-  incoming.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-  const ordered = [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id);
-  const discardedThisMerge = Math.max(0, ordered.length - NOTIFICATION_ARCHIVE_LIMIT);
-  return {
-    events: ordered.slice(0, NOTIFICATION_ARCHIVE_LIMIT),
-    droppedCount: current.droppedCount + discardedThisMerge,
-  };
-}
+export { NOTIFICATION_ARCHIVE_LIMIT, retainNotificationArchive };
+export type { NotificationArchiveState };
 
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
@@ -144,12 +129,13 @@ function statusLabel(item: CuratedNotification): string {
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
+  const notificationFeed = useNotificationFeed();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
-  const [archive, setArchive] = useState<NotificationArchiveState>({ events: [], droppedCount: 0 });
+  const archive = notificationFeed.archive;
   const events = archive.events;
-  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
-  const [failed, setFailed] = useState(false);
+  const fetchedAt = notificationFeed.lastSuccessAt;
+  const failed = notificationFeed.status === 'STALE' || notificationFeed.status === 'UNAVAILABLE';
   const [query, setQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState(today);
   const [filter, setFilter] = useState<NotificationFilter>('all');
@@ -157,59 +143,9 @@ export function NotificationsPage() {
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [routing, setRouting] = useState<RoutingSnapshot>(EMPTY_ROUTING);
   const [routingFailed, setRoutingFailed] = useState(false);
-  const cursorRef = useRef(0);
 
   useEffect(() => setSelectedDay(dayKey(new Date(), zone)), [zone]);
   useEffect(() => setDraftRules(prefs.alerts), [prefs.alerts]);
-
-  useEffect(() => {
-    const merge = (incoming: LedgerEvent[]) => {
-      if (incoming.length) cursorRef.current = Math.max(cursorRef.current, ...incoming.map((item) => item.id));
-      const cutoff = Date.now() - 7 * 24 * 60 * 60_000;
-      setArchive((current) => retainNotificationArchive(current, incoming, cutoff));
-    };
-    let bootstrapped = false;
-    let bootstrapHighWater = 0;
-    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-    const poll = createSettledPoll<LedgerEvent[]>({
-      intervalMs: 5_000,
-      timeoutMs: 15_000,
-      request: async (signal) => {
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60_000;
-        if (!bootstrapped) {
-          const head = await fetchJson<LedgerEvent[]>('/api/events?limit=1', { signal });
-          bootstrapHighWater = head[0]?.id ?? 0;
-          const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
-          return (await Promise.all(relevantKinds.map((kind) => fetchJson<LedgerEvent[]>(
-            `/api/events?since=${sevenDaysAgo}&limit=2000&kind=${encodeURIComponent(kind)}${before}`,
-            { signal },
-          )))).flat();
-        }
-        // Drain oldest-first pages after the last seen ledger id. This cannot
-        // skip alerts when more than one page arrives between polls.
-        const incoming: LedgerEvent[] = [];
-        let afterId = cursorRef.current;
-        for (let page = 0; page < 10; page += 1) {
-          const cursor = afterId > 0 ? `&afterId=${afterId}` : '';
-          const rows = await fetchJson<LedgerEvent[]>(`/api/events?since=${sevenDaysAgo}&limit=2000${cursor}`, { signal });
-          incoming.push(...rows);
-          if (rows.length < 2_000) break;
-          afterId = Math.max(afterId, ...rows.map((item) => item.id));
-        }
-        return incoming;
-      },
-      onSuccess: (incoming) => {
-        if (!bootstrapped) cursorRef.current = Math.max(cursorRef.current, bootstrapHighWater);
-        bootstrapped = true;
-        merge(incoming);
-        setFetchedAt(Date.now());
-        setFailed(false);
-      },
-      onError: () => setFailed(true),
-    });
-    poll.start();
-    return poll.stop;
-  }, []);
 
   useEffect(() => {
     const poll = createSettledPoll<RoutingSnapshot>({
@@ -257,7 +193,13 @@ export function NotificationsPage() {
   const unread = enabled.filter((item) => item.id > seen).length;
   const rulesDirty = JSON.stringify(draftRules) !== JSON.stringify(prefs.alerts);
   const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  const status = failed ? 'Archive Unavailable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Loading';
+  const status = notificationFeed.status === 'CURRENT' && fetchedAt
+    ? `Live · ${liveAge(fetchedAt)}`
+    : notificationFeed.status === 'STALE'
+      ? `Archive Stale${fetchedAt ? ` · ${liveAge(fetchedAt)}` : ''}`
+      : notificationFeed.status === 'UNAVAILABLE'
+        ? 'Archive Unavailable'
+        : 'Loading';
   const groupedCount = Math.max(0, curatedRaw.length - notifications.length);
   const excludedCount = Math.max(0, events.length - curatedRaw.length);
 

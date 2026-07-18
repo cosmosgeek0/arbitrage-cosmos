@@ -46,6 +46,20 @@ const productIntegrationClient = createProductIntegrationClient(
 );
 const durableResumeCursor = readDurableMaterialCursor();
 
+function MutationFailureAlert() {
+  const { mutationError } = useStore();
+  return (
+    <div className="global-mutation-alert" role="alert" aria-atomic="true">
+      {mutationError ? (
+        <>
+          <strong>CHANGE NOT SAVED</strong>
+          <span>{mutationError.code} · {mutationError.message}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
@@ -67,6 +81,7 @@ function Shell() {
   return (
     <div className="app-root">
       <Topbar />
+      <MutationFailureAlert />
       <div className="app-body">
         <Sidebar />
         <div className="app-main">

@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { createSerializedWatchlistMutationQueue } from '../../src/store.tsx';
+import {
+  createSerializedWatchlistMutationQueue,
+  reduceMutationFailureTruth,
+} from '../../src/store.tsx';
 
 function deferred() {
   let resolve;
@@ -58,4 +61,40 @@ test('StoreProvider routes watchlist toggles through the serialized queue', asyn
   assert.match(source, /createSerializedWatchlistMutationQueue\(/);
   assert.match(source, /watchlistMutationQueue\.enqueue\(symbol\)/);
   assert.doesNotMatch(source, /const cur = state\?\.config\.watchlist/);
+});
+
+test('watchlist mutation failures remain visible until a later acknowledgement', () => {
+  const firstFailure = Object.freeze({
+    status: 503,
+    code: 'CONFIG_UNAVAILABLE',
+    message: 'Configuration owner is unavailable.',
+  });
+  const secondFailure = Object.freeze({
+    status: 409,
+    code: 'REVISION_CONFLICT',
+    message: 'The configuration revision changed.',
+  });
+
+  const rejected = reduceMutationFailureTruth(null, {
+    kind: 'REJECTED',
+    failure: firstFailure,
+  });
+  assert.strictEqual(rejected, firstFailure);
+  assert.strictEqual(reduceMutationFailureTruth(rejected, {
+    kind: 'REJECTED',
+    failure: secondFailure,
+  }), secondFailure, 'a later rejection must replace stale failure detail');
+  assert.equal(reduceMutationFailureTruth(secondFailure, {
+    kind: 'ACKNOWLEDGED',
+  }), null, 'only an acknowledged mutation clears the visible failure');
+});
+
+test('the app shell mounts one persistent accessible mutation alert consumer', async () => {
+  const source = await readFile(new URL('../../src/App.tsx', import.meta.url), 'utf8');
+  assert.match(source, /function MutationFailureAlert\(\)/);
+  assert.match(source, /role="alert"/);
+  assert.match(source, /aria-atomic="true"/);
+  assert.match(source, /<MutationFailureAlert \/>/);
+  assert.match(source, /mutationError\.code/);
+  assert.match(source, /mutationError\.message/);
 });

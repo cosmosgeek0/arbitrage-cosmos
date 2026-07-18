@@ -284,6 +284,18 @@ export function subscribeLiveBook(symbol: string, fn: (m: LiveBookMsg) => void):
 
 type MutationResult<T> = { data: T; error: null } | { data: null; error: ApiFailure };
 
+export type MutationFailureTruthEvent =
+  | Readonly<{ kind: 'REJECTED'; failure: ApiFailure }>
+  | Readonly<{ kind: 'ACKNOWLEDGED' }>;
+
+export function reduceMutationFailureTruth(
+  current: ApiFailure | null,
+  event: MutationFailureTruthEvent,
+): ApiFailure | null {
+  if (event.kind === 'ACKNOWLEDGED') return null;
+  return event.failure ?? current;
+}
+
 function mutationFailure(error: unknown): ApiFailure {
   if (error instanceof ApiRequestError) {
     return { status: error.status, code: error.code, message: error.message, details: error.details };
@@ -740,7 +752,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const result = await post<AppConfig>('/api/config', patch);
     const config = result.data && isConfigAcknowledgement(result.data) ? failClosedConfig(result.data) : null;
     const error = result.error ?? (config ? null : acknowledgementFailure('Configuration acknowledgement was malformed.'));
-    setMutationError(error);
+    setMutationError((current) => config
+      ? reduceMutationFailureTruth(current, { kind: 'ACKNOWLEDGED' })
+      : reduceMutationFailureTruth(current, {
+          kind: 'REJECTED',
+          failure: error ?? acknowledgementFailure('Configuration acknowledgement was malformed.'),
+        }));
     if (config) setState((s) => (s ? failClosedState({ ...s, config }) : s));
     return config;
   }, []);

@@ -63,15 +63,14 @@ test('automatic token rendering uses only same-origin owners and deterministic l
   assert.match(detail, /same-origin public-source owner/);
 });
 
-test('TokenDetail retains one derivatives owner without removing reserved panels', async () => {
+test('TokenDetail retains one derivatives owner without dead alternate panels', async () => {
   const detail = await read('pages/TokenDetail.tsx');
 
-  assert.doesNotMatch(detail, /\b(?:function\s+CgxPanel|type\s+CgxTab|interface\s+CgxPoint)\b/);
+  assert.doesNotMatch(detail, /\b(?:function\s+(?:CgxPanel|BasisCard|ProfilePanel)|type\s+CgxTab|interface\s+CgxPoint)\b/);
   assert.doesNotMatch(detail, /\bfetch\(`\/api\/(?:candles|futures)\//);
+  assert.doesNotMatch(detail, /import\s*\{[^}]*\bCopy\b/);
   assert.match(detail, /function\s+DerivativesIntelligence\b/);
   assert.match(detail, /<DerivativesIntelligence\b/);
-  assert.match(detail, /function\s+BasisCard\b/);
-  assert.match(detail, /function\s+ProfilePanel\b/);
 });
 
 test('the shared store structurally omits legacy preview and execution capabilities', async () => {

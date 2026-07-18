@@ -5,9 +5,11 @@
 import React from 'react';
 import type { SystemSupervisorSnapshot } from '../../../lib/systemIntegration';
 import {
+  EXPECTED_COMPONENTS,
   UNKNOWN_TEXT,
   ageText,
   exposureVerdict,
+  isComponentCurrentReady,
   readinessTone,
   words,
 } from '../lib/presentation';
@@ -22,14 +24,14 @@ export function PostureStrip({ snapshot, nowMs }: { snapshot: SystemSupervisorSn
   const rootCause = rootBlocker
     ? rootBlocker.lastFailure?.code ?? rootBlocker.blockerCodes[0] ?? UNKNOWN_TEXT
     : null;
-  const ready = snapshot.components.filter((c) => c.readiness === 'READY').length;
+  const ready = snapshot.components.filter(isComponentCurrentReady).length;
 
   return (
     <div className="sdx-summary" role="status" aria-label="Whole-machine posture">
       <div className="sdx-summary-cell">
         <span>Overall State</span>
         <strong className={readinessTone(posture)}>{words(posture)}</strong>
-        <small>{ready}/{snapshot.components.length} Components Ready · Phase {words(snapshot.phase)}</small>
+        <small>{ready}/{EXPECTED_COMPONENTS.length} Components Current-Ready · Phase {words(snapshot.phase)}</small>
       </div>
       <div className="sdx-summary-cell">
         <span>Mode</span>

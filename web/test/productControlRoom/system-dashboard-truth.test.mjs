@@ -5,7 +5,10 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { CapitalPanel } from '../../src/features/systemDashboard/components/CapitalPanel.tsx';
-import { ExposureBanner } from '../../src/features/systemDashboard/components/PostureStrip.tsx';
+import {
+  ExposureBanner,
+  PostureStrip,
+} from '../../src/features/systemDashboard/components/PostureStrip.tsx';
 import { RiskExecutionPanel } from '../../src/features/systemDashboard/components/RiskExecutionPanel.tsx';
 import { TraceDrilldown } from '../../src/features/systemDashboard/components/TraceDrilldown.tsx';
 import { fixtureById } from '../../src/features/systemDashboard/fixtures/index.ts';
@@ -72,6 +75,26 @@ test('reconciliation is clear only when current available evidence explicitly co
       : component),
   };
   assert.equal(reconciliationVerdict(stale), 'UNKNOWN');
+});
+
+test('posture current-ready count excludes stale, silent, incomplete, unknown, and missing components', () => {
+  const now = 1_800_000_000_000;
+  const healthyMarkup = renderToStaticMarkup(
+    React.createElement(PostureStrip, { snapshot: fixtureById('healthy').build(now), nowMs: now }),
+  );
+  assert.match(healthyMarkup, /14\/14 Components Current-Ready/);
+
+  const staleMarkup = renderToStaticMarkup(
+    React.createElement(PostureStrip, { snapshot: fixtureById('stale').build(now), nowMs: now }),
+  );
+  assert.match(staleMarkup, /12\/14 Components Current-Ready/);
+  assert.doesNotMatch(staleMarkup, /14\/14 Components Ready/);
+
+  const silentMarkup = renderToStaticMarkup(
+    React.createElement(PostureStrip, { snapshot: fixtureById('silent').build(now), nowMs: now }),
+  );
+  assert.match(silentMarkup, /10\/14 Components Current-Ready/);
+  assert.doesNotMatch(silentMarkup, /13\/13 Components Ready/);
 });
 
 test('narrow trace layout preserves failure and provenance truth', () => {

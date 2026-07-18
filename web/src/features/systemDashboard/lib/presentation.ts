@@ -143,6 +143,17 @@ export function freshnessText(verdict: FreshnessVerdict): string {
   return `${verdict.kind} · ${millisecondsText(verdict.ageMs)}`;
 }
 
+/** Publisher readiness is only current-ready when its supporting evidence is
+ * complete, fresh, and available. Synthetic and replay labels remain valid
+ * known truth modes; UNKNOWN and UNAVAILABLE never count as ready. */
+export function isComponentCurrentReady(component: SystemComponentSnapshot): boolean {
+  return component.readiness === 'READY'
+    && component.completeness === 'COMPLETE'
+    && freshnessOf(component).kind === 'FRESH'
+    && component.truthLabel !== 'UNKNOWN'
+    && component.truthLabel !== 'UNAVAILABLE';
+}
+
 export type ReconciliationVerdict = 'BLOCKED' | 'CLEAR' | 'UNKNOWN';
 
 /** A false blocking flag is not proof of convergence. Green requires the

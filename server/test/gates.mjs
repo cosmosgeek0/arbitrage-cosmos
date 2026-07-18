@@ -208,6 +208,10 @@ const iconSource = readFileSync('server/src/binance/icons.ts', 'utf8');
 const liquidationSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
 const newsContextSource = readFileSync('server/src/services/newsContext.ts', 'utf8');
 const environmentSource = readFileSync('server/src/bootstrap/environment.ts', 'utf8');
+const dataDirLeaseSource = readFileSync(
+  'server/src/systemIntegration/persistence/dataDirLease.ts',
+  'utf8',
+);
 check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
@@ -269,6 +273,22 @@ check(
     /const\s+physicalLease\s*=\s*new\s+DataDirLease/.test(environmentSource) &&
     /assertDataDirCachePathHeld/.test(environmentSource) &&
     /realpathSync\.native/.test(environmentSource) &&
+    /function\s+asciiLowercase/.test(environmentSource) &&
+    /function\s+canonicalLogicalDataDirKey/.test(environmentSource) &&
+    /DATA_DIR_LOGICAL_PATH_NON_ASCII/.test(environmentSource) &&
+    /DATA_DIR_CACHE_PATH_NON_ASCII/.test(environmentSource) &&
+    /components\.some\(isReservedCacheComponent\)/.test(environmentSource) &&
+    /assertRequestedConfigurationNoMutation/.test(environmentSource) &&
+    /assertCacheReservations\(prospectiveCachePaths/.test(environmentSource) &&
+    /assertCacheLeafValid/.test(environmentSource) &&
+    /assertNoExistingCacheInodeAliases/.test(environmentSource) &&
+    /DATA_DIR_CACHE_PATH_OUTSIDE_DATA_DIR/.test(environmentSource) &&
+    /journal-compat\.json/.test(environmentSource) &&
+    /LEGACY_LEASE_ROOT/.test(dataDirLeaseSource) &&
+    /schemaVersion:\s*2/.test(dataDirLeaseSource) &&
+    /rejectOrScavengeLegacyLease/.test(dataDirLeaseSource) &&
+    /livenessNamespace/.test(dataDirLeaseSource) &&
+    /\/proc\/self\/ns\/pid/.test(dataDirLeaseSource) &&
     /const\s+dataDirLease\s*=\s*DATA_DIR_LEASE/.test(serverIndex) &&
     /beforeMutation:\s*\(\)\s*=>\s*dataDirLease\.assertHeld\(\)/.test(serverIndex) &&
     /icon_cache\.json/.test(environmentSource) &&

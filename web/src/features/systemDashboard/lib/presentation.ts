@@ -19,6 +19,33 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'idle';
 
 export const UNKNOWN_TEXT = 'UNKNOWN';
 
+export type ExposureVerdict = Readonly<{
+  kind: 'ACTIVE' | 'NONE' | 'UNKNOWN';
+  count: number | null;
+  amount: string | null;
+}>;
+
+/** Exposure is tri-state. Absence is proven only by explicit zero count and amount. */
+export function exposureVerdict(
+  reportedCount: number | null,
+  reportedAmount: string | null,
+): ExposureVerdict {
+  const count = Number.isInteger(reportedCount) && reportedCount !== null && reportedCount >= 0
+    ? reportedCount
+    : null;
+  const parsedAmount = reportedAmount === null || reportedAmount.trim() === ''
+    ? null
+    : Number.parseFloat(reportedAmount.replaceAll(',', ''));
+  const amount = parsedAmount !== null && Number.isFinite(parsedAmount) && parsedAmount >= 0
+    ? reportedAmount
+    : null;
+  if ((count !== null && count > 0) || (parsedAmount !== null && parsedAmount > 0)) {
+    return { kind: 'ACTIVE', count, amount };
+  }
+  if (count === 0 && parsedAmount === 0) return { kind: 'NONE', count, amount };
+  return { kind: 'UNKNOWN', count, amount };
+}
+
 /** The full managed-component set the owner expects on the machine graph.
  *  A member absent from a snapshot renders as an explicit MISSING box. */
 export const EXPECTED_COMPONENTS: SystemComponentId[] = [

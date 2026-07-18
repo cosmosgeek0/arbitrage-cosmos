@@ -36,6 +36,8 @@ export interface BasisConfig extends EngineConfig {
   maxGapCv: number;
   /** samples kept in the gap tracking window */
   gapWindowSize: number;
+  /** minimum executable-gap change, in percentage points, eligible for causality */
+  causalMoveThresholdPct: number;
 
   // --- funding model ---
   /** default expected hold when the gap slope gives no estimate, ms */
@@ -87,6 +89,7 @@ export const BASIS_DEFAULTS: BasisConfig = {
 
   maxGapCv: 0.6,
   gapWindowSize: 60,
+  causalMoveThresholdPct: 0.005,
 
   defaultHoldMs: 4 * 60 * 60_000,
   minHoldMs: 10 * 60_000,
@@ -144,6 +147,7 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     'perpTakerFeePct',
     'maxFutureSkewMs',
     'maxGapCv',
+    'causalMoveThresholdPct',
     'maxFundingDragPct',
     'fundingExtremeAbs',
     'maxBorrowHourlyRatePct',
@@ -197,6 +201,9 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
   }
   if (cfg.gapWindowSize < 3 || cfg.fundingHistoryKeep < 3) {
     throw new RangeError('invalid basis config: rolling history sizes must be at least 3');
+  }
+  if (cfg.causalMoveThresholdPct <= 0 || cfg.causalMoveThresholdPct >= cfg.watchGapPct) {
+    throw new RangeError('invalid basis config: causalMoveThresholdPct must be in (0, watchGapPct)');
   }
   if (cfg.stagedSizeFractions.length === 0 || cfg.stagedSizeFractions.length > 16) {
     throw new RangeError('invalid basis config stagedSizeFractions length');

@@ -80,7 +80,8 @@ test('source catalog pins current Binance endpoint classes, product boundaries, 
   assert.equal(BINANCE_SOURCE_FACTS.USD_M_DEPTH_DELTA.bookScope, 'STANDARD_NO_RPI');
   assert.equal(BINANCE_SOURCE_FACTS.USD_M_RPI_DEPTH_DELTA.bookScope, 'RPI_INCLUDED');
   assert.equal(BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.samplingWindowMs, 1_000);
-  assert.match(BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.notes.join(' '), /largest liquidation order/);
+  assert.match(BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.notes.join(' '), /latest liquidation order/);
+  assert.match(BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.notes.join(' '), /silence is not proof of zero/);
   assert.match(BINANCE_SOURCE_FACTS.USD_M_FUNDING_INFO.endpoint, /fundingInfo$/);
   assert.equal(BINANCE_SOURCE_FACTS.MARGIN_ALL_ASSETS.endpointClass, 'REST');
   assert.match(BINANCE_SOURCE_FACTS.MARGIN_AVAILABLE_INVENTORY.notes.join(' '), /epoch seconds/);
@@ -323,7 +324,7 @@ test('liquidation records expose sampling loss and map order side to liquidated 
   assert.equal(sell.orderSide, 'SELL');
   assert.equal(sell.liquidatedPositionSide, 'LONG');
   assert.equal(sell.sampledPerWindow, true);
-  assert.equal(sell.samplingSelection, 'LARGEST_PER_SYMBOL');
+  assert.equal(sell.samplingSelection, 'LATEST_PER_SYMBOL');
   assert.equal(sell.sampleWindowMs, 1_000);
   assert.equal(sell.truth.temporal.sourceTransactionTimeMs, 1_720_000_000_010);
 

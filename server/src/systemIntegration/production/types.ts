@@ -12,6 +12,7 @@ import type {
 } from '../composition/types.js';
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
 import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
+import type { VolumeEvidenceRoutingSnapshot } from '../../intelligenceRuntime/routing/index.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -24,6 +25,10 @@ export interface ProductionMarketRow {
   readonly perpIndexPrice?: number | null;
   readonly fundingRate?: number | null;
   readonly nextFundingTime?: number | null;
+  readonly openInterest?: number | null;
+  readonly openInterestUsd?: number | null;
+  readonly openInterestChangePct?: number | null;
+  readonly openInterestUpdatedAt?: number | null;
 }
 
 /**
@@ -88,11 +93,44 @@ export interface ProductionVolumeConnectionStatus {
   readonly lastTradeTs: number | null;
 }
 
+export interface ProductionVolumeTradeEvidenceCut {
+  readonly kind: 'SPOT_AGG_TRADE';
+  readonly generation: number;
+  readonly revision: number;
+  readonly receivedAtMs: number;
+  readonly continuity: 'CONTIGUOUS' | 'GAP' | 'UNKNOWN';
+  readonly baseAsset: string;
+  readonly raw: Readonly<{
+    e: 'aggTrade';
+    E: number;
+    s: string;
+    a: number;
+    p: string;
+    q: string;
+    f: number;
+    l: number;
+    T: number;
+    m: boolean;
+  }>;
+}
+
+export interface ProductionVolumeSourceClosedCut {
+  readonly kind: 'SOURCE_CLOSED';
+  readonly generation: number;
+  readonly revision: number;
+  readonly observedAtMs: number;
+}
+
+export type ProductionVolumeEvidenceCut = ProductionVolumeTradeEvidenceCut | ProductionVolumeSourceClosedCut;
+export type ProductionVolumeEvidenceObserver = (cut: Readonly<ProductionVolumeEvidenceCut>) => void;
+
 export interface ProductionVolumeRuntimePort {
   start(): Promise<void>;
   stop(): void;
   connectionStatus(): Readonly<ProductionVolumeConnectionStatus>;
   integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  /** Optional only for legacy/test doubles; production VolumeRuntime supplies the sole physical feed. */
+  setEvidenceObserver?(observer: ProductionVolumeEvidenceObserver | null): void;
   setIntakePaused(paused: boolean): boolean;
   intakePaused(): boolean;
   operatorBlockedSymbols(): readonly string[];
@@ -151,6 +189,12 @@ export interface ProductionSystemIntegrationInput {
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
+  /**
+   * Optional stricter per-record bound for the existing canonical evidence
+   * Bridge. It can only reduce the production default and makes resource
+   * pressure explicit and fail-closed.
+   */
+  readonly intelligenceEvidenceMaximumBytes?: number;
 }
 
 export interface ProductionSystemIntegrationPorts {
@@ -160,6 +204,10 @@ export interface ProductionSystemIntegrationPorts {
   readonly components: ApplicationComponentReadPorts;
   /** Exact owner counts only; this adapter never computes strategy scores. */
   readonly summaries: ApplicationSummaryReadPort;
+  /** Read-only truth from the one production router; no strategy or transport authority. */
+  readonly intelligenceEvidence: Readonly<{
+    readRoutingSnapshot(): Readonly<VolumeEvidenceRoutingSnapshot>;
+  }>;
   readonly strategyIntake: Readonly<{
     basis: Readonly<{
       readPaused(): boolean;

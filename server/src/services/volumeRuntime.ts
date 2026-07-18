@@ -32,6 +32,21 @@ export interface VolumeRuntimeIntegrationSnapshot {
   };
 }
 
+export type VolumeRuntimeEvidenceCut = Readonly<{
+  kind: 'SPOT_AGG_TRADE';
+  generation: number;
+  revision: number;
+  receivedAtMs: number;
+  continuity: 'CONTIGUOUS' | 'GAP' | 'UNKNOWN';
+  baseAsset: string;
+  raw: Readonly<RawAggTrade>;
+} | {
+  kind: 'SOURCE_CLOSED';
+  generation: number;
+  revision: number;
+  observedAtMs: number;
+}>;
+
 const STREAM_CHUNK = 140;
 const UNIVERSE_REFRESH_MS = 15 * 60_000;
 const BOOK_REFRESH_MS = 2_750;
@@ -48,6 +63,7 @@ export class VolumeRuntime {
   private streamStatus = new Map<string, FeedStatus>();
   private eligibleSymbols: string[] = [];
   private eligibleSymbolSet = new Set<string>();
+  private eligibleBaseBySymbol = new Map<string, string>();
   private symbolSetKey = '';
   private running = false;
   private generation = 0;
@@ -69,7 +85,10 @@ export class VolumeRuntime {
   private lastTradeTs: number | null = null;
   private symbolLastTradeTs = new Map<string, number>();
   private lastAggTradeId = new Map<string, number>();
+  private lastRawTradeId = new Map<string, number>();
   private tradeMessages = 0;
+  private evidenceRevision = 0;
+  private evidenceObserver: ((cut: VolumeRuntimeEvidenceCut) => void) | null = null;
   private configKey = '';
   private persistedEventKeys = new Set<string>();
   private persistedEventOrder: string[] = [];
@@ -88,6 +107,8 @@ export class VolumeRuntime {
   async start(): Promise<void> {
     if (this.running) return this.startPromise ?? Promise.resolve();
     const generation = ++this.generation;
+    this.evidenceRevision = 0;
+    this.lastRawTradeId.clear();
     this.running = true;
     this.engine.start();
     const promise = this.startGeneration(generation);
@@ -98,6 +119,14 @@ export class VolumeRuntime {
 
   stop(): void {
     if (!this.running && !this.startPromise && !this.engine.isRunning()) return;
+    const closingGeneration = this.generation;
+    const observedAtMs = Date.now();
+    this.publishEvidence(Object.freeze({
+      kind: 'SOURCE_CLOSED' as const,
+      generation: closingGeneration,
+      revision: this.nextEvidenceRevision(),
+      observedAtMs,
+    }));
     ++this.generation;
     ++this.streamEpoch;
     this.running = false;
@@ -111,6 +140,8 @@ export class VolumeRuntime {
     this.symbolSetKey = '';
     this.eligibleSymbols = [];
     this.eligibleSymbolSet.clear();
+    this.eligibleBaseBySymbol.clear();
+    this.lastRawTradeId.clear();
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.bookTimer) clearInterval(this.bookTimer);
     if (this.universeTimer) clearInterval(this.universeTimer);
@@ -218,6 +249,16 @@ export class VolumeRuntime {
     });
   }
 
+  setEvidenceObserver(observer: ((cut: VolumeRuntimeEvidenceCut) => void) | null): void {
+    if (observer !== null && typeof observer !== 'function') {
+      throw new TypeError('volume evidence observer must be a function or null');
+    }
+    if (observer !== null && this.evidenceObserver !== null && observer !== this.evidenceObserver) {
+      throw new TypeError('volume evidence observer already bound');
+    }
+    this.evidenceObserver = observer;
+  }
+
   operatorBlockedSymbols(): readonly string[] {
     return this.engine.operatorBlockedSymbols();
   }
@@ -319,6 +360,9 @@ export class VolumeRuntime {
     const nextKey = nextSymbols.join(',');
     this.eligibleSymbols = nextSymbols;
     this.eligibleSymbolSet = new Set(nextSymbols);
+    this.eligibleBaseBySymbol = new Map(
+      metas.filter((meta) => meta.eligible).map((meta) => [meta.symbol, meta.base]),
+    );
     for (const symbol of this.seeded) if (!this.eligibleSymbolSet.has(symbol)) this.seeded.delete(symbol);
     for (const symbol of this.symbolLastTradeTs.keys()) {
       if (!this.eligibleSymbolSet.has(symbol)) this.symbolLastTradeTs.delete(symbol);
@@ -427,10 +471,48 @@ export class VolumeRuntime {
       return;
     }
     if (!this.engine.onTrade(mapped.tick, mapped.printCount)) return;
+    const previousRawTradeId = this.lastRawTradeId.get(mapped.tick.symbol);
+    const continuity = previousRawTradeId === undefined
+      ? 'UNKNOWN' as const
+      : candidate.f === previousRawTradeId + 1
+        ? 'CONTIGUOUS' as const
+        : 'GAP' as const;
     this.lastAggTradeId.set(mapped.tick.symbol, candidate.a as number);
+    this.lastRawTradeId.set(mapped.tick.symbol, candidate.l as number);
     this.lastTradeTs = mapped.tick.ts;
     this.symbolLastTradeTs.set(mapped.tick.symbol, mapped.tick.ts);
     this.tradeMessages += 1;
+    const baseAsset = this.eligibleBaseBySymbol.get(mapped.tick.symbol);
+    if (baseAsset !== undefined) {
+      this.publishEvidence(Object.freeze({
+        kind: 'SPOT_AGG_TRADE' as const,
+        generation,
+        revision: this.nextEvidenceRevision(),
+        receivedAtMs: Date.now(),
+        continuity,
+        baseAsset,
+        raw: Object.freeze({ ...(raw as RawAggTrade) }),
+      }));
+    }
+  }
+
+  private nextEvidenceRevision(): number {
+    if (!Number.isSafeInteger(this.evidenceRevision) || this.evidenceRevision >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('volume evidence revision exhausted');
+    }
+    this.evidenceRevision += 1;
+    return this.evidenceRevision;
+  }
+
+  private publishEvidence(cut: VolumeRuntimeEvidenceCut): void {
+    try {
+      this.evidenceObserver?.(cut);
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.evidence-observer',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private onStreamStatus(name: string, status: FeedStatus, generation: number, streamEpoch: number): void {

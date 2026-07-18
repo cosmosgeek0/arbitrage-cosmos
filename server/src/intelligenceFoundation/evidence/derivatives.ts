@@ -398,7 +398,7 @@ export function normalizeLiquidation(
       kind: 'LIQUIDATION', orderSide: side.value, liquidatedPositionSide: side.value === 'SELL' ? 'LONG' : 'SHORT',
       orderType: orderType.value, timeInForce: timeInForce.value, originalQuantity: originalQuantity.value,
       filledQuantity: filledQuantity.value, averagePrice, sampledPerWindow: true,
-      samplingSelection: 'LARGEST_PER_SYMBOL',
+      samplingSelection: 'LATEST_PER_SYMBOL',
       sampleWindowMs: prepared.fact.samplingWindowMs,
     },
     sourceRecordIds: [rawId], transform: 'normalize-liquidation-v1',

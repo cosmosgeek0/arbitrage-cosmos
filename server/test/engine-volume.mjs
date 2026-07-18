@@ -738,6 +738,8 @@ section('25. live runtime start/stop generations are idempotent (zero network)')
     () => config,
     () => [],
   );
+  const evidenceCuts = [];
+  runtime.setEvidenceObserver((cut) => evidenceCuts.push(structuredClone(cut)));
   await Promise.all([runtime.start(), runtime.start()]);
   check('concurrent starts share one live generation', runtime.connectionStatus().running === true);
   check('empty universe opens no sockets', runtime.connectionStatus().streamConnections === 0);
@@ -745,10 +747,55 @@ section('25. live runtime start/stop generations are idempotent (zero network)')
   runtime.stop();
   runtime.stop();
   check('double stop leaves runtime stopped', runtime.connectionStatus().running === false);
+  check('one STOPPED evidence fence is published for the first physical generation',
+    evidenceCuts.length === 1
+      && evidenceCuts[0].kind === 'SOURCE_CLOSED'
+      && evidenceCuts[0].generation === 1
+      && evidenceCuts[0].revision === 1);
   await runtime.start();
   check('restart creates a fresh live generation', runtime.connectionStatus().running === true);
   runtime.stop();
   check('final stop is clean', runtime.snapshot().status.running === false);
+  check('restart publishes a distinct generation fence with a reset per-generation revision',
+    evidenceCuts.length === 2
+      && evidenceCuts[1].kind === 'SOURCE_CLOSED'
+      && evidenceCuts[1].generation === 3
+      && evidenceCuts[1].revision === 1);
+
+  const published = [];
+  const evidenceRuntime = new VolumeRuntime(
+    { logEvent: () => undefined },
+    () => config,
+    () => [],
+  );
+  evidenceRuntime.setEvidenceObserver((cut) => published.push(structuredClone(cut)));
+  await evidenceRuntime.start();
+  evidenceRuntime.eligibleSymbolSet.add('BTCUSDT');
+  evidenceRuntime.eligibleBaseBySymbol.set('BTCUSDT', 'BTC');
+  evidenceRuntime.engine.setUniverse([symbolMeta('BTCUSDT')]);
+  const eventTime = Date.now();
+  const rawTrade = (aggregateId, first, last) => ({
+    e: 'aggTrade', E: eventTime, s: 'BTCUSDT', a: aggregateId,
+    p: '60000', q: '0.01', f: first, l: last, T: eventTime, m: false,
+  });
+  evidenceRuntime.onTradeMessage(rawTrade(1, 10, 10), evidenceRuntime.generation, evidenceRuntime.streamEpoch);
+  evidenceRuntime.onTradeMessage(rawTrade(2, 11, 11), evidenceRuntime.generation, evidenceRuntime.streamEpoch);
+  evidenceRuntime.onTradeMessage(rawTrade(3, 14, 14), evidenceRuntime.generation, evidenceRuntime.streamEpoch);
+  check('accepted physical trades publish exact raw IDs with UNKNOWN, CONTIGUOUS, then GAP continuity',
+    published.length === 3
+      && published[0].kind === 'SPOT_AGG_TRADE'
+      && published[0].continuity === 'UNKNOWN'
+      && published[0].raw.f === 10
+      && published[1].continuity === 'CONTIGUOUS'
+      && published[1].raw.l === 11
+      && published[2].continuity === 'GAP'
+      && published[2].revision === 3);
+  evidenceRuntime.stop();
+  check('physical stop follows trade cuts with one monotonic source-close revision',
+    published.length === 4
+      && published[3].kind === 'SOURCE_CLOSED'
+      && published[3].generation === 1
+      && published[3].revision === 4);
 }
 
 // ================================================================

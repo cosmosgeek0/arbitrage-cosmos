@@ -1175,7 +1175,7 @@
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 367,
+        "line": 411,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -2753,6 +2753,12 @@
         "line": 35
       },
       {
+        "concept": "semantic-source",
+        "declaration": "type BasisCausalSource",
+        "file": "server/src/engine/basis/types.ts",
+        "line": 61
+      },
+      {
         "concept": "exchange-hand",
         "declaration": "type ExchangeUniverse",
         "file": "server/src/engine/marketData.ts",
@@ -4041,6 +4047,24 @@
         "declaration": "class WebSocketSourceRunner",
         "file": "server/src/intelligenceRuntime/lifecycle/websocketRunner.ts",
         "line": 250
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface RegisteredEvidenceSourceCut",
+        "file": "server/src/intelligenceRuntime/routing/types.ts",
+        "line": 40
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface BoundSourceLifecycle",
+        "file": "server/src/intelligenceRuntime/routing/volumeEvidenceRouter.ts",
+        "line": 74
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface SourceLifecycleAdmission",
+        "file": "server/src/intelligenceRuntime/routing/volumeEvidenceRouter.ts",
+        "line": 85
       },
       {
         "concept": "semantic-source",
@@ -7560,63 +7584,69 @@
       },
       {
         "concept": "semantic-source",
+        "declaration": "type BinanceSourceFact",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 19
+      },
+      {
+        "concept": "semantic-source",
         "declaration": "type UniverseSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 22
+        "line": 26
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceSlice",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 23
+        "line": 27
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceState",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 24
+        "line": 28
       },
       {
         "concept": "semantic-source",
         "declaration": "type PublicSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 78
+        "line": 87
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceProjectionEvidence",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 95
+        "line": 104
       },
       {
         "concept": "semantic-source",
         "declaration": "interface IntelligenceSourceCut",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 109
+        "line": 118
       },
       {
         "concept": "capital-authority",
         "declaration": "type CapitalSummaryReadResult",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 280
+        "line": 297
       },
       {
         "concept": "capital-authority",
         "declaration": "interface CapitalReadGuard",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 285
+        "line": 302
       },
       {
         "concept": "capital-authority",
         "declaration": "function safeCapitalSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 290
+        "line": 307
       },
       {
         "concept": "capital-authority",
         "declaration": "function unavailableCapitalRestartSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 397
+        "line": 414
       },
       {
         "concept": "semantic-source",
@@ -7655,28 +7685,34 @@
         "line": 31
       },
       {
+        "concept": "semantic-source",
+        "declaration": "interface ProductionVolumeSourceClosedCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 117
+      },
+      {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalRestartSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 107
+        "line": 145
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalUnavailableSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 125
+        "line": 163
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 131
+        "line": 169
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalSummaryReadPort",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 139
+        "line": 177
       },
       {
         "concept": "control-authority",
@@ -8121,18 +8157,28 @@
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 28,
+        "line": 32,
         "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 32,
+        "line": 36,
+        "target": "../../intelligenceRuntime/routing/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 40,
         "target": "../../intelligenceRuntime/universe/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 35,
+        "line": 43,
         "target": "../../foundation/control/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 15,
+        "target": "../../intelligenceRuntime/routing/index.js"
       },
       {
         "file": "server/src/systemIntegration/supervisor/projection.ts",
@@ -14750,5 +14796,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "a7ff84344157bed8f8ab29e23428710b663c000f5f1ea246d3537820146505fa"
+  "evidenceSha256": "0873e09dcf2a372883b1a97a57f9150037e7dec7113eae9c1ce46128ce9b7976"
 }

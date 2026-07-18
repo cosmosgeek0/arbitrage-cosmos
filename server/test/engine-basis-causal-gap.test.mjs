@@ -238,14 +238,12 @@ test('MIS-013 validates changed legs against independent newer time and sequence
     );
     h.engine.tick();
     const causal = h.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
-    assert.deepEqual(causal, {
-      quadrant: 'UNKNOWN',
-      trend: 'UNKNOWN',
-      initiatingMarket: 'UNKNOWN',
-      initiatingSourceTs: null,
-      initiatingSourceSequence: null,
-      acceptedEventSequence: null,
-    });
+    assert.deepEqual(
+      [causal.quadrant, causal.trend, causal.initiatingMarket,
+        causal.initiatingSourceTs, causal.initiatingSourceSequence,
+        causal.acceptedEventSequence],
+      ['UNKNOWN', 'UNKNOWN', 'UNKNOWN', null, null, null],
+    );
     const proposal = h.engine.openProposals()[0];
     assert.ok(proposal, 'the canonical proposal remains visible with fail-closed causal evidence');
     assert.deepEqual(

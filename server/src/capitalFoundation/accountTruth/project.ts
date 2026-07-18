@@ -1,6 +1,8 @@
 import {
+  BORROW_EVIDENCE_AUTHORITIES,
   BORROW_TRUTH_STATES,
   MARGIN_ACCOUNT_MODES,
+  validateBorrowTruthForConsumption,
   type BorrowTruth,
 } from '../../foundation/borrow/index.js';
 import {
@@ -207,11 +209,32 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
   const hourlyRate = value.hourlyRate === null
     ? null
     : nonNegative(value.hourlyRate, `${path}.hourlyRate`);
+  const currentBorrowedAsset = value.currentBorrowedAsset === null
+    ? null
+    : nonNegative(value.currentBorrowedAsset, `${path}.currentBorrowedAsset`);
+  const accruedInterestAsset = value.accruedInterestAsset === null
+    ? null
+    : nonNegative(value.accruedInterestAsset, `${path}.accruedInterestAsset`);
+  const collateralAmount = value.collateralAmount === null
+    ? null
+    : nonNegative(value.collateralAmount, `${path}.collateralAmount`);
+  const collateralAsset = value.collateralAsset === null
+    ? null
+    : asset(value.collateralAsset, `${path}.collateralAsset`);
+  const currentLtv = value.currentLtv === null
+    ? null
+    : nonNegative(value.currentLtv, `${path}.currentLtv`);
   if (
     maxBorrowableAsset !== null && borrowLimitAsset !== null
     && compareExactDecimals(maxBorrowableAsset, borrowLimitAsset) > 0
   ) {
     throw new TypeError(`${path}.maxBorrowableAsset cannot exceed borrowLimitAsset`);
+  }
+  if ((collateralAmount === null) !== (collateralAsset === null)) {
+    throw new TypeError(`${path}.collateralAmount and collateralAsset must be supplied together`);
+  }
+  if (currentLtv !== null && compareExactDecimals(currentLtv, ONE) > 0) {
+    throw new TypeError(`${path}.currentLtv must be a fractional ratio between 0 and 1`);
   }
   if (!isValidUtcMillis(value.evaluatedAtMs)) throw new TypeError(`${path}.evaluatedAtMs is invalid`);
   if (value.expiresAtMs !== null && !isValidUtcMillis(value.expiresAtMs)) {
@@ -222,12 +245,16 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
     permission: cloneSourcedTimestamp(value.provenance.permission, `${path}.provenance.permission`),
     maxBorrow: cloneSourcedTimestamp(value.provenance.maxBorrow, `${path}.provenance.maxBorrow`),
     rate: cloneSourcedTimestamp(value.provenance.rate, `${path}.provenance.rate`),
+    liability: cloneSourcedTimestamp(value.provenance.liability, `${path}.provenance.liability`),
+    collateral: cloneSourcedTimestamp(value.provenance.collateral, `${path}.provenance.collateral`),
   });
   const freshness = Object.freeze({
     account: cloneFreshnessReport(value.freshness.account, `${path}.freshness.account`),
     permission: cloneFreshnessReport(value.freshness.permission, `${path}.freshness.permission`),
     maxBorrow: cloneFreshnessReport(value.freshness.maxBorrow, `${path}.freshness.maxBorrow`),
     rate: cloneFreshnessReport(value.freshness.rate, `${path}.freshness.rate`),
+    liability: cloneFreshnessReport(value.freshness.liability, `${path}.freshness.liability`),
+    collateral: cloneFreshnessReport(value.freshness.collateral, `${path}.freshness.collateral`),
   });
   return Object.freeze({
     accountId: identifier(value.accountId, `${path}.accountId`),
@@ -241,6 +268,11 @@ function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<
     maxBorrowableAsset,
     borrowLimitAsset,
     hourlyRate,
+    currentBorrowedAsset,
+    accruedInterestAsset,
+    collateralAmount,
+    collateralAsset,
+    currentLtv,
     evaluatedAtMs: value.evaluatedAtMs,
     expiresAtMs: value.expiresAtMs,
     provenance,
@@ -621,18 +653,36 @@ function deriveBorrow(
     ids.add(referenceId);
     const capacityPoolId = identifier(reference.capacityPoolId, `borrowTruthReferences[${index}].capacityPoolId`);
     if (typeof reference.requiredForNewAllocation !== 'boolean') throw new TypeError(`borrowTruthReferences[${index}].requiredForNewAllocation must be boolean`);
+    const validationIssues = validateBorrowTruthForConsumption(reference.truth, {
+      evaluatedAtMs: input.evaluatedAtMs,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    });
+    const schemaIssues = validationIssues.filter((issue) => issue.includes('SCHEMA_INVALID'));
+    if (schemaIssues.length > 0) {
+      throw new TypeError(
+        `borrowTruthReferences[${index}].truth violates the exact BorrowTruth schema: ${schemaIssues.join(', ')}`,
+      );
+    }
     const truth = cloneBorrowTruth(reference.truth, `borrowTruthReferences[${index}].truth`);
     const maxBorrow = truth.maxBorrowableAsset as NonNegativeDecimal | null;
     const current = truth.evaluatedAtMs <= input.evaluatedAtMs
       && truth.expiresAtMs !== null
       && input.evaluatedAtMs <= truth.expiresAtMs;
+    const integrityIssues = validationIssues.filter(
+      (issue) => issue !== 'BORROW_TRUTH_NOT_CURRENT' && !issue.endsWith('_EVIDENCE_EXPIRED'),
+    );
     const availableStateConsistent = truth.state !== 'AVAILABLE'
-      || (maxBorrow !== null && positive(maxBorrow) && truth.reason === 'BORROW_AMOUNT_POSITIVE');
-    if (!availableStateConsistent) unavailable.push(`BORROW_TRUTH_${referenceId}_CONTRADICTORY_AVAILABLE_STATE`);
+      || integrityIssues.length === 0;
+    if (!availableStateConsistent) {
+      integrityIssues.forEach((issue) => {
+        unavailable.push(`BORROW_TRUTH_${referenceId}_${issue.replace(/^BORROW_TRUTH_/, '')}`);
+      });
+    }
     const accountMatches = truth.accountId === expectedAccountId;
     if (!accountMatches) unavailable.push(`BORROW_TRUTH_${referenceId}_ACCOUNT_MISMATCH`);
     const usable = truth.state === 'AVAILABLE' && current && maxBorrow !== null
-      && availableStateConsistent && accountMatches;
+      && validationIssues.length === 0 && availableStateConsistent && accountMatches;
     if (reference.requiredForNewAllocation && !usable) {
       const reason = current ? `BORROW_TRUTH_${referenceId}_${truth.state}` : `BORROW_TRUTH_${referenceId}_EXPIRED_OR_UNBOUNDED`;
       if (['UNAVAILABLE', 'PERMISSION_MISSING', 'ACCOUNT_MODE_MISMATCH'].includes(truth.state)) unavailable.push(reason);
@@ -690,6 +740,11 @@ function deriveBorrow(
       && left.maxBorrowableAsset === right.maxBorrowableAsset
       && left.borrowLimitAsset === right.borrowLimitAsset
       && left.hourlyRate === right.hourlyRate
+      && left.currentBorrowedAsset === right.currentBorrowedAsset
+      && left.accruedInterestAsset === right.accruedInterestAsset
+      && left.collateralAmount === right.collateralAmount
+      && left.collateralAsset === right.collateralAsset
+      && left.currentLtv === right.currentLtv
       && expected.current === reference.current
       && expected.usableForNewAllocation === reference.usableForNewAllocation;
     if (!samePoolFacts) {

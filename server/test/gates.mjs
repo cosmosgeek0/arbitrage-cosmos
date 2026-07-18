@@ -777,13 +777,30 @@ check(
   ))
 );
 
+const loanTruthResponse = await get('/api/loans');
+check(
+  'borrow API exposes the Foundation owner and null private liability/collateral bindings',
+  loanTruthResponse.status === 503
+    && loanTruthResponse.body?.owner === 'FOUNDATION_BORROW_TRUTH'
+    && loanTruthResponse.body?.scope === null
+    && loanTruthResponse.body?.currentBorrowedAsset === null
+    && loanTruthResponse.body?.accruedInterestAsset === null
+    && loanTruthResponse.body?.collateralAmount === null
+    && loanTruthResponse.body?.collateralAsset === null
+    && loanTruthResponse.body?.currentLtv === null
+    && loanTruthResponse.body?.liabilitySource === null
+    && loanTruthResponse.body?.collateralSource === null
+    && loanTruthResponse.body?.liabilityFreshness === null
+    && loanTruthResponse.body?.collateralFreshness === null
+);
+
 const privateReadResponses = [
   await post('/api/fills/import', { symbol: 'BTCUSDT' }),
   equityHistoryResponse,
   earnResponse,
   walletBalanceResponse,
   pnlResponse,
-  await get('/api/loans'),
+  loanTruthResponse,
   await post('/api/loans/refresh', {}),
   await get('/api/orders/history?symbol=BTCUSDT'),
   await get('/api/loans/max-borrowable?asset=BTC'),

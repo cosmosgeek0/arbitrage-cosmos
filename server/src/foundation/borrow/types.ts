@@ -1,5 +1,19 @@
 import type { FreshnessReport, SourcedTimestamp } from '../contracts/index.js';
 
+/**
+ * Authorities allowed to publish private-account borrow facts.
+ *
+ * LIVE_PUBLIC and DERIVED_LIVE cannot prove a signed account read. Replay and
+ * test evidence are admitted only as explicit non-live modes; one truth cut
+ * may never mix these authorities.
+ */
+export const BORROW_EVIDENCE_AUTHORITIES = [
+  'LIVE_PRIVATE',
+  'RECORDED_REPLAY',
+  'SYNTHETIC_TEST',
+] as const;
+export type BorrowEvidenceAuthority = (typeof BORROW_EVIDENCE_AUTHORITIES)[number];
+
 /** Exhaustive operator states for one read-only margin-borrow decision. */
 export const BORROW_TRUTH_STATES = [
   'AVAILABLE',
@@ -20,6 +34,10 @@ export type MarginAccountMode = (typeof MARGIN_ACCOUNT_MODES)[number];
 /** Result of the adapter's read attempt. This lane never performs that read. */
 export const BORROW_READ_STATUSES = ['OK', 'RATE_LIMITED', 'SOURCE_ERROR', 'UNAVAILABLE'] as const;
 export type BorrowReadStatus = (typeof BORROW_READ_STATUSES)[number];
+
+/** Collateral evidence admitted by this owner is margin-account scoped only. */
+export const BORROW_COLLATERAL_PRODUCTS = ['MARGIN_ACCOUNT'] as const;
+export type BorrowCollateralProduct = (typeof BORROW_COLLATERAL_PRODUCTS)[number];
 
 export interface BorrowScopeIdentity {
   /** Internal account identity, never an API credential. */
@@ -70,6 +88,35 @@ export interface BorrowRateEvidence extends BorrowReadEvidenceBase {
   hourlyRate: string | null;
 }
 
+/**
+ * Exact current liability evidence for the scoped borrowed asset.
+ *
+ * Binance margin account reads publish current `borrowed` and accrued
+ * `interest` as separate values. They stay separate here: neither field is
+ * derived from total debt and neither is converted through binary numbers.
+ */
+export interface BorrowLiabilityEvidence extends BorrowReadEvidenceBase {
+  currentBorrowedAsset: string | null;
+  accruedInterestAsset: string | null;
+}
+
+/**
+ * Optional same-product collateral/LTV evidence supplied by an authorized
+ * private adapter and bound to the exact margin decision scope.
+ *
+ * Binance margin account collateral margin level is not LTV and cannot be
+ * relabelled or algebraically converted into `currentLtv`. Flexible-loan
+ * collateral/LTV has a distinct product/loan identity and is not admissible
+ * here. If a future same-scope owner supplies a venue-published LTV, it uses a
+ * fractional exact string (`0.57` means 57%); otherwise the field stays null.
+ */
+export interface BorrowCollateralEvidence extends BorrowReadEvidenceBase {
+  product: BorrowCollateralProduct;
+  collateralAmount: string | null;
+  collateralAsset: string | null;
+  currentLtv: string | null;
+}
+
 export interface DeriveBorrowTruthInput {
   scope: BorrowScopeIdentity;
   /** Injected clock; no wall-clock access occurs in this lane. */
@@ -78,34 +125,44 @@ export interface DeriveBorrowTruthInput {
   permission: BorrowPermissionEvidence | null;
   maxBorrow: MaxBorrowEvidence | null;
   rate: BorrowRateEvidence | null;
+  liability: BorrowLiabilityEvidence | null;
+  collateral: BorrowCollateralEvidence | null;
 }
 
-export type BorrowTruthReason =
-  | 'BORROW_AMOUNT_POSITIVE'
-  | 'BORROW_AMOUNT_ZERO'
-  | 'BORROW_DISABLED'
-  | 'ACCOUNT_NOT_CREATED'
-  | 'ACCOUNT_MODE_DISABLED'
-  | 'MODE_IDENTITY_MISMATCH'
-  | 'PERMISSION_IDENTITY_MISMATCH'
-  | 'MARGIN_PERMISSION_DISABLED'
-  | 'PERMISSION_UNKNOWN'
-  | 'ACCOUNT_STATUS_UNKNOWN'
-  | 'BORROW_AMOUNT_UNKNOWN'
-  | 'REQUIRED_EVIDENCE_MISSING'
-  | 'EVIDENCE_PARTIAL'
-  | 'EVIDENCE_EXPIRED'
-  | 'EVIDENCE_CLOCK_SKEWED'
-  | 'EVIDENCE_IDENTITY_MISMATCH'
-  | 'SOURCE_RATE_LIMITED'
-  | 'SOURCE_REPORTED_ERROR'
-  | 'SOURCE_UNAVAILABLE';
+export const BORROW_TRUTH_REASONS = [
+  'BORROW_AMOUNT_POSITIVE',
+  'BORROW_AMOUNT_ZERO',
+  'BORROW_DISABLED',
+  'ACCOUNT_NOT_CREATED',
+  'ACCOUNT_MODE_DISABLED',
+  'MODE_IDENTITY_MISMATCH',
+  'PERMISSION_IDENTITY_MISMATCH',
+  'MARGIN_PERMISSION_DISABLED',
+  'PERMISSION_UNKNOWN',
+  'ACCOUNT_STATUS_UNKNOWN',
+  'BORROW_AMOUNT_UNKNOWN',
+  'CURRENT_BORROW_UNKNOWN',
+  'ACCRUED_INTEREST_UNKNOWN',
+  'REQUIRED_EVIDENCE_MISSING',
+  'EVIDENCE_PARTIAL',
+  'EVIDENCE_EXPIRED',
+  'EVIDENCE_CLOCK_SKEWED',
+  'EVIDENCE_IDENTITY_MISMATCH',
+  'EVIDENCE_AUTHORITY_MISMATCH',
+  'PRIVATE_AUTHORITY_REQUIRED',
+  'SOURCE_RATE_LIMITED',
+  'SOURCE_REPORTED_ERROR',
+  'SOURCE_UNAVAILABLE',
+] as const;
+export type BorrowTruthReason = (typeof BORROW_TRUTH_REASONS)[number];
 
 export interface BorrowEvidenceProvenance {
   account: Readonly<SourcedTimestamp> | null;
   permission: Readonly<SourcedTimestamp> | null;
   maxBorrow: Readonly<SourcedTimestamp> | null;
   rate: Readonly<SourcedTimestamp> | null;
+  liability: Readonly<SourcedTimestamp> | null;
+  collateral: Readonly<SourcedTimestamp> | null;
 }
 
 export interface BorrowFreshnessEvidence {
@@ -113,6 +170,8 @@ export interface BorrowFreshnessEvidence {
   permission: Readonly<FreshnessReport> | null;
   maxBorrow: Readonly<FreshnessReport> | null;
   rate: Readonly<FreshnessReport> | null;
+  liability: Readonly<FreshnessReport> | null;
+  collateral: Readonly<FreshnessReport> | null;
 }
 
 /** Immutable, deterministic truth projection. Decimal values remain exact strings. */
@@ -123,8 +182,13 @@ export interface BorrowTruth extends BorrowScopeIdentity {
   maxBorrowableAsset: string | null;
   borrowLimitAsset: string | null;
   hourlyRate: string | null;
+  currentBorrowedAsset: string | null;
+  accruedInterestAsset: string | null;
+  collateralAmount: string | null;
+  collateralAsset: string | null;
+  currentLtv: string | null;
   evaluatedAtMs: number;
-  /** Earliest expiry across supplied evidence, inclusive at the exact boundary. */
+  /** Earliest expiry across supplied required preflight evidence, inclusive at the exact boundary. */
   expiresAtMs: number | null;
   provenance: Readonly<BorrowEvidenceProvenance>;
   freshness: Readonly<BorrowFreshnessEvidence>;

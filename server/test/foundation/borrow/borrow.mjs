@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /** Lane J — read-only borrow truth proof. ZERO network, ZERO wall clock. */
 import {
+  BORROW_COLLATERAL_PRODUCTS,
+  BORROW_EVIDENCE_AUTHORITIES,
   BORROW_READ_STATUSES,
   BORROW_TRUTH_STATES,
   MARGIN_ACCOUNT_MODES,
@@ -9,6 +11,7 @@ import {
   deriveBorrowTruthBatch,
   isExactZero,
   normalizeNonNegativeDecimal,
+  validateBorrowTruthForConsumption,
 } from '../../../dist/foundation/borrow/index.js';
 
 const results = [];
@@ -98,6 +101,30 @@ function rate(identity = scope(), overrides = {}) {
   };
 }
 
+function liability(identity = scope(), overrides = {}) {
+  return {
+    ...identity,
+    status: 'OK',
+    observedAt: stamp('binance.margin.account.liability'),
+    currentBorrowedAsset: '1.5000',
+    accruedInterestAsset: '0.012500',
+    ...overrides,
+  };
+}
+
+function collateral(identity = scope(), overrides = {}) {
+  return {
+    ...identity,
+    status: 'OK',
+    observedAt: stamp('fixture.margin.same-scope.collateral-ltv'),
+    product: 'MARGIN_ACCOUNT',
+    collateralAmount: '2500.000',
+    collateralAsset: 'USDT',
+    currentLtv: '0.2500',
+    ...overrides,
+  };
+}
+
 function completeInput(scopeOverrides = {}) {
   const identity = scope(scopeOverrides);
   return {
@@ -107,6 +134,8 @@ function completeInput(scopeOverrides = {}) {
     permission: permission(identity),
     maxBorrow: maxBorrow(identity),
     rate: rate(identity),
+    liability: liability(identity),
+    collateral: collateral(identity),
   };
 }
 
@@ -119,6 +148,7 @@ section('1. exact public vocabulary and a fully evidenced AVAILABLE truth');
 {
   check('eight states are exact and ordered', BORROW_TRUTH_STATES.join('|') === 'AVAILABLE|UNAVAILABLE|UNKNOWN|STALE|PERMISSION_MISSING|ACCOUNT_MODE_MISMATCH|RATE_LIMITED|SOURCE_ERROR');
   check('read statuses are closed', BORROW_READ_STATUSES.join('|') === 'OK|RATE_LIMITED|SOURCE_ERROR|UNAVAILABLE');
+  check('collateral product identity admits margin account only', BORROW_COLLATERAL_PRODUCTS.join('|') === 'MARGIN_ACCOUNT');
   check('account modes keep cross generations distinct', MARGIN_ACCOUNT_MODES.join('|') === 'CROSS_CLASSIC|CROSS_PRO|ISOLATED');
 
   const input = completeInput();
@@ -131,10 +161,15 @@ section('1. exact public vocabulary and a fully evidenced AVAILABLE truth');
   check('amount is canonical without binary conversion', truth.maxBorrowableAsset === '5.25');
   check('account limit is independently retained', truth.borrowLimitAsset === '10');
   check('hourly rate is canonical without rounding', truth.hourlyRate === '0.00012');
+  check('current borrowed amount is canonical without folding in interest', truth.currentBorrowedAsset === '1.5');
+  check('accrued interest remains a separate exact fact', truth.accruedInterestAsset === '0.0125');
+  check('optional same-margin collateral amount retains its explicit unit', truth.collateralAmount === '2500' && truth.collateralAsset === 'USDT');
+  check('independently supplied same-margin LTV remains a fractional exact value', truth.currentLtv === '0.25');
   check('injected time is the only evaluation time', truth.evaluatedAtMs === T0);
   check('earliest evidence expiry is explicit and inclusive', truth.expiresAtMs === T0 + 900);
-  check('all four freshness reports are FRESH', Object.values(truth.freshness).every((x) => x?.state === 'FRESH'));
+  check('all six freshness reports are FRESH', Object.values(truth.freshness).every((x) => x?.state === 'FRESH'));
   check('source identity survives in provenance', truth.provenance.maxBorrow.sourceId === 'binance.margin.maxBorrowable');
+  check('liability and optional collateral retain independent source identities', truth.provenance.liability.sourceId === 'binance.margin.account.liability' && truth.provenance.collateral.sourceId === 'fixture.margin.same-scope.collateral-ltv');
   check('input was not mutated', JSON.stringify(input) === before);
   check('result, provenance, freshness and timestamps are frozen', Object.isFrozen(truth) && Object.isFrozen(truth.provenance) && Object.isFrozen(truth.freshness) && Object.isFrozen(truth.provenance.maxBorrow));
   const originalState = truth.state;
@@ -142,11 +177,111 @@ section('1. exact public vocabulary and a fully evidenced AVAILABLE truth');
   try { truth.provenance.maxBorrow.sourceId = 'tampered'; } catch {}
   check('mutation attempts cannot alter truth', truth.state === originalState && truth.provenance.maxBorrow.sourceId === 'binance.margin.maxBorrowable');
 
+  check(
+    'private-account evidence authorities are explicit and closed',
+    BORROW_EVIDENCE_AUTHORITIES.join('|') === 'LIVE_PRIVATE|RECORDED_REPLAY|SYNTHETIC_TEST',
+  );
+  check(
+    'a canonical AVAILABLE truth passes the reusable exact consumer boundary',
+    validateBorrowTruthForConsumption(truth, {
+      evaluatedAtMs: T0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    }).length === 0,
+  );
+
   const savedNow = Date.now;
   Date.now = () => { throw new Error('wall clock forbidden'); };
   let pureState = null;
   try { pureState = deriveBorrowTruth(completeInput()).state; } finally { Date.now = savedNow; }
   check('derivation never reads wall clock', pureState === 'AVAILABLE');
+}
+
+// ---------------------------------------------------------------------
+section('1b. private/replay/test authority is explicit and mixed cuts fail closed');
+{
+  for (const authority of BORROW_EVIDENCE_AUTHORITIES) {
+    const input = completeInput();
+    for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+      input[evidenceName].observedAt.authority = authority;
+    }
+    check(`${authority} is admitted when the whole evidence cut agrees`, deriveBorrowTruth(input).state === 'AVAILABLE');
+  }
+
+  for (const authority of ['LIVE_PUBLIC', 'DERIVED_LIVE']) {
+    const input = completeInput();
+    for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+      input[evidenceName].observedAt.authority = authority;
+    }
+    const truth = deriveBorrowTruth(input);
+    check(
+      `${authority} cannot impersonate signed private-account evidence`,
+      truth.state === 'SOURCE_ERROR' && truth.reason === 'PRIVATE_AUTHORITY_REQUIRED',
+    );
+  }
+
+  const mixed = completeInput();
+  for (const evidenceName of ['permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    mixed[evidenceName].observedAt.authority = 'RECORDED_REPLAY';
+  }
+  mixed.account.observedAt.authority = 'LIVE_PRIVATE';
+  const mixedTruth = deriveBorrowTruth(mixed);
+  check(
+    'a mixed accepted-authority cut is never published as AVAILABLE',
+    mixedTruth.state === 'SOURCE_ERROR' && mixedTruth.reason === 'EVIDENCE_AUTHORITY_MISMATCH',
+  );
+
+  const generic = completeInput();
+  generic.maxBorrow.observedAt.authority = 'GENERIC_INJECTED';
+  check('an open-ended injected authority is structurally rejected', throwsTypeError(() => deriveBorrowTruth(generic)));
+
+  const canonical = deriveBorrowTruth(completeInput());
+  const forgedLiability = { ...canonical, currentBorrowedAsset: null };
+  const liabilityIssues = validateBorrowTruthForConsumption(forgedLiability, {
+    evaluatedAtMs: T0,
+    acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+    requireRate: false,
+  });
+  check(
+    'consumer validation rejects a hand-shaped AVAILABLE truth with incomplete liability',
+    liabilityIssues.includes('BORROW_TRUTH_AVAILABLE_CURRENT_BORROW_MISSING'),
+  );
+
+  const extra = { ...canonical, injectedConfidence: '1' };
+  check(
+    'consumer validation enforces the exact BorrowTruth key set',
+    validateBorrowTruthForConsumption(extra, {
+      evaluatedAtMs: T0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    }).includes('BORROW_TRUTH_SCHEMA_INVALID'),
+  );
+
+  const noRateInput = completeInput();
+  noRateInput.rate = null;
+  const noRateTruth = deriveBorrowTruth(noRateInput);
+  const economicsIssues = validateBorrowTruthForConsumption(noRateTruth, {
+    evaluatedAtMs: T0,
+    acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+    requireRate: true,
+  });
+  check(
+    'a rate-requiring consumer can reuse the boundary without weakening Borrow availability',
+    economicsIssues.includes('BORROW_TRUTH_AVAILABLE_RATE_MISSING')
+      && economicsIssues.includes('BORROW_TRUTH_RATE_EVIDENCE_MISSING'),
+  );
+
+  const staleCollateralInput = completeInput();
+  staleCollateralInput.collateral.observedAt.sourceTimeMs = T0 - 1_001;
+  const staleCollateralTruth = deriveBorrowTruth(staleCollateralInput);
+  check(
+    'stale optional collateral remains honest null and does not invalidate the authorized liability cut',
+    validateBorrowTruthForConsumption(staleCollateralTruth, {
+      evaluatedAtMs: T0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    }).length === 0,
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -171,7 +306,7 @@ section('2. exact zero, unknown, disabled and unavailable stay distinct');
   unavailable.maxBorrow = maxBorrow(unavailable.scope, { status: 'UNAVAILABLE', amount: null, borrowLimit: null });
   check('fresh explicit source unavailability is UNAVAILABLE', deriveBorrowTruth(unavailable).state === 'UNAVAILABLE' && deriveBorrowTruth(unavailable).reason === 'SOURCE_UNAVAILABLE');
 
-  for (const missing of ['account', 'permission', 'maxBorrow']) {
+  for (const missing of ['account', 'permission', 'maxBorrow', 'liability']) {
     const input = completeInput();
     input[missing] = null;
     const truth = deriveBorrowTruth(input);
@@ -182,6 +317,19 @@ section('2. exact zero, unknown, disabled and unavailable stay distinct');
   optionalRate.rate = null;
   const noRate = deriveBorrowTruth(optionalRate);
   check('missing optional rate does not fabricate or erase availability', noRate.state === 'AVAILABLE' && noRate.hourlyRate === null && noRate.provenance.rate === null);
+
+  const absentCollateral = completeInput();
+  absentCollateral.collateral = null;
+  const noCollateralEvidence = deriveBorrowTruth(absentCollateral);
+  check(
+    'ENGINE §11 optional collateral absence preserves borrow availability without fabricating fields',
+    noCollateralEvidence.state === 'AVAILABLE'
+      && noCollateralEvidence.collateralAmount === null
+      && noCollateralEvidence.collateralAsset === null
+      && noCollateralEvidence.currentLtv === null
+      && noCollateralEvidence.provenance.collateral === null
+      && noCollateralEvidence.freshness.collateral === null,
+  );
 
   for (const field of ['enableReading', 'enableMargin', 'enableSpotAndMarginTrading']) {
     const input = completeInput();
@@ -196,18 +344,55 @@ section('2. exact zero, unknown, disabled and unavailable stay distinct');
     check(`unknown ${field} remains UNKNOWN`, truth.state === 'UNKNOWN' && truth.reason === 'ACCOUNT_STATUS_UNKNOWN');
   }
 
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const [field, reason] of [
+    ['currentBorrowedAsset', 'CURRENT_BORROW_UNKNOWN'],
+    ['accruedInterestAsset', 'ACCRUED_INTEREST_UNKNOWN'],
+  ]) {
+    const input = completeInput();
+    input.liability[field] = null;
+    const truth = deriveBorrowTruth(input);
+    check(`unknown ${field} remains null and blocks availability`, truth.state === 'UNKNOWN' && truth.reason === reason && truth[field] === null);
+  }
+
+  const missingCollateral = completeInput();
+  Object.assign(missingCollateral.collateral, { collateralAmount: null, collateralAsset: null, currentLtv: null });
+  const noCollateral = deriveBorrowTruth(missingCollateral);
+  check('same-margin collateral field unknowns stay null without blocking required preflight', noCollateral.state === 'AVAILABLE' && noCollateral.collateralAmount === null && noCollateral.collateralAsset === null && noCollateral.currentLtv === null);
+
+  const missingLtv = completeInput();
+  missingLtv.collateral.currentLtv = null;
+  const noLtv = deriveBorrowTruth(missingLtv);
+  check('missing same-margin LTV is never derived from borrowed and collateral amounts', noLtv.state === 'AVAILABLE' && noLtv.collateralAmount === '2500' && noLtv.currentLtv === null);
+
+  const exactZeroExposure = completeInput();
+  Object.assign(exactZeroExposure.liability, { currentBorrowedAsset: '0.000', accruedInterestAsset: '0' });
+  Object.assign(exactZeroExposure.collateral, { collateralAmount: '0', collateralAsset: 'USDT', currentLtv: '0.0' });
+  const zeroExposure = deriveBorrowTruth(exactZeroExposure);
+  check('observed zero exposure stays an exact zero rather than unknown', zeroExposure.state === 'AVAILABLE' && zeroExposure.currentBorrowedAsset === '0' && zeroExposure.accruedInterestAsset === '0' && zeroExposure.collateralAmount === '0' && zeroExposure.currentLtv === '0');
+
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability']) {
     const input = completeInput();
     input[evidenceName].observedAt.completeness = 'PARTIAL';
     const truth = deriveBorrowTruth(input);
     check(`partial ${evidenceName} evidence is UNKNOWN`, truth.state === 'UNKNOWN' && truth.reason === 'EVIDENCE_PARTIAL');
   }
+
+  const partialCollateral = completeInput();
+  partialCollateral.collateral.observedAt.completeness = 'PARTIAL';
+  const partialCollateralTruth = deriveBorrowTruth(partialCollateral);
+  check(
+    'partial optional collateral is field-unknown without blocking required preflight',
+    partialCollateralTruth.state === 'AVAILABLE'
+      && partialCollateralTruth.collateralAmount === null
+      && partialCollateralTruth.currentLtv === null
+      && partialCollateralTruth.provenance.collateral.completeness === 'PARTIAL',
+  );
 }
 
 // ---------------------------------------------------------------------
 section('3. evidence expiry, receipt fallback, and clock skew are explicit');
 {
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability']) {
     const boundary = completeInput();
     boundary[evidenceName].observedAt.sourceTimeMs = T0 - 1_000;
     check(`${evidenceName} is fresh at exact max-age boundary`, deriveBorrowTruth(boundary).state === 'AVAILABLE');
@@ -217,6 +402,29 @@ section('3. evidence expiry, receipt fallback, and clock skew are explicit');
     const truth = deriveBorrowTruth(stale);
     check(`${evidenceName} expires one millisecond after boundary`, truth.state === 'STALE' && truth.reason === 'EVIDENCE_EXPIRED');
   }
+
+  const staleCollateral = completeInput();
+  staleCollateral.collateral.observedAt.sourceTimeMs = T0 - 1_001;
+  const staleCollateralTruth = deriveBorrowTruth(staleCollateral);
+  check(
+    'stale optional collateral cannot publish fields or shorten required truth expiry',
+    staleCollateralTruth.state === 'AVAILABLE'
+      && staleCollateralTruth.collateralAmount === null
+      && staleCollateralTruth.currentLtv === null
+      && staleCollateralTruth.freshness.collateral.state === 'STALE'
+      && staleCollateralTruth.expiresAtMs === T0 + 900,
+  );
+
+  const skewedCollateral = completeInput();
+  skewedCollateral.collateral.observedAt.sourceTimeMs = T0 + 2_001;
+  const skewedCollateralTruth = deriveBorrowTruth(skewedCollateral);
+  check(
+    'clock-skewed optional collateral remains field-unknown',
+    skewedCollateralTruth.state === 'AVAILABLE'
+      && skewedCollateralTruth.collateralAmount === null
+      && skewedCollateralTruth.currentLtv === null
+      && skewedCollateralTruth.freshness.collateral.state === 'CLOCK_SKEWED',
+  );
 
   const sourceWins = completeInput();
   sourceWins.maxBorrow.observedAt.sourceTimeMs = T0 - 1_001;
@@ -265,7 +473,7 @@ section('4. permissions, account mode and all source outcomes are fail-closed');
     check(`false ${field} is ACCOUNT_MODE_MISMATCH`, truth.state === 'ACCOUNT_MODE_MISMATCH');
   }
 
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
     const input = completeInput();
     input[evidenceName].mode = 'ISOLATED';
     const truth = deriveBorrowTruth(input);
@@ -277,7 +485,7 @@ section('4. permissions, account mode and all source outcomes are fail-closed');
   const crossPro = completeInput({ mode: 'CROSS_PRO' });
   check('cross-pro identity remains cross bucket', deriveBorrowTruth(crossPro).positionBucket === 'MARGIN_CROSS');
 
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability']) {
     const input = completeInput();
     const emptyPayload = evidenceName === 'account'
       ? { accountCreated: null, modeEnabled: null, borrowEnabled: null }
@@ -285,13 +493,17 @@ section('4. permissions, account mode and all source outcomes are fail-closed');
         ? { enableReading: null, enableMargin: null, enableSpotAndMarginTrading: null }
         : evidenceName === 'maxBorrow'
           ? { amount: null, borrowLimit: null }
-          : { hourlyRate: null };
+          : evidenceName === 'rate'
+            ? { hourlyRate: null }
+            : evidenceName === 'liability'
+              ? { currentBorrowedAsset: null, accruedInterestAsset: null }
+              : { collateralAmount: null, collateralAsset: null, currentLtv: null };
     Object.assign(input[evidenceName], emptyPayload, { status: 'RATE_LIMITED' });
     const truth = deriveBorrowTruth(input);
     check(`rate limit on ${evidenceName} is RATE_LIMITED`, truth.state === 'RATE_LIMITED' && truth.reason === 'SOURCE_RATE_LIMITED');
   }
 
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability']) {
     const input = completeInput();
     const emptyPayload = evidenceName === 'account'
       ? { accountCreated: null, modeEnabled: null, borrowEnabled: null }
@@ -299,10 +511,32 @@ section('4. permissions, account mode and all source outcomes are fail-closed');
         ? { enableReading: null, enableMargin: null, enableSpotAndMarginTrading: null }
         : evidenceName === 'maxBorrow'
           ? { amount: null, borrowLimit: null }
-          : { hourlyRate: null };
+          : evidenceName === 'rate'
+            ? { hourlyRate: null }
+            : evidenceName === 'liability'
+              ? { currentBorrowedAsset: null, accruedInterestAsset: null }
+              : { collateralAmount: null, collateralAsset: null, currentLtv: null };
     Object.assign(input[evidenceName], emptyPayload, { status: 'SOURCE_ERROR' });
     const truth = deriveBorrowTruth(input);
     check(`source failure on ${evidenceName} is SOURCE_ERROR`, truth.state === 'SOURCE_ERROR' && truth.reason === 'SOURCE_REPORTED_ERROR');
+  }
+
+  for (const status of ['RATE_LIMITED', 'SOURCE_ERROR', 'UNAVAILABLE']) {
+    const optionalFailure = completeInput();
+    Object.assign(optionalFailure.collateral, {
+      status,
+      collateralAmount: null,
+      collateralAsset: null,
+      currentLtv: null,
+    });
+    const truth = deriveBorrowTruth(optionalFailure);
+    check(
+      `${status} optional collateral stays field-unknown without blocking required preflight`,
+      truth.state === 'AVAILABLE'
+        && truth.collateralAmount === null
+        && truth.collateralAsset === null
+        && truth.currentLtv === null,
+    );
   }
 
   const errorAndLimit = completeInput();
@@ -319,7 +553,7 @@ section('4. permissions, account mode and all source outcomes are fail-closed');
 // ---------------------------------------------------------------------
 section('5. account, symbol, asset, mode and permission evidence cannot be substituted');
 {
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
     for (const [field, wrong] of [['accountId', 'acct-other'], ['symbol', 'ETHUSDT'], ['asset', 'ETH']]) {
       const input = completeInput();
       input[evidenceName][field] = wrong;
@@ -336,7 +570,28 @@ section('5. account, symbol, asset, mode and permission evidence cannot be subst
   wrongRate.rate.asset = 'BTC';
   check('mismatched rate value is never relabelled under target scope', deriveBorrowTruth(wrongRate).hourlyRate === null);
 
-  for (const evidenceName of ['account', 'maxBorrow', 'rate']) {
+  const wrongCollateral = completeInput();
+  wrongCollateral.collateral.symbol = 'ETHUSDT';
+  const wrongCollateralTruth = deriveBorrowTruth(wrongCollateral);
+  check('mismatched optional collateral is never relabelled under margin truth', wrongCollateralTruth.state === 'SOURCE_ERROR' && wrongCollateralTruth.collateralAmount === null && wrongCollateralTruth.currentLtv === null);
+
+  const failedWrongCollateral = completeInput();
+  Object.assign(failedWrongCollateral.collateral, {
+    symbol: 'ETHUSDT',
+    status: 'SOURCE_ERROR',
+    collateralAmount: null,
+    collateralAsset: null,
+    currentLtv: null,
+  });
+  const failedWrongCollateralTruth = deriveBorrowTruth(failedWrongCollateral);
+  check(
+    'optional collateral source failure cannot hide a cross-scope substitution',
+    failedWrongCollateralTruth.state === 'SOURCE_ERROR'
+      && failedWrongCollateralTruth.reason === 'EVIDENCE_IDENTITY_MISMATCH'
+      && failedWrongCollateralTruth.collateralAmount === null,
+  );
+
+  for (const evidenceName of ['account', 'maxBorrow', 'rate', 'liability', 'collateral']) {
     const input = completeInput();
     input[evidenceName].permissionId = 'different-key-snapshot';
     check(`${evidenceName} permission binding cannot be substituted`, deriveBorrowTruth(input).state === 'SOURCE_ERROR');
@@ -372,7 +627,7 @@ section('6. malformed and contradictory evidence fails consistently with TypeErr
     check(`invalid scope ${field} rejected`, throwsTypeError(() => deriveBorrowTruth(input)));
   }
 
-  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate']) {
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
     const implicit = completeInput(); delete implicit[evidenceName];
     check(`implicit undefined ${evidenceName} rejected; null required`, throwsTypeError(() => deriveBorrowTruth(implicit)));
     const nonObject = completeInput(); nonObject[evidenceName] = [];
@@ -403,6 +658,20 @@ section('6. malformed and contradictory evidence fails consistently with TypeErr
   check('negative hourly rate rejected', throwsTypeError(() => deriveBorrowTruth(negativeRate)));
   const numericRate = completeInput(); numericRate.rate.hourlyRate = 0.01;
   check('numeric hourly rate rejected to prevent binary ambiguity', throwsTypeError(() => deriveBorrowTruth(numericRate)));
+  const numericBorrowed = completeInput(); numericBorrowed.liability.currentBorrowedAsset = 1;
+  check('numeric current borrowed amount is rejected', throwsTypeError(() => deriveBorrowTruth(numericBorrowed)));
+  const overOneLtv = completeInput(); overOneLtv.collateral.currentLtv = '1.0000000001';
+  check('LTV above one cannot be admitted as a fractional ratio', throwsTypeError(() => deriveBorrowTruth(overOneLtv)));
+  const numericLtv = completeInput(); numericLtv.collateral.currentLtv = 0.25;
+  check('numeric LTV is rejected to prevent binary ambiguity', throwsTypeError(() => deriveBorrowTruth(numericLtv)));
+  const flexibleLoanCollateral = completeInput(); flexibleLoanCollateral.collateral.product = 'FLEXIBLE_LOAN';
+  check('flexible-loan collateral/LTV cannot be relabelled as margin BorrowTruth', throwsTypeError(() => deriveBorrowTruth(flexibleLoanCollateral)));
+  const productlessCollateral = completeInput(); delete productlessCollateral.collateral.product;
+  check('collateral evidence requires an explicit margin product identity', throwsTypeError(() => deriveBorrowTruth(productlessCollateral)));
+  const orphanCollateralAmount = completeInput(); orphanCollateralAmount.collateral.collateralAsset = null;
+  check('collateral quantity cannot lose its asset unit', throwsTypeError(() => deriveBorrowTruth(orphanCollateralAmount)));
+  const orphanCollateralAsset = completeInput(); orphanCollateralAsset.collateral.collateralAmount = null;
+  check('collateral asset cannot imply an unknown quantity', throwsTypeError(() => deriveBorrowTruth(orphanCollateralAsset)));
   const aboveLimit = completeInput(); aboveLimit.maxBorrow.amount = '10.0000000000000000001'; aboveLimit.maxBorrow.borrowLimit = '10';
   check('amount above account limit is contradictory', throwsTypeError(() => deriveBorrowTruth(aboveLimit)));
   const equalLimit = completeInput(); equalLimit.maxBorrow.amount = '10.000'; equalLimit.maxBorrow.borrowLimit = '10';
@@ -413,6 +682,8 @@ section('6. malformed and contradictory evidence fails consistently with TypeErr
     ['permission', { status: 'RATE_LIMITED' }],
     ['maxBorrow', { status: 'UNAVAILABLE' }],
     ['rate', { status: 'SOURCE_ERROR' }],
+    ['liability', { status: 'RATE_LIMITED' }],
+    ['collateral', { status: 'UNAVAILABLE' }],
   ];
   for (const [name, override] of contradictions) {
     const input = completeInput(); Object.assign(input[name], override);

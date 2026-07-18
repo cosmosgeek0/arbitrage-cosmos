@@ -1,8 +1,8 @@
 # QUANT EDGE RESEARCH FACTORY — durable build state
 
-State generation: `41`
+State generation: `42`
 
-Updated: 2026-07-18T05:32:53+0530
+Updated: 2026-07-18T09:14:15+0530
 
 Status: `HISTORICAL LANE_READY — POST-ACCEPTANCE CORRECTIONS PENDING`.
 Historical Q02/Q05/Q08/Q16 and C17/A17 acceptance remains immutable. Money-truth
@@ -32,13 +32,15 @@ uncertainty and advisory-only local inference.
   and `c82cf92d68bebcfbc5d818de667b9ca50714e7cffbeac331fe06176899c6709e`.
 - Q08 retains historical source seal `0224276b1a356696eab857aea38d40d8956491761a9e0012a0298cb9e3448d74`
   and 1,204-byte primary `d2054e47d0050ef521d91f653b9ab6f60411a2d2f0633933c7ec65e76145525b`.
-  Current F-034/F-038/F-039 source and primary are
-  `232ee05a6d2ab4a2645be9be5f466ce400004ec503298dcb2ca13e8e264bac06`
+  Current F-034/F-038/F-039 plus pending FIX-017 source and primary are
+  `46ceb4f5d530e1d3f2ed38dd634989debe84d1926a35497fafc260a7afaf2bb7`
   and `3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8`.
 - Exact fix commits are F-034 `19f674a35944f1f3fdd4fdafd396fba9df6fd255`,
   F-038 `42e431fbc8ee8823cba826f759737ce3b3f52465` and F-039
-  `039c3866619c3e3af9533c651284af32a7bc114d`; current correction bytes match
-  the F-039 tree `6724c8fa53fb74df5ef840d37ca3de8364b7c64f`. Director merge
+  `039c3866619c3e3af9533c651284af32a7bc114d`. The previously attested
+  correction chain ends at F-039 tree `6724c8fa53fb74df5ef840d37ca3de8364b7c64f`; current
+  Q08 bytes additionally contain FIX-017, whose commit/tree deliberately remain
+  `PENDING_NOT_EMBEDDED` until independent verification. Director merge
   `5f887cf27ce246d80b7fc553eed470b015976963` / tree
   `813a383df420e318dc97522c860d6b1e6b99aab4` integrates that chain without
   creating new Q-phase acceptance.
@@ -81,18 +83,18 @@ uncertainty and advisory-only local inference.
   universe/watch-452 p50 `3,711,352,291 ns`, child peak RSS `58,949,632`
   bytes. These are fresh pending measurements, not historical A17 measurements.
 - Current combined-correction benchmark observation: warm-single p50
-  `139,616,417 ns`, focus-25 p50 `231,062,000 ns`, candidate-128 p50
-  `1,021,433,167 ns`, universe/watch-452 p50 `3,742,542,708 ns`, child peak RSS
-  `67,387,392` bytes. These are fresh pending measurements, not historical A17
+  `132,974,584 ns`, focus-25 p50 `223,359,916 ns`, candidate-128 p50
+  `998,414,791 ns`, universe/watch-452 p50 `3,654,287,250 ns`, child peak RSS
+  `67,698,688` bytes. These are fresh pending measurements, not historical A17
   measurements.
 - Current generated Q17 SHA-256 values: benchmark
-  `e46b4363c887b6d932fdd82872608e52b5d5add8d688cb9d52c4d027152a956b`;
+  `46727b85e53e8d50382fd74c39d06d495b60dae8ad2db2fd46593fe720526418`;
   component manifest
-  `b773e8e7269c4bfb417f03c0fab84a82a39b643c031a633431525a84c9f30356`;
+  `127687fb4b8886d893465a3e7d2787e364ca7e59f8085354bd6c2640868656fc`;
   security scope
-  `46977f02aed24dc971f3318529b78d87dd31500cb669cdaa3fd92222dbb473e3`;
+  `eaadef6587de309e5ff91b5c98ae12d4d4092df8067559d6ac3285cfa253ccaa`;
   self-excluding artifact manifest
-  `98faf051e3545991f93dcf608305a78baeb609f43a531333b53f09698ae7971f`.
+  `0246146f30ed665c5abf5c79eb144ad235c8c6f93e9ff573ca18ab9bd9b7eb45`.
   The last digest is mutable pending-correction evidence, not an acceptance seal.
 - Historical directive-input lock acceptance remains
   `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`

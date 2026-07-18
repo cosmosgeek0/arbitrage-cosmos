@@ -115,6 +115,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "3d755d7255a030528008e22b590f33b8355d87f74ed68620825ba245c1ff9bfc"
             ),
             "fixCommits": ["039c3866619c3e3af9533c651284af32a7bc114d"],
+            "pendingCorrectionIds": [],
             "historicalPrimarySha256": (
                 "01b648ee6ae5f9d4dbba345b775d4f19b4d1ce2276036d9161554c73ab8f49ba"
             ),
@@ -134,6 +135,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "42e431fbc8ee8823cba826f759737ce3b3f52465",
                 "039c3866619c3e3af9533c651284af32a7bc114d",
             ],
+            "pendingCorrectionIds": [],
             "historicalPrimarySha256": (
                 "f36a9b089fe2c935c08f6f67e8b7debcf40b8d67cde46ae73271835b725afe47"
             ),
@@ -147,13 +149,14 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8"
             ),
             "currentSourceSha256": (
-                "232ee05a6d2ab4a2645be9be5f466ce400004ec503298dcb2ca13e8e264bac06"
+                "46ceb4f5d530e1d3f2ed38dd634989debe84d1926a35497fafc260a7afaf2bb7"
             ),
             "fixCommits": [
                 "19f674a35944f1f3fdd4fdafd396fba9df6fd255",
                 "42e431fbc8ee8823cba826f759737ce3b3f52465",
                 "039c3866619c3e3af9533c651284af32a7bc114d",
             ],
+            "pendingCorrectionIds": ["FIX-017"],
             "historicalPrimarySha256": (
                 "d2054e47d0050ef521d91f653b9ab6f60411a2d2f0633933c7ec65e76145525b"
             ),
@@ -192,6 +195,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             "directorIntegrationCommit": "5f887cf27ce246d80b7fc553eed470b015976963",
             "directorIntegrationTree": "813a383df420e318dc97522c860d6b1e6b99aab4",
             "fixCommits": expected["fixCommits"],
+            "pendingCorrectionIds": expected["pendingCorrectionIds"],
             "tipCommit": "039c3866619c3e3af9533c651284af32a7bc114d",
             "tipTree": "6724c8fa53fb74df5ef840d37ca3de8364b7c64f",
         }
@@ -200,6 +204,11 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
         assert "NOT_ACCEPTED" in dispositions
         assert "EXACT_COMMIT_ACCEPTED" not in dispositions
         assert "CURRENT_BYTES_VERIFIED" not in dispositions
+        for pending_id in cast(list[str], expected["pendingCorrectionIds"]):
+            assert f"{pending_id}_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION" in dispositions
+            assert f"{pending_id}_COMMIT_AND_TREE_PENDING_NOT_EMBEDDED" in cast(
+                list[str], row["limitations"]
+            )
         assert row["evidencePosture"] == (
             "HISTORICAL_ACCEPTANCE_WITH_POST_ACCEPTANCE_CORRECTION_PENDING"
         )

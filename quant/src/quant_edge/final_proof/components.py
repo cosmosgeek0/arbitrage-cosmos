@@ -96,6 +96,7 @@ class _PostAcceptanceCorrectionSpec:
     current_source: _SourceSpec
     current_primary_evidence: _ArtifactSpec | None
     fix_commits: tuple[str, ...]
+    pending_correction_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,7 +391,7 @@ _Q16_RB13_SERVICE_SPEC: Final = _ArtifactSpec(
     1,
 )
 
-# F-034/F-038/F-039 changed already accepted Q02/Q05/Q08 owner bytes.  Their
+# F-034/F-038/F-039 and FIX-017 changed already accepted Q02/Q05/Q08 owner bytes.  Their
 # accepted source/evidence pins above remain immutable.  These specs verify the
 # exact current money-truth correction bytes without promoting them into the
 # historical phase identities or receipts.
@@ -431,7 +432,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "quant/src/quant_edge/derivatives",
             "src/quant_edge/derivatives",
             15,
-            "232ee05a6d2ab4a2645be9be5f466ce400004ec503298dcb2ca13e8e264bac06",
+            "46ceb4f5d530e1d3f2ed38dd634989debe84d1926a35497fafc260a7afaf2bb7",
         ),
         _ArtifactSpec(
             "q08.money-truth-derivatives-campaign.v1",
@@ -443,6 +444,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             1,
         ),
         (_F034_COMMIT, _F038_COMMIT, _F039_COMMIT),
+        ("FIX-017",),
     ),
 }
 
@@ -1167,6 +1169,10 @@ def _phase_specs() -> tuple[_PhaseSpec, ...]:
             limitations.append("MODEL_PAYLOAD_UNAVAILABLE_NONLOADABLE")
         if phase in _POST_ACCEPTANCE_CORRECTIONS:
             limitations.append(f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_{phase}_RECEIPTS")
+            limitations.extend(
+                f"{correction_id}_COMMIT_AND_TREE_PENDING_NOT_EMBEDDED"
+                for correction_id in _POST_ACCEPTANCE_CORRECTIONS[phase].pending_correction_ids
+            )
         if phase == "Q16":
             limitations.extend(
                 (
@@ -1292,6 +1298,7 @@ def _phase_mapping(
                 "directorIntegrationCommit": _MONEY_TRUTH_DIRECTOR_INTEGRATION_COMMIT,
                 "directorIntegrationTree": _MONEY_TRUTH_DIRECTOR_INTEGRATION_TREE,
                 "fixCommits": list(money_truth_correction.fix_commits),
+                "pendingCorrectionIds": list(money_truth_correction.pending_correction_ids),
                 "tipCommit": _MONEY_TRUTH_FIX_TIP_COMMIT,
                 "tipTree": _MONEY_TRUTH_FIX_TIP_TREE,
             },
@@ -1323,6 +1330,10 @@ def _phase_mapping(
             "HISTORICAL_EXACT_COMMIT_ACCEPTED",
             f"{spec.phase}_MONEY_TRUTH_CORRECTION_IMPLEMENTED",
             f"{spec.phase}_MONEY_TRUTH_CORRECTION_PENDING_INDEPENDENT_VERIFICATION",
+            *(
+                f"{correction_id}_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
+                for correction_id in money_truth_correction.pending_correction_ids
+            ),
             "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED",
             "NOT_ACCEPTED",
         ]

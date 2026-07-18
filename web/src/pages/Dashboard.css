@@ -681,3 +681,14 @@
   .dcx-empty-performance > button { margin-left: 32px; }
   .dcx-source-footer { align-items: flex-start; flex-direction: column; }
 }
+.dcx-state-truth {
+  margin: 12px 16px 0;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn, #b45309) 46%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn, #b45309) 9%, transparent);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}

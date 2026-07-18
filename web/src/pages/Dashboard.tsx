@@ -161,7 +161,7 @@ function Metric({ label, value, detail, tone = 'idle' }: { label: string; value:
 }
 
 export function Dashboard() {
-  const { state, setPage } = useStore();
+  const { state, stateStatus, stateLastSuccessAtMs, stateError, setPage } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const [refreshTick, setRefreshTick] = useState(0);
   const [range, setRange] = useState<RangeId>('1M');
@@ -377,6 +377,14 @@ export function Dashboard() {
             <button type="button" onClick={() => open('risk')}><ShieldCheck size={14} />Risk</button>
           </div>
         </header>
+
+        {stateStatus !== 'CURRENT' && (
+          <div className="dcx-state-truth" role="alert">
+            {stateStatus === 'STALE' ? 'STALE LAST-KNOWN' : 'UNAVAILABLE'} · Compatibility state
+            {stateLastSuccessAtMs === null ? ' has no successful read.' : ` last succeeded ${timeAgo(stateLastSuccessAtMs)}.`}
+            {stateError ? ` ${stateError}` : ''}
+          </div>
+        )}
 
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric

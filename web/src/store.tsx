@@ -31,6 +31,44 @@ export type RefreshResult = {
   ts?: number;
 };
 
+export type CompatibilityStateStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+
+export type CompatibilityStateTruth = Readonly<{
+  status: CompatibilityStateStatus;
+  lastSuccessAtMs: number | null;
+  error: string | null;
+}>;
+
+export type CompatibilityStateTruthEvent =
+  | Readonly<{ kind: 'SUCCESS'; observedAtMs: number }>
+  | Readonly<{ kind: 'FAILURE'; observedAtMs: number; error: string }>;
+
+export const INITIAL_COMPATIBILITY_STATE_TRUTH: CompatibilityStateTruth = Object.freeze({
+  status: 'LOADING',
+  lastSuccessAtMs: null,
+  error: null,
+});
+
+export function reduceCompatibilityStateTruth(
+  current: Readonly<CompatibilityStateTruth>,
+  event: Readonly<CompatibilityStateTruthEvent>,
+): CompatibilityStateTruth {
+  const observedAtMs = Number.isFinite(event.observedAtMs) && event.observedAtMs >= 0
+    ? event.observedAtMs
+    : null;
+  if (event.kind === 'SUCCESS' && observedAtMs !== null) {
+    return Object.freeze({ status: 'CURRENT', lastSuccessAtMs: observedAtMs, error: null });
+  }
+  const error = event.kind === 'FAILURE' && event.error.trim()
+    ? event.error.trim()
+    : 'Compatibility state refresh failed.';
+  return Object.freeze({
+    status: current.lastSuccessAtMs === null ? 'UNAVAILABLE' : 'STALE',
+    lastSuccessAtMs: current.lastSuccessAtMs,
+    error,
+  });
+}
+
 // Account detail ids render controlled, read-only Account subviews. Product
 // truth remains in ProductControlRoomProvider; this store owns navigation only.
 export type Page =
@@ -64,6 +102,9 @@ const PAGE_IDS: Page[] = [
 
 interface Store {
   state: ServerState | null;
+  stateStatus: CompatibilityStateStatus;
+  stateLastSuccessAtMs: number | null;
+  stateError: string | null;
   markets: MarketRow[];
   marketsUpdatedAt: number | null;
   marketsError: string | null;
@@ -231,6 +272,9 @@ async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
+  const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
+    INITIAL_COMPATIBILITY_STATE_TRUTH,
+  );
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
   const [marketsError, setMarketsError] = useState<string | null>(null);
@@ -323,9 +367,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       stateRefreshController = controller;
       void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
         .then((snapshot) => {
-          if (!closed && !controller.signal.aborted) setState(failClosedState(snapshot));
+          if (!closed && !controller.signal.aborted) {
+            setState(failClosedState(snapshot));
+            setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+              kind: 'SUCCESS',
+              observedAtMs: Date.now(),
+            }));
+          }
         })
-        .catch(() => undefined)
+        .catch((cause) => {
+          if (!closed && !controller.signal.aborted) {
+            setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+              kind: 'FAILURE',
+              observedAtMs: Date.now(),
+              error: mutationFailure(cause).message,
+            }));
+          }
+        })
         .finally(() => {
           if (stateRefreshController === controller) stateRefreshController = null;
           stateRefreshInFlight = false;
@@ -484,8 +542,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await fetchJson<ServerState>('/api/state');
       setState(failClosedState(s));
-    } catch {
+      setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+        kind: 'SUCCESS',
+        observedAtMs: Date.now(),
+      }));
+    } catch (cause) {
       issues.push('State snapshot failed');
+      setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+        kind: 'FAILURE',
+        observedAtMs: Date.now(),
+        error: mutationFailure(cause).message,
+      }));
     }
     try {
       const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
@@ -511,6 +578,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const store: Store = {
     state,
+    stateStatus: stateTruth.status,
+    stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
+    stateError: stateTruth.error,
     markets,
     marketsUpdatedAt,
     marketsError,

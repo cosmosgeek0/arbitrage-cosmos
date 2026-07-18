@@ -125,6 +125,7 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_KILL_SWITCH') return mutation.engaged === true;
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_INTAKE') return mutation.paused === true;
+  if (mutation.command === 'SET_VOLUME_INTAKE') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   if (mutation.command === 'SET_VOLUME_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   if (mutation.command === 'REDUCE_SIZE_CEILING') return true;
@@ -916,6 +917,17 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         return 'UNKNOWN';
       }
     }
+    if (request.mutation.command === 'SET_VOLUME_INTAKE') {
+      const owner = this.options.strategyIntake?.volume;
+      if (!owner || typeof owner.readPaused !== 'function') return 'UNKNOWN';
+      try {
+        const paused = owner.readPaused();
+        if (typeof paused !== 'boolean') return 'UNKNOWN';
+        return paused === request.mutation.paused ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     if (request.mutation.command === 'SET_BASIS_SYMBOL_POLICY'
       || request.mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
       const strategy = request.mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
@@ -1378,6 +1390,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       } else if (mutation.command === 'SET_BASIS_INTAKE') {
         const owner = this.options.strategyIntake?.basis;
         if (!owner || typeof owner.setPaused !== 'function') throw new Error('BASIS_INTAKE_OWNER_NOT_WIRED');
+        owner.setPaused(mutation.paused);
+      } else if (mutation.command === 'SET_VOLUME_INTAKE') {
+        const owner = this.options.strategyIntake?.volume;
+        if (!owner || typeof owner.setPaused !== 'function') throw new Error('VOLUME_INTAKE_OWNER_NOT_WIRED');
         owner.setPaused(mutation.paused);
       } else if (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
         || mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {

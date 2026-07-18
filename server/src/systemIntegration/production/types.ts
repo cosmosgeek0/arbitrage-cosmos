@@ -87,6 +87,8 @@ export interface ProductionVolumeRuntimePort {
   stop(): void;
   connectionStatus(): Readonly<ProductionVolumeConnectionStatus>;
   integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  setIntakePaused(paused: boolean): boolean;
+  intakePaused(): boolean;
   operatorBlockedSymbols(): readonly string[];
   setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean;
   symbolAllowedByPolicy(symbol: string): boolean;
@@ -116,6 +118,10 @@ export interface ProductionSystemIntegrationPorts {
   readonly summaries: ApplicationSummaryReadPort;
   readonly strategyIntake: Readonly<{
     basis: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
+    volume: Readonly<{
       readPaused(): boolean;
       setPaused(paused: boolean): boolean;
     }>;

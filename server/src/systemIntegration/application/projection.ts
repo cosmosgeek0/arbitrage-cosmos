@@ -98,7 +98,7 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'VOLUME_ENGINE', ownerPath: 'server/src/engine/volume',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_VOLUME_INTAKE'),
   }),
   'capital-supervision': Object.freeze({
     owner: 'CAPITAL_SUPERVISION', ownerPath: 'server/src/capitalFoundation',

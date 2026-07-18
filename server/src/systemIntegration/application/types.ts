@@ -82,6 +82,10 @@ export interface SystemIntegrationApplicationOptions {
       readPaused(): boolean;
       setPaused(paused: boolean): boolean;
     }>;
+    volume?: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
   }>;
   /** Narrow durable deny-overlay seam; strategy engines remain the effective policy owners. */
   readonly strategySymbolPolicy?: Readonly<{

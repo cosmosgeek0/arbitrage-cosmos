@@ -1300,6 +1300,10 @@ export function createProductionSystemIntegrationPorts(
       readPaused: () => input.basis.intakePaused(),
       setPaused: (paused: boolean) => input.basis.setIntakePaused(paused),
     }),
+    volume: Object.freeze({
+      readPaused: () => input.volume.intakePaused(),
+      setPaused: (paused: boolean) => input.volume.setIntakePaused(paused),
+    }),
   });
 
   const strategySymbolPolicy = Object.freeze({

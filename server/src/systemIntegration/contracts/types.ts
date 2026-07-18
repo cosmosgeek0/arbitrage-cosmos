@@ -260,6 +260,7 @@ export type SystemControlMutation =
   | { readonly command: 'REVOKE_RESERVATION'; readonly reservationId: string }
   | { readonly command: 'RESTART_COMPONENT'; readonly componentId: SystemComponentId }
   | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean }
+  | { readonly command: 'SET_VOLUME_INTAKE'; readonly paused: boolean }
   | { readonly command: 'CLEAR_DEPLOYMENT_FREEZE'; readonly expectedObservedAtUtc: string }
   | {
       readonly command: 'SET_PUBLIC_SOURCE_LIFECYCLE';

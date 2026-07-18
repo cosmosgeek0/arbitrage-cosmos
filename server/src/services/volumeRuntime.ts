@@ -255,6 +255,14 @@ export class VolumeRuntime {
     return this.engine.setVolume1sMultiple(numeric);
   }
 
+  setIntakePaused(paused: boolean): boolean {
+    return this.engine.setIntakePaused(paused);
+  }
+
+  intakePaused(): boolean {
+    return this.engine.intakePaused();
+  }
+
   private async refreshUniverse(generation: number): Promise<void> {
     if (!this.isActive(generation)) return;
     const config = this.readConfig();

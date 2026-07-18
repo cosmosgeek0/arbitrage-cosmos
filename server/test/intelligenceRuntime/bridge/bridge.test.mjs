@@ -407,6 +407,30 @@ test('broad normalized public events feed the feature bank and stable snapshot w
   assert.equal(snapshot.executesAction, false);
 });
 
+test('exact-symbol Bridge readback is bounded, frozen, and honest before an artifact exists', () => {
+  const { bridge, clock, identity } = prepare();
+  const rows = [trade(identity, clock.nowMs(), 1), book(identity, clock.nowMs())];
+  assert.equal(bridge.ingest({ correlationId: 'symbol-read-root', scope: 'BROAD', evidence: rows }).accepted, 2);
+
+  const btc = bridge.readSymbol('BTCUSDT');
+  const eth = bridge.readSymbol('ETHUSDT');
+  assert.equal(btc.symbol, 'BTCUSDT');
+  assert.equal(btc.evidenceHistoryCount, 2);
+  assert.equal(btc.evidenceHistoryState, 'COMPLETE');
+  assert.equal(btc.featureSnapshot.symbol, 'BTCUSDT');
+  assert.equal(btc.artifact, null);
+  assert.equal(btc.attention, null);
+  assert.ok(btc.reasonCodes.includes('INTELLIGENCE_ARTIFACT_MISSING'));
+  assert.equal(btc.authority, 'EVIDENCE_ONLY');
+  assert.equal(btc.liveMoneyAuthority, 'NONE');
+  assert.equal(eth.featureSnapshot, null);
+  assert.equal(eth.evidenceHistoryCount, 0);
+  assert.ok(eth.reasonCodes.includes('EVIDENCE_HISTORY_MISSING'));
+  assert.equal(Object.isFrozen(btc), true);
+  assert.throws(() => btc.reasonCodes.push('MUTATION'), TypeError);
+  assert.throws(() => bridge.readSymbol('../BTCUSDT'), /canonical bounded market symbol/);
+});
+
 test('the production-sized 452-symbol public universe graph is accepted without truncation', () => {
   const clock = new ManualClock();
   const bridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });

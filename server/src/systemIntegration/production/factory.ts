@@ -13,6 +13,7 @@ import {
 import {
   BINANCE_SOURCE_FACTS,
   normalizeFunding,
+  normalizeLiquidation,
   normalizeMarkPrice,
   normalizeOpenInterest,
   normalizeTrade,
@@ -71,6 +72,11 @@ import type {
   ProductionBasisRuntimePort,
   ProductionMarketEnginePort,
   ProductionMarketRow,
+  ProductionLiquidationEvidenceCut,
+  ProductionLiquidationSourceClosedCut,
+  ProductionTokenEvidenceFact,
+  ProductionTokenEvidenceState,
+  ProductionTokenIntelligenceReadModel,
   ProductionFeedStatus,
   ProductionStrategySnapshot,
   ProductionSystemIntegrationInput,
@@ -166,6 +172,75 @@ function latest(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
   return Math.max(left, right);
+}
+
+function validFiniteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function validNonNegativeOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && candidate >= 0 ? candidate : null;
+}
+
+function validPositiveOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && candidate > 0 ? candidate : null;
+}
+
+function validFundingOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && Math.abs(candidate) <= 1 ? candidate : null;
+}
+
+function validObservedAtOrNull(value: unknown, nowMs: number): number | null {
+  const candidate = validUtcOrNull(value);
+  return candidate !== null && candidate <= nowMs ? candidate : null;
+}
+
+const TOKEN_MARKET_FIELDS = Object.freeze([
+  'symbol', 'base', 'hasSpot', 'hasPerp', 'perpMark', 'perpIndexPrice',
+  'fundingRate', 'nextFundingTime', 'openInterest', 'openInterestUsd',
+  'openInterestChangePct', 'openInterestUpdatedAt', 'liquidations15mUsd',
+  'longLiquidations15mUsd', 'shortLiquidations15mUsd',
+] as const);
+
+function safeTokenMarketRow(
+  market: ProductionMarketEnginePort,
+  symbol: string,
+): Readonly<ProductionMarketRow> | null {
+  try {
+    const rows = market.allRows();
+    if (!Array.isArray(rows) || utilTypes.isProxy(rows) || rows.length > MAX_MARKET_ROWS) return null;
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw) || utilTypes.isProxy(raw)
+          || Object.getPrototypeOf(raw) !== Object.prototype
+          || Object.getOwnPropertySymbols(raw).length > 0) continue;
+      const descriptors = Object.getOwnPropertyDescriptors(raw);
+      const symbolDescriptor = descriptors.symbol;
+      if (!symbolDescriptor || !Object.hasOwn(symbolDescriptor, 'value')
+          || !symbolDescriptor.enumerable || symbolDescriptor.value !== symbol) continue;
+      const captured: Record<string, unknown> = {};
+      let valid = true;
+      for (const field of TOKEN_MARKET_FIELDS) {
+        const descriptor = descriptors[field];
+        if (descriptor === undefined) {
+          captured[field] = undefined;
+          continue;
+        }
+        if (!Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
+          valid = false;
+          break;
+        }
+        captured[field] = descriptor.value;
+      }
+      if (!valid || typeof captured.hasSpot !== 'boolean' || typeof captured.hasPerp !== 'boolean') return null;
+      return Object.freeze(captured as unknown as ProductionMarketRow);
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function frozenHealth(
@@ -939,6 +1014,7 @@ class PublicIntelligenceLifecycle {
     });
     this.router = new VolumeEvidenceRouter({ clock, sink: this.bridge });
     this.volume.setEvidenceObserver?.((cut) => this.onVolumeEvidence(cut));
+    this.market.setLiquidationEvidenceObserver?.((cut) => this.onLiquidationEvidence(cut));
     // Sampling may reduce allocation churn, but it must never outlive the
     // source contract. Re-project at least twice inside the configured
     // freshness window and immediately fail closed on the source reads below.
@@ -968,6 +1044,175 @@ class PublicIntelligenceLifecycle {
 
   readEvidenceRoutingSnapshot() {
     return this.router.snapshot();
+  }
+
+  readSymbol(symbol: string): Readonly<ProductionTokenIntelligenceReadModel> {
+    if (!SYMBOL.test(symbol)) throw new TypeError('symbol must be a canonical bounded market symbol');
+    const observedAtMs = this.clock.nowMs();
+    if (!isValidUtcMillis(observedAtMs)) throw new TypeError('clock.nowMs returned invalid UTC ms');
+    const row = safeTokenMarketRow(this.market, symbol);
+    const routing = this.router.snapshotForSymbol(symbol);
+    const capability = (name: string) => routing.capabilities.find((entry) => entry.capability === name) ?? null;
+    const projectionRunning = this.runtimeActive && this.intelligenceActive;
+    const projectionCurrent = projectionRunning && this.focusTruthCurrent(observedAtMs);
+    let usdmSource: Pick<SourceProjectionEvidence, 'connected' | 'feedState'> = {
+      connected: false,
+      feedState: 'missing',
+    };
+    try {
+      const source = this.evidence.readSource('USDM', observedAtMs);
+      usdmSource = Object.freeze({ connected: source.connected, feedState: source.feedState });
+    } catch { /* fail closed below */ }
+    const rawLiquidationFeed = this.market.feeds['futures-liquidations'];
+    const liquidationFeedState: ProductionFeedStatus | 'missing' = (
+      rawLiquidationFeed === 'open' || rawLiquidationFeed === 'connecting'
+      || rawLiquidationFeed === 'closed' || rawLiquidationFeed === 'cooldown'
+      || rawLiquidationFeed === 'exhausted'
+    ) ? rawLiquidationFeed : 'missing';
+    const usdmAvailable = projectionCurrent && usdmSource.connected && usdmSource.feedState === 'open';
+    const liquidationAvailable = projectionCurrent && liquidationFeedState === 'open';
+
+    let markObservedAtMs: number | null = null;
+    let liquidationObservedAtMs: number | null = null;
+    try { markObservedAtMs = validObservedAtOrNull(this.market.markEventTimestamp(symbol), observedAtMs); } catch { /* unavailable */ }
+    try {
+      liquidationObservedAtMs = validObservedAtOrNull(
+        this.market.liquidationEventTimestamp?.(symbol) ?? null,
+        observedAtMs,
+      );
+    } catch { /* unavailable */ }
+
+    const markCandidate = row?.hasPerp === true ? Object.freeze({
+      markPrice: validPositiveOrNull(row.perpMark),
+      indexPrice: validPositiveOrNull(row.perpIndexPrice),
+      fundingRate: validFundingOrNull(row.fundingRate),
+      nextFundingTimeMs: validUtcOrNull(row.nextFundingTime),
+    }) : null;
+    const markState: ProductionTokenEvidenceState = !usdmAvailable
+      ? 'UNAVAILABLE'
+      : markObservedAtMs === null || markCandidate === null
+        ? 'MISSING'
+        : observedAtMs - markObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+          : [markCandidate.markPrice, markCandidate.indexPrice, markCandidate.fundingRate]
+              .some((value) => value !== null)
+            ? 'FRESH'
+            : 'MISSING';
+
+    const openInterestCapability = capability('OPEN_INTEREST');
+    const openInterestObservedAtMs = validObservedAtOrNull(row?.openInterestUpdatedAt, observedAtMs);
+    const openInterestCandidate = row?.hasPerp === true ? Object.freeze({
+      base: validNonNegativeOrNull(row.openInterest),
+      quoteUsd: validNonNegativeOrNull(row.openInterestUsd),
+      changePct: validFiniteOrNull(row.openInterestChangePct),
+    }) : null;
+    const openInterestState: ProductionTokenEvidenceState = !usdmAvailable
+      ? 'UNAVAILABLE'
+      : openInterestCapability?.freshness === 'STALE'
+        ? 'STALE'
+        : openInterestObservedAtMs !== null && observedAtMs - openInterestObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+        : openInterestCapability?.freshness === 'FRESH'
+          && openInterestObservedAtMs !== null
+          && openInterestCandidate !== null
+          && Object.values(openInterestCandidate).some((value) => value !== null)
+          ? 'FRESH'
+          : 'MISSING';
+
+    const liquidationCapability = capability('LIQUIDATION');
+    const liquidationCandidate = row?.hasPerp === true
+      && validPositiveOrNull(row.liquidations15mUsd) !== null
+      ? Object.freeze({
+          total15mUsd: validPositiveOrNull(row.liquidations15mUsd),
+          long15mUsd: validNonNegativeOrNull(row.longLiquidations15mUsd),
+          short15mUsd: validNonNegativeOrNull(row.shortLiquidations15mUsd),
+          sampling: 'LATEST_PER_SYMBOL_LOWER_BOUND' as const,
+        })
+      : null;
+    const liquidationState: ProductionTokenEvidenceState = !liquidationAvailable
+      ? 'UNAVAILABLE'
+      : liquidationCapability?.freshness === 'STALE'
+        ? 'STALE'
+        : liquidationObservedAtMs !== null && observedAtMs - liquidationObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+        : liquidationCapability?.freshness === 'FRESH'
+          && liquidationObservedAtMs !== null
+          && liquidationCandidate !== null
+          ? 'FRESH'
+          : 'MISSING';
+
+    const fact = <TValue>(input: {
+      state: ProductionTokenEvidenceState;
+      sourceId: string;
+      dataset: string;
+      observedAtMs: number | null;
+      value: Readonly<TValue> | null;
+      reasonCodes: readonly string[];
+    }): Readonly<ProductionTokenEvidenceFact<TValue>> => Object.freeze({
+      ...input,
+      value: input.state === 'FRESH' ? input.value : null,
+      reasonCodes: Object.freeze([...input.reasonCodes]),
+    });
+
+    const rawBridge = this.bridge.readSymbol(symbol);
+    // The response observation time is an upper bound for every nested owner
+    // evaluation. Bridge/router clocks may tick after the freshness cut used
+    // above, so publish the maximum instead of exposing an apparently future
+    // nested record to strict browser consumers.
+    const readObservedAtMs = Math.max(observedAtMs, routing.observedAtMs, rawBridge.evaluatedAtMs);
+    const bridge = Object.freeze({
+      ...rawBridge,
+      currentState: projectionCurrent ? 'CURRENT' as const : 'HISTORICAL_ONLY' as const,
+      featureSnapshot: projectionCurrent ? rawBridge.featureSnapshot : null,
+      attention: projectionCurrent ? rawBridge.attention : null,
+      artifact: projectionCurrent ? rawBridge.artifact : null,
+      reasonCodes: Object.freeze([
+        ...rawBridge.reasonCodes,
+        ...(projectionCurrent ? [] : ['CURRENT_PROJECTION_UNAVAILABLE']),
+      ]),
+    });
+    const anyCurrentEvidence = projectionCurrent && (
+      [markState, openInterestState, liquidationState].includes('FRESH')
+      || routing.capabilities.some((entry) => entry.freshness === 'FRESH')
+    );
+    return Object.freeze({
+      schemaVersion: 'token-intelligence-owner-read.v1' as const,
+      symbol,
+      observedAtMs: readObservedAtMs,
+      projection: Object.freeze({
+        state: !projectionRunning ? 'NOT_RUNNING' as const : anyCurrentEvidence ? 'ACTIVE' as const : 'DEGRADED' as const,
+        usdm: Object.freeze({ connected: usdmSource.connected, feedState: usdmSource.feedState }),
+        liquidation: Object.freeze({ connected: liquidationFeedState === 'open', feedState: liquidationFeedState }),
+      }),
+      markFunding: fact({
+        state: markState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE.dataset,
+        observedAtMs: markObservedAtMs,
+        value: markCandidate,
+        reasonCodes: markState === 'FRESH' ? [] : [`MARK_FUNDING_${markState}`],
+      }),
+      openInterest: fact({
+        state: openInterestState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST.dataset,
+        observedAtMs: openInterestObservedAtMs,
+        value: openInterestCandidate,
+        reasonCodes: openInterestCapability?.reasonCodes ?? [`OPEN_INTEREST_${openInterestState}`],
+      }),
+      liquidation: fact({
+        state: liquidationState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.dataset,
+        observedAtMs: liquidationObservedAtMs,
+        value: liquidationCandidate,
+        reasonCodes: liquidationCapability?.reasonCodes ?? [`LIQUIDATION_${liquidationState}`],
+      }),
+      routing,
+      bridge,
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
+    });
   }
 
   readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
@@ -1204,6 +1449,90 @@ class PublicIntelligenceLifecycle {
         generation: cut.generation,
         revision: cut.revision,
         bootstrap: cut.continuity === 'CONTIGUOUS' ? 'CONTIGUOUS_OWNER' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: cut.receivedAtMs,
+      }),
+      evidence: result.ok ? Object.freeze([result.value]) : Object.freeze([]),
+      qualityFailures: result.ok ? result.qualityFailures : result.failures,
+    });
+  }
+
+  private onLiquidationEvidence(
+    cut: Readonly<ProductionLiquidationEvidenceCut | ProductionLiquidationSourceClosedCut>,
+  ): void {
+    const fact = BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION;
+    const nowMs = this.clock.nowMs();
+    if (!isValidUtcMillis(nowMs)) {
+      this.router.invalidate('PUBLICATION_CLOCK_INVALID');
+      return;
+    }
+    if (cut.kind === 'SOURCE_CLOSED') {
+      if (!Number.isSafeInteger(cut.observedAtMs) || cut.observedAtMs < 0 || cut.observedAtMs > nowMs) {
+        this.router.invalidate('SOURCE_CLOSE_TIME_INVALID');
+        return;
+      }
+      this.router.route({
+        correlationId: stableId('existing-liquidation-source-close', {
+          generation: cut.generation,
+          revision: cut.revision,
+          observedAtMs: cut.observedAtMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'STOPPED' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: cut.generation,
+          revision: cut.revision,
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: cut.observedAtMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+      return;
+    }
+    if (!this.runtimeActive
+        || !Number.isSafeInteger(cut.receivedAtMs) || cut.receivedAtMs < 0 || cut.receivedAtMs > nowMs) return;
+    const result = normalizeLiquidation(cut.raw, {
+      sourceKey: 'USD_M_LIQUIDATION',
+      sourceId: fact.sourceId,
+      endpointClass: fact.endpointClass,
+      instrument: {
+        venue: 'BINANCE',
+        productFamily: 'USD_M_PERPETUAL',
+        symbol: cut.raw.o.s,
+        pair: cut.raw.o.s,
+        baseAsset: cut.baseAsset,
+        quoteAsset: 'USDT',
+        contractType: 'PERPETUAL',
+      },
+      receivedTimeMs: cut.receivedAtMs,
+      evaluatedAtMs: nowMs,
+      maxAgeMs: this.maxAgeMs,
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+    });
+    this.router.route({
+      correlationId: stableId('existing-liquidation-ingest', {
+        generation: cut.generation,
+        revision: cut.revision,
+        symbol: cut.raw.o.s,
+        transactionTimeMs: cut.raw.o.T,
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'SAMPLED' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: cut.generation,
+        revision: cut.revision,
+        bootstrap: cut.bootstrap,
         rateBudget: unknownRateBudget(),
         observedAtMs: cut.receivedAtMs,
       }),
@@ -1827,6 +2156,7 @@ export function createProductionSystemIntegrationPorts(
 
   const intelligenceEvidence = Object.freeze({
     readRoutingSnapshot: () => publicIntelligence.readEvidenceRoutingSnapshot(),
+    readSymbol: (symbol: string) => publicIntelligence.readSymbol(symbol),
   });
 
   const strategyIntake = Object.freeze({

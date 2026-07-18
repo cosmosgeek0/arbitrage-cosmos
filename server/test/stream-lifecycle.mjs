@@ -674,6 +674,8 @@ test('MarketEngine normalizes force-order snapshots once and both liquidation vi
   assert.deepEqual(deniedEngine.feeds, {}, 'denied startup cannot activate a WebSocket owner');
 
   const projected = [];
+  const cuts = [];
+  const clock = { value: Date.now(), nowMs() { return this.value; } };
   const engine = new MarketEngine(
     { logEvent() {} },
     async () => ({
@@ -687,26 +689,54 @@ test('MarketEngine normalizes force-order snapshots once and both liquidation vi
       start() {}, stop() {}, observeSourceStatus() {},
       ingestPrint(print) { projected.push(print); },
     },
-    { publicSourceStartupEgressAdmitted: true },
+    { publicSourceStartupEgressAdmitted: true, clock },
   );
   await engine.init();
-  const timestamp = Date.now();
-  const first = { e: 'forceOrder', E: timestamp, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '0.5', z: '1.5', q: '1.5', ap: '100', T: timestamp } };
-  engine.onForceOrders([
+  engine.setLiquidationEvidenceObserver((cut) => cuts.push(cut));
+  // Drive the private transport boundary without constructing a network
+  // socket: the owner lifecycle itself is what this regression exercises.
+  engine.running = true;
+  engine.generation = 1;
+  engine.observeFeedStatus('futures-liquidations', 'open', 1);
+  const timestamp = clock.value - 10;
+  const first = { e: 'forceOrder', E: timestamp, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', X: 'FILLED', l: '0.5', z: '1.5', q: '1.5', ap: '100', T: timestamp } };
+  engine.onLiquidationFrame([
     first,
     first,
     { ...first, o: { ...first.o, ap: '101' } },
-    { e: 'forceOrder', E: timestamp + 1, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '0.25', z: '0.75', q: '0.75', ap: '100', T: timestamp + 1 } },
-    { e: 'forceOrder', E: timestamp + 2, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', X: 'PARTIALLY_FILLED', z: '1', q: '1', ap: '100', T: timestamp + 2 } },
-    { e: 'forceOrder', E: timestamp + 3, ps: 'BTCUSDT', o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 3 } },
-    { e: 'forceOrder', E: timestamp + 4, ps: 'BTCUSDT', st: 2, o: { s: 'BTCUSDT', S: 'SELL', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 4 } },
-  ]);
+    { e: 'forceOrder', E: timestamp + 1, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', X: 'FILLED', l: '0.25', z: '0.75', q: '0.75', ap: '100', T: timestamp + 1 } },
+    { e: 'forceOrder', E: timestamp + 2, ps: 'BTCUSDT', st: 1, o: { s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', X: 'PARTIALLY_FILLED', z: '1', q: '1', ap: '100', T: timestamp + 2 } },
+    { e: 'forceOrder', E: timestamp + 3, ps: 'BTCUSDT', o: { s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 3 } },
+    { e: 'forceOrder', E: timestamp + 4, ps: 'BTCUSDT', st: 2, o: { s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', X: 'FILLED', l: '1', z: '1', q: '1', ap: '100', T: timestamp + 4 } },
+  ], 1);
   assert.equal(projected.length, 2);
   assert.equal(projected.reduce((sum, print) => sum + print.notionalUsd, 0), 225);
   const row = engine.rows().find((candidate) => candidate.symbol === 'BTCUSDT');
   assert.equal(row.liquidations15mUsd, 225);
   assert.equal(row.longLiquidations15mUsd, 225);
   assert.equal(row.shortLiquidations15mUsd, null);
+  assert.equal(engine.liquidationEventTimestamp('BTCUSDT'), timestamp + 1);
+  assert.equal(engine.liquidationEventTimestamp('../BTCUSDT'), null);
+  assert.deepEqual(cuts.map((cut) => [cut.kind, cut.generation, cut.revision]), [
+    ['FORCE_ORDER', 1, 1],
+    ['FORCE_ORDER', 1, 2],
+  ]);
+  assert.equal(cuts[0].bootstrap, 'CURRENT_SNAPSHOT');
+  assert.deepEqual([cuts[0].raw.o.o, cuts[0].raw.o.f], ['LIMIT', 'IOC']);
+  assert.equal(Object.isFrozen(cuts[0].raw.o), true);
+
+  engine.observeFeedStatus('futures-liquidations', 'closed', 1);
+  assert.equal(engine.liquidationEventTimestamp('BTCUSDT'), null);
+  assert.deepEqual([cuts.at(-1).kind, cuts.at(-1).generation, cuts.at(-1).revision], ['SOURCE_CLOSED', 1, 3]);
+  engine.onLiquidationFrame({ ...first, E: timestamp + 2, o: { ...first.o, T: timestamp + 2 } }, 1);
+  assert.equal(cuts.length, 3, 'closed generations reject late force-order frames');
+
+  engine.observeFeedStatus('futures-liquidations', 'open', 1);
+  assert.equal(engine.liquidationEventTimestamp('BTCUSDT'), null, 'a restart cannot reuse a prior-generation observation');
+  engine.onLiquidationFrame({ ...first, E: timestamp + 2, o: { ...first.o, q: '1', z: '1', T: timestamp + 2 } }, 1);
+  assert.deepEqual([cuts.at(-1).kind, cuts.at(-1).generation, cuts.at(-1).revision], ['FORCE_ORDER', 2, 1]);
+  engine.stop();
+  assert.deepEqual([cuts.at(-1).kind, cuts.at(-1).generation, cuts.at(-1).revision], ['SOURCE_CLOSED', 2, 2]);
 });
 
 function marketUniverse(symbols = ['BTCUSDT']) {

@@ -98,6 +98,8 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
   };
   const spot = new Map();
   const usdm = new Map();
+  const liquidation = new Map();
+  let liquidationEvidenceObserver = null;
   const market = {
     feeds: {},
     pairCount: 0,
@@ -108,6 +110,8 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     allRows() { return this.rows; },
     priceUpdatedAt(symbol) { return spot.get(symbol) ?? null; },
     markEventTimestamp(symbol) { return usdm.get(symbol) ?? null; },
+    liquidationEventTimestamp(symbol) { return liquidation.get(symbol) ?? null; },
+    setLiquidationEvidenceObserver(observer) { liquidationEvidenceObserver = observer; },
   };
   const basisStatus = {
     running: false,
@@ -174,6 +178,7 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     calls,
     spot,
     usdm,
+    liquidation,
     market,
     basis,
     basisStatus,
@@ -184,6 +189,10 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     emitVolumeEvidence(cut) {
       assert.equal(typeof volumeEvidenceObserver, 'function');
       volumeEvidenceObserver(structuredClone(cut));
+    },
+    emitLiquidationEvidence(cut) {
+      assert.equal(typeof liquidationEvidenceObserver, 'function');
+      liquidationEvidenceObserver(structuredClone(cut));
     },
     ports,
     ctx,
@@ -516,6 +525,140 @@ test('one production router projects current mark/funding and OI with fresh, mis
   world.clock.now = START + 25_001;
   assert.equal(routingCapability(world, 'FUNDING').freshness, 'STALE');
   assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'STALE');
+});
+
+test('token intelligence readback is exact-symbol, owner-fresh, historical-aware, and hostile-input fail-closed', async () => {
+  const world = createWorld();
+  const row = {
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+    openInterest: 1_000, openInterestUsd: 60_000_000,
+    openInterestChangePct: 1.25, openInterestUpdatedAt: START - 150,
+    liquidations15mUsd: 120_000_000,
+    longLiquidations15mUsd: 120_000_000,
+    shortLiquidations15mUsd: 0,
+  };
+  world.market.rows = [row];
+
+  const stopped = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(stopped.projection.state, 'NOT_RUNNING');
+  assert.equal(stopped.markFunding.state, 'UNAVAILABLE');
+  assert.equal(stopped.openInterest.state, 'UNAVAILABLE');
+  assert.equal(stopped.liquidation.state, 'UNAVAILABLE');
+  assert.equal(stopped.bridge.currentState, 'HISTORICAL_ONLY');
+
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.market.feeds['futures-liquidations'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  world.liquidation.set('BTCUSDT', START - 100);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  world.emitLiquidationEvidence({
+    kind: 'FORCE_ORDER', generation: 1, revision: 1,
+    receivedAtMs: START, bootstrap: 'CURRENT_SNAPSHOT', baseAsset: 'BTC',
+    raw: {
+      e: 'forceOrder', E: START - 100, st: 1, ps: 'BTCUSDT',
+      o: {
+        s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', q: '2', ap: '60000', z: '2',
+        X: 'FILLED', T: START - 100,
+      },
+    },
+  });
+
+  const read = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(read.projection.state, 'ACTIVE');
+  assert.equal(read.markFunding.state, 'FRESH');
+  assert.equal(read.markFunding.value.fundingRate, 0.0001);
+  assert.equal(read.openInterest.state, 'FRESH');
+  assert.deepEqual(read.openInterest.value, { base: 1_000, quoteUsd: 60_000_000, changePct: 1.25 });
+  assert.equal(read.liquidation.state, 'FRESH');
+  assert.equal(read.liquidation.value.total15mUsd, 120_000_000);
+  assert.equal(read.liquidation.value.sampling, 'LATEST_PER_SYMBOL_LOWER_BOUND');
+  const capability = (name) => read.routing.capabilities.find((entry) => entry.capability === name);
+  assert.equal(capability('OPEN_INTEREST').freshness, 'FRESH');
+  assert.equal(capability('FUNDING').freshness, 'FRESH');
+  assert.equal(capability('LIQUIDATION').completeness, 'SAMPLED');
+  assert.equal(read.bridge.evidenceHistoryCount, 4);
+  assert.equal(read.bridge.currentState, 'CURRENT');
+  assert.equal(read.bridge.artifact, null);
+  assert.ok(read.bridge.reasonCodes.includes('INTELLIGENCE_ARTIFACT_MISSING'));
+  assert.equal(read.authority, 'EVIDENCE_ONLY');
+  assert.equal(read.liveMoneyAuthority, 'NONE');
+  assert.equal(Object.isFrozen(read), true);
+  assert.equal(Object.isFrozen(read.openInterest.reasonCodes), true);
+
+  const savedMark = [row.perpMark, row.perpIndexPrice, row.fundingRate];
+  row.perpMark = null;
+  row.perpIndexPrice = null;
+  row.fundingRate = null;
+  const scheduleOnly = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(scheduleOnly.markFunding.state, 'MISSING');
+  assert.equal(scheduleOnly.markFunding.value, null, 'a funding schedule alone is not current mark/funding evidence');
+  [row.perpMark, row.perpIndexPrice, row.fundingRate] = savedMark;
+
+  const other = world.ports.intelligenceEvidence.readSymbol('ETHUSDT');
+  assert.equal(other.openInterest.state, 'MISSING');
+  assert.equal(other.liquidation.state, 'MISSING');
+  assert.equal(other.routing.capabilities.find((entry) => entry.capability === 'OPEN_INTEREST').freshness, 'MISSING');
+  assert.equal(other.bridge.evidenceHistoryCount, 0);
+
+  row.openInterestUpdatedAt = START + 1;
+  world.liquidation.set('BTCUSDT', START + 1);
+  const future = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(future.openInterest.state, 'MISSING');
+  assert.equal(future.openInterest.value, null);
+  assert.equal(future.liquidation.state, 'MISSING');
+  assert.equal(future.liquidation.value, null);
+  row.openInterestUpdatedAt = START - 150;
+  world.liquidation.set('BTCUSDT', START - 100);
+
+  let accessorReads = 0;
+  const accessorRow = { ...row };
+  Object.defineProperty(accessorRow, 'openInterestUsd', {
+    enumerable: true,
+    get() { accessorReads += 1; return 60_000_000; },
+  });
+  world.market.rows = [accessorRow];
+  const accessorRead = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(accessorReads, 0);
+  assert.equal(accessorRead.openInterest.state, 'MISSING');
+  assert.equal(accessorRead.openInterest.value, null);
+
+  world.market.rows = [new Proxy({ ...row }, { get() { throw new Error('hostile row read'); } })];
+  assert.equal(world.ports.intelligenceEvidence.readSymbol('BTCUSDT').openInterest.value, null);
+  const originalAllRows = world.market.allRows;
+  world.market.allRows = () => { throw new Error('owner unavailable'); };
+  assert.equal(world.ports.intelligenceEvidence.readSymbol('BTCUSDT').openInterest.value, null);
+  world.market.allRows = originalAllRows;
+  world.market.rows = [row];
+
+  world.clock.now = START + 10_001;
+  world.spot.set('BTCUSDT', START + 9_900);
+  world.usdm.set('BTCUSDT', START + 9_950);
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  const stale = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(stale.openInterest.state, 'STALE');
+  assert.equal(stale.openInterest.value, null);
+  assert.equal(stale.liquidation.state, 'STALE');
+  assert.equal(stale.liquidation.value, null);
+
+  world.ports.runtimes.marketIntelligence.stop();
+  const historical = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(historical.projection.state, 'NOT_RUNNING');
+  assert.equal(historical.bridge.currentState, 'HISTORICAL_ONLY');
+  assert.equal(historical.bridge.featureSnapshot, null);
+  assert.equal(historical.bridge.attention, null);
+  assert.equal(historical.bridge.artifact, null);
+  assert.ok(historical.bridge.evidenceHistoryCount > 0);
+  assert.equal(historical.openInterest.value, null);
+  assert.throws(() => world.ports.intelligenceEvidence.readSymbol('../BTCUSDT'), /canonical bounded market symbol/);
 });
 
 test('partial canonical bootstrap cannot publish cached focus and recovers only after full duplicate reconciliation', async () => {

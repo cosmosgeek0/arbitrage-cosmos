@@ -129,3 +129,16 @@ export interface VolumeEvidenceRoutingSnapshot {
   readonly authority: 'EVIDENCE_ONLY';
   readonly liveMoneyAuthority: 'NONE';
 }
+
+/**
+ * Exact-symbol projection over the router's retained observations. Global
+ * counters and failures are deliberately omitted so another instrument cannot
+ * make this symbol look healthy or unhealthy.
+ */
+export interface VolumeEvidenceSymbolRoutingSnapshot {
+  readonly symbol: string;
+  readonly observedAtMs: number;
+  readonly capabilities: readonly Readonly<VolumeEvidenceCapabilityTruth>[];
+  readonly authority: 'EVIDENCE_ONLY';
+  readonly liveMoneyAuthority: 'NONE';
+}

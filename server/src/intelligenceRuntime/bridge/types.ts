@@ -265,6 +265,21 @@ export interface IntelligenceBridgeSnapshot {
   executesAction: false;
 }
 
+/** Exact-symbol, evidence-only readback over the Bridge's existing stores. */
+export interface BridgeSymbolReadModel {
+  readonly symbol: string;
+  readonly evaluatedAtMs: number;
+  readonly featureSnapshot: Readonly<FeatureSnapshot> | null;
+  /** Exact retained-history summary; no full record payload crosses this poll. */
+  readonly evidenceHistoryCount: number;
+  readonly evidenceHistoryState: 'COMPLETE' | 'TRUNCATED';
+  readonly attention: Readonly<PublicAttentionAllocation> | null;
+  readonly artifact: Readonly<BridgeIntelligenceArtifact> | null;
+  readonly reasonCodes: readonly string[];
+  readonly authority: 'EVIDENCE_ONLY';
+  readonly liveMoneyAuthority: 'NONE';
+}
+
 export interface BridgeUniverseReceipt {
   accepted: boolean;
   graphId: string | null;

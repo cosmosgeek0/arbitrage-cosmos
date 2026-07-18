@@ -411,6 +411,48 @@ test('registered fresh evidence reaches the one Bridge/FeatureBank and preserves
   assert.equal(capability(stale, 'CONTEXT').freshness, 'STALE');
 });
 
+test('exact-symbol routing snapshots never inherit another instrument truth', () => {
+  const h = harness({}, ['BTCUSDT', 'ETHUSDT']);
+  const btc = instrument('USD_M_PERPETUAL', 'BTCUSDT');
+  const btcOpenInterest = evidence('OPEN_INTEREST', 'USD_M_OPEN_INTEREST', T0 - 150, {
+    openInterestBase: 1_000,
+    openInterestQuoteValue: 100_000,
+    changeBase: null,
+    changeQuoteValue: null,
+    comparisonWindowMs: null,
+  }, { instrument: btc });
+  const btcLiquidation = evidence('LIQUIDATION', 'USD_M_LIQUIDATION', T0 - 120, {
+    orderSide: 'SELL',
+    liquidatedPositionSide: 'LONG',
+    orderType: 'LIMIT',
+    timeInForce: 'IOC',
+    originalQuantity: 2,
+    filledQuantity: 2,
+    averagePrice: 99,
+    sampledPerWindow: true,
+    samplingSelection: 'LATEST_PER_SYMBOL',
+    sampleWindowMs: 1_000,
+  }, { instrument: btc });
+  assert.equal(route(h, 'USD_M_OPEN_INTEREST', [btcOpenInterest]).state, 'FRESH');
+  assert.equal(route(h, 'USD_M_LIQUIDATION', [btcLiquidation]).state, 'SAMPLED');
+
+  const btcRead = h.router.snapshotForSymbol('BTCUSDT');
+  const ethRead = h.router.snapshotForSymbol('ETHUSDT');
+  assert.equal(capability(btcRead, 'OPEN_INTEREST').freshness, 'FRESH');
+  assert.equal(capability(btcRead, 'LIQUIDATION').completeness, 'SAMPLED');
+  assert.equal(capability(ethRead, 'OPEN_INTEREST').freshness, 'MISSING');
+  assert.equal(capability(ethRead, 'LIQUIDATION').freshness, 'MISSING');
+  assert.deepEqual(capability(ethRead, 'OPEN_INTEREST').sourceIds, []);
+  assert.equal(btcRead.capabilities.length, 9);
+  assert.equal(Object.isFrozen(btcRead), true);
+  assert.equal(Object.isFrozen(btcRead.capabilities), true);
+
+  h.clock.advance(1_001);
+  assert.equal(capability(h.router.snapshotForSymbol('BTCUSDT'), 'OPEN_INTEREST').freshness, 'STALE');
+  assert.equal(capability(h.router.snapshotForSymbol('ETHUSDT'), 'OPEN_INTEREST').freshness, 'MISSING');
+  assert.throws(() => h.router.snapshotForSymbol('../BTCUSDT'), /canonical bounded market symbol/);
+});
+
 test('canonical trade continuity and book-ticker monotonicity reject regression and trade gaps', () => {
   const trades = harness();
   assert.equal(route(trades, 'SPOT_AGG_TRADE', [

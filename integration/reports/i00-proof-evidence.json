@@ -676,7 +676,7 @@
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
-            "line": 295,
+            "line": 338,
             "ruleId": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL"
           }
         ],
@@ -760,22 +760,22 @@
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 281,
+        "line": 324,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 286,
+        "line": 329,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 289,
+        "line": 332,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 295,
+        "line": 338,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3468,
+        "line": 3500,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -2766,15 +2766,21 @@
       },
       {
         "concept": "semantic-source",
+        "declaration": "interface MarketLiquidationSourceClosedCut",
+        "file": "server/src/engine/marketData.ts",
+        "line": 102
+      },
+      {
+        "concept": "semantic-source",
         "declaration": "type MarketPublicSourceId",
         "file": "server/src/engine/marketData.ts",
-        "line": 95
+        "line": 134
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketPublicSourceLifecycle",
         "file": "server/src/engine/marketData.ts",
-        "line": 96
+        "line": 135
       },
       {
         "concept": "semantic-source",
@@ -3386,55 +3392,55 @@
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 139
+        "line": 140
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 190
+        "line": 191
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 587
+        "line": 588
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 837
+        "line": 838
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 1990
+        "line": 1998
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 1999
+        "line": 2007
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2353
+        "line": 2361
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2365
+        "line": 2373
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2375
+        "line": 2383
       },
       {
         "concept": "semantic-source",
@@ -4058,13 +4064,13 @@
         "concept": "semantic-source",
         "declaration": "interface BoundSourceLifecycle",
         "file": "server/src/intelligenceRuntime/routing/volumeEvidenceRouter.ts",
-        "line": 74
+        "line": 76
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceLifecycleAdmission",
         "file": "server/src/intelligenceRuntime/routing/volumeEvidenceRouter.ts",
-        "line": 85
+        "line": 87
       },
       {
         "concept": "semantic-source",
@@ -7586,67 +7592,67 @@
         "concept": "semantic-source",
         "declaration": "type BinanceSourceFact",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 19
+        "line": 20
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 26
+        "line": 27
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceSlice",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 27
+        "line": 28
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceState",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 28
+        "line": 29
       },
       {
         "concept": "semantic-source",
         "declaration": "type PublicSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 87
+        "line": 93
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceProjectionEvidence",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 104
+        "line": 110
       },
       {
         "concept": "semantic-source",
         "declaration": "interface IntelligenceSourceCut",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 118
+        "line": 124
       },
       {
         "concept": "capital-authority",
         "declaration": "type CapitalSummaryReadResult",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 297
+        "line": 372
       },
       {
         "concept": "capital-authority",
         "declaration": "interface CapitalReadGuard",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 302
+        "line": 377
       },
       {
         "concept": "capital-authority",
         "declaration": "function safeCapitalSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 307
+        "line": 382
       },
       {
         "concept": "capital-authority",
         "declaration": "function unavailableCapitalRestartSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 414
+        "line": 489
       },
       {
         "concept": "semantic-source",
@@ -7686,33 +7692,39 @@
       },
       {
         "concept": "semantic-source",
+        "declaration": "interface ProductionLiquidationSourceClosedCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 86
+      },
+      {
+        "concept": "semantic-source",
         "declaration": "interface ProductionVolumeSourceClosedCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 117
+        "line": 218
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalRestartSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 145
+        "line": 246
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalUnavailableSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 163
+        "line": 264
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 169
+        "line": 270
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalSummaryReadPort",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 177
+        "line": 278
       },
       {
         "concept": "control-authority",
@@ -7947,7 +7959,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 124,
+        "line": 125,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -8157,28 +8169,38 @@
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 32,
+        "line": 33,
         "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 36,
+        "line": 37,
         "target": "../../intelligenceRuntime/routing/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 40,
+        "line": 41,
         "target": "../../intelligenceRuntime/universe/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 43,
+        "line": 44,
         "target": "../../foundation/control/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/types.ts",
         "line": 15,
         "target": "../../intelligenceRuntime/routing/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 18,
+        "target": "../../intelligenceRuntime/routing/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 19,
+        "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
         "file": "server/src/systemIntegration/supervisor/projection.ts",
@@ -14796,5 +14818,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "0873e09dcf2a372883b1a97a57f9150037e7dec7113eae9c1ce46128ce9b7976"
+  "evidenceSha256": "96de127b0f72219bc4222b948bb2e3eb619e1598ce2b2426b8ec103dfde10627"
 }

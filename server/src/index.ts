@@ -119,6 +119,7 @@ import {
   createProductIncidentRouter,
 } from './productIntegration/incidents/index.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import { disambiguateNewsItemIds } from './services/newsIdentity.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
 import { compareExactDecimals, normalizeNonNegativeExactDecimal } from './capitalFoundation/contracts/index.js';
@@ -1449,6 +1450,10 @@ function currentNewsContextStatus(): ReturnType<typeof newsContextStatus> {
   };
 }
 
+function canonicalNewsContextRead(payload: Awaited<ReturnType<typeof getNewsContext>>) {
+  return { ...payload, items: disambiguateNewsItemIds(payload.items) };
+}
+
 app.get('/api/news-context', (req, res) => {
   runAsync(res, async () => {
     try {
@@ -1463,7 +1468,8 @@ app.get('/api/news-context', (req, res) => {
         return;
       }
       const payload = await getNewsContext(false);
-      res.json({ ...payload, items: payload.items.slice(0, limit) });
+      const canonical = canonicalNewsContextRead(payload);
+      res.json({ ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
       safeLogEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
       res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
@@ -1484,7 +1490,8 @@ app.post('/api/news-context/refresh', (req, res) => {
     }
     try {
       const payload = await refreshNewsContextNow();
-      res.json({ ok: true, ...payload, items: payload.items.slice(0, limit) });
+      const canonical = canonicalNewsContextRead(payload);
+      res.json({ ok: true, ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
       safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
       res.status(503).json({ ok: false, error: 'news context unavailable', items: [], sources: [] });
@@ -1520,7 +1527,8 @@ app.get('/api/news-stream', (req, res) => {
 
   const send = (payload: Awaited<ReturnType<typeof getNewsContext>>) => {
     if (closed) return;
-    const accepted = res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
+    const canonical = canonicalNewsContextRead(payload);
+    const accepted = res.write(`event: news\ndata: ${JSON.stringify({ ...canonical, items: canonical.items.slice(0, limit) })}\n\n`);
     slowWrites = accepted ? 0 : slowWrites + 1;
     if (slowWrites >= 3) res.end();
   };
@@ -2583,6 +2591,26 @@ app.get('/api/funding/extremes', (_req, res) => {
   });
 });
 
+// Exact-symbol, evidence-only owner readback for the Token workspace. This is
+// passive composition over existing MarketEngine, router, and Bridge truth.
+app.get('/api/intelligence/token', (req, res) => {
+  const symbol = String(req.query.symbol ?? '');
+  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+    res.status(400).json({ error: 'bad symbol' });
+    return;
+  }
+  try {
+    res.json(systemIntegrationProduction.intelligenceEvidence.readSymbol(symbol));
+  } catch {
+    res.status(503).json({
+      error: 'token intelligence unavailable',
+      symbol,
+      authority: 'EVIDENCE_ONLY',
+      liveMoneyAuthority: 'NONE',
+    });
+  }
+});
+
 // Everything the app knows about ONE symbol (for the token detail page).
 app.get('/api/symbol/context', (req, res) => {
   const symbol = String(req.query.symbol ?? '');
@@ -2597,6 +2625,10 @@ app.get('/api/symbol/context', (req, res) => {
   const baseBal = eq?.entries.find((e) => e.asset === base);
   res.json({
     orderTruthState,
+    // Private borrow truth has no mounted owner in this validate-only build.
+    // Publish that boundary with the existing exact-symbol account context so
+    // browser consumers never query a retired loan capability.
+    borrowTruthState: 'NOT_CONFIGURED',
     openOrders: orderTruthState === 'AVAILABLE'
       ? orders.openOrdersCache.filter((o) => o.symbol === symbol)
       : null,

@@ -61,6 +61,8 @@ interface ForceOrderUpdate {
   o?: {
     s: string;
     S: 'BUY' | 'SELL';
+    o?: string;
+    f?: string;
     q: string;
     p: string;
     ap?: string;
@@ -70,6 +72,43 @@ interface ForceOrderUpdate {
     T?: number;
   };
 }
+
+export interface MarketLiquidationEvidenceCut {
+  readonly kind: 'FORCE_ORDER';
+  readonly generation: number;
+  readonly revision: number;
+  readonly receivedAtMs: number;
+  readonly bootstrap: 'CURRENT_SNAPSHOT' | 'NONE';
+  readonly baseAsset: string;
+  readonly raw: Readonly<{
+    readonly e: 'forceOrder';
+    readonly E: number;
+    readonly st: 1;
+    readonly ps: string;
+    readonly o: Readonly<{
+      readonly s: string;
+      readonly S: 'BUY' | 'SELL';
+      readonly o: string;
+      readonly f: string;
+      readonly q: string;
+      readonly ap: string;
+      readonly z: string;
+      readonly X: 'FILLED';
+      readonly T: number;
+    }>;
+  }>;
+}
+
+export interface MarketLiquidationSourceClosedCut {
+  readonly kind: 'SOURCE_CLOSED';
+  readonly generation: number;
+  readonly revision: number;
+  readonly observedAtMs: number;
+}
+
+export type MarketLiquidationEvidenceObserver = (
+  cut: Readonly<MarketLiquidationEvidenceCut | MarketLiquidationSourceClosedCut>,
+) => void;
 
 interface LiquidationPrint {
   ts: number;
@@ -164,6 +203,10 @@ export class MarketEngine {
   private spotUpdatedAt = new Map<string, number>();
   private markUpdatedAt = new Map<string, number>();
   private liquidationUpdatedAt = new Map<string, number>();
+  private liquidationEvidenceObserver: MarketLiquidationEvidenceObserver | null = null;
+  private liquidationEvidenceGeneration = 0;
+  private liquidationEvidenceRevision = 0;
+  private liquidationEvidenceOpen = false;
   private streams = new Map<string, BinanceStream>();
   private isolatedSources = new Set<MarketPublicSourceId>();
   private sourceControlGenerations: Record<MarketPublicSourceId, number> = {
@@ -357,6 +400,7 @@ export class MarketEngine {
       this.clearAllOpenInterest();
       return;
     }
+    this.closeLiquidationEvidence(this.clock.nowMs());
     this.running = false;
     ++this.generation;
     for (const s of this.streams.values()) s.stop();
@@ -377,8 +421,11 @@ export class MarketEngine {
 
   private observeFeedStatus(name: string, status: FeedStatus, generation: number): void {
     if (!this.isActive(generation)) return;
-    if (name === 'futures-liquidations') this.liquidationProjection?.observeSourceStatus(status);
     const prev = this.feeds[name];
+    if (name === 'futures-liquidations') {
+      this.liquidationProjection?.observeSourceStatus(status);
+      this.observeLiquidationEvidenceStatus(prev, status);
+    }
     this.feeds[name] = status;
     if (name === 'futures-markprice' && status !== 'open') {
       // Mark price is the valuation owner for USD-denominated OI. A known
@@ -484,6 +531,28 @@ export class MarketEngine {
     return this.markUpdatedAt.get(symbol) ?? null;
   }
 
+  /** Latest accepted sampled force-order transaction time from this owner. */
+  liquidationEventTimestamp(symbol: string): number | null {
+    if (!validSymbol(symbol) || !this.features.has(symbol) || !this.running
+        || this.feeds['futures-liquidations'] !== 'open') return null;
+    const now = this.clock.nowMs();
+    const timestamp = this.liquidationUpdatedAt.get(symbol);
+    return timestamp !== undefined && validEventTime(timestamp, now, LIQUIDATION_WINDOW_MS)
+      ? timestamp
+      : null;
+  }
+
+  setLiquidationEvidenceObserver(observer: MarketLiquidationEvidenceObserver | null): void {
+    if (observer !== null && typeof observer !== 'function') {
+      throw new TypeError('liquidation evidence observer must be a function or null');
+    }
+    this.liquidationEvidenceObserver = observer;
+    if (observer !== null && this.running && this.feeds['futures-liquidations'] === 'open'
+        && !this.liquidationEvidenceOpen) {
+      this.openLiquidationEvidence();
+    }
+  }
+
   changeOf(symbol: string): number | null {
     if (!this.hasFreshUpdate(this.spotUpdatedAt, symbol)) return null;
     return this.spotChange.get(symbol) ?? null;
@@ -546,7 +615,7 @@ export class MarketEngine {
   }
 
   private onLiquidationFrame(data: unknown, generation: number): void {
-    if (!this.isActive(generation)) return;
+    if (!this.isActive(generation) || this.feeds['futures-liquidations'] !== 'open') return;
     this.onForceOrders(data);
   }
 
@@ -560,7 +629,9 @@ export class MarketEngine {
       const o = ev.o;
       if (ev.e !== 'forceOrder' || ev.st !== 1 || !o || !validSymbol(o.s)
           || ev.ps !== o.s || !this.features.has(o.s)
-          || (o.S !== 'BUY' && o.S !== 'SELL') || o.X !== 'FILLED') continue;
+          || (o.S !== 'BUY' && o.S !== 'SELL') || o.X !== 'FILLED'
+          || typeof o.o !== 'string' || o.o.length < 1 || o.o.length > 32
+          || typeof o.f !== 'string' || o.f.length < 1 || o.f.length > 32) continue;
       // Conservatively admit completed liquidation-order snapshots only. The
       // executed notional is accumulated filled quantity `z` multiplied by
       // average fill price `ap`; `l` is only the final fill.
@@ -589,6 +660,92 @@ export class MarketEngine {
         eventTimeMs: ts,
         sourceEventKey,
       }));
+      this.publishLiquidationEvidence(Object.freeze({
+        kind: 'FORCE_ORDER' as const,
+        generation: this.liquidationEvidenceGeneration,
+        revision: this.nextLiquidationEvidenceRevision(),
+        receivedAtMs: now,
+        // Each sampled force-order row is itself the current latest-per-symbol
+        // snapshot. This lets a reconstructed consumer bootstrap from the next
+        // physical event without pretending the sampled stream is contiguous.
+        bootstrap: 'CURRENT_SNAPSHOT' as const,
+        baseAsset: this.features.get(o.s)?.base ?? o.s,
+        raw: Object.freeze({
+          e: 'forceOrder' as const,
+          E: Number(ev.E),
+          st: 1 as const,
+          ps: o.s,
+          o: Object.freeze({
+            s: o.s,
+            S: o.S,
+            o: o.o,
+            f: o.f,
+            q: o.q,
+            ap: o.ap as string,
+            z: o.z as string,
+            X: 'FILLED' as const,
+            T: ts,
+          }),
+        }),
+      }));
+    }
+  }
+
+  private observeLiquidationEvidenceStatus(previous: FeedStatus | undefined, status: FeedStatus): void {
+    if (status === 'open' && previous !== 'open') {
+      // A new physical generation has no current sampled row until its first
+      // accepted force-order snapshot. Retained 15-minute history stays in the
+      // projection, but it cannot impersonate a new-generation observation.
+      this.liquidationUpdatedAt.clear();
+      this.openLiquidationEvidence();
+      return;
+    }
+    if (status !== 'open' && previous === 'open') {
+      this.closeLiquidationEvidence(this.clock.nowMs());
+      this.liquidationUpdatedAt.clear();
+    }
+  }
+
+  private openLiquidationEvidence(): void {
+    if (this.liquidationEvidenceOpen) return;
+    if (this.liquidationEvidenceGeneration >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('liquidation evidence generation exhausted');
+    }
+    this.liquidationEvidenceGeneration += 1;
+    this.liquidationEvidenceRevision = 0;
+    this.liquidationEvidenceOpen = true;
+  }
+
+  private closeLiquidationEvidence(observedAtMs: number): void {
+    if (!this.liquidationEvidenceOpen || this.liquidationEvidenceGeneration < 1) return;
+    this.liquidationEvidenceOpen = false;
+    this.publishLiquidationEvidence(Object.freeze({
+      kind: 'SOURCE_CLOSED' as const,
+      generation: this.liquidationEvidenceGeneration,
+      revision: this.nextLiquidationEvidenceRevision(),
+      observedAtMs,
+    }));
+  }
+
+  private nextLiquidationEvidenceRevision(): number {
+    if (this.liquidationEvidenceRevision >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('liquidation evidence revision exhausted');
+    }
+    this.liquidationEvidenceRevision += 1;
+    return this.liquidationEvidenceRevision;
+  }
+
+  private publishLiquidationEvidence(
+    cut: Readonly<MarketLiquidationEvidenceCut | MarketLiquidationSourceClosedCut>,
+  ): void {
+    if (this.liquidationEvidenceObserver === null || cut.generation < 1) return;
+    try {
+      this.liquidationEvidenceObserver(cut);
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'market-engine.liquidation-evidence-observer',
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

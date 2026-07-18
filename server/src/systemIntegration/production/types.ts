@@ -13,6 +13,10 @@ import type {
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
 import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
 import type { VolumeEvidenceRoutingSnapshot } from '../../intelligenceRuntime/routing/index.js';
+import type {
+  VolumeEvidenceSymbolRoutingSnapshot,
+} from '../../intelligenceRuntime/routing/index.js';
+import type { BridgeSymbolReadModel } from '../../intelligenceRuntime/bridge/index.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -29,6 +33,9 @@ export interface ProductionMarketRow {
   readonly openInterestUsd?: number | null;
   readonly openInterestChangePct?: number | null;
   readonly openInterestUpdatedAt?: number | null;
+  readonly liquidations15mUsd?: number | null;
+  readonly longLiquidations15mUsd?: number | null;
+  readonly shortLiquidations15mUsd?: number | null;
 }
 
 /**
@@ -45,6 +52,100 @@ export interface ProductionMarketEnginePort {
   allRows(): readonly Readonly<ProductionMarketRow>[];
   priceUpdatedAt(symbol: string): number | null;
   markEventTimestamp(symbol: string): number | null;
+  liquidationEventTimestamp?(symbol: string): number | null;
+  /** Optional only for legacy/test doubles; MarketEngine supplies this observer. */
+  setLiquidationEvidenceObserver?(observer: ProductionLiquidationEvidenceObserver | null): void;
+}
+
+export interface ProductionLiquidationEvidenceCut {
+  readonly kind: 'FORCE_ORDER';
+  readonly generation: number;
+  readonly revision: number;
+  readonly receivedAtMs: number;
+  readonly bootstrap: 'CURRENT_SNAPSHOT' | 'NONE';
+  readonly baseAsset: string;
+  readonly raw: Readonly<{
+    readonly e: 'forceOrder';
+    readonly E: number;
+    readonly st: 1;
+    readonly ps: string;
+    readonly o: Readonly<{
+      readonly s: string;
+      readonly S: 'BUY' | 'SELL';
+      readonly o: string;
+      readonly f: string;
+      readonly q: string;
+      readonly ap: string;
+      readonly z: string;
+      readonly X: 'FILLED';
+      readonly T: number;
+    }>;
+  }>;
+}
+
+export interface ProductionLiquidationSourceClosedCut {
+  readonly kind: 'SOURCE_CLOSED';
+  readonly generation: number;
+  readonly revision: number;
+  readonly observedAtMs: number;
+}
+
+export type ProductionLiquidationEvidenceObserver = (
+  cut: Readonly<ProductionLiquidationEvidenceCut | ProductionLiquidationSourceClosedCut>,
+) => void;
+
+export type ProductionTokenEvidenceState = 'FRESH' | 'STALE' | 'MISSING' | 'UNAVAILABLE';
+
+export interface ProductionTokenEvidenceFact<TValue> {
+  readonly state: ProductionTokenEvidenceState;
+  readonly sourceId: string;
+  readonly dataset: string;
+  readonly observedAtMs: number | null;
+  /** Only FRESH facts may carry a current value. */
+  readonly value: Readonly<TValue> | null;
+  readonly reasonCodes: readonly string[];
+}
+
+export interface ProductionTokenBridgeReadModel extends BridgeSymbolReadModel {
+  readonly currentState: 'CURRENT' | 'HISTORICAL_ONLY';
+}
+
+export interface ProductionTokenIntelligenceReadModel {
+  readonly schemaVersion: 'token-intelligence-owner-read.v1';
+  readonly symbol: string;
+  readonly observedAtMs: number;
+  readonly projection: Readonly<{
+    readonly state: 'ACTIVE' | 'DEGRADED' | 'NOT_RUNNING';
+    readonly usdm: Readonly<{
+      readonly connected: boolean;
+      readonly feedState: ProductionFeedStatus | 'missing';
+    }>;
+    readonly liquidation: Readonly<{
+      readonly connected: boolean;
+      readonly feedState: ProductionFeedStatus | 'missing';
+    }>;
+  }>;
+  readonly markFunding: Readonly<ProductionTokenEvidenceFact<{
+    readonly markPrice: number | null;
+    readonly indexPrice: number | null;
+    readonly fundingRate: number | null;
+    readonly nextFundingTimeMs: number | null;
+  }>>;
+  readonly openInterest: Readonly<ProductionTokenEvidenceFact<{
+    readonly base: number | null;
+    readonly quoteUsd: number | null;
+    readonly changePct: number | null;
+  }>>;
+  readonly liquidation: Readonly<ProductionTokenEvidenceFact<{
+    readonly total15mUsd: number | null;
+    readonly long15mUsd: number | null;
+    readonly short15mUsd: number | null;
+    readonly sampling: 'LATEST_PER_SYMBOL_LOWER_BOUND';
+  }>>;
+  readonly routing: Readonly<VolumeEvidenceSymbolRoutingSnapshot>;
+  readonly bridge: Readonly<ProductionTokenBridgeReadModel>;
+  readonly authority: 'EVIDENCE_ONLY';
+  readonly liveMoneyAuthority: 'NONE';
 }
 
 export interface ProductionStrategySnapshot {
@@ -207,6 +308,7 @@ export interface ProductionSystemIntegrationPorts {
   /** Read-only truth from the one production router; no strategy or transport authority. */
   readonly intelligenceEvidence: Readonly<{
     readRoutingSnapshot(): Readonly<VolumeEvidenceRoutingSnapshot>;
+    readSymbol(symbol: string): Readonly<ProductionTokenIntelligenceReadModel>;
   }>;
   readonly strategyIntake: Readonly<{
     basis: Readonly<{

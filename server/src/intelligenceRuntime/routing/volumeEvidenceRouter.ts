@@ -17,6 +17,7 @@ import type {
   VolumeEvidenceCapabilityTruth,
   VolumeEvidenceRouterOptions,
   VolumeEvidenceRoutingSnapshot,
+  VolumeEvidenceSymbolRoutingSnapshot,
 } from './types.js';
 import { VOLUME_EVIDENCE_CAPABILITIES } from './types.js';
 
@@ -40,6 +41,7 @@ type Requirement =
   | 'CONTEXT';
 
 interface Observation {
+  readonly symbol: string;
   readonly joinKey: string;
   readonly evidenceTimeMs: number;
   readonly maxAgeMs: number;
@@ -441,8 +443,10 @@ export class VolumeEvidenceRouter {
   readonly #watermarks = new Map<string, SeriesWatermark>();
   readonly #depthResyncSeries = new Set<string>();
   readonly #spotDepthResyncSeries = new Set<string>();
+  readonly #spotDepthResyncSymbols = new Set<string>();
   readonly #contiguousGapSeries = new Map<string, ContiguousGapState>();
   readonly #spotTradeGapSeries = new Set<string>();
+  readonly #spotTradeGapSymbols = new Set<string>();
   readonly #sourceLifecycles = new Map<string, BoundSourceLifecycle>();
   readonly #rejectedSourceCuts = new Map<string, string>();
   readonly #observations = new Map<Requirement, Map<string, Observation>>();
@@ -561,7 +565,7 @@ export class VolumeEvidenceRouter {
     const failures: StableFailure[] = [];
     let batchStale = false;
     let batchSampled = false;
-    let spotDepthGapInBatch = false;
+    const spotDepthGapSymbolsInBatch = new Set<string>();
     const depthGapSeriesInBatch = new Set<string>();
     const validated: NormalizedEvidence[] = [];
     for (const raw of batch.evidence) {
@@ -622,7 +626,7 @@ export class VolumeEvidenceRouter {
         if (orderingFailure.code === 'SEQUENCE_GAP'
             && evidence.kind === 'DEPTH_DELTA'
             && evidence.instrument.productFamily === 'SPOT') {
-          spotDepthGapInBatch = true;
+          spotDepthGapSymbolsInBatch.add(evidence.instrument.symbol);
         }
         if (orderingFailure.code === 'SEQUENCE_GAP' && evidence.kind === 'DEPTH_DELTA') {
           depthGapSeriesInBatch.add(seriesKey(evidence));
@@ -724,6 +728,7 @@ export class VolumeEvidenceRouter {
       for (const evidence of accepted) {
         if (evidence.kind === 'DEPTH_SNAPSHOT' && evidence.instrument.productFamily === 'SPOT') {
           this.#spotDepthResyncSeries.delete(seriesKey(evidence));
+          this.#spotDepthResyncSymbols.delete(evidence.instrument.symbol);
         }
         if (evidence.kind === 'DEPTH_SNAPSHOT') this.#depthResyncSeries.delete(seriesKey(evidence));
         if (evidence.kind === 'TRADE') {
@@ -735,7 +740,10 @@ export class VolumeEvidenceRouter {
           if (pending?.anchored === true && committedNumeric !== null
               && targetNumeric !== null && committedNumeric >= targetNumeric) {
             this.#contiguousGapSeries.delete(key);
-            if (evidence.instrument.productFamily === 'SPOT') this.#spotTradeGapSeries.delete(key);
+            if (evidence.instrument.productFamily === 'SPOT') {
+              this.#spotTradeGapSeries.delete(key);
+              this.#spotTradeGapSymbols.delete(evidence.instrument.symbol);
+            }
           }
         }
       }
@@ -748,7 +756,7 @@ export class VolumeEvidenceRouter {
     // A later gap in the same immutable cut dominates an earlier accepted
     // delta. Re-observing that earlier delta must never restore false-green
     // depth capability truth before a separately accepted snapshot.
-    if (spotDepthGapInBatch) this.#invalidateSpotDepthForResync();
+    for (const symbol of spotDepthGapSymbolsInBatch) this.#invalidateSpotDepthForResync(symbol);
     this.#counters.routed += routed;
     this.#counters.duplicate += duplicate;
     this.#counters.rejected += rejected;
@@ -788,7 +796,51 @@ export class VolumeEvidenceRouter {
 
   snapshot(): Readonly<VolumeEvidenceRoutingSnapshot> {
     const nowMs = safeTime(this.#clock.nowMs(), 'clock.nowMs()');
-    const capabilityTruth = REQUIRED_QUALITY_CAPABILITIES.map((capability) => this.#capability(capability, nowMs));
+    const capabilities = this.#capabilities(nowMs);
+    return Object.freeze({
+      observedAtMs: nowMs,
+      capabilities,
+      sources: Object.freeze([...this.#sourceLifecycles.values()]
+        .sort((left, right) => compareText(sourceStateKey(left), sourceStateKey(right)))
+        .map((source) => Object.freeze({
+          sourceId: source.sourceId,
+          dataset: source.dataset,
+          lifecycle: source.lifecycle,
+          generation: source.generation,
+          revision: source.revision,
+          closed: source.closed,
+          bootstrapped: source.bootstrapped,
+        }))),
+      series: this.#watermarks.size,
+      maximumSeries: this.#maximumSeries,
+      ...this.#counters,
+      failures: Object.freeze(this.#visibleFailures(this.#failures)),
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
+    });
+  }
+
+  snapshotForSymbol(symbol: string): Readonly<VolumeEvidenceSymbolRoutingSnapshot> {
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{2,32}$/.test(symbol)) {
+      throw new TypeError('symbol must be a canonical bounded market symbol');
+    }
+    const nowMs = safeTime(this.#clock.nowMs(), 'clock.nowMs()');
+    return Object.freeze({
+      symbol,
+      observedAtMs: nowMs,
+      capabilities: this.#capabilities(nowMs, symbol),
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
+    });
+  }
+
+  #capabilities(
+    nowMs: number,
+    symbol?: string,
+  ): readonly Readonly<VolumeEvidenceCapabilityTruth>[] {
+    const capabilityTruth = REQUIRED_QUALITY_CAPABILITIES.map((capability) => (
+      this.#capability(capability, nowMs, symbol)
+    ));
     const qualityMissing = capabilityTruth.filter((entry) => entry.freshness === 'MISSING');
     const qualityStale = capabilityTruth.filter((entry) => entry.freshness === 'STALE');
     const qualityPartial = capabilityTruth.filter((entry) => entry.completeness !== 'COMPLETE');
@@ -812,27 +864,7 @@ export class VolumeEvidenceRouter {
         ...qualityPartial.map((entry) => `${entry.capability}_${entry.completeness}`),
       ])),
     });
-    return Object.freeze({
-      observedAtMs: nowMs,
-      capabilities: Object.freeze([...capabilityTruth, quality]),
-      sources: Object.freeze([...this.#sourceLifecycles.values()]
-        .sort((left, right) => compareText(sourceStateKey(left), sourceStateKey(right)))
-        .map((source) => Object.freeze({
-          sourceId: source.sourceId,
-          dataset: source.dataset,
-          lifecycle: source.lifecycle,
-          generation: source.generation,
-          revision: source.revision,
-          closed: source.closed,
-          bootstrapped: source.bootstrapped,
-        }))),
-      series: this.#watermarks.size,
-      maximumSeries: this.#maximumSeries,
-      ...this.#counters,
-      failures: Object.freeze(this.#visibleFailures(this.#failures)),
-      authority: 'EVIDENCE_ONLY' as const,
-      liveMoneyAuthority: 'NONE' as const,
-    });
+    return Object.freeze([...capabilityTruth, quality]);
   }
 
   /**
@@ -847,8 +879,10 @@ export class VolumeEvidenceRouter {
     this.#watermarks.clear();
     this.#depthResyncSeries.clear();
     this.#spotDepthResyncSeries.clear();
+    this.#spotDepthResyncSymbols.clear();
     this.#contiguousGapSeries.clear();
     this.#spotTradeGapSeries.clear();
+    this.#spotTradeGapSymbols.clear();
     this.#rejectedSourceCuts.clear();
     this.#observations.clear();
     this.#requirementIssues.clear();
@@ -1020,6 +1054,13 @@ export class VolumeEvidenceRouter {
       this.#spotDepthResyncSeries.delete(key);
       this.#contiguousGapSeries.delete(key);
       this.#spotTradeGapSeries.delete(key);
+    }
+    if (fact.productFamily === 'SPOT' && fact.evidenceKinds.includes('TRADE')) {
+      this.#spotTradeGapSymbols.clear();
+    }
+    if (fact.productFamily === 'SPOT'
+        && fact.evidenceKinds.some((kind) => kind === 'DEPTH_SNAPSHOT' || kind === 'DEPTH_DELTA')) {
+      this.#spotDepthResyncSymbols.clear();
     }
     this.#markSourceMissing(fact, reason);
   }
@@ -1302,6 +1343,7 @@ export class VolumeEvidenceRouter {
     }
     if (evidence.kind === 'TRADE' && evidence.instrument.productFamily === 'SPOT') {
       this.#spotTradeGapSeries.add(key);
+      this.#spotTradeGapSymbols.add(evidence.instrument.symbol);
     }
     if (prior === null) {
       staged.set(key, makeSeriesWatermark(evidence, fact, atMs, null, true));
@@ -1336,14 +1378,24 @@ export class VolumeEvidenceRouter {
     this.#depthResyncSeries.add(key);
     if (evidence.instrument.productFamily === 'SPOT') {
       this.#spotDepthResyncSeries.add(key);
-      this.#invalidateSpotDepthForResync();
+      this.#spotDepthResyncSymbols.add(evidence.instrument.symbol);
+      this.#invalidateSpotDepthForResync(evidence.instrument.symbol);
     }
     return makeStableFailure('SEQUENCE_GAP', COMPONENT, message, field, [evidence.id]);
   }
 
-  #invalidateSpotDepthForResync(): void {
+  #invalidateSpotDepthForResync(symbol?: string): void {
     this.#requirementIssues.set('SPOT_DEPTH', ['DEPTH_SEQUENCE_GAP_REQUIRES_RESYNC']);
-    this.#observations.delete('SPOT_DEPTH');
+    const observations = this.#observations.get('SPOT_DEPTH');
+    if (symbol === undefined) {
+      this.#observations.delete('SPOT_DEPTH');
+      return;
+    }
+    if (observations === undefined) return;
+    for (const [key, observation] of observations) {
+      if (observation.symbol === symbol) observations.delete(key);
+    }
+    if (observations.size === 0) this.#observations.delete('SPOT_DEPTH');
   }
 
   #invalidateEvidenceSeries(evidence: NormalizedEvidence, reason: string): void {
@@ -1384,8 +1436,8 @@ export class VolumeEvidenceRouter {
         ? 'COMPLETE' as const
         : 'PARTIAL' as const;
     for (const requirement of requirementsFor(evidence)) {
-      if (requirement === 'SPOT_DEPTH' && this.#spotDepthResyncSeries.size > 0) {
-        this.#invalidateSpotDepthForResync();
+      if (requirement === 'SPOT_DEPTH' && this.#spotDepthResyncSymbols.has(evidence.instrument.symbol)) {
+        this.#invalidateSpotDepthForResync(evidence.instrument.symbol);
         continue;
       }
       let requirementObservations = this.#observations.get(requirement);
@@ -1399,6 +1451,7 @@ export class VolumeEvidenceRouter {
       if (time === null) continue;
       if (current !== undefined && current.evidenceTimeMs > time) continue;
       requirementObservations.set(key, Object.freeze({
+        symbol: evidence.instrument.symbol,
         joinKey: observationJoinKey(requirement, evidence),
         evidenceTimeMs: time,
         maxAgeMs,
@@ -1423,12 +1476,17 @@ export class VolumeEvidenceRouter {
   #capability(
     capability: Exclude<VolumeEvidenceCapability, 'SOURCE_QUALITY'>,
     nowMs: number,
+    symbol?: string,
   ): Readonly<VolumeEvidenceCapabilityTruth> {
     const requirements = CAPABILITY_REQUIREMENTS[capability];
+    const spotTradeGap = symbol === undefined
+      ? this.#spotTradeGapSeries.size > 0
+      : this.#spotTradeGapSymbols.has(symbol);
     const rawObservationsByRequirement = requirements.map((requirement) => (
-      requirement === 'SPOT_TRADE' && this.#spotTradeGapSeries.size > 0
+      requirement === 'SPOT_TRADE' && spotTradeGap
         ? []
         : [...(this.#observations.get(requirement)?.values() ?? [])]
+          .filter((observation) => symbol === undefined || observation.symbol === symbol)
     ));
     const rejectedSpotDepthDelta = this.#rejectedSpotDepthDeltaReason();
     const observationsByRequirement = rawObservationsByRequirement.map((observations, index) => (

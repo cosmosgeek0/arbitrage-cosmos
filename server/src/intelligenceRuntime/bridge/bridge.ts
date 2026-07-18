@@ -56,6 +56,7 @@ import type {
   BridgeFreezeRequest,
   BridgeIntelligenceArtifact,
   BridgePendingCandidateTrigger,
+  BridgeSymbolReadModel,
   BridgeUniverseReceipt,
   CorrelatedEvidenceBatch,
   IntelligenceBridgeConfig,
@@ -941,6 +942,43 @@ export class IntelligenceRuntimeBridge {
       createsProposal: false as const,
       createsRiskVerdict: false as const,
       executesAction: false as const,
+    });
+  }
+
+  readSymbol(symbol: string): Readonly<BridgeSymbolReadModel> {
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{2,32}$/.test(symbol)) {
+      throw new TypeError('symbol must be a canonical bounded market symbol');
+    }
+    const evaluatedAtMs = this.#now();
+    const featureSnapshot = this.#featureBank.snapshot(symbol);
+    const evidenceHistoryState = this.#evidence.isTruncated(
+      symbol,
+      evaluatedAtMs,
+      this.#config.featureBank.historyRetentionMs,
+    ) ? 'TRUNCATED' as const : 'COMPLETE' as const;
+    const evidenceHistoryCount = this.#evidence.countForSymbol(symbol, evaluatedAtMs);
+    const instrumentId = featureSnapshot?.instrumentId ?? null;
+    const attention = instrumentId === null
+      ? null
+      : this.#publicAttention?.allocations.find((allocation) => allocation.instrumentId === instrumentId) ?? null;
+    const artifact = instrumentId === null ? null : this.#artifacts.get(instrumentId) ?? null;
+    return deepFreeze({
+      symbol,
+      evaluatedAtMs,
+      featureSnapshot: featureSnapshot === null ? null : structuredClone(featureSnapshot),
+      evidenceHistoryCount,
+      evidenceHistoryState,
+      attention: attention === null ? null : structuredClone(attention),
+      artifact: artifact === null ? null : structuredClone(artifact),
+      reasonCodes: sortedUnique([
+        ...(featureSnapshot === null ? ['FEATURE_SNAPSHOT_MISSING'] : featureSnapshot.reasonCodes),
+        ...(evidenceHistoryCount === 0 ? ['EVIDENCE_HISTORY_MISSING'] : []),
+        ...(attention === null ? ['ATTENTION_ALLOCATION_MISSING'] : []),
+        ...(artifact === null ? ['INTELLIGENCE_ARTIFACT_MISSING'] : []),
+        ...(evidenceHistoryState === 'TRUNCATED' ? ['EVIDENCE_HISTORY_TRUNCATED'] : []),
+      ]),
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
     });
   }
 

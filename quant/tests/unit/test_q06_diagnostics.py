@@ -8,6 +8,7 @@ from quant_edge.features.diagnostics import (
     FeatureColumnV1,
     column_health,
     deferred_diagnostics,
+    diagnostic_obligations,
     missingness_signals,
     pairwise_correlation,
     redundancy_clusters,
@@ -125,7 +126,9 @@ class TestMissingness:
 
     def test_deferred_diagnostics_are_recorded(self) -> None:
         assert deferred_diagnostics() == DEFERRED_DIAGNOSTICS
-        assert "SHAP_ATTRIBUTION_FOR_TREE_CHALLENGERS" in DEFERRED_DIAGNOSTICS
+        assert deferred_diagnostics() == ()
+        assert len(diagnostic_obligations()) == 10
+        assert "SHAP_OR_EQUIVALENT_ATTRIBUTION" in diagnostic_obligations()
 
 
 class TestCoverageEdges:

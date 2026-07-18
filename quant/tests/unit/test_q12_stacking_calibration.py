@@ -28,6 +28,15 @@ from quant_edge.ensemble import (
     validate_oof_bundles,
 )
 from quant_edge.ensemble.calibration import CalibratorV1
+from quant_edge.ensemble.regime_mixture import (
+    PER_REGIME_CALIBRATION_STATUS,
+    RegimeMixtureSpecV1,
+    RegimeMixtureStatus,
+    RegimeSpecialistV1,
+    RegimeWeightsV1,
+    RegimeWeightV1,
+    mix_regime_specialists,
+)
 from quant_edge.ensemble.stacking import FittedStackV1, ValidatedOofMatrixV1
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
@@ -50,6 +59,139 @@ BASE = 1_700_000_000_000_000_000
 TARGET = "binary-target:v1"
 SPECIALISTS = ("specialist-a:v1", "specialist-b:v1")
 SPEC = CalibrationSpecV1(6, 3, (4, 8))
+
+
+def _mixture_spec(*, disagreement: ExactRatioV1 | None = None) -> RegimeMixtureSpecV1:
+    return RegimeMixtureSpecV1(
+        fallback_probability=make_ratio(1, 5),
+        disagreement_threshold=(make_ratio(1, 5) if disagreement is None else disagreement),
+        max_unseen_mass=make_ratio(1, 5),
+        min_specialist_support=10,
+    )
+
+
+class TestSoftRegimeSpecialistMixture:
+    def test_soft_probabilities_mix_specialists_exactly(self) -> None:
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(3, 4)),
+                RegimeWeightV1("WILD", make_ratio(1, 4)),
+            )
+        )
+        specialists = (
+            RegimeSpecialistV1("CALM", make_ratio(4, 5), 100),
+            RegimeSpecialistV1("WILD", make_ratio(2, 5), 100),
+        )
+
+        result = mix_regime_specialists(weights, specialists, spec=_mixture_spec())
+
+        assert result.status is RegimeMixtureStatus.MIXED_RESEARCH_ONLY
+        assert result.final_probability == make_ratio(7, 10)
+        assert result.raw_mixture_probability == make_ratio(7, 10)
+        assert result.disagreement == make_ratio(3, 20)
+        assert result.unseen_mass == make_ratio(0, 1)
+
+    def test_excess_specialist_disagreement_uses_conservative_fallback(self) -> None:
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(3, 4)),
+                RegimeWeightV1("WILD", make_ratio(1, 4)),
+            )
+        )
+        specialists = (
+            RegimeSpecialistV1("CALM", make_ratio(4, 5), 100),
+            RegimeSpecialistV1("WILD", make_ratio(2, 5), 100),
+        )
+
+        result = mix_regime_specialists(
+            weights, specialists, spec=_mixture_spec(disagreement=make_ratio(1, 10))
+        )
+
+        assert result.status is RegimeMixtureStatus.FALLBACK_DISAGREEMENT
+        assert result.final_probability == make_ratio(1, 5)
+        assert result.raw_mixture_probability == make_ratio(7, 10)
+        assert result.reason == "SPECIALIST_DISAGREEMENT_EXCEEDS_BOUND"
+
+    def test_small_unseen_mass_is_blended_only_with_declared_fallback(self) -> None:
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(9, 10)),
+                RegimeWeightV1("NEW", make_ratio(1, 10)),
+            )
+        )
+
+        result = mix_regime_specialists(
+            weights,
+            (RegimeSpecialistV1("CALM", make_ratio(4, 5), 100),),
+            spec=_mixture_spec(),
+        )
+
+        assert result.status is RegimeMixtureStatus.MIXED_WITH_UNSEEN_FALLBACK
+        assert result.final_probability == make_ratio(37, 50)
+        assert result.unseen_mass == make_ratio(1, 10)
+        assert result.substituted_regimes == ("NEW",)
+
+    def test_large_unseen_mass_forces_whole_assessment_fallback(self) -> None:
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(3, 5)),
+                RegimeWeightV1("NEW", make_ratio(2, 5)),
+            )
+        )
+
+        result = mix_regime_specialists(
+            weights,
+            (RegimeSpecialistV1("CALM", make_ratio(4, 5), 100),),
+            spec=_mixture_spec(),
+        )
+
+        assert result.status is RegimeMixtureStatus.FALLBACK_UNSEEN_REGIME
+        assert result.final_probability == make_ratio(1, 5)
+        assert result.raw_mixture_probability is None
+        assert result.reason == "UNSEEN_REGIME_MASS_EXCEEDS_BOUND"
+
+    def test_real_per_regime_calibration_remains_blocked_by_q13(self) -> None:
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(1, 2)),
+                RegimeWeightV1("WILD", make_ratio(1, 2)),
+            )
+        )
+        specialists = (
+            RegimeSpecialistV1("CALM", make_ratio(3, 5), 100),
+            RegimeSpecialistV1("WILD", make_ratio(2, 5), 100),
+        )
+
+        result = mix_regime_specialists(weights, specialists, spec=_mixture_spec())
+
+        assert result.calibration_status == PER_REGIME_CALIBRATION_STATUS
+        assert "BLOCKED_DATA" in result.calibration_status
+        assert "Q13_REAL_EVIDENCE_INSUFFICIENT" in result.calibration_status
+
+    def test_probability_sum_order_support_and_determinism_are_enforced(self) -> None:
+        with pytest.raises(ContractValueError, match="sum exactly to one"):
+            RegimeWeightsV1(
+                (
+                    RegimeWeightV1("CALM", make_ratio(1, 4)),
+                    RegimeWeightV1("WILD", make_ratio(1, 4)),
+                )
+            )
+        weights = RegimeWeightsV1(
+            (
+                RegimeWeightV1("CALM", make_ratio(1, 2)),
+                RegimeWeightV1("WILD", make_ratio(1, 2)),
+            )
+        )
+        low_support = (
+            RegimeSpecialistV1("CALM", make_ratio(3, 5), 1),
+            RegimeSpecialistV1("WILD", make_ratio(2, 5), 1),
+        )
+        first = mix_regime_specialists(weights, low_support, spec=_mixture_spec())
+
+        assert first == mix_regime_specialists(weights, low_support, spec=_mixture_spec())
+        assert first.status is RegimeMixtureStatus.FALLBACK_UNSEEN_REGIME
+        with pytest.raises(ContractValueError, match="sorted and unique"):
+            mix_regime_specialists(weights, tuple(reversed(low_support)), spec=_mixture_spec())
 
 
 def _samples(count: int = 72) -> SampleSetV1:

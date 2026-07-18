@@ -45,6 +45,7 @@ function harness(overrides = {}) {
   return createReplayHarness({
     persistTicks: 1,
     minNetBasisPct: 0.01,
+    minDataQuality: 0.1,
     maxMarkDivergenceBps: 100,
     ...overrides,
   }, T0);
@@ -319,4 +320,205 @@ test('MIS-013 cannot launder stale or over-skewed causal cuts through leg recove
   const skewRestarted = skewedReverse.engine.featureSnapshot(SYMBOL).basis.gapB.causality;
   assert.equal(skewRestarted.quadrant, 'RISING_SPOT_LED');
   assert.equal(skewRestarted.initiatingSourceTs, T0 + 3_200);
+});
+
+test('MIS-016 carries one causal lifecycle through growth and follower-confirmed decay', () => {
+  const h = harness();
+  seed(h);
+  h.run([
+    perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000)),
+    perpetualBookReplayStep(T0 + 1_500, book(101.7, 101.72, T0 + 1_500)),
+    spotBookReplayStep(T0 + 2_000, book(100.18, 100.2, T0 + 2_000)),
+  ]);
+
+  const causal = h.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(causal.quadrant, 'RISING_PERPETUAL_LED');
+  assert.equal(causal.source, 'PERPETUAL_BOOK');
+  assert.equal(causal.initiatingSourceTs, T0 + 1_000);
+  assert.equal(causal.initiatingSourceSequence, T0 + 1_000);
+  assert.equal(causal.ageMs, 1_000);
+  assert.equal(causal.persistenceEvents, 3);
+  assert.equal(Number.isFinite(causal.slopePctPerMin), true);
+  assert.equal(causal.evolution, 'DECAYING');
+  assert.equal(causal.followerMarket, 'SPOT');
+  assert.equal(causal.followerConfirmation, 'CONFIRMED');
+  assert.equal(causal.followerSourceTs, T0 + 2_000);
+  assert.equal(causal.followerSourceSequence, T0 + 2_000);
+  assert.equal(causal.lastSourceTs, T0 + 2_000);
+  assert.equal(causal.lastSourceSequence, T0 + 2_000);
+  assert.equal(causal.lastAcceptedEventSequence > causal.acceptedEventSequence, true);
+
+  const decision = h.engine.decisions(1)[0];
+  const proposal = h.engine.proposals.open()[0];
+  const snapshot = buildSnapshots(h.engine, h.sink).gapCausality(SYMBOL).gapA;
+  assert.equal(decision.evidence.gapCausalSource, 'PERPETUAL_BOOK');
+  assert.equal(decision.evidence.gapInitiatingPriceTrend, 'RISING');
+  assert.equal(decision.evidence.gapFollowerConfirmation, 'CONFIRMED');
+  assert.equal(decision.evidence.gapEvolution, 'DECAYING');
+  assert.equal(Number.isFinite(decision.evidence.gapCausalSlopePctPerMin), true);
+  assert.equal(proposal.evidence.causalSource, 'PERPETUAL_BOOK');
+  assert.equal(proposal.evidence.initiatingPriceTrend, 'RISING');
+  assert.equal(proposal.evidence.followerConfirmation, 'CONFIRMED');
+  assert.equal(proposal.evidence.gapEvolution, 'DECAYING');
+  assert.deepEqual(snapshot, causal);
+});
+
+test('MIS-016 resets source, age, persistence, and confirmation on a causal flip', () => {
+  const h = harness();
+  seed(h);
+  h.run([perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000))]);
+  const rising = h.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(rising.quadrant, 'RISING_PERPETUAL_LED');
+
+  h.run([perpetualBookReplayStep(T0 + 1_500, book(101.2, 101.22, T0 + 1_500))]);
+  const flipped = h.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(flipped.quadrant, 'FALLING_PERPETUAL_LED');
+  assert.equal(flipped.initiatingSourceTs, T0 + 1_500);
+  assert.equal(flipped.ageMs, 0);
+  assert.equal(flipped.persistenceEvents, 1);
+  assert.equal(flipped.followerConfirmation, 'PENDING');
+  assert.equal(flipped.followerSourceTs, null);
+  assert.equal(flipped.acceptedEventSequence, flipped.lastAcceptedEventSequence);
+
+  h.run([spotBookReplayStep(T0 + 1_600, book(99.48, 99.5, T0 + 900))]);
+  const discontinuous = h.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(discontinuous.quadrant, 'UNKNOWN');
+  assert.equal(discontinuous.persistenceEvents, 0);
+  assert.equal(discontinuous.followerConfirmation, 'UNKNOWN');
+});
+
+test('MIS-016 resets stale, expired, missing, and fully-decayed causal lifecycles', () => {
+  const stale = harness();
+  seed(stale);
+  stale.run([perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000))]);
+  stale.run([{ atMs: T0 + 7_000, events: [] }]);
+  assert.equal(stale.engine.featureSnapshot(SYMBOL).basis.gapA.causality.quadrant, 'UNKNOWN');
+
+  const expired = harness({ causalExpiryMs: 1_000, staleMs: 10_000, fundingStaleMs: 10_000, maxLegSkewMs: 10_000 });
+  seed(expired);
+  expired.run([perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000))]);
+  expired.run([perpetualBookReplayStep(T0 + 2_500, book(101.501, 101.521, T0 + 2_500))]);
+  assert.equal(expired.engine.featureSnapshot(SYMBOL).basis.gapA.causality.quadrant, 'UNKNOWN');
+
+  const missing = harness();
+  seed(missing);
+  missing.run([perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000))]);
+  missing.run([spotBookReplayStep(T0 + 1_500, book(Number.NaN, 100, T0 + 1_500))]);
+  assert.equal(missing.engine.featureSnapshot(SYMBOL).basis.gapA.causality.quadrant, 'UNKNOWN');
+
+  const decayed = harness();
+  seed(decayed);
+  decayed.run([perpetualBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000))]);
+  decayed.run([spotBookReplayStep(T0 + 2_000, book(100.48, 100.5, T0 + 2_000))]);
+  assert.equal(decayed.engine.featureSnapshot(SYMBOL).basis.gapA.causality.quadrant, 'UNKNOWN');
+  assert.equal(decayed.engine.featureSnapshot(SYMBOL).basis.gapA.causality.ageMs, null);
+});
+
+test('MIS-016 tracks reverse-gap growth and Perpetual follower confirmation', () => {
+  const h = harness();
+  seed(
+    h,
+    book(101, 101.02, T0 + 10),
+    book(99.98, 100, T0 + 20),
+    { borrow: true },
+  );
+  h.run([
+    spotBookReplayStep(T0 + 1_000, book(101.5, 101.52, T0 + 1_000)),
+    spotBookReplayStep(T0 + 1_500, book(101.7, 101.72, T0 + 1_500)),
+    perpetualBookReplayStep(T0 + 2_000, book(100.18, 100.2, T0 + 2_000)),
+  ]);
+
+  const causal = h.engine.featureSnapshot(SYMBOL).basis.gapB.causality;
+  assert.equal(causal.quadrant, 'RISING_SPOT_LED');
+  assert.equal(causal.source, 'SPOT_BOOK');
+  assert.equal(causal.persistenceEvents, 3);
+  assert.equal(Number.isFinite(causal.slopePctPerMin), true);
+  assert.equal(causal.evolution, 'DECAYING');
+  assert.equal(causal.followerMarket, 'PERPETUAL');
+  assert.equal(causal.followerConfirmation, 'CONFIRMED');
+  assert.equal(causal.followerSourceTs, T0 + 2_000);
+  assert.equal(h.engine.decisions(1)[0].evidence.gapFollowerConfirmation, 'CONFIRMED');
+  assert.equal(h.engine.proposals.open()[0].evidence.followerConfirmation, 'CONFIRMED');
+});
+
+test('MIS-016 cumulative micro-decay updates then fully resolves both executable gaps', () => {
+  const forward = harness();
+  seed(forward);
+  forward.run([perpetualBookReplayStep(T0 + 1_000, book(101.2, 101.22, T0 + 1_000))]);
+  const forwardSteps = Array.from({ length: 51 }, (_, index) => {
+    const eventNumber = index + 1;
+    const gapPct = 1.2 - 0.004 * eventNumber;
+    const ask = 101.2 / (1 + gapPct / 100);
+    return spotBookReplayStep(
+      T0 + 1_000 + eventNumber * 10,
+      book(ask - 0.01, ask, T0 + 1_000 + eventNumber * 10),
+      false,
+    );
+  });
+  forward.run([forwardSteps[0]]);
+  const forwardConfirmed = forward.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(forwardConfirmed.followerConfirmation, 'CONFIRMED');
+  assert.equal(forwardConfirmed.persistenceEvents, 2);
+  assert.equal(forwardConfirmed.lastSourceTs, T0 + 1_010);
+  forwardSteps[forwardSteps.length - 1].tick = true;
+  forward.run(forwardSteps.slice(1));
+  assert.equal(forward.engine.featureSnapshot(SYMBOL).basis.gapA.gapPct > forward.engine.cfg.watchGapPct, true);
+  assert.equal(forward.engine.featureSnapshot(SYMBOL).basis.gapA.causality.quadrant, 'UNKNOWN');
+
+  const reverse = harness();
+  seed(
+    reverse,
+    book(101, 101.02, T0 + 10),
+    book(99.98, 100, T0 + 20),
+    { borrow: true },
+  );
+  reverse.run([spotBookReplayStep(T0 + 1_000, book(101.2, 101.22, T0 + 1_000))]);
+  const reverseSteps = Array.from({ length: 51 }, (_, index) => {
+    const eventNumber = index + 1;
+    const gapPct = 1.2 - 0.004 * eventNumber;
+    const ask = 101.2 / (1 + gapPct / 100);
+    return perpetualBookReplayStep(
+      T0 + 1_000 + eventNumber * 10,
+      book(ask - 0.01, ask, T0 + 1_000 + eventNumber * 10),
+      false,
+    );
+  });
+  reverse.run([reverseSteps[0]]);
+  const reverseConfirmed = reverse.engine.featureSnapshot(SYMBOL).basis.gapB.causality;
+  assert.equal(reverseConfirmed.followerConfirmation, 'CONFIRMED');
+  assert.equal(reverseConfirmed.persistenceEvents, 2);
+  assert.equal(reverseConfirmed.lastSourceTs, T0 + 1_010);
+  reverseSteps[reverseSteps.length - 1].tick = true;
+  reverse.run(reverseSteps.slice(1));
+  assert.equal(reverse.engine.featureSnapshot(SYMBOL).basis.gapB.gapPct > reverse.engine.cfg.watchGapPct, true);
+  assert.equal(reverse.engine.featureSnapshot(SYMBOL).basis.gapB.causality.quadrant, 'UNKNOWN');
+});
+
+test('MIS-016 asymmetric quotes cannot manufacture follower confirmation in either direction', () => {
+  const forward = harness();
+  seed(
+    forward,
+    book(99.8, 100, T0 + 10),
+    book(101, 101.02, T0 + 20),
+  );
+  forward.run([perpetualBookReplayStep(T0 + 1_000, book(101.2, 101.22, T0 + 1_000))]);
+  forward.run([spotBookReplayStep(T0 + 2_000, book(99.98, 99.99, T0 + 2_000))]);
+  const forwardCausal = forward.engine.featureSnapshot(SYMBOL).basis.gapA.causality;
+  assert.equal(forwardCausal.quadrant, 'RISING_SPOT_LED');
+  assert.equal(forwardCausal.followerConfirmation, 'PENDING');
+  assert.equal(forwardCausal.initiatingPriceTrend, 'FALLING');
+
+  const reverse = harness();
+  seed(
+    reverse,
+    book(101, 101.02, T0 + 10),
+    book(99.8, 100, T0 + 20),
+    { borrow: true },
+  );
+  reverse.run([spotBookReplayStep(T0 + 1_000, book(101.2, 101.22, T0 + 1_000))]);
+  reverse.run([perpetualBookReplayStep(T0 + 2_000, book(99.98, 99.99, T0 + 2_000))]);
+  const reverseCausal = reverse.engine.featureSnapshot(SYMBOL).basis.gapB.causality;
+  assert.equal(reverseCausal.quadrant, 'RISING_PERPETUAL_LED');
+  assert.equal(reverseCausal.followerConfirmation, 'PENDING');
+  assert.equal(reverseCausal.initiatingPriceTrend, 'FALLING');
 });

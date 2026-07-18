@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "i00.post-l-topology-receipt.v1",
+  "status": "AUTHORIZED_POST_L_TOPOLOGY",
+  "scope": "RECEIPT_BOUND_DONOR_EQUALITY_ONLY",
+  "requiredLastMerge": "ec82bc51d5311dfb3f505216bfb3fa41733f038c",
+  "topologyCut": {
+    "commit": "90947e7e094751b4baa9a6ae4969150822ad39d6",
+    "tree": "f0c30338b4e536baaad75a51c24cf682376039e0",
+    "parents": [
+      "1484992e62207d5de72669b3aa7b1b713f6071f0",
+      "b7e2e1fdde2eeb213969f9c29c195ce9b3b0d0d2"
+    ]
+  },
+  "historicalCorrection": {
+    "commit": "d8a86f722689ed82ad40f9ec44bbbc19c2347646",
+    "tree": "1da28eb2dcc03a0545fc2bc51e2a735e88826014",
+    "parents": [
+      "dea2d2a5c2b5e83d3aea75b0e368f0a478596561"
+    ]
+  },
+  "authorizedLaterMerges": [
+    "449350d60ab30a385edeccdf4d91716ef8550537",
+    "51efaaa41fbaf85bcbefa9adc6cdbd640d814506",
+    "6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd",
+    "c1a4b835a15aa60152b2ecfa9ae8087f6e159ce6",
+    "4eff62bdd30eceddf39bbbdf417b0eba51c22b7c",
+    "9c7e8b16bc8fbaba0110daa391a6e6160dae5802",
+    "b3f49616e69ee5036386414030b482b5f02e9c13",
+    "2787ebf3665c1efe32af9c426504af6b871898f1",
+    "614e5a8ed20b5c810ee92268a3f3c12c30971519",
+    "9c3bb17638cd8bc5478b813c22c5a7050f046ce3",
+    "955e204964f44246e0c69772578f43180a56b33f",
+    "611df36d12d00c3fbf041fff4af9cccde03afc91",
+    "e3b84307af010b8b1547418f5f6cb5078039413d",
+    "48a89d9f07574868fc6346725781ba954f488a4c",
+    "55b456e19dbbd97548d9beb601dfc8cc7d3c57b7",
+    "995904ada86e86ef4214bea596331b978a332da0",
+    "dae131726ddb3bb69c75c8a3e5f4259119b84350",
+    "7381290c576d97b76ea441455e9c03288f23a501",
+    "5f887cf27ce246d80b7fc553eed470b015976963",
+    "4dbb0f11f032cd5d10058b18c193d844508dc92a",
+    "90947e7e094751b4baa9a6ae4969150822ad39d6"
+  ]
+}

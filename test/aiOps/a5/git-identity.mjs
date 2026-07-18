@@ -94,4 +94,13 @@ export const AI_OPS_IDENTITY_REGRESSION_MATRIX = Object.freeze([
       }),
     ]),
   }),
+  Object.freeze({
+    item: 'FIX-109',
+    environment: 'DONOR_BRANCH_NAME_WITH_INTEGRATED_OBJECTS',
+    branchDiagnostic: 'port-a5-20260716',
+    head: Object.freeze({
+      commit: '1fd0f70d9a5a2c7b47123f0d4d1a87cb97dbe753',
+      tree: '8072070f040adce612617f7ef69403b9005b0af4',
+    }),
+  }),
 ]);

@@ -536,6 +536,64 @@ test('UserStream honors Binance retryAfter and stop cancels the deferred reconne
   assert.equal(stream.status, 'off');
 });
 
+test('UserStream latches terminal exhaustion and re-arms only for an explicit lifecycle restart', async () => {
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  const exhaustionWaiters = [];
+  const waitForExhaustion = () => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for user-stream exhaustion')), 250);
+    exhaustionWaiters.push(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+  const stream = new UserStream(
+    {
+      userDataStreamSubscribeFrame() {
+        throw new Error('private subscription must not be reached when socket construction fails');
+      },
+    },
+    () => undefined,
+    (status, detail) => {
+      statuses.push({ status, detail });
+      if (status === 'exhausted') exhaustionWaiters.shift()?.();
+    },
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        throw new Error('synthetic private socket construction failure');
+      },
+      retryBaseMs: 1,
+      retryMaxMs: 1,
+      maximumAttempts: 99,
+      random: () => 0.5,
+    },
+  );
+
+  try {
+    const firstExhaustion = waitForExhaustion();
+    await stream.start();
+    await firstExhaustion;
+    assert.equal(socketFactoryCalls, 8, 'a widening override cannot construct canonical attempt nine');
+    assert.deepEqual(statuses.at(-1), {
+      status: 'exhausted',
+      detail: 'private stream retry campaign exhausted',
+    });
+    assert.equal(stream.status, 'exhausted');
+    await sleep(10);
+    assert.equal(socketFactoryCalls, 8, 'terminal exhaustion cannot self-rearm');
+
+    stream.stop();
+    const secondExhaustion = waitForExhaustion();
+    await stream.start();
+    await secondExhaustion;
+    assert.equal(socketFactoryCalls, 16, 'an explicit lifecycle restart owns one fresh bounded campaign');
+    assert.equal(stream.status, 'exhausted');
+  } finally {
+    stream.stop();
+  }
+});
+
 test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and evicts slow viewers', () => {
   const handles = [];
   const streamFactory = (name, url, onMessage) => {

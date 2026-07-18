@@ -58,7 +58,7 @@ function proposal(strategy, ts, suffix) {
   };
 }
 
-function createWorld() {
+function createWorld({ intelligenceEvidenceMaximumBytes } = {}) {
   const clock = new ManualClock();
   const calls = {
     marketInit: 0,
@@ -128,6 +128,9 @@ function createWorld() {
     basis,
     volume,
     sourceMaxAgeMs: 10_000,
+    ...(intelligenceEvidenceMaximumBytes === undefined
+      ? {}
+      : { intelligenceEvidenceMaximumBytes }),
   });
   const ctx = () => ({
     nowMs: clock.nowMs(),
@@ -462,6 +465,67 @@ test('one production router projects current mark/funding and OI with fresh, mis
   world.clock.now = START + 15_001;
   assert.equal(routingCapability(world, 'FUNDING').freshness, 'STALE');
   assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'STALE');
+});
+
+test('partial canonical bootstrap cannot publish cached focus and recovers only after full duplicate reconciliation', async () => {
+  // This bound is deliberately between the canonical current funding record
+  // and the larger mark record below, forcing the real Bridge to accept one
+  // immutable row and reject the other without a fabricated sink receipt.
+  const world = createWorld({ intelligenceEvidenceMaximumBytes: 1_270 });
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  const runtimeHealth = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.notEqual(runtimeHealth.timestamp, null);
+  const partialHealth = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(partialHealth.timestamp, null);
+  let routing = world.ports.intelligenceEvidence.readRoutingSnapshot();
+  assert.deepEqual([routing.routed, routing.duplicate, routing.rejected], [1, 0, 1]);
+  const partialSource = routing.sources.find((entry) => entry.dataset === 'usd_m.mark_price');
+  assert.deepEqual(
+    [partialSource.generation, partialSource.revision, partialSource.closed, partialSource.bootstrapped],
+    [1, 1, false, false],
+  );
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'MISSING');
+  const cachedPlanFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(cachedPlanFocus.canPin, false);
+  assert.equal(cachedPlanFocus.attentionPlanId, null);
+  assert.equal(cachedPlanFocus.effectiveTier, null);
+
+  // Reconstruct at the same injected clock so the accepted funding row is an
+  // exact Bridge duplicate. A smaller, new mark row supplies the missing cut;
+  // only that complete duplicate+accepted reconciliation may republish health.
+  world.ports.runtimes.marketIntelligence.stop();
+  world.ports.runtimes.intelligenceRuntime.stop();
+  world.market.rows[0].perpMark = 1;
+  world.market.rows[0].perpIndexPrice = null;
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  const recoveredHealth = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(recoveredHealth.timestamp.sourceTimeMs, START - 200);
+
+  routing = world.ports.intelligenceEvidence.readRoutingSnapshot();
+  assert.deepEqual([routing.routed, routing.duplicate, routing.rejected], [2, 1, 1]);
+  const recoveredSource = routing.sources.find((entry) => entry.dataset === 'usd_m.mark_price');
+  assert.deepEqual(
+    [recoveredSource.generation, recoveredSource.revision, recoveredSource.closed, recoveredSource.bootstrapped],
+    [2, 1, false, true],
+  );
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  const recoveredFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(recoveredFocus.canPin, true);
+  assert.notEqual(recoveredFocus.attentionPlanId, null);
 });
 
 test('production Volume owner publishes one lifecycle-bound trade source and delayed pre-close LIVE stays fenced', async () => {

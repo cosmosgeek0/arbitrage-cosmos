@@ -15,6 +15,7 @@ import {
   normalizeMarkPrice,
   normalizeOpenInterest,
   normalizeTrade,
+  type BinanceSourceFact,
 } from '../../intelligenceFoundation/evidence/index.js';
 import {
   buildUniverseGraph,
@@ -30,6 +31,7 @@ import {
 } from '../../intelligenceRuntime/bridge/index.js';
 import {
   VolumeEvidenceRouter,
+  type RegisteredEvidenceRouteReceipt,
 } from '../../intelligenceRuntime/routing/index.js';
 import {
   runtimeUniverseTruth,
@@ -135,6 +137,14 @@ function invalidMarketFactsCut(): Readonly<MarketFactsCut> {
 function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>): void {
   if (!input || typeof input !== 'object') throw new TypeError('production integration input is required');
   if (typeof input.clock?.nowMs !== 'function') throw new TypeError('clock.nowMs is required');
+  if (input.intelligenceEvidenceMaximumBytes !== undefined
+      && (!Number.isSafeInteger(input.intelligenceEvidenceMaximumBytes)
+        || input.intelligenceEvidenceMaximumBytes < 512
+        || input.intelligenceEvidenceMaximumBytes > MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES)) {
+    throw new RangeError(
+      `intelligenceEvidenceMaximumBytes must be an integer in [512, ${MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES}]`,
+    );
+  }
   for (const [name, value, methods] of [
     ['market', input.market, ['init', 'start', 'stop', 'allRows', 'priceUpdatedAt', 'markEventTimestamp']],
     ['basis', input.basis, ['start', 'stop', 'connectionStatus', 'integrationSnapshot']],
@@ -429,6 +439,7 @@ const MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS = 5_000;
 const MAX_PROJECTED_UNIVERSE_ROWS = 640;
 const MAX_PROJECTED_MARK_EVIDENCE = 256;
 const MAX_PROJECTED_OPEN_INTEREST_EVIDENCE = 256;
+const MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES = 2 * 1024 * 1024;
 
 function unknownRateBudget() {
   return Object.freeze({
@@ -701,8 +712,14 @@ class PublicIntelligenceLifecycle {
     private readonly evidence: MarketEvidenceReader,
     private readonly volume: ProductionVolumeRuntimePort,
     private readonly maxAgeMs: number,
+    maximumEvidenceBytes?: number,
   ) {
-    this.bridge = new IntelligenceRuntimeBridge({ clock });
+    this.bridge = new IntelligenceRuntimeBridge({
+      clock,
+      ...(maximumEvidenceBytes === undefined
+        ? {}
+        : { config: { maximumEvidenceBytes } }),
+    });
     this.router = new VolumeEvidenceRouter({ clock, sink: this.bridge });
     this.volume.setEvidenceObserver?.((cut) => this.onVolumeEvidence(cut));
     // Sampling may reduce allocation churn, but it must never outlive the
@@ -852,6 +869,35 @@ class PublicIntelligenceLifecycle {
     const next = prior + 1;
     this.sourceRevisions.set(key, next);
     return next;
+  }
+
+  private marketEvidenceCurrent(
+    fact: BinanceSourceFact,
+    revision: number,
+    receipt: Readonly<RegisteredEvidenceRouteReceipt>,
+    fundingProjected: boolean,
+  ): boolean {
+    if (receipt.state !== 'FRESH'
+        || receipt.received < 1
+        || receipt.rejected !== 0
+        || receipt.routed + receipt.duplicate !== receipt.received) return false;
+    try {
+      const snapshot = this.router.snapshot();
+      const exactSource = snapshot.sources.find((source) => (
+        source.sourceId === fact.sourceId
+        && source.dataset === fact.dataset
+        && source.lifecycle === 'LIVE'
+        && source.generation === this.publicationGeneration
+        && source.revision === revision
+      ));
+      if (exactSource?.closed !== false || exactSource.bootstrapped !== true) return false;
+      if (!fundingProjected) return true;
+      return snapshot.capabilities.find((capability) => (
+        capability.capability === 'FUNDING'
+      ))?.freshness === 'FRESH';
+    } catch {
+      return false;
+    }
   }
 
   private onVolumeEvidence(cut: Readonly<ProductionVolumeEvidenceCut>): void {
@@ -1122,6 +1168,8 @@ class PublicIntelligenceLifecycle {
         }
       }
     }
+    const markSourceRevision = this.nextSourceRevision(fact.sourceId, fact.dataset);
+    const fundingProjected = normalized.some((record) => record.kind === 'FUNDING');
     const receipt = this.router.route({
       correlationId: stableId('existing-market-intelligence-ingest', {
         sourceTimeMs: usdmTimestamp.sourceTimeMs,
@@ -1136,7 +1184,7 @@ class PublicIntelligenceLifecycle {
         authority: 'COMPLETE' as const,
         continuity: 'UNKNOWN' as const,
         generation: this.publicationGeneration,
-        revision: this.nextSourceRevision(fact.sourceId, fact.dataset),
+        revision: markSourceRevision,
         bootstrap: normalized.length > 0 ? 'CURRENT_SNAPSHOT' as const : 'NONE' as const,
         rateBudget: unknownRateBudget(),
         observedAtMs: nowMs,
@@ -1206,7 +1254,8 @@ class PublicIntelligenceLifecycle {
     const evaluation = this.bridge.evaluate();
     return Object.freeze({
       universeReady,
-      evidenceReady: receipt.routed + receipt.duplicate > 0 && evaluation.attentionPlan !== null,
+      evidenceReady: evaluation.attentionPlan !== null
+        && this.marketEvidenceCurrent(fact, markSourceRevision, receipt, fundingProjected),
     });
   }
 }
@@ -1439,6 +1488,7 @@ export function createProductionSystemIntegrationPorts(
     evidence,
     input.volume,
     maxAgeMs,
+    input.intelligenceEvidenceMaximumBytes,
   );
   const basisLifecycle = new BasisLifecyclePort(input.basis, maxAgeMs);
   const volumeLifecycle = new VolumeLifecyclePort(input.volume, maxAgeMs);

@@ -1055,6 +1055,7 @@ test('sink-rejected bootstrap stays MISSING until the whole cut is accepted or d
   const partialReceipt = route(partial, 'USD_M_MARK_PRICE', [partialMark, overboundFunding], {
     source: { generation: 4, revision: 1, bootstrap: 'CURRENT_SNAPSHOT', continuity: 'UNKNOWN' },
   });
+  assert.equal(partialReceipt.state, 'MISSING');
   assert.equal(partialReceipt.routed, 1);
   assert.equal(partialReceipt.rejected, 1);
   assert.equal(partial.router.snapshot().sources.find((entry) => (

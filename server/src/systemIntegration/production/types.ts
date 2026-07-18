@@ -145,6 +145,12 @@ export interface ProductionSystemIntegrationInput {
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
+  /**
+   * Optional stricter per-record bound for the existing canonical evidence
+   * Bridge. It can only reduce the production default and makes resource
+   * pressure explicit and fail-closed.
+   */
+  readonly intelligenceEvidenceMaximumBytes?: number;
 }
 
 export interface ProductionSystemIntegrationPorts {

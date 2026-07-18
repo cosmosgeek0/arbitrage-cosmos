@@ -104,7 +104,7 @@ const facts = {
     productFamily: 'USD_M_PERPETUAL', evidenceKinds: ['LIQUIDATION'], endpoint: 'wss://fstream.binance.com/market',
     channel: '!forceOrder@arr', freshnessBasis: 'SOURCE_TRANSACTION_TIME', sourceEventTimeField: 'E',
     sourceTransactionTimeField: 'o.T', sequenceFields: [], bookScope: null, sourceMarketType: 1,
-    samplingWindowMs: 1_000, notes: ['only the largest liquidation order per symbol in each 1000ms window is pushed', 'SELL liquidates a LONG; BUY liquidates a SHORT'],
+    samplingWindowMs: 1_000, notes: ['only the latest liquidation order per symbol in each 1000ms window is pushed', 'the stream is sampled and silence is not proof of zero liquidations', 'SELL liquidates a LONG; BUY liquidates a SHORT'],
   },
   MARGIN_ALL_ASSETS: {
     sourceId: 'binance-margin-rest', dataset: 'margin.all_assets', endpointClass: 'REST',

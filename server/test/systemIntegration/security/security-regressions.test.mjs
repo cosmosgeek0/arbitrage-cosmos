@@ -8,6 +8,25 @@ import { installEgressTripwire } from '../fixtures/egress-tripwire.mjs';
 
 const SOURCE_ROOT = path.resolve('server/src/systemIntegration');
 const DIST_ROOT = path.resolve('server/dist/systemIntegration');
+const DATA_DIR_LEASE_SOURCE = path.resolve(
+  'server/src/systemIntegration/persistence/dataDirLease.ts',
+);
+const DATA_DIR_LEASE_FS_CAPABILITIES = Object.freeze([
+  'Stats',
+  'closeSync',
+  'constants',
+  'fchmodSync',
+  'fstatSync',
+  'fsyncSync',
+  'futimesSync',
+  'linkSync',
+  'lstatSync',
+  'openSync',
+  'readdirSync',
+  'readSync',
+  'unlinkSync',
+  'writeSync',
+].sort());
 const CLIENT_CONVERGENCE_FILES = Object.freeze([
   path.resolve('web/src/lib/systemIntegration.ts'),
   path.resolve('web/src/components/SystemIntegrationSurface.tsx'),
@@ -138,6 +157,25 @@ function forbiddenImportReason(specifier) {
   return null;
 }
 
+function approvedDataDirLeaseFsImport(file, node, specifier) {
+  if (path.resolve(file) !== DATA_DIR_LEASE_SOURCE
+      || specifier !== 'node:fs'
+      || !ts.isImportDeclaration(node)
+      || node.importClause === undefined
+      || node.importClause.name !== undefined
+      || node.importClause.namedBindings === undefined
+      || !ts.isNamedImports(node.importClause.namedBindings)) return false;
+  const importedNames = [];
+  for (const element of node.importClause.namedBindings.elements) {
+    if (element.propertyName !== undefined
+        || element.isTypeOnly !== (element.name.text === 'Stats')) return false;
+    importedNames.push(element.name.text);
+  }
+  importedNames.sort();
+  return importedNames.length === DATA_DIR_LEASE_FS_CAPABILITIES.length
+    && importedNames.every((name, index) => name === DATA_DIR_LEASE_FS_CAPABILITIES[index]);
+}
+
 function isProcessEnv(node) {
   if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
   const property = nodeName(node);
@@ -184,7 +222,9 @@ function productionViolations(files) {
         const specifier = moduleName(node.moduleSpecifier);
         if (specifier === null) return;
         const reason = forbiddenImportReason(specifier);
-        if (reason) report(node.moduleSpecifier, reason);
+        if (reason && !approvedDataDirLeaseFsImport(file, node, specifier)) {
+          report(node.moduleSpecifier, reason);
+        }
         if (ts.isImportDeclaration(node) && node.importClause) {
           const importedNames = [];
           if (node.importClause.name) importedNames.push(node.importClause.name.text);
@@ -363,6 +403,48 @@ test('production convergence source has no private, signed, money-moving, ambien
   const files = filesUnder(SOURCE_ROOT, ['.ts', '.tsx']);
   assert.ok(files.length >= 30, 'expected the complete system-integration production source tree');
   assert.deepEqual(productionViolations(files), []);
+});
+
+test('DATA_DIR lease filesystem capability is exact-path, exact-module, and exact-name only', () => {
+  const actual = parse(DATA_DIR_LEASE_SOURCE).tree.statements.find((statement) => (
+    ts.isImportDeclaration(statement)
+    && moduleName(statement.moduleSpecifier) === 'node:fs'
+  ));
+  assert.ok(actual && ts.isImportDeclaration(actual));
+  assert.equal(approvedDataDirLeaseFsImport(DATA_DIR_LEASE_SOURCE, actual, 'node:fs'), true);
+
+  const approvedSource = readFileSync(DATA_DIR_LEASE_SOURCE, 'utf8');
+  const importText = actual.getText(parse(DATA_DIR_LEASE_SOURCE).tree);
+  const mutations = [
+    { file: path.resolve('server/src/systemIntegration/persistence/other.ts'), text: importText },
+    { file: DATA_DIR_LEASE_SOURCE, text: importText.replace("'node:fs'", "'node:fs/promises'") },
+    { file: DATA_DIR_LEASE_SOURCE, text: importText.replace('  closeSync,\n', '') },
+    { file: DATA_DIR_LEASE_SOURCE, text: importText.replace('  closeSync,', '  closeSync as closeLease,') },
+    { file: DATA_DIR_LEASE_SOURCE, text: importText.replace('  type Stats,', '  Stats,') },
+    { file: DATA_DIR_LEASE_SOURCE, text: `import fs from 'node:fs';` },
+    { file: DATA_DIR_LEASE_SOURCE, text: importText.replace('  writeSync,', '  writeSync,\n  readFileSync,') },
+  ];
+  assert.ok(approvedSource.includes(importText));
+  for (const mutation of mutations) {
+    const tree = ts.createSourceFile(
+      mutation.file,
+      mutation.text,
+      ts.ScriptTarget.ESNext,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const declaration = tree.statements.find(ts.isImportDeclaration);
+    assert.ok(declaration);
+    assert.equal(
+      approvedDataDirLeaseFsImport(
+        mutation.file,
+        declaration,
+        moduleName(declaration.moduleSpecifier),
+      ),
+      false,
+      mutation.text,
+    );
+  }
 });
 
 test('all production convergence barrels import inertly with egress, timers, clock, and random patched', async () => {

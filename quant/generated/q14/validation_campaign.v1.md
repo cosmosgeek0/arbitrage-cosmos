@@ -1,9 +1,9 @@
 # Q14 validation-factory campaign (SYNTHETIC evidence)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `26bb358d99473c371e2be513f6952047792994be46bbc266faeba99d58295aa5`
-- Campaign JSON SHA-256: `cb873140f03eed45c06cc0f05aa1472f6dbd0c7deb7b97e50a37cd765cb023b2`
-- Golden dataset digest: `cd3b2e72e7070153ddd7a71499bc1089b9291b76a10c33f3dd10090d419cbcd2`
+- Golden fixture SHA-256: `539c95b264333208dfd37c96856be32bd130b41907560558a38bd323e53b20c9`
+- Campaign JSON SHA-256: `a0522034a97c2676d4af31c7b22c10412ebb06a115df4de72f307081b23d9f87`
+- Golden dataset digest: `701e256d7beb6161812ed2d5edba16069856c1ded12e996b987c7e758249724b`
 - Leaked model (true lineage): `REJECTED_TEMPORAL_LEAK`
 - Leaked model (falsified lineage): `REJECTED_IMPLAUSIBLE_SKILL`
 - Honest baseline: `ACCEPTED_FOR_COMPARISON`
@@ -23,11 +23,11 @@ fixture proving only that the falsification machinery works.
 - Baseline: `random-baseline`
 - Challenger: `informative-challenger`
 - Verdict: `IMPROVES`
-- Plan digest: `a61e28326586c5e01ad26ddacd550fee4d0ed5d7f4c5ae5b8e062e8fd5d2fc3d`
+- Plan digest: `061a147448835f17ed74dc1739db1866e74c94d80effe97e8d58e8cafa9b2bd6`
 - Trial ledger digest: `a94e471fb93ddc6ef6d0a322a3d18fe4e24a52e36990d6eb1881fd3a257fd43d`
 - Baseline leakage verdict: `ACCEPTED_FOR_COMPARISON`
 - Challenger leakage verdict: `ACCEPTED_FOR_COMPARISON`
 - Folds compared/skipped: 4/0
 - Improved/worsened/tied folds: 4/0/0
 - Holdout opened: True
-- Report digest: `63c6d0948d469a85c1066e544186e8bbe2acb3da72a4e33bed49aefced1e08ff`
+- Report digest: `ae6db6e18609937127014699301fe4b0c8794363b6137d4736447428e64b8e94`

@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
-from q14_fixtures import informative_predictions, make_sample_set, predictions_from_scores
+from q14_fixtures import (
+    bind_fold_fit_receipts,
+    informative_predictions,
+    make_sample_set,
+    predictions_from_scores,
+)
 
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FixedPointV1
@@ -81,7 +88,7 @@ def _comparison_spec(
         leakage=LeakageSpecV1(
             primary=PrimaryMetricSpecV1(kind=kind, k=k, ece_bins=None),
             implausible_skill=FixedPointV1(implausible_mantissa),
-            band_seed=SEED,
+            band_seed=2,
             band_replicates=32,
         ),
     )
@@ -122,8 +129,25 @@ def test_comparison_spec_contract_law() -> None:
 def test_challenger_improvement_is_evidence_based() -> None:
     samples = make_sample_set(80)
     plan = _plan(samples)
-    baseline = random_rank_predictions(samples, seed=7, model_id="random-baseline")
-    challenger = informative_predictions(samples, model_id="informative-challenger")
+    baseline = bind_fold_fit_receipts(
+        samples, plan, random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    )
+    unverified = informative_predictions(samples, model_id="informative-challenger")
+    rejected = compare_models(samples, plan, baseline, unverified, _ledger(), _comparison_spec())
+    assert rejected.verdict is ComparisonVerdict.REJECTED_CHALLENGER_LINEAGE
+    challenger = bind_fold_fit_receipts(samples, plan, unverified)
+    forged_receipt = replace(
+        challenger.fold_fit_receipts[0],
+        train_sample_ids=tuple(sample.sample_id for sample in samples.samples),
+    )
+    forged_lineage = replace(
+        challenger,
+        fold_fit_receipts=(forged_receipt, *challenger.fold_fit_receipts[1:]),
+    )
+    forged_report = compare_models(
+        samples, plan, baseline, forged_lineage, _ledger(), _comparison_spec()
+    )
+    assert forged_report.verdict is ComparisonVerdict.REJECTED_CHALLENGER_LINEAGE
     report = compare_models(samples, plan, baseline, challenger, _ledger(), _comparison_spec())
     assert report.verdict is ComparisonVerdict.IMPROVES
     assert report.improved_fold_count == 4
@@ -150,8 +174,12 @@ def test_lower_is_better_effects_are_direction_adjusted() -> None:
     # challenger's smaller loss must still read as a positive effect.
     samples = make_sample_set(80)
     plan = _plan(samples)
-    baseline = random_rank_predictions(samples, seed=7, model_id="random-baseline")
-    challenger = informative_predictions(samples, model_id="informative-challenger")
+    baseline = bind_fold_fit_receipts(
+        samples, plan, random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    )
+    challenger = bind_fold_fit_receipts(
+        samples, plan, informative_predictions(samples, model_id="informative-challenger")
+    )
     report = compare_models(
         samples,
         plan,
@@ -173,7 +201,9 @@ def test_lower_is_better_effects_are_direction_adjusted() -> None:
 def test_leaked_challenger_never_reaches_comparison() -> None:
     samples = make_sample_set(80)
     plan = _plan(samples)
-    baseline = random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    baseline = bind_fold_fit_receipts(
+        samples, plan, random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    )
     leaked = future_leaked_predictions(samples, model_id="leaked-model")
     report = compare_models(samples, plan, baseline, leaked, _ledger(), _comparison_spec())
     assert report.verdict is ComparisonVerdict.REJECTED_CHALLENGER_LEAKAGE
@@ -204,6 +234,8 @@ def test_invalid_plan_and_insufficient_folds() -> None:
     # k = 20 is measurable on the 64-sample research set (leakage passes) but no
     # 13-sample fold validation slice can support it, so every fold is skipped.
     plan = _plan(samples)
+    baseline = bind_fold_fit_receipts(samples, plan, baseline)
+    challenger = bind_fold_fit_receipts(samples, plan, challenger)
     starved = compare_models(
         samples,
         plan,
@@ -219,8 +251,12 @@ def test_invalid_plan_and_insufficient_folds() -> None:
 def test_two_fold_comparison_yields_no_evidence_interval_gate() -> None:
     samples = make_sample_set(60)
     plan = _plan(samples, fold_count=2, holdout_num=0, holdout_den=1)
-    baseline = random_rank_predictions(samples, seed=7, model_id="random-baseline")
-    challenger = informative_predictions(samples, model_id="informative-challenger")
+    baseline = bind_fold_fit_receipts(
+        samples, plan, random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    )
+    challenger = bind_fold_fit_receipts(
+        samples, plan, informative_predictions(samples, model_id="informative-challenger")
+    )
     report = compare_models(samples, plan, baseline, challenger, _ledger(), _comparison_spec())
     assert report.verdict is ComparisonVerdict.NO_EVIDENCE
     assert report.effect_interval is not None
@@ -230,8 +266,12 @@ def test_two_fold_comparison_yields_no_evidence_interval_gate() -> None:
 def test_holdout_grant_is_recorded_and_used_once_granted() -> None:
     samples = make_sample_set(80)
     plan = _plan(samples)
-    baseline = random_rank_predictions(samples, seed=7, model_id="random-baseline")
-    challenger = informative_predictions(samples, model_id="informative-challenger")
+    baseline = bind_fold_fit_receipts(
+        samples, plan, random_rank_predictions(samples, seed=7, model_id="random-baseline")
+    )
+    challenger = bind_fold_fit_receipts(
+        samples, plan, informative_predictions(samples, model_id="informative-challenger")
+    )
     grant = HoldoutGrantV1(
         grant_id="grant-final",
         reason="final untouched holdout read for the declared primary metric",

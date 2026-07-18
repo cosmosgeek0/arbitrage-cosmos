@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from quant_edge.canonical import canonical_json_bytes
@@ -46,15 +47,18 @@ from quant_edge.validation.multiplicity import (
     pbo_cscv,
 )
 from quant_edge.validation.samples import (
+    FoldFitReceiptV1,
     PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
     ValidationSampleV1,
+    subset_by_ids,
 )
 from quant_edge.validation.splits import (
     HoldoutGrantV1,
     SplitScheme,
+    WalkForwardPlanV1,
     WalkForwardSpecV1,
     build_walk_forward_plan,
 )
@@ -72,50 +76,60 @@ HOUR_NS = 3_600_000_000_000
 ZERO = make_ratio(0, 1)
 
 
-def _dataset(rng: DeterministicRandom, *, dataset_id: str, count: int) -> SampleSetV1:
+def _dataset(
+    rng: DeterministicRandom, *, dataset_id: str, count: int
+) -> tuple[SampleSetV1, tuple[dict[str, object], ...]]:
     samples: list[ValidationSampleV1] = []
+    feature_rows: list[dict[str, object]] = []
     for index in range(count):
         synthetic_signal = rng.next_u64() % 3 == 0
-        outcome = synthetic_signal != (index % 5 == 0)
+        outcome = synthetic_signal
         horizon = (1 + int(rng.next_u64() % 3)) * (HOUR_NS // 4)
+        cutoff_ns = BASE_NS + index * HOUR_NS
+        feature_rows.append(
+            {
+                "asOfNs": str(cutoff_ns),
+                "sampleId": f"s-{index:04d}",
+                "syntheticSignal": synthetic_signal,
+            }
+        )
         samples.append(
             ValidationSampleV1(
                 sample_id=f"s-{index:04d}",
                 symbol="BNBUSDT",
                 group_id=f"g-{index:04d}",
-                cutoff_ns=BASE_NS + index * HOUR_NS,
+                cutoff_ns=cutoff_ns,
                 label_end_ns=BASE_NS + index * HOUR_NS + horizon,
-                strata=(
-                    ("liquidity", "mid"),
-                    ("syntheticSignal", "positive" if synthetic_signal else "negative"),
-                ),
+                strata=(("liquidity", "mid"),),
                 binary_outcome=outcome,
                 gross_edge_ratio=make_ratio(2 + int(rng.next_u64() % 4), 1_000),
                 base_cost_ratio=make_ratio(1, 1_000),
                 quality=QualityState.SYNTHETIC,
             )
         )
-    return SampleSetV1(
-        dataset_id=dataset_id,
-        posture=EvidencePosture.SYNTHETIC,
-        samples=tuple(samples),
+    return (
+        SampleSetV1(
+            dataset_id=dataset_id,
+            posture=EvidencePosture.SYNTHETIC,
+            samples=tuple(samples),
+        ),
+        tuple(feature_rows),
     )
 
 
-def _informative(samples: SampleSetV1, *, model_id: str) -> PredictionSetV1:
+def _informative(
+    samples: SampleSetV1,
+    feature_rows: tuple[dict[str, object], ...],
+    *,
+    model_id: str,
+) -> PredictionSetV1:
     predictions = []
-    feature_rows: list[dict[str, object]] = []
-    for sample in sorted(samples.samples, key=lambda sample: sample.sample_id):
-        strata = dict(sample.strata)
-        synthetic_signal = strata["syntheticSignal"] == "positive"
-        score = make_ratio(7, 10) if synthetic_signal else make_ratio(3, 10)
-        feature_rows.append(
-            {
-                "asOfNs": str(sample.cutoff_ns),
-                "sampleId": sample.sample_id,
-                "syntheticSignal": synthetic_signal,
-            }
-        )
+    signal_by_id = {str(row["sampleId"]): bool(row["syntheticSignal"]) for row in feature_rows}
+    for position, sample in enumerate(sorted(samples.samples, key=lambda sample: sample.sample_id)):
+        skilled = signal_by_id[sample.sample_id] != (position % 5 == 0)
+        # Break equal-score groups in the same sample-id order used by the
+        # historical fixture, so tie-aware AP preserves the prior campaign result.
+        score = make_ratio((700_000 if skilled else 300_000) - position, 1_000_000)
         predictions.append(
             PredictionV1(
                 sample_id=sample.sample_id,
@@ -124,7 +138,7 @@ def _informative(samples: SampleSetV1, *, model_id: str) -> PredictionSetV1:
             )
         )
     feature_digest = DigestV1(
-        hexdigest=hashlib.sha256(canonical_json_bytes(feature_rows)).hexdigest()
+        hexdigest=hashlib.sha256(canonical_json_bytes(list(feature_rows))).hexdigest()
     )
     fit_digest = DigestV1(
         hexdigest=hashlib.sha256(
@@ -145,6 +159,66 @@ def _informative(samples: SampleSetV1, *, model_id: str) -> PredictionSetV1:
             feature_artifact_digest=feature_digest,
             fit_receipt_digest=fit_digest,
         ),
+    )
+
+
+def _bind_fold_fit_receipts(
+    samples: SampleSetV1,
+    plan: WalkForwardPlanV1,
+    predictions: PredictionSetV1,
+) -> PredictionSetV1:
+    receipts: list[FoldFitReceiptV1] = []
+    for fold in plan.folds:
+        training = subset_by_ids(samples, fold.train_sample_ids)
+        validation_rows = [
+            row.as_mapping()
+            for row in predictions.predictions
+            if row.sample_id in set(fold.validation_sample_ids)
+        ]
+
+        def digest(value: object) -> DigestV1:
+            return DigestV1(hexdigest=hashlib.sha256(canonical_json_bytes(value)).hexdigest())
+
+        receipts.append(
+            FoldFitReceiptV1(
+                fold_id=fold.fold_id,
+                model_id=predictions.model_id,
+                plan_digest=plan.digest(),
+                training_dataset_digest=training.digest(),
+                train_sample_ids=fold.train_sample_ids,
+                validation_sample_ids=fold.validation_sample_ids,
+                max_training_label_end_ns=max(sample.label_end_ns for sample in training.samples),
+                validation_start_cutoff_ns=fold.validation_start_cutoff_ns,
+                embargo_ns=plan.spec.embargo_ns,
+                prediction_digest=digest(validation_rows),
+                model_artifact_digest=digest(
+                    {"foldId": fold.fold_id, "modelId": predictions.model_id}
+                ),
+                code_digest=digest("q14-campaign-producer:v1"),
+                config_digest=digest(plan.spec.as_mapping()),
+                seed=CAMPAIGN_SEED,
+            )
+        )
+    receipt_digest = DigestV1(
+        hexdigest=hashlib.sha256(
+            canonical_json_bytes([receipt.as_mapping() for receipt in receipts])
+        ).hexdigest()
+    )
+    feature_digest = (
+        predictions.lineage.feature_artifact_digest
+        if predictions.lineage is not None
+        else DigestV1(
+            hexdigest=hashlib.sha256(
+                canonical_json_bytes(
+                    [prediction.as_mapping() for prediction in predictions.predictions]
+                )
+            ).hexdigest()
+        )
+    )
+    return replace(
+        predictions,
+        lineage=PredictionLineageV1(feature_digest, receipt_digest),
+        fold_fit_receipts=tuple(receipts),
     )
 
 
@@ -269,14 +343,14 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
     rng = DeterministicRandom.from_seed(CAMPAIGN_SEED)
 
     # Golden scenario: one dataset, full factory pass.
-    samples = _dataset(rng, dataset_id="q14-golden", count=80)
+    samples, feature_rows = _dataset(rng, dataset_id="q14-golden", count=80)
     plan = build_walk_forward_plan(samples, _walk_spec())
     leakage_spec = _leakage_spec()
 
     leaked = future_leaked_predictions(samples, model_id="leaked-model")
     forged = falsify_lineage(leaked, samples)
     honest = random_rank_predictions(samples, seed=7, model_id="random-baseline")
-    challenger = _informative(samples, model_id="informative-challenger")
+    challenger = _informative(samples, feature_rows, model_id="informative-challenger")
 
     leaked_assessment = assess_leakage(samples, leaked, leakage_spec)
     forged_assessment = assess_leakage(samples, forged, leakage_spec)
@@ -290,8 +364,8 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
     comparison = compare_models(
         samples,
         plan,
-        honest,
-        challenger,
+        _bind_fold_fit_receipts(samples, plan, honest),
+        _bind_fold_fit_receipts(samples, plan, challenger),
         _ledger(),
         _comparison_spec(),
         holdout_grant=grant,
@@ -351,7 +425,7 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
     behavioral_rejections = 0
     honest_accepted = 0
     for index in range(SEEDED_DATASETS):
-        seeded = _dataset(rng, dataset_id=f"q14-battery-{index:02d}", count=40)
+        seeded, _ = _dataset(rng, dataset_id=f"q14-battery-{index:02d}", count=40)
         seeded_leak = future_leaked_predictions(seeded, model_id=f"leak-{index:02d}")
         seeded_forged = falsify_lineage(seeded_leak, seeded)
         seeded_honest = random_rank_predictions(

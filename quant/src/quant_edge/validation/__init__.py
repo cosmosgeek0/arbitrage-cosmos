@@ -89,6 +89,7 @@ from quant_edge.validation.normal import (
     normal_quantile,
 )
 from quant_edge.validation.samples import (
+    FoldFitReceiptV1,
     PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
@@ -136,6 +137,7 @@ __all__ = [
     "DsrReportV1",
     "DsrStatus",
     "FoldComparisonV1",
+    "FoldFitReceiptV1",
     "FoldStatus",
     "FoldV1",
     "HoldoutGrantV1",

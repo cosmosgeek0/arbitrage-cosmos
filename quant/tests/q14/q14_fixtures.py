@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 from quant_edge.canonical import canonical_json_bytes
 from quant_edge.labels.rational import ExactRatioV1, make_ratio
 from quant_edge.lake.contracts import DigestV1, EvidencePosture, QualityState
 from quant_edge.validation.samples import (
+    FoldFitReceiptV1,
     PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
     ValidationSampleV1,
+    subset_by_ids,
 )
+from quant_edge.validation.splits import WalkForwardPlanV1
 
 BASE_NS = 1_772_000_000_000_000_000
 HOUR_NS = 3_600_000_000_000
@@ -161,3 +165,70 @@ def outcome_derived_predictions(
             derived_outcome = not derived_outcome
         scores[sample.sample_id] = positive_score if derived_outcome else negative_score
     return predictions_from_scores(samples, scores, model_id="outcome-derived-control")
+
+
+def bind_fold_fit_receipts(
+    samples: SampleSetV1,
+    plan: WalkForwardPlanV1,
+    predictions: PredictionSetV1,
+) -> PredictionSetV1:
+    """Build deterministic synthetic receipts for the controlled Q14 test producer."""
+
+    receipts: list[FoldFitReceiptV1] = []
+    for fold in plan.folds:
+        training = subset_by_ids(samples, fold.train_sample_ids)
+        validation_rows = [
+            row.as_mapping()
+            for row in predictions.predictions
+            if row.sample_id in set(fold.validation_sample_ids)
+        ]
+
+        def digest(value: object) -> DigestV1:
+            return DigestV1(hexdigest=hashlib.sha256(canonical_json_bytes(value)).hexdigest())
+
+        receipts.append(
+            FoldFitReceiptV1(
+                fold_id=fold.fold_id,
+                model_id=predictions.model_id,
+                plan_digest=plan.digest(),
+                training_dataset_digest=training.digest(),
+                train_sample_ids=fold.train_sample_ids,
+                validation_sample_ids=fold.validation_sample_ids,
+                max_training_label_end_ns=max(sample.label_end_ns for sample in training.samples),
+                validation_start_cutoff_ns=fold.validation_start_cutoff_ns,
+                embargo_ns=plan.spec.embargo_ns,
+                prediction_digest=digest(validation_rows),
+                model_artifact_digest=digest(
+                    {"foldId": fold.fold_id, "modelId": predictions.model_id}
+                ),
+                code_digest=digest("q14-synthetic-producer:v1"),
+                config_digest=digest(
+                    {"foldId": fold.fold_id, "planDigest": plan.digest().hexdigest}
+                ),
+                seed=20260712,
+            )
+        )
+    receipt_digest = DigestV1(
+        hexdigest=hashlib.sha256(
+            canonical_json_bytes([receipt.as_mapping() for receipt in receipts])
+        ).hexdigest()
+    )
+    feature_digest = (
+        predictions.lineage.feature_artifact_digest
+        if predictions.lineage is not None
+        else DigestV1(
+            hexdigest=hashlib.sha256(
+                canonical_json_bytes(
+                    [prediction.as_mapping() for prediction in predictions.predictions]
+                )
+            ).hexdigest()
+        )
+    )
+    return replace(
+        predictions,
+        lineage=PredictionLineageV1(
+            feature_artifact_digest=feature_digest,
+            fit_receipt_digest=receipt_digest,
+        ),
+        fold_fit_receipts=tuple(receipts),
+    )

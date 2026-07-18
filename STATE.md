@@ -92,13 +92,14 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 
 ## Current canonical gate evidence
 
-These are measured `fix/pin-refresh` results for the newly mounted gate denominators; they do not alter the historical candidate rulings below.
+These are measured results for the final merged staging tree; they do not alter the historical candidate rulings below.
 
 | Command | Mounted denominator | Measured result |
 | --- | ---: | --- |
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
-| `npm run test:all` | 3,469 = 3 hostile perimeter + 449 AI-Ops + 3,017 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,011 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
+| `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
+| Product Assurance operation scan | 555 files / 225 discovered | 225/225 covered; 0 uncovered; 802 behavior checks and 4 provenance checks. |
 
 ## Previous source evidence
 
@@ -119,7 +120,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - CI hotfix `6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd` is in Main and candidate ancestry. Hotfix #2 `53c6da81` is `REFERENCE_ONLY`; its useful behavior was independently adapted without admitting its stale branch assumptions.
 - The candidate has exact second-parent merges for egress, A1-A5, observability, operations, replay, runbooks, A-FORMAL, and S2. Their sealed donor tips are candidate ancestors.
 - The Product Assurance historical merge-cut proof remains 193/193 blobs. Current source records seven explicit post-integration replacements, leaving 186 donor-identical HEAD blobs.
-- Product Assurance now scans 555 files and exactly 205 discovered operations with zero uncovered sites.
+- Product Assurance now scans 555 files and exactly 225 discovered operations with zero uncovered sites.
 - The five protected owner-directive root files are absent from this clean candidate checkout. Their exact committed verifier bundle remains verification-only and cannot impersonate live owner input.
 - The retired Role 3 C2 receipt is historical `REFERENCE_ONLY` evidence for C2R. The campaign preserves its exact untracked bytes in a tracked evidence-only descendant; it does not reclassify that receipt as current-candidate verification.
 

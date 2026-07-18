@@ -8,7 +8,11 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { MarketEngine, type MarketLiquidationProjectionPort } from './engine/marketData.js';
+import {
+  MarketEngine,
+  type MarketLiquidationProjectionPort,
+} from './engine/marketData.js';
+import { projectMarketApiRow } from './engine/marketApiProjection.js';
 import { Ledger } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
@@ -1505,30 +1509,6 @@ app.post('/api/fills/import', (_req, res) => {
   sendNotConfigured(res, 'SIGNED_FILL_IMPORT');
 });
 
-function usableBook(b: BookTicker | undefined): BookTicker | null {
-  if (!b || !(b.bidPrice > 0) || !(b.askPrice > 0) || b.askPrice < b.bidPrice) return null;
-  return b;
-}
-
-function spreadPct(b: BookTicker | null): number | null {
-  if (!b) return null;
-  const mid = (b.bidPrice + b.askPrice) / 2;
-  return mid > 0 ? ((b.askPrice - b.bidPrice) / mid) * 100 : null;
-}
-
-function topQuoteUsd(b: BookTicker | null): number | null {
-  if (!b) return null;
-  const bidQuote = b.bidPrice * b.bidQty;
-  const askQuote = b.askPrice * b.askQty;
-  const usable = Math.min(bidQuote, askQuote);
-  return Number.isFinite(usable) && usable > 0 ? usable : null;
-}
-
-function gapPct(a: number | null, b: number | null, den: number | null): number | null {
-  if (a === null || b === null || den === null || den <= 0) return null;
-  return ((a - b) / den) * 100;
-}
-
 // Full market list for the Markets page: all exact spot+perp pairs plus
 // spot-only Binance USDT symbols. The account WS payload stays light while
 // this endpoint carries screener-grade market facts.
@@ -1881,57 +1861,13 @@ app.get('/api/markets', (_req, res) => {
 
     const rows = engine
       .allRows()
-      .map((r) => {
-        const spotBook = usableBook(spotBooks.get(r.symbol));
-        const perpBook = r.hasPerp ? usableBook(perpBooks.get(r.symbol)) : null;
-        const perpTicker = r.hasPerp ? perp24h.get(r.symbol) : undefined;
-        const perpVolume24h = perpTicker?.quoteVolume ?? null;
-        const executableBasisLongSpotPct = gapPct(perpBook?.bidPrice ?? null, spotBook?.askPrice ?? null, spotBook?.askPrice ?? null);
-        const executableBasisShortSpotPct = gapPct(spotBook?.bidPrice ?? null, perpBook?.askPrice ?? null, perpBook?.askPrice ?? null);
-        const executableBasisBestPct =
-          executableBasisLongSpotPct === null
-            ? executableBasisShortSpotPct
-            : executableBasisShortSpotPct === null
-              ? executableBasisLongSpotPct
-              : Math.max(executableBasisLongSpotPct, executableBasisShortSpotPct);
-        const executableBasisSide =
-          executableBasisBestPct === null
-            ? null
-            : executableBasisBestPct === executableBasisLongSpotPct
-              ? ('LONG_SPOT_SHORT_PERP' as const)
-              : ('SHORT_SPOT_LONG_PERP' as const);
-        return {
-          ...r,
-          status: 'idle' as const,
-          spark: engine.sparkOf(r.symbol, 36),
-          spotBid: spotBook?.bidPrice ?? null,
-          spotAsk: spotBook?.askPrice ?? null,
-          spotBidQty: spotBook?.bidQty ?? null,
-          spotAskQty: spotBook?.askQty ?? null,
-          spotSpreadPct: spreadPct(spotBook),
-          spotTopQuoteUsd: topQuoteUsd(spotBook),
-          perpBid: perpBook?.bidPrice ?? null,
-          perpAsk: perpBook?.askPrice ?? null,
-          perpBidQty: perpBook?.bidQty ?? null,
-          perpAskQty: perpBook?.askQty ?? null,
-          perpSpreadPct: spreadPct(perpBook),
-          perpTopQuoteUsd: topQuoteUsd(perpBook),
-          perpLast: perpTicker?.lastPrice ?? null,
-          perpChange24hPct: perpTicker?.priceChangePct ?? null,
-          perpVolume24h,
-          perpHigh24h: perpTicker?.highPrice ?? null,
-          perpLow24h: perpTicker?.lowPrice ?? null,
-          oiToPerpVolume24h:
-            r.openInterestUsd !== null && r.openInterestUsd !== undefined && perpVolume24h !== null && perpVolume24h > 0
-              ? r.openInterestUsd / perpVolume24h
-              : null,
-          executableBasisLongSpotPct,
-          executableBasisShortSpotPct,
-          executableBasisBestPct,
-          executableBasisSide,
-          fundingAnnualPct: r.fundingRate === null ? null : r.fundingRate * 3 * 365 * 100,
-        };
-      })
+      .map((row) => projectMarketApiRow({
+        row,
+        spotBook: spotBooks.get(row.symbol),
+        perpBook: perpBooks.get(row.symbol),
+        perpTicker: perp24h.get(row.symbol),
+        spark: engine.sparkOf(row.symbol, 36),
+      }))
       .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
     res.json({
       updatedAt: Date.now(),

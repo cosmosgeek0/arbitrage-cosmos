@@ -11,6 +11,7 @@ import { UserStream } from '../src/binance/userStream.ts';
 import { CORE_OPERATION_POLICIES } from '../src/productAssurance/catalog/core.ts';
 import { BookStreamHub } from '../src/services/bookStream.ts';
 import { MarketEngine } from '../src/engine/marketData.ts';
+import { projectMarketApiRow } from '../src/engine/marketApiProjection.ts';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -704,4 +705,370 @@ test('MarketEngine normalizes force-order snapshots once and both liquidation vi
   assert.equal(row.liquidations15mUsd, 225);
   assert.equal(row.longLiquidations15mUsd, 225);
   assert.equal(row.shortLiquidations15mUsd, null);
+});
+
+function marketUniverse(symbols = ['BTCUSDT']) {
+  return {
+    pairs: symbols.map((symbol) => ({ symbol, base: symbol.slice(0, -4) })),
+    filters: new Map(symbols.map((symbol) => [symbol, {
+      symbol, base: symbol.slice(0, -4), quote: 'USDT', status: 'TRADING',
+      stepSize: 0.001, minQty: 0.001, tickSize: 0.01, minNotional: 5,
+    }])),
+  };
+}
+
+async function openInterestHarness({ ttlMs = 1_000, symbols = ['BTCUSDT'] } = {}) {
+  const clock = {
+    value: 1_000_000,
+    nowMs() { return this.value; },
+  };
+  let fetcher = async () => {
+    throw new Error('OPEN_INTEREST_TEST_SAMPLE_NOT_CONFIGURED');
+  };
+  const engine = new MarketEngine(
+    { logEvent() {} },
+    async () => marketUniverse(symbols),
+    undefined,
+    {
+      publicSourceStartupEgressAdmitted: true,
+      clock,
+      fetchOpenInterest: (symbol) => fetcher(symbol),
+      openInterestTtlMs: ttlMs,
+    },
+  );
+  await engine.init();
+  // Exercise the owner synchronously without constructing a socket or timer.
+  engine.running = true;
+  engine.generation = 1;
+  const mark = (price = 100, symbol = symbols[0]) => engine.onMarkPrices([{
+    E: clock.value,
+    s: symbol,
+    p: String(price),
+    i: String(price),
+    r: '0.0001',
+    T: clock.value + 60_000,
+  }], 1);
+  const sample = async (openInterest, time = clock.value, size = 1) => {
+    fetcher = async (symbol) => ({ symbol, openInterest, time });
+    await engine.refreshOpenInterestSlice(size, 1);
+  };
+  const row = (symbol = symbols[0]) => engine.rows().find((candidate) => candidate.symbol === symbol);
+  return {
+    clock,
+    engine,
+    mark,
+    row,
+    sample,
+    setFetcher(next) { fetcher = next; },
+  };
+}
+
+function projectMarketRow(row, perpVolume24h = 10_000) {
+  return projectMarketApiRow({
+    row: { ...row, hasSpot: true, hasPerp: true },
+    perpTicker: {
+      symbol: row.symbol,
+      lastPrice: row.perpMark ?? 1,
+      priceChangePct: 0,
+      highPrice: row.perpMark ?? 1,
+      lowPrice: row.perpMark ?? 1,
+      volume: 1,
+      quoteVolume: perpVolume24h,
+      count: 1,
+    },
+    spark: [],
+  });
+}
+
+function assertOpenInterestUnavailable(row) {
+  assert.ok(row);
+  assert.deepEqual({
+    openInterest: row.openInterest,
+    openInterestUsd: row.openInterestUsd,
+    openInterestChangePct: row.openInterestChangePct,
+    openInterestUpdatedAt: row.openInterestUpdatedAt,
+  }, {
+    openInterest: null,
+    openInterestUsd: null,
+    openInterestChangePct: null,
+    openInterestUpdatedAt: null,
+  });
+  assert.equal(projectMarketRow(row).oiToPerpVolume24h, null);
+}
+
+test('MarketEngine bounds OI TTL and separates source observation from local freshness', async () => {
+  assert.throws(() => new MarketEngine(
+    { logEvent() {} }, async () => marketUniverse(), undefined,
+    { publicSourceStartupEgressAdmitted: true, openInterestTtlMs: 999 },
+  ), /OPEN_INTEREST_TTL_OUT_OF_BOUNDS:999/);
+  assert.throws(() => new MarketEngine(
+    { logEvent() {} }, async () => marketUniverse(), undefined,
+    { publicSourceStartupEgressAdmitted: true, openInterestTtlMs: 300_001 },
+  ), /OPEN_INTEREST_TTL_OUT_OF_BOUNDS:300001/);
+
+  const h = await openInterestHarness();
+  h.mark();
+  await h.sample(10, h.clock.value - 100);
+  let row = h.row();
+  assert.equal(row.openInterest, 10);
+  assert.equal(row.openInterestUsd, 1_000);
+  assert.equal(row.openInterestChangePct, null, 'the first observation establishes a baseline only');
+  assert.equal(row.openInterestUpdatedAt, 999_900, 'public time remains the exchange observation, not local receipt');
+  assert.equal(projectMarketRow(row).oiToPerpVolume24h, 0.1);
+
+  h.clock.value += 100;
+  await h.sample(11);
+  row = h.row();
+  assert.equal(row.openInterestChangePct, 10);
+
+  h.clock.value += 1_001;
+  assertOpenInterestUnavailable(h.row());
+  await h.sample(12);
+  assert.equal(h.row().openInterestChangePct, null, 'the first post-TTL observation cannot reuse the expired baseline');
+  h.clock.value += 100;
+  await h.sample(13.2);
+  assert.ok(Math.abs(h.row().openInterestChangePct - 10) < 1e-12);
+
+  h.clock.value += 100;
+  await h.sample(14, h.clock.value + 1);
+  assertOpenInterestUnavailable(h.row());
+  h.clock.value += 100;
+  await h.sample(14);
+  assert.equal(h.row().openInterestChangePct, null, 'a rejected future sample cannot become a recovery baseline');
+
+  await h.sample(15, h.clock.value);
+  assertOpenInterestUnavailable(h.row(), 'same-time conflicting source truth fails closed');
+  h.clock.value += 100;
+  await h.sample(15);
+  assert.equal(h.row().openInterestChangePct, null);
+  h.clock.value += 100;
+  await h.sample(16, h.clock.value - 101);
+  assertOpenInterestUnavailable(h.row(), 'nonmonotonic source truth fails closed');
+  h.engine.stop();
+});
+
+test('MarketEngine nulls every OI field when mark truth goes stale and requires two recovered observations', async () => {
+  const h = await openInterestHarness({ ttlMs: 60_000 });
+  h.mark(100);
+  await h.sample(10);
+  h.clock.value += 100;
+  await h.sample(11);
+  assert.equal(h.row().openInterestChangePct, 10);
+
+  h.clock.value += 30_001;
+  assertOpenInterestUnavailable(h.row());
+  await h.sample(12);
+  assertOpenInterestUnavailable(h.row());
+
+  h.clock.value += 100;
+  h.mark(101);
+  await h.sample(13);
+  assert.equal(h.row().openInterestChangePct, null);
+  h.clock.value += 100;
+  await h.sample(14);
+  assert.ok(h.row().openInterestChangePct > 0, 'the second fresh priced observation may compute a change');
+  h.engine.stop();
+});
+
+test('MarketEngine fails OI closed on outage, isolation, stop, and late promises', async () => {
+  const h = await openInterestHarness({ ttlMs: 60_000 });
+  h.mark();
+  await h.sample(10);
+  h.clock.value += 100;
+  await h.sample(11);
+
+  h.setFetcher(async () => { throw new Error('PUBLIC_SOURCE_DOWN'); });
+  await assert.rejects(h.engine.refreshOpenInterestSlice(1, 1), /OPEN_INTEREST_SOURCE_UNAVAILABLE:1/);
+  assertOpenInterestUnavailable(h.row());
+
+  h.clock.value += 100;
+  await h.sample(12);
+  assert.equal(h.row().openInterestChangePct, null);
+  h.clock.value += 100;
+  await h.sample(13);
+  assert.ok(h.row().openInterestChangePct > 0);
+
+  let resolveLate;
+  h.setFetcher(() => new Promise((resolve) => { resolveLate = resolve; }));
+  h.clock.value += 100;
+  const late = h.engine.refreshOpenInterestSlice(1, 1);
+  let streamStops = 0;
+  let streamStarts = 0;
+  const fakeStream = {
+    stop() { streamStops += 1; },
+    start() { streamStarts += 1; },
+  };
+  h.engine.streams = new Map([
+    ['futures-markprice', fakeStream],
+    ['futures-liquidations', fakeStream],
+  ]);
+  h.engine.isolatePublicSource('public-usdm-source');
+  assert.equal(streamStops, 2);
+  assertOpenInterestUnavailable(h.row());
+
+  h.engine.restartPublicSource('public-usdm-source');
+  assert.equal(streamStarts, 2);
+  h.clock.value += 100;
+  h.mark();
+  await h.sample(14);
+  assert.equal(h.row().openInterestChangePct, null, 'a never-settling isolated fetch cannot block recovery');
+  h.clock.value += 100;
+  await h.sample(15);
+  assert.ok(h.row().openInterestChangePct > 0);
+
+  resolveLate({ symbol: 'BTCUSDT', openInterest: 99, time: h.clock.value - 200 });
+  await late;
+  assert.equal(h.row().openInterest, 15, 'late isolated completion cannot publish or clear newer recovery truth');
+  assert.ok(h.row().openInterestChangePct > 0);
+
+  h.engine.stop();
+  assertOpenInterestUnavailable(h.row());
+});
+
+test('MarketEngine snapshots hostile OI accessors once and rechecks lifecycle before mutation', async () => {
+  const h = await openInterestHarness({ ttlMs: 60_000 });
+  h.mark();
+  let symbolReads = 0;
+  let openInterestReads = 0;
+  let timeReads = 0;
+  h.setFetcher(async () => new Proxy({
+    symbol: 'BTCUSDT',
+    openInterest: 10,
+    time: h.clock.value,
+  }, {
+    get(target, property, receiver) {
+      if (property === 'symbol') symbolReads += 1;
+      if (property === 'openInterest') {
+        openInterestReads += 1;
+        return openInterestReads === 1 ? 10 : Number.POSITIVE_INFINITY;
+      }
+      if (property === 'time') {
+        timeReads += 1;
+        return timeReads === 1 ? h.clock.value : h.clock.value + 100_000;
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }));
+  await h.engine.refreshOpenInterestSlice(1, 1);
+  assert.deepEqual({ symbolReads, openInterestReads, timeReads }, {
+    symbolReads: 1,
+    openInterestReads: 1,
+    timeReads: 1,
+  });
+  assert.equal(h.row().openInterest, 10);
+  assert.equal(h.row().openInterestUsd, 1_000);
+  assert.equal(h.row().openInterestUpdatedAt, h.clock.value);
+
+  h.clock.value += 100;
+  h.setFetcher(async () => ({
+    symbol: 'BTCUSDT',
+    get openInterest() { throw new Error('HOSTILE_OPEN_INTEREST_ACCESSOR'); },
+    time: h.clock.value,
+  }));
+  await assert.rejects(h.engine.refreshOpenInterestSlice(1, 1), /OPEN_INTEREST_SOURCE_UNAVAILABLE:1/);
+  assertOpenInterestUnavailable(h.row());
+
+  let streamStops = 0;
+  let streamStarts = 0;
+  const fakeStream = {
+    stop() { streamStops += 1; },
+    start() { streamStarts += 1; },
+  };
+  h.engine.streams = new Map([
+    ['futures-markprice', fakeStream],
+    ['futures-liquidations', fakeStream],
+  ]);
+  h.clock.value += 100;
+  h.setFetcher(async () => new Proxy({
+    symbol: 'BTCUSDT',
+    openInterest: 99,
+    time: h.clock.value,
+  }, {
+    get(target, property, receiver) {
+      if (property === 'symbol') {
+        h.engine.isolatePublicSource('public-usdm-source');
+        h.engine.restartPublicSource('public-usdm-source');
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }));
+  await h.engine.refreshOpenInterestSlice(1, 1);
+  assert.equal(streamStops, 2);
+  assert.equal(streamStarts, 2);
+  assertOpenInterestUnavailable(h.row());
+
+  h.clock.value += 100;
+  h.mark();
+  await h.sample(11);
+  assert.equal(h.row().openInterestChangePct, null);
+  h.clock.value += 100;
+  await h.sample(12);
+  assert.ok(h.row().openInterestChangePct > 0);
+  h.engine.stop();
+});
+
+test('MarketEngine clears source-wide OI on one-symbol outage and requeues invalidated slices', async () => {
+  const symbols = ['AAAUSDT', 'BBBUSDT', 'CCCUSDT'];
+  const h = await openInterestHarness({ ttlMs: 60_000, symbols });
+  for (const [index, symbol] of symbols.entries()) h.mark(100 + index * 50, symbol);
+  h.setFetcher(async (symbol) => ({
+    symbol,
+    openInterest: symbol === 'AAAUSDT' ? 10 : symbol === 'BBBUSDT' ? 20 : 30,
+    time: h.clock.value,
+  }));
+  await h.engine.refreshOpenInterestSlice(3, 1);
+  assert.deepEqual(symbols.map((symbol) => h.row(symbol).openInterest), [10, 20, 30]);
+
+  h.clock.value += 100;
+  h.setFetcher(async () => { throw new Error('ONE_SYMBOL_SLICE_DOWN'); });
+  await assert.rejects(h.engine.refreshOpenInterestSlice(1, 1), /OPEN_INTEREST_SOURCE_UNAVAILABLE:1/);
+  for (const symbol of symbols) assertOpenInterestUnavailable(h.row(symbol));
+
+  h.clock.value += 100;
+  h.setFetcher(async (symbol) => ({ symbol, openInterest: 40, time: h.clock.value }));
+  await h.engine.refreshOpenInterestSlice(3, 1);
+  for (const symbol of symbols) assert.equal(h.row(symbol).openInterestChangePct, null);
+
+  const advancedSymbols = [];
+  h.clock.value += 100;
+  h.setFetcher(async (symbol) => {
+    advancedSymbols.push(symbol);
+    return { symbol, openInterest: 40, time: h.clock.value };
+  });
+  await h.engine.refreshOpenInterestSlice(1, 1);
+  assert.deepEqual(advancedSymbols, ['AAAUSDT'], 'a completed slice advances the cursor away from zero');
+
+  let resolveInvalidated;
+  h.clock.value += 100;
+  let invalidatedSymbol = null;
+  h.setFetcher((symbol) => {
+    invalidatedSymbol = symbol;
+    return new Promise((resolve) => { resolveInvalidated = resolve; });
+  });
+  const invalidated = h.engine.refreshOpenInterestSlice(1, 1);
+  assert.equal(invalidatedSymbol, 'BBBUSDT', 'the never-settling slice starts from a nonzero cursor');
+  const fakeStream = { stop() {}, start() {} };
+  h.engine.streams = new Map([
+    ['futures-markprice', fakeStream],
+    ['futures-liquidations', fakeStream],
+  ]);
+  h.engine.isolatePublicSource('public-usdm-source');
+  h.engine.restartPublicSource('public-usdm-source');
+
+  const recoveredSymbols = [];
+  h.clock.value += 100;
+  for (const [index, symbol] of symbols.entries()) h.mark(100 + index * 50, symbol);
+  h.setFetcher(async (symbol) => {
+    recoveredSymbols.push(symbol);
+    return { symbol, openInterest: 41, time: h.clock.value };
+  });
+  await h.engine.refreshOpenInterestSlice(1, 1);
+  assert.deepEqual(recoveredSymbols, ['BBBUSDT'], 'restart prioritizes the invalidated nonzero slice cursor');
+  assert.equal(h.row('BBBUSDT').openInterest, 41);
+  assert.equal(h.row('BBBUSDT').openInterestChangePct, null);
+
+  resolveInvalidated({ symbol: 'BBBUSDT', openInterest: 999, time: h.clock.value - 100 });
+  await invalidated;
+  assert.equal(h.row('BBBUSDT').openInterest, 41, 'late invalidated slice cannot replace recovery truth');
+  h.engine.stop();
 });

@@ -1,0 +1,288 @@
+"""Bounded, prior-only multi-horizon activity-transition evidence.
+
+The family consumes public aggregate observations, not private exchange state. Every
+baseline is computed from observations strictly before the assessed print. Missing
+activity, spread, depth or peer evidence stays ``UNKNOWN``; no field is silently
+replaced with zero. A wake needs more than one consecutive qualifying print, which
+prevents a single burst from being promoted into persistent activity.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Final
+
+from quant_edge.errors import ContractValueError
+from quant_edge.labels.rational import ExactRatioV1, make_ratio
+from quant_edge.lake.contracts import require_contract_id, require_strict_int
+
+MAX_ACTIVITY_COUNT: Final = 10**12
+MAX_ACTIVITY_HORIZON: Final = 4_096
+
+
+class ActivityState(StrEnum):
+    WARMUP = "WARMUP"
+    UNKNOWN = "UNKNOWN"
+    QUIET = "QUIET"
+    ONE_PRINT_REJECTED = "ONE_PRINT_REJECTED"
+    WAKE = "WAKE"
+    PERSISTENT = "PERSISTENT"
+    FADING = "FADING"
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityObservationV1:
+    observation_id: str
+    event_time_ns: int
+    ordinal: int
+    trades: int | None
+    quote_updates: int | None
+    spread_ticks: int | None
+    bid_depth: int | None
+    ask_depth: int | None
+    peer_activity: int | None
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.observation_id, field="observation_id")
+        require_strict_int(self.event_time_ns, field="event_time_ns", minimum=0)
+        require_strict_int(self.ordinal, field="ordinal", minimum=0)
+        for field, value in (
+            ("trades", self.trades),
+            ("quote_updates", self.quote_updates),
+            ("spread_ticks", self.spread_ticks),
+            ("bid_depth", self.bid_depth),
+            ("ask_depth", self.ask_depth),
+            ("peer_activity", self.peer_activity),
+        ):
+            if value is not None:
+                require_strict_int(value, field=field, minimum=0, maximum=MAX_ACTIVITY_COUNT)
+
+    @property
+    def activity(self) -> int | None:
+        if self.trades is None or self.quote_updates is None:
+            return None
+        return self.trades + self.quote_updates
+
+    @property
+    def depth(self) -> int | None:
+        if self.bid_depth is None or self.ask_depth is None:
+            return None
+        return self.bid_depth + self.ask_depth
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityHorizonV1:
+    horizon_id: str
+    lookback: int
+    surprise_numerator: int
+    surprise_denominator: int
+    persistence_prints: int
+    controlled_spread_ticks: int
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.horizon_id, field="horizon_id")
+        require_strict_int(self.lookback, field="lookback", minimum=2, maximum=MAX_ACTIVITY_HORIZON)
+        require_strict_int(self.surprise_numerator, field="surprise_numerator", minimum=1)
+        require_strict_int(self.surprise_denominator, field="surprise_denominator", minimum=1)
+        if self.surprise_numerator <= self.surprise_denominator:
+            raise ContractValueError("surprise threshold must be greater than one")
+        require_strict_int(
+            self.persistence_prints,
+            field="persistence_prints",
+            minimum=2,
+            maximum=self.lookback,
+        )
+        require_strict_int(
+            self.controlled_spread_ticks,
+            field="controlled_spread_ticks",
+            minimum=0,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityTransitionV1:
+    horizon_id: str
+    observation_id: str
+    ordinal: int
+    state: ActivityState
+    surprise: ExactRatioV1 | None
+    qualifying_prints: int
+    controlled_spread: bool | None
+    compression: bool | None
+    liquidity_arrival: ExactRatioV1 | None
+    peer_abnormality: ExactRatioV1 | None
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.horizon_id, field="horizon_id")
+        require_contract_id(self.observation_id, field="observation_id")
+        require_strict_int(self.ordinal, field="ordinal", minimum=0)
+        if not isinstance(self.state, ActivityState):
+            raise ContractValueError("state must be ActivityState")
+        require_strict_int(self.qualifying_prints, field="qualifying_prints", minimum=0)
+        for field, ratio_value in (
+            ("surprise", self.surprise),
+            ("liquidity_arrival", self.liquidity_arrival),
+            ("peer_abnormality", self.peer_abnormality),
+        ):
+            if ratio_value is not None and not isinstance(ratio_value, ExactRatioV1):
+                raise ContractValueError(f"{field} must be ExactRatioV1 or None")
+        for field, flag_value in (
+            ("controlled_spread", self.controlled_spread),
+            ("compression", self.compression),
+        ):
+            if flag_value is not None and not isinstance(flag_value, bool):
+                raise ContractValueError(f"{field} must be bool or None")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "compression": self.compression,
+            "controlledSpread": self.controlled_spread,
+            "horizonId": self.horizon_id,
+            "liquidityArrival": (
+                None if self.liquidity_arrival is None else self.liquidity_arrival.as_mapping()
+            ),
+            "observationId": self.observation_id,
+            "ordinal": self.ordinal,
+            "peerAbnormality": (
+                None if self.peer_abnormality is None else self.peer_abnormality.as_mapping()
+            ),
+            "qualifyingPrints": self.qualifying_prints,
+            "state": self.state.value,
+            "surprise": None if self.surprise is None else self.surprise.as_mapping(),
+        }
+
+
+def _mean_ratio(value: int, baseline: tuple[int, ...]) -> ExactRatioV1:
+    return make_ratio(value * len(baseline), sum(baseline))
+
+
+def _qualifies(
+    observation: ActivityObservationV1,
+    prior: tuple[ActivityObservationV1, ...],
+    horizon: ActivityHorizonV1,
+) -> tuple[bool | None, ExactRatioV1 | None, bool | None]:
+    activity = observation.activity
+    baseline = tuple(item.activity for item in prior)
+    if activity is None or any(item is None for item in baseline):
+        return None, None, None
+    observed_values: list[int] = []
+    for item in baseline:
+        if item is None:
+            raise AssertionError("missing baselines return above")
+        observed_values.append(item)
+    observed = tuple(observed_values)
+    if sum(observed) == 0:
+        return None, None, None
+    surprise = _mean_ratio(activity, observed)
+    controlled = (
+        None
+        if observation.spread_ticks is None
+        else observation.spread_ticks <= horizon.controlled_spread_ticks
+    )
+    above = (
+        surprise.numerator * horizon.surprise_denominator
+        >= surprise.denominator * horizon.surprise_numerator
+    )
+    return (None if controlled is None else above and controlled), surprise, controlled
+
+
+def _liquidity(
+    observation: ActivityObservationV1,
+    prior: ActivityObservationV1,
+) -> tuple[bool | None, ExactRatioV1 | None]:
+    depth = observation.depth
+    previous_depth = prior.depth
+    if (
+        depth is None
+        or previous_depth is None
+        or previous_depth == 0
+        or observation.spread_ticks is None
+        or prior.spread_ticks is None
+    ):
+        return None, None
+    arrival = max(0, depth - previous_depth)
+    compression = depth > previous_depth and observation.spread_ticks < prior.spread_ticks
+    return compression, make_ratio(arrival, previous_depth)
+
+
+def activity_transitions(
+    observations: tuple[ActivityObservationV1, ...],
+    horizons: tuple[ActivityHorizonV1, ...],
+) -> tuple[ActivityTransitionV1, ...]:
+    """Return ordered horizon-major transitions using only each row's prior prefix."""
+
+    if not isinstance(observations, tuple) or not observations:
+        raise ContractValueError("observations must be a non-empty tuple")
+    if not isinstance(horizons, tuple) or not horizons:
+        raise ContractValueError("horizons must be a non-empty tuple")
+    if tuple(sorted(item.horizon_id for item in horizons)) != tuple(
+        item.horizon_id for item in horizons
+    ) or len({item.horizon_id for item in horizons}) != len(horizons):
+        raise ContractValueError("horizons must be sorted and unique by horizon_id")
+    previous_ordinal = -1
+    previous_time = -1
+    for observation in observations:
+        if not isinstance(observation, ActivityObservationV1):
+            raise ContractValueError("observations must contain ActivityObservationV1")
+        if observation.ordinal <= previous_ordinal or observation.event_time_ns <= previous_time:
+            raise ContractValueError("observations must be strictly chronological")
+        previous_ordinal = observation.ordinal
+        previous_time = observation.event_time_ns
+
+    output: list[ActivityTransitionV1] = []
+    for horizon in horizons:
+        if not isinstance(horizon, ActivityHorizonV1):
+            raise ContractValueError("horizons must contain ActivityHorizonV1")
+        active = False
+        qualifying_prints = 0
+        for index, observation in enumerate(observations):
+            if index < horizon.lookback:
+                state = ActivityState.WARMUP
+                surprise = None
+                controlled = None
+            else:
+                prior = observations[index - horizon.lookback : index]
+                qualifies, surprise, controlled = _qualifies(observation, prior, horizon)
+                if qualifies is None:
+                    state = ActivityState.UNKNOWN
+                    qualifying_prints = 0
+                    active = False
+                elif qualifies:
+                    qualifying_prints += 1
+                    if qualifying_prints < horizon.persistence_prints:
+                        state = ActivityState.ONE_PRINT_REJECTED
+                    elif not active:
+                        state = ActivityState.WAKE
+                        active = True
+                    else:
+                        state = ActivityState.PERSISTENT
+                else:
+                    qualifying_prints = 0
+                    state = ActivityState.FADING if active else ActivityState.QUIET
+                    active = False
+            compression, arrival = (
+                (None, None) if index == 0 else _liquidity(observation, observations[index - 1])
+            )
+            peer = (
+                None
+                if observation.activity is None
+                or observation.peer_activity is None
+                or observation.peer_activity == 0
+                else make_ratio(observation.activity, observation.peer_activity)
+            )
+            output.append(
+                ActivityTransitionV1(
+                    horizon_id=horizon.horizon_id,
+                    observation_id=observation.observation_id,
+                    ordinal=observation.ordinal,
+                    state=state,
+                    surprise=surprise,
+                    qualifying_prints=qualifying_prints,
+                    controlled_spread=controlled,
+                    compression=compression,
+                    liquidity_arrival=arrival,
+                    peer_abnormality=peer,
+                )
+            )
+    return tuple(output)

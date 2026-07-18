@@ -33,6 +33,12 @@ from quant_edge.micro import (
     trade_intensity_feature,
     vwap_spread_at_size_feature,
 )
+from quant_edge.micro.activity import (
+    ActivityHorizonV1,
+    ActivityObservationV1,
+    ActivityState,
+    activity_transitions,
+)
 
 ALL_FEATURE_FACTORIES = (
     absorption_ratio_feature,
@@ -52,6 +58,135 @@ ALL_FEATURE_FACTORIES = (
     trade_intensity_feature,
     vwap_spread_at_size_feature,
 )
+
+
+def _activity_observation(
+    ordinal: int,
+    activity: int | None,
+    *,
+    spread: int | None = 2,
+    depth: int | None = 100,
+    peer: int | None = 10,
+) -> ActivityObservationV1:
+    return ActivityObservationV1(
+        observation_id=f"activity-{ordinal}",
+        event_time_ns=1_772_000_000_000_000_000 + ordinal,
+        ordinal=ordinal,
+        trades=None if activity is None else activity // 2,
+        quote_updates=None if activity is None else activity - activity // 2,
+        spread_ticks=spread,
+        bid_depth=None if depth is None else depth // 2,
+        ask_depth=None if depth is None else depth - depth // 2,
+        peer_activity=peer,
+    )
+
+
+def _activity_horizon(horizon_id: str = "fast") -> ActivityHorizonV1:
+    return ActivityHorizonV1(
+        horizon_id=horizon_id,
+        lookback=3,
+        surprise_numerator=2,
+        surprise_denominator=1,
+        persistence_prints=2,
+        controlled_spread_ticks=2,
+    )
+
+
+class TestActivityTransitionFamily:
+    def test_contracts_reject_bad_thresholds_and_order(self) -> None:
+        with pytest.raises(ContractValueError, match="greater than one"):
+            ActivityHorizonV1("fast", 3, 1, 1, 2, 2)
+        with pytest.raises(ContractValueError, match="strictly chronological"):
+            activity_transitions(
+                (_activity_observation(1, 10), _activity_observation(1, 10)),
+                (_activity_horizon(),),
+            )
+        with pytest.raises(ContractValueError, match="sorted and unique"):
+            activity_transitions(
+                (_activity_observation(0, 10),),
+                (_activity_horizon("slow"), _activity_horizon("fast")),
+            )
+
+    def test_one_print_wake_persistence_and_fade_are_distinct(self) -> None:
+        observations = tuple(
+            _activity_observation(index, activity, spread=spread, depth=depth)
+            for index, (activity, spread, depth) in enumerate(
+                (
+                    (10, 3, 100),
+                    (10, 3, 100),
+                    (10, 3, 100),
+                    (50, 2, 130),
+                    (100, 2, 150),
+                    (200, 2, 170),
+                    (10, 2, 170),
+                )
+            )
+        )
+
+        states = tuple(
+            transition.state
+            for transition in activity_transitions(observations, (_activity_horizon(),))
+        )
+
+        assert states == (
+            ActivityState.WARMUP,
+            ActivityState.WARMUP,
+            ActivityState.WARMUP,
+            ActivityState.ONE_PRINT_REJECTED,
+            ActivityState.WAKE,
+            ActivityState.PERSISTENT,
+            ActivityState.FADING,
+        )
+
+    def test_spread_control_compression_liquidity_and_peer_abnormality(self) -> None:
+        observations = tuple(
+            _activity_observation(index, activity, spread=spread, depth=depth, peer=peer)
+            for index, (activity, spread, depth, peer) in enumerate(
+                ((10, 4, 100, 10), (10, 4, 100, 10), (10, 4, 100, 10), (50, 2, 150, 10))
+            )
+        )
+
+        result = activity_transitions(observations, (_activity_horizon(),))[-1]
+
+        assert result.controlled_spread is True
+        assert result.compression is True
+        assert result.liquidity_arrival is not None
+        assert result.peer_abnormality is not None
+        assert (result.liquidity_arrival.numerator, result.liquidity_arrival.denominator) == (1, 2)
+        assert (result.peer_abnormality.numerator, result.peer_abnormality.denominator) == (5, 1)
+
+    def test_missing_and_zero_baseline_truth_stays_unknown(self) -> None:
+        observations = (
+            *(_activity_observation(index, 0) for index in range(3)),
+            _activity_observation(3, 50),
+            _activity_observation(4, None, spread=None, depth=None, peer=None),
+        )
+
+        results = activity_transitions(observations, (_activity_horizon(),))
+
+        assert results[3].state is ActivityState.UNKNOWN
+        assert results[3].surprise is None
+        assert results[4].state is ActivityState.UNKNOWN
+        assert results[4].controlled_spread is None
+        assert results[4].liquidity_arrival is None
+        assert results[4].peer_abnormality is None
+
+    def test_multi_horizon_output_is_prior_only_and_deterministic(self) -> None:
+        prefix = tuple(_activity_observation(index, 10) for index in range(4))
+        first = (*prefix, _activity_observation(4, 50))
+        second = (*prefix, _activity_observation(4, 5_000))
+        horizons = (
+            _activity_horizon("fast"),
+            ActivityHorizonV1("slow", 4, 2, 1, 2, 2),
+        )
+
+        left = activity_transitions(first, horizons)
+        right = activity_transitions(first, horizons)
+        changed_future = activity_transitions(second, horizons)
+
+        assert left == right
+        assert left[:4] == changed_future[:4]
+        assert left[5:9] == changed_future[5:9]
 
 
 def _record(

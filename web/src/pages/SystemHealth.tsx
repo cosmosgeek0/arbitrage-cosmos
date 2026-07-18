@@ -8,6 +8,7 @@ import { ProductSurfaceAdapter } from '../features/productControlRoom/components
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
+import { ComponentOperationalHealthTable } from './ComponentOperationalHealthTable';
 import './Health.css';
 
 type HealthTone = 'healthy' | 'degraded' | 'broken';
@@ -92,6 +93,8 @@ export function SystemHealth() {
 
         {snapshot ? (
           <>
+
+            <ComponentOperationalHealthTable components={snapshot.components} />
 
             <div className="healthx-alert">
               <ShieldCheck size={14} />

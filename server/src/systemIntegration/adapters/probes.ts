@@ -134,6 +134,10 @@ export interface StructuralComponentProbeReading {
   readonly lastReceiveAtMs: number | null;
   readonly lastProcessAtMs: number | null;
   readonly lastSuccessAtMs: number | null;
+  readonly processingLagMs?: number | null;
+  readonly retry?: NonNullable<SystemComponentSnapshot['retry']>;
+  readonly dataQuality?: NonNullable<SystemComponentSnapshot['dataQuality']>;
+  readonly checkpoint?: NonNullable<SystemComponentSnapshot['checkpoint']>;
   readonly queue: Readonly<SystemQueueSnapshot> | null;
   readonly lastFailure: Readonly<StructuredFailure> | null;
   readonly blockerCodes: readonly string[];
@@ -333,6 +337,57 @@ function sourceQueue(value: Readonly<SourceQueueProbeReading> | null): Readonly<
   });
 }
 
+function sourceRetry(snapshot: Readonly<RuntimeSourceSnapshot>): NonNullable<SystemComponentSnapshot['retry']> {
+  const state = snapshot.observedState === 'BACKING_OFF'
+    ? 'BACKING_OFF'
+    : snapshot.backoff.cooldownUntilMs !== null
+      ? 'COOLDOWN'
+      : snapshot.backoff.attempt > 0 && snapshot.backoff.retryAtMs !== null
+        ? 'RETRYING'
+        : 'IDLE';
+  return Object.freeze({ state, ...snapshot.backoff });
+}
+
+function sourceDataQuality(snapshot: Readonly<RuntimeSourceSnapshot>): NonNullable<SystemComponentSnapshot['dataQuality']> {
+  const degraded = snapshot.completeness !== 'COMPLETE'
+    || snapshot.invalidCount > 0
+    || snapshot.duplicateCount > 0
+    || snapshot.outOfOrderCount > 0
+    || snapshot.sequenceGapCount > 0;
+  return Object.freeze({
+    state: degraded ? 'DEGRADED' : 'GOOD',
+    invalidCount: snapshot.invalidCount,
+    duplicateCount: snapshot.duplicateCount,
+    outOfOrderCount: snapshot.outOfOrderCount,
+    sequenceGapCount: snapshot.sequenceGapCount,
+    observedAtMs: snapshot.snapshotTimeMs,
+  });
+}
+
+const UNAVAILABLE_RETRY = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  attempt: null,
+  ceiling: null,
+  delayMs: null,
+  retryAtMs: null,
+  cooldownUntilMs: null,
+});
+
+const UNAVAILABLE_DATA_QUALITY = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  invalidCount: null,
+  duplicateCount: null,
+  outOfOrderCount: null,
+  sequenceGapCount: null,
+  observedAtMs: null,
+});
+
+const UNAVAILABLE_CHECKPOINT = Object.freeze({
+  state: 'UNAVAILABLE' as const,
+  revision: null,
+  persistedAtMs: null,
+});
+
 export function probeRuntimeSource(
   input: RuntimeSourceProbeDescriptor,
 ): DialectTranslation<Readonly<RuntimeSourceProbeProjection>> {
@@ -366,6 +421,10 @@ export function probeRuntimeSource(
       lastReceiveAtMs: null,
       lastProcessAtMs: null,
       lastSuccessAtMs: null,
+      processingLagMs: null,
+      retry: UNAVAILABLE_RETRY,
+      dataQuality: UNAVAILABLE_DATA_QUALITY,
+      checkpoint: UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue: null,
       lastFailure: null,
@@ -454,6 +513,10 @@ export function probeRuntimeSource(
       lastSuccessAtMs: snapshot.observedState === 'LIVE' && effectiveAuthority !== 'UNAVAILABLE'
         ? snapshot.lastProcessedTimeMs
         : null,
+      processingLagMs: snapshot.processingLagMs,
+      retry: sourceRetry(snapshot),
+      dataQuality: sourceDataQuality(snapshot),
+      checkpoint: UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue,
       lastFailure: failureOrigin?.failure ?? null,
@@ -500,6 +563,10 @@ function unavailableComponent(input: StructuralComponentProbeDescriptor): Readon
     lastReceiveAtMs: null,
     lastProcessAtMs: null,
     lastSuccessAtMs: null,
+    processingLagMs: null,
+    retry: UNAVAILABLE_RETRY,
+    dataQuality: UNAVAILABLE_DATA_QUALITY,
+    checkpoint: UNAVAILABLE_CHECKPOINT,
     dependencies: Object.freeze([...input.dependencies]),
     queue: null,
     lastFailure: null,
@@ -569,6 +636,10 @@ export function probeSystemComponent(
       lastReceiveAtMs: reading.lastReceiveAtMs,
       lastProcessAtMs: reading.lastProcessAtMs,
       lastSuccessAtMs: reading.lastSuccessAtMs,
+      processingLagMs: reading.processingLagMs ?? null,
+      retry: reading.retry ?? UNAVAILABLE_RETRY,
+      dataQuality: reading.dataQuality ?? UNAVAILABLE_DATA_QUALITY,
+      checkpoint: reading.checkpoint ?? UNAVAILABLE_CHECKPOINT,
       dependencies: Object.freeze([...input.dependencies]),
       queue: reading.queue,
       lastFailure: reading.lastFailure,

@@ -38,6 +38,10 @@ from quant_edge.survival.km import ONE, CurveRole, exact_survival_steps
 
 ANY_CAUSE: Final = "ANY_CAUSE"
 MAX_CALIBRATION_BINS: Final = 32
+# Calibration is actionable only when every subject belongs to an evaluable
+# bin. This complete-support policy is deterministic and makes no empirical
+# claim about how much missing follow-up would be acceptable.
+MIN_CALIBRATION_EVALUATED_FRACTION: Final = Fraction(1, 1)
 
 REASON_INTEGRATED_BRIER_UNAVAILABLE: Final = "INTEGRATED_BRIER_UNAVAILABLE"
 REASON_INTEGRATED_BRIER_EXCEEDS_BUDGET: Final = "INTEGRATED_BRIER_EXCEEDS_BUDGET"
@@ -546,7 +550,7 @@ class CalibrationBinV1:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationReportV1:
-    """Reliability table at one horizon plus the expected calibration error."""
+    """Reliability table whose ECE is available only at the minimum support."""
 
     cohort_id: str
     prediction_id: str
@@ -575,11 +579,32 @@ class CalibrationReportV1:
                 raise ContractValueError("bins must be dense and ordered")
         require_strict_int(self.evaluated, field="evaluated", minimum=0)
         require_strict_int(self.unavailable_subjects, field="unavailable_subjects", minimum=0)
+        evaluated_from_bins = sum(
+            calibration_bin.count
+            for calibration_bin in self.bins
+            if calibration_bin.status is BinStatus.AVAILABLE
+        )
+        unavailable_from_bins = sum(
+            calibration_bin.count
+            for calibration_bin in self.bins
+            if calibration_bin.status is BinStatus.UNAVAILABLE
+        )
+        if self.evaluated != evaluated_from_bins:
+            raise ContractValueError("evaluated must equal AVAILABLE-bin support")
+        if self.unavailable_subjects != unavailable_from_bins:
+            raise ContractValueError("unavailable_subjects must equal UNAVAILABLE-bin support")
         if not isinstance(self.status, MetricStatus):
             raise ContractValueError("status must be MetricStatus")
         available = self.status is MetricStatus.AVAILABLE
+        total_support = self.evaluated + self.unavailable_subjects
+        has_minimum_support = (
+            total_support > 0
+            and Fraction(self.evaluated, total_support) >= MIN_CALIBRATION_EVALUATED_FRACTION
+        )
         if available and (self.expected_calibration_error is None or self.evaluated == 0):
             raise ContractValueError("an AVAILABLE report carries an ECE over members")
+        if available and not has_minimum_support:
+            raise ContractValueError("an AVAILABLE report requires minimum evaluated support")
         if not available and self.expected_calibration_error is not None:
             raise ContractValueError("an UNAVAILABLE report carries no ECE")
 
@@ -638,7 +663,8 @@ def evaluate_calibration(
     bin's observed frequency is the censoring-aware KM/AJ estimate over the bin
     members, so censored subjects never bias the observed side. Bins whose
     observed frequency is unknowable (the horizon outruns the bin's follow-up)
-    are ``UNAVAILABLE`` and excluded from the error, never guessed.
+    are ``UNAVAILABLE`` and never guessed. The report is actionable only when
+    the evaluated-subject fraction meets the explicit minimum-support law.
     """
 
     if not isinstance(cohort, SurvivalCohortV1):
@@ -713,7 +739,12 @@ def evaluate_calibration(
                 signed_gap=fraction_to_fixed_point(gap),
             )
         )
-    if evaluated == 0:
+    total_support = evaluated + unavailable_subjects
+    has_minimum_support = (
+        total_support > 0
+        and Fraction(evaluated, total_support) >= MIN_CALIBRATION_EVALUATED_FRACTION
+    )
+    if not has_minimum_support:
         status = MetricStatus.UNAVAILABLE
         expected_error: FixedPointV1 | None = None
     else:

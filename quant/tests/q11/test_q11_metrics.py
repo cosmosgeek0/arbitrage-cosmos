@@ -603,7 +603,8 @@ class TestCalibration:
         assert report.unavailable_subjects == 2
         assert report.bins[1].status is BinStatus.AVAILABLE
         assert report.evaluated == 2
-        assert report.status is MetricStatus.AVAILABLE
+        assert report.status is MetricStatus.UNAVAILABLE
+        assert report.expected_calibration_error is None
 
     def test_all_bins_unknowable_is_unavailable(self) -> None:
         members = cohort((subject("s1", 2, None),))
@@ -750,6 +751,38 @@ class TestCalibration:
             observed=None,
             signed_gap=None,
         )
+        unavailable_bin = CalibrationBinV1(
+            bin_index=0,
+            lower=lower,
+            upper=upper,
+            status=BinStatus.UNAVAILABLE,
+            count=1,
+            mean_predicted=None,
+            observed=None,
+            signed_gap=None,
+        )
+        available_bin = CalibrationBinV1(
+            bin_index=1,
+            lower=upper,
+            upper=make_ratio(1, 1),
+            status=BinStatus.AVAILABLE,
+            count=1,
+            mean_predicted=ZERO_FP,
+            observed=ZERO_FP,
+            signed_gap=ZERO_FP,
+        )
+        with pytest.raises(ContractValueError, match="minimum evaluated support"):
+            CalibrationReportV1(
+                cohort_id="c",
+                prediction_id="p",
+                cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
+                bins=(unavailable_bin, available_bin),
+                evaluated=1,
+                unavailable_subjects=1,
+                status=MetricStatus.AVAILABLE,
+                expected_calibration_error=ZERO_FP,
+            )
         with pytest.raises(ContractValueError, match="AVAILABLE report carries"):
             CalibrationReportV1(
                 cohort_id="c",

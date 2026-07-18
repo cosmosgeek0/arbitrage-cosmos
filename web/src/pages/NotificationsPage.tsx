@@ -54,6 +54,29 @@ const FILTERS: { id: NotificationFilter; label: string }[] = [
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
 
+export const NOTIFICATION_ARCHIVE_LIMIT = 10_000;
+
+export interface NotificationArchiveState {
+  events: LedgerEvent[];
+  droppedCount: number;
+}
+
+export function retainNotificationArchive(
+  current: NotificationArchiveState,
+  incoming: readonly LedgerEvent[],
+  cutoff: number,
+): NotificationArchiveState {
+  const merged = new Map<number, LedgerEvent>();
+  current.events.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
+  incoming.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
+  const ordered = [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id);
+  const discardedThisMerge = Math.max(0, ordered.length - NOTIFICATION_ARCHIVE_LIMIT);
+  return {
+    events: ordered.slice(0, NOTIFICATION_ARCHIVE_LIMIT),
+    droppedCount: current.droppedCount + discardedThisMerge,
+  };
+}
+
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
     bot: { available: true, label: 'Bot Runtime', detail: 'Engine and control transitions' },
@@ -123,7 +146,8 @@ export function NotificationsPage() {
   const { binding: productBinding } = useProductControlRoomContext();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
-  const [events, setEvents] = useState<LedgerEvent[]>([]);
+  const [archive, setArchive] = useState<NotificationArchiveState>({ events: [], droppedCount: 0 });
+  const events = archive.events;
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
@@ -142,12 +166,7 @@ export function NotificationsPage() {
     const merge = (incoming: LedgerEvent[]) => {
       if (incoming.length) cursorRef.current = Math.max(cursorRef.current, ...incoming.map((item) => item.id));
       const cutoff = Date.now() - 7 * 24 * 60 * 60_000;
-      setEvents((current) => {
-        const merged = new Map<number, LedgerEvent>();
-        current.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-        incoming.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-        return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 10_000);
-      });
+      setArchive((current) => retainNotificationArchive(current, incoming, cutoff));
     };
     let bootstrapped = false;
     let bootstrapHighWater = 0;
@@ -302,7 +321,10 @@ export function NotificationsPage() {
             <strong>{rangeLabel}</strong><span className="newsx-range-note">Seven-Day Inbox</span>
           </div>
           <div className="notifx-navigation-actions">
-            <span className="notifx-curation"><b>{excludedCount.toLocaleString()}</b> Raw Events Excluded · <b>{groupedCount}</b> Repeats Grouped</span>
+            <span className="notifx-curation" aria-live="polite">
+              {archive.droppedCount > 0 && <><b>Archive View Truncated</b> · <b>{archive.droppedCount.toLocaleString()}</b> Event Rows Not Retained This Session · </>}
+              <b>{excludedCount.toLocaleString()}</b> Raw Events Excluded · <b>{groupedCount}</b> Repeats Grouped
+            </span>
             <button type="button" className="notifx-mark-read" onClick={markRead} disabled={unread === 0}><IconBell size={13} />{unread ? `Mark ${unread} Read` : 'All Read'}</button>
             <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
           </div>

@@ -673,6 +673,14 @@ section('23. runtime symbol policy applies immediately without cooldown debt');
   const blockedIntent = engine.intentFor(proposal.id);
   check('BLOCK expires an open proposal before its final intent bridge',
     proposal.status === 'expired' && blockedIntent.ok === false && blockedIntent.reason === 'symbol_blocked');
+  engine.setOperatorSymbolBlocked('POLICYUSDT', false);
+  const resized = engine.proposalStore.upsertFromDecision({
+    symbol: 'POLICYUSDT', ts: clock.now(), strategy: 'volume_spike', kind: 'proposal', rejectCode: null,
+    humanReason: 'size ceiling invalidation proof', correlationId: 'size-ceiling-correlation',
+    evidence: { direction: 'long', confidence: 0.7 },
+  }, feature);
+  check('downward Volume size ceiling invalidates proposals sized under the prior ceiling',
+    engine.setSuggestedNotionalUsd(5) === true && resized.status === 'expired' && engine.cfg.suggestedNotionalUsd === 5);
 }
 
 // ================================================================

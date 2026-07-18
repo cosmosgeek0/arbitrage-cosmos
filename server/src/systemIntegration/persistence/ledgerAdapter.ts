@@ -152,7 +152,8 @@ function requiresRuntimePublication(command: unknown): boolean {
     || command === 'SET_BASIS_INTAKE'
     || command === 'SET_VOLUME_INTAKE'
     || command === 'SET_BASIS_SYMBOL_POLICY'
-    || command === 'SET_VOLUME_SYMBOL_POLICY';
+    || command === 'SET_VOLUME_SYMBOL_POLICY'
+    || command === 'REDUCE_SIZE_CEILING';
 }
 
 function idempotencyEventKind(idempotencyKey: string): string {
@@ -2298,6 +2299,7 @@ export class SystemLedgerPersistenceAdapter {
         let desiredComponents = state.desiredComponents;
         let strategyIntake = state.strategyIntake;
         let strategySymbolPolicy = state.strategySymbolPolicy;
+        let sizeCeilings = state.sizeCeilings;
         let reservations = state.reservations;
         let approvals = state.approvals;
         const mutation: Readonly<SystemControlMutation> = commit.request.mutation;
@@ -2332,6 +2334,12 @@ export class SystemLedgerPersistenceAdapter {
             ...state.strategySymbolPolicy,
             [field]: Object.freeze(next),
           });
+        } else if (commit.applied && mutation.command === 'REDUCE_SIZE_CEILING') {
+          const field = mutation.scope === 'SYSTEM' ? 'system' : mutation.scope === 'BASIS' ? 'basis' : 'volume';
+          sizeCeilings = Object.freeze({
+            ...state.sizeCeilings,
+            [field]: mutation.maximumNotionalUsd,
+          });
         } else if (commit.applied && mutation.command === 'REVOKE_RESERVATION') {
           reservations = state.reservations.map((entry) => entry.reservationId === mutation.reservationId
             ? { ...entry, blocksAllocation: false, correlationId: commit.request.correlationId, updatedAtMs: commit.request.requestedAtMs }
@@ -2349,6 +2357,7 @@ export class SystemLedgerPersistenceAdapter {
             control: commit.after,
             strategyIntake,
             strategySymbolPolicy,
+            sizeCeilings,
             desiredComponents,
             reservations,
             approvals,

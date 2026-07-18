@@ -158,8 +158,12 @@ export class VolumeEngine {
     );
   }
 
-  setSuggestedNotionalUsd(value: number): void {
-    if (positive(value)) this.cfg.suggestedNotionalUsd = Math.min(value, 1_000_000);
+  setSuggestedNotionalUsd(value: number): boolean {
+    if (!positive(value) || value > 1_000_000) throw new RangeError('volume size ceiling is outside owner bounds');
+    if (this.cfg.suggestedNotionalUsd === value) return false;
+    this.cfg.suggestedNotionalUsd = value;
+    this.proposalStore.expireAll('size_ceiling_changed');
+    return true;
   }
 
   pin(symbol: string, pinned = true): void {

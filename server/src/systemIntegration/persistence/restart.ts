@@ -79,6 +79,11 @@ export function createInitialCheckpointState(
       basisBlocked: [],
       volumeBlocked: [],
     },
+    sizeCeilings: {
+      system: null,
+      basis: null,
+      volume: null,
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

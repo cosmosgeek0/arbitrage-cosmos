@@ -541,6 +541,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     SET_VOLUME_INTAKE: ['command', 'paused'],
     SET_BASIS_SYMBOL_POLICY: ['command', 'action', 'symbol'],
     SET_VOLUME_SYMBOL_POLICY: ['command', 'action', 'symbol'],
+    REDUCE_SIZE_CEILING: ['command', 'scope', 'maximumNotionalUsd'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -560,6 +561,16 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
         issues.push(issue('mutation', 'STRATEGY_SYMBOL_POLICY_INVALID', 'symbol policy requires a canonical symbol and BLOCK or ALLOW'));
       }
       break;
+    case 'REDUCE_SIZE_CEILING': {
+      const decimal = mutation.maximumNotionalUsd;
+      if ((mutation.scope !== 'SYSTEM' && mutation.scope !== 'BASIS' && mutation.scope !== 'VOLUME')
+        || typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 96) {
+        issues.push(issue('mutation', 'SIZE_CEILING_INVALID', 'size ceiling reduction requires a canonical positive exact decimal'));
+      }
+      break;
+    }
     case 'SET_SAFE_MODE':
       if (!isSystemSafeMode(mutation.safeMode)) issues.push(issue('mutation.safeMode', 'SAFE_MODE_INVALID', 'only safe convergence modes are accepted'));
       break;

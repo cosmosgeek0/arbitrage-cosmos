@@ -1265,5 +1265,16 @@ export function createProductionSystemIntegrationPorts(
     }),
   });
 
-  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy });
+  const sizeCeilings = Object.freeze({
+    BASIS: Object.freeze({
+      readCeiling: () => input.basis.sizeCeiling(),
+      setCeiling: (value: string) => input.basis.setSizeCeiling(value),
+    }),
+    VOLUME: Object.freeze({
+      readCeiling: () => input.volume.sizeCeiling(),
+      setCeiling: (value: string) => input.volume.setSizeCeiling(value),
+    }),
+  });
+
+  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings });
 }

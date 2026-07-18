@@ -12,6 +12,7 @@ export const OPAQUE_CONTROL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export const CONFIGURATION_REVISION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 export const PAYLOAD_DIGEST_PATTERN = /^(?:sha256:)?[a-f0-9]{64}$/;
 export const STRATEGY_SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/;
+export const POSITIVE_EXACT_DECIMAL_PATTERN = /^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/;
 const SENSITIVE_MATERIAL_PATTERN = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
 
 const DESIRED_STATES = new Set(['STOPPED', 'RUNNING', 'PAUSED']);
@@ -87,6 +88,18 @@ export function validateControlMutation(value: unknown): MutationValidation {
         return invalid('Strategy symbol policy requires one canonical symbol and BLOCK or ALLOW.');
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'REDUCE_SIZE_CEILING': {
+      const decimal = value.maximumNotionalUsd;
+      const digits = typeof decimal === 'string' ? decimal.replace('.', '').length : 0;
+      if (!exactKeys(value, ['command', 'scope', 'maximumNotionalUsd'])
+        || (value.scope !== 'SYSTEM' && value.scope !== 'BASIS' && value.scope !== 'VOLUME')
+        || typeof decimal !== 'string'
+        || !POSITIVE_EXACT_DECIMAL_PATTERN.test(decimal)
+        || digits > 96) {
+        return invalid('Size ceiling reduction requires one scope and one canonical positive exact decimal.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    }
     case 'SET_SAFE_MODE':
       if (!exactKeys(value, ['command', 'safeMode']) || typeof value.safeMode !== 'string') {
         return invalid('Mode mutation requires one safeMode value.');

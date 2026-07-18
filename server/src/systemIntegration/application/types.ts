@@ -91,6 +91,8 @@ export interface SystemIntegrationApplicationOptions {
     basis?: StrategySymbolPolicyOwnerPort;
     volume?: StrategySymbolPolicyOwnerPort;
   }>;
+  /** Existing Capital/config owners expose only downward size-ceiling application. */
+  readonly sizeCeilings?: Readonly<Partial<Record<'SYSTEM' | 'BASIS' | 'VOLUME', SizeCeilingOwnerPort>>>;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
@@ -121,6 +123,19 @@ export interface StrategySymbolPolicyControlReadback {
   readonly effectiveAllowed: boolean | null;
   readonly controlRevision: number;
   readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface SizeCeilingOwnerPort {
+  readCeiling(): string | null;
+  setCeiling(value: string): boolean;
+}
+
+export interface SizeCeilingControlReadback {
+  readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
+  readonly desiredMaximumNotionalUsd: string | null;
+  readonly effectiveMaximumNotionalUsd: string | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
 }
 
 export type SystemApplicationPhase =
@@ -193,6 +208,7 @@ export interface SystemIntegrationApplicationFacade {
     strategy: 'basis' | 'volume',
     symbol: string,
   ): Readonly<StrategySymbolPolicyControlReadback>;
+  sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

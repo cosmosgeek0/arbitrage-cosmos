@@ -296,7 +296,12 @@ export type SystemControlMutation =
   | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean }
   | { readonly command: 'SET_VOLUME_INTAKE'; readonly paused: boolean }
   | { readonly command: 'SET_BASIS_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string }
-  | { readonly command: 'SET_VOLUME_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string };
+  | { readonly command: 'SET_VOLUME_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string }
+  | {
+      readonly command: 'REDUCE_SIZE_CEILING';
+      readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
+      readonly maximumNotionalUsd: string;
+    };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

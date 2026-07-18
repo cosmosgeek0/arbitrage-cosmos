@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -304,6 +304,20 @@ export function validateCheckpointState(value: unknown): string[] {
         || new Set(symbols).size !== symbols.length
         || symbols.some((symbol, index) => index > 0 && String(symbols[index - 1]).localeCompare(String(symbol), 'en') >= 0)) {
         issues.push(`$.strategySymbolPolicy.${field}:SYMBOL_POLICY_INVALID`);
+      }
+    }
+  }
+
+  const sizeCeilings = value.sizeCeilings;
+  if (!plainObject(sizeCeilings)) issues.push('$.sizeCeilings:OBJECT_REQUIRED');
+  else {
+    exactKeys(sizeCeilings, ['system', 'basis', 'volume'], '$.sizeCeilings', issues);
+    for (const field of ['system', 'basis', 'volume'] as const) {
+      const decimal = sizeCeilings[field];
+      if (decimal !== null && (typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 96)) {
+        issues.push(`$.sizeCeilings.${field}:EXACT_DECIMAL_INVALID`);
       }
     }
   }
@@ -586,6 +600,9 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
       ...(Object.hasOwn(parsed.state, 'strategySymbolPolicy')
         ? {}
         : { strategySymbolPolicy: { basisBlocked: [], volumeBlocked: [] } }),
+      ...(Object.hasOwn(parsed.state, 'sizeCeilings')
+        ? {}
+        : { sizeCeilings: { system: null, basis: null, volume: null } }),
     };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };

@@ -6,6 +6,7 @@ import { systemClock } from '../engine/v0/clock.js';
 import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
 import type { AppConfig } from '../types.js';
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from '../capitalFoundation/contracts/index.js';
 
 interface MarketUniverseRow {
   symbol: string;
@@ -192,6 +193,28 @@ export class BasisRuntime {
 
   symbolAllowedByPolicy(symbol: string): boolean {
     return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
+  sizeCeiling(): string | null {
+    try {
+      return normalizeNonNegativeExactDecimal(String(this.engine.cfg.suggestedNotionalUsd));
+    } catch {
+      return null;
+    }
+  }
+
+  setSizeCeiling(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    if (canonical !== value) throw new TypeError('basis size ceiling must be canonical');
+    const numeric = Number(canonical);
+    if (!Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+      throw new RangeError('basis size ceiling cannot cross the legacy numeric boundary exactly');
+    }
+    const current = this.sizeCeiling();
+    if (current === null || compareExactDecimals(canonical, normalizeNonNegativeExactDecimal(current)) > 0) {
+      throw new RangeError('basis size ceiling is downward-only');
+    }
+    return this.engine.setSuggestedNotionalUsd(numeric);
   }
 
   private onEngineEvent(event: EngineEvent): void {

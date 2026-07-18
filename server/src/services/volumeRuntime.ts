@@ -7,6 +7,7 @@ import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
 import type { Decision, EngineEvent, EngineProposal } from '../engine/v0/types.js';
 import type { AppConfig } from '../types.js';
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from '../capitalFoundation/contracts/index.js';
 import type { Ledger } from '../ledger.js';
 
 interface MarketUniverseRow {
@@ -225,6 +226,28 @@ export class VolumeRuntime {
 
   symbolAllowedByPolicy(symbol: string): boolean {
     return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
+  sizeCeiling(): string | null {
+    try {
+      return normalizeNonNegativeExactDecimal(String(this.engine.cfg.suggestedNotionalUsd));
+    } catch {
+      return null;
+    }
+  }
+
+  setSizeCeiling(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    if (canonical !== value) throw new TypeError('volume size ceiling must be canonical');
+    const numeric = Number(canonical);
+    if (!Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+      throw new RangeError('volume size ceiling cannot cross the legacy numeric boundary exactly');
+    }
+    const current = this.sizeCeiling();
+    if (current === null || compareExactDecimals(canonical, normalizeNonNegativeExactDecimal(current)) > 0) {
+      throw new RangeError('volume size ceiling is downward-only');
+    }
+    return this.engine.setSuggestedNotionalUsd(numeric);
   }
 
   private async refreshUniverse(generation: number): Promise<void> {

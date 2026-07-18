@@ -14,6 +14,7 @@ import {
   type StructuredFailure,
 } from '../../foundation/contracts/index.js';
 import {
+  SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR,
   SYSTEM_CONTROL_FAILURE_CODES,
   type SystemControlActor,
   type SystemControlCompositionDecision,
@@ -77,11 +78,16 @@ function validControlState(state: Readonly<SystemControlState>): boolean {
 }
 
 function validActor(actor: Readonly<SystemControlActor>): boolean {
-  return typeof actor.id === 'string'
+  const canonicalAlarm = actor?.source === 'canonical-alarm';
+  return typeof actor?.id === 'string'
     && actor.id.trim().length > 0
     && actor.id.length <= 160
     && (actor.email === null || (typeof actor.email === 'string' && actor.email.length <= 320))
-    && (actor.source === 'loopback' || actor.source === 'cloudflare-access');
+    && (actor.source === 'loopback' || actor.source === 'cloudflare-access' || canonicalAlarm)
+    && (!canonicalAlarm || (
+      actor.id === SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR.id
+      && actor.email === null
+    ));
 }
 
 export class SystemControlService {
@@ -327,6 +333,16 @@ export class SystemControlService {
     }
     const mutation = validateControlMutation(request.mutation);
     if (!mutation.ok) return this.failure(request, mutation.code, mutation.message);
+    if (actor.source === 'canonical-alarm' && !(
+      mutation.mutation.command === 'SET_KILL_SWITCH'
+      && mutation.mutation.engaged === true
+    )) {
+      return this.failure(
+        request,
+        'OPERATOR_REQUIRED',
+        'The canonical alarm actor can only engage the kill switch; an operator is required for every other control.',
+      );
+    }
     return null;
   }
 

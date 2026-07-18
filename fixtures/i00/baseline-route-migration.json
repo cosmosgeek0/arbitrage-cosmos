@@ -90,9 +90,8 @@
         { "path": "server/src/index.ts", "needle": "ledger.recentEvents(limit, filters.kind", "expectedOccurrences": 1 }
       ],
       "productionConsumers": [
-        { "path": "web/src/components/Header.tsx", "occurrences": 3 },
-        { "path": "web/src/pages/LedgerPage.tsx", "occurrences": 1 },
-        { "path": "web/src/pages/NotificationsPage.tsx", "occurrences": 3 }
+        { "path": "web/src/lib/notificationFeed.tsx", "occurrences": 3 },
+        { "path": "web/src/pages/LedgerPage.tsx", "occurrences": 1 }
       ]
     },
     {

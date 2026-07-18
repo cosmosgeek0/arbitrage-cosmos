@@ -137,6 +137,16 @@ test('header keeps canonical Product truth and structurally omits legacy and AWS
   }
 });
 
+test('Header retains one mounted topbar content implementation', async () => {
+  const header = await read('components/Header.tsx');
+
+  assert.doesNotMatch(header, /\bconst\s+content\s*=\s*\(k:\s*MK\)/);
+  assert.doesNotMatch(header, /\bconst\s+contentClean\s*=\s*\(k:\s*MK\)/);
+  assert.doesNotMatch(header, /\b(?:function\s+TopPanelHeader|const\s+(?:TbpCheck|IconDollar))\b/);
+  assert.match(header, /const\s+premiumContent\s*=\s*\(k:\s*MK\)/);
+  assert.equal(header.match(/premiumContent\((?:outgoingContent|contentActive)\)/g)?.length, 2);
+});
+
 test('account recovery and notification routing cannot reintroduce private or AWS green state', async () => {
   const [header, notifications, store] = await Promise.all([
     read('components/Header.tsx'),

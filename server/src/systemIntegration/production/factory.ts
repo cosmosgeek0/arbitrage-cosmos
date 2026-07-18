@@ -67,6 +67,7 @@ import {
   weakestTemporalFact,
 } from './temporal.js';
 import { admitProductionSourceRegistry } from './sourceAdmission.js';
+import { createProductionCapitalEligibilityPort } from './capitalEconomics.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
@@ -2212,8 +2213,14 @@ export function createProductionSystemIntegrationPorts(
     restorePinnedSymbols: (symbols: readonly string[]) => publicIntelligence.restorePinnedSymbols(symbols),
   });
 
+  const capitalEligibility = createProductionCapitalEligibilityPort({
+    clock: input.clock,
+    owners: input.capitalEconomicsOwners ?? null,
+  });
+
   return Object.freeze({
     sourceRegistry, runtimes, components, summaries, intelligenceEvidence,
     strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
+    capitalEligibility,
   });
 }

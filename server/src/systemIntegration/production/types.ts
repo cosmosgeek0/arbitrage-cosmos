@@ -17,6 +17,10 @@ import type {
   VolumeEvidenceSymbolRoutingSnapshot,
 } from '../../intelligenceRuntime/routing/index.js';
 import type { BridgeSymbolReadModel } from '../../intelligenceRuntime/bridge/index.js';
+import type {
+  ProductionCanonicalEconomicsOwners,
+  ProductionCapitalEligibilityPort,
+} from './capitalEconomics.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -288,6 +292,8 @@ export interface ProductionSystemIntegrationInput {
   readonly capitalSummary?: ProductionCapitalSummaryReadPort | null;
   /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
+  /** Exact cached owners; absent in today's server assembly and therefore fail-closed. */
+  readonly capitalEconomicsOwners?: ProductionCanonicalEconomicsOwners | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
   /**
@@ -357,4 +363,6 @@ export interface ProductionSystemIntegrationPorts {
     setPinned(symbol: string, pinned: boolean): boolean;
     restorePinnedSymbols(symbols: readonly string[]): boolean;
   }>;
+  /** Mounted Capital callsite; current real assembly reports NOT_CONFIGURED. */
+  readonly capitalEligibility: Readonly<ProductionCapitalEligibilityPort>;
 }

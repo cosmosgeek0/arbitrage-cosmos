@@ -63,8 +63,7 @@ function createWorld(cuts, initialNow = T0) {
 }
 
 function latestCausality(runtime) {
-  const decision = runtime.integrationSnapshot().decisions.filter((row) => row.symbol === SYMBOL).at(-1);
-  assert.ok(decision, 'BasisRuntime must expose the canonical engine decision');
+  const decision = latestDecision(runtime);
   return {
     quadrant: decision.evidence.gapCausalQuadrant,
     market: decision.evidence.gapInitiatingMarket,
@@ -72,6 +71,12 @@ function latestCausality(runtime) {
     sourceSequence: decision.evidence.gapInitiatingSourceSequence,
     acceptanceSequence: decision.evidence.gapCausalEventSequence,
   };
+}
+
+function latestDecision(runtime) {
+  const decision = runtime.integrationSnapshot().decisions.filter((row) => row.symbol === SYMBOL).at(-1);
+  assert.ok(decision, 'BasisRuntime must expose the canonical engine decision');
+  return decision;
 }
 
 async function withRuntimeClock(world, body) {
@@ -179,6 +184,35 @@ test('BasisRuntime makes missing and exact stale paired legs causally unavailabl
     await stale.runtime.refreshBooks();
     assert.equal(latestCausality(stale.runtime).quadrant, 'UNKNOWN');
     assert.equal(worldSafeGap(stale.runtime), null);
+  });
+});
+
+test('BasisRuntime never manufactures source age or event-time slope for untimed Spot REST changes', async () => {
+  const world = createWorld([
+    cut(rawBook(99.98, 100), rawBook(101, 101.02, T0 - 10)),
+    cut(rawBook(99.48, 99.5), rawBook(101, 101.02, T0 + 50)),
+    cut(rawBook(99.28, 99.3), rawBook(101, 101.02, T0 + 90)),
+  ]);
+  await withRuntimeClock(world, async () => {
+    await world.runtime.start();
+    world.setNow(T0 + 100);
+    await world.runtime.refreshBooks();
+    let evidence = latestDecision(world.runtime).evidence;
+    assert.equal(evidence.gapCausalQuadrant, 'RISING_SPOT_LED');
+    assert.equal(evidence.gapInitiatingSourceTs, null);
+    assert.equal(evidence.gapInitiatingSourceSequence, null);
+    assert.equal(evidence.gapCausalAgeMs, null);
+    assert.equal(evidence.gapCausalSlopePctPerMin, null);
+    assert.equal(evidence.gapCausalPersistenceEvents, 1);
+
+    world.setNow(T0 + 140);
+    await world.runtime.refreshBooks();
+    evidence = latestDecision(world.runtime).evidence;
+    assert.equal(evidence.gapCausalQuadrant, 'RISING_SPOT_LED');
+    assert.equal(evidence.gapCausalAgeMs, null);
+    assert.equal(evidence.gapCausalSlopePctPerMin, null);
+    assert.equal(evidence.gapCausalPersistenceEvents, 2);
+    assert.equal(evidence.gapEvolution, 'GROWING');
   });
 });
 

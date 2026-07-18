@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Lane G import-time purity and compiled no-I/O proof. */
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -11,7 +12,6 @@ function section(title) {
 }
 
 let dateNowCalls = 0;
-let fetchCalls = 0;
 let timeoutCalls = 0;
 let intervalCalls = 0;
 let randomCalls = 0;
@@ -19,14 +19,13 @@ const envReads = [];
 const toleratedLoaderEnv = new Set(['WATCH_REPORT_DEPENDENCIES']);
 
 const realDateNow = Date.now;
-const realFetch = globalThis.fetch;
 const realTimeout = globalThis.setTimeout;
 const realInterval = globalThis.setInterval;
 const realRandom = Math.random;
 const realEnv = process.env;
 
 Date.now = () => { dateNowCalls += 1; return realDateNow(); };
-globalThis.fetch = (...args) => { fetchCalls += 1; return realFetch(...args); };
+const fetchDenial = installFoundationFetchDenial();
 globalThis.setTimeout = (...args) => { timeoutCalls += 1; return realTimeout(...args); };
 globalThis.setInterval = (...args) => { intervalCalls += 1; return realInterval(...args); };
 Math.random = () => { randomCalls += 1; return realRandom(); };
@@ -41,7 +40,8 @@ const globalsBefore = new Set(Object.getOwnPropertyNames(globalThis));
 section('1. replay barrel import is side-effect-free');
 const mod = await import('../../../dist/foundation/replay/index.js');
 check('no Date.now during import', dateNowCalls === 0, `${dateNowCalls} calls`);
-check('no fetch during import', fetchCalls === 0, `${fetchCalls} calls`);
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
+check('no fetch during import', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('no setTimeout during import', timeoutCalls === 0, `${timeoutCalls} calls`);
 check('no setInterval during import', intervalCalls === 0, `${intervalCalls} calls`);
 check('no Math.random during import', randomCalls === 0, `${randomCalls} calls`);
@@ -51,7 +51,7 @@ const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globa
 check('no globals created during import', newGlobals.length === 0, newGlobals.join(','));
 
 Date.now = realDateNow;
-globalThis.fetch = realFetch;
+fetchDenial.restore();
 globalThis.setTimeout = realTimeout;
 globalThis.setInterval = realInterval;
 Math.random = realRandom;

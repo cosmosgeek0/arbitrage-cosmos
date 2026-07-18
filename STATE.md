@@ -111,6 +111,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
 | 3 | `FIX-005` | `BUILT_AND_TESTED` | The named merged-scope audit mounts FIX-031 then FIX-017, preserves the first child failure exit, and cannot report success until both residual finding regressions pass. Its command-contract suite is 3/3 and the live two-finding audit exits 0. |
 | 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap now loads `.env` before path-owning modules, and one resolver owns the canonical data directory plus icon, liquidation, profile, and news archive paths. The fresh-process regression imports all four owners with a `.env`-only `DATA_DIR` and proves their exact shared authority. |
+| 5 | `FIX-171` | `BUILT_AND_TESTED` | All ten Foundation import-purity wrappers install one deterministic synchronous fetch denial instead of forwarding to ambient transport. A shared negative control performs an actual hostile fetch attempt and proves the exact fail-closed code before every import check. |
 
 ## Previous source evidence
 

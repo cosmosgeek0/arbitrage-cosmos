@@ -3,6 +3,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -47,13 +48,12 @@ for (const [file, source] of sources) {
 
 section('2. import performs no I/O, clock, environment or scheduling work');
 const originals = {
-  fetch: globalThis.fetch,
   dateNow: Date.now,
   setTimeout: globalThis.setTimeout,
   setInterval: globalThis.setInterval,
 };
 let calls = [];
-globalThis.fetch = async () => { calls.push('fetch'); throw new Error('network forbidden'); };
+const fetchDenial = installFoundationFetchDenial();
 Date.now = () => { calls.push('Date.now'); throw new Error('clock forbidden'); };
 globalThis.setTimeout = () => { calls.push('setTimeout'); throw new Error('timer forbidden'); };
 globalThis.setInterval = () => { calls.push('setInterval'); throw new Error('timer forbidden'); };
@@ -64,13 +64,18 @@ try {
 } catch (error) {
   importError = error;
 } finally {
-  globalThis.fetch = originals.fetch;
+  fetchDenial.restore();
   Date.now = originals.dateNow;
   globalThis.setTimeout = originals.setTimeout;
   globalThis.setInterval = originals.setInterval;
 }
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
 check('fresh dynamic import succeeds under traps', importError === null, importError?.message ?? '');
-check('fresh dynamic import triggers no trapped side effects', calls.length === 0, calls.join(','));
+check(
+  'fresh dynamic import triggers no trapped side effects',
+  calls.length === 0 && fetchDenial.attempts() === 0,
+  [...calls, ...(fetchDenial.attempts() ? [`fetch:${fetchDenial.attempts()}`] : [])].join(','),
+);
 
 section('3. export surface contains derivation only, never capital actions');
 const keys = module ? Object.keys(module).sort() : [];

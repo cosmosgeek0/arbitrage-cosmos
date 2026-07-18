@@ -3,6 +3,7 @@
  * Lane H — import/use purity proof. Instruments side-effectful globals before
  * importing the compiled observability barrel and statically scans this lane.
  */
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -14,7 +15,6 @@ function section(title) {
 }
 
 let dateNowCalls = 0;
-let fetchCalls = 0;
 let setTimeoutCalls = 0;
 let setIntervalCalls = 0;
 let randomCalls = 0;
@@ -22,14 +22,13 @@ const envReadKeys = [];
 const NODE_LOADER_ENV_KEYS = new Set(['WATCH_REPORT_DEPENDENCIES']);
 
 const realDateNow = Date.now;
-const realFetch = globalThis.fetch;
 const realSetTimeout = globalThis.setTimeout;
 const realSetInterval = globalThis.setInterval;
 const realRandom = Math.random;
 const realEnv = process.env;
 
 Date.now = function countedNow() { dateNowCalls += 1; return realDateNow(); };
-globalThis.fetch = function countedFetch(...args) { fetchCalls += 1; return realFetch.apply(this, args); };
+const fetchDenial = installFoundationFetchDenial();
 globalThis.setTimeout = function countedSetTimeout(...args) { setTimeoutCalls += 1; return realSetTimeout.apply(this, args); };
 globalThis.setInterval = function countedSetInterval(...args) { setIntervalCalls += 1; return realSetInterval.apply(this, args); };
 Math.random = function countedRandom() { randomCalls += 1; return realRandom(); };
@@ -44,7 +43,8 @@ const globalsBefore = new Set(Object.getOwnPropertyNames(globalThis));
 section('1. importing the observability barrel has no side effects');
 const mod = await import('../../../dist/foundation/observability/index.js');
 check('no Date.now during import', dateNowCalls === 0, `${dateNowCalls} calls`);
-check('no fetch during import', fetchCalls === 0, `${fetchCalls} calls`);
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
+check('no fetch during import', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('no setTimeout during import', setTimeoutCalls === 0, `${setTimeoutCalls} calls`);
 check('no setInterval during import', setIntervalCalls === 0, `${setIntervalCalls} calls`);
 check('no Math.random during import', randomCalls === 0, `${randomCalls} calls`);
@@ -54,7 +54,7 @@ const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globa
 check('no globals created', newGlobals.length === 0, newGlobals.join(','));
 
 Date.now = realDateNow;
-globalThis.fetch = realFetch;
+fetchDenial.restore();
 globalThis.setTimeout = realSetTimeout;
 globalThis.setInterval = realSetInterval;
 Math.random = realRandom;

@@ -11,6 +11,7 @@
  * Run after `npm run build -w server`:
  *   node server/test/foundation/contracts/import-purity.mjs
  */
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -24,7 +25,6 @@ function section(title) {
 // ---------- instrument BEFORE import ----------
 
 let dateNowCalls = 0;
-let fetchCalls = 0;
 let setTimeoutCalls = 0;
 let setIntervalCalls = 0;
 let randomCalls = 0;
@@ -38,7 +38,6 @@ const envReadKeys = [];
 const NODE_LOADER_ENV_KEYS = new Set(['WATCH_REPORT_DEPENDENCIES']);
 
 const realDateNow = Date.now;
-const realFetch = globalThis.fetch;
 const realSetTimeout = globalThis.setTimeout;
 const realSetInterval = globalThis.setInterval;
 const realRandom = Math.random;
@@ -48,10 +47,7 @@ Date.now = function countedNow() {
   dateNowCalls++;
   return realDateNow();
 };
-globalThis.fetch = function countedFetch(...args) {
-  fetchCalls++;
-  return realFetch.apply(this, args);
-};
+const fetchDenial = installFoundationFetchDenial();
 globalThis.setTimeout = function countedSetTimeout(...args) {
   setTimeoutCalls++;
   return realSetTimeout.apply(this, args);
@@ -79,7 +75,8 @@ section('1. importing the contracts barrel is side-effect free');
 const mod = await import('../../../dist/foundation/contracts/index.js');
 
 check('no Date.now() during import', dateNowCalls === 0, `${dateNowCalls} calls`);
-check('no fetch during import', fetchCalls === 0, `${fetchCalls} calls`);
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
+check('no fetch during import', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('no setTimeout during import', setTimeoutCalls === 0, `${setTimeoutCalls} calls`);
 check('no setInterval during import', setIntervalCalls === 0, `${setIntervalCalls} calls`);
 check('no Math.random during import', randomCalls === 0, `${randomCalls} calls`);
@@ -91,7 +88,7 @@ check('no new globals created', newGlobals.length === 0, newGlobals.join(','));
 
 // ---------- restore runtime ----------
 Date.now = realDateNow;
-globalThis.fetch = realFetch;
+fetchDenial.restore();
 globalThis.setTimeout = realSetTimeout;
 globalThis.setInterval = realSetInterval;
 Math.random = realRandom;

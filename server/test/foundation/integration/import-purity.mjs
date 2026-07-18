@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Cross-lane import-purity proof for every foundation public barrel. */
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -10,7 +11,6 @@ function check(name, pass, detail = '') {
 function section(title) { console.log(`\n${title}`); }
 
 let dateNowCalls = 0;
-let fetchCalls = 0;
 let timeoutCalls = 0;
 let intervalCalls = 0;
 let randomCalls = 0;
@@ -18,14 +18,13 @@ const envReads = [];
 const toleratedLoaderEnv = new Set(['WATCH_REPORT_DEPENDENCIES']);
 
 const realDateNow = Date.now;
-const realFetch = globalThis.fetch;
 const realTimeout = globalThis.setTimeout;
 const realInterval = globalThis.setInterval;
 const realRandom = Math.random;
 const realEnv = process.env;
 
 Date.now = (...args) => { dateNowCalls += 1; return realDateNow(...args); };
-globalThis.fetch = (...args) => { fetchCalls += 1; return realFetch(...args); };
+const fetchDenial = installFoundationFetchDenial();
 globalThis.setTimeout = (...args) => { timeoutCalls += 1; return realTimeout(...args); };
 globalThis.setInterval = (...args) => { intervalCalls += 1; return realInterval(...args); };
 Math.random = (...args) => { randomCalls += 1; return realRandom(...args); };
@@ -59,7 +58,8 @@ for (const [name, path, expectedExport] of barrels) {
   imported.push({ name, module, expectedExport });
 }
 check('no Date.now during imports', dateNowCalls === 0, `${dateNowCalls} calls`);
-check('no fetch during imports', fetchCalls === 0, `${fetchCalls} calls`);
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
+check('no fetch during imports', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('no setTimeout during imports', timeoutCalls === 0, `${timeoutCalls} calls`);
 check('no setInterval during imports', intervalCalls === 0, `${intervalCalls} calls`);
 check('no Math.random during imports', randomCalls === 0, `${randomCalls} calls`);
@@ -69,7 +69,7 @@ const createdGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !g
 check('no globals created during imports', createdGlobals.length === 0, createdGlobals.join(','));
 
 Date.now = realDateNow;
-globalThis.fetch = realFetch;
+fetchDenial.restore();
 globalThis.setTimeout = realTimeout;
 globalThis.setInterval = realInterval;
 Math.random = realRandom;

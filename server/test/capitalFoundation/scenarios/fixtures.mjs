@@ -7,6 +7,7 @@ import {
   addExactDecimals,
   assessCapitalTruth,
   capitalDigest,
+  createConservativeEconomicFactBinding,
   deriveActivePositionId,
   derivePositionThesisId,
 } from '../../../dist/capitalFoundation/contracts/index.js';
@@ -99,7 +100,7 @@ export function intelligenceTruth(overrides = {}) {
 }
 
 export function exactEconomics(overrides = {}) {
-  return {
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '100',
     expectedGrossEdge: '12',
@@ -114,12 +115,42 @@ export function exactEconomics(overrides = {}) {
     estimatedRecoveryCost: '0.75',
     estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '1000',
-    fundingSourceIds: ['scenario-funding-fact'],
-    borrowSourceIds: ['scenario-borrow-fact'],
-    capitalOpportunitySourceIds: ['scenario-capital-opportunity-fact'],
     exactSourceIds: ['scenario-exact-economics'],
     missingFields: [],
     ...overrides,
+  };
+  const fact = (kind, value, sourceId) => value === null ? null : createConservativeEconomicFactBinding({
+    kind,
+    owner: {
+      FUNDING: 'BASIS_ENGINE',
+      BORROW: 'FOUNDATION_BORROW_TRUTH',
+      CAPITAL_OPPORTUNITY: 'CAPITAL_FOUNDATION',
+    }[kind],
+    value,
+    unit: values.valuationAsset,
+    source: {
+      sourceTimeMs: NOW - 100,
+      receivedAtMs: NOW - 90,
+      maxAgeMs: 1_000_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : fact('FUNDING', values.estimatedFunding, 'scenario-funding-fact'),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : fact('BORROW', values.estimatedBorrowCost, 'scenario-borrow-fact'),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : fact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'scenario-capital-opportunity-fact'),
   };
 }
 

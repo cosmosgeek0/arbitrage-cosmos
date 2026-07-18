@@ -3,6 +3,7 @@ export * from './identity.js';
 export * from './truth.js';
 export * from './lifecycle.js';
 export * from './economics.js';
+export * from './conservativeEconomics.js';
 export * from './actions.js';
 export * from './opportunity.js';
 export * from './capital.js';

@@ -4,6 +4,7 @@ import {
   capitalDigest,
   normalizeExactDecimal,
   normalizeNonNegativeExactDecimal,
+  validateConservativeEconomicFactBinding,
   weakestCapitalTruth,
   type ConservativeEconomicInputs,
   type ExactDecimal,
@@ -136,6 +137,7 @@ function canonicalUnsigned(
 
 function exactEconomics(
   input: Readonly<ConservativeEconomicInputs>,
+  evaluatedAtMs: number,
 ): Readonly<ConservativeEconomicInputs> {
   if (!input || !nonEmpty(input.valuationAsset)) {
     throw new TypeError('caller exact economics requires a valuation asset');
@@ -180,18 +182,39 @@ function exactEconomics(
   }
   const exactSourceIds = sortedUnique(input.exactSourceIds);
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
-  const boundSourceIds = (name: 'fundingSourceIds' | 'borrowSourceIds' | 'capitalOpportunitySourceIds') => {
-    if (!Array.isArray(input[name])) throw new TypeError(`${name} must be an array`);
-    const ids = sortedUnique(input[name]);
-    if (ids.length === 0) missing.add(name);
-    return ids;
+  const boundFact = (
+    name: 'fundingFact' | 'borrowFact' | 'capitalOpportunityFact',
+    kind: 'FUNDING' | 'BORROW' | 'CAPITAL_OPPORTUNITY',
+    value: ExactDecimal | null,
+  ) => {
+    const binding = input[name];
+    if (value === null || binding === null) {
+      missing.add(name);
+      return null;
+    }
+    const issues = validateConservativeEconomicFactBinding(binding, {
+      kind,
+      value,
+      unit: input.valuationAsset,
+      evaluatedAtMs,
+    });
+    if (issues.length > 0) {
+      missing.add(name);
+      issues.forEach((issue) => missing.add(`${name}.${issue}`));
+      return null;
+    }
+    return binding;
   };
   return cloneAndFreeze({
     valuationAsset: input.valuationAsset,
     ...values,
-    fundingSourceIds: boundSourceIds('fundingSourceIds'),
-    borrowSourceIds: boundSourceIds('borrowSourceIds'),
-    capitalOpportunitySourceIds: boundSourceIds('capitalOpportunitySourceIds'),
+    fundingFact: boundFact('fundingFact', 'FUNDING', estimatedFunding),
+    borrowFact: boundFact('borrowFact', 'BORROW', estimatedBorrowCost),
+    capitalOpportunityFact: boundFact(
+      'capitalOpportunityFact',
+      'CAPITAL_OPPORTUNITY',
+      estimatedCapitalOpportunityCost,
+    ),
     exactSourceIds,
     missingFields: [...missing].sort(),
   });
@@ -441,7 +464,7 @@ function buildIntake(
   sourceKind: SourceKind,
 ): Readonly<ProposalIntakeRecord> {
   validateCommon(input);
-  const economics = exactEconomics(input.economics);
+  const economics = exactEconomics(input.economics, input.evaluatedAtMs);
   const report = lossReport(
     sourceKind,
     input.configuration,

@@ -9,6 +9,7 @@ import {
   normalizeExactDecimal,
   normalizeNonNegativeExactDecimal,
   truthAllowsNewExposure,
+  validateConservativeEconomicFactBinding,
   weakestCapitalTruth,
   type CapitalConsiderationMode,
   type CapitalTruthState,
@@ -166,7 +167,7 @@ function cloneTruth(truth: TruthMetadata, evaluatedAtMs: number, reasons: readon
   });
 }
 
-function normalizeEconomics(source: ConservativeEconomicInputs): {
+function normalizeEconomics(source: ConservativeEconomicInputs, evaluatedAtMs: number): {
   readonly economics: Readonly<ConservativeEconomicInputs>;
   readonly incomplete: boolean;
 } {
@@ -192,10 +193,31 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
   if (valuationAsset === 'UNKNOWN') missing.add('valuationAsset');
   const exactSourceIds = sortedUnique((Array.isArray(source?.exactSourceIds) ? source.exactSourceIds : []).filter(nonEmpty));
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
-  const sourceIds = (name: 'fundingSourceIds' | 'borrowSourceIds' | 'capitalOpportunitySourceIds'): readonly string[] => {
-    const ids = sortedUnique((Array.isArray(source?.[name]) ? source[name] : []).filter(nonEmpty));
-    if (ids.length === 0) missing.add(name);
-    return ids;
+  const estimatedFunding = signed('estimatedFunding');
+  const estimatedBorrowCost = unsigned('estimatedBorrowCost');
+  const estimatedCapitalOpportunityCost = unsigned('estimatedCapitalOpportunityCost');
+  const boundFact = (
+    name: 'fundingFact' | 'borrowFact' | 'capitalOpportunityFact',
+    kind: 'FUNDING' | 'BORROW' | 'CAPITAL_OPPORTUNITY',
+    value: ReturnType<typeof normalizeExactDecimal> | null,
+  ) => {
+    const binding = source?.[name] ?? null;
+    if (value === null || binding === null) {
+      missing.add(name);
+      return null;
+    }
+    const issues = validateConservativeEconomicFactBinding(binding, {
+      kind,
+      value,
+      unit: valuationAsset,
+      evaluatedAtMs,
+    });
+    if (issues.length > 0) {
+      missing.add(name);
+      for (const issue of issues) missing.add(`${name}.${issue}`);
+      return null;
+    }
+    return binding;
   };
   const economics = Object.freeze({
     valuationAsset,
@@ -203,18 +225,22 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
     expectedGrossEdge: signed('expectedGrossEdge'),
     expectedNetEdge: signed('expectedNetEdge'),
     estimatedFees: unsigned('estimatedFees'),
-    estimatedFunding: signed('estimatedFunding'),
-    estimatedBorrowCost: unsigned('estimatedBorrowCost'),
+    estimatedFunding,
+    estimatedBorrowCost,
     estimatedSpreadCost: unsigned('estimatedSpreadCost'),
     estimatedSlippage: unsigned('estimatedSlippage'),
     estimatedLatencyCost: unsigned('estimatedLatencyCost'),
     estimatedAdverseSelectionCost: unsigned('estimatedAdverseSelectionCost'),
     estimatedRecoveryCost: unsigned('estimatedRecoveryCost'),
-    estimatedCapitalOpportunityCost: unsigned('estimatedCapitalOpportunityCost'),
+    estimatedCapitalOpportunityCost,
     liquidityCapacity: unsigned('liquidityCapacity'),
-    fundingSourceIds: sourceIds('fundingSourceIds'),
-    borrowSourceIds: sourceIds('borrowSourceIds'),
-    capitalOpportunitySourceIds: sourceIds('capitalOpportunitySourceIds'),
+    fundingFact: boundFact('fundingFact', 'FUNDING', estimatedFunding),
+    borrowFact: boundFact('borrowFact', 'BORROW', estimatedBorrowCost),
+    capitalOpportunityFact: boundFact(
+      'capitalOpportunityFact',
+      'CAPITAL_OPPORTUNITY',
+      estimatedCapitalOpportunityCost,
+    ),
     exactSourceIds,
     missingFields: sortedUnique([...missing]),
   });
@@ -542,7 +568,7 @@ export function evaluateOpportunityEligibility(
     }
     const structure = structureFor(candidate);
     const evidence = assessEvidence(candidate, policy, evaluatedAtMs, structure.instrumentIds);
-    const normalizedEconomics = normalizeEconomics(candidate.intake.economics);
+    const normalizedEconomics = normalizeEconomics(candidate.intake.economics, evaluatedAtMs);
     const reasons = proposalReasons(candidate.intake, policy, evaluatedAtMs);
     reasons.push(...evidence.reasons);
     if (structure.unknown && candidate.intake.proposal.strategy === 'BASIS') reasons.push('EXECUTABLE_STRUCTURE_UNKNOWN');

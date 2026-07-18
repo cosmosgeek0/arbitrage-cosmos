@@ -6,6 +6,7 @@ import type {
   StrategyProposalId,
 } from './identity.js';
 import type { CapitalTruthState, TruthMetadata } from './truth.js';
+import type { ConservativeEconomicFactBinding } from './conservativeEconomics.js';
 
 export const CAPITAL_CONSIDERATION_MODES = Object.freeze(['ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const);
 export type CapitalConsiderationMode = (typeof CAPITAL_CONSIDERATION_MODES)[number];
@@ -74,10 +75,10 @@ export interface ConservativeEconomicInputs {
   readonly estimatedRecoveryCost: NonNegativeDecimal | null;
   readonly estimatedCapitalOpportunityCost: NonNegativeDecimal | null;
   readonly liquidityCapacity: NonNegativeDecimal | null;
-  /** Canonical owner facts bound per private/public economic component. */
-  readonly fundingSourceIds: readonly string[];
-  readonly borrowSourceIds: readonly string[];
-  readonly capitalOpportunitySourceIds: readonly string[];
+  /** Exact canonical owner bindings; a free-form source ID is never enough. */
+  readonly fundingFact: Readonly<ConservativeEconomicFactBinding> | null;
+  readonly borrowFact: Readonly<ConservativeEconomicFactBinding> | null;
+  readonly capitalOpportunityFact: Readonly<ConservativeEconomicFactBinding> | null;
   readonly exactSourceIds: readonly string[];
   readonly missingFields: readonly string[];
 }

@@ -47,7 +47,10 @@ globalThis.setInterval = realSetInterval;
 Math.random = realRandom;
 
 const globalsAfter = new Set(Object.getOwnPropertyNames(globalThis));
-const { assessCapitalTruth } = await import('../../../dist/capitalFoundation/contracts/index.js');
+const {
+  assessCapitalTruth,
+  createConservativeEconomicFactBinding,
+} = await import('../../../dist/capitalFoundation/contracts/index.js');
 const { MAX_UTC_MS } = await import('../../../dist/foundation/contracts/index.js');
 
 function source(sourceId, overrides = {}) {
@@ -114,8 +117,26 @@ function intelligenceTruth(overrides = {}) {
   };
 }
 
+function economicFact(kind, value, sourceId) {
+  if (value === null) return null;
+  return createConservativeEconomicFactBinding({
+    kind,
+    owner: {
+      FUNDING: 'BASIS_ENGINE',
+      BORROW: 'FOUNDATION_BORROW_TRUTH',
+      CAPITAL_OPPORTUNITY: 'CAPITAL_FOUNDATION',
+    }[kind],
+    value,
+    unit: 'USDT',
+    source: source(sourceId),
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
+
 function exactEconomics(overrides = {}) {
-  return {
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '1000',
     expectedGrossEdge: '20.5',
@@ -130,12 +151,21 @@ function exactEconomics(overrides = {}) {
     estimatedRecoveryCost: '0.75',
     estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '5000',
-    fundingSourceIds: ['funding-owner-1'],
-    borrowSourceIds: ['borrow-owner-1'],
-    capitalOpportunitySourceIds: ['capital-opportunity-owner-1'],
     exactSourceIds: ['exact-economics-1'],
     missingFields: [],
     ...overrides,
+  };
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : economicFact('FUNDING', values.estimatedFunding, 'basis.funding-owner-1'),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : economicFact('BORROW', values.estimatedBorrowCost, 'foundation.borrow-owner-1'),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : economicFact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'capital.opportunity-owner-1'),
   };
 }
 

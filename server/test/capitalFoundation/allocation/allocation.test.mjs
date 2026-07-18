@@ -5,6 +5,7 @@ import {
   addExactDecimals,
   assessCapitalTruth,
   capitalDigest,
+  createConservativeEconomicFactBinding,
   deriveCapitalConfigRevision,
   deriveAllocationDecisionId,
   deriveCapitalMandateId,
@@ -25,6 +26,30 @@ const NOW = 1_800_000_000_000;
 const ELIGIBILITY_POLICY_REVISION = deriveCapitalConfigRevision('allocation-test-eligibility', { revision: 1 });
 const bound = (value) => ({ value, minimum: '0', maximum: '1000000', unit: 'USDT' });
 const integerBound = (value, maximum, unit = 'COUNT') => ({ value, minimum: 0, maximum, unit });
+
+function economicFact(kind, value, sourceId, valuationAsset = 'USDT') {
+  return createConservativeEconomicFactBinding({
+    kind,
+    owner: {
+      FUNDING: 'BASIS_ENGINE',
+      BORROW: 'FOUNDATION_BORROW_TRUTH',
+      CAPITAL_OPPORTUNITY: 'CAPITAL_FOUNDATION',
+    }[kind],
+    value,
+    unit: valuationAsset,
+    source: {
+      sourceTimeMs: NOW - 10,
+      receivedAtMs: NOW - 5,
+      maxAgeMs: 1_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
 
 function truth(overrides = {}) {
   return assessCapitalTruth({
@@ -168,8 +193,14 @@ function candidate(key, amount = '80', overrides = {}) {
       estimatedLatencyCost: '0', estimatedAdverseSelectionCost: '0',
       estimatedRecoveryCost: '0', estimatedCapitalOpportunityCost: '0',
       liquidityCapacity: requestedAmount,
-      fundingSourceIds: [`funding-${key}`], borrowSourceIds: [`borrow-${key}`],
-      capitalOpportunitySourceIds: [`capital-opportunity-${key}`],
+      fundingFact: economicFact('FUNDING', '0', `funding-${key}`, valuationAsset),
+      borrowFact: economicFact('BORROW', '0', `borrow-${key}`, valuationAsset),
+      capitalOpportunityFact: economicFact(
+        'CAPITAL_OPPORTUNITY',
+        '0',
+        `capital-opportunity-${key}`,
+        valuationAsset,
+      ),
       exactSourceIds: [`source-${key}`], missingFields: [],
     },
     evidencePacketIds: [],

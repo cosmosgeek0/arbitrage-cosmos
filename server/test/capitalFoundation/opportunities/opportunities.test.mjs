@@ -5,7 +5,10 @@ import {
   deriveOpportunityEligibilityPolicyRevision,
   evaluateOpportunityEligibility,
 } from '../../../dist/capitalFoundation/opportunities/index.js';
-import { assessCapitalTruth } from '../../../dist/capitalFoundation/contracts/index.js';
+import {
+  assessCapitalTruth,
+  createConservativeEconomicFactBinding,
+} from '../../../dist/capitalFoundation/contracts/index.js';
 
 const NOW = 1_800_000_000_000;
 
@@ -43,8 +46,34 @@ function intelligenceTruth(overrides = {}) {
   };
 }
 
+function economicFact(kind, value, sourceId) {
+  if (value === null) return null;
+  const owner = {
+    FUNDING: 'BASIS_ENGINE',
+    BORROW: 'FOUNDATION_BORROW_TRUTH',
+    CAPITAL_OPPORTUNITY: 'CAPITAL_FOUNDATION',
+  }[kind];
+  return createConservativeEconomicFactBinding({
+    kind,
+    owner,
+    value,
+    unit: 'USDT',
+    source: {
+      sourceTimeMs: NOW - 100,
+      receivedAtMs: NOW - 90,
+      maxAgeMs: 1_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
+
 function economics(overrides = {}) {
-  return {
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '1000.00',
     expectedGrossEdge: '21.5',
@@ -59,12 +88,21 @@ function economics(overrides = {}) {
     estimatedRecoveryCost: '0.75',
     estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '2500',
-    fundingSourceIds: ['funding-owner-1'],
-    borrowSourceIds: ['borrow-owner-1'],
-    capitalOpportunitySourceIds: ['capital-opportunity-owner-1'],
     exactSourceIds: ['economics-caller-1'],
     missingFields: [],
     ...overrides,
+  };
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : economicFact('FUNDING', values.estimatedFunding, 'basis.funding-owner-1'),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : economicFact('BORROW', values.estimatedBorrowCost, 'foundation.borrow-owner-1'),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : economicFact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'capital.opportunity-owner-1'),
   };
 }
 
@@ -584,9 +622,9 @@ test('all-in economics blocks when latency, adverse-selection, recovery, or capi
         estimatedAdverseSelectionCost: null,
         estimatedRecoveryCost: null,
         estimatedCapitalOpportunityCost: null,
-        fundingSourceIds: [],
-        borrowSourceIds: [],
-        capitalOpportunitySourceIds: [],
+        fundingFact: null,
+        borrowFact: null,
+        capitalOpportunityFact: null,
         missingFields: [],
       },
     }),
@@ -602,10 +640,23 @@ test('all-in economics blocks when latency, adverse-selection, recovery, or capi
     ],
   );
   assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
-  assert.deepEqual(result.economics.fundingSourceIds, []);
-  assert.ok(result.economics.missingFields.includes('fundingSourceIds'));
-  assert.ok(result.economics.missingFields.includes('borrowSourceIds'));
-  assert.ok(result.economics.missingFields.includes('capitalOpportunitySourceIds'));
+  assert.equal(result.economics.fundingFact, null);
+  assert.ok(result.economics.missingFields.includes('fundingFact'));
+  assert.ok(result.economics.missingFields.includes('borrowFact'));
+  assert.ok(result.economics.missingFields.includes('capitalOpportunityFact'));
+});
+
+test('arbitrary source IDs cannot bind owner economics or produce eligibility', () => {
+  const forged = economics({
+    exactSourceIds: ['funding-owner-1', 'borrow-owner-1', 'capital-opportunity-owner-1'],
+    fundingFact: null,
+    borrowFact: null,
+    capitalOpportunityFact: null,
+  });
+  const result = one(candidate({ intake: intake({ economics: forged }) }));
+  assert.equal(result.status, 'BLOCKED');
+  assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
+  assert.ok(result.economics.missingFields.includes('fundingFact'));
 });
 
 test('freshness is reevaluated against injected now rather than trusting an old fresh label', () => {

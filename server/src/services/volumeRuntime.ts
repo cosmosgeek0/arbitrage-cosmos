@@ -3,6 +3,10 @@ import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import type {
+  ObservedOrderFocusApplyResult,
+  ObservedOrderFocusSnapshot,
+} from '../engine/volume/observedOrderFocus.js';
 import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
 import type { Decision, EngineEvent, EngineProposal } from '../engine/v0/types.js';
@@ -205,6 +209,16 @@ export class VolumeRuntime {
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
     });
+  }
+
+  /**
+   * Pure cached-owner injection only. The runtime exposes no private refresh
+   * or signed transport through this seam.
+   */
+  applyObservedOrderFocus(
+    snapshot: Readonly<ObservedOrderFocusSnapshot>,
+  ): Readonly<ObservedOrderFocusApplyResult> {
+    return this.engine.applyObservedOrderFocus(snapshot);
   }
 
   private async refreshUniverse(generation: number): Promise<void> {

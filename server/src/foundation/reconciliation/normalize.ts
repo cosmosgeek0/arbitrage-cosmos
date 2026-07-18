@@ -451,7 +451,9 @@ function normalizePositionSet(records: readonly Readonly<ObservedPositionEvidenc
  * transport/timer/environment access exists in this lane.
  */
 export function normalizeObservedEvidence(input: ObservedEvidenceInput, nowMs: number): Readonly<NormalizedObservedEvidence> {
-  if (!isValidUtcMillis(nowMs)) throw new TypeError('normalizeObservedEvidence: nowMs must be valid UTC ms');
+  if (!isValidUtcMillis(nowMs) || Object.is(nowMs, -0)) {
+    throw new TypeError('normalizeObservedEvidence: nowMs must be valid UTC ms');
+  }
   const serializability = findSerializabilityIssues(input);
   if (serializability.length > 0) {
     throw new TypeError(

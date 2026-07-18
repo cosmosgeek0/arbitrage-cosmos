@@ -3,6 +3,9 @@ import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import type {
+  ObservedOrderFocusApplyResult,
+} from '../engine/volume/observedOrderFocus.js';
 import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
 import type { Decision, EngineEvent } from '../engine/v0/types.js';
@@ -14,6 +17,10 @@ import type {
 import type { AppConfig } from '../types.js';
 import { compareExactDecimals, normalizeNonNegativeExactDecimal } from '../capitalFoundation/contracts/index.js';
 import type { Ledger } from '../ledger.js';
+import {
+  createObservedOrderFocusPersistence,
+  DurableObservedOrderFocusCoordinator,
+} from './observedOrderFocus.js';
 
 interface MarketUniverseRow {
   symbol: string;
@@ -64,6 +71,7 @@ function chunks<T>(rows: T[], size: number): T[][] {
 
 export class VolumeRuntime {
   private readonly engine: VolumeEngine;
+  private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
   private streams: BinanceStream[] = [];
   private streamStatus = new Map<string, FeedStatus>();
   private eligibleSymbols: string[] = [];
@@ -107,10 +115,33 @@ export class VolumeRuntime {
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
+    this.observedOrderFocusCoordinator = typeof ledger?.getConfigValue === 'function'
+      && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
+      ? new DurableObservedOrderFocusCoordinator(
+          systemClock,
+          createObservedOrderFocusPersistence(ledger),
+          Object.freeze({
+            applyObservedOrderFocus: (snapshot: unknown) => this.engine.applyObservedOrderFocus(snapshot),
+            restoreObservedOrderFocus: (snapshot: unknown) => this.engine.restoreObservedOrderFocus(snapshot),
+            observedOrderFocusReadback: (
+              status: ObservedOrderFocusApplyResult['status'],
+              applied: boolean,
+              reasonCodes: readonly string[],
+            ) => this.engine.observedOrderFocusReadback(status, applied, reasonCodes),
+          }),
+        )
+      : null;
   }
 
   async start(): Promise<void> {
     if (this.running) return this.startPromise ?? Promise.resolve();
+    const restoration = this.observedOrderFocusCoordinator?.restore();
+    if (restoration !== undefined
+        && (restoration.state === 'UNAVAILABLE'
+          || restoration.state === 'CORRUPT'
+          || restoration.state === 'CONFLICT')) {
+      throw new Error(`volume observed-order focus restore failed: ${restoration.state}`);
+    }
     const generation = ++this.generation;
     this.evidenceRevision = 0;
     this.lastRawTradeId.clear();
@@ -327,6 +358,20 @@ export class VolumeRuntime {
 
   intakePaused(): boolean {
     return this.engine.intakePaused();
+  }
+
+  /**
+   * Pure cached-owner injection only. The runtime exposes no private refresh
+   * or signed transport through this seam.
+   */
+  applyObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    return this.observedOrderFocusCoordinator === null
+      ? this.engine.observedOrderFocusReadback(
+          'REJECTED_PERSISTENCE_UNAVAILABLE',
+          false,
+          ['OBSERVED_ORDER_FOCUS_PERSISTENCE_UNAVAILABLE'],
+        )
+      : this.observedOrderFocusCoordinator.apply(snapshot);
   }
 
   private async refreshUniverse(generation: number): Promise<void> {

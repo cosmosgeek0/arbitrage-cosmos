@@ -69,6 +69,7 @@ import {
 import { admitProductionSourceRegistry } from './sourceAdmission.js';
 import { createProductionCapitalEligibilityPort } from './capitalEconomics.js';
 import { createProductionVolumeRiskPort } from './volumeRisk.js';
+import { createProductionObservedOrderFocusPort } from './observedOrderFocus.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
@@ -2223,11 +2224,17 @@ export function createProductionSystemIntegrationPorts(
     runtime: input.volume,
     owner: input.volumeRiskEvidenceOwner ?? null,
   });
+  const observedOrderFocus = createProductionObservedOrderFocusPort({
+    clock: input.clock,
+    runtime: input.volume,
+    owner: input.observedOrderFocusEvidenceOwner ?? null,
+  });
 
   return Object.freeze({
     sourceRegistry, runtimes, components, summaries, intelligenceEvidence,
     strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
     capitalEligibility,
     volumeRisk,
+    observedOrderFocus,
   });
 }

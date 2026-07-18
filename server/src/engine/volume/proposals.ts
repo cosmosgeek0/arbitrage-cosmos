@@ -766,7 +766,14 @@ export class ProposalStore {
 
   /** Expire proposals whose symbols left the configured universe. */
   reconcileSymbols(symbols: ReadonlySet<string>): void {
-    const now = this.strictNow();
+    this.reconcileSymbolsAt(symbols, this.strictNow());
+  }
+
+  /** Same mutation with one already-validated Engine-owned clock cut. */
+  reconcileSymbolsAt(symbols: ReadonlySet<string>, now: number): void {
+    if (!isValidProposalClockTime(now)) {
+      throw new TypeError('Volume proposal universe mutation received invalid UTC ms');
+    }
     for (const [symbol, id] of this.openBySymbol) {
       if (symbols.has(symbol)) continue;
       const proposal = this.proposals.get(id);

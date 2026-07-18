@@ -57,7 +57,7 @@ def policy(
         maximum_brier_micros=20_000,
         maximum_absolute_bias_micros=60_000,
         maximum_mean_absolute_residual_micros=100_000,
-        maximum_absolute_cost_residual_micros=100,
+        maximum_mean_absolute_cost_residual_micros=100,
         required_cost_unit="quote-notional-micros.v1",
         required_cost_valuation_asset="USDT",
     )
@@ -232,7 +232,7 @@ def test_replay_residuals_are_exact_and_promote_only_research_head(tmp_path: Pat
     assert result.brier_micros == 10_000
     assert result.bias_micros == 50_000
     assert result.mean_absolute_residual_micros == 100_000
-    assert result.mean_cost_residual_micros == 10
+    assert result.mean_absolute_cost_residual_micros == 10
     assert result.report_revision.startswith("sha256:")
 
     with ResearchRegistryStore(tmp_path) as store:

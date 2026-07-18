@@ -20,6 +20,13 @@ from quant_edge.registry_ops.contracts import OutcomeReality, mapping_digest
 MAX_RECORDED_OUTCOMES: Final = 10_000
 MICROS: Final = 1_000_000
 RECORDED_OUTCOME_ATTESTATION_SCHEMA: Final = "Q15RecordedOutcomeAttestationV1"
+_MAX_EXACT_COMPARISON_DELTAS: Final = (
+    MAX_RECORDED_OUTCOMES * MAX_RECORDED_OUTCOMES * MICROS * MICROS,
+    MAX_RECORDED_OUTCOMES * MAX_RECORDED_OUTCOMES * MICROS,
+    MAX_RECORDED_OUTCOMES * MAX_RECORDED_OUTCOMES * MICROS,
+    MAX_RECORDED_OUTCOMES * MAX_RECORDED_OUTCOMES * 10**15,
+)
+_MAX_ROUNDED_COMPARISON_DELTAS: Final = (MICROS, MICROS, MICROS, 10**15)
 
 
 def _ceil_nonnegative_ratio(numerator: int, denominator: int) -> int:
@@ -44,6 +51,11 @@ class RecordedCalibrationStatus(StrEnum):
     REJECTED = "REJECTED"
     NOT_CONFIGURED = "NOT_CONFIGURED"
     WRONG_REALITY = "WRONG_REALITY"
+
+
+class RecordedComparisonVerdict(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
 
 
 @dataclass(frozen=True, slots=True)
@@ -677,7 +689,7 @@ class RecordedCalibrationPolicyV1:
     maximum_brier_micros: int
     maximum_absolute_bias_micros: int
     maximum_mean_absolute_residual_micros: int
-    maximum_absolute_cost_residual_micros: int
+    maximum_mean_absolute_cost_residual_micros: int
     required_cost_unit: str
     required_cost_valuation_asset: str
 
@@ -706,8 +718,8 @@ class RecordedCalibrationPolicyV1:
                 getattr(self, field_name), field=field_name, minimum=0, maximum=MICROS
             )
         require_strict_int(
-            self.maximum_absolute_cost_residual_micros,
-            field="maximum_absolute_cost_residual_micros",
+            self.maximum_mean_absolute_cost_residual_micros,
+            field="maximum_mean_absolute_cost_residual_micros",
             minimum=0,
             maximum=10**15,
         )
@@ -729,7 +741,9 @@ class RecordedCalibrationPolicyV1:
         return {
             "authority": self.authority.value,
             "maximumAbsoluteBiasMicros": self.maximum_absolute_bias_micros,
-            "maximumAbsoluteCostResidualMicros": self.maximum_absolute_cost_residual_micros,
+            "maximumMeanAbsoluteCostResidualMicros": (
+                self.maximum_mean_absolute_cost_residual_micros
+            ),
             "maximumBrierMicros": self.maximum_brier_micros,
             "maximumMeanAbsoluteResidualMicros": self.maximum_mean_absolute_residual_micros,
             "maximumSourceRevisions": self.maximum_source_revisions,
@@ -764,7 +778,11 @@ class RecordedCalibrationReportV1:
     brier_micros: int | None
     bias_micros: int | None
     mean_absolute_residual_micros: int | None
-    mean_cost_residual_micros: int | None
+    mean_absolute_cost_residual_micros: int | None
+    brier_numerator_micros_squared: int | None
+    bias_numerator_micros: int | None
+    absolute_residual_numerator_micros: int | None
+    absolute_cost_residual_numerator_micros: int | None
 
     def __post_init__(self) -> None:
         for field_name in ("report_id", "slot_id", "corpus_id", "corpus_revision"):
@@ -806,13 +824,60 @@ class RecordedCalibrationReportV1:
             self.brier_micros,
             self.bias_micros,
             self.mean_absolute_residual_micros,
-            self.mean_cost_residual_micros,
+            self.mean_absolute_cost_residual_micros,
+        )
+        exact_numerators = (
+            self.brier_numerator_micros_squared,
+            self.bias_numerator_micros,
+            self.absolute_residual_numerator_micros,
+            self.absolute_cost_residual_numerator_micros,
         )
         if self.status is RecordedCalibrationStatus.DATA_INSUFFICIENT:
-            if any(value is not None for value in metrics):
-                raise ContractValueError("DATA_INSUFFICIENT cannot publish metrics")
-        elif any(value is None for value in metrics):
-            raise ContractValueError("evaluated calibration reports require all metrics")
+            if any(value is not None for value in (*metrics, *exact_numerators)):
+                raise ContractValueError(
+                    "DATA_INSUFFICIENT cannot publish metrics or exact numerators"
+                )
+        elif any(value is None for value in (*metrics, *exact_numerators)):
+            raise ContractValueError(
+                "evaluated calibration reports require all metrics and exact numerators"
+            )
+        else:
+            if any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (*metrics, *exact_numerators)
+            ):
+                raise ContractValueError(
+                    "recorded calibration metrics and exact numerators must be integers"
+                )
+            count = len(self.record_ids)
+            if count == 0:
+                raise ContractValueError("evaluated calibration reports require records")
+            brier_numerator, bias_numerator, residual_numerator, cost_numerator = cast(
+                tuple[int, int, int, int], exact_numerators
+            )
+            if (
+                brier_numerator < 0
+                or residual_numerator < 0
+                or cost_numerator < 0
+                or abs(bias_numerator) > count * MICROS
+                or brier_numerator > count * MICROS * MICROS
+                or residual_numerator > count * MICROS
+                or cost_numerator > count * 10**15
+            ):
+                raise ContractValueError("recorded calibration exact numerators are out of bounds")
+            expected_metrics = (
+                _ceil_nonnegative_ratio(brier_numerator, count * MICROS),
+                _round_ratio_away_from_zero(bias_numerator, count),
+                _ceil_nonnegative_ratio(residual_numerator, count),
+                _ceil_nonnegative_ratio(cost_numerator, count),
+            )
+            if (
+                self.brier_micros,
+                self.bias_micros,
+                self.mean_absolute_residual_micros,
+                self.mean_absolute_cost_residual_micros,
+            ) != expected_metrics:
+                raise ContractValueError("recorded calibration metrics must match exact numerators")
 
     @property
     def report_revision(self) -> str:
@@ -824,16 +889,20 @@ class RecordedCalibrationReportV1:
 
     def as_mapping(self) -> dict[str, object]:
         return {
+            "absoluteCostResidualNumeratorMicros": (self.absolute_cost_residual_numerator_micros),
+            "absoluteResidualNumeratorMicros": self.absolute_residual_numerator_micros,
             "attestationArtifactSha256": None
             if self.attestation_artifact_sha256 is None
             else self.attestation_artifact_sha256.hexdigest,
+            "biasNumeratorMicros": self.bias_numerator_micros,
             "biasMicros": self.bias_micros,
+            "brierNumeratorMicrosSquared": self.brier_numerator_micros_squared,
             "brierMicros": self.brier_micros,
             "corpusId": self.corpus_id,
             "corpusRevision": self.corpus_revision,
             "corpusSha256": self.corpus_sha256.hexdigest,
             "meanAbsoluteResidualMicros": self.mean_absolute_residual_micros,
-            "meanCostResidualMicros": self.mean_cost_residual_micros,
+            "meanAbsoluteCostResidualMicros": self.mean_absolute_cost_residual_micros,
             "meanOutcomeMicros": self.mean_outcome_micros,
             "meanPredictionMicros": self.mean_prediction_micros,
             "modelId": self.model_id,
@@ -900,6 +969,136 @@ class RecordedCalibrationSnapshotV1:
             "slotId": self.slot_id,
             "transitionId": self.transition_id,
             "updatedAtMs": str(self.updated_at_ms),
+        }
+
+    @property
+    def content_digest(self) -> DigestV1:
+        return mapping_digest(self.as_mapping())
+
+
+@dataclass(frozen=True, slots=True)
+class RecordedCalibrationComparisonV1:
+    comparison_id: str
+    baseline_report_revision: str
+    challenger_report_revision: str
+    baseline_model_revision: str
+    challenger_model_revision: str
+    outcome_digests: tuple[DigestV1, ...]
+    verdict: RecordedComparisonVerdict
+    reason_codes: tuple[str, ...]
+    brier_delta_micros: int | None
+    absolute_bias_delta_micros: int | None
+    mean_absolute_residual_delta_micros: int | None
+    mean_absolute_cost_residual_delta_micros: int | None
+    brier_exact_delta_numerator: int | None
+    absolute_bias_exact_delta_numerator: int | None
+    mean_absolute_residual_exact_delta_numerator: int | None
+    mean_absolute_cost_residual_exact_delta_numerator: int | None
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "comparison_id",
+            "baseline_report_revision",
+            "challenger_report_revision",
+            "baseline_model_revision",
+            "challenger_model_revision",
+        ):
+            require_contract_id(getattr(self, field_name), field=field_name)
+        if not isinstance(self.verdict, RecordedComparisonVerdict):
+            raise ContractValueError("verdict must be RecordedComparisonVerdict")
+        if self.verdict is RecordedComparisonVerdict.PASS and self.reason_codes:
+            raise ContractValueError("PASS comparisons cannot carry reason codes")
+        if self.verdict is RecordedComparisonVerdict.FAIL and not self.reason_codes:
+            raise ContractValueError("FAIL comparisons require reason codes")
+        deltas = (
+            self.brier_delta_micros,
+            self.absolute_bias_delta_micros,
+            self.mean_absolute_residual_delta_micros,
+            self.mean_absolute_cost_residual_delta_micros,
+        )
+        exact_deltas = (
+            self.brier_exact_delta_numerator,
+            self.absolute_bias_exact_delta_numerator,
+            self.mean_absolute_residual_exact_delta_numerator,
+            self.mean_absolute_cost_residual_exact_delta_numerator,
+        )
+        if "METRICS_UNAVAILABLE" in self.reason_codes:
+            if any(value is not None for value in (*deltas, *exact_deltas)):
+                raise ContractValueError("unavailable metrics cannot publish comparison deltas")
+        elif any(value is None for value in (*deltas, *exact_deltas)):
+            raise ContractValueError(
+                "available comparisons require every rounded and exact metric delta"
+            )
+        else:
+            if any(
+                isinstance(value, bool) or not isinstance(value, int)
+                for value in (*deltas, *exact_deltas)
+            ):
+                raise ContractValueError("comparison deltas must be integers")
+            available_deltas = cast(tuple[int, int, int, int], deltas)
+            available_exact_deltas = cast(tuple[int, int, int, int], exact_deltas)
+            if any(
+                abs(value) > maximum
+                for value, maximum in zip(
+                    available_deltas,
+                    _MAX_ROUNDED_COMPARISON_DELTAS,
+                    strict=True,
+                )
+            ):
+                raise ContractValueError("rounded comparison deltas are out of bounds")
+            if any(
+                abs(value) > maximum
+                for value, maximum in zip(
+                    available_exact_deltas,
+                    _MAX_EXACT_COMPARISON_DELTAS,
+                    strict=True,
+                )
+            ):
+                raise ContractValueError("exact comparison deltas are out of bounds")
+            if any(
+                rounded != 0 and (exact == 0 or (rounded > 0) is not (exact > 0))
+                for rounded, exact in zip(
+                    available_deltas,
+                    available_exact_deltas,
+                    strict=True,
+                )
+            ):
+                raise ContractValueError(
+                    "rounded comparison deltas must agree with exact delta direction"
+                )
+        if self.verdict is RecordedComparisonVerdict.PASS:
+            available_exact_deltas = cast(tuple[int, int, int, int], exact_deltas)
+            if any(value > 0 for value in available_exact_deltas):
+                raise ContractValueError(
+                    "PASS comparisons cannot carry positive regressions in exact evidence"
+                )
+            if not any(value < 0 for value in available_exact_deltas):
+                raise ContractValueError("PASS comparisons require a strict improvement")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "absoluteBiasDeltaMicros": self.absolute_bias_delta_micros,
+            "absoluteBiasExactDeltaNumerator": self.absolute_bias_exact_delta_numerator,
+            "baselineModelRevision": self.baseline_model_revision,
+            "baselineReportRevision": self.baseline_report_revision,
+            "brierDeltaMicros": self.brier_delta_micros,
+            "brierExactDeltaNumerator": self.brier_exact_delta_numerator,
+            "challengerModelRevision": self.challenger_model_revision,
+            "challengerReportRevision": self.challenger_report_revision,
+            "comparisonId": self.comparison_id,
+            "meanAbsoluteResidualDeltaMicros": self.mean_absolute_residual_delta_micros,
+            "meanAbsoluteResidualExactDeltaNumerator": (
+                self.mean_absolute_residual_exact_delta_numerator
+            ),
+            "meanAbsoluteCostResidualDeltaMicros": (self.mean_absolute_cost_residual_delta_micros),
+            "meanAbsoluteCostResidualExactDeltaNumerator": (
+                self.mean_absolute_cost_residual_exact_delta_numerator
+            ),
+            "outcomeSha256": [digest.hexdigest for digest in self.outcome_digests],
+            "reasonCodes": list(self.reason_codes),
+            "schema": "Q15RecordedCalibrationComparisonV1",
+            "verdict": self.verdict.value,
+            "version": 1,
         }
 
     @property
@@ -986,6 +1185,7 @@ def _evaluate_recorded_calibration(
     if len(corpus.records) < policy.minimum_records or not corpus.records:
         status = RecordedCalibrationStatus.DATA_INSUFFICIENT
         metrics: tuple[int | None, ...] = (None,) * 6
+        exact_numerators: tuple[int | None, ...] = (None,) * 4
     else:
         count = len(corpus.records)
         mean_prediction = sum(record.prediction_micros for record in corpus.records) // count
@@ -995,20 +1195,31 @@ def _evaluate_recorded_calibration(
         brier_numerator = sum(
             record.residual_micros * record.residual_micros for record in corpus.records
         )
-        cost_residual_total = sum(record.cost_residual_micros for record in corpus.records)
+        absolute_cost_residual_total = sum(
+            abs(record.cost_residual_micros) for record in corpus.records
+        )
         # Positive fractional loss/error is rounded upward; signed bias rounds
         # away from zero. Exact numerators, not rounded reports, gate budgets.
         bias = _round_ratio_away_from_zero(bias_total, count)
         mean_absolute_residual = _ceil_nonnegative_ratio(absolute_residual_total, count)
         brier = _ceil_nonnegative_ratio(brier_numerator, count * MICROS)
-        mean_cost_residual = _round_ratio_away_from_zero(cost_residual_total, count)
+        mean_absolute_cost_residual = _ceil_nonnegative_ratio(
+            absolute_cost_residual_total,
+            count,
+        )
         metrics = (
             mean_prediction,
             mean_outcome,
             brier,
             bias,
             mean_absolute_residual,
-            mean_cost_residual,
+            mean_absolute_cost_residual,
+        )
+        exact_numerators = (
+            brier_numerator,
+            bias_total,
+            absolute_residual_total,
+            absolute_cost_residual_total,
         )
         if brier_numerator > policy.maximum_brier_micros * count * MICROS:
             reasons.add("BRIER_EXCEEDS_BUDGET")
@@ -1016,8 +1227,8 @@ def _evaluate_recorded_calibration(
             reasons.add("BIAS_EXCEEDS_BUDGET")
         if absolute_residual_total > policy.maximum_mean_absolute_residual_micros * count:
             reasons.add("RESIDUAL_EXCEEDS_BUDGET")
-        if abs(cost_residual_total) > policy.maximum_absolute_cost_residual_micros * count:
-            reasons.add("COST_RESIDUAL_EXCEEDS_BUDGET")
+        if absolute_cost_residual_total > policy.maximum_mean_absolute_cost_residual_micros * count:
+            reasons.add("MEAN_ABSOLUTE_COST_RESIDUAL_EXCEEDS_BUDGET")
         if "OUTCOME_REALITY_NOT_AUTHORIZED" in reasons:
             status = RecordedCalibrationStatus.WRONG_REALITY
         elif "OUTCOME_ATTESTATION_REQUIRED" in reasons:
@@ -1049,5 +1260,139 @@ def _evaluate_recorded_calibration(
         brier_micros=metrics[2],
         bias_micros=metrics[3],
         mean_absolute_residual_micros=metrics[4],
-        mean_cost_residual_micros=metrics[5],
+        mean_absolute_cost_residual_micros=metrics[5],
+        brier_numerator_micros_squared=exact_numerators[0],
+        bias_numerator_micros=exact_numerators[1],
+        absolute_residual_numerator_micros=exact_numerators[2],
+        absolute_cost_residual_numerator_micros=exact_numerators[3],
+    )
+
+
+def compare_recorded_calibrations(
+    *,
+    comparison_id: str,
+    baseline: RecordedCalibrationReportV1,
+    challenger: RecordedCalibrationReportV1,
+) -> RecordedCalibrationComparisonV1:
+    require_contract_id(comparison_id, field="comparison_id")
+    if not isinstance(baseline, RecordedCalibrationReportV1) or not isinstance(
+        challenger, RecordedCalibrationReportV1
+    ):
+        raise ContractValueError("baseline and challenger must be recorded calibration reports")
+    reasons: set[str] = set()
+    if baseline.slot_id != challenger.slot_id:
+        reasons.add("SLOT_MISMATCH")
+    if baseline.policy.authority is not challenger.policy.authority:
+        reasons.add("AUTHORITY_MISMATCH")
+    if (
+        baseline.record_ids != challenger.record_ids
+        or baseline.outcome_digests != challenger.outcome_digests
+    ):
+        reasons.add("OUTCOME_COHORT_MISMATCH")
+    if not baseline.is_promotable:
+        reasons.add("BASELINE_NOT_PROMOTABLE")
+    if not challenger.is_promotable:
+        reasons.add("CHALLENGER_NOT_PROMOTABLE")
+    baseline_metrics = (
+        baseline.brier_micros,
+        baseline.bias_micros,
+        baseline.mean_absolute_residual_micros,
+        baseline.mean_absolute_cost_residual_micros,
+    )
+    challenger_metrics = (
+        challenger.brier_micros,
+        challenger.bias_micros,
+        challenger.mean_absolute_residual_micros,
+        challenger.mean_absolute_cost_residual_micros,
+    )
+    baseline_exact = (
+        baseline.brier_numerator_micros_squared,
+        baseline.bias_numerator_micros,
+        baseline.absolute_residual_numerator_micros,
+        baseline.absolute_cost_residual_numerator_micros,
+    )
+    challenger_exact = (
+        challenger.brier_numerator_micros_squared,
+        challenger.bias_numerator_micros,
+        challenger.absolute_residual_numerator_micros,
+        challenger.absolute_cost_residual_numerator_micros,
+    )
+    baseline_count = len(baseline.record_ids)
+    challenger_count = len(challenger.record_ids)
+    if (
+        any(
+            value is None
+            for value in (
+                *baseline_metrics,
+                *challenger_metrics,
+                *baseline_exact,
+                *challenger_exact,
+            )
+        )
+        or baseline_count == 0
+        or challenger_count == 0
+    ):
+        reasons.add("METRICS_UNAVAILABLE")
+        deltas: tuple[int | None, ...] = (None,) * 4
+        exact_deltas: tuple[int | None, ...] = (None,) * 4
+    else:
+        baseline_brier, baseline_bias, baseline_residual, baseline_cost = cast(
+            tuple[int, int, int, int], baseline_metrics
+        )
+        challenger_brier, challenger_bias, challenger_residual, challenger_cost = cast(
+            tuple[int, int, int, int], challenger_metrics
+        )
+        baseline_brier_num, baseline_bias_num, baseline_residual_num, baseline_cost_num = cast(
+            tuple[int, int, int, int], baseline_exact
+        )
+        (
+            challenger_brier_num,
+            challenger_bias_num,
+            challenger_residual_num,
+            challenger_cost_num,
+        ) = cast(tuple[int, int, int, int], challenger_exact)
+        deltas = (
+            challenger_brier - baseline_brier,
+            abs(challenger_bias) - abs(baseline_bias),
+            challenger_residual - baseline_residual,
+            challenger_cost - baseline_cost,
+        )
+        # Every exact delta is a rational cross-product. Brier's shared MICROS
+        # denominator cancels; the sign therefore proves exact non-regression
+        # even when both conservative integer-micro reports round to a tie.
+        exact_deltas = (
+            challenger_brier_num * baseline_count - baseline_brier_num * challenger_count,
+            abs(challenger_bias_num) * baseline_count - abs(baseline_bias_num) * challenger_count,
+            challenger_residual_num * baseline_count - baseline_residual_num * challenger_count,
+            challenger_cost_num * baseline_count - baseline_cost_num * challenger_count,
+        )
+        reason_by_index = (
+            "BRIER_REGRESSION",
+            "ABSOLUTE_BIAS_REGRESSION",
+            "ABSOLUTE_RESIDUAL_REGRESSION",
+            "MEAN_ABSOLUTE_COST_RESIDUAL_REGRESSION",
+        )
+        for index, delta in enumerate(exact_deltas):
+            if delta > 0:
+                reasons.add(reason_by_index[index])
+        if all(delta == 0 for delta in exact_deltas):
+            reasons.add("NO_STRICT_IMPROVEMENT")
+    verdict = RecordedComparisonVerdict.PASS if not reasons else RecordedComparisonVerdict.FAIL
+    return RecordedCalibrationComparisonV1(
+        comparison_id=comparison_id,
+        baseline_report_revision=baseline.report_revision,
+        challenger_report_revision=challenger.report_revision,
+        baseline_model_revision=baseline.model_revision or "model-revision-unavailable",
+        challenger_model_revision=challenger.model_revision or "model-revision-unavailable",
+        outcome_digests=challenger.outcome_digests,
+        verdict=verdict,
+        reason_codes=tuple(sorted(reasons)),
+        brier_delta_micros=deltas[0],
+        absolute_bias_delta_micros=deltas[1],
+        mean_absolute_residual_delta_micros=deltas[2],
+        mean_absolute_cost_residual_delta_micros=deltas[3],
+        brier_exact_delta_numerator=exact_deltas[0],
+        absolute_bias_exact_delta_numerator=exact_deltas[1],
+        mean_absolute_residual_exact_delta_numerator=exact_deltas[2],
+        mean_absolute_cost_residual_exact_delta_numerator=exact_deltas[3],
     )

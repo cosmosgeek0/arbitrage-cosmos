@@ -66,14 +66,17 @@ from quant_edge.registry_ops.passive_fill_receipts import (
 )
 from quant_edge.registry_ops.recorded_outcomes import (
     CalibrationAuthority,
+    RecordedCalibrationComparisonV1,
     RecordedCalibrationPolicyV1,
     RecordedCalibrationReportV1,
     RecordedCalibrationSnapshotV1,
+    RecordedComparisonVerdict,
     RecordedOutcomeAttestationV1,
     RecordedOutcomeCorpusV1,
     RecordedPredictionRegistrationV1,
     RecordedPredictionV1,
     _evaluate_recorded_calibration,
+    compare_recorded_calibrations,
     evaluate_recorded_calibration,
 )
 from quant_edge.survival.passive_fill import (
@@ -807,6 +810,19 @@ class ResearchRegistryStore:
                 FOREIGN KEY(report_revision)
                     REFERENCES recorded_calibration_reports(report_revision)
             ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_comparisons(
+                comparison_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL UNIQUE,
+                baseline_report_revision TEXT NOT NULL,
+                challenger_report_revision TEXT NOT NULL,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                verdict TEXT NOT NULL,
+                FOREIGN KEY(baseline_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision),
+                FOREIGN KEY(challenger_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
             CREATE TABLE IF NOT EXISTS recorded_calibration_transitions(
                 transition_id TEXT PRIMARY KEY,
                 slot_id TEXT NOT NULL,
@@ -817,6 +833,14 @@ class ResearchRegistryStore:
                 committed_at_ms INTEGER NOT NULL,
                 FOREIGN KEY(report_revision)
                     REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_transition_comparisons(
+                transition_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL,
+                FOREIGN KEY(transition_id)
+                    REFERENCES recorded_calibration_transitions(transition_id),
+                FOREIGN KEY(comparison_revision)
+                    REFERENCES recorded_calibration_comparisons(comparison_revision)
             ) STRICT;
             """
         )
@@ -3190,6 +3214,7 @@ class ResearchRegistryStore:
         if (
             bytes(report["body"]) != canonical_json_bytes(report_mapping)
             or mapping_digest(report_mapping).hexdigest != report["body_sha"]
+            or snapshot.report_revision != f"sha256:{report['body_sha']}"
             or report_mapping.get("reportId") != snapshot.report_id
             or report_mapping.get("modelId") != snapshot.model_id
             or report_mapping.get("modelRevision") != snapshot.model_revision
@@ -3202,6 +3227,89 @@ class ResearchRegistryStore:
             raise RegistryIntegrityError("recorded calibration head and report binding is corrupt")
         return snapshot
 
+    def record_recorded_calibration_comparison(
+        self,
+        comparison: RecordedCalibrationComparisonV1,
+        *,
+        baseline: RecordedCalibrationReportV1,
+        challenger: RecordedCalibrationReportV1,
+    ) -> DigestV1:
+        if not isinstance(comparison, RecordedCalibrationComparisonV1):
+            raise ContractValueError("comparison must be RecordedCalibrationComparisonV1")
+        expected = compare_recorded_calibrations(
+            comparison_id=comparison.comparison_id,
+            baseline=baseline,
+            challenger=challenger,
+        )
+        if expected != comparison:
+            raise RegistryConflictError(
+                "recorded calibration comparison does not match exact reports"
+            )
+        body = canonical_json_bytes(comparison.as_mapping())
+        revision = f"sha256:{comparison.content_digest.hexdigest}"
+        connection = self._begin(None)
+        try:
+            for persisted_report in (baseline, challenger):
+                report_revision = persisted_report.report_revision
+                report = connection.execute(
+                    "SELECT body_sha,body FROM recorded_calibration_reports "
+                    "WHERE report_revision=?",
+                    (report_revision,),
+                ).fetchone()
+                if report is None:
+                    raise RegistryConflictError(
+                        "recorded calibration comparison requires both persisted reports"
+                    )
+                expected_report_body = canonical_json_bytes(persisted_report.as_mapping())
+                if (
+                    report["body_sha"] != persisted_report.content_digest.hexdigest
+                    or bytes(report["body"]) != expected_report_body
+                    or report_revision != f"sha256:{report['body_sha']}"
+                ):
+                    raise RegistryIntegrityError(
+                        "recorded calibration comparison requires exact persisted report bytes"
+                    )
+            existing = connection.execute(
+                "SELECT comparison_revision,body_sha,body FROM "
+                "recorded_calibration_comparisons WHERE comparison_id=?",
+                (comparison.comparison_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["comparison_revision"] != revision
+                    or existing["body_sha"] != comparison.content_digest.hexdigest
+                    or bytes(existing["body"]) != body
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration comparison identity already differs"
+                    )
+                self._finish(connection, None)
+                return comparison.content_digest
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_comparisons("
+                    "comparison_id,comparison_revision,baseline_report_revision,"
+                    "challenger_report_revision,body_sha,body,verdict) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        comparison.comparison_id,
+                        revision,
+                        comparison.baseline_report_revision,
+                        comparison.challenger_report_revision,
+                        comparison.content_digest.hexdigest,
+                        body,
+                        comparison.verdict.value,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded calibration comparison revision is already bound"
+                ) from error
+            self._finish(connection, None)
+            return comparison.content_digest
+        except BaseException:
+            self._rollback(connection)
+            raise
+
     def promote_recorded_calibration(
         self,
         *,
@@ -3209,6 +3317,7 @@ class ResearchRegistryStore:
         transition_id: str,
         expected_generation: int,
         now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
         hook: FaultHook | None = None,
     ) -> RecordedCalibrationSnapshotV1:
         if report.model_id == "passive-fill":
@@ -3220,6 +3329,7 @@ class ResearchRegistryStore:
             transition_id=transition_id,
             expected_generation=expected_generation,
             now_ms=now_ms,
+            comparison=comparison,
             hook=hook,
         )
 
@@ -3259,6 +3369,7 @@ class ResearchRegistryStore:
         transition_id: str,
         expected_generation: int,
         now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
         hook: FaultHook | None = None,
         passive_fill_receipt: PassiveFillHeldOutCalibrationReceiptV1 | None = None,
     ) -> RecordedCalibrationSnapshotV1:
@@ -3307,12 +3418,25 @@ class ResearchRegistryStore:
             if existing_transition is not None:
                 mapping = parse_canonical_object(bytes(existing_transition["snapshot"]))
                 existing = _recorded_calibration_snapshot_from_mapping(mapping)
+                linked_comparison = connection.execute(
+                    "SELECT comparison_revision FROM "
+                    "recorded_calibration_transition_comparisons WHERE transition_id=?",
+                    (transition_id,),
+                ).fetchone()
+                expected_comparison_revision = (
+                    None if comparison is None else f"sha256:{comparison.content_digest.hexdigest}"
+                )
                 if (
                     existing_transition["expected_generation"] != expected_generation
                     or existing_transition["report_revision"] != report.report_revision
                     or existing.content_digest.hexdigest != existing_transition["snapshot_sha"]
                     or bytes(existing_transition["snapshot"])
                     != canonical_json_bytes(existing.as_mapping())
+                    or (linked_comparison is None) != (expected_comparison_revision is None)
+                    or (
+                        linked_comparison is not None
+                        and linked_comparison["comparison_revision"] != expected_comparison_revision
+                    )
                 ):
                     raise RegistryConflictError(
                         "recorded calibration transition idempotency key conflicts"
@@ -3327,6 +3451,7 @@ class ResearchRegistryStore:
             generation = 0 if head is None else int(head["generation"])
             if generation != expected_generation:
                 raise RegistryConflictError("recorded calibration generation is stale")
+            comparison_revision: str | None = None
             if head is not None:
                 head_mapping = parse_canonical_object(bytes(head["snapshot"]))
                 head_snapshot = _recorded_calibration_snapshot_from_mapping(head_mapping)
@@ -3334,6 +3459,54 @@ class ResearchRegistryStore:
                     head["snapshot"]
                 ) != canonical_json_bytes(head_snapshot.as_mapping()):
                     raise RegistryIntegrityError("recorded calibration prior head is corrupt")
+                if now_ms <= head_snapshot.updated_at_ms:
+                    raise RegistryConflictError(
+                        "recorded calibration promotion time must strictly advance"
+                    )
+                prior_report = connection.execute(
+                    "SELECT body_sha,body FROM recorded_calibration_reports "
+                    "WHERE report_revision=?",
+                    (head_snapshot.report_revision,),
+                ).fetchone()
+                if prior_report is None:
+                    raise RegistryIntegrityError("recorded calibration prior report is absent")
+                prior_mapping = parse_canonical_object(bytes(prior_report["body"]))
+                if (
+                    bytes(prior_report["body"]) != canonical_json_bytes(prior_mapping)
+                    or mapping_digest(prior_mapping).hexdigest != prior_report["body_sha"]
+                    or head_snapshot.report_revision != f"sha256:{prior_report['body_sha']}"
+                ):
+                    raise RegistryIntegrityError(
+                        "recorded calibration prior report binding is corrupt"
+                    )
+                if not isinstance(comparison, RecordedCalibrationComparisonV1):
+                    raise RegistryConflictError(
+                        "subsequent recorded calibration promotion requires comparison evidence"
+                    )
+                comparison_revision = f"sha256:{comparison.content_digest.hexdigest}"
+                comparison_row = connection.execute(
+                    "SELECT body_sha,body,baseline_report_revision,"
+                    "challenger_report_revision,verdict FROM "
+                    "recorded_calibration_comparisons WHERE comparison_revision=?",
+                    (comparison_revision,),
+                ).fetchone()
+                if (
+                    comparison.verdict is not RecordedComparisonVerdict.PASS
+                    or comparison_row is None
+                    or comparison_row["body_sha"] != comparison.content_digest.hexdigest
+                    or bytes(comparison_row["body"])
+                    != canonical_json_bytes(comparison.as_mapping())
+                    or comparison_row["baseline_report_revision"] != head_snapshot.report_revision
+                    or comparison_row["challenger_report_revision"] != report.report_revision
+                    or comparison_row["verdict"] != RecordedComparisonVerdict.PASS.value
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration promotion comparison does not authorize revision"
+                    )
+            elif comparison is not None:
+                raise RegistryConflictError(
+                    "initial recorded calibration promotion cannot claim a prior comparison"
+                )
             snapshot = RecordedCalibrationSnapshotV1(
                 slot_id=report.slot_id,
                 generation=generation + 1,
@@ -3373,6 +3546,12 @@ class ResearchRegistryStore:
                     snapshot_body,
                 ),
             )
+            if comparison_revision is not None:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_transition_comparisons("
+                    "transition_id,comparison_revision) VALUES(?,?)",
+                    (transition_id, comparison_revision),
+                )
             self._finish(connection, hook)
             return snapshot
         except BaseException:

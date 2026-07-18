@@ -242,7 +242,13 @@ export type SystemControlMutation =
   | { readonly command: 'APPLY_CONFIGURATION'; readonly configurationRevision: string; readonly payloadDigest: string }
   | { readonly command: 'REVOKE_APPROVAL'; readonly approvalId: string }
   | { readonly command: 'REVOKE_RESERVATION'; readonly reservationId: string }
-  | { readonly command: 'RESTART_COMPONENT'; readonly componentId: SystemComponentId };
+  | { readonly command: 'RESTART_COMPONENT'; readonly componentId: SystemComponentId }
+  | { readonly command: 'CLEAR_DEPLOYMENT_FREEZE'; readonly expectedObservedAtUtc: string }
+  | {
+      readonly command: 'SET_PUBLIC_SOURCE_LIFECYCLE';
+      readonly sourceId: Extract<SystemComponentId, 'public-spot-source' | 'public-usdm-source'>;
+      readonly action: 'ISOLATE' | 'RESTART';
+    };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

@@ -135,6 +135,7 @@ export const PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS = Object.freeze([
   'SET_KILL_SWITCH',
   'SET_INTAKE_PAUSED',
   'RESTART_COMPONENT',
+  'SET_PUBLIC_SOURCE_LIFECYCLE',
 ] as const);
 export type ProductRuntimeSafeBackendCommand = (typeof PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS)[number];
 
@@ -232,6 +233,12 @@ export interface ProductRuntimeCommandIntent {
 /** Optional canonical owner. Presence alone never wires a control. */
 export interface ProductRuntimeCommandOwnerPort {
   readonly capability: Readonly<ProductRuntimeCommandOwnerCapability>;
+  readSourceControlState?(sourceId: 'public-spot-source' | 'public-usdm-source'): Readonly<{
+    readonly sourceRevision: number;
+    readonly desiredLifecycle: 'LIVE' | 'ISOLATED';
+    readonly observedLifecycle: string;
+    readonly pendingAction: 'ISOLATE' | 'RESTART' | null;
+  }> | null;
   preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>>;
   submit(input: Readonly<{
     request: Readonly<ProductRuntimeCommandRequest>;

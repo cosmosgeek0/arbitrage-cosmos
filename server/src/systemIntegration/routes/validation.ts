@@ -73,6 +73,10 @@ export function parseControlBody(value: unknown): ParsedControlBody {
       allowed = ['command', 'expectedRevision', 'reason', 'componentId'];
       mutation = { command: value.command, componentId: value.componentId };
       break;
+    case 'CLEAR_DEPLOYMENT_FREEZE':
+      allowed = ['command', 'expectedRevision', 'reason', 'expectedObservedAtUtc'];
+      mutation = { command: value.command, expectedObservedAtUtc: value.expectedObservedAtUtc };
+      break;
     default:
       return invalid('command is unsupported.');
   }

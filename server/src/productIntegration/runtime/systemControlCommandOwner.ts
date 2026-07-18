@@ -1,5 +1,12 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+import type {
+  IsolatablePublicSourceId,
+  SourceIsolationAction,
+  SourceIsolationOwnerPort,
+  SourceReceipt,
+  SourceIsolationSnapshot,
+} from '../../intelligenceRuntime/lifecycle/index.js';
 import type { SystemControlMutation, SystemControlState } from '../../systemIntegration/contracts/index.js';
 import type { SystemControlService } from '../../systemIntegration/controls/index.js';
 import {
@@ -13,6 +20,7 @@ import {
   type ProductRuntimeControlPreview,
   type ProductRuntimeControlResult,
   type ProductRuntimeControlResultStatus,
+  type ProductRuntimeSafeBackendCommand,
 } from './types.js';
 
 const PREVIEW_SCHEMA = 'product-system-control-preview.v1' as const;
@@ -25,15 +33,31 @@ const COMMAND_ID = /^sysctrl_[a-f0-9]{64}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/;
 const CONTROL_ID = /^[a-z0-9][a-z0-9.-]{0,159}$/;
 
-interface ResolvedControlIntent {
-  readonly revision: number;
-  readonly mutation: Readonly<SystemControlMutation>;
-  readonly consequence: string;
-}
+type ResolvedControlIntent =
+  | Readonly<{
+      kind: 'SYSTEM';
+      revision: number;
+      mutation: Readonly<SystemControlMutation>;
+      consequence: string;
+    }>
+  | Readonly<{
+      kind: 'SOURCE';
+      revision: number;
+      sourceId: IsolatablePublicSourceId;
+      action: SourceIsolationAction;
+      mutation: Readonly<{
+        command: 'SET_PUBLIC_SOURCE_LIFECYCLE';
+        sourceId: IsolatablePublicSourceId;
+        action: SourceIsolationAction;
+      }>;
+      consequence: string;
+    }>;
 
 export interface ProductRuntimeSystemControlCommandOwnerDependencies {
   /** The one canonical service; this adapter owns no control state or receipt store. */
   readonly controls: Pick<SystemControlService, 'snapshot' | 'mutate' | 'readResult'>;
+  /** Intelligence Runtime remains the source-lifecycle state and effect owner. */
+  readonly sourceIsolation?: SourceIsolationOwnerPort;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -107,6 +131,7 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
     && value.targetId === 'machine'
     && exactPayload(value.payload, { safeMode: 'READ_ONLY' })) {
     return Object.freeze({
+      kind: 'SYSTEM',
       revision,
       mutation: Object.freeze({ command: 'SET_SAFE_MODE', safeMode: 'READ_ONLY' }),
       consequence: 'The canonical system posture becomes READ_ONLY; no live authority is granted.',
@@ -118,6 +143,7 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
     && value.targetId === 'machine'
     && exactPayload(value.payload, { engaged: true })) {
     return Object.freeze({
+      kind: 'SYSTEM',
       revision,
       mutation: Object.freeze({ command: 'SET_KILL_SWITCH', engaged: true }),
       consequence: 'The canonical kill switch engages and new intake remains fail-closed.',
@@ -129,6 +155,7 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
     && value.targetId === 'machine'
     && exactPayload(value.payload, { paused: true })) {
     return Object.freeze({
+      kind: 'SYSTEM',
       revision,
       mutation: Object.freeze({ command: 'SET_INTAKE_PAUSED', paused: true }),
       consequence: 'New intake pauses while reconciliation and supervision remain available.',
@@ -140,11 +167,32 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
     && value.targetId === 'engine-supervisor'
     && exactPayload(value.payload, { componentId: 'engine-supervisor' })) {
     return Object.freeze({
+      kind: 'SYSTEM',
       revision,
       // System Integration names the one dependency-root lifecycle target
       // `market-universe`; its publication restarts the whole managed graph.
       mutation: Object.freeze({ command: 'RESTART_COMPONENT', componentId: 'market-universe' }),
       consequence: 'The canonical dependency-root managed runtime restarts as one supervised graph.',
+    });
+  }
+  if (value.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
+    && value.targetType === 'COMPONENT'
+    && (value.targetId === 'public-spot-source' || value.targetId === 'public-usdm-source')
+    && value.controlId === `source.${value.targetId}.lifecycle`
+    && plainObject(value.payload)
+    && (value.payload.action === 'ISOLATE' || value.payload.action === 'RESTART')
+    && exactPayload(value.payload, { sourceId: value.targetId, action: value.payload.action })) {
+    const sourceId = value.targetId;
+    const action = value.payload.action;
+    return Object.freeze({
+      kind: 'SOURCE',
+      revision,
+      sourceId,
+      action,
+      mutation: Object.freeze({ command: 'SET_PUBLIC_SOURCE_LIFECYCLE' as const, sourceId, action }),
+      consequence: action === 'ISOLATE'
+        ? `Only ${sourceId} is isolated; unrelated public sources remain supervised.`
+        : `Only ${sourceId} is restarted from its durable isolated lifecycle.`,
     });
   }
   return null;
@@ -227,8 +275,12 @@ function commandIdentityFromParts(
   });
 }
 
-function stateText(state: Readonly<SystemControlState>): string {
+function stateText(state: unknown): string {
   return canonical(state);
+}
+
+function receiptReference(value: number | string | null): string | null {
+  return typeof value === 'number' ? `ledger-event:${value}` : value;
 }
 
 function validControlState(value: unknown): value is Readonly<SystemControlState> {
@@ -244,6 +296,41 @@ function validControlState(value: unknown): value is Readonly<SystemControlState
     && utcMillis(value.updatedAtMs)
     && typeof value.correlationId === 'string'
     && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value.correlationId);
+}
+
+function sourceIdForControl(controlId: string): IsolatablePublicSourceId | null {
+  if (controlId === 'source.public-spot-source.lifecycle') return 'public-spot-source';
+  if (controlId === 'source.public-usdm-source.lifecycle') return 'public-usdm-source';
+  return null;
+}
+
+function validSourceSnapshot(value: unknown, sourceId: IsolatablePublicSourceId): value is Readonly<SourceIsolationSnapshot> {
+  if (!plainObject(value) || value.sourceId !== sourceId
+    || !Number.isSafeInteger(value.sourceRevision) || Number(value.sourceRevision) < 0
+    || (value.desiredLifecycle !== 'LIVE' && value.desiredLifecycle !== 'ISOLATED')
+    || !['LIVE', 'WARMING', 'DEGRADED', 'ISOLATED', 'FAILED', 'STOPPED'].includes(String(value.observedLifecycle))
+    || value.lifecycle !== value.observedLifecycle
+    || !Number.isSafeInteger(value.generation) || Number(value.generation) < 0) return false;
+  return true;
+}
+
+function resultFromSourceReceipt(
+  identity: Readonly<ProductRuntimeCommandResultIdentity>,
+  status: Extract<ProductRuntimeControlResultStatus, 'APPLIED' | 'ACCEPTED_ASYNC'>,
+  receipt: Readonly<SourceReceipt>,
+  snapshot: Readonly<SourceIsolationSnapshot>,
+): Readonly<ProductRuntimeControlResult> {
+  const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
+  return Object.freeze({
+    ...expected,
+    controlId: identity.controlId,
+    status,
+    before: stateText(receipt.before),
+    after: stateText(receipt.after ?? snapshot),
+    receiptId: receipt.receiptId,
+    completedAtMs: receipt.completedAtMs ?? receipt.requestedAtMs,
+    synthetic: false,
+  });
 }
 
 function mutationMatchesControl(controlId: string, value: unknown): boolean {
@@ -284,7 +371,7 @@ function resultFromDurableReceipt(
     status,
     before: stateText(before),
     after: stateText(after),
-    receiptId: ledgerEventId === null ? null : `ledger-event:${ledgerEventId}`,
+    receiptId: receiptReference(ledgerEventId),
     completedAtMs,
     synthetic: false,
   });
@@ -300,10 +387,10 @@ function failClosedReadback(
 function result(
   request: Readonly<ProductRuntimeCommandRequest>,
   status: ProductRuntimeControlResultStatus,
-  before: Readonly<SystemControlState>,
-  after: Readonly<SystemControlState>,
+  before: unknown,
+  after: unknown,
   completedAtMs: number,
-  ledgerEventId: number | null = null,
+  receiptId: number | string | null = null,
 ): Readonly<ProductRuntimeControlResult> {
   const identity = commandIdentity(request);
   return Object.freeze({
@@ -312,41 +399,48 @@ function result(
     status,
     before: stateText(before),
     after: stateText(after),
-    receiptId: ledgerEventId === null ? null : `ledger-event:${ledgerEventId}`,
+    receiptId: receiptReference(receiptId),
     completedAtMs,
     synthetic: false,
   });
 }
 
 function failureStatus(code: string, retryable: boolean): ProductRuntimeControlResultStatus {
-  if (code === 'STALE_COMMAND_REVISION' || code === 'COMMAND_REVISION_REUSED') return 'REJECTED_STALE_REVISION';
+  if (code === 'STALE_COMMAND_REVISION' || code === 'COMMAND_REVISION_REUSED' || code === 'STALE_SOURCE_REVISION') {
+    return 'REJECTED_STALE_REVISION';
+  }
   if (code === 'OPERATOR_REQUIRED' || code === 'LIVE_EXECUTION_NOT_IMPLEMENTED') return 'REJECTED_AUTHORITY';
   if (code.includes('NOT_SUPPORTED') || code === 'COMMAND_NOT_APPLICABLE') return 'REJECTED_NOT_SUPPORTED';
   if (code === 'CONTROL_PERSISTENCE_UNAVAILABLE') return retryable ? 'FAILED_RECOVERABLE' : 'FAILED_ATTENTION_REQUIRED';
-  if (code === 'CONTROL_COMMITTED_RUNTIME_PENDING') return 'FAILED_ATTENTION_REQUIRED';
+  if (code === 'CONTROL_COMMITTED_RUNTIME_PENDING' || code === 'SOURCE_CONTROL_EFFECT_PENDING') return 'FAILED_ATTENTION_REQUIRED';
   if (code.includes('INVALID') || code.includes('IDEMPOTENCY')) return 'REJECTED_SCHEMA';
   if (code.includes('UNAVAILABLE') || code.includes('DEPENDENCY')) return 'REJECTED_DEPENDENCY';
   return 'REJECTED_STATE';
 }
 
-const CAPABILITY: Readonly<ProductRuntimeCommandOwnerCapability> = Object.freeze({
-  ownerId: 'systemIntegration.canonical-control-service',
-  supportedBackendCommandIds: Object.freeze([
+function capability(sourceIsolationConfigured: boolean): Readonly<ProductRuntimeCommandOwnerCapability> {
+  const supportedBackendCommandIds: ProductRuntimeSafeBackendCommand[] = [
     'SET_SAFE_MODE',
     'SET_KILL_SWITCH',
     'SET_INTAKE_PAUSED',
     'RESTART_COMPONENT',
-  ] as const),
-  serverDerivedActor: true,
-  durableIdempotency: true,
-  revisionCompareAndSet: true,
-  durableReceipts: true,
-  managedRestartComponentId: 'engine-supervisor',
-});
+    ...(sourceIsolationConfigured ? ['SET_PUBLIC_SOURCE_LIFECYCLE' as const] : []),
+  ];
+  return Object.freeze({
+    ownerId: 'systemIntegration.canonical-control-service',
+    supportedBackendCommandIds: Object.freeze(supportedBackendCommandIds),
+    serverDerivedActor: true,
+    durableIdempotency: true,
+    revisionCompareAndSet: true,
+    durableReceipts: true,
+    managedRestartComponentId: 'engine-supervisor',
+  });
+}
 
 export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCommandOwnerPort {
-  readonly capability = CAPABILITY;
+  readonly capability: Readonly<ProductRuntimeCommandOwnerCapability>;
   private readonly controls: ProductRuntimeSystemControlCommandOwnerDependencies['controls'];
+  private readonly sourceIsolation: SourceIsolationOwnerPort | undefined;
 
   constructor(dependencies: Readonly<ProductRuntimeSystemControlCommandOwnerDependencies>) {
     if (!dependencies?.controls
@@ -355,14 +449,58 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       || typeof dependencies.controls.readResult !== 'function') {
       throw new TypeError('Product command owner requires the canonical SystemControlService.');
     }
+    if (dependencies.sourceIsolation && (
+      typeof dependencies.sourceIsolation.canApply !== 'function'
+      || typeof dependencies.sourceIsolation.apply !== 'function'
+      || typeof dependencies.sourceIsolation.snapshot !== 'function'
+      || typeof dependencies.sourceIsolation.readEffect !== 'function'
+      || typeof dependencies.sourceIsolation.pendingAction !== 'function'
+      || typeof dependencies.sourceIsolation.readResult !== 'function'
+    )) throw new TypeError('Product command owner source lifecycle dependency is invalid.');
     this.controls = dependencies.controls;
+    this.sourceIsolation = dependencies.sourceIsolation;
+    this.capability = capability(this.sourceIsolation !== undefined);
+  }
+
+  readSourceControlState(sourceId: IsolatablePublicSourceId): Readonly<{
+    sourceRevision: number;
+    desiredLifecycle: 'LIVE' | 'ISOLATED';
+    observedLifecycle: string;
+    pendingAction: SourceIsolationAction | null;
+  }> | null {
+    if (!this.sourceIsolation) return null;
+    try {
+      const snapshot = this.sourceIsolation.snapshot(sourceId);
+      return Object.freeze({
+        sourceRevision: snapshot.sourceRevision,
+        desiredLifecycle: snapshot.desiredLifecycle,
+        observedLifecycle: snapshot.observedLifecycle,
+        pendingAction: this.sourceIsolation.pendingAction(sourceId),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  private currentState(resolved: Readonly<ResolvedControlIntent>): Readonly<SystemControlState> | Readonly<SourceIsolationSnapshot> {
+    if (resolved.kind === 'SYSTEM') return this.controls.snapshot();
+    if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
+    return this.sourceIsolation.snapshot(resolved.sourceId);
   }
 
   async preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>> {
     const resolved = resolveIntent(intent);
     if (!resolved) throw new TypeError('Product control preview intent is invalid or unsupported.');
-    const current = this.controls.snapshot();
-    if (resolved.revision !== current.revision) throw new Error('Product control preview revision is stale.');
+    const current = this.currentState(resolved);
+    const currentRevision = resolved.kind === 'SYSTEM'
+      ? (current as SystemControlState).revision
+      : (current as SourceIsolationSnapshot).sourceRevision;
+    if (resolved.revision !== currentRevision) throw new Error('Product control preview revision is stale.');
+    if (resolved.kind === 'SOURCE') {
+      if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
+      const applicable = this.sourceIsolation.canApply(resolved.sourceId, resolved.action, resolved.revision);
+      if (!applicable.ok) throw new Error(`Product source control is not applicable: ${applicable.code}`);
+    }
     const expiresAtMs = intent.nowMs + PREVIEW_TTL_MS;
     if (!utcMillis(expiresAtMs)) throw new RangeError('Product control preview expiry exceeds its UTC bound.');
     return buildPreview(intent, resolved, expiresAtMs);
@@ -378,7 +516,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const request = input.request;
     const resolved = resolveIntent(input.intent);
     if (!resolved) throw new TypeError('Product control submission intent is invalid or unsupported.');
-    const before = this.controls.snapshot();
+    const before = this.currentState(resolved);
     if (request.expiresAtMs <= input.intent.nowMs) {
       return result(request, 'EXPIRED', before, before, input.intent.nowMs);
     }
@@ -398,6 +536,47 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     if (!constantTimeTextEqual(request.previewDigest, expectedPreview.digest)
       || !constantTimeTextEqual(request.previewId, expectedPreview.previewId)) {
       return result(request, 'REJECTED_AUTHORITY', before, before, input.intent.nowMs);
+    }
+
+    if (resolved.kind === 'SOURCE') {
+      if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
+      let sourceResult;
+      try {
+        sourceResult = await this.sourceIsolation.apply(Object.freeze({
+          idempotencyKey: request.idempotencyKey,
+          sourceId: resolved.sourceId,
+          action: resolved.action,
+          expectedSourceRevision: resolved.revision,
+          requestedAtMs: input.intent.nowMs,
+          reason: request.reason,
+          actor: input.intent.operator,
+        }));
+      } catch {
+        return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
+      }
+      if (!sourceResult.ok) {
+        let after: Readonly<SourceIsolationSnapshot> | Readonly<SystemControlState> = before;
+        try { after = this.sourceIsolation.snapshot(resolved.sourceId); } catch { /* Fail closed on the before image. */ }
+        const retryable = sourceResult.code.includes('PERSISTENCE')
+          || sourceResult.code.includes('CAS')
+          || sourceResult.code.includes('PENDING');
+        return result(
+          request,
+          failureStatus(sourceResult.code, retryable),
+          before,
+          after,
+          input.intent.nowMs,
+          sourceResult.receiptId ?? null,
+        );
+      }
+      return result(
+        request,
+        sourceResult.status === 'ALREADY_APPLIED' ? 'ALREADY_APPLIED' : 'APPLIED',
+        before,
+        sourceResult.snapshot,
+        input.intent.nowMs,
+        sourceResult.receiptId,
+      );
     }
 
     const identity = commandIdentity(request);
@@ -423,7 +602,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     if (!Number.isSafeInteger(receipt.ledgerEventId) || (receipt.ledgerEventId as number) < 1) {
       return result(request, 'FAILED_ATTENTION_REQUIRED', receipt.before, receipt.after, receipt.after.updatedAtMs);
     }
-    const replay = before.revision !== receipt.before.revision;
+    const replay = (before as SystemControlState).revision !== receipt.before.revision;
     const status: ProductRuntimeControlResultStatus = replay || !receipt.applied
       ? 'ALREADY_APPLIED'
       : resolved.mutation.command === 'RESTART_COMPONENT'
@@ -451,6 +630,55 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
     if (!constantTimeTextEqual(identity.commandId, expected.commandId)) {
       return failClosedReadback('COMMAND_RESULT_IDENTITY_MISMATCH');
+    }
+
+    const sourceId = sourceIdForControl(identity.controlId);
+    if (sourceId !== null) {
+      if (!this.sourceIsolation) return failClosedReadback('SOURCE_RESULT_OWNER_NOT_CONFIGURED');
+      let sourceReadback;
+      try { sourceReadback = this.sourceIsolation.readResult(identity.idempotencyKey); } catch {
+        return failClosedReadback('SOURCE_RESULT_OWNER_UNAVAILABLE');
+      }
+      if (sourceReadback.state === 'NOT_FOUND') {
+        return Object.freeze({ state: 'NOT_FOUND' as const, result: null, failureCode: null });
+      }
+      if (sourceReadback.state === 'FAIL_CLOSED') {
+        return failClosedReadback(sourceReadback.failureCode);
+      }
+      const receipt = sourceReadback.receipt;
+      const snapshot = sourceReadback.snapshot;
+      if (receipt.idempotencyKey !== identity.idempotencyKey
+        || receipt.sourceId !== sourceId
+        || typeof receipt.receiptId !== 'string' || !/^source-control:sha256:[a-f0-9]{64}$/.test(receipt.receiptId)
+        || typeof receipt.requestDigest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(receipt.requestDigest)
+        || !utcMillis(receipt.requestedAtMs)
+        || !validSourceSnapshot(receipt.before, sourceId)
+        || !validSourceSnapshot(snapshot, sourceId)
+        || (sourceReadback.state === 'TERMINAL' && (
+          receipt.effectState !== 'APPLIED'
+          || receipt.after === null
+          || !validSourceSnapshot(receipt.after, sourceId)
+          || receipt.completedAtMs === null
+          || !utcMillis(receipt.completedAtMs)
+        ))
+        || (sourceReadback.state === 'PENDING' && (
+          receipt.effectState !== 'PENDING'
+          || receipt.after !== null
+          || receipt.completedAtMs !== null
+        ))) {
+        return failClosedReadback('DURABLE_SOURCE_RECEIPT_INVALID');
+      }
+      const readback = resultFromSourceReceipt(
+        identity,
+        sourceReadback.state === 'PENDING' ? 'ACCEPTED_ASYNC' : 'APPLIED',
+        receipt,
+        snapshot,
+      );
+      return Object.freeze({
+        state: sourceReadback.state,
+        result: readback,
+        failureCode: null,
+      });
     }
 
     let stored;

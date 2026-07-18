@@ -77,9 +77,16 @@ import {
   createCanonicalSupervisorOpsReadback,
   createCanonicalRestartTruthCoordinator,
   createDeploymentFreezeReader,
+  createDeploymentFreezeClearOwner,
   type CanonicalSupervisorOpsReadPort,
 } from './systemIntegration/ops/index.js';
 import { createNodeDeploymentFreezeFileSystem } from './services/deploymentFreezeFileSystem.js';
+import { createDeploymentFreezeClearPersistence } from './services/deploymentFreezeClearPersistence.js';
+import {
+  createSourceIsolationOwner,
+  type SourceIsolationPhysicalPort,
+} from './intelligenceRuntime/lifecycle/index.js';
+import { createSourceIsolationPersistence } from './services/sourceIsolationPersistence.js';
 import {
   PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
   createProductIntegrationRuntime,
@@ -232,6 +239,40 @@ function readCanonicalOps(supervisorCut?: Readonly<SystemSupervisorReadModel>) {
 const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
   read: readCanonicalOps,
 });
+function configuredDeploymentFreezeMarkerPath(): string | null {
+  const stateDirectory = String(process.env.I00_OPS_STATE_DIR ?? '');
+  const markerPath = String(process.env.I00_DEPLOY_FROZEN_MARKER ?? '');
+  if (
+    !stateDirectory
+    || !markerPath
+    || stateDirectory.trim() !== stateDirectory
+    || markerPath.trim() !== markerPath
+    || !path.isAbsolute(stateDirectory)
+    || !path.isAbsolute(markerPath)
+    || path.normalize(stateDirectory) !== stateDirectory
+    || path.normalize(markerPath) !== markerPath
+    || stateDirectory === path.parse(stateDirectory).root
+    || markerPath !== path.join(stateDirectory, 'deploy-frozen.json')
+  ) return null;
+  return markerPath;
+}
+const configuredFreezeMarkerPath = configuredDeploymentFreezeMarkerPath();
+const deploymentFreezeFileSystem = createNodeDeploymentFreezeFileSystem();
+const deploymentFreezeReadback = createDeploymentFreezeReader({
+  markerPath: configuredFreezeMarkerPath,
+  clock: systemIntegrationClock,
+  fileSystem: deploymentFreezeFileSystem,
+});
+const deploymentFreezeClear = configuredFreezeMarkerPath === null
+  ? undefined
+  : createDeploymentFreezeClearOwner({
+      markerPath: configuredFreezeMarkerPath,
+      clock: systemIntegrationClock,
+      readCanonicalOps: () => readCanonicalOps(),
+      readFreeze: () => deploymentFreezeReadback.read(),
+      persistence: createDeploymentFreezeClearPersistence(ledger),
+      fileSystem: deploymentFreezeFileSystem,
+    });
 let readManagedRuntimeForControlEffect: (() => Readonly<ManagedCompositionReadSnapshot>) | null = null;
 let systemIntegration: SystemIntegrationApplicationFacade;
 const canonicalRestartTruth = createCanonicalRestartTruthCoordinator({
@@ -247,6 +288,7 @@ systemIntegration = createSystemIntegrationApplication({
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
   traces: canonicalOwnerEvidence,
+  ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({
     readRestartTruth: (nowMs: number) => canonicalRestartTruth.readRestartTruth(nowMs),
     readLocalMutationAuthority,
@@ -273,28 +315,6 @@ systemIntegration = createSystemIntegrationApplication({
   }),
 });
 readManagedRuntimeForControlEffect = () => systemIntegration.managedRuntime();
-function configuredDeploymentFreezeMarkerPath(): string | null {
-  const stateDirectory = String(process.env.I00_OPS_STATE_DIR ?? '');
-  const markerPath = String(process.env.I00_DEPLOY_FROZEN_MARKER ?? '');
-  if (
-    !stateDirectory
-    || !markerPath
-    || stateDirectory.trim() !== stateDirectory
-    || markerPath.trim() !== markerPath
-    || !path.isAbsolute(stateDirectory)
-    || !path.isAbsolute(markerPath)
-    || path.normalize(stateDirectory) !== stateDirectory
-    || path.normalize(markerPath) !== markerPath
-    || stateDirectory === path.parse(stateDirectory).root
-    || markerPath !== path.join(stateDirectory, 'deploy-frozen.json')
-  ) return null;
-  return markerPath;
-}
-const deploymentFreezeReadback = createDeploymentFreezeReader({
-  markerPath: configuredDeploymentFreezeMarkerPath(),
-  clock: systemIntegrationClock,
-  fileSystem: createNodeDeploymentFreezeFileSystem(),
-});
 canonicalOpsReadback = createCanonicalSupervisorOpsReadback({
   clock: systemIntegrationClock,
   readSupervisor: () => systemIntegration.supervisor(),
@@ -318,6 +338,15 @@ const canonicalApplicationStartFailureCodes = Object.freeze([
     : !systemIntegrationStart.ok ? ['SYSTEM_INTEGRATION_START_FAILED'] : []),
   ...(!bootReleaseStart.ok ? [bootReleaseStart.code] : []),
 ]);
+const publicSourceIsolation = createSourceIsolationOwner({
+  clock: systemIntegrationClock,
+  persistence: createSourceIsolationPersistence(ledger),
+  physical: Object.freeze({
+    read: (sourceId) => engine.readPublicSourceControl(sourceId),
+    isolate: (sourceId) => engine.isolatePublicSource(sourceId),
+    restart: (sourceId) => engine.restartPublicSource(sourceId),
+  } satisfies SourceIsolationPhysicalPort),
+});
 const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   applicationStartOk: () => canonicalApplicationStartOk,
   applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
@@ -343,6 +372,7 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
   clock: systemIntegrationClock,
   commandOwner: createProductRuntimeSystemControlCommandOwner({
     controls: systemIntegration.controls,
+    sourceIsolation: publicSourceIsolation,
   }),
 });
 

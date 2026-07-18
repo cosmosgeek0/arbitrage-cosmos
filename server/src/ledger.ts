@@ -83,11 +83,13 @@ const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'LIABILITY',
   'RECOVERY_CAMPAIGN',
 ] as const);
-export const LEDGER_SCHEMA_VERSION = 2;
-// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. An old
-// writer can silently coerce that truth back through binary64, so rollback is
-// no longer safe after this runtime opens the ledger.
-export const LEDGER_ROLLBACK_FLOOR = 2;
+const LEDGER_EXACT_FILL_SCHEMA_VERSION = 2;
+export const LEDGER_SCHEMA_VERSION = 3;
+// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. Schema
+// 3 makes the complete generic event envelope first-class in the sole Ledger.
+// An older writer can silently drop either class of truth, so rollback is no
+// longer safe after this runtime opens the ledger.
+export const LEDGER_ROLLBACK_FLOOR = 3;
 const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
 const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
 const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
@@ -120,6 +122,25 @@ export interface LedgerEvent {
   kind: string;
   symbol: string | null;
   data: unknown;
+  severity: string | null;
+  source: string | null;
+  strategy: string | null;
+  status: string | null;
+  reason: string | null;
+  message: string | null;
+  correlation: string | null;
+  createdAt: number;
+}
+
+export interface LedgerEventMetadataInput {
+  readonly severity?: string | null;
+  readonly source?: string | null;
+  readonly strategy?: string | null;
+  readonly status?: string | null;
+  readonly reason?: string | null;
+  readonly message?: string | null;
+  readonly correlation?: string | null;
+  readonly createdAt?: number;
 }
 
 export type OrderRecoveryState =
@@ -150,7 +171,7 @@ export interface DurableMutationAuthorityRead {
   readonly readErrorCount: number;
 }
 
-export interface LedgerEventInput {
+export interface LedgerEventInput extends LedgerEventMetadataInput {
   kind: string;
   symbol?: string | null;
   data?: unknown;
@@ -324,6 +345,140 @@ const LEGACY_FILL_COLUMNS = Object.freeze({
   source: 'TEXT',
 } as const);
 
+interface EventColumnInfo {
+  readonly name: string;
+  readonly type: string;
+  readonly notnull: number;
+  readonly pk: number;
+}
+
+const LEGACY_EVENT_COLUMNS = Object.freeze({
+  id: 'INTEGER',
+  ts: 'INTEGER',
+  kind: 'TEXT',
+  symbol: 'TEXT',
+  data: 'TEXT',
+} as const);
+
+const EVENT_V3_COLUMNS = Object.freeze({
+  ...LEGACY_EVENT_COLUMNS,
+  severity: 'TEXT',
+  source: 'TEXT',
+  strategy: 'TEXT',
+  status: 'TEXT',
+  reason: 'TEXT',
+  message: 'TEXT',
+  correlation: 'TEXT',
+  created_at: 'INTEGER',
+} as const);
+
+const LEDGER_EVENT_INSERT_SQL = `
+  INSERT INTO events (
+    ts, kind, symbol, data, severity, source, strategy, status,
+    reason, message, correlation, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+interface PreparedLedgerEventMetadata {
+  readonly severity: string | null;
+  readonly source: string | null;
+  readonly strategy: string | null;
+  readonly status: string | null;
+  readonly reason: string | null;
+  readonly message: string | null;
+  readonly correlation: string | null;
+  /** Null means the append transaction must bind its own receipt time. */
+  readonly createdAt: number | null;
+}
+
+const LEDGER_EVENT_TEXT_LIMITS = Object.freeze({
+  severity: 64,
+  source: 256,
+  strategy: 256,
+  status: 128,
+  reason: 2_048,
+  message: 8_192,
+  correlation: 256,
+} as const);
+
+function prepareLedgerEventMetadata(
+  input: Readonly<LedgerEventMetadataInput>,
+): Readonly<PreparedLedgerEventMetadata> {
+  const text = (field: keyof typeof LEDGER_EVENT_TEXT_LIMITS): string | null => {
+    const value = input[field];
+    if (value === undefined || value === null) return null;
+    if (typeof value !== 'string'
+        || value.length < 1
+        || value.length > LEDGER_EVENT_TEXT_LIMITS[field]
+        || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)) {
+      throw new TypeError(`invalid ledger event ${field}`);
+    }
+    return value;
+  };
+  const createdAt = input.createdAt ?? null;
+  if (createdAt !== null && (!Number.isSafeInteger(createdAt) || createdAt < 0)) {
+    throw new TypeError('invalid ledger event createdAt');
+  }
+  return Object.freeze({
+    severity: text('severity'),
+    source: text('source'),
+    strategy: text('strategy'),
+    status: text('status'),
+    reason: text('reason'),
+    message: text('message'),
+    correlation: text('correlation'),
+    createdAt,
+  });
+}
+
+function eventInsertValues(
+  ts: number,
+  kind: string,
+  symbol: string | null,
+  serialized: string | null,
+  metadata: Readonly<PreparedLedgerEventMetadata>,
+): readonly unknown[] {
+  return [
+    ts,
+    kind,
+    symbol,
+    serialized,
+    metadata.severity,
+    metadata.source,
+    metadata.strategy,
+    metadata.status,
+    metadata.reason,
+    metadata.message,
+    metadata.correlation,
+    metadata.createdAt ?? ts,
+  ];
+}
+
+function ledgerEventFromAppend(
+  id: number,
+  ts: number,
+  kind: string,
+  symbol: string | null,
+  data: unknown,
+  metadata: Readonly<PreparedLedgerEventMetadata>,
+): LedgerEvent {
+  return {
+    id,
+    ts,
+    kind,
+    symbol,
+    data,
+    severity: metadata.severity,
+    source: metadata.source,
+    strategy: metadata.strategy,
+    status: metadata.status,
+    reason: metadata.reason,
+    message: metadata.message,
+    correlation: metadata.correlation,
+    createdAt: metadata.createdAt ?? ts,
+  };
+}
+
 function exactColumnShape(
   columns: readonly FillColumnInfo[],
   expected: Readonly<Record<string, string>>,
@@ -412,7 +567,7 @@ function canonicalLegacyFill(row: Readonly<LegacyFillDbRow>): FillRow {
   });
 }
 
-function upgradeLedgerVersion(db: Database.Database): void {
+function upgradeFillSchemaVersion(db: Database.Database): void {
   const updated = db.prepare(`
     UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
     SET current_schema_version = ?, rollback_floor = ?
@@ -420,9 +575,9 @@ function upgradeLedgerVersion(db: Database.Database): void {
       AND current_schema_version = 1
       AND typeof(rollback_floor) = 'integer'
       AND rollback_floor BETWEEN 0 AND 1
-  `).run(LEDGER_SCHEMA_VERSION, LEDGER_ROLLBACK_FLOOR);
+  `).run(LEDGER_EXACT_FILL_SCHEMA_VERSION, LEDGER_EXACT_FILL_SCHEMA_VERSION);
   if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
-  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+  db.pragma(`user_version = ${LEDGER_EXACT_FILL_SCHEMA_VERSION}`);
 }
 
 function migrateFillStorage(db: Database.Database): void {
@@ -435,7 +590,7 @@ function migrateFillStorage(db: Database.Database): void {
     }
     const columns = db.prepare('PRAGMA table_info(fills)').all() as FillColumnInfo[];
     if (exactColumnShape(columns, EXACT_FILL_COLUMNS)) {
-      if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+      if (liveSchemaVersion === 1) upgradeFillSchemaVersion(db);
       return;
     }
     if (!exactColumnShape(columns, LEGACY_FILL_COLUMNS) || (liveSchemaVersion as number) >= 2) {
@@ -480,7 +635,104 @@ function migrateFillStorage(db: Database.Database): void {
       CREATE INDEX idx_fills_total_order
         ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
     `);
-    if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+    if (liveSchemaVersion === 1) upgradeFillSchemaVersion(db);
+  }).immediate();
+}
+
+function exactEventColumnShape(
+  columns: readonly EventColumnInfo[],
+  expected: Readonly<Record<string, string>>,
+): boolean {
+  if (columns.length !== Object.keys(expected).length) return false;
+  const actual = new Map(columns.map((column) => [column.name, column.type.toUpperCase()]));
+  return Object.entries(expected).every(([name, type]) => actual.get(name) === type)
+    && columns.find((column) => column.name === 'id')?.pk === 1
+    && columns.every((column) => column.notnull === (
+      ['ts', 'kind'].includes(column.name) ? 1 : 0
+    ))
+    && columns.every((column) => column.name === 'id' || column.pk === 0);
+}
+
+function upgradeEventSchemaVersion(db: Database.Database): void {
+  const updated = db.prepare(`
+    UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+    SET current_schema_version = ?, rollback_floor = ?
+    WHERE singleton = 1
+      AND current_schema_version = ?
+      AND typeof(rollback_floor) = 'integer'
+      AND rollback_floor BETWEEN 0 AND ?
+  `).run(
+    LEDGER_SCHEMA_VERSION,
+    LEDGER_ROLLBACK_FLOOR,
+    LEDGER_EXACT_FILL_SCHEMA_VERSION,
+    LEDGER_EXACT_FILL_SCHEMA_VERSION,
+  );
+  if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
+  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+}
+
+function assertCompleteEventCreatedAtStorage(db: Database.Database): void {
+  const row = db.prepare(`
+    SELECT COUNT(*) AS malformed_count
+    FROM events
+    WHERE typeof(created_at) <> 'integer'
+      OR created_at < 0
+      OR created_at > ?
+  `).get(Number.MAX_SAFE_INTEGER) as { malformed_count: unknown };
+  if (row.malformed_count !== 0) {
+    throw new Error('LEDGER_EVENT_CREATED_AT_MALFORMED');
+  }
+}
+
+/**
+ * Adds the v3 generic event envelope in place. SQLite ADD COLUMN preserves the
+ * historical rows; created_at alone is deterministically backfilled from the
+ * old receipt timestamp, while every historically absent descriptive field
+ * remains NULL.
+ */
+function migrateEventStorage(db: Database.Database): void {
+  db.transaction(() => {
+    const liveSchemaVersion = db.pragma('user_version', { simple: true }) as unknown;
+    if (!Number.isSafeInteger(liveSchemaVersion)
+        || (liveSchemaVersion as number) < 0
+        || (liveSchemaVersion as number) > LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
+    }
+    const version = liveSchemaVersion as number;
+    const columns = db.prepare('PRAGMA table_info(events)').all() as EventColumnInfo[];
+    const exactV3 = exactEventColumnShape(columns, EVENT_V3_COLUMNS);
+    if (exactV3) {
+      // A completed envelope beside an older durable marker cannot be an
+      // interrupted migration: SQLite transactions commit schema, backfill,
+      // compatibility row and user_version together. Treat that split-brain
+      // shape as corruption instead of guessing which side is authoritative.
+      if (version > 0 && version < LEDGER_SCHEMA_VERSION) {
+        throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+      }
+      assertCompleteEventCreatedAtStorage(db);
+      return;
+    }
+    if (!exactEventColumnShape(columns, LEGACY_EVENT_COLUMNS)
+        || version >= LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+    }
+    db.exec(`
+      ALTER TABLE events ADD COLUMN severity TEXT;
+      ALTER TABLE events ADD COLUMN source TEXT;
+      ALTER TABLE events ADD COLUMN strategy TEXT;
+      ALTER TABLE events ADD COLUMN status TEXT;
+      ALTER TABLE events ADD COLUMN reason TEXT;
+      ALTER TABLE events ADD COLUMN message TEXT;
+      ALTER TABLE events ADD COLUMN correlation TEXT;
+      ALTER TABLE events ADD COLUMN created_at INTEGER;
+    `);
+    const migratedColumns = db.prepare('PRAGMA table_info(events)').all() as EventColumnInfo[];
+    if (!exactEventColumnShape(migratedColumns, EVENT_V3_COLUMNS)) {
+      throw new Error('LEDGER_EVENT_SCHEMA_MIGRATION_INCOMPLETE');
+    }
+    db.prepare('UPDATE events SET created_at = ts WHERE created_at IS NULL').run();
+    assertCompleteEventCreatedAtStorage(db);
+    if (version === LEDGER_EXACT_FILL_SCHEMA_VERSION) upgradeEventSchemaVersion(db);
   }).immediate();
 }
 
@@ -551,6 +803,14 @@ interface EventDbRow {
   kind: string;
   symbol: string | null;
   data: string | null;
+  severity: string | null;
+  source: string | null;
+  strategy: string | null;
+  status: string | null;
+  reason: string | null;
+  message: string | null;
+  correlation: string | null;
+  created_at: number | null;
 }
 
 interface ProductOperatorEventDbRow {
@@ -744,6 +1004,13 @@ export class Ledger extends EventEmitter {
       if ((startupSchemaVersion as number) > 0 && startupFillTable.count !== 1) {
         throw new Error('LEDGER_FILL_SCHEMA_MISSING');
       }
+      const startupEventTable = this.db.prepare(`
+        SELECT COUNT(*) AS count FROM sqlite_master
+        WHERE type = 'table' AND name = 'events'
+      `).get() as { count: number };
+      if ((startupSchemaVersion as number) > 0 && startupEventTable.count !== 1) {
+        throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+      }
 
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
@@ -764,7 +1031,15 @@ export class Ledger extends EventEmitter {
         ts INTEGER NOT NULL,
         kind TEXT NOT NULL,
         symbol TEXT,
-        data TEXT
+        data TEXT,
+        severity TEXT,
+        source TEXT,
+        strategy TEXT,
+        status TEXT,
+        reason TEXT,
+        message TEXT,
+        correlation TEXT,
+        created_at INTEGER
       );
       CREATE TABLE IF NOT EXISTS fills (
         symbol TEXT NOT NULL,
@@ -967,6 +1242,11 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
       migrateFillStorage(this.db);
+      migrateEventStorage(this.db);
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_events_correlation
+          ON events (correlation, id DESC);
+      `);
       if (startupSchemaVersion === 0) {
         const initializeCompatibility = this.db.transaction(() => {
           const liveSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
@@ -1023,19 +1303,27 @@ export class Ledger extends EventEmitter {
     }
   }
 
-  logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
+  logEvent(
+    kind: string,
+    symbol?: string | null,
+    data?: unknown,
+    metadata: Readonly<LedgerEventMetadataInput> = {},
+  ): LedgerEvent {
     const ts = Date.now();
     validateFinancialMutationEvent(kind, symbol ?? null, data);
+    const preparedMetadata = prepareLedgerEventMetadata(metadata);
+    const serialized = data === undefined ? null : JSON.stringify(data);
     const info = this.db
-      .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-      .run(ts, kind, symbol ?? null, data === undefined ? null : JSON.stringify(data));
-    const ev: LedgerEvent = {
-      id: Number(info.lastInsertRowid),
+      .prepare(LEDGER_EVENT_INSERT_SQL)
+      .run(...eventInsertValues(ts, kind, symbol ?? null, serialized ?? null, preparedMetadata));
+    const ev = ledgerEventFromAppend(
+      Number(info.lastInsertRowid),
       ts,
       kind,
-      symbol: symbol ?? null,
-      data: data ?? null,
-    };
+      symbol ?? null,
+      data ?? null,
+      preparedMetadata,
+    );
     this.emit('event', ev);
     return ev;
   }
@@ -1051,21 +1339,29 @@ export class Ledger extends EventEmitter {
       throw new Error('atomic ledger event batch must contain between 1 and 8 records');
     }
     const ts = Date.now();
-    const insert = this.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
+    const insert = this.db.prepare(LEDGER_EVENT_INSERT_SQL);
     const commit = this.db.transaction(() => records.map((record) => {
       if (typeof record.kind !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(record.kind)) {
         throw new Error('invalid atomic ledger event kind');
       }
       validateFinancialMutationEvent(record.kind, record.symbol ?? null, record.data);
       const serialized = record.data === undefined ? null : JSON.stringify(record.data);
-      const info = insert.run(ts, record.kind, record.symbol ?? null, serialized);
-      return {
-        id: Number(info.lastInsertRowid),
+      const metadata = prepareLedgerEventMetadata(record);
+      const info = insert.run(...eventInsertValues(
         ts,
-        kind: record.kind,
-        symbol: record.symbol ?? null,
-        data: record.data ?? null,
-      } satisfies LedgerEvent;
+        record.kind,
+        record.symbol ?? null,
+        serialized ?? null,
+        metadata,
+      ));
+      return ledgerEventFromAppend(
+        Number(info.lastInsertRowid),
+        ts,
+        record.kind,
+        record.symbol ?? null,
+        record.data ?? null,
+        metadata,
+      );
     }));
     const events = commit();
     for (const event of events) {
@@ -1095,8 +1391,14 @@ export class Ledger extends EventEmitter {
       if (!like) return [];
       clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
       params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push("(data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\')");
-      params.push(like, like, like);
+      clauses.push(`(
+        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
+        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
+        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
+        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
+        OR correlation LIKE ? ESCAPE '\\'
+      )`);
+      params.push(like, like, like, like, like, like, like, like, like, like);
     }
     if (since !== undefined && Number.isFinite(since)) {
       clauses.push('ts >= ?');
@@ -1134,8 +1436,14 @@ export class Ledger extends EventEmitter {
       if (!like) return 0;
       clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
       params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push("(data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\')");
-      params.push(like, like, like);
+      clauses.push(`(
+        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
+        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
+        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
+        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
+        OR correlation LIKE ? ESCAPE '\\'
+      )`);
+      params.push(like, like, like, like, like, like, like, like, like, like);
     }
     if (since !== undefined && Number.isFinite(since)) { clauses.push('ts >= ?'); params.push(since); }
     if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
@@ -1817,20 +2125,22 @@ export class Ledger extends EventEmitter {
     prepared: Readonly<PreparedProductPersistenceAudit>,
   ): LedgerEvent {
     const ts = Date.now();
+    const metadata = prepareLedgerEventMetadata({});
     const info = this.db
-      .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-      .run(ts, prepared.kind, prepared.symbol, prepared.serialized);
+      .prepare(LEDGER_EVENT_INSERT_SQL)
+      .run(...eventInsertValues(ts, prepared.kind, prepared.symbol, prepared.serialized, metadata));
     const id = Number(info.lastInsertRowid);
     if (!Number.isSafeInteger(id) || id < 1) {
       throw new RangeError('product persistence ledger event identity is invalid');
     }
-    return {
+    return ledgerEventFromAppend(
       id,
       ts,
-      kind: prepared.kind,
-      symbol: prepared.symbol,
-      data: JSON.parse(prepared.serialized) as SystemJsonValue,
-    };
+      prepared.kind,
+      prepared.symbol,
+      JSON.parse(prepared.serialized) as SystemJsonValue,
+      metadata,
+    );
   }
 
   private readProductPersistenceAudit(
@@ -1855,7 +2165,7 @@ export class Ledger extends EventEmitter {
   ): ProductPersistenceMutationResult {
     if (result.disposition !== 'COMMITTED_NEW') return result;
     try {
-      const event = result.ledgerEvent;
+      const event = this.readProductPersistenceAudit(result.ledgerEvent.id);
       this.emit('event', {
         ...event,
         data: JSON.parse(JSON.stringify(event.data)) as unknown,
@@ -1895,8 +2205,10 @@ export class Ledger extends EventEmitter {
     kind: string,
     symbol: string | null = null,
     data: unknown = null,
+    metadataInput: Readonly<LedgerEventMetadataInput> = {},
   ): LedgerEvent {
     const ts = Date.now();
+    const metadata = prepareLedgerEventMetadata(metadataInput);
     let serialized: string | null = null;
     if (data !== undefined) {
       const encoded = JSON.stringify(data);
@@ -1910,8 +2222,8 @@ export class Ledger extends EventEmitter {
         .prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
         .run(key, value);
       const info = this.db
-        .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-        .run(ts, kind, symbol, serialized);
+        .prepare(LEDGER_EVENT_INSERT_SQL)
+        .run(...eventInsertValues(ts, kind, symbol, serialized, metadata));
       const ledgerEventId = Number(info.lastInsertRowid);
       if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
         throw new RangeError('ledger event identity exceeds the supported integer range');
@@ -1941,13 +2253,14 @@ export class Ledger extends EventEmitter {
       return ledgerEventId;
     });
     const ledgerEventId = commit.immediate();
-    const event: LedgerEvent = {
-      id: ledgerEventId,
+    const event = ledgerEventFromAppend(
+      ledgerEventId,
       ts,
       kind,
       symbol,
-      data: durableData,
-    };
+      durableData,
+      metadata,
+    );
     try {
       this.emit('event', event);
       return event;
@@ -1971,6 +2284,14 @@ export class Ledger extends EventEmitter {
           && row.kind === kind
           && row.symbol === symbol
           && row.data === serialized
+          && row.severity === metadata.severity
+          && row.source === metadata.source
+          && row.strategy === metadata.strategy
+          && row.status === metadata.status
+          && row.reason === metadata.reason
+          && row.message === metadata.message
+          && row.correlation === metadata.correlation
+          && row.created_at === (metadata.createdAt ?? ts)
           && exactOperator) {
           return parseEvent(row);
         }
@@ -1978,13 +2299,14 @@ export class Ledger extends EventEmitter {
         // A listener may close its surrounding application. The pristine
         // transaction result below remains authoritative in that case.
       }
-      return {
-        id: ledgerEventId,
+      return ledgerEventFromAppend(
+        ledgerEventId,
         ts,
         kind,
         symbol,
-        data: serialized === null ? null : JSON.parse(serialized) as unknown,
-      };
+        serialized === null ? null : JSON.parse(serialized) as unknown,
+        metadata,
+      );
     }
   }
 
@@ -2911,10 +3233,11 @@ export class Ledger extends EventEmitter {
         symbol,
         serialized,
         data: serialized === null ? null : JSON.parse(serialized) as unknown,
+        metadata: prepareLedgerEventMetadata(record),
       });
     });
 
-    const insert = this.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
+    const insert = this.db.prepare(LEDGER_EVENT_INSERT_SQL);
     const insertProductOperatorEvent = this.db.prepare(`
       INSERT INTO product_operator_events (
         ledger_event_id,
@@ -2944,7 +3267,13 @@ export class Ledger extends EventEmitter {
         .run(key, nextValue);
       let appendedProductOperatorEvent = false;
       const events = prepared.map((record) => {
-        const info = insert.run(ts, record.kind, record.symbol, record.serialized);
+        const info = insert.run(...eventInsertValues(
+          ts,
+          record.kind,
+          record.symbol,
+          record.serialized,
+          record.metadata,
+        ));
         const ledgerEventId = Number(info.lastInsertRowid);
         if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
           throw new RangeError('ledger event identity exceeds the supported integer range');
@@ -2962,13 +3291,14 @@ export class Ledger extends EventEmitter {
           );
           appendedProductOperatorEvent = true;
         }
-        return Object.freeze({
-          id: ledgerEventId,
+        return Object.freeze(ledgerEventFromAppend(
+          ledgerEventId,
           ts,
-          kind: record.kind,
-          symbol: record.symbol,
-          data: record.data,
-        } satisfies LedgerEvent);
+          record.kind,
+          record.symbol,
+          record.data,
+          record.metadata,
+        ));
       });
       if (appendedProductOperatorEvent) this.trimProductOperatorEvents();
       return Object.freeze({ committed: true as const, events: Object.freeze(events) });
@@ -2985,6 +3315,14 @@ export class Ledger extends EventEmitter {
       data: prepared[index].serialized === null
         ? null
         : JSON.parse(prepared[index].serialized) as unknown,
+      severity: event.severity,
+      source: event.source,
+      strategy: event.strategy,
+      status: event.status,
+      reason: event.reason,
+      message: event.message,
+      correlation: event.correlation,
+      createdAt: event.createdAt,
     });
     const exactResult: LedgerConfigCompareAndSetResult = Object.freeze({
       committed: true as const,
@@ -3035,6 +3373,14 @@ export class Ledger extends EventEmitter {
           && row.kind === prepared[index].kind
           && row.symbol === prepared[index].symbol
           && row.data === prepared[index].serialized
+          && row.severity === prepared[index].metadata.severity
+          && row.source === prepared[index].metadata.source
+          && row.strategy === prepared[index].metadata.strategy
+          && row.status === prepared[index].metadata.status
+          && row.reason === prepared[index].metadata.reason
+          && row.message === prepared[index].metadata.message
+          && row.correlation === prepared[index].metadata.correlation
+          && row.created_at === (prepared[index].metadata.createdAt ?? row.ts)
           && (() => {
             const productOperatorEvent = prepareProductOperatorEvent(
               prepared[index].kind,
@@ -3545,12 +3891,29 @@ function parseEvent(r: EventDbRow): LedgerEvent {
       data = { unavailable: true, reason: 'invalid_json' };
     }
   }
+  const nullableText = (value: unknown, field: string): string | null => {
+    if (value === null) return null;
+    if (typeof value !== 'string') throw new Error(`LEDGER_EVENT_${field}_MALFORMED`);
+    return value;
+  };
+  const createdAt = r.created_at;
+  if (!Number.isSafeInteger(createdAt) || (createdAt as number) < 0) {
+    throw new Error('LEDGER_EVENT_CREATED_AT_MALFORMED');
+  }
   return {
     id: r.id,
     ts: r.ts,
     kind: r.kind,
     symbol: r.symbol,
     data,
+    severity: nullableText(r.severity, 'SEVERITY'),
+    source: nullableText(r.source, 'SOURCE'),
+    strategy: nullableText(r.strategy, 'STRATEGY'),
+    status: nullableText(r.status, 'STATUS'),
+    reason: nullableText(r.reason, 'REASON'),
+    message: nullableText(r.message, 'MESSAGE'),
+    correlation: nullableText(r.correlation, 'CORRELATION'),
+    createdAt: createdAt as number,
   };
 }
 

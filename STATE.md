@@ -111,6 +111,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
 | 19 | `FIX-092` | `BUILT_AND_TESTED` | AI-Ops A1/A2/A5 donor mode is selected only by exact donor commit and tree; integrated current-tree truth works on attached or detached HEAD. The detached clean-clone parent regression failed 3/4 before the fix, and the focused identity regression is 1/1 after it. |
 | 20 | `FIX-105` | `BUILT_AND_TESTED` | A5 donor-only expectations are conditional on the exact sealed donor commit/tree pair, never merely a branch label. The parent-relative matrix assertion failed 1/2 before the exact donor case was registered and passes 2/2 after it. |
+| 21 | `FIX-107` | `BUILT_AND_TESTED` | A1, A2, and A5 now share the same exact commit/tree donor classifier instead of lane-specific branch assumptions. The all-lane assertion failed 2/3 on its parent and passes 3/3 with all three sealed donor identities registered. |
 
 ## Previous source evidence
 

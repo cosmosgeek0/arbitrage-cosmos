@@ -22,3 +22,14 @@ test('FIX-105 donor expectation is conditional on the exact donor commit and tre
   assert.equal(result.mode, 'DONOR');
   assert.equal(result.verificationTarget, 'SEALED_DONOR_HISTORY');
 });
+
+test('FIX-107 every named AI-Ops lane uses the same commit-tree identity rule', () => {
+  const scenario = AI_OPS_IDENTITY_REGRESSION_MATRIX.find((row) => row.item === 'FIX-107');
+  assert.ok(scenario);
+  assert.deepEqual(scenario.lanes, ['A1', 'A2', 'A5']);
+  for (const lane of scenario.lanes) {
+    const result = classifyAiOpsGitIdentity(scenario.heads[lane], AI_OPS_DONOR_IDENTITIES[lane]);
+    assert.equal(result.mode, 'DONOR', lane);
+    assert.equal(result.verificationTarget, 'SEALED_DONOR_HISTORY', lane);
+  }
+});

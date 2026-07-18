@@ -9,7 +9,8 @@ import type {
 } from '../../systemIntegration/persistence/types.js';
 import { PRODUCT_INCIDENT_ACK_EVENT_KIND } from '../../systemIntegration/persistence/types.js';
 
-const INCIDENT_ACK_SCHEMA = 'cosmos.product-incident-ack.v1' as const;
+const INCIDENT_ACK_SCHEMA_V1 = 'cosmos.product-incident-ack.v1' as const;
+const INCIDENT_ACK_SCHEMA_V2 = 'cosmos.product-incident-ack.v2' as const;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const MAX_UTC_MS = 4_102_444_800_000;
@@ -21,6 +22,10 @@ export interface ProductIncidentPersistencePort {
   readProductIncidentAcknowledgement(
     incidentId: string,
     idempotencyKey: string,
+  ): Readonly<LedgerEventRecord> | null;
+  readProductIncidentCommandAcknowledgement(
+    idempotencyKey: string,
+    controlId: string,
   ): Readonly<LedgerEventRecord> | null;
   compareAndTransitionProductIncident(
     input: Readonly<ProductIncidentPersistenceInput>,
@@ -37,6 +42,35 @@ export interface ProductIncidentAcknowledgementRequest {
   }>;
   readonly acknowledgedAtMs: number;
   readonly reason: string;
+}
+
+export interface ProductIncidentCommandBinding {
+  readonly schemaVersion: 'product-command.v1';
+  readonly commandId: string;
+  readonly controlId: string;
+  readonly backendCommandId: 'ACK_INCIDENT';
+  readonly targetType: 'INCIDENT';
+  readonly targetId: string;
+  readonly previewId: string;
+  readonly previewDigest: string;
+  readonly requestDigest: string;
+  readonly expiresAtMs: number;
+  readonly correlationId: string;
+}
+
+export interface ProductIncidentAcknowledgementEvidence {
+  readonly incidentId: string;
+  readonly expectedLedgerEventId: number;
+  readonly idempotencyKey: string;
+  readonly actor: Readonly<{ readonly id: string; readonly source: 'loopback' | 'cloudflare-access' }>;
+  readonly acknowledgedAtMs: number;
+  readonly reason: string;
+  readonly acknowledgementCorrelationId: string;
+  readonly incidentCorrelationId: string;
+  readonly before: Readonly<Record<string, unknown>>;
+  readonly after: Readonly<ProductIncidentRecord>;
+  readonly command: Readonly<ProductIncidentCommandBinding> | null;
+  readonly receiptId: string;
 }
 
 export type ProductIncidentAcknowledgementFailureCode =
@@ -102,7 +136,7 @@ function validRequest(value: unknown): value is Readonly<ProductIncidentAcknowle
 
 function acknowledgementCorrelationId(request: Readonly<ProductIncidentAcknowledgementRequest>): string {
   const digest = createHash('sha256').update(JSON.stringify({
-    schema: INCIDENT_ACK_SCHEMA,
+    schema: INCIDENT_ACK_SCHEMA_V1,
     incidentId: request.incidentId,
     expectedLedgerEventId: request.expectedLedgerEventId,
     idempotencyKey: request.idempotencyKey,
@@ -137,9 +171,10 @@ function auditData(
   request: Readonly<ProductIncidentAcknowledgementRequest>,
   incident: Readonly<ProductIncidentRecord>,
   commandCorrelationId: string,
+  command: Readonly<ProductIncidentCommandBinding> | null,
 ): SystemJsonValue {
   return Object.freeze({
-    schema: INCIDENT_ACK_SCHEMA,
+    schema: command === null ? INCIDENT_ACK_SCHEMA_V1 : INCIDENT_ACK_SCHEMA_V2,
     operation: 'ACKNOWLEDGE',
     incidentId: incident.incidentId,
     expectedLedgerEventId: request.expectedLedgerEventId,
@@ -161,6 +196,7 @@ function auditData(
       request.acknowledgedAtMs,
       request.actor.id,
     ),
+    ...(command === null ? {} : { command }),
     externalActionAuthorization: 'NONE',
   });
 }
@@ -219,47 +255,88 @@ function sameUnacknowledgedTruth(before: Record<string, unknown>, after: Record<
   ));
 }
 
-function acknowledgementFromEvent(
+function validCommandBinding(value: unknown): value is Readonly<ProductIncidentCommandBinding> {
+  return plainObject(value)
+    && exactKeys(value, [
+      'schemaVersion', 'commandId', 'controlId', 'backendCommandId', 'targetType',
+      'targetId', 'previewId', 'previewDigest', 'requestDigest', 'expiresAtMs',
+      'correlationId',
+    ])
+    && value.schemaVersion === 'product-command.v1'
+    && typeof value.commandId === 'string' && /^sysctrl_[a-f0-9]{64}$/.test(value.commandId)
+    && typeof value.controlId === 'string' && /^incident\.ack\.[a-f0-9]{64}$/.test(value.controlId)
+    && value.backendCommandId === 'ACK_INCIDENT'
+    && value.targetType === 'INCIDENT'
+    && typeof value.targetId === 'string' && IDENTIFIER.test(value.targetId)
+    && typeof value.previewId === 'string' && /^prv_[a-f0-9]{64}$/.test(value.previewId)
+    && typeof value.previewDigest === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.previewDigest)
+    && typeof value.requestDigest === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.requestDigest)
+    && utcMillis(value.expiresAtMs)
+    && typeof value.correlationId === 'string' && IDENTIFIER.test(value.correlationId);
+}
+
+function sameCommandBinding(
+  left: Readonly<ProductIncidentCommandBinding> | null,
+  right: Readonly<ProductIncidentCommandBinding> | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return Object.keys(left).every((key) => (
+    left[key as keyof ProductIncidentCommandBinding]
+      === right[key as keyof ProductIncidentCommandBinding]
+  ));
+}
+
+function acknowledgementEvidenceFromEvent(
   event: Readonly<LedgerEventRecord>,
-  request: Readonly<ProductIncidentAcknowledgementRequest>,
-  correlationId: string,
-): Readonly<ProductIncidentRecord> | null {
+): Readonly<ProductIncidentAcknowledgementEvidence> | null {
   const data = event.data;
+  const v1Keys = [
+    'schema', 'operation', 'incidentId', 'expectedLedgerEventId',
+    'idempotencyKey', 'actor', 'acknowledgedAtMs', 'reason',
+    'commandCorrelationId', 'incidentCorrelationId', 'before', 'after',
+    'externalActionAuthorization',
+  ] as const;
+  const v2Keys = [...v1Keys, 'command'] as const;
   if (!Number.isSafeInteger(event.id) || event.id < 1 || !utcMillis(event.ts)
     || event.kind !== PRODUCT_INCIDENT_ACK_EVENT_KIND || event.symbol !== null
-    || !plainObject(data) || !exactKeys(data, [
-      'schema', 'operation', 'incidentId', 'expectedLedgerEventId',
-      'idempotencyKey', 'actor', 'acknowledgedAtMs', 'reason',
-      'commandCorrelationId', 'incidentCorrelationId', 'before', 'after',
-      'externalActionAuthorization',
-    ]) || !plainObject(data.actor)
+    || !plainObject(data)
+    || !((data.schema === INCIDENT_ACK_SCHEMA_V1 && exactKeys(data, v1Keys))
+      || (data.schema === INCIDENT_ACK_SCHEMA_V2 && exactKeys(data, v2Keys)))
+    || !plainObject(data.actor)
     || !validAuditSnapshot(data.before) || !validAuditSnapshot(data.after)) return null;
   const before = data.before;
   const after = data.after;
-  const valid = data.schema === INCIDENT_ACK_SCHEMA
-    && data.operation === 'ACKNOWLEDGE'
-    && data.incidentId === request.incidentId
-    && data.expectedLedgerEventId === request.expectedLedgerEventId
-    && data.idempotencyKey === request.idempotencyKey
-    && data.acknowledgedAtMs === request.acknowledgedAtMs
-    && data.reason === request.reason
-    && data.commandCorrelationId === correlationId
+  const command = data.schema === INCIDENT_ACK_SCHEMA_V2 && validCommandBinding(data.command)
+    ? Object.freeze({ ...data.command })
+    : null;
+  const valid = data.operation === 'ACKNOWLEDGE'
+    && typeof data.incidentId === 'string' && IDENTIFIER.test(data.incidentId)
+    && Number.isSafeInteger(data.expectedLedgerEventId) && Number(data.expectedLedgerEventId) >= 1
+    && typeof data.idempotencyKey === 'string' && IDEMPOTENCY_KEY.test(data.idempotencyKey)
+    && utcMillis(data.acknowledgedAtMs)
+    && typeof data.reason === 'string' && data.reason === data.reason.trim()
+    && data.reason.length >= 1 && data.reason.length <= 500
+    && typeof data.commandCorrelationId === 'string' && IDENTIFIER.test(data.commandCorrelationId)
+    && typeof data.incidentCorrelationId === 'string' && IDENTIFIER.test(data.incidentCorrelationId)
     && data.incidentCorrelationId === after.correlationId
     && data.externalActionAuthorization === 'NONE'
     && exactKeys(data.actor, ['id', 'source'])
-    && data.actor.id === request.actor.id
-    && data.actor.source === request.actor.source
-    && before.incidentId === request.incidentId
-    && before.state !== 'ACKNOWLEDGED'
+    && typeof data.actor.id === 'string' && IDENTIFIER.test(data.actor.id)
+    && (data.actor.source === 'loopback' || data.actor.source === 'cloudflare-access')
+    && before.incidentId === data.incidentId
+    && before.state === 'OPEN'
     && before.acknowledgedAtMs === null
     && before.acknowledgedByOperatorId === null
-    && after.incidentId === request.incidentId
+    && before.resolvedAtMs === null
+    && after.incidentId === data.incidentId
     && after.state === 'ACKNOWLEDGED'
-    && after.acknowledgedAtMs === request.acknowledgedAtMs
-    && after.acknowledgedByOperatorId === request.actor.id
-    && sameUnacknowledgedTruth(before, after);
+    && after.acknowledgedAtMs === data.acknowledgedAtMs
+    && after.acknowledgedByOperatorId === data.actor.id
+    && sameUnacknowledgedTruth(before, after)
+    && (data.schema !== INCIDENT_ACK_SCHEMA_V2 || command !== null)
+    && (command === null || command.targetId === data.incidentId);
   if (!valid) return null;
-  return Object.freeze({
+  const incident = Object.freeze({
     incidentId: after.incidentId as string,
     fingerprint: after.fingerprint as string,
     rootComponentId: after.rootComponentId as string,
@@ -282,6 +359,43 @@ function acknowledgementFromEvent(
       data: data as SystemJsonValue,
     }),
   });
+  return Object.freeze({
+    incidentId: data.incidentId as string,
+    expectedLedgerEventId: data.expectedLedgerEventId as number,
+    idempotencyKey: data.idempotencyKey as string,
+    actor: Object.freeze({
+      id: data.actor.id as string,
+      source: data.actor.source as 'loopback' | 'cloudflare-access',
+    }),
+    acknowledgedAtMs: data.acknowledgedAtMs as number,
+    reason: data.reason as string,
+    acknowledgementCorrelationId: data.commandCorrelationId as string,
+    incidentCorrelationId: data.incidentCorrelationId as string,
+    before: Object.freeze({ ...before }),
+    after: incident,
+    command,
+    receiptId: `ledger-event:${event.id}`,
+  });
+}
+
+function acknowledgementFromEvent(
+  event: Readonly<LedgerEventRecord>,
+  request: Readonly<ProductIncidentAcknowledgementRequest>,
+  correlationId: string,
+  command: Readonly<ProductIncidentCommandBinding> | null,
+): Readonly<ProductIncidentRecord> | null {
+  const evidence = acknowledgementEvidenceFromEvent(event);
+  if (evidence === null
+    || evidence.incidentId !== request.incidentId
+    || evidence.expectedLedgerEventId !== request.expectedLedgerEventId
+    || evidence.idempotencyKey !== request.idempotencyKey
+    || evidence.actor.id !== request.actor.id
+    || evidence.actor.source !== request.actor.source
+    || evidence.acknowledgedAtMs !== request.acknowledgedAtMs
+    || evidence.reason !== request.reason
+    || evidence.acknowledgementCorrelationId !== correlationId
+    || !sameCommandBinding(evidence.command, command)) return null;
+  return evidence.after;
 }
 
 function acknowledgementReadbackMatches(
@@ -291,6 +405,7 @@ function acknowledgementReadbackMatches(
   ledgerEventId: number,
   correlationId: string,
   acknowledgement: Readonly<ProductIncidentRecord>,
+  command: Readonly<ProductIncidentCommandBinding> | null,
 ): boolean {
   return after.incidentId === before.incidentId
     && after.fingerprint === before.fingerprint
@@ -311,7 +426,7 @@ function acknowledgementReadbackMatches(
     && acknowledgement.state === after.state
     && acknowledgement.acknowledgedAtMs === after.acknowledgedAtMs
     && acknowledgement.acknowledgedByOperatorId === after.acknowledgedByOperatorId
-    && acknowledgementFromEvent(acknowledgement.lastAudit, request, correlationId) !== null;
+    && acknowledgementFromEvent(acknowledgement.lastAudit, request, correlationId, command) !== null;
 }
 
 function failure(
@@ -331,17 +446,58 @@ export class ProductIncidentOwner {
   constructor(persistence: Readonly<ProductIncidentPersistencePort>) {
     if (!persistence || typeof persistence.readProductIncident !== 'function'
       || typeof persistence.readProductIncidentAcknowledgement !== 'function'
+      || typeof persistence.readProductIncidentCommandAcknowledgement !== 'function'
       || typeof persistence.compareAndTransitionProductIncident !== 'function') {
       throw new TypeError('ProductIncidentOwner requires the sole-Ledger incident port.');
     }
     this.persistence = persistence;
   }
 
-  acknowledge(value: unknown): Readonly<ProductIncidentAcknowledgementResult> {
+  readIncident(incidentId: string): Readonly<ProductIncidentRecord> | null {
+    if (typeof incidentId !== 'string' || !IDENTIFIER.test(incidentId)) {
+      throw new TypeError('Product incident identity is invalid.');
+    }
+    return this.persistence.readProductIncident(incidentId);
+  }
+
+  readCommandAcknowledgement(
+    idempotencyKey: string,
+    controlId: string,
+  ): Readonly<ProductIncidentAcknowledgementEvidence> | null {
+    if (typeof idempotencyKey !== 'string' || !IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      throw new TypeError('Product incident command idempotency identity is invalid.');
+    }
+    if (typeof controlId !== 'string' || !/^incident\.ack\.[a-f0-9]{64}$/.test(controlId)) {
+      throw new TypeError('Product incident command control identity is invalid.');
+    }
+    const event = this.persistence.readProductIncidentCommandAcknowledgement(idempotencyKey, controlId);
+    if (event === null) return null;
+    const evidence = acknowledgementEvidenceFromEvent(event);
+    if (evidence === null || evidence.command === null
+      || evidence.idempotencyKey !== idempotencyKey
+      || evidence.command.controlId !== controlId) {
+      throw new Error('Durable Product incident command receipt is invalid.');
+    }
+    return evidence;
+  }
+
+  acknowledge(
+    value: unknown,
+    commandValue: unknown = null,
+  ): Readonly<ProductIncidentAcknowledgementResult> {
     let request: Readonly<ProductIncidentAcknowledgementRequest>;
+    let command: Readonly<ProductIncidentCommandBinding> | null;
     try {
       if (!validRequest(value)) return failure('ACK_REQUEST_INVALID', null);
+      if (commandValue !== null && !validCommandBinding(commandValue)) {
+        return failure('ACK_REQUEST_INVALID', null);
+      }
       request = value;
+      command = commandValue === null ? null : commandValue;
+      if (command !== null && (
+        command.targetId !== request.incidentId
+        || command.expiresAtMs < request.acknowledgedAtMs
+      )) return failure('ACK_REQUEST_INVALID', null);
     } catch {
       return failure('ACK_REQUEST_INVALID', null);
     }
@@ -361,11 +517,25 @@ export class ProductIncidentOwner {
     const commandCorrelationId = acknowledgementCorrelationId(request);
 
     if (historicalAcknowledgement !== null) {
-      const historicalIncident = acknowledgementFromEvent(
-        historicalAcknowledgement,
-        request,
-        commandCorrelationId,
-      );
+      const evidence = acknowledgementEvidenceFromEvent(historicalAcknowledgement);
+      const historicalIncident = command === null
+        ? acknowledgementFromEvent(
+            historicalAcknowledgement,
+            request,
+            commandCorrelationId,
+            null,
+          )
+        : evidence !== null
+            && evidence.incidentId === request.incidentId
+            && evidence.expectedLedgerEventId === request.expectedLedgerEventId
+            && evidence.idempotencyKey === request.idempotencyKey
+            && evidence.actor.id === request.actor.id
+            && evidence.actor.source === request.actor.source
+            && evidence.reason === request.reason
+            && evidence.acknowledgementCorrelationId === commandCorrelationId
+            && sameCommandBinding(evidence.command, command)
+          ? evidence.after
+          : null;
       if (historicalIncident === null
         || before.acknowledgedAtMs !== historicalIncident.acknowledgedAtMs
         || before.acknowledgedByOperatorId !== historicalIncident.acknowledgedByOperatorId) {
@@ -385,6 +555,9 @@ export class ProductIncidentOwner {
     }
     if (before.resolvedAtMs !== null || before.state === 'RESOLVED') {
       return failure('INCIDENT_ALREADY_RESOLVED', before.ledgerEventId);
+    }
+    if (before.state !== 'OPEN') {
+      return failure('INCIDENT_ACK_IDEMPOTENCY_CONFLICT', before.ledgerEventId);
     }
     if (before.ledgerEventId !== request.expectedLedgerEventId) {
       return failure('INCIDENT_REVISION_CONFLICT', before.ledgerEventId);
@@ -411,7 +584,7 @@ export class ProductIncidentOwner {
       audit: Object.freeze({
         kind: PRODUCT_INCIDENT_ACK_EVENT_KIND,
         symbol: null,
-        data: auditData(request, before, commandCorrelationId),
+        data: auditData(request, before, commandCorrelationId, command),
       }),
     });
 
@@ -442,7 +615,7 @@ export class ProductIncidentOwner {
     }
     const acknowledgement = acknowledgementEvent === null
       ? null
-      : acknowledgementFromEvent(acknowledgementEvent, request, commandCorrelationId);
+      : acknowledgementFromEvent(acknowledgementEvent, request, commandCorrelationId, command);
     if (after === null || acknowledgement === null || !acknowledgementReadbackMatches(
       before,
       after,
@@ -450,6 +623,7 @@ export class ProductIncidentOwner {
       mutation.ledgerEvent.id,
       commandCorrelationId,
       acknowledgement,
+      command,
     )) return failure('INCIDENT_ACK_READBACK_UNPROVEN', mutation.ledgerEvent.id);
 
     return Object.freeze({

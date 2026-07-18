@@ -73,6 +73,7 @@ import {
   createLiveEdgeControlProductionBinding,
   finalizeSystemBootReleaseCleanShutdown,
   LiveEdgeMutationJournalPersistenceAdapter,
+  type ProductIncidentPersistenceInput,
 } from './systemIntegration/persistence/index.js';
 import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
@@ -101,6 +102,7 @@ import {
   type ProductRuntimeReadPorts,
 } from './productIntegration/runtime/index.js';
 import { createProductRuntimeSystemControlCommandOwner } from './productIntegration/runtime/systemControlCommandOwner.js';
+import { createProductIncidentOwner } from './productIntegration/incidents/index.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
@@ -395,6 +397,18 @@ const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
     });
   },
 });
+const productIncidentOwner = createProductIncidentOwner(Object.freeze({
+  readProductIncident: (incidentId: string) => ledger.readProductIncident(incidentId),
+  readProductIncidentAcknowledgement: (incidentId: string, idempotencyKey: string) => (
+    ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey)
+  ),
+  readProductIncidentCommandAcknowledgement: (idempotencyKey: string, controlId: string) => (
+    ledger.readProductIncidentCommandAcknowledgement(idempotencyKey, controlId)
+  ),
+  compareAndTransitionProductIncident: (input: Readonly<ProductIncidentPersistenceInput>) => (
+    ledger.compareAndTransitionProductIncident(input)
+  ),
+}));
 const productIntegrationRuntime = createProductIntegrationRuntime({
   read: productIntegrationRead,
   clock: systemIntegrationClock,
@@ -408,6 +422,7 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
       readState: (symbol: string) => systemIntegration.focusPinState(symbol),
       readPinnedSymbols: () => systemIntegrationProduction.attentionFocus.readPinnedSymbols(),
     }),
+    incidents: productIncidentOwner,
   }),
 });
 

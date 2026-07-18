@@ -14,6 +14,14 @@ import type {
   SystemFocusPinReadback,
 } from '../../systemIntegration/contracts/index.js';
 import { controlRequestDigest, type SystemControlService } from '../../systemIntegration/controls/index.js';
+import type {
+  ProductIncidentAcknowledgementEvidence,
+  ProductIncidentAcknowledgementRequest,
+  ProductIncidentAcknowledgementResult,
+  ProductIncidentCommandBinding,
+} from '../incidents/index.js';
+import type { ProductIncidentRecord } from '../../systemIntegration/persistence/types.js';
+import { productIncidentAcknowledgementControlId } from './controls.js';
 import {
   PRODUCT_RUNTIME_COMMAND_SCHEMA,
   type ProductRuntimeCommandIntent,
@@ -56,6 +64,16 @@ type ResolvedControlIntent =
         action: SourceIsolationAction;
       }>;
       consequence: string;
+    }>
+  | Readonly<{
+      kind: 'INCIDENT';
+      revision: number;
+      incidentId: string;
+      operation: Readonly<{
+        command: 'ACK_INCIDENT';
+        incidentId: string;
+      }>;
+      consequence: string;
     }>;
 
 export interface ProductRuntimeSystemControlCommandOwnerDependencies {
@@ -76,6 +94,18 @@ export interface ProductRuntimeSystemControlCommandOwnerDependencies {
   readonly attentionFocus?: Readonly<{
     readState(symbol: string): Readonly<SystemFocusPinReadback>;
     readPinnedSymbols(): readonly string[];
+  }>;
+  /** Product Integration owns ACK semantics; this adapter owns no incident state. */
+  readonly incidents?: Readonly<{
+    readIncident(incidentId: string): Readonly<ProductIncidentRecord> | null;
+    acknowledge(
+      request: unknown,
+      command?: unknown,
+    ): Readonly<ProductIncidentAcknowledgementResult>;
+    readCommandAcknowledgement(
+      idempotencyKey: string,
+      controlId: string,
+    ): Readonly<ProductIncidentAcknowledgementEvidence> | null;
   }>;
 }
 
@@ -261,6 +291,21 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
         : `Only ${sourceId} is restarted from its durable isolated lifecycle.`,
     });
   }
+  if (value.backendCommandId === 'ACK_INCIDENT'
+    && value.targetType === 'INCIDENT'
+    && typeof value.targetId === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(value.targetId)
+    && value.controlId === productIncidentAcknowledgementControlId(value.targetId)
+    && revision >= 1
+    && exactPayload(value.payload, { incidentId: value.targetId })) {
+    return Object.freeze({
+      kind: 'INCIDENT',
+      revision,
+      incidentId: value.targetId,
+      operation: Object.freeze({ command: 'ACK_INCIDENT', incidentId: value.targetId }),
+      consequence: 'Acknowledgement is appended without clearing incident root cause, severity, health, or source evidence.',
+    });
+  }
   return null;
 }
 
@@ -277,7 +322,9 @@ function previewMaterial(
     targetId: intent.targetId,
     payload: intent.payload,
     expectedRevision: intent.expectedRevision,
-    mutation: resolved.mutation,
+    ...(resolved.kind === 'INCIDENT'
+      ? { operation: resolved.operation }
+      : { mutation: resolved.mutation }),
     actor: Object.freeze({
       id: intent.operator.id,
       email: intent.operator.email,
@@ -488,6 +535,63 @@ function result(
   });
 }
 
+function incidentCommandBinding(
+  request: Readonly<ProductRuntimeCommandRequest>,
+  operator: Readonly<ProductRuntimeCommandIntent['operator']>,
+): Readonly<ProductIncidentCommandBinding> {
+  const identity = commandIdentity(request);
+  return Object.freeze({
+    schemaVersion: PRODUCT_RUNTIME_COMMAND_SCHEMA,
+    commandId: identity.commandId,
+    controlId: request.controlId,
+    backendCommandId: 'ACK_INCIDENT',
+    targetType: 'INCIDENT',
+    targetId: request.targetId,
+    previewId: request.previewId,
+    previewDigest: request.previewDigest,
+    requestDigest: `sha256:${sha256({ request, operator })}`,
+    expiresAtMs: request.expiresAtMs,
+    correlationId: identity.correlationId,
+  });
+}
+
+function incidentEvidenceMatchesCommand(
+  evidence: Readonly<ProductIncidentAcknowledgementEvidence>,
+  request: Readonly<ProductRuntimeCommandRequest>,
+  operator: Readonly<ProductRuntimeCommandIntent['operator']>,
+  binding: Readonly<ProductIncidentCommandBinding>,
+): boolean {
+  return evidence.command !== null
+    && canonical(evidence.command) === canonical(binding)
+    && evidence.incidentId === request.targetId
+    && evidence.expectedLedgerEventId === Number(request.expectedRevision)
+    && evidence.idempotencyKey === request.idempotencyKey
+    && evidence.actor.id === operator.id
+    && evidence.actor.source === operator.source
+    && evidence.reason === request.reason
+    && evidence.after.incidentId === request.targetId
+    && evidence.after.ledgerEventId >= 1
+    && evidence.receiptId === `ledger-event:${evidence.after.ledgerEventId}`;
+}
+
+function resultFromIncidentEvidence(
+  identity: Readonly<ProductRuntimeCommandResultIdentity>,
+  evidence: Readonly<ProductIncidentAcknowledgementEvidence>,
+  status: Extract<ProductRuntimeControlResultStatus, 'APPLIED' | 'ALREADY_APPLIED'>,
+): Readonly<ProductRuntimeControlResult> {
+  const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
+  return Object.freeze({
+    ...expected,
+    controlId: identity.controlId,
+    status,
+    before: stateText(evidence.before),
+    after: stateText(evidence.after),
+    receiptId: evidence.receiptId,
+    completedAtMs: evidence.acknowledgedAtMs,
+    synthetic: false,
+  });
+}
+
 function failureStatus(code: string, retryable: boolean): ProductRuntimeControlResultStatus {
   if (code === 'STALE_COMMAND_REVISION' || code === 'COMMAND_REVISION_REUSED' || code === 'STALE_SOURCE_REVISION') {
     return 'REJECTED_STALE_REVISION';
@@ -506,6 +610,7 @@ function capability(
   sourceIsolationConfigured: boolean,
   strategyIntakeConfigured: boolean,
   attentionFocusConfigured: boolean,
+  incidentAcknowledgementConfigured: boolean,
 ): Readonly<ProductRuntimeCommandOwnerCapability> {
   const supportedBackendCommandIds: ProductRuntimeSafeBackendCommand[] = [
     'SET_SAFE_MODE',
@@ -515,6 +620,7 @@ function capability(
     ...(sourceIsolationConfigured ? ['SET_PUBLIC_SOURCE_LIFECYCLE' as const] : []),
     ...(strategyIntakeConfigured ? ['SET_BASIS_INTAKE' as const, 'SET_VOLUME_INTAKE' as const] : []),
     ...(attentionFocusConfigured ? ['PIN_FOCUS' as const] : []),
+    ...(incidentAcknowledgementConfigured ? ['ACK_INCIDENT' as const] : []),
   ];
   return Object.freeze({
     ownerId: 'systemIntegration.canonical-control-service',
@@ -533,6 +639,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
   private readonly sourceIsolation: SourceIsolationOwnerPort | undefined;
   private readonly strategyIntake: ProductRuntimeSystemControlCommandOwnerDependencies['strategyIntake'];
   private readonly attentionFocus: ProductRuntimeSystemControlCommandOwnerDependencies['attentionFocus'];
+  private readonly incidents: ProductRuntimeSystemControlCommandOwnerDependencies['incidents'];
 
   constructor(dependencies: Readonly<ProductRuntimeSystemControlCommandOwnerDependencies>) {
     if (!dependencies?.controls
@@ -556,14 +663,21 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       || typeof dependencies.attentionFocus.readPinnedSymbols !== 'function')) {
       throw new TypeError('Product command owner focus dependency is invalid.');
     }
+    if (dependencies.incidents && (
+      typeof dependencies.incidents.readIncident !== 'function'
+      || typeof dependencies.incidents.acknowledge !== 'function'
+      || typeof dependencies.incidents.readCommandAcknowledgement !== 'function'
+    )) throw new TypeError('Product command owner incident acknowledgement dependency is invalid.');
     this.controls = dependencies.controls;
     this.sourceIsolation = dependencies.sourceIsolation;
     this.strategyIntake = dependencies.strategyIntake;
     this.attentionFocus = dependencies.attentionFocus;
+    this.incidents = dependencies.incidents;
     this.capability = capability(
       this.sourceIsolation !== undefined,
       this.strategyIntake !== undefined,
       this.attentionFocus !== undefined,
+      this.incidents !== undefined,
     );
   }
 
@@ -630,6 +744,42 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     }
   }
 
+  readIncidentControlState(incidentId: string): Readonly<{
+    incidentId: string;
+    ledgerEventId: number;
+    state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+    severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    rootComponentId: string;
+    eventCount: number;
+    acknowledgedAtMs: number | null;
+    resolvedAtMs: number | null;
+  }> | null {
+    if (!this.incidents) return null;
+    try {
+      const incident = this.incidents.readIncident(incidentId);
+      if (incident === null || incident.incidentId !== incidentId
+        || !Number.isSafeInteger(incident.ledgerEventId) || incident.ledgerEventId < 1
+        || !['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].includes(incident.state)
+        || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(incident.severity)
+        || typeof incident.rootComponentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.rootComponentId)
+        || !Number.isSafeInteger(incident.eventCount) || incident.eventCount < 1
+        || !(incident.acknowledgedAtMs === null || utcMillis(incident.acknowledgedAtMs))
+        || !(incident.resolvedAtMs === null || utcMillis(incident.resolvedAtMs))) return null;
+      return Object.freeze({
+        incidentId: incident.incidentId,
+        ledgerEventId: incident.ledgerEventId,
+        state: incident.state as 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED',
+        severity: incident.severity as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW',
+        rootComponentId: incident.rootComponentId,
+        eventCount: incident.eventCount,
+        acknowledgedAtMs: incident.acknowledgedAtMs,
+        resolvedAtMs: incident.resolvedAtMs,
+      });
+    } catch {
+      return null;
+    }
+  }
+
   readStrategyIntakeControlState(strategy: 'basis' | 'volume'): Readonly<{
     controlRevision: number;
     desiredPaused: boolean;
@@ -675,8 +825,16 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     }
   }
 
-  private currentState(resolved: Readonly<ResolvedControlIntent>): Readonly<SystemControlState> | Readonly<SourceIsolationSnapshot> {
+  private currentState(
+    resolved: Readonly<ResolvedControlIntent>,
+  ): Readonly<SystemControlState> | Readonly<SourceIsolationSnapshot> | Readonly<ProductIncidentRecord> {
     if (resolved.kind === 'SYSTEM') return this.controls.snapshot();
+    if (resolved.kind === 'INCIDENT') {
+      if (!this.incidents) throw new Error('Product incident acknowledgement owner is not configured.');
+      const incident = this.incidents.readIncident(resolved.incidentId);
+      if (incident === null) throw new Error('Product incident does not exist.');
+      return incident;
+    }
     if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
     return this.sourceIsolation.snapshot(resolved.sourceId);
   }
@@ -742,7 +900,9 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const current = this.currentState(resolved);
     const currentRevision = resolved.kind === 'SYSTEM'
       ? (current as SystemControlState).revision
-      : (current as SourceIsolationSnapshot).sourceRevision;
+      : resolved.kind === 'SOURCE'
+        ? (current as SourceIsolationSnapshot).sourceRevision
+        : (current as ProductIncidentRecord).ledgerEventId;
     if (resolved.revision !== currentRevision) throw new Error('Product control preview revision is stale.');
     if (resolved.kind === 'SOURCE') {
       if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
@@ -756,6 +916,9 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
           && (state.state !== 'APPLIED' || state.eligible !== true || state.canPin !== true))) {
         throw new Error('Product focus control is not applicable to current canonical attention truth.');
       }
+    }
+    if (resolved.kind === 'INCIDENT' && (current as ProductIncidentRecord).state !== 'OPEN') {
+      throw new Error('Product incident acknowledgement is only previewable from OPEN.');
     }
     const expiresAtMs = intent.nowMs + PREVIEW_TTL_MS;
     if (!utcMillis(expiresAtMs)) throw new RangeError('Product control preview expiry exceeds its UTC bound.');
@@ -797,6 +960,68 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       return result(request, 'REJECTED_AUTHORITY', before, before, input.intent.nowMs);
     }
 
+    if (resolved.kind === 'INCIDENT') {
+      if (!this.incidents) throw new Error('Product incident acknowledgement owner is not configured.');
+      const binding = incidentCommandBinding(request, input.intent.operator);
+      let existing: Readonly<ProductIncidentAcknowledgementEvidence> | null;
+      try {
+        existing = this.incidents.readCommandAcknowledgement(request.idempotencyKey, request.controlId);
+      } catch {
+        return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
+      }
+      if (existing !== null) {
+        if (!incidentEvidenceMatchesCommand(existing, request, input.intent.operator, binding)) {
+          return result(request, 'REJECTED_SCHEMA', before, before, input.intent.nowMs);
+        }
+        return resultFromIncidentEvidence(
+          Object.freeze({ ...commandIdentity(request), idempotencyKey: request.idempotencyKey, controlId: request.controlId }),
+          existing,
+          'ALREADY_APPLIED',
+        );
+      }
+
+      const acknowledgementRequest: Readonly<ProductIncidentAcknowledgementRequest> = Object.freeze({
+        incidentId: resolved.incidentId,
+        expectedLedgerEventId: resolved.revision,
+        idempotencyKey: request.idempotencyKey,
+        actor: Object.freeze({ id: input.intent.operator.id, source: input.intent.operator.source }),
+        acknowledgedAtMs: input.intent.nowMs,
+        reason: request.reason,
+      });
+      let acknowledged: Readonly<ProductIncidentAcknowledgementResult>;
+      try {
+        acknowledged = this.incidents.acknowledge(acknowledgementRequest, binding);
+      } catch {
+        return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
+      }
+      if (!acknowledged.ok) {
+        const status: ProductRuntimeControlResultStatus = acknowledged.code === 'INCIDENT_REVISION_CONFLICT'
+          ? 'REJECTED_STALE_REVISION'
+          : acknowledged.code === 'ACK_REQUEST_INVALID'
+              || acknowledged.code === 'INCIDENT_ACK_IDEMPOTENCY_CONFLICT'
+            ? 'REJECTED_SCHEMA'
+            : acknowledged.code === 'INCIDENT_PERSISTENCE_UNAVAILABLE'
+                || acknowledged.code === 'INCIDENT_ACK_READBACK_UNPROVEN'
+              ? 'FAILED_ATTENTION_REQUIRED'
+              : 'REJECTED_STATE';
+        return result(request, status, before, before, input.intent.nowMs);
+      }
+      let evidence: Readonly<ProductIncidentAcknowledgementEvidence> | null;
+      try {
+        evidence = this.incidents.readCommandAcknowledgement(request.idempotencyKey, request.controlId);
+      } catch {
+        return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
+      }
+      if (evidence === null || !incidentEvidenceMatchesCommand(evidence, request, input.intent.operator, binding)) {
+        return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
+      }
+      return resultFromIncidentEvidence(
+        Object.freeze({ ...commandIdentity(request), idempotencyKey: request.idempotencyKey, controlId: request.controlId }),
+        evidence,
+        acknowledged.status === 'ALREADY_ACKNOWLEDGED' ? 'ALREADY_APPLIED' : 'APPLIED',
+      );
+    }
+
     if (resolved.kind === 'SOURCE') {
       if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
       let sourceResult;
@@ -814,7 +1039,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
         return result(request, 'FAILED_ATTENTION_REQUIRED', before, before, input.intent.nowMs);
       }
       if (!sourceResult.ok) {
-        let after: Readonly<SourceIsolationSnapshot> | Readonly<SystemControlState> = before;
+        let after: Readonly<SourceIsolationSnapshot> | Readonly<SystemControlState> = before as Readonly<SourceIsolationSnapshot>;
         try { after = this.sourceIsolation.snapshot(resolved.sourceId); } catch { /* Fail closed on the before image. */ }
         const retryable = sourceResult.code.includes('PERSISTENCE')
           || sourceResult.code.includes('CAS')
@@ -889,6 +1114,41 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const expected = commandIdentityFromParts(identity.idempotencyKey, identity.controlId);
     if (!constantTimeTextEqual(identity.commandId, expected.commandId)) {
       return failClosedReadback('COMMAND_RESULT_IDENTITY_MISMATCH');
+    }
+
+    if (/^incident\.ack\.[a-f0-9]{64}$/.test(identity.controlId)) {
+      if (!this.incidents) return failClosedReadback('INCIDENT_RESULT_OWNER_NOT_CONFIGURED');
+      let evidence: Readonly<ProductIncidentAcknowledgementEvidence> | null;
+      try {
+        evidence = this.incidents.readCommandAcknowledgement(identity.idempotencyKey, identity.controlId);
+      } catch {
+        return failClosedReadback('INCIDENT_RESULT_OWNER_UNAVAILABLE');
+      }
+      if (evidence === null) {
+        return Object.freeze({ state: 'NOT_FOUND' as const, result: null, failureCode: null });
+      }
+      const command = evidence.command;
+      if (command === null
+        || command.schemaVersion !== PRODUCT_RUNTIME_COMMAND_SCHEMA
+        || command.commandId !== expected.commandId
+        || command.controlId !== identity.controlId
+        || command.backendCommandId !== 'ACK_INCIDENT'
+        || command.targetType !== 'INCIDENT'
+        || command.controlId !== productIncidentAcknowledgementControlId(command.targetId)
+        || command.correlationId !== expected.correlationId
+        || evidence.idempotencyKey !== identity.idempotencyKey
+        || evidence.incidentId !== command.targetId
+        || evidence.after.incidentId !== command.targetId
+        || evidence.after.acknowledgedAtMs !== evidence.acknowledgedAtMs
+        || evidence.after.state !== 'ACKNOWLEDGED'
+        || evidence.receiptId !== `ledger-event:${evidence.after.ledgerEventId}`) {
+        return failClosedReadback('DURABLE_INCIDENT_RECEIPT_INVALID');
+      }
+      return Object.freeze({
+        state: 'TERMINAL' as const,
+        result: resultFromIncidentEvidence(identity, evidence, 'APPLIED'),
+        failureCode: null,
+      });
     }
 
     const sourceId = sourceIdForControl(identity.controlId);

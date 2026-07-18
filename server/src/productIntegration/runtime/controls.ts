@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
 import {
   PRODUCT_RUNTIME_COMMAND_SCHEMA,
@@ -51,6 +53,9 @@ function ownerBlocker(
   if (command === 'RESTART_COMPONENT' && capability.managedRestartComponentId !== 'engine-supervisor') {
     return 'MANAGED_ROOT_RESTART_NOT_PROVEN';
   }
+  if (command === 'ACK_INCIDENT' && typeof owner.readIncidentControlState !== 'function') {
+    return 'INCIDENT_ACK_READBACK_NOT_PROVEN';
+  }
   return null;
 }
 
@@ -60,7 +65,7 @@ function entry(
   input: Readonly<{
     controlId: string;
     backendCommandId: ProductRuntimeSafeBackendCommand;
-    targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
+    targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
     targetId: string;
     payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
     payloadSchema: string;
@@ -85,8 +90,14 @@ function entry(
   return Object.freeze({
     ...publicInput,
     wiringState: blocker === null ? 'WIRED_LIVE' : `UNAVAILABLE:${blocker}`,
-    owner: blocker === null ? owner!.capability.ownerId : 'systemIntegration canonical control owner',
-    group: input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
+    owner: blocker === null
+      ? input.backendCommandId === 'ACK_INCIDENT'
+        ? 'productIntegration.incident-owner'
+        : owner!.capability.ownerId
+      : 'systemIntegration canonical control owner',
+    group: input.backendCommandId === 'ACK_INCIDENT'
+      ? 'Incident Response'
+      : input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
       ? 'Source Lifecycle'
       : input.backendCommandId === 'PIN_FOCUS'
         ? 'Universe Attention'
@@ -94,14 +105,59 @@ function entry(
         ? 'Strategy Intake'
       : input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
     authority: blocker === null ? 'SERVER_DERIVED_OPERATOR' : 'NOT_CONFIGURED',
-    requiredPosture: input.backendCommandId === 'RESTART_COMPONENT'
-      ? 'NO_CAPITAL_EXPOSED'
-      : input.backendCommandId === 'PIN_FOCUS' ? 'ACCEPTED_RUNTIME_ADAPTER' : 'PROCESS_ALIVE',
+    requiredPosture: input.backendCommandId === 'ACK_INCIDENT'
+      ? 'INCIDENT_OPEN_OR_EXACT_REPLAY'
+      : input.backendCommandId === 'RESTART_COMPONENT'
+        ? 'NO_CAPITAL_EXPOSED'
+        : input.backendCommandId === 'PIN_FOCUS' ? 'ACCEPTED_RUNTIME_ADAPTER' : 'PROCESS_ALIVE',
     expiryPolicy: 'Canonical owner preview expiry is authoritative.',
     currentStateRevision: currentStateRevision ?? String(snapshot.control.revision),
     disabledReason: blocker === null ? null : blocker,
     preview: null,
     latestResult: null,
+  });
+}
+
+export function productIncidentAcknowledgementControlId(incidentId: string): string {
+  const digest = createHash('sha256')
+    .update('product-incident-ack-control.v1\0', 'utf8')
+    .update(incidentId, 'utf8')
+    .digest('hex');
+  return `incident.ack.${digest}`;
+}
+
+function incidentAcknowledgementEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  incidentId: string,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readIncidentControlState']>> = null;
+  try { state = owner?.readIncidentControlState?.(incidentId) ?? null; } catch { state = null; }
+  const configured = ownerBlocker(owner, 'ACK_INCIDENT') === null;
+  return entry(snapshot, owner, {
+    controlId: productIncidentAcknowledgementControlId(incidentId),
+    backendCommandId: 'ACK_INCIDENT',
+    targetType: 'INCIDENT',
+    targetId: incidentId,
+    payload: Object.freeze({ incidentId }),
+    payloadSchema: '{ incidentId: canonical Product incident identity }',
+    payloadEnumeration: Object.freeze([incidentId]),
+    defaultValue: incidentId,
+    label: 'Acknowledge Incident',
+    explanation: 'Records operator acknowledgement without clearing root cause, severity, health, or source evidence.',
+    safeBounds: 'One exact durable incident revision; no health, routing, or external-action authority.',
+    currentDesiredValue: state?.state ?? 'UNKNOWN',
+    currentEffectiveValue: state?.state ?? 'UNKNOWN',
+    effect: 'IMMEDIATE',
+    reversibility: 'Acknowledgement is immutable; recovery remains a separate owner-proven transition.',
+    invariants: Object.freeze([
+      'Root cause, severity, capital relevance, chronology, event count, and health truth are preserved.',
+      'No SystemControlMutation or external paging action is authorized.',
+    ]),
+    effectTelemetry: Object.freeze(['incident Ledger revision', 'operator identity', 'acknowledgement time', 'immutable receipt']),
+    confirmationText: `Confirm acknowledgement of incident ${incidentId} at Ledger revision ${state?.ledgerEventId ?? 'UNKNOWN'}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.ledgerEventId),
+    ...(configured && state === null ? { forcedBlocker: 'INCIDENT_CONTROL_STATE_UNAVAILABLE' } : {}),
   });
 }
 
@@ -259,6 +315,7 @@ export function buildProductRuntimeControlRegistry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner?: Readonly<ProductRuntimeCommandOwnerPort>,
   requestedControlId?: string,
+  incidentId?: string,
 ): readonly Readonly<ProductRuntimeControlRegistryEntry>[] {
   const controls: Readonly<ProductRuntimeControlRegistryEntry>[] = [
     entry(snapshot, owner, {
@@ -297,6 +354,7 @@ export function buildProductRuntimeControlRegistry(
     sourceLifecycleEntry(snapshot, owner, 'public-usdm-source'),
     strategyIntakeEntry(snapshot, owner, 'basis'),
     strategyIntakeEntry(snapshot, owner, 'volume'),
+    ...(incidentId === undefined ? [] : [incidentAcknowledgementEntry(snapshot, owner, incidentId)]),
   ];
   const focusControls = new Map<string, Readonly<{ symbol: string; pinned: boolean }>>();
   const requested = requestedControlId === undefined ? null : focusControlSpec(requestedControlId);

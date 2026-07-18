@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import test from 'node:test';
 import express from 'express';
-import { createProductIntegrationRuntime, createProductIntegrationRuntimeRouter } from '../../../dist/productIntegration/runtime/index.js';
+import {
+  createProductIntegrationRuntime,
+  createProductIntegrationRuntimeRouter,
+  productIncidentAcknowledgementControlId,
+} from '../../../dist/productIntegration/runtime/index.js';
 import { T0, makeRead } from './testSupport.mjs';
 
 const HOST = '127.0.0.1';
@@ -93,6 +97,27 @@ test('frozen product-integration v1 routes enforce identity, exact paths, and qu
     });
     assert.equal(forgedPreview.status, 400);
     assert.equal((await forgedPreview.json()).code, 'CONTROL_PREVIEW_INVALID');
+
+    const incidentTargetId = 'incident.product.route-shape';
+    const incidentControlId = productIncidentAcknowledgementControlId(incidentTargetId);
+    const incidentPreview = await request('/api/product-integration/v1/commands/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ controlId: incidentControlId, expectedRevision: '17', targetId: incidentTargetId }),
+    });
+    assert.equal(incidentPreview.status, 409, 'the exact incident preview shape reaches owner configuration');
+    assert.equal((await incidentPreview.json()).code, 'CONTROL_NOT_CONFIGURED');
+    const missingIncidentTarget = await request('/api/product-integration/v1/commands/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ controlId: incidentControlId, expectedRevision: '17' }),
+    });
+    assert.equal(missingIncidentTarget.status, 400);
+    assert.equal((await missingIncidentTarget.json()).code, 'CONTROL_PREVIEW_INVALID');
+    const crossIncidentTarget = await request('/api/product-integration/v1/commands/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ controlId: incidentControlId, expectedRevision: '17', targetId: 'incident.product.other' }),
+    });
+    assert.equal(crossIncidentTarget.status, 400);
+    assert.equal((await crossIncidentTarget.json()).code, 'CONTROL_PREVIEW_INVALID');
 
     const noContentType = await request('/api/product-integration/v1/commands', { method: 'POST', body: '{}' });
     assert.equal(noContentType.status, 415);

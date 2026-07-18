@@ -139,6 +139,7 @@ export const PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS = Object.freeze([
   'SET_BASIS_INTAKE',
   'SET_VOLUME_INTAKE',
   'PIN_FOCUS',
+  'ACK_INCIDENT',
 ] as const);
 export type ProductRuntimeSafeBackendCommand = (typeof PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS)[number];
 
@@ -225,7 +226,7 @@ export type ProductRuntimeCommandResultReadback =
 export interface ProductRuntimeCommandIntent {
   readonly controlId: string;
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
-  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly expectedRevision: string;
@@ -274,6 +275,16 @@ export interface ProductRuntimeCommandOwnerPort {
     request: Readonly<ProductRuntimeCommandRequest>;
     intent: Readonly<ProductRuntimeCommandIntent>;
   }>): Promise<boolean>;
+  readIncidentControlState?(incidentId: string): Readonly<{
+    readonly incidentId: string;
+    readonly ledgerEventId: number;
+    readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+    readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    readonly rootComponentId: string;
+    readonly eventCount: number;
+    readonly acknowledgedAtMs: number | null;
+    readonly resolvedAtMs: number | null;
+  }> | null;
   preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>>;
   submit(input: Readonly<{
     request: Readonly<ProductRuntimeCommandRequest>;
@@ -351,7 +362,7 @@ export interface ProductRuntimeControlRegistryEntry {
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
   readonly wiringState: ProductRuntimeControlWiringState;
   readonly owner: string;
-  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly payloadSchema: string;

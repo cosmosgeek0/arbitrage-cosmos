@@ -2605,7 +2605,10 @@ export class Ledger extends EventEmitter {
     const rows = this.db.prepare(`
       SELECT * FROM events
       WHERE kind = ?
-        AND json_extract(data, '$.schema') = 'cosmos.product-incident-ack.v1'
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-ack.v1',
+          'cosmos.product-incident-ack.v2'
+        )
         AND json_extract(data, '$.incidentId') = ?
         AND json_extract(data, '$.idempotencyKey') = ?
       ORDER BY id ASC
@@ -2616,6 +2619,30 @@ export class Ledger extends EventEmitter {
       idempotencyKey,
     ) as EventDbRow[];
     if (rows.length > 1) throw new Error('duplicate durable product incident acknowledgement events');
+    return rows.length === 0 ? null : this.readProductPersistenceAudit(rows[0]!.id);
+  }
+
+  /** Reads one Product ACK receipt by its exact command identity pair. */
+  readProductIncidentCommandAcknowledgement(
+    idempotencyKey: string,
+    controlId: string,
+  ): Readonly<LedgerEvent> | null {
+    if (typeof idempotencyKey !== 'string' || !PRODUCT_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      throw new TypeError('product incident acknowledgement idempotencyKey is invalid');
+    }
+    if (typeof controlId !== 'string' || !/^incident\.ack\.[a-f0-9]{64}$/.test(controlId)) {
+      throw new TypeError('product incident acknowledgement controlId is invalid');
+    }
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-ack.v2'
+        AND json_extract(data, '$.idempotencyKey') = ?
+        AND json_extract(data, '$.command.controlId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(PRODUCT_INCIDENT_ACK_EVENT_KIND, idempotencyKey, controlId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident command receipts');
     return rows.length === 0 ? null : this.readProductPersistenceAudit(rows[0]!.id);
   }
 

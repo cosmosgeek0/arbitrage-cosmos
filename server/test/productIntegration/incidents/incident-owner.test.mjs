@@ -56,6 +56,9 @@ function owner(ledger) {
     readProductIncidentAcknowledgement: (incidentId, idempotencyKey) => (
       ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey)
     ),
+    readProductIncidentCommandAcknowledgement: (idempotencyKey, controlId) => (
+      ledger.readProductIncidentCommandAcknowledgement(idempotencyKey, controlId)
+    ),
     compareAndTransitionProductIncident: (input) => ledger.compareAndTransitionProductIncident(input),
   }));
 }

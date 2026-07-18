@@ -1,4 +1,10 @@
-import { buildProductRuntimeControlRegistry, parseProductRuntimeCommandRequest, previewProductRuntimeControl, submitProductRuntimeControl } from './controls.js';
+import {
+  buildProductRuntimeControlRegistry,
+  parseProductRuntimeCommandRequest,
+  previewProductRuntimeControl,
+  productIncidentAcknowledgementControlId,
+  submitProductRuntimeControl,
+} from './controls.js';
 import { isProductRuntimeCursor, isProductRuntimeRowCursor, projectProductMaterialEventPage } from './events.js';
 import { buildProductRuntimeSupervisorEnvelope } from './projection.js';
 import { isProductRuntimeTraceId, projectProductCorrelationTrace } from './trace.js';
@@ -27,6 +33,21 @@ function checkedNow(options: Readonly<ProductRuntimeOptions>): number {
 }
 
 const PRODUCT_SUPERVISOR_EMBEDDED_TRACE_LIMIT = 200;
+
+function incidentTargetForControl(controlId: string, targetId: unknown): string | undefined {
+  const incidentControl = /^incident\.ack\.[a-f0-9]{64}$/.test(controlId);
+  if (!incidentControl) {
+    if (targetId !== undefined) {
+      throw new ProductRuntimeError('CONTROL_PREVIEW_INVALID', 'targetId is only accepted for an incident-bound control.', 400);
+    }
+    return undefined;
+  }
+  if (typeof targetId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(targetId)
+    || productIncidentAcknowledgementControlId(targetId) !== controlId) {
+    throw new ProductRuntimeError('CONTROL_PREVIEW_INVALID', 'Incident targetId does not match the bound control identity.', 400);
+  }
+  return targetId;
+}
 
 export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
@@ -194,14 +215,21 @@ export class ProductIntegrationRuntimeService {
   async previewCommand(input: Readonly<{
     controlId: string;
     expectedRevision: string;
+    targetId?: string;
     operator: Readonly<ProductRuntimeOperator>;
   }>): Promise<Readonly<ProductRuntimeControlPreview>> {
     const nowMs = checkedNow(this.options);
+    const incidentId = incidentTargetForControl(input.controlId, input.targetId);
     let snapshot;
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner, input.controlId);
+    const registry = buildProductRuntimeControlRegistry(
+      snapshot,
+      this.options.commandOwner,
+      input.controlId,
+      incidentId,
+    );
     return previewProductRuntimeControl({
       registry,
       owner: this.options.commandOwner,
@@ -215,11 +243,19 @@ export class ProductIntegrationRuntimeService {
   async submitCommand(value: unknown, operator: Readonly<ProductRuntimeOperator>): Promise<Readonly<ProductRuntimeControlResult>> {
     const request: Readonly<ProductRuntimeCommandRequest> = parseProductRuntimeCommandRequest(value);
     const nowMs = checkedNow(this.options);
+    const incidentId = /^incident\.ack\.[a-f0-9]{64}$/.test(request.controlId)
+      ? incidentTargetForControl(request.controlId, request.targetId)
+      : undefined;
     let snapshot;
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner, request.controlId);
+    const registry = buildProductRuntimeControlRegistry(
+      snapshot,
+      this.options.commandOwner,
+      request.controlId,
+      incidentId,
+    );
     return submitProductRuntimeControl({ registry, owner: this.options.commandOwner, request, nowMs, operator });
   }
 

@@ -1,3 +1,4 @@
+import { resolveDataDirAuthority } from './bootstrap/environment.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
@@ -95,25 +96,6 @@ import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
 import { DataDirLease } from './systemIntegration/persistence/dataDirLease.js';
 
-// Minimal .env loader (no dependency). Never logs values.
-// SKIP_DOTENV lets the gates harness boot deterministically keyless, ignoring
-// any developer .env on disk so the disconnected-state gates stay valid.
-function loadDotEnv(): void {
-  if (process.env.SKIP_DOTENV) return;
-  try {
-    const txt = fs.readFileSync(path.resolve(process.cwd(), '.env'), 'utf8');
-    for (const line of txt.split('\n')) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-      if (m && process.env[m[1]] === undefined) {
-        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-      }
-    }
-  } catch {
-    // no .env — fine
-  }
-}
-loadDotEnv();
-
 // Source-catalog ownership is not operational egress authority. A normal
 // verifier-style boot stays local unless an effectful public-source campaign
 // supplies the one exact positive admission.
@@ -134,9 +116,7 @@ const sourceLogoCache = new Map<string, SourceLogoEntry>();
 const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
 const sourceLogoFailures = new Map<string, number>();
 
-const canonicalDataDir = process.env.DATA_DIR
-  ? path.resolve(process.env.DATA_DIR)
-  : path.resolve(process.cwd(), 'data');
+const { dataDir: canonicalDataDir } = resolveDataDirAuthority();
 fs.mkdirSync(canonicalDataDir, { recursive: true });
 // This process lease is acquired before the Ledger, boot-generation mutation,
 // listeners, timers, transports, or any owner runtime can start. Lease loss is

@@ -6,11 +6,11 @@
  * the global dominance snapshot refresh hourly. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveDataDirAuthority } from '../bootstrap/environment.js';
 import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
-const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
-const DISK = path.resolve(process.cwd(), process.env.PROFILE_CACHE ?? path.join(DATA_ROOT, 'profile_cache.json'));
+const { profileCache: DISK } = resolveDataDirAuthority();
 const PROFILE_TTL = 60 * 60 * 1000; // 1h
 const CALL_GAP_MS = 2_500; // keyless CG throttles hard; stay polite
 const FETCH_TIMEOUT_MS = 12_000;

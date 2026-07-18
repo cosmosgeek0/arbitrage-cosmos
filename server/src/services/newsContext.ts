@@ -2,6 +2,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { resolveDataDirAuthority } from '../bootstrap/environment.js';
 
 export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
@@ -67,7 +68,7 @@ const RSS_SOURCE_CONCURRENCY = 6;
 // timezone, including UTC-12 through UTC+14.
 const NEWS_ARCHIVE_RETENTION_MS = 8 * 86_400_000;
 const NEWS_ARCHIVE_MAX_ITEMS = 8_000;
-const NEWS_ARCHIVE_PATH = path.join(process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data'), 'news-archive.json');
+const { newsArchive: NEWS_ARCHIVE_PATH } = resolveDataDirAuthority();
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const OFFICIAL_MACRO_KEYS = new Set([
   'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe', 'boj',

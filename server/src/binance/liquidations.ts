@@ -4,10 +4,10 @@
  * force order closes a LONG position; BUY closes a SHORT. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { resolveDataDirAuthority } from '../bootstrap/environment.js';
 import type { FeedStatus } from './ws.js';
 
-const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
-const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? path.join(DATA_ROOT, 'liquidations.json'));
+const { liquidationCache: DISK } = resolveDataDirAuthority();
 const FIVE_MIN = 5 * 60_000;
 const HOUR = 60 * 60_000;
 const KEEP_5M_MS = 48 * HOUR;

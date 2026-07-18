@@ -27,6 +27,7 @@ import type {
   ProductIdentityReferenceRecord,
   RestartBarrierProjection,
 } from '../persistence/types.js';
+import type { DeploymentFreezeClearOwnerPort } from '../ops/types.js';
 import type {
   SystemSupervisorReadModel,
   SystemSupervisorSummaries,
@@ -73,6 +74,7 @@ export interface SystemIntegrationApplicationOptions {
   readonly components?: ApplicationComponentReadPorts;
   readonly summaries?: ApplicationSummaryReadPort;
   readonly traces?: ApplicationTraceReadPort;
+  readonly deploymentFreezeClear?: DeploymentFreezeClearOwnerPort;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;

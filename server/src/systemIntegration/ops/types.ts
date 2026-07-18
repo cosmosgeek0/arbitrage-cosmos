@@ -68,6 +68,64 @@ export interface DeploymentFreezeFileSystem {
   readRegularFileNoFollow(markerPath: string, maximumBytes: number): DeploymentFreezeFileRead;
 }
 
+export interface DeploymentFreezeClearFileSystem {
+  removeRegularFileNoFollow(markerPath: string): void;
+}
+
+export interface DeploymentFreezeClearActor {
+  readonly id: string;
+  readonly email: string | null;
+  readonly source: 'loopback' | 'cloudflare-access';
+}
+
+export interface DeploymentFreezeClearRequest {
+  readonly idempotencyKey: string;
+  readonly expectedObservedAtUtc: string;
+  readonly reason: string;
+  readonly requestedAtMs: number;
+  readonly actor: Readonly<DeploymentFreezeClearActor>;
+}
+
+export interface DeploymentFreezeClearAuditRecord extends DeploymentFreezeClearRequest {
+  readonly schema: 'cosmos.deployment-freeze-clear.v1';
+  readonly requestDigest: string;
+  readonly result: 'CLEAR_AUTHORIZED';
+  readonly receiptId?: string;
+}
+
+export type DeploymentFreezeClearPersistenceAppendResult =
+  | Readonly<{ kind: 'APPENDED' | 'REPLAY'; record: Readonly<DeploymentFreezeClearAuditRecord & { receiptId: string }> }>
+  | Readonly<{ kind: 'CONFLICT'; record: Readonly<DeploymentFreezeClearAuditRecord & { receiptId: string }> }>;
+
+export interface DeploymentFreezeClearPersistencePort {
+  read(idempotencyKey: string):
+    | Readonly<DeploymentFreezeClearAuditRecord & { receiptId: string }>
+    | null
+    | Promise<Readonly<DeploymentFreezeClearAuditRecord & { receiptId: string }> | null>;
+  append(record: Readonly<DeploymentFreezeClearAuditRecord>):
+    | DeploymentFreezeClearPersistenceAppendResult
+    | Promise<DeploymentFreezeClearPersistenceAppendResult>;
+}
+
+export type DeploymentFreezeClearResult =
+  | Readonly<{ ok: true; status: 'CLEARED'; receiptId: string; observedAtUtc: string }>
+  | Readonly<{ ok: false; code: string }>;
+
+export interface DeploymentFreezeClearOwnerOptions {
+  readonly markerPath: string | null;
+  readonly clock: CanonicalSupervisorOpsClock;
+  readonly readCanonicalOps: () => Readonly<CanonicalSupervisorOpsReadback> | Promise<Readonly<CanonicalSupervisorOpsReadback>>;
+  readonly readFreeze: () => Readonly<DeploymentFreezeProjection>;
+  readonly persistence: DeploymentFreezeClearPersistencePort;
+  readonly fileSystem: DeploymentFreezeClearFileSystem;
+}
+
+export interface DeploymentFreezeClearOwnerPort {
+  canClear(expectedObservedAtUtc: string, requestedAtMs: number): Promise<Readonly<{ ok: boolean; code: string }>>;
+  clear(request: Readonly<DeploymentFreezeClearRequest>): Promise<DeploymentFreezeClearResult>;
+  readEffect(): 'APPLIED' | 'NOT_APPLIED' | 'UNKNOWN';
+}
+
 export interface DeploymentFreezeReaderOptions {
   readonly markerPath: string | null;
   readonly clock: CanonicalSupervisorOpsClock;

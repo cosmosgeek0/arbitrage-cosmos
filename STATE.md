@@ -99,7 +99,7 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 452 = 3 hostile perimeter + 449 AI-Ops | Exit 0; 452/452 passed; AI-Ops reported 0 failed and 0 skipped. |
 | `npm run test:all` | 3,514 = 3 hostile perimeter + 449 AI-Ops + 3,062 Quant | Exit 0; `CANONICAL_TEST_ALL PASS`; Quant reported 3,056 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 559 files / 225 discovered | 225/225 covered; 0 uncovered; all 116 database sites resolve only to `server/src/ledger.ts` / `OP_LEDGER_SQLITE`; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 561 files / 225 discovered | 225/225 covered; 0 uncovered; all 116 database sites resolve only to `server/src/ledger.ts` / `OP_LEDGER_SQLITE`; 802 behavior checks and 4 provenance checks. |
 
 ## Real-gap campaign state
 
@@ -133,6 +133,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 24 | `FIX-110` | `BUILT_AND_TESTED` | Integrated AI-Ops mode binds its verification target to the exact current commit and tree objects, independent of branch attachment. The new parent-relative assertion failed 5/6 before the exact integrated fixture was registered and passes 6/6 after it. |
 | 25 | `FIX-172` | `BUILT_AND_TESTED` | A real-object environment regression now proves the same commit/tree classifier on an attached donor-looking branch, a detached Git worktree, an independent clean clone, and the exact detached A5 donor. The focused identity suite is 7/7; the canonical AI-Ops gate is 45 files / 456 tests with zero non-pass outcomes. |
 | 26 | `Q-133` | `BUILT_AND_TESTED` | The sole root Quant runner now exposes all 14 stable lint, type, unit, property, contract, replay, leakage, integration, benchmark, all, baseline, walk-forward, registry, and protocol modes with real child exits and JUnit-derived receipts. The command contract is 5/5. Exact-current receipts are 325 Python files for lint/type; tests 1,281 unit, 81 property, 517 contract, 189 replay, 243 leakage, 310 integration, 121 benchmark, and 3,063 all; each research generator reproduces 3/3 accepted artifacts across two byte-identical temporary passes; registry is 8 families and protocol is 22/22. |
+| 27 | `ARC-L15-032` | `BUILT_AND_TESTED` | The authenticated canonical control path now clears only an exact configured deployment-freeze marker after revision-bound, current strong-zero recovery readback. Ledger CAS records the bounded operator identity, reason, time, and authorization before a no-follow atomic unlink; the internal canonical-alarm identity is explicitly denied before persistence or publication, and stale, unknown, exposed, persistence-failed, or unconfirmed removals fail closed. The focused hostile suite is 4/4 and System Integration is 415/415. |
 
 ## Previous source evidence
 

@@ -457,6 +457,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     REVOKE_APPROVAL: ['command', 'approvalId'],
     REVOKE_RESERVATION: ['command', 'reservationId'],
     RESTART_COMPONENT: ['command', 'componentId'],
+    CLEAR_DEPLOYMENT_FREEZE: ['command', 'expectedObservedAtUtc'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -483,6 +484,9 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       break;
     case 'RESTART_COMPONENT':
       if (!isSystemComponentId(mutation.componentId)) issues.push(issue('mutation.componentId', 'COMPONENT_ID_INVALID', 'restart target must be canonical'));
+      break;
+    case 'CLEAR_DEPLOYMENT_FREEZE':
+      if (!validText(mutation.expectedObservedAtUtc, 32)) issues.push(issue('mutation.expectedObservedAtUtc', 'REVISION_INVALID', 'freeze clear readback revision must be bounded'));
       break;
   }
   return issues;

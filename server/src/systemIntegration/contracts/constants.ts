@@ -104,6 +104,7 @@ export const SYSTEM_CONTROL_COMMANDS = Object.freeze([
   'REVOKE_APPROVAL',
   'REVOKE_RESERVATION',
   'RESTART_COMPONENT',
+  'CLEAR_DEPLOYMENT_FREEZE',
 ] as const);
 
 export type SystemControlCommand = (typeof SYSTEM_CONTROL_COMMANDS)[number];

@@ -115,6 +115,14 @@ export function validateControlMutation(value: unknown): MutationValidation {
         || !COMPONENT_IDS.has(value.componentId)
       ) return invalid('Restart requires one known componentId.');
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'CLEAR_DEPLOYMENT_FREEZE':
+      if (!exactKeys(value, ['command', 'expectedObservedAtUtc'])
+        || typeof value.expectedObservedAtUtc !== 'string'
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.expectedObservedAtUtc)
+        || !Number.isFinite(Date.parse(value.expectedObservedAtUtc))) {
+        return invalid('Freeze clear requires one exact canonical observedAtUtc revision.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
   }
   return invalid('Mutation command is unsupported.');
 }

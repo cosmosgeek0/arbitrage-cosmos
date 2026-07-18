@@ -5,6 +5,7 @@ import hashlib
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -21,6 +22,42 @@ from quant_edge.inference.service import LocalInferenceServiceV1
 from quant_edge.inference.transport import create_unix_server
 
 from .conftest import QUANT_ROOT, REPO_ROOT
+
+
+def test_python_subprocesses_reuse_active_test_interpreter() -> None:
+    tree = ast.parse(Path(__file__).read_text())
+    python_command_heads: list[ast.expr] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
+            and node.func.attr == "run"
+            and node.args
+            and isinstance(node.args[0], ast.List)
+            and len(node.args[0].elts) >= 2
+            and isinstance(node.args[0].elts[1], ast.Constant)
+            and node.args[0].elts[1].value in {"-c", "-m"}
+        ):
+            continue
+        python_command_heads.append(node.args[0].elts[0])
+
+    assert python_command_heads
+    assert all(
+        isinstance(head, ast.Attribute)
+        and isinstance(head.value, ast.Name)
+        and head.value.id == "sys"
+        and head.attr == "executable"
+        for head in python_command_heads
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", "import sys; print(sys.executable)"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert Path(completed.stdout.strip()).samefile(sys.executable)
 
 
 def test_generated_artifacts_match_fresh_generation_byte_for_byte() -> None:
@@ -49,7 +86,7 @@ def test_generation_is_cwd_timezone_and_hash_seed_stable(tmp_path: Path) -> None
             }
         )
         completed = subprocess.run(
-            [str(QUANT_ROOT / ".venv" / "bin" / "python"), "-c", code, str(REPO_ROOT)],
+            [sys.executable, "-c", code, str(REPO_ROOT)],
             cwd=tmp_path,
             env=env,
             check=True,
@@ -93,7 +130,7 @@ def test_generated_clients_are_syntax_valid_and_assessment_is_protocol_canonical
     )
     subprocess.run(
         [
-            str(QUANT_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-m",
             "py_compile",
             str(QUANT_ROOT / "generated" / "q16" / "python_client_v1.py"),
@@ -196,7 +233,7 @@ await rejected(racePath, 'changed during admission');
     try:
         subprocess.run(
             [
-                str(QUANT_ROOT / ".venv" / "bin" / "python"),
+                sys.executable,
                 "-c",
                 python_probe,
                 str(python_client),
@@ -468,7 +505,7 @@ else:
 """
     subprocess.run(
         [
-            str(QUANT_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-c",
             script,
             str(client),
@@ -629,7 +666,7 @@ else:
     try:
         completed = subprocess.run(
             [
-                str(QUANT_ROOT / ".venv" / "bin" / "python"),
+                sys.executable,
                 "-c",
                 script,
                 str(client),

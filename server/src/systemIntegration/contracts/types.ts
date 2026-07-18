@@ -186,6 +186,42 @@ export interface SystemQueueSnapshot {
   readonly observedAtMs: number;
 }
 
+export type SystemRetryState =
+  | 'IDLE'
+  | 'RETRYING'
+  | 'BACKING_OFF'
+  | 'COOLDOWN'
+  | 'UNKNOWN'
+  | 'UNAVAILABLE';
+
+export interface SystemRetrySnapshot {
+  readonly state: SystemRetryState;
+  readonly attempt: number | null;
+  readonly ceiling: number | null;
+  readonly delayMs: number | null;
+  readonly retryAtMs: number | null;
+  readonly cooldownUntilMs: number | null;
+}
+
+export type SystemDataQualityState = 'GOOD' | 'DEGRADED' | 'UNKNOWN' | 'UNAVAILABLE';
+
+export interface SystemDataQualitySnapshot {
+  readonly state: SystemDataQualityState;
+  readonly invalidCount: number | null;
+  readonly duplicateCount: number | null;
+  readonly outOfOrderCount: number | null;
+  readonly sequenceGapCount: number | null;
+  readonly observedAtMs: number | null;
+}
+
+export type SystemCheckpointState = 'CURRENT' | 'DIRTY' | 'STALE' | 'MISSING' | 'UNKNOWN' | 'UNAVAILABLE';
+
+export interface SystemCheckpointSnapshot {
+  readonly state: SystemCheckpointState;
+  readonly revision: string | null;
+  readonly persistedAtMs: number | null;
+}
+
 export interface SystemComponentSnapshot {
   readonly componentId: SystemComponentId;
   readonly owner: SystemOwnerKind;
@@ -204,6 +240,14 @@ export interface SystemComponentSnapshot {
   readonly lastReceiveAtMs: number | null;
   readonly lastProcessAtMs: number | null;
   readonly lastSuccessAtMs: number | null;
+  /** Producer-reported event-to-processing lag; null never means zero. */
+  readonly processingLagMs?: number | null;
+  /** Optional for legacy owner inputs; canonical projections materialize UNAVAILABLE. */
+  readonly retry?: Readonly<SystemRetrySnapshot>;
+  /** Optional for legacy owner inputs; canonical projections materialize UNAVAILABLE. */
+  readonly dataQuality?: Readonly<SystemDataQualitySnapshot>;
+  /** Optional for legacy owner inputs; canonical projections materialize UNAVAILABLE. */
+  readonly checkpoint?: Readonly<SystemCheckpointSnapshot>;
   readonly dependencies: readonly SystemComponentId[];
   readonly queue: Readonly<SystemQueueSnapshot> | null;
   readonly lastFailure: Readonly<StructuredFailure> | null;

@@ -12,10 +12,12 @@ import {
   SOURCE_AUTHORITIES,
   SOURCE_ENDPOINT_CLASSES,
 } from './constants.js';
+import { types as nodeTypes } from 'node:util';
 import { sortedUnique, stableId } from './ids.js';
 import type {
   FrozenPreEventRecord,
   InstrumentIdentity,
+  NewLensDescriptor,
   NormalizedEvidence,
   StableFailure,
   TruthMetadata,
@@ -132,6 +134,320 @@ export function validateNoSecretFields(value: unknown, component = 'contracts'):
     return { ok: false, failure: failure('SECRET_FIELD_REJECTED', component, 'forbidden secret-bearing field rejected', field) };
   }
   return { ok: true, value };
+}
+
+const NEW_LENS_FIELDS = [
+  'lensId',
+  'definition',
+  'provenance',
+  'freshness',
+  'missingDataBehavior',
+  'failureMode',
+  'history',
+  'cost',
+  'incrementalRationale',
+  'version',
+  'testReplayPath',
+] as const;
+const NEW_LENS_PROVENANCE_FIELDS = ['sourceIds', 'inputFeatureIds', 'transformIds'] as const;
+const NEW_LENS_FRESHNESS_FIELDS = ['basis', 'maximumAgeMs'] as const;
+const NEW_LENS_MISSING_FIELDS = ['state', 'reasonCode'] as const;
+const NEW_LENS_FAILURE_FIELDS = ['code', 'description', 'state'] as const;
+const NEW_LENS_HISTORY_FIELDS = ['availability', 'retentionMs'] as const;
+const NEW_LENS_COST_FIELDS = ['complexity', 'maxInputRecords', 'maxRetainedRecords'] as const;
+const NEW_LENS_INCREMENTAL_FIELDS = ['baselineFeatureIds', 'incrementalReferenceIds', 'hypothesis'] as const;
+const NEW_LENS_PROOF_FIELDS = ['kind', 'path'] as const;
+const NEW_LENS_UNAVAILABLE_STATES = ['UNKNOWN', 'UNAVAILABLE', 'BLOCKED'] as const;
+const NEW_LENS_HISTORY_STATES = ['NONE', 'BOUNDED', 'REPLAYABLE'] as const;
+const NEW_LENS_COMPLEXITIES = ['CONSTANT', 'LINEAR', 'SUPERLINEAR'] as const;
+const NEW_LENS_PROOF_KINDS = ['TEST', 'REPLAY'] as const;
+const NEW_LENS_CONTROL_OR_BIDI = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/;
+const NEW_LENS_ID = /^[a-z][a-z0-9._-]{1,95}$/;
+const NEW_LENS_REFERENCE = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/;
+const NEW_LENS_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
+const NEW_LENS_REASON_CODE = /^[A-Z][A-Z0-9_]{1,95}$/;
+const NEW_LENS_PROOF_PATH = /^(?:server\/test|test)\/[A-Za-z0-9._/-]+$/;
+const NEW_LENS_REPLAY_PATH = /(?:^|\/)(?:fixtures?|[^/]*replay[^/]*)(?:\/|$)/i;
+const NEW_LENS_PLACEHOLDER = /^(?:tbd|todo|none|n\/?a|unknown|placeholder|better signal|improves signal|more alpha|high confidence|adds value)[.!]?$/i;
+const NEW_LENS_MAX_FRESHNESS_MS = 31 * 24 * 60 * 60 * 1_000;
+const NEW_LENS_MAX_HISTORY_RETENTION_MS = 10 * 366 * 24 * 60 * 60 * 1_000;
+const NEW_LENS_MAX_INPUT_RECORDS = 1_000_000;
+const NEW_LENS_MAX_RETAINED_RECORDS = 1_000_000;
+
+class NewLensInputError extends Error {
+  constructor(
+    readonly field: string,
+    message: string,
+    readonly code: StableFailure['code'] = 'INVALID_VALUE',
+  ) {
+    super(message);
+  }
+}
+
+function rejectNewLens(
+  field: string,
+  message: string,
+  code: StableFailure['code'] = 'INVALID_VALUE',
+): never {
+  throw new NewLensInputError(field, message, code);
+}
+
+function captureExactNewLensObject(
+  value: unknown,
+  expectedKeys: readonly string[],
+  field: string,
+): Record<string, unknown> {
+  if (nodeTypes.isProxy(value) || value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return rejectNewLens(field, 'must be a plain, non-Proxy object');
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return rejectNewLens(field, 'must use a plain object prototype');
+  }
+  const ownKeys = Reflect.ownKeys(value);
+  for (const key of ownKeys) {
+    if (typeof key === 'string' && isForbiddenSecretKey(key)) {
+      return rejectNewLens(`${field}.${key}`, 'forbidden secret-bearing field rejected', 'SECRET_FIELD_REJECTED');
+    }
+  }
+  if (ownKeys.some((key) => typeof key === 'symbol')) {
+    return rejectNewLens(field, 'symbol keys are not valid descriptor data');
+  }
+  const actualKeys = (ownKeys as string[]).sort();
+  const canonicalExpected = [...expectedKeys].sort();
+  if (actualKeys.length !== canonicalExpected.length || actualKeys.some((key, index) => key !== canonicalExpected[index])) {
+    return rejectNewLens(field, 'must have the exact canonical own-key shape');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const captured: Record<string, unknown> = {};
+  for (const key of expectedKeys) {
+    const descriptor = descriptors[key];
+    if (!descriptor || !('value' in descriptor) || descriptor.enumerable !== true) {
+      return rejectNewLens(`${field}.${key}`, 'must be an enumerable own data property');
+    }
+    captured[key] = descriptor.value;
+  }
+  return captured;
+}
+
+function boundedNewLensText(value: unknown, field: string, maximumLength: number): string {
+  if (
+    typeof value !== 'string' || value.length === 0 || value.length > maximumLength ||
+    value !== value.trim() || NEW_LENS_CONTROL_OR_BIDI.test(value)
+  ) return rejectNewLens(field, 'must be bounded canonical text');
+  return value;
+}
+
+function meaningfulNewLensText(value: unknown, field: string, maximumLength: number): string {
+  const text = boundedNewLensText(value, field, maximumLength);
+  if (text.length < 24 || text.split(/\s+/).length < 4 || NEW_LENS_PLACEHOLDER.test(text)) {
+    return rejectNewLens(field, 'must state a concrete, non-placeholder claim');
+  }
+  return text;
+}
+
+function boundedPositiveNewLensInteger(value: unknown, maximum: number): value is number {
+  return positiveSafeInteger(value) && !Object.is(value, -0) && value <= maximum;
+}
+
+function boundedNonNegativeNewLensInteger(value: unknown, maximum: number): value is number {
+  return nonNegativeTime(value) && !Object.is(value, -0) && value <= maximum;
+}
+
+function newLensReference(value: unknown, field: string): string {
+  const reference = boundedNewLensText(value, field, 128);
+  if (!NEW_LENS_REFERENCE.test(reference)) return rejectNewLens(field, 'must be a stable reference identifier');
+  return reference;
+}
+
+function captureNewLensReferenceSet(
+  value: unknown,
+  field: string,
+  maximumLength: number,
+): string[] {
+  if (nodeTypes.isProxy(value) || !Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) {
+    return rejectNewLens(field, 'must be a plain, non-Proxy array');
+  }
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+  if (!lengthDescriptor || !('value' in lengthDescriptor) || !Number.isSafeInteger(lengthDescriptor.value)) {
+    return rejectNewLens(field, 'must have a canonical array length');
+  }
+  const length = lengthDescriptor.value as number;
+  if (length < 0 || length > maximumLength) return rejectNewLens(field, 'exceeds the descriptor collection bound');
+  const ownKeys = Reflect.ownKeys(value);
+  for (const key of ownKeys) {
+    if (typeof key === 'string' && isForbiddenSecretKey(key)) {
+      return rejectNewLens(`${field}.${key}`, 'forbidden secret-bearing field rejected', 'SECRET_FIELD_REJECTED');
+    }
+  }
+  if (ownKeys.some((key) => typeof key === 'symbol')) return rejectNewLens(field, 'symbol keys are not valid descriptor data');
+  const expectedKeys = new Set<string>(['length', ...Array.from({ length }, (_, index) => String(index))]);
+  if (ownKeys.length !== expectedKeys.size || ownKeys.some((key) => typeof key !== 'string' || !expectedKeys.has(key))) {
+    return rejectNewLens(field, 'must be dense and have no extra own properties');
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const captured: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const key = String(index);
+    const descriptor = descriptors[key];
+    if (!descriptor || !('value' in descriptor) || descriptor.enumerable !== true) {
+      return rejectNewLens(`${field}[${index}]`, 'must be an enumerable own data property');
+    }
+    captured.push(newLensReference(descriptor.value, `${field}[${index}]`));
+  }
+  if (new Set(captured).size !== captured.length) return rejectNewLens(field, 'must not contain duplicate references');
+  return sortedUnique(captured);
+}
+
+function newLensRepoPath(value: unknown, field: string, kind: 'TEST' | 'REPLAY'): string {
+  const path = boundedNewLensText(value, field, 320);
+  if (
+    path.startsWith('/') || path.includes('\\') || /^[A-Za-z]:/.test(path) ||
+    path.includes('://') || !NEW_LENS_PROOF_PATH.test(path) ||
+    path.split('/').some((part) => part.length === 0 || part === '.' || part === '..')
+  ) return rejectNewLens(field, 'must be a normalized repo-relative path');
+  if (kind === 'TEST' && !/\.(?:mjs|js|ts)$/.test(path)) {
+    return rejectNewLens(field, 'test proof must name an executable test file');
+  }
+  if (kind === 'REPLAY' && (!/\.(?:mjs|js|ts|json|jsonl|ndjson)$/.test(path) || !NEW_LENS_REPLAY_PATH.test(path))) {
+    return rejectNewLens(field, 'replay proof must name a canonical replay or fixture path');
+  }
+  return path;
+}
+
+/**
+ * Builds an immutable proposal descriptor only. This does not register, mount, execute, or promote a lens.
+ */
+export function createNewLensDescriptor(value: unknown): ValidationResult<NewLensDescriptor> {
+  try {
+    const input = captureExactNewLensObject(value, NEW_LENS_FIELDS, 'descriptor');
+    const provenance = captureExactNewLensObject(input.provenance, NEW_LENS_PROVENANCE_FIELDS, 'descriptor.provenance');
+    const freshness = captureExactNewLensObject(input.freshness, NEW_LENS_FRESHNESS_FIELDS, 'descriptor.freshness');
+    const missingDataBehavior = captureExactNewLensObject(input.missingDataBehavior, NEW_LENS_MISSING_FIELDS, 'descriptor.missingDataBehavior');
+    const failureMode = captureExactNewLensObject(input.failureMode, NEW_LENS_FAILURE_FIELDS, 'descriptor.failureMode');
+    const history = captureExactNewLensObject(input.history, NEW_LENS_HISTORY_FIELDS, 'descriptor.history');
+    const cost = captureExactNewLensObject(input.cost, NEW_LENS_COST_FIELDS, 'descriptor.cost');
+    const incrementalRationale = captureExactNewLensObject(input.incrementalRationale, NEW_LENS_INCREMENTAL_FIELDS, 'descriptor.incrementalRationale');
+    const testReplayPath = captureExactNewLensObject(input.testReplayPath, NEW_LENS_PROOF_FIELDS, 'descriptor.testReplayPath');
+
+    const lensId = boundedNewLensText(input.lensId, 'descriptor.lensId', 96);
+    if (!NEW_LENS_ID.test(lensId)) return rejectNewLens('descriptor.lensId', 'must be a canonical lens identifier');
+    const definition = meaningfulNewLensText(input.definition, 'descriptor.definition', 2_048);
+    const version = boundedNewLensText(input.version, 'descriptor.version', 64);
+    if (!NEW_LENS_VERSION.test(version)) return rejectNewLens('descriptor.version', 'must be a stable version identifier');
+
+    const sourceIds = captureNewLensReferenceSet(provenance.sourceIds, 'descriptor.provenance.sourceIds', 64);
+    const inputFeatureIds = captureNewLensReferenceSet(provenance.inputFeatureIds, 'descriptor.provenance.inputFeatureIds', 128);
+    const transformIds = captureNewLensReferenceSet(provenance.transformIds, 'descriptor.provenance.transformIds', 64);
+    if (sourceIds.length === 0) return rejectNewLens('descriptor.provenance.sourceIds', 'must name at least one source');
+    if (inputFeatureIds.length === 0 || transformIds.length === 0) {
+      return rejectNewLens('descriptor.provenance', 'must name an input feature and transform');
+    }
+    const allProvenanceReferences = [...sourceIds, ...inputFeatureIds, ...transformIds];
+    if (new Set(allProvenanceReferences).size !== allProvenanceReferences.length) {
+      return rejectNewLens('descriptor.provenance', 'reference categories must be unambiguous and disjoint');
+    }
+
+    if (!has(FRESHNESS_BASES, freshness.basis)) return rejectNewLens('descriptor.freshness.basis', 'uses an unknown freshness basis');
+    if (freshness.basis === 'UNAVAILABLE') {
+      if (freshness.maximumAgeMs !== null) return rejectNewLens('descriptor.freshness.maximumAgeMs', 'must be null when the basis is unavailable');
+    } else if (!boundedPositiveNewLensInteger(freshness.maximumAgeMs, NEW_LENS_MAX_FRESHNESS_MS)) {
+      return rejectNewLens('descriptor.freshness.maximumAgeMs', 'must be within the fixed freshness horizon');
+    }
+
+    if (!has(NEW_LENS_UNAVAILABLE_STATES, missingDataBehavior.state)) {
+      return rejectNewLens('descriptor.missingDataBehavior.state', 'uses an unknown missing-data state');
+    }
+    const missingReasonCode = boundedNewLensText(missingDataBehavior.reasonCode, 'descriptor.missingDataBehavior.reasonCode', 96);
+    if (!NEW_LENS_REASON_CODE.test(missingReasonCode)) {
+      return rejectNewLens('descriptor.missingDataBehavior.reasonCode', 'must be a canonical reason code');
+    }
+
+    if (!has(NEW_LENS_UNAVAILABLE_STATES, failureMode.state)) {
+      return rejectNewLens('descriptor.failureMode.state', 'uses an unknown failure state');
+    }
+    const failureCode = boundedNewLensText(failureMode.code, 'descriptor.failureMode.code', 96);
+    if (!NEW_LENS_REASON_CODE.test(failureCode)) return rejectNewLens('descriptor.failureMode.code', 'must be a canonical failure code');
+    const failureDescription = meaningfulNewLensText(failureMode.description, 'descriptor.failureMode.description', 1_024);
+
+    if (!has(NEW_LENS_HISTORY_STATES, history.availability)) {
+      return rejectNewLens('descriptor.history.availability', 'uses an unknown history state');
+    }
+    if (history.availability === 'NONE') {
+      if (history.retentionMs !== null) return rejectNewLens('descriptor.history.retentionMs', 'must be null when history is unavailable');
+    } else if (!boundedPositiveNewLensInteger(history.retentionMs, NEW_LENS_MAX_HISTORY_RETENTION_MS)) {
+      return rejectNewLens('descriptor.history.retentionMs', 'must be within the fixed history horizon');
+    }
+
+    if (!has(NEW_LENS_COMPLEXITIES, cost.complexity)) return rejectNewLens('descriptor.cost.complexity', 'uses an unknown complexity class');
+    if (!boundedPositiveNewLensInteger(cost.maxInputRecords, NEW_LENS_MAX_INPUT_RECORDS)) {
+      return rejectNewLens('descriptor.cost.maxInputRecords', 'must be within the fixed input-record bound');
+    }
+    if (!boundedNonNegativeNewLensInteger(cost.maxRetainedRecords, NEW_LENS_MAX_RETAINED_RECORDS)) {
+      return rejectNewLens('descriptor.cost.maxRetainedRecords', 'must be within the fixed retained-record bound');
+    }
+    if (history.availability === 'NONE' && cost.maxRetainedRecords !== 0) {
+      return rejectNewLens('descriptor.cost.maxRetainedRecords', 'must be zero when history is unavailable');
+    }
+    if (history.availability !== 'NONE' && cost.maxRetainedRecords === 0) {
+      return rejectNewLens('descriptor.cost.maxRetainedRecords', 'must be positive when history is retained');
+    }
+
+    const baselineFeatureIds = captureNewLensReferenceSet(
+      incrementalRationale.baselineFeatureIds,
+      'descriptor.incrementalRationale.baselineFeatureIds',
+      64,
+    );
+    const incrementalReferenceIds = captureNewLensReferenceSet(
+      incrementalRationale.incrementalReferenceIds,
+      'descriptor.incrementalRationale.incrementalReferenceIds',
+      64,
+    );
+    if (baselineFeatureIds.length === 0 || baselineFeatureIds.some((reference) => !inputFeatureIds.includes(reference))) {
+      return rejectNewLens('descriptor.incrementalRationale.baselineFeatureIds', 'must bind at least one declared input feature');
+    }
+    if (incrementalReferenceIds.length === 0 || incrementalReferenceIds.some((reference) => !allProvenanceReferences.includes(reference))) {
+      return rejectNewLens('descriptor.incrementalRationale.incrementalReferenceIds', 'must bind at least one declared provenance reference');
+    }
+    if (incrementalReferenceIds.some((reference) => baselineFeatureIds.includes(reference))) {
+      return rejectNewLens('descriptor.incrementalRationale', 'baseline and incremental references must be disjoint');
+    }
+    const incrementalHypothesis = meaningfulNewLensText(
+      incrementalRationale.hypothesis,
+      'descriptor.incrementalRationale.hypothesis',
+      2_048,
+    );
+
+    if (!has(NEW_LENS_PROOF_KINDS, testReplayPath.kind)) return rejectNewLens('descriptor.testReplayPath.kind', 'uses an unknown proof kind');
+    const proofPath = newLensRepoPath(testReplayPath.path, 'descriptor.testReplayPath.path', testReplayPath.kind);
+
+    const semantic: Omit<NewLensDescriptor, 'id'> = {
+      lensId,
+      definition,
+      provenance: { sourceIds, inputFeatureIds, transformIds },
+      freshness: {
+        basis: freshness.basis,
+        maximumAgeMs: freshness.maximumAgeMs as number | null,
+      },
+      missingDataBehavior: { state: missingDataBehavior.state, reasonCode: missingReasonCode },
+      failureMode: { code: failureCode, description: failureDescription, state: failureMode.state },
+      history: { availability: history.availability, retentionMs: history.retentionMs as number | null },
+      cost: {
+        complexity: cost.complexity,
+        maxInputRecords: cost.maxInputRecords,
+        maxRetainedRecords: cost.maxRetainedRecords,
+      },
+      incrementalRationale: { baselineFeatureIds, incrementalReferenceIds, hypothesis: incrementalHypothesis },
+      version,
+      testReplayPath: { kind: testReplayPath.kind, path: proofPath },
+    };
+    return { ok: true, value: deepFreeze({ id: stableId('new-lens', semantic), ...semantic }) };
+  } catch (error) {
+    if (error instanceof NewLensInputError) {
+      return { ok: false, failure: failure(error.code, 'new_lens_descriptor', error.message, error.field) };
+    }
+    return { ok: false, failure: failure('INVALID_VALUE', 'new_lens_descriptor', 'descriptor could not be safely inspected', null) };
+  }
 }
 
 export function validateTruthMetadata(value: unknown): ValidationResult<TruthMetadata> {

@@ -9,6 +9,7 @@ export const SYSTEM_PERSISTENCE_SCHEMA = 'cosmos.system-integration.checkpoint' 
 export const SYSTEM_PERSISTENCE_VERSION = 1 as const;
 export const SYSTEM_PERSISTENCE_CONFIG_KEY = 'system.integration.checkpoint.v1' as const;
 export const SYSTEM_PERSISTENCE_EVENT_KIND = 'system.integration.trace' as const;
+export const PRODUCT_INCIDENT_ACK_EVENT_KIND = 'incident_acknowledged' as const;
 
 export const SYSTEM_PERSISTENCE_LIMITS = Object.freeze({
   maximumCheckpointBytes: 512 * 1024,
@@ -352,6 +353,10 @@ export interface LedgerPersistencePort {
   readProductIncident?(
     incidentId: string,
   ): Readonly<ProductIncidentRecord> | null;
+  readProductIncidentAcknowledgement?(
+    incidentId: string,
+    idempotencyKey: string,
+  ): Readonly<LedgerEventRecord> | null;
   compareAndSetProductBootReleaseRevision?(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): ProductPersistenceMutationResult;

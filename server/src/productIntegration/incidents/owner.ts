@@ -1,20 +1,27 @@
 import { createHash } from 'node:crypto';
 
 import type {
+  LedgerEventRecord,
   ProductIncidentPersistenceInput,
   ProductIncidentRecord,
   ProductPersistenceMutationResult,
   SystemJsonValue,
 } from '../../systemIntegration/persistence/types.js';
+import { PRODUCT_INCIDENT_ACK_EVENT_KIND } from '../../systemIntegration/persistence/types.js';
 
 const INCIDENT_ACK_SCHEMA = 'cosmos.product-incident-ack.v1' as const;
-const INCIDENT_TRANSITION_EVENT_KIND = 'product.incident.transition' as const;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const MAX_UTC_MS = 4_102_444_800_000;
+const INCIDENT_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const);
+const INCIDENT_STATES = Object.freeze(['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] as const);
 
 export interface ProductIncidentPersistencePort {
   readProductIncident(incidentId: string): Readonly<ProductIncidentRecord> | null;
+  readProductIncidentAcknowledgement(
+    incidentId: string,
+    idempotencyKey: string,
+  ): Readonly<LedgerEventRecord> | null;
   compareAndTransitionProductIncident(
     input: Readonly<ProductIncidentPersistenceInput>,
   ): Readonly<ProductPersistenceMutationResult>;
@@ -103,6 +110,29 @@ function acknowledgementCorrelationId(request: Readonly<ProductIncidentAcknowled
   return `product.incident.ack.${digest.slice(0, 48)}`;
 }
 
+function auditSnapshot(
+  incident: Readonly<ProductIncidentRecord>,
+  state: string,
+  acknowledgedAtMs: number | null,
+  acknowledgedByOperatorId: string | null,
+): SystemJsonValue {
+  return Object.freeze({
+    incidentId: incident.incidentId,
+    fingerprint: incident.fingerprint,
+    rootComponentId: incident.rootComponentId,
+    severity: incident.severity,
+    capitalRelevant: incident.capitalRelevant,
+    state,
+    firstSeenAtMs: incident.firstSeenAtMs,
+    lastSeenAtMs: incident.lastSeenAtMs,
+    eventCount: incident.eventCount,
+    acknowledgedAtMs,
+    acknowledgedByOperatorId,
+    resolvedAtMs: incident.resolvedAtMs,
+    correlationId: incident.correlationId,
+  });
+}
+
 function auditData(
   request: Readonly<ProductIncidentAcknowledgementRequest>,
   incident: Readonly<ProductIncidentRecord>,
@@ -119,23 +149,94 @@ function auditData(
     reason: request.reason,
     commandCorrelationId,
     incidentCorrelationId: incident.correlationId,
-    preservedRootComponentId: incident.rootComponentId,
-    preservedSeverity: incident.severity,
-    preservedCapitalRelevant: incident.capitalRelevant,
-    preservedEventCount: incident.eventCount,
+    before: auditSnapshot(
+      incident,
+      incident.state,
+      incident.acknowledgedAtMs,
+      incident.acknowledgedByOperatorId,
+    ),
+    after: auditSnapshot(
+      incident,
+      'ACKNOWLEDGED',
+      request.acknowledgedAtMs,
+      request.actor.id,
+    ),
     externalActionAuthorization: 'NONE',
   });
 }
 
-function acknowledgementReplayMatches(
-  incident: Readonly<ProductIncidentRecord>,
+const INCIDENT_SNAPSHOT_KEYS = Object.freeze([
+  'incidentId', 'fingerprint', 'rootComponentId', 'severity', 'capitalRelevant',
+  'state', 'firstSeenAtMs', 'lastSeenAtMs', 'eventCount', 'acknowledgedAtMs',
+  'acknowledgedByOperatorId', 'resolvedAtMs', 'correlationId',
+] as const);
+
+function validAuditSnapshot(value: unknown): value is Record<string, unknown> {
+  if (!plainObject(value) || !exactKeys(value, INCIDENT_SNAPSHOT_KEYS)) return false;
+  const acknowledgementAbsent = value.acknowledgedAtMs === null
+    && value.acknowledgedByOperatorId === null;
+  const acknowledgementPresent = utcMillis(value.acknowledgedAtMs)
+    && typeof value.acknowledgedByOperatorId === 'string'
+    && IDENTIFIER.test(value.acknowledgedByOperatorId);
+  const validLifecycle = value.state === 'OPEN'
+    ? acknowledgementAbsent && value.resolvedAtMs === null
+    : value.state === 'ACKNOWLEDGED'
+      ? acknowledgementPresent && value.resolvedAtMs === null
+      : value.state === 'RESOLVED'
+        && (acknowledgementAbsent || acknowledgementPresent)
+        && utcMillis(value.resolvedAtMs)
+        && value.resolvedAtMs === value.lastSeenAtMs
+        && (value.acknowledgedAtMs === null
+          || Number(value.acknowledgedAtMs) <= Number(value.resolvedAtMs));
+  return typeof value.incidentId === 'string' && IDENTIFIER.test(value.incidentId)
+    && typeof value.fingerprint === 'string' && IDENTIFIER.test(value.fingerprint)
+    && typeof value.rootComponentId === 'string' && IDENTIFIER.test(value.rootComponentId)
+    && typeof value.severity === 'string'
+    && INCIDENT_SEVERITIES.includes(value.severity as (typeof INCIDENT_SEVERITIES)[number])
+    && typeof value.capitalRelevant === 'boolean'
+    && typeof value.state === 'string'
+    && INCIDENT_STATES.includes(value.state as (typeof INCIDENT_STATES)[number])
+    && utcMillis(value.firstSeenAtMs)
+    && utcMillis(value.lastSeenAtMs)
+    && Number(value.lastSeenAtMs) >= Number(value.firstSeenAtMs)
+    && Number.isSafeInteger(value.eventCount) && Number(value.eventCount) >= 1
+    && (value.acknowledgedAtMs === null || utcMillis(value.acknowledgedAtMs))
+    && (value.acknowledgedByOperatorId === null
+      || (typeof value.acknowledgedByOperatorId === 'string' && IDENTIFIER.test(value.acknowledgedByOperatorId)))
+    && ((value.acknowledgedAtMs === null) === (value.acknowledgedByOperatorId === null))
+    && (value.resolvedAtMs === null || utcMillis(value.resolvedAtMs))
+    && (value.acknowledgedAtMs === null || value.acknowledgedAtMs >= value.firstSeenAtMs)
+    && (value.resolvedAtMs === null || value.resolvedAtMs >= value.firstSeenAtMs)
+    && typeof value.correlationId === 'string' && IDENTIFIER.test(value.correlationId)
+    && validLifecycle;
+}
+
+function sameUnacknowledgedTruth(before: Record<string, unknown>, after: Record<string, unknown>): boolean {
+  return INCIDENT_SNAPSHOT_KEYS.every((key) => (
+    key === 'state' || key === 'acknowledgedAtMs' || key === 'acknowledgedByOperatorId'
+      ? true
+      : before[key] === after[key]
+  ));
+}
+
+function acknowledgementFromEvent(
+  event: Readonly<LedgerEventRecord>,
   request: Readonly<ProductIncidentAcknowledgementRequest>,
   correlationId: string,
-): boolean {
-  const data = incident.lastAudit.data;
-  if (!plainObject(data) || !plainObject(data.actor)) return false;
-  return incident.lastAudit.kind === INCIDENT_TRANSITION_EVENT_KIND
-    && data.schema === INCIDENT_ACK_SCHEMA
+): Readonly<ProductIncidentRecord> | null {
+  const data = event.data;
+  if (!Number.isSafeInteger(event.id) || event.id < 1 || !utcMillis(event.ts)
+    || event.kind !== PRODUCT_INCIDENT_ACK_EVENT_KIND || event.symbol !== null
+    || !plainObject(data) || !exactKeys(data, [
+      'schema', 'operation', 'incidentId', 'expectedLedgerEventId',
+      'idempotencyKey', 'actor', 'acknowledgedAtMs', 'reason',
+      'commandCorrelationId', 'incidentCorrelationId', 'before', 'after',
+      'externalActionAuthorization',
+    ]) || !plainObject(data.actor)
+    || !validAuditSnapshot(data.before) || !validAuditSnapshot(data.after)) return null;
+  const before = data.before;
+  const after = data.after;
+  const valid = data.schema === INCIDENT_ACK_SCHEMA
     && data.operation === 'ACKNOWLEDGE'
     && data.incidentId === request.incidentId
     && data.expectedLedgerEventId === request.expectedLedgerEventId
@@ -143,15 +244,44 @@ function acknowledgementReplayMatches(
     && data.acknowledgedAtMs === request.acknowledgedAtMs
     && data.reason === request.reason
     && data.commandCorrelationId === correlationId
-    && data.incidentCorrelationId === incident.correlationId
-    && data.preservedRootComponentId === incident.rootComponentId
-    && data.preservedSeverity === incident.severity
-    && data.preservedCapitalRelevant === incident.capitalRelevant
-    && data.preservedEventCount === incident.eventCount
+    && data.incidentCorrelationId === after.correlationId
     && data.externalActionAuthorization === 'NONE'
     && exactKeys(data.actor, ['id', 'source'])
     && data.actor.id === request.actor.id
-    && data.actor.source === request.actor.source;
+    && data.actor.source === request.actor.source
+    && before.incidentId === request.incidentId
+    && before.state !== 'ACKNOWLEDGED'
+    && before.acknowledgedAtMs === null
+    && before.acknowledgedByOperatorId === null
+    && after.incidentId === request.incidentId
+    && after.state === 'ACKNOWLEDGED'
+    && after.acknowledgedAtMs === request.acknowledgedAtMs
+    && after.acknowledgedByOperatorId === request.actor.id
+    && sameUnacknowledgedTruth(before, after);
+  if (!valid) return null;
+  return Object.freeze({
+    incidentId: after.incidentId as string,
+    fingerprint: after.fingerprint as string,
+    rootComponentId: after.rootComponentId as string,
+    severity: after.severity as string,
+    capitalRelevant: after.capitalRelevant as boolean,
+    state: after.state as string,
+    firstSeenAtMs: after.firstSeenAtMs as number,
+    lastSeenAtMs: after.lastSeenAtMs as number,
+    eventCount: after.eventCount as number,
+    acknowledgedAtMs: after.acknowledgedAtMs as number,
+    acknowledgedByOperatorId: after.acknowledgedByOperatorId as string,
+    resolvedAtMs: after.resolvedAtMs as number | null,
+    correlationId: after.correlationId as string,
+    ledgerEventId: event.id,
+    lastAudit: Object.freeze({
+      id: event.id,
+      ts: event.ts,
+      kind: event.kind,
+      symbol: event.symbol,
+      data: data as SystemJsonValue,
+    }),
+  });
 }
 
 function acknowledgementReadbackMatches(
@@ -160,6 +290,7 @@ function acknowledgementReadbackMatches(
   request: Readonly<ProductIncidentAcknowledgementRequest>,
   ledgerEventId: number,
   correlationId: string,
+  acknowledgement: Readonly<ProductIncidentRecord>,
 ): boolean {
   return after.incidentId === before.incidentId
     && after.fingerprint === before.fingerprint
@@ -175,7 +306,12 @@ function acknowledgementReadbackMatches(
     && after.acknowledgedAtMs === request.acknowledgedAtMs
     && after.acknowledgedByOperatorId === request.actor.id
     && after.ledgerEventId === ledgerEventId
-    && acknowledgementReplayMatches(after, request, correlationId);
+    && acknowledgement.ledgerEventId === ledgerEventId
+    && acknowledgement.correlationId === after.correlationId
+    && acknowledgement.state === after.state
+    && acknowledgement.acknowledgedAtMs === after.acknowledgedAtMs
+    && acknowledgement.acknowledgedByOperatorId === after.acknowledgedByOperatorId
+    && acknowledgementFromEvent(acknowledgement.lastAudit, request, correlationId) !== null;
 }
 
 function failure(
@@ -194,6 +330,7 @@ export class ProductIncidentOwner {
 
   constructor(persistence: Readonly<ProductIncidentPersistencePort>) {
     if (!persistence || typeof persistence.readProductIncident !== 'function'
+      || typeof persistence.readProductIncidentAcknowledgement !== 'function'
       || typeof persistence.compareAndTransitionProductIncident !== 'function') {
       throw new TypeError('ProductIncidentOwner requires the sole-Ledger incident port.');
     }
@@ -210,25 +347,41 @@ export class ProductIncidentOwner {
     }
 
     let before: Readonly<ProductIncidentRecord> | null;
+    let historicalAcknowledgement: Readonly<LedgerEventRecord> | null;
     try {
       before = this.persistence.readProductIncident(request.incidentId);
+      historicalAcknowledgement = this.persistence.readProductIncidentAcknowledgement(
+        request.incidentId,
+        request.idempotencyKey,
+      );
     } catch {
       return failure('INCIDENT_PERSISTENCE_UNAVAILABLE', null);
     }
     if (before === null) return failure('INCIDENT_NOT_FOUND', null);
     const commandCorrelationId = acknowledgementCorrelationId(request);
 
-    if (before.acknowledgedAtMs !== null || before.acknowledgedByOperatorId !== null) {
-      if (!acknowledgementReplayMatches(before, request, commandCorrelationId)) {
-        return failure('INCIDENT_ACK_IDEMPOTENCY_CONFLICT', before.ledgerEventId);
+    if (historicalAcknowledgement !== null) {
+      const historicalIncident = acknowledgementFromEvent(
+        historicalAcknowledgement,
+        request,
+        commandCorrelationId,
+      );
+      if (historicalIncident === null
+        || before.acknowledgedAtMs !== historicalIncident.acknowledgedAtMs
+        || before.acknowledgedByOperatorId !== historicalIncident.acknowledgedByOperatorId) {
+        return failure('INCIDENT_ACK_READBACK_UNPROVEN', before.ledgerEventId);
       }
       return Object.freeze({
         ok: true,
         status: 'ALREADY_ACKNOWLEDGED',
-        receiptId: `ledger-event:${before.ledgerEventId}`,
+        receiptId: `ledger-event:${historicalIncident.ledgerEventId}`,
         correlationId: commandCorrelationId,
-        incident: before,
+        incident: historicalIncident,
       });
+    }
+
+    if (before.acknowledgedAtMs !== null || before.acknowledgedByOperatorId !== null) {
+      return failure('INCIDENT_ACK_IDEMPOTENCY_CONFLICT', before.ledgerEventId);
     }
     if (before.resolvedAtMs !== null || before.state === 'RESOLVED') {
       return failure('INCIDENT_ALREADY_RESOLVED', before.ledgerEventId);
@@ -256,7 +409,7 @@ export class ProductIncidentOwner {
       resolvedAtMs: before.resolvedAtMs,
       correlationId: before.correlationId,
       audit: Object.freeze({
-        kind: INCIDENT_TRANSITION_EVENT_KIND,
+        kind: PRODUCT_INCIDENT_ACK_EVENT_KIND,
         symbol: null,
         data: auditData(request, before, commandCorrelationId),
       }),
@@ -277,17 +430,26 @@ export class ProductIncidentOwner {
     }
 
     let after: Readonly<ProductIncidentRecord> | null;
+    let acknowledgementEvent: Readonly<LedgerEventRecord> | null;
     try {
       after = this.persistence.readProductIncident(request.incidentId);
+      acknowledgementEvent = this.persistence.readProductIncidentAcknowledgement(
+        request.incidentId,
+        request.idempotencyKey,
+      );
     } catch {
       return failure('INCIDENT_ACK_READBACK_UNPROVEN', mutation.ledgerEvent.id);
     }
-    if (after === null || !acknowledgementReadbackMatches(
+    const acknowledgement = acknowledgementEvent === null
+      ? null
+      : acknowledgementFromEvent(acknowledgementEvent, request, commandCorrelationId);
+    if (after === null || acknowledgement === null || !acknowledgementReadbackMatches(
       before,
       after,
       request,
       mutation.ledgerEvent.id,
       commandCorrelationId,
+      acknowledgement,
     )) return failure('INCIDENT_ACK_READBACK_UNPROVEN', mutation.ledgerEvent.id);
 
     return Object.freeze({
@@ -295,7 +457,7 @@ export class ProductIncidentOwner {
       status: mutation.disposition === 'IDEMPOTENT_REPLAY' ? 'ALREADY_ACKNOWLEDGED' : 'ACKNOWLEDGED',
       receiptId: `ledger-event:${mutation.ledgerEvent.id}`,
       correlationId: commandCorrelationId,
-      incident: after,
+      incident: acknowledgement,
     });
   }
 }

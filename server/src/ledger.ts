@@ -17,6 +17,7 @@ import {
 import {
   PRODUCT_IDENTITY_REFERENCE_TYPES,
   PRODUCT_IDENTITY_RESOLUTION_STATES,
+  PRODUCT_INCIDENT_ACK_EVENT_KIND,
   type ProductBootReleasePersistenceInput,
   type ProductBootReleaseRecord,
   type ProductCommandPersistenceInput,
@@ -77,6 +78,11 @@ const PRODUCT_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PRODUCT_DOMAIN_STATE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
 const PRODUCT_INCIDENT_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const);
 const PRODUCT_INCIDENT_STATES = Object.freeze(['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] as const);
+const PRODUCT_INCIDENT_ROUTE_SCHEMA = 'cosmos.product-incident-route.v1';
+const PRODUCT_INCIDENT_ACK_SCHEMAS = new Set([
+  'cosmos.product-incident-ack.v1',
+  'cosmos.product-incident-ack.v2',
+]);
 const PRODUCT_DIGEST = /^(?:sha256:)?[a-f0-9]{16,128}$/i;
 const PRODUCT_COMMIT = /^[a-f0-9]{40,64}$/i;
 const PRODUCT_SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
@@ -2584,6 +2590,36 @@ export class Ledger extends EventEmitter {
   }
 
   /**
+   * Reads the one immutable acknowledgement event by Product incident and
+   * idempotency identity. The canonical `/api/events` route exposes this same
+   * Ledger row; no operator-event projection or second store is involved.
+   */
+  readProductIncidentAcknowledgement(
+    incidentId: string,
+    idempotencyKey: string,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    if (typeof idempotencyKey !== 'string' || !PRODUCT_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      throw new TypeError('product incident acknowledgement idempotencyKey is invalid');
+    }
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-ack.v1'
+        AND json_extract(data, '$.incidentId') = ?
+        AND json_extract(data, '$.idempotencyKey') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(
+      PRODUCT_INCIDENT_ACK_EVENT_KIND,
+      incidentId,
+      idempotencyKey,
+    ) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident acknowledgement events');
+    return rows.length === 0 ? null : this.readProductPersistenceAudit(rows[0]!.id);
+  }
+
+  /**
    * CAS-records one boot, shutdown, or release revision. The row is evidence
    * only; this primitive never deploys, switches a release, or marks readiness.
    */
@@ -3485,6 +3521,82 @@ function exactProductIncidentRow(
     && row.ledger_event_id > 0;
 }
 
+function productIncidentAuditSnapshotMatchesRow(
+  value: unknown,
+  row: Readonly<ProductIncidentDbRow>,
+): boolean {
+  if (!plainLedgerRecord(value)) return false;
+  return value.incidentId === row.incident_id
+    && value.fingerprint === row.fingerprint
+    && value.rootComponentId === row.root_component_id
+    && value.severity === row.severity
+    && value.capitalRelevant === (row.capital_relevant === 1)
+    && value.state === row.state
+    && value.firstSeenAtMs === row.first_seen_at_ms
+    && value.lastSeenAtMs === row.last_seen_at_ms
+    && value.eventCount === row.event_count
+    && value.acknowledgedAtMs === row.acknowledged_at_ms
+    && value.acknowledgedByOperatorId === row.acknowledged_by_operator_id
+    && value.resolvedAtMs === row.resolved_at_ms
+    && value.correlationId === row.correlation_id;
+}
+
+function productIncidentAuditMatchesRow(
+  row: Readonly<ProductIncidentDbRow>,
+  audit: Readonly<LedgerEvent>,
+): boolean {
+  if (!plainLedgerRecord(audit.data)) return false;
+  const data = audit.data;
+  if (Object.hasOwn(data, 'incidentId') && data.incidentId !== row.incident_id) return false;
+
+  if (data.schema === PRODUCT_INCIDENT_ROUTE_SCHEMA) {
+    const expected = audit.kind === 'product.incident.opened'
+      ? Object.freeze({ operation: 'OPEN', sourceKind: 'connection_alert', state: 'OPEN' })
+      : audit.kind === 'product.incident.grouped'
+        ? Object.freeze({ operation: 'GROUP', sourceKind: 'connection_alert', state: null })
+        : audit.kind === 'product.incident.resolved'
+          ? Object.freeze({ operation: 'RESOLVE', sourceKind: 'connection_recovered', state: 'RESOLVED' })
+          : null;
+    return expected !== null
+      && audit.symbol === null
+      && data.operation === expected.operation
+      && data.sourceEventKind === expected.sourceKind
+      && Number.isSafeInteger(data.sourceEventId)
+      && Number(data.sourceEventId) >= 1
+      && (expected.state === null || row.state === expected.state)
+      && data.fingerprint === row.fingerprint
+      && data.rootComponentId === row.root_component_id
+      && data.severity === row.severity
+      && data.capitalRelevant === (row.capital_relevant === 1)
+      && data.correlationId === row.correlation_id
+      && data.reasonCode === 'CONNECTION_UNHEALTHY'
+      && plainLedgerRecord(data.routing)
+      && data.routing.inApp === 'WIRED_LOCAL'
+      && data.routing.externalPaging === 'NOT_CONFIGURED'
+      && data.externalActionAuthorization === 'NONE'
+      && (expected.sourceKind === 'connection_recovered'
+        ? data.sourceStatus === 'operational'
+        : data.sourceStatus === 'degraded' || data.sourceStatus === 'outage');
+  }
+
+  if (PRODUCT_INCIDENT_ACK_SCHEMAS.has(String(data.schema))) {
+    return audit.kind === PRODUCT_INCIDENT_ACK_EVENT_KIND
+      && audit.symbol === null
+      && row.state === 'ACKNOWLEDGED'
+      && data.operation === 'ACKNOWLEDGE'
+      && data.acknowledgedAtMs === row.acknowledged_at_ms
+      && data.incidentCorrelationId === row.correlation_id
+      && Number.isSafeInteger(data.expectedLedgerEventId)
+      && Number(data.expectedLedgerEventId) >= 1
+      && Number(data.expectedLedgerEventId) < audit.id
+      && plainLedgerRecord(data.actor)
+      && data.actor.id === row.acknowledged_by_operator_id
+      && productIncidentAuditSnapshotMatchesRow(data.after, row);
+  }
+
+  return true;
+}
+
 function productIncidentRecord(
   row: Readonly<ProductIncidentDbRow>,
   audit: Readonly<LedgerEvent>,
@@ -3527,6 +3639,9 @@ function productIncidentRecord(
     throw new Error('durable product incident state fields are inconsistent');
   }
   assertProductIdentifier(row.correlation_id, 'durable product incident correlationId');
+  if (!productIncidentAuditMatchesRow(row, audit)) {
+    throw new Error('durable product incident audit relationship is invalid');
+  }
   return Object.freeze({
     incidentId: row.incident_id,
     fingerprint: row.fingerprint,

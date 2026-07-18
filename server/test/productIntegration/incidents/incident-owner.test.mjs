@@ -53,6 +53,9 @@ function request(opened, suffix = 'one', overrides = {}) {
 function owner(ledger) {
   return createProductIncidentOwner(Object.freeze({
     readProductIncident: (incidentId) => ledger.readProductIncident(incidentId),
+    readProductIncidentAcknowledgement: (incidentId, idempotencyKey) => (
+      ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey)
+    ),
     compareAndTransitionProductIncident: (input) => ledger.compareAndTransitionProductIncident(input),
   }));
 }
@@ -135,7 +138,7 @@ test('I00-044A serializes hostile writers on ledgerEventId even when event_count
     assert.equal(loser.ok, false);
     assert.equal(loser.code, 'INCIDENT_ACK_IDEMPOTENCY_CONFLICT');
     assert.equal(secondLedger.readProductIncident('incident.product.race').eventCount, 1);
-    assert.equal(secondLedger.countEvents('product.incident.transition'), 1);
+    assert.equal(secondLedger.countEvents('incident_acknowledged'), 1);
 
     const revisionOpened = seedIncident(firstLedger, 'revision');
     const current = firstLedger.readProductIncident('incident.product.revision');

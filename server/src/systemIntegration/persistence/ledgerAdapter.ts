@@ -1463,6 +1463,25 @@ export class SystemLedgerPersistenceAdapter {
     }
   }
 
+  readProductIncidentAcknowledgement(
+    incidentId: string,
+    idempotencyKey: string,
+  ): PersistenceResult<Readonly<LedgerEventRecord> | null> {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    if (typeof this.ledger.readProductIncidentAcknowledgement !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product incident acknowledgement read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product incident acknowledgement query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product incident acknowledgement query failed'));
+    }
+  }
+
   compareAndSetProductBootReleaseRevision(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {

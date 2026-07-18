@@ -107,7 +107,7 @@ function depth(eventMs, quantity) {
   };
 }
 
-function liquidation(eventMs, quoteNotional, sampledPerWindow = false, samplingSelection = sampledPerWindow ? 'LARGEST_PER_SYMBOL' : 'UNKNOWN') {
+function liquidation(eventMs, quoteNotional, sampledPerWindow = false, samplingSelection = sampledPerWindow ? 'LATEST_PER_SYMBOL' : 'UNKNOWN') {
   const price = 100;
   const id = stableId('evidence', { kind: 'LIQUIDATION', eventMs, quoteNotional, sampledPerWindow, samplingSelection });
   return {

@@ -22,6 +22,7 @@ import {
   miniTickerDelta,
   VOLUME_HISTORICAL_REJECT_CODE_MAP,
   VOLUME_REJECT_CODES,
+  projectVolumeRejectDisposition,
 } from '../dist/engine/volume/index.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
@@ -405,6 +406,77 @@ section('11. snapshots return contract-shaped data');
   check('snapshot exposes exact Volume vocabulary and historical map',
     JSON.stringify(vocabulary.emitted) === JSON.stringify(VOLUME_REJECT_CODES)
       && vocabulary.historical.volume_not_abnormal.successorOutcome === 'ignore');
+  const normalizedReplay = projectVolumeRejectDisposition('volume_not_abnormal');
+  check('historical normal-volume replay preserves raw spelling and projects to ignore',
+    normalizedReplay.rawCode === 'volume_not_abnormal'
+      && normalizedReplay.classification === 'HISTORICAL'
+      && normalizedReplay.successorOutcome === 'ignore'
+      && normalizedReplay.focusExitReason === 'volume_normalized');
+  const riskReplay = projectVolumeRejectDisposition('risk_blocked');
+  check('historical risk replay preserves raw spelling and canonical Foundation ownership',
+    riskReplay.rawCode === 'risk_blocked'
+      && riskReplay.owner === 'FOUNDATION_RISK'
+      && riskReplay.successorOutcome === 'risk_rejected'
+      && riskReplay.focusExitReason === 'risk_rejected');
+  check('unknown historical spelling remains explicit invalid truth',
+    projectVolumeRejectDisposition('invented_reject').classification === 'INVALID'
+      && projectVolumeRejectDisposition('invented_reject').owner === 'UNRESOLVED'
+      && projectVolumeRejectDisposition('invented_reject').successorOutcome === 'INVALID'
+      && projectVolumeRejectDisposition(null).rawCode === null);
+  check('current engine intake posture stays explicit outside the detector vocabulary',
+    projectVolumeRejectDisposition('intake_paused').classification === 'CURRENT_ENGINE'
+      && projectVolumeRejectDisposition('intake_paused').successorCode === 'intake_paused'
+      && projectVolumeRejectDisposition('intake_paused').owner === 'ENGINE');
+
+  const replayDecision = (world, rejectCode) => ({
+    symbol: SYM,
+    ts: world.clock.now(),
+    strategy: 'volume_spike',
+    kind: 'reject',
+    rejectCode,
+    humanReason: `historical ${rejectCode}`,
+    correlationId: `replay-${rejectCode}`,
+    evidence: {},
+  });
+  const normalizedWorld = mkWorld();
+  normalizedWorld.engine.focusMgr.promote(
+    SYM,
+    'volume_activation',
+    1,
+    'replay-normal-volume',
+    normalizedWorld.clock.now(),
+  );
+  normalizedWorld.engine.focusMgr.noteDecision(
+    replayDecision(normalizedWorld, 'volume_not_abnormal'),
+    1,
+  );
+  check('historical normal-volume replay uses non-reject volume_normalized semantics',
+    normalizedWorld.engine.focusMgr.closedFocusSessions(1)[0]?.exitReason === 'volume_normalized'
+      && normalizedWorld.engine.memSink.byKind('candidate_rejected').length === 0);
+
+  const riskWorld = mkWorld();
+  riskWorld.engine.focusMgr.promote(
+    SYM,
+    'volume_activation',
+    1,
+    'replay-risk-blocked',
+    riskWorld.clock.now(),
+  );
+  riskWorld.engine.focusMgr.noteDecision(replayDecision(riskWorld, 'risk_blocked'), 1);
+  check('historical risk replay closes focus as risk_rejected, never signal_expired',
+    riskWorld.engine.focusMgr.closedFocusSessions(1)[0]?.exitReason === 'risk_rejected');
+
+  const candidateWorld = mkWorld();
+  candidateWorld.engine.focusMgr.noteDecision({
+    ...replayDecision(candidateWorld, null),
+    kind: 'watch',
+    rejectCode: null,
+  }, 1);
+  candidateWorld.engine.focusMgr.noteDecision(replayDecision(candidateWorld, 'risk_blocked'), 1);
+  check('historical risk candidate rejection retains the raw spelling',
+    candidateWorld.engine.memSink.byKind('candidate_rejected').some(
+      (event) => event.rejectCode === 'risk_blocked',
+    ));
 }
 
 // ================================================================

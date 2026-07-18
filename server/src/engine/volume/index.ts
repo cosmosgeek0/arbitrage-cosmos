@@ -20,10 +20,13 @@ export { VolumeSnapshots } from './snapshots.js';
 export {
   VOLUME_HISTORICAL_REJECT_CODE_MAP,
   VOLUME_REJECT_CODES,
+  projectVolumeRejectDisposition,
   volumeRejectVocabularySnapshot,
   type HistoricalVolumeRejectCode,
   type HistoricalVolumeRejectDisposition,
   type VolumeRejectCode,
+  type VolumeRejectProjection,
+  type VolumeRejectProjectionClassification,
   type VolumeRejectVocabularySnapshot,
 } from './rejectVocabulary.js';
 export {

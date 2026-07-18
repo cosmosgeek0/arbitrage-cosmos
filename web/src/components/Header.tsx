@@ -1524,25 +1524,40 @@ function SharedTopBar() {
       if (!Array.isArray(rows)) throw new Error('events payload is invalid');
       return rows;
     };
-    const notificationPoll = createSettledPoll<LedgerEvent[]>({
+    let pendingBootstrapKinds = [...relevantKinds];
+    let bootstrapHighWater: number | null = null;
+    const bootstrapSince = Date.now() - 24 * 60 * 60_000;
+    const notificationPoll = createSettledPoll<{
+      items: LedgerEvent[];
+      bootstrapFailures: number;
+      bootstrapSuccesses: number;
+    }>({
       intervalMs: 5_000,
       timeoutMs: 15_000,
       request: async (signal) => {
         let items: LedgerEvent[] = [];
+        let bootstrapFailures = 0;
+        let bootstrapSuccesses = 0;
         if (!bootstrapped) {
-          const head = await readEventRows('/api/events?limit=1', signal);
-          const highWater = head[0]?.id ?? 0;
-          const since = Date.now() - 24 * 60 * 60_000;
-          const before = highWater > 0 ? `&beforeId=${highWater + 1}` : '';
-          const bootstrapReads = await Promise.allSettled(relevantKinds.map((kind) => readEventRows(
-            `/api/events?since=${since}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
+          if (bootstrapHighWater === null) {
+            const head = await readEventRows('/api/events?limit=1', signal);
+            bootstrapHighWater = head[0]?.id ?? 0;
+          }
+          const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
+          const attemptedKinds = pendingBootstrapKinds;
+          const bootstrapReads = await Promise.allSettled(attemptedKinds.map((kind) => readEventRows(
+            `/api/events?since=${bootstrapSince}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
             signal,
           )));
-          const bootstrapFailure = bootstrapReads.find((result) => result.status === 'rejected');
-          if (bootstrapFailure?.status === 'rejected') throw bootstrapFailure.reason;
+          if (signal.aborted) throw signal.reason;
           items = bootstrapReads.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
-          notifLiveCursor.current = Math.max(notifLiveCursor.current, highWater);
-          bootstrapped = true;
+          pendingBootstrapKinds = attemptedKinds.filter((_, index) => bootstrapReads[index]?.status === 'rejected');
+          bootstrapFailures = pendingBootstrapKinds.length;
+          bootstrapSuccesses = attemptedKinds.length - bootstrapFailures;
+          if (bootstrapFailures === 0) {
+            notifLiveCursor.current = Math.max(notifLiveCursor.current, bootstrapHighWater);
+            bootstrapped = true;
+          }
         } else {
           let afterId = notifLiveCursor.current;
           for (let page = 0; page < 5; page += 1) {
@@ -1552,9 +1567,9 @@ function SharedTopBar() {
             afterId = Math.max(afterId, ...rows.map((item) => item.id));
           }
         }
-        return items;
+        return { items, bootstrapFailures, bootstrapSuccesses };
       },
-      onSuccess: (items) => {
+      onSuccess: ({ items, bootstrapFailures, bootstrapSuccesses }) => {
         if (items.length > 0) {
           notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
           setNotifLiveEvents((current) => {
@@ -1563,6 +1578,14 @@ function SharedTopBar() {
             for (const item of items) merged.set(item.id, item);
             return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
           });
+        }
+        if (bootstrapFailures > 0) {
+          setNotificationFeedState((current) => ({
+            status: current.lastSuccessAt === null && bootstrapSuccesses === 0 ? 'UNAVAILABLE' : 'STALE',
+            lastSuccessAt: bootstrapSuccesses > 0 ? Date.now() : current.lastSuccessAt,
+            error: `${bootstrapFailures} notification history ${bootstrapFailures === 1 ? 'stream is' : 'streams are'} unavailable; retrying only failed streams.`,
+          }));
+          return;
         }
         setNotificationFeedState({ status: 'CURRENT', lastSuccessAt: Date.now(), error: null });
       },

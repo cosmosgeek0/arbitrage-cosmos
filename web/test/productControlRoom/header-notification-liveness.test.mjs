@@ -8,7 +8,7 @@ test('premium Header notification polling is bounded and exposes last-known feed
   const source = await readFile(headerUrl, 'utf8');
   const sharedTopbarStart = source.indexOf('function SharedTopBar()');
   const notificationReaderStart = source.indexOf('const readEventRows = async', sharedTopbarStart);
-  const notificationPollStart = source.indexOf('const notificationPoll = createSettledPoll<LedgerEvent[]>', sharedTopbarStart);
+  const notificationPollStart = source.indexOf('const notificationPoll = createSettledPoll<{', sharedTopbarStart);
   const notificationPollEnd = source.indexOf('// Compute the box geometry', notificationPollStart);
   const premiumStart = source.indexOf('const premiumContent', sharedTopbarStart);
   const premiumNotificationStart = source.indexOf("case 'notif':", premiumStart);
@@ -35,8 +35,14 @@ test('premium Header notification polling is bounded and exposes last-known feed
   assert.match(poll, /apiErrorMessage\(error,\s*'Notification feed unavailable'\)/);
   assert.match(poll, /notificationPoll\.start\(\)/);
   assert.match(poll, /return notificationPoll\.stop/);
-  assert.match(poll, /Promise\.allSettled\(relevantKinds\.map/);
-  assert.match(poll, /bootstrapReads\.find\(\(result\) => result\.status === 'rejected'\)/);
+  assert.match(notificationEffect, /let pendingBootstrapKinds = \[\.\.\.relevantKinds\]/);
+  assert.match(poll, /Promise\.allSettled\(attemptedKinds\.map/);
+  assert.match(poll, /items = bootstrapReads\.flatMap\(\(result\) => result\.status === 'fulfilled' \? result\.value : \[\]\)/);
+  assert.match(poll, /pendingBootstrapKinds = attemptedKinds\.filter\(\(_, index\) => bootstrapReads\[index\]\?\.status === 'rejected'\)/);
+  assert.match(poll, /onSuccess: \(\{ items, bootstrapFailures, bootstrapSuccesses \}\) =>/);
+  assert.match(poll, /bootstrapFailures > 0[\s\S]*status: current\.lastSuccessAt === null && bootstrapSuccesses === 0 \? 'UNAVAILABLE' : 'STALE'/);
+  assert.doesNotMatch(poll, /bootstrapReads\.find\(\(result\) => result\.status === 'rejected'\)/);
+  assert.doesNotMatch(poll, /throw bootstrapFailure\.reason/);
   assert.doesNotMatch(poll, /Promise\.all\(/);
   assert.doesNotMatch(notificationEffect, /window\.setInterval|\bfetch\(/);
 

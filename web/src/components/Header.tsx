@@ -11,6 +11,7 @@ import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
+import { parseNotificationCursor } from '../lib/notificationCursor';
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
@@ -1007,7 +1008,7 @@ function NotificationMenu() {
   const { state, setPage } = useStore();
   const { open, setOpen, ref } = useMenu<HTMLDivElement>();
   const events = state?.events ?? [];
-  const [seen, setSeen] = useState<number>(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [seen, setSeen] = useState<number>(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const unread = events.filter((e) => e.id > seen).length;
   const toggle = () => {
     const willOpen = !open;
@@ -1505,7 +1506,7 @@ function SharedTopBar() {
     setOutgoingContent(null);
   }, []);
   const [now, setNow] = useState(() => new Date());
-  const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [seen, setSeen] = useState(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);

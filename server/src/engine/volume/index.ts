@@ -13,6 +13,22 @@ export { VolumeFeatureEngine } from './features.js';
 export { WakeupDetector, type VolumeScanContext } from './detector.js';
 export { priorityOf } from './priority.js';
 export { FocusManager } from './focus.js';
+export {
+  FOCUS_HISTORICAL_EXIT_REASON_MAP,
+  type HistoricalFocusExitReason,
+} from './focusVocabulary.js';
+export {
+  OBSERVED_ORDER_FOCUS_SOURCE_OWNER,
+  OBSERVED_ORDER_FOCUS_MAX_AGE_MS,
+  inspectObservedOrderFocusSnapshot,
+  observedOrderFocusFingerprint,
+  validateObservedOrderFocusSnapshot,
+  type ObservedOrderFocusApplyResult,
+  type ObservedOrderFocusApplyStatus,
+  type ObservedOrderFocusAuthority,
+  type ObservedOrderFocusSnapshot,
+  type ObservedOrderFocusState,
+} from './observedOrderFocus.js';
 export { ProposalStore, type IntentResult } from './proposals.js';
 export { MemoryEventSink, makeEvent } from './events.js';
 export { VolumeEngine } from './engine.js';

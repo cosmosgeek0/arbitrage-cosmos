@@ -25,6 +25,14 @@ import type {
   ProductionVolumeRiskEvidenceOwner,
   ProductionVolumeRiskPort,
 } from './volumeRisk.js';
+import type {
+  ProductionObservedOrderFocusEvidenceOwner,
+  ProductionObservedOrderFocusPort,
+} from './observedOrderFocus.js';
+import type {
+  ObservedOrderFocusApplyResult,
+  ObservedOrderFocusSnapshot,
+} from '../../engine/volume/observedOrderFocus.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -103,6 +111,9 @@ export interface ProductionVolumeRuntimePort {
   integrationSnapshot(): Readonly<ProductionVolumeStrategySnapshot>;
   readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null;
   recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean;
+  applyObservedOrderFocus(
+    snapshot: Readonly<ObservedOrderFocusSnapshot>,
+  ): Readonly<ObservedOrderFocusApplyResult>;
   setIntakePaused(paused: boolean): boolean;
   intakePaused(): boolean;
 }
@@ -118,6 +129,8 @@ export interface ProductionSystemIntegrationInput {
   readonly capitalEconomicsOwners?: ProductionCanonicalEconomicsOwners | null;
   /** Exact cached evidence owner; absent in today's real server assembly. */
   readonly volumeRiskEvidenceOwner?: ProductionVolumeRiskEvidenceOwner | null;
+  /** Cached normalized Foundation owner; absent in today's real server assembly. */
+  readonly observedOrderFocusEvidenceOwner?: ProductionObservedOrderFocusEvidenceOwner | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
 }
@@ -143,4 +156,6 @@ export interface ProductionSystemIntegrationPorts {
   readonly capitalEligibility: Readonly<ProductionCapitalEligibilityPort>;
   /** Foundation-owned Volume risk callsite; current real assembly is NOT_CONFIGURED. */
   readonly volumeRisk: Readonly<ProductionVolumeRiskPort>;
+  /** Foundation-observed open-order focus callsite; real assembly is NOT_CONFIGURED. */
+  readonly observedOrderFocus: Readonly<ProductionObservedOrderFocusPort>;
 }

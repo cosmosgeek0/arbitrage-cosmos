@@ -7,6 +7,14 @@ disposition; blocked families name their missing evidence. No predictive, econom
 spoofing claim exists.
 """
 
+from quant_edge.micro.activity import (
+    ActivityHorizonV1,
+    ActivityObservationV1,
+    ActivityState,
+    ActivityTransitionV1,
+    activity_surprise_feature,
+    activity_transitions,
+)
 from quant_edge.micro.bookfeat import (
     band_flow_feature,
     book_slope_imbalance_feature,
@@ -58,6 +66,10 @@ from quant_edge.micro.l1 import (
 
 __all__ = [
     "SECTION_13_1_DISPOSITIONS",
+    "ActivityHorizonV1",
+    "ActivityObservationV1",
+    "ActivityState",
+    "ActivityTransitionV1",
     "FamilyDisposition",
     "FamilyRecordV1",
     "JoinedTradeV1",
@@ -72,6 +84,8 @@ __all__ = [
     "TradePointV1",
     "TradeSeriesV1",
     "absorption_ratio_feature",
+    "activity_surprise_feature",
+    "activity_transitions",
     "amihud_illiquidity_feature",
     "band_flow_feature",
     "book_slope_imbalance_feature",

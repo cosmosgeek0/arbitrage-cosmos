@@ -34,7 +34,7 @@ def test_serving_manifest_pins_exact_accepted_truth(
 ) -> None:
     manifest = serving_manifest
     loaded = lineage
-    assert len(manifest.artifacts) == len(SERVING_ARTIFACTS) == 32
+    assert len(manifest.artifacts) == len(SERVING_ARTIFACTS) == 33
     assert manifest.artifact("q06.feature-golden.v1").kind.value == "FEATURE_REGISTRY"
     assert manifest.artifact("q07.micro-golden.v1").kind.value == "FEATURE_REGISTRY"
     assert manifest.artifact("q16.source.inference.service.v1").media_type == "text/x-python"

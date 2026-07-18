@@ -97,10 +97,14 @@ SECTION_13_1_DISPOSITIONS: Final[tuple[FamilyRecordV1, ...]] = (
         bullet_id="13.1-06-arrival",
         bullet="trade-arrival rate, acceleration, burstiness, inter-arrival, entropy",
         disposition=FamilyDisposition.ADAPT,
-        reason="arrival rate and the inter-arrival index of dispersion implemented; "
-        "acceleration/entropy variants deferred pending binning definitions that "
-        "survive review",
-        implemented_features=("trade_dispersion:v1", "trade_intensity:v1"),
+        reason="arrival rate, inter-arrival dispersion and strictly-prior activity "
+        "surprise implemented; acceleration/entropy variants deferred pending "
+        "binning definitions that survive review",
+        implemented_features=(
+            "activity_surprise:v1",
+            "trade_dispersion:v1",
+            "trade_intensity:v1",
+        ),
     ),
     FamilyRecordV1(
         bullet_id="13.1-07-size-distribution",

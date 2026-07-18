@@ -47,6 +47,18 @@ from quant_edge.registry_ops.contracts import (
     ValidationBindingV1,
     mapping_digest,
 )
+from quant_edge.registry_ops.recorded_outcomes import (
+    CalibrationAuthority,
+    RecordedCalibrationPolicyV1,
+    RecordedCalibrationReportV1,
+    RecordedCalibrationSnapshotV1,
+    RecordedOutcomeAttestationV1,
+    RecordedOutcomeCorpusV1,
+    RecordedPredictionRegistrationV1,
+    RecordedPredictionV1,
+    _evaluate_recorded_calibration,
+    evaluate_recorded_calibration,
+)
 
 SCHEMA_VERSION = 1
 
@@ -112,6 +124,28 @@ def _snapshot_from_mapping(mapping: dict[str, object]) -> ChampionSnapshotV1:
         )
     except (KeyError, TypeError, ValueError) as error:
         raise RegistryIntegrityError("persisted champion snapshot is malformed") from error
+
+
+def _recorded_calibration_snapshot_from_mapping(
+    mapping: dict[str, object],
+) -> RecordedCalibrationSnapshotV1:
+    try:
+        return RecordedCalibrationSnapshotV1(
+            slot_id=str(mapping["slotId"]),
+            generation=_mapping_int(mapping, "generation"),
+            report_id=str(mapping["reportId"]),
+            report_revision=str(mapping["reportRevision"]),
+            model_id=str(mapping["modelId"]),
+            model_revision=str(mapping["modelRevision"]),
+            policy_revision=str(mapping["policyRevision"]),
+            authority=CalibrationAuthority(str(mapping["authority"])),
+            transition_id=str(mapping["transitionId"]),
+            updated_at_ms=_mapping_int(mapping, "updatedAtMs"),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration snapshot is malformed"
+        ) from error
 
 
 def _verify_transition_record(
@@ -386,7 +420,16 @@ def _verify_validation_report_content(
 class ResearchRegistryStore:
     """One explicit local registry root and one serialized writer connection."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        recorded_outcome_attestation: ArtifactRefV1 | None = None,
+        recorded_outcome_artifact_root: Path | None = None,
+        recorded_prediction_owner_id: str | None = None,
+        recorded_prediction_owner_revision: str | None = None,
+        recorded_prediction_clock: Callable[[], int] | None = None,
+    ) -> None:
         if not isinstance(root, Path) or not root.is_absolute():
             raise ContractValueError("registry root must be an absolute pathlib.Path")
         try:
@@ -395,7 +438,53 @@ class ResearchRegistryStore:
             raise RegistryIntegrityError("registry root must pre-exist") from error
         if not stat.S_ISDIR(info.st_mode) or root.is_symlink():
             raise RegistryIntegrityError("registry root must be a real non-symlink directory")
+        if (recorded_outcome_attestation is None) != (
+            recorded_outcome_artifact_root is None
+        ):
+            raise ContractValueError(
+                "recorded outcome attestation reference and artifact root "
+                "must be configured together"
+            )
+        if recorded_outcome_attestation is not None and not isinstance(
+            recorded_outcome_attestation, ArtifactRefV1
+        ):
+            raise ContractValueError("recorded_outcome_attestation must be ArtifactRefV1")
+        if recorded_outcome_artifact_root is not None and not isinstance(
+            recorded_outcome_artifact_root, Path
+        ):
+            raise ContractValueError("recorded_outcome_artifact_root must be pathlib.Path")
+        prediction_owner_configuration = (
+            recorded_prediction_owner_id,
+            recorded_prediction_owner_revision,
+            recorded_prediction_clock,
+        )
+        if any(value is not None for value in prediction_owner_configuration) and not all(
+            value is not None for value in prediction_owner_configuration
+        ):
+            raise ContractValueError(
+                "recorded prediction owner identity, revision and clock must be configured together"
+            )
+        if recorded_prediction_owner_id is not None:
+            require_contract_id(
+                recorded_prediction_owner_id,
+                field="recorded_prediction_owner_id",
+            )
+            require_contract_id(
+                recorded_prediction_owner_revision,
+                field="recorded_prediction_owner_revision",
+            )
+            if not callable(recorded_prediction_clock):
+                raise ContractValueError("recorded_prediction_clock must be callable")
+        if recorded_outcome_attestation is not None and recorded_prediction_owner_id is None:
+            raise ContractValueError(
+                "production outcome attestation requires a configured prediction owner"
+            )
         self._root = root
+        self._recorded_outcome_attestation = recorded_outcome_attestation
+        self._recorded_outcome_artifact_root = recorded_outcome_artifact_root
+        self._recorded_prediction_owner_id = recorded_prediction_owner_id
+        self._recorded_prediction_owner_revision = recorded_prediction_owner_revision
+        self._recorded_prediction_clock = recorded_prediction_clock
         self._root_identity = (info.st_dev, info.st_ino)
         database = root / "q15-registry.sqlite3"
         created = False
@@ -622,6 +711,40 @@ class ResearchRegistryStore:
                 body_sha TEXT NOT NULL,
                 body BLOB NOT NULL,
                 UNIQUE(model_id, model_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_reports(
+                report_id TEXT PRIMARY KEY,
+                report_revision TEXT NOT NULL UNIQUE,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                authority TEXT NOT NULL,
+                status TEXT NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_predictions(
+                prediction_id TEXT PRIMARY KEY,
+                prediction_sha TEXT NOT NULL UNIQUE,
+                registration_sha TEXT NOT NULL UNIQUE,
+                owner_id TEXT NOT NULL,
+                owner_revision TEXT NOT NULL,
+                registered_at_ms INTEGER NOT NULL,
+                body BLOB NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_heads(
+                slot_id TEXT PRIMARY KEY,
+                generation INTEGER NOT NULL,
+                snapshot_sha TEXT NOT NULL,
+                snapshot BLOB NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_transitions(
+                transition_id TEXT PRIMARY KEY,
+                slot_id TEXT NOT NULL,
+                expected_generation INTEGER NOT NULL,
+                report_revision TEXT NOT NULL,
+                snapshot_sha TEXT NOT NULL,
+                snapshot BLOB NOT NULL,
+                committed_at_ms INTEGER NOT NULL,
+                FOREIGN KEY(report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
             ) STRICT;
             """
         )
@@ -2269,6 +2392,510 @@ class ResearchRegistryStore:
             (item.artifact_id, item.sha256.hexdigest): item for item in lineage_references
         }
         return snapshot, tuple(unique_references[key] for key in sorted(unique_references))
+
+    def record_recorded_prediction(
+        self,
+        prediction: RecordedPredictionV1,
+    ) -> RecordedPredictionRegistrationV1:
+        """Append one prediction using the configured owner's trusted receive clock."""
+
+        if not isinstance(prediction, RecordedPredictionV1):
+            raise ContractValueError("prediction must be RecordedPredictionV1")
+        owner_id = self._recorded_prediction_owner_id
+        owner_revision = self._recorded_prediction_owner_revision
+        clock = self._recorded_prediction_clock
+        if owner_id is None or owner_revision is None or clock is None:
+            raise RegistryConflictError("RECORDED_PREDICTION_OWNER_NOT_CONFIGURED")
+        connection = self._require_open()
+        existing = connection.execute(
+            "SELECT prediction_sha,registration_sha,owner_id,owner_revision,body "
+            "FROM recorded_predictions WHERE prediction_id=?",
+            (prediction.prediction_id,),
+        ).fetchone()
+        if existing is not None:
+            try:
+                mapping = parse_canonical_object(bytes(existing["body"]))
+                registration = RecordedPredictionRegistrationV1.from_mapping(mapping)
+            except QuantEdgeError as error:
+                raise RegistryIntegrityError(
+                    "persisted recorded prediction registration is invalid"
+                ) from error
+            if (
+                bytes(existing["body"]) != canonical_json_bytes(mapping)
+                or existing["prediction_sha"] != prediction.content_digest.hexdigest
+                or existing["registration_sha"] != registration.content_digest.hexdigest
+                or existing["owner_id"] != owner_id
+                or existing["owner_revision"] != owner_revision
+                or registration.prediction != prediction
+                or registration.owner_id != owner_id
+                or registration.owner_revision != owner_revision
+            ):
+                raise RegistryConflictError("recorded prediction identity already differs")
+            return registration
+        registered_at_ms = clock()
+        require_utc_millis(registered_at_ms, field="recorded prediction owner clock")
+        registration = RecordedPredictionRegistrationV1(
+            owner_id=owner_id,
+            owner_revision=owner_revision,
+            prediction=prediction,
+            registered_at_ms=registered_at_ms,
+        )
+        body = canonical_json_bytes(registration.as_mapping())
+        connection = self._begin(None)
+        try:
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_predictions("
+                    "prediction_id,prediction_sha,registration_sha,owner_id,owner_revision,"
+                    "registered_at_ms,body) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        prediction.prediction_id,
+                        prediction.content_digest.hexdigest,
+                        registration.content_digest.hexdigest,
+                        owner_id,
+                        owner_revision,
+                        registered_at_ms,
+                        body,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded prediction identity or content is already bound"
+                ) from error
+            self._finish(connection, None)
+            return registration
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def _recorded_prediction_registration(
+        self,
+        prediction_id: str,
+    ) -> RecordedPredictionRegistrationV1:
+        require_contract_id(prediction_id, field="prediction_id")
+        owner_id = self._recorded_prediction_owner_id
+        owner_revision = self._recorded_prediction_owner_revision
+        if owner_id is None or owner_revision is None:
+            raise RegistryConflictError("RECORDED_PREDICTION_OWNER_NOT_CONFIGURED")
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT prediction_sha,registration_sha,owner_id,owner_revision,"
+                "registered_at_ms,body FROM recorded_predictions WHERE prediction_id=?",
+                (prediction_id,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            raise RegistryConflictError(
+                "recorded outcome requires a durable pre-outcome prediction"
+            )
+        try:
+            mapping = parse_canonical_object(bytes(row["body"]))
+            registration = RecordedPredictionRegistrationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "persisted recorded prediction registration is invalid"
+            ) from error
+        if (
+            bytes(row["body"]) != canonical_json_bytes(mapping)
+            or row["prediction_sha"] != registration.prediction.content_digest.hexdigest
+            or row["registration_sha"] != registration.content_digest.hexdigest
+            or row["owner_id"] != registration.owner_id
+            or row["owner_revision"] != registration.owner_revision
+            or row["registered_at_ms"] != registration.registered_at_ms
+        ):
+            raise RegistryIntegrityError("persisted recorded prediction binding is corrupt")
+        if registration.owner_id != owner_id or registration.owner_revision != owner_revision:
+            raise RegistryConflictError("recorded prediction belongs to a foreign owner")
+        return registration
+
+    def _prediction_registrations_for_corpus(
+        self,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> tuple[RecordedPredictionRegistrationV1, ...]:
+        registrations = tuple(
+            self._recorded_prediction_registration(record.prediction_id)
+            for record in corpus.records
+        )
+        if any(
+            not registration.matches_outcome(record)
+            for record, registration in zip(corpus.records, registrations, strict=True)
+        ):
+            raise RegistryConflictError(
+                "recorded outcome does not bind an exact pre-outcome prediction"
+            )
+        return registrations
+
+    def _require_recorded_outcome_attestation_registration(
+        self,
+        reference: ArtifactRefV1,
+    ) -> None:
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT digest,body FROM artifacts WHERE artifact_id=?",
+                (reference.artifact_id,),
+            )
+            .fetchone()
+        )
+        expected_reference_body = canonical_json_bytes(reference.as_mapping())
+        if (
+            row is None
+            or row["digest"] != mapping_digest(reference.as_mapping()).hexdigest
+            or bytes(row["body"]) != expected_reference_body
+        ):
+            raise RegistryConflictError(
+                "recorded outcome attestation must be the exact registered artifact"
+            )
+
+    def verify_recorded_outcome_attestation(
+        self, corpus: RecordedOutcomeCorpusV1
+    ) -> RecordedOutcomeAttestationV1:
+        if not isinstance(corpus, RecordedOutcomeCorpusV1):
+            raise ContractValueError("corpus must be RecordedOutcomeCorpusV1")
+        reference = self._recorded_outcome_attestation
+        artifact_root = self._recorded_outcome_artifact_root
+        if reference is None or artifact_root is None:
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        if (
+            reference.schema_name != "Q15RecordedOutcomeAttestationV1"
+            or reference.schema_version != 1
+        ):
+            raise RegistryConflictError("recorded outcome attestation schema is not configured")
+        self._require_recorded_outcome_attestation_registration(reference)
+        try:
+            raw = read_verified_artifact(artifact_root, reference)
+            mapping = parse_canonical_object(raw)
+            attestation = RecordedOutcomeAttestationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "recorded outcome attestation bytes are invalid"
+            ) from error
+        registrations = self._prediction_registrations_for_corpus(corpus)
+        if (
+            attestation.prediction_owner_id != self._recorded_prediction_owner_id
+            or attestation.prediction_owner_revision != self._recorded_prediction_owner_revision
+            or not attestation.matches_corpus(corpus, registrations)
+        ):
+            raise RegistryConflictError(
+                "recorded outcome attestation does not bind the exact corpus and predictions"
+            )
+        return attestation
+
+    def evaluate_recorded_calibration(
+        self,
+        *,
+        report_id: str,
+        slot_id: str,
+        corpus: RecordedOutcomeCorpusV1,
+        policy: RecordedCalibrationPolicyV1,
+    ) -> RecordedCalibrationReportV1:
+        """Verify configured production bytes and evaluate in one store operation."""
+
+        if policy.authority is not CalibrationAuthority.PRODUCTION:
+            return evaluate_recorded_calibration(
+                report_id=report_id,
+                slot_id=slot_id,
+                corpus=corpus,
+                policy=policy,
+            )
+        attestation = self.verify_recorded_outcome_attestation(corpus)
+        reference = self._recorded_outcome_attestation
+        if reference is None:  # pragma: no cover - verification enforces configuration
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        return _evaluate_recorded_calibration(
+            report_id=report_id,
+            slot_id=slot_id,
+            corpus=corpus,
+            policy=policy,
+            attestation_artifact_sha256=reference.sha256,
+            prediction_registration_digests=attestation.prediction_registration_sha256,
+        )
+
+    def _require_production_attestation(
+        self, report: RecordedCalibrationReportV1
+    ) -> None:
+        reference = self._recorded_outcome_attestation
+        artifact_root = self._recorded_outcome_artifact_root
+        if reference is None or artifact_root is None:
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        if report.attestation_artifact_sha256 != reference.sha256:
+            raise RegistryConflictError("production report attestation is not configured")
+        self._require_recorded_outcome_attestation_registration(reference)
+        try:
+            mapping = parse_canonical_object(read_verified_artifact(artifact_root, reference))
+            attestation = RecordedOutcomeAttestationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "recorded outcome attestation bytes are invalid"
+            ) from error
+        if (
+            attestation.corpus_id != report.corpus_id
+            or attestation.corpus_revision != report.corpus_revision
+            or attestation.corpus_sha256 != report.corpus_sha256
+            or attestation.record_ids != report.record_ids
+            or attestation.outcome_sha256 != report.outcome_digests
+            or attestation.prediction_sha256 != report.prediction_digests
+            or attestation.prediction_registration_sha256 != report.prediction_registration_digests
+        ):
+            raise RegistryConflictError("production report is not content-bound to attestation")
+        registrations = tuple(
+            self._recorded_prediction_registration(prediction_id)
+            for prediction_id in attestation.prediction_ids
+        )
+        if (
+            tuple(item.prediction.content_digest for item in registrations)
+            != attestation.prediction_sha256
+            or tuple(item.content_digest for item in registrations)
+            != attestation.prediction_registration_sha256
+        ):
+            raise RegistryConflictError(
+                "production report prediction registrations no longer match attestation"
+            )
+
+    def record_recorded_calibration_report(
+        self,
+        report: RecordedCalibrationReportV1,
+        *,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> DigestV1:
+        if not isinstance(report, RecordedCalibrationReportV1):
+            raise ContractValueError("report must be RecordedCalibrationReportV1")
+        if not isinstance(corpus, RecordedOutcomeCorpusV1):
+            raise ContractValueError("corpus must be RecordedOutcomeCorpusV1")
+        production_bound = report.policy.authority is CalibrationAuthority.PRODUCTION and (
+            report.attestation_artifact_sha256 is not None or report.is_promotable
+        )
+        expected = (
+            self.evaluate_recorded_calibration(
+                report_id=report.report_id,
+                slot_id=report.slot_id,
+                corpus=corpus,
+                policy=report.policy,
+            )
+            if production_bound
+            else evaluate_recorded_calibration(
+                report_id=report.report_id,
+                slot_id=report.slot_id,
+                corpus=corpus,
+                policy=report.policy,
+            )
+        )
+        if expected != report:
+            raise RegistryConflictError(
+                "recorded calibration report does not match exact corpus evaluation"
+            )
+        body = canonical_json_bytes(report.as_mapping())
+        connection = self._begin(None)
+        try:
+            existing = connection.execute(
+                "SELECT report_revision,body_sha,body FROM recorded_calibration_reports "
+                "WHERE report_id=?",
+                (report.report_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["report_revision"] != report.report_revision
+                    or existing["body_sha"] != report.content_digest.hexdigest
+                    or bytes(existing["body"]) != body
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration report identity already differs"
+                    )
+                self._finish(connection, None)
+                return report.content_digest
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_reports("
+                    "report_id,report_revision,body_sha,body,authority,status) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (
+                        report.report_id,
+                        report.report_revision,
+                        report.content_digest.hexdigest,
+                        body,
+                        report.policy.authority.value,
+                        report.status.value,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded calibration revision is already bound"
+                ) from error
+            self._finish(connection, None)
+            return report.content_digest
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def current_recorded_calibration(self, slot_id: str) -> RecordedCalibrationSnapshotV1 | None:
+        require_contract_id(slot_id, field="slot_id")
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT generation,snapshot_sha,snapshot FROM recorded_calibration_heads "
+                "WHERE slot_id=?",
+                (slot_id,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            return None
+        mapping = parse_canonical_object(bytes(row["snapshot"]))
+        snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        if (
+            snapshot.slot_id != slot_id
+            or snapshot.generation != row["generation"]
+            or snapshot.content_digest.hexdigest != row["snapshot_sha"]
+            or bytes(row["snapshot"]) != canonical_json_bytes(snapshot.as_mapping())
+        ):
+            raise RegistryIntegrityError("recorded calibration head is corrupt")
+        report = (
+            self._require_open()
+            .execute(
+                "SELECT body_sha,body,authority,status FROM recorded_calibration_reports "
+                "WHERE report_revision=?",
+                (snapshot.report_revision,),
+            )
+            .fetchone()
+        )
+        if report is None:
+            raise RegistryIntegrityError("recorded calibration report is absent")
+        report_mapping = parse_canonical_object(bytes(report["body"]))
+        policy_mapping = report_mapping.get("policy")
+        if (
+            bytes(report["body"]) != canonical_json_bytes(report_mapping)
+            or mapping_digest(report_mapping).hexdigest != report["body_sha"]
+            or report_mapping.get("reportId") != snapshot.report_id
+            or report_mapping.get("modelId") != snapshot.model_id
+            or report_mapping.get("modelRevision") != snapshot.model_revision
+            or not isinstance(policy_mapping, dict)
+            or policy_mapping.get("policyRevision") != snapshot.policy_revision
+            or policy_mapping.get("authority") != snapshot.authority.value
+            or report["authority"] != snapshot.authority.value
+            or report["status"] != "PROMOTION_ELIGIBLE"
+        ):
+            raise RegistryIntegrityError("recorded calibration head and report binding is corrupt")
+        return snapshot
+
+    def promote_recorded_calibration(
+        self,
+        *,
+        report: RecordedCalibrationReportV1,
+        transition_id: str,
+        expected_generation: int,
+        now_ms: int,
+        hook: FaultHook | None = None,
+    ) -> RecordedCalibrationSnapshotV1:
+        if not isinstance(report, RecordedCalibrationReportV1):
+            raise ContractValueError("report must be RecordedCalibrationReportV1")
+        require_contract_id(transition_id, field="transition_id")
+        require_strict_int(expected_generation, field="expected_generation", minimum=0)
+        require_utc_millis(now_ms, field="now_ms")
+        if not report.is_promotable or report.model_id is None or report.model_revision is None:
+            raise RegistryConflictError(
+                "recorded calibration promotion requires eligible exact-model evidence"
+            )
+        if report.policy.authority is CalibrationAuthority.PRODUCTION:
+            self._require_production_attestation(report)
+        connection = self._begin(hook)
+        try:
+            report_row = connection.execute(
+                "SELECT body_sha,body,authority,status FROM recorded_calibration_reports "
+                "WHERE report_revision=?",
+                (report.report_revision,),
+            ).fetchone()
+            report_body = canonical_json_bytes(report.as_mapping())
+            if (
+                report_row is None
+                or report_row["body_sha"] != report.content_digest.hexdigest
+                or bytes(report_row["body"]) != report_body
+                or report_row["authority"] != report.policy.authority.value
+                or report_row["status"] != report.status.value
+            ):
+                raise RegistryConflictError(
+                    "recorded calibration promotion requires its exact persisted report"
+                )
+            existing_transition = connection.execute(
+                "SELECT expected_generation,report_revision,snapshot_sha,snapshot "
+                "FROM recorded_calibration_transitions WHERE transition_id=?",
+                (transition_id,),
+            ).fetchone()
+            if existing_transition is not None:
+                mapping = parse_canonical_object(bytes(existing_transition["snapshot"]))
+                existing = _recorded_calibration_snapshot_from_mapping(mapping)
+                if (
+                    existing_transition["expected_generation"] != expected_generation
+                    or existing_transition["report_revision"] != report.report_revision
+                    or existing.content_digest.hexdigest != existing_transition["snapshot_sha"]
+                    or bytes(existing_transition["snapshot"])
+                    != canonical_json_bytes(existing.as_mapping())
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration transition idempotency key conflicts"
+                    )
+                self._finish(connection, hook)
+                return existing
+            head = connection.execute(
+                "SELECT generation,snapshot_sha,snapshot FROM recorded_calibration_heads "
+                "WHERE slot_id=?",
+                (report.slot_id,),
+            ).fetchone()
+            generation = 0 if head is None else int(head["generation"])
+            if generation != expected_generation:
+                raise RegistryConflictError("recorded calibration generation is stale")
+            if head is not None:
+                head_mapping = parse_canonical_object(bytes(head["snapshot"]))
+                head_snapshot = _recorded_calibration_snapshot_from_mapping(head_mapping)
+                if head_snapshot.content_digest.hexdigest != head["snapshot_sha"] or bytes(
+                    head["snapshot"]
+                ) != canonical_json_bytes(head_snapshot.as_mapping()):
+                    raise RegistryIntegrityError("recorded calibration prior head is corrupt")
+            snapshot = RecordedCalibrationSnapshotV1(
+                slot_id=report.slot_id,
+                generation=generation + 1,
+                report_id=report.report_id,
+                report_revision=report.report_revision,
+                model_id=report.model_id,
+                model_revision=report.model_revision,
+                policy_revision=report.policy.policy_revision,
+                authority=report.policy.authority,
+                transition_id=transition_id,
+                updated_at_ms=now_ms,
+            )
+            snapshot_body = canonical_json_bytes(snapshot.as_mapping())
+            connection.execute(
+                "INSERT INTO recorded_calibration_transitions("
+                "transition_id,slot_id,expected_generation,report_revision,snapshot_sha,"
+                "snapshot,committed_at_ms) VALUES(?,?,?,?,?,?,?)",
+                (
+                    transition_id,
+                    report.slot_id,
+                    expected_generation,
+                    report.report_revision,
+                    snapshot.content_digest.hexdigest,
+                    snapshot_body,
+                    now_ms,
+                ),
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_heads(slot_id,generation,snapshot_sha,snapshot) "
+                "VALUES(?,?,?,?) ON CONFLICT(slot_id) DO UPDATE SET "
+                "generation=excluded.generation,snapshot_sha=excluded.snapshot_sha,"
+                "snapshot=excluded.snapshot",
+                (
+                    report.slot_id,
+                    snapshot.generation,
+                    snapshot.content_digest.hexdigest,
+                    snapshot_body,
+                ),
+            )
+            self._finish(connection, hook)
+            return snapshot
+        except BaseException:
+            self._rollback(connection)
+            raise
 
     def transition_count(self, slot_id: str) -> int:
         require_contract_id(slot_id, field="slot_id")

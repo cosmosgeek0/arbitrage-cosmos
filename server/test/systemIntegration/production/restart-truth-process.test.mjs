@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -76,6 +76,10 @@ async function runBoot(dataDir, sentinels) {
         HOST,
         PORT: String(port),
         DATA_DIR: dataDir,
+        DATA_DIR_LOGICAL_LEASE_ROOT: path.join(
+          realpathSync.native(path.dirname(dataDir)),
+          `${path.basename(dataDir)}-logical-lease-runtime`,
+        ),
         PROFILE_CACHE: path.join(dataDir, 'profile-cache.json'),
         ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
         LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
@@ -150,5 +154,9 @@ test('production performs a durable fail-closed restart-truth refresh on each cl
     assert.equal(existsSync(sentinels.private), false);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
+    rmSync(path.join(
+      realpathSync.native(path.dirname(dataDir)),
+      `${path.basename(dataDir)}-logical-lease-runtime`,
+    ), { recursive: true, force: true });
   }
 });

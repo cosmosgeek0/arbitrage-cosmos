@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -20,6 +22,7 @@ import test from 'node:test';
 
 import Database from 'better-sqlite3';
 
+import { Ledger } from '../../../dist/ledger.js';
 import { DataDirLease } from '../../../dist/systemIntegration/persistence/dataDirLease.js';
 
 const HOST = '127.0.0.1';
@@ -177,6 +180,10 @@ async function waitForServer(child, base, logs) {
 }
 
 function runtimeEnvironment(dataDir, port) {
+  const logicalLeaseRoot = path.join(
+    realpathSync.native(path.dirname(dataDir)),
+    `${path.basename(dataDir)}-logical-lease-runtime`,
+  );
   return {
     PATH: process.env.PATH,
     NODE_ENV: 'production',
@@ -184,6 +191,7 @@ function runtimeEnvironment(dataDir, port) {
     HOST,
     PORT: String(port),
     DATA_DIR: dataDir,
+    DATA_DIR_LOGICAL_LEASE_ROOT: logicalLeaseRoot,
     PROFILE_CACHE: path.join(dataDir, 'profile-cache.json'),
     ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
     LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
@@ -195,6 +203,19 @@ function runtimeEnvironment(dataDir, port) {
       ? {}
       : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
   };
+}
+
+function runtimeLogicalLeaseRoot(dataDir) {
+  return runtimeEnvironment(dataDir, 0).DATA_DIR_LOGICAL_LEASE_ROOT;
+}
+
+function logicalLeaseArtifactNames(logicalRoot) {
+  if (!existsSync(logicalRoot)) return [];
+  return readdirSync(logicalRoot, { withFileTypes: true }).flatMap((entry) => (
+    entry.isDirectory()
+      ? leaseArtifactNames(path.join(logicalRoot, entry.name))
+      : [entry.name]
+  )).sort();
 }
 
 function spawnRuntime(dataDir, port) {
@@ -213,8 +234,12 @@ function spawnRuntime(dataDir, port) {
   return { child, logs: () => output };
 }
 
-test('a second live process is rejected before it can share the canonical DATA_DIR', () => {
-  const dataDir = tempDataDir();
+test('different logical aliases to one physical DATA_DIR share the physical writer lease', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cosmos-data-dir-alias-dedup-'));
+  const dataDir = path.join(root, 'physical-data');
+  const dataDirAlias = path.join(root, 'logical-alias');
+  mkdirSync(dataDir, { mode: 0o700 });
+  symlinkSync(dataDir, dataDirAlias, 'dir');
   const first = new DataDirLease(dataDir);
   try {
     const leaseUrl = new URL(
@@ -232,7 +257,7 @@ test('a second live process is rejected before it can share the canonical DATA_D
         process.exitCode = 17;
       }
     `;
-    const second = spawnSync(process.execPath, ['--input-type=module', '--eval', source, dataDir], {
+    const second = spawnSync(process.execPath, ['--input-type=module', '--eval', source, dataDirAlias], {
       cwd: process.cwd(),
       env: process.env,
       encoding: 'utf8',
@@ -246,7 +271,7 @@ test('a second live process is rejected before it can share the canonical DATA_D
     first.release();
     assertNoLeaseDatabase(dataDir);
     assert.deepEqual(leaseArtifactNames(dataDir), []);
-    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -278,18 +303,17 @@ test('fresh bootstrap pins a parent-symlink DATA_DIR before lease, cache, and Le
     for (const url of ${JSON.stringify(cacheOwnerUrls)}) await import(url);
     const {
       DATA_DIR_AUTHORITY,
-      assertDataDirAuthorityHeld,
+      DATA_DIR_LEASE,
       resolveDataDirAuthority,
     } = await import(
       ${JSON.stringify(environmentUrl)}
     );
     const { DataDirLease } = await import(${JSON.stringify(leaseUrl)});
     const { Ledger } = await import(${JSON.stringify(ledgerUrl)});
-    const lease = new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
     try {
       unlinkSync(process.argv[1]);
       symlinkSync(process.argv[2], process.argv[1], 'dir');
-      assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
+      DATA_DIR_LEASE.assertHeld();
       let secondWriter = 'UNSAFE_ACQUIRED';
       try {
         const second = new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
@@ -297,7 +321,9 @@ test('fresh bootstrap pins a parent-symlink DATA_DIR before lease, cache, and Le
       } catch (error) {
         secondWriter = String(error?.code ?? error?.message ?? error);
       }
-      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir);
+      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir, {
+        beforeMutation: () => DATA_DIR_LEASE.assertHeld(),
+      });
       ledger.close();
       process.stdout.write('RESULT=' + JSON.stringify({
         authority: DATA_DIR_AUTHORITY,
@@ -305,7 +331,7 @@ test('fresh bootstrap pins a parent-symlink DATA_DIR before lease, cache, and Le
         secondWriter,
       }));
     } finally {
-      lease.release();
+      DATA_DIR_LEASE.release();
     }
   `;
   const requestedDataDir = path.join(parentAlias, 'data');
@@ -316,6 +342,7 @@ test('fresh bootstrap pins a parent-symlink DATA_DIR before lease, cache, and Le
     ICON_CACHE: path.join(requestedDataDir, 'icon-cache.json'),
     LIQ_CACHE: path.join(requestedDataDir, 'liquidations.json'),
     PROFILE_CACHE: path.join(requestedDataDir, 'profile-cache.json'),
+    DATA_DIR_LOGICAL_LEASE_ROOT: path.join(realpathSync.native(root), 'logical-runtime'),
   };
 
   try {
@@ -358,32 +385,32 @@ test('bootstrap identity replacement fails closed before Ledger or listener admi
   const retainedDir = path.join(root, 'retained-owner-directory');
   mkdirSync(dataDir, { recursive: true });
   const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
-  const leaseUrl = new URL(
-    '../../../dist/systemIntegration/persistence/dataDirLease.js',
-    import.meta.url,
-  ).href;
   const ledgerUrl = new URL('../../../dist/ledger.js', import.meta.url).href;
   const probe = `
-    import { mkdirSync, renameSync } from 'node:fs';
+    import { mkdirSync, renameSync, rmSync } from 'node:fs';
     import { createServer } from 'node:net';
-    const { DATA_DIR_AUTHORITY, assertDataDirAuthorityHeld } = await import(
+    const { DATA_DIR_AUTHORITY, DATA_DIR_LEASE } = await import(
       ${JSON.stringify(environmentUrl)}
     );
-    const { DataDirLease } = await import(${JSON.stringify(leaseUrl)});
     const { Ledger } = await import(${JSON.stringify(ledgerUrl)});
-    new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
     renameSync(DATA_DIR_AUTHORITY.dataDir, process.argv[1]);
     mkdirSync(DATA_DIR_AUTHORITY.dataDir, { recursive: true });
+    let result = 'UNSAFE_LEDGER_OR_LISTENER_ADMITTED';
     try {
-      assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
-      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir);
+      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir, {
+        beforeMutation: () => DATA_DIR_LEASE.assertHeld(),
+      });
       const listener = createServer();
       listener.listen(0, '127.0.0.1');
       ledger.close();
-      process.stdout.write('UNSAFE_LEDGER_OR_LISTENER_ADMITTED');
     } catch (error) {
-      process.stdout.write(String(error?.code ?? error?.message ?? error));
+      result = String(error?.code ?? error?.message ?? error);
+    } finally {
+      rmSync(DATA_DIR_AUTHORITY.dataDir, { recursive: true, force: true });
+      renameSync(process.argv[1], DATA_DIR_AUTHORITY.dataDir);
+      DATA_DIR_LEASE.release();
     }
+    process.stdout.write(result);
   `;
 
   try {
@@ -392,7 +419,12 @@ test('bootstrap identity replacement fails closed before Ledger or listener admi
       ['--input-type=module', '--eval', probe, retainedDir],
       {
         cwd: process.cwd(),
-        env: { ...process.env, SKIP_DOTENV: '1', DATA_DIR: dataDir },
+        env: {
+          ...process.env,
+          SKIP_DOTENV: '1',
+          DATA_DIR: dataDir,
+          DATA_DIR_LOGICAL_LEASE_ROOT: path.join(realpathSync.native(root), 'logical-runtime'),
+        },
         encoding: 'utf8',
         timeout: 10_000,
       },
@@ -408,18 +440,298 @@ test('bootstrap identity replacement fails closed before Ledger or listener admi
   }
 });
 
+test('Ledger pre-mutation guard aborts before directory or SQLite creation', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cosmos-ledger-guard-'));
+  const dataDir = path.join(root, 'not-created');
+  let guardCalls = 0;
+  try {
+    assert.throws(
+      () => new Ledger(dataDir, {
+        beforeMutation: () => {
+          guardCalls += 1;
+          throw Object.assign(new Error('DATA_DIR_LEASE_LOST'), { code: 'DATA_DIR_LEASE_LOST' });
+        },
+      }),
+      (error) => error?.code === 'DATA_DIR_LEASE_LOST',
+    );
+    assert.equal(guardCalls, 1);
+    assert.equal(existsSync(dataDir), false);
+    assert.equal(existsSync(path.join(dataDir, 'cosmos.db')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('cache reservations reject ledger, lease, news, logical-root, and pairwise collisions before owners import', () => {
+  const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
+  const cases = [
+    {
+      name: 'literal LIQ_CACHE=cosmos.db',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: () => ({ LIQ_CACHE: 'cosmos.db' }),
+    },
+    ...['cosmos.db-wal', 'cosmos.db-shm'].map((filename) => ({
+      name: filename,
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({ LIQ_CACHE: path.join(dataDir, filename) }),
+    })),
+    {
+      name: 'DATA_DIR itself',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({ ICON_CACHE: dataDir }),
+    },
+    {
+      name: 'physical lease root',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({ PROFILE_CACHE: path.join(dataDir, LEASE_ROOT) }),
+    },
+    {
+      name: 'candidate namespace',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({
+        LIQ_CACHE: path.join(dataDir, `${LEASE_WITNESS_PREFIX}${'a'.repeat(64)}`),
+      }),
+    },
+    {
+      name: 'successor namespace',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({
+        PROFILE_CACHE: path.join(dataDir, `${LEASE_SUCCESSOR_PREFIX}${'b'.repeat(64)}`),
+      }),
+    },
+    {
+      name: 'news archive owner',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ dataDir }) => ({ ICON_CACHE: path.join(dataDir, 'news-archive.json') }),
+    },
+    {
+      name: 'logical lease namespace',
+      expected: 'DATA_DIR_CACHE_PATH_RESERVED',
+      configure: ({ logicalRoot }) => ({ PROFILE_CACHE: logicalRoot }),
+    },
+    {
+      name: 'pairwise mutable cache collision',
+      expected: 'DATA_DIR_CACHE_PATH_COLLISION',
+      configure: ({ root }) => ({
+        ICON_CACHE: path.join(root, 'shared-cache.json'),
+        LIQ_CACHE: path.join(root, 'shared-cache.json'),
+      }),
+    },
+  ];
+  const probe = `
+    try {
+      await import(${JSON.stringify(environmentUrl)});
+      process.stdout.write('UNSAFE_AUTHORITY_ADMITTED');
+    } catch (error) {
+      process.stdout.write(String(error?.code ?? error?.message ?? error));
+    }
+  `;
+
+  for (const entry of cases) {
+    const root = mkdtempSync(path.join(tmpdir(), 'cosmos-cache-reservation-'));
+    const physicalRoot = realpathSync.native(root);
+    const dataDir = path.join(physicalRoot, 'data');
+    const logicalRoot = path.join(physicalRoot, 'logical-runtime');
+    const configured = entry.configure({ root: physicalRoot, dataDir, logicalRoot });
+    try {
+      const child = spawnSync(process.execPath, ['--input-type=module', '--eval', probe], {
+        cwd: physicalRoot,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          SKIP_DOTENV: '1',
+          DATA_DIR: dataDir,
+          DATA_DIR_LOGICAL_LEASE_ROOT: logicalRoot,
+          ...configured,
+        },
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      assert.equal(child.status, 0, `${entry.name}: ${child.stderr || child.stdout}`);
+      assert.equal(child.stdout, entry.expected, entry.name);
+      assert.equal(existsSync(path.join(dataDir, 'cosmos.db')), false, entry.name);
+      if (existsSync(dataDir)) assert.deepEqual(leaseArtifactNames(dataDir), [], entry.name);
+      assert.deepEqual(logicalLeaseArtifactNames(logicalRoot), [], entry.name);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('nested configured cache parent is physically pinned and replacement fails before write', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cosmos-cache-parent-pin-'));
+  const physicalRoot = realpathSync.native(root);
+  const dataDir = path.join(physicalRoot, 'data');
+  const externalA = path.join(physicalRoot, 'external-a');
+  const externalB = path.join(physicalRoot, 'external-b');
+  const retainedA = path.join(physicalRoot, 'retained-a');
+  const nestedAlias = path.join(dataDir, 'nested-cache-parent');
+  mkdirSync(dataDir, { recursive: true });
+  mkdirSync(externalA, { recursive: true });
+  mkdirSync(externalB, { recursive: true });
+  symlinkSync(externalA, nestedAlias, 'dir');
+  const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
+  const probe = `
+    import { mkdirSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+    const {
+      DATA_DIR_AUTHORITY,
+      DATA_DIR_LEASE,
+      assertDataDirCachePathHeld,
+    } = await import(${JSON.stringify(environmentUrl)});
+    unlinkSync(process.argv[1]);
+    symlinkSync(process.argv[2], process.argv[1], 'dir');
+    assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DATA_DIR_AUTHORITY.profileCache);
+    writeFileSync(DATA_DIR_AUTHORITY.profileCache, 'PINNED_A', { flag: 'wx', mode: 0o600 });
+    renameSync(process.argv[3], process.argv[4]);
+    mkdirSync(process.argv[3], { mode: 0o700 });
+    let replacement = 'UNSAFE_REPLACEMENT_ACCEPTED';
+    try {
+      assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DATA_DIR_AUTHORITY.profileCache);
+      writeFileSync(DATA_DIR_AUTHORITY.profileCache, 'UNSAFE');
+    } catch (error) {
+      replacement = String(error?.code ?? error?.message ?? error);
+    }
+    rmSync(process.argv[3], { recursive: true, force: true });
+    renameSync(process.argv[4], process.argv[3]);
+    DATA_DIR_LEASE.release();
+    process.stdout.write(JSON.stringify({
+      profileCache: DATA_DIR_AUTHORITY.profileCache,
+      replacement,
+    }));
+  `;
+  try {
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', probe, nestedAlias, externalB, externalA, retainedA],
+      {
+        cwd: physicalRoot,
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          SKIP_DOTENV: '1',
+          DATA_DIR: dataDir,
+          DATA_DIR_LOGICAL_LEASE_ROOT: path.join(physicalRoot, 'logical-runtime'),
+          PROFILE_CACHE: path.join(nestedAlias, 'profiles.json'),
+        },
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    );
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    assert.deepEqual(JSON.parse(child.stdout), {
+      profileCache: path.join(externalA, 'profiles.json'),
+      replacement: 'DATA_DIR_CACHE_AUTHORITY_CHANGED',
+    });
+    assert.equal(readFileSync(path.join(externalA, 'profiles.json'), 'utf8'), 'PINNED_A');
+    assert.equal(existsSync(path.join(externalB, 'profiles.json')), false);
+    assert.deepEqual(leaseArtifactNames(dataDir), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('production logical lease root is explicit, owner-only, nonsymlinked, and precedes DATA_DIR creation', () => {
+  const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
+  const probe = `
+    try {
+      await import(${JSON.stringify(environmentUrl)});
+      process.stdout.write('UNSAFE_AUTHORITY_ADMITTED');
+    } catch (error) {
+      process.stdout.write(String(error?.code ?? error?.message ?? error));
+    }
+  `;
+  const cases = [
+    { name: 'absent env', expected: 'DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED' },
+    {
+      name: 'relative env',
+      expected: 'DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID',
+      root: 'relative-runtime',
+    },
+    { name: 'wrong mode', expected: 'DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID', mode: 0o755 },
+    { name: 'symlink root', expected: 'DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID', symlink: true },
+  ];
+  for (const entry of cases) {
+    const root = mkdtempSync(path.join(tmpdir(), 'cosmos-production-lease-root-'));
+    const physicalRoot = realpathSync.native(root);
+    const dataDir = path.join(physicalRoot, 'must-not-exist');
+    const configuredRoot = path.join(physicalRoot, 'runtime');
+    try {
+      if (entry.mode !== undefined) {
+        mkdirSync(configuredRoot, { mode: entry.mode });
+        chmodSync(configuredRoot, entry.mode);
+      }
+      if (entry.symlink) symlinkSync(physicalRoot, configuredRoot, 'dir');
+      const env = {
+        ...process.env,
+        NODE_ENV: 'production',
+        SKIP_DOTENV: '1',
+        DATA_DIR: dataDir,
+        ...(entry.name === 'absent env' ? {} : {
+          DATA_DIR_LOGICAL_LEASE_ROOT: entry.root ?? configuredRoot,
+        }),
+      };
+      const child = spawnSync(process.execPath, ['--input-type=module', '--eval', probe], {
+        cwd: physicalRoot,
+        env,
+        encoding: 'utf8',
+        timeout: 10_000,
+      });
+      assert.equal(child.status, 0, `${entry.name}: ${child.stderr || child.stdout}`);
+      assert.equal(child.stdout, entry.expected, entry.name);
+      assert.equal(existsSync(dataDir), false, entry.name);
+      assert.equal(`${child.stdout}${child.stderr}`.includes(dataDir), false, entry.name);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('production systemd fixture shares an external runtime root despite PrivateTmp', () => {
+  const unit = readFileSync(
+    new URL('../../../../ops/live/systemd/cosmos-app.service', import.meta.url),
+    'utf8',
+  );
+  assert.match(unit, /^PrivateTmp=yes$/mu);
+  assert.match(unit, /^RuntimeDirectory=cosmos-app$/mu);
+  assert.match(unit, /^RuntimeDirectoryMode=0700$/mu);
+  assert.match(unit, /^RuntimeDirectoryPreserve=restart$/mu);
+  assert.match(
+    unit,
+    /^Environment=DATA_DIR_LOGICAL_LEASE_ROOT=\/run\/cosmos-app\/data-dir-leases$/mu,
+  );
+  assert.doesNotMatch(unit, /DATA_DIR_LOGICAL_LEASE_ROOT=.*(?:\/tmp|%t\/private)/u);
+});
+
 test(
-  'a second complete application exits before advancing boot generation or opening a listener',
+  'same logical DATA_DIR blocks a fresh application after alias retarget before physical mutation',
   { timeout: 30_000 },
   async () => {
-    const dataDir = tempDataDir();
+    const root = mkdtempSync(path.join(tmpdir(), 'cosmos-logical-retarget-'));
+    const dataDirA = path.join(root, 'physical-a');
+    const dataDirB = path.join(root, 'physical-b');
+    const dataDir = path.join(root, 'configured-data');
+    mkdirSync(dataDirA, { recursive: true });
+    mkdirSync(dataDirB, { recursive: true });
+    symlinkSync(dataDirA, dataDir, 'dir');
+    const logicalRoot = runtimeLogicalLeaseRoot(dataDir);
     const firstPort = await availablePort();
     const secondPort = await availablePort();
     const first = spawnRuntime(dataDir, firstPort);
     let second = null;
     try {
       await waitForServer(first.child, `http://${HOST}:${firstPort}`, first.logs);
-      const before = new Database(path.join(dataDir, 'cosmos.db'), { readonly: true });
+      const logicalLeaves = readdirSync(logicalRoot);
+      assert.equal(logicalLeaves.length, 1);
+      assert.match(logicalLeaves[0], /^[0-9a-f]{64}$/u);
+      const logicalRootStats = lstatSync(logicalRoot);
+      const logicalLeafStats = lstatSync(path.join(logicalRoot, logicalLeaves[0]));
+      assert.equal(logicalRootStats.isSymbolicLink(), false);
+      assert.equal(logicalLeafStats.isSymbolicLink(), false);
+      assert.equal(logicalRootStats.mode & 0o777, 0o700);
+      assert.equal(logicalLeafStats.mode & 0o777, 0o700);
+      assert.equal(logicalRootStats.uid, process.getuid());
+      assert.equal(logicalLeafStats.uid, process.getuid());
+      const before = new Database(path.join(dataDirA, 'cosmos.db'), { readonly: true });
       try {
         assert.equal(
           before.prepare('SELECT COUNT(*) AS count FROM product_boot_release_revisions').get().count,
@@ -429,6 +741,8 @@ test(
         before.close();
       }
 
+      unlinkSync(dataDir);
+      symlinkSync(dataDirB, dataDir, 'dir');
       second = spawnRuntime(dataDir, secondPort);
       const rejected = await waitForExit(second.child);
       assert.equal(rejected.code, 1, second.logs());
@@ -442,7 +756,7 @@ test(
         signal: AbortSignal.timeout(2_000),
       });
       assert.equal(ownerStillLive.status, 200);
-      const after = new Database(path.join(dataDir, 'cosmos.db'), { readonly: true });
+      const after = new Database(path.join(dataDirA, 'cosmos.db'), { readonly: true });
       try {
         assert.equal(
           after.prepare('SELECT COUNT(*) AS count FROM product_boot_release_revisions').get().count,
@@ -455,10 +769,14 @@ test(
       first.child.kill('SIGTERM');
       const ownerExit = await waitForExit(first.child, 15_000);
       assert.equal(ownerExit.code, 0, first.logs());
-      assert.equal(existsSync(path.join(dataDir, 'network-egress.log')), false);
-      assert.equal(existsSync(path.join(dataDir, 'private-egress.log')), false);
-      assertNoLeaseDatabase(dataDir);
-      assert.deepEqual(leaseArtifactNames(dataDir), []);
+      assert.equal(existsSync(path.join(dataDirB, 'cosmos.db')), false);
+      assert.equal(existsSync(path.join(dataDirB, 'network-egress.log')), false);
+      assert.equal(existsSync(path.join(dataDirB, 'private-egress.log')), false);
+      assertNoLeaseDatabase(dataDirA);
+      assertNoLeaseDatabase(dataDirB);
+      assert.deepEqual(leaseArtifactNames(dataDirA), []);
+      assert.deepEqual(leaseArtifactNames(dataDirB), []);
+      assert.deepEqual(logicalLeaseArtifactNames(logicalRoot), []);
     } finally {
       if (second !== null && !finished(second.child)) {
         second.child.kill('SIGKILL');
@@ -468,7 +786,7 @@ test(
         first.child.kill('SIGKILL');
         await waitForExit(first.child, 3_000).catch(() => undefined);
       }
-      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
     }
   },
 );
@@ -600,6 +918,7 @@ test(
         await waitForExit(application.child, 3_000).catch(() => undefined);
       }
       rmSync(dataDir, { recursive: true, force: true });
+      rmSync(runtimeLogicalLeaseRoot(dataDir), { recursive: true, force: true });
     }
   },
 );
@@ -727,25 +1046,52 @@ test('witness and successor-chain bounds fail closed without deleting ambiguous 
   }
 });
 
-test('application bootstrap acquires the lease before Ledger and releases it only after durable finalization', () => {
-  const source = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
-  const leaseAcquisition = source.indexOf('const dataDirLease = new DataDirLease');
-  const authorityRevalidation = source.indexOf(
-    'assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY)',
+test('application bootstrap orders logical and physical leases before every durable/runtime admission', () => {
+  const indexSource = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
+  const environmentSource = readFileSync(
+    new URL('../../../src/bootstrap/environment.ts', import.meta.url),
+    'utf8',
   );
-  const ledgerOpen = source.indexOf('return new Ledger(canonicalDataDir)');
-  const bootMutation = source.indexOf('const bootReleaseStart = bootReleasePersistence.start()');
-  const listenerAdmission = source.indexOf('server.listen(PORT, HOST');
-  const durableFinalization = source.indexOf(
+  const ledgerSource = readFileSync(new URL('../../../src/ledger.ts', import.meta.url), 'utf8');
+  const logicalLeaseAcquisition = environmentSource.indexOf('const logicalBinding = acquireLogicalLease');
+  const physicalResolution = environmentSource.indexOf('resolveDataDirAuthorityInternal(', logicalLeaseAcquisition);
+  const physicalLeaseAcquisition = environmentSource.indexOf(
+    'const physicalLease = new DataDirLease',
+    physicalResolution,
+  );
+  const leaseBinding = indexSource.indexOf('const dataDirLease = DATA_DIR_LEASE');
+  const firstLeaseAssertion = indexSource.indexOf('dataDirLease.assertHeld()', leaseBinding);
+  const ledgerOpen = indexSource.indexOf('return new Ledger(canonicalDataDir');
+  const ledgerGuard = indexSource.indexOf('beforeMutation: () => dataDirLease.assertHeld()', ledgerOpen);
+  const bootMutation = indexSource.indexOf('const bootReleaseStart = bootReleasePersistence.start()');
+  const runtimeStart = indexSource.indexOf('return systemIntegration.start()');
+  const runtimeLeaseAssertion = indexSource.lastIndexOf('dataDirLease.assertHeld()', runtimeStart);
+  const listenerAdmission = indexSource.indexOf('server.listen(PORT, HOST');
+  const listenerLeaseAssertion = indexSource.lastIndexOf('dataDirLease.assertHeld()', listenerAdmission);
+  const durableFinalization = indexSource.indexOf(
     'const finalization = finalizeSystemBootReleaseCleanShutdown',
   );
-  const leaseRelease = source.indexOf('dataDirLease.release()', durableFinalization);
-  assert.ok(leaseAcquisition > 0);
-  assert.ok(authorityRevalidation > leaseAcquisition);
-  assert.ok(ledgerOpen > authorityRevalidation);
+  const leaseRelease = indexSource.indexOf('dataDirLease.release()', durableFinalization);
+  const ledgerCallback = ledgerSource.indexOf('options.beforeMutation?.()');
+  const ledgerMkdir = ledgerSource.indexOf('mkdirSync(dataDir', ledgerCallback);
+  const ledgerDatabase = ledgerSource.indexOf('new Database(databasePath)', ledgerCallback);
+  assert.ok(logicalLeaseAcquisition > 0);
+  assert.ok(physicalResolution > logicalLeaseAcquisition);
+  assert.ok(physicalLeaseAcquisition > physicalResolution);
+  assert.ok(leaseBinding > 0);
+  assert.ok(firstLeaseAssertion > leaseBinding);
+  assert.ok(ledgerOpen > firstLeaseAssertion);
+  assert.ok(ledgerGuard > ledgerOpen);
   assert.ok(bootMutation > ledgerOpen);
+  assert.ok(runtimeLeaseAssertion > bootMutation);
+  assert.ok(runtimeStart > runtimeLeaseAssertion);
+  assert.ok(listenerLeaseAssertion > runtimeStart);
+  assert.ok(listenerAdmission > listenerLeaseAssertion);
   assert.ok(listenerAdmission > bootMutation);
   assert.ok(durableFinalization > listenerAdmission);
   assert.ok(leaseRelease > durableFinalization);
-  assert.match(source, /onLost:\s*\(\)\s*=>\s*\{[\s\S]*?process\.exit\(1\)/u);
+  assert.ok(ledgerCallback > 0);
+  assert.ok(ledgerMkdir > ledgerCallback);
+  assert.ok(ledgerDatabase > ledgerCallback);
+  assert.match(environmentSource, /const onLeaseLost:[\s\S]*?process\.exit\(1\)/u);
 });

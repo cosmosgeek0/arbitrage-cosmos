@@ -666,6 +666,10 @@ export function validateOwnerArtifacts(artifacts) {
   }
   requireText(issues, artifacts.appService, 'User=cosmos', 'APP_NON_ROOT_USER_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'EnvironmentFile=/etc/cosmos/cosmos-app.env', 'APP_ENV_FILE_FAIL_CLOSED_MISSING', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectory=cosmos-app', 'APP_LEASE_RUNTIME_MISSING', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectoryMode=0700', 'APP_LEASE_RUNTIME_MODE_INVALID', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectoryPreserve=restart', 'APP_LEASE_RUNTIME_RESTART_PRESERVE_MISSING', 'appService');
+  requireText(issues, artifacts.appService, 'Environment=DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases', 'APP_LOGICAL_LEASE_ROOT_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'Restart=on-failure', 'APP_RESTART_POLICY_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'StartLimitIntervalSec=', 'APP_RESTART_LIMIT_MISSING', 'appService');
   requireText(issues, artifacts.tunnelService, '--no-autoupdate', 'TUNNEL_AUTOUPDATE_NOT_DISABLED', 'tunnelService');

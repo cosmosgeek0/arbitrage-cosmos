@@ -1,6 +1,6 @@
 import {
   DATA_DIR_AUTHORITY,
-  assertDataDirAuthorityHeld,
+  DATA_DIR_LEASE,
 } from './bootstrap/environment.js';
 import express from 'express';
 import http from 'node:http';
@@ -97,7 +97,6 @@ import { createProductRuntimeSystemControlCommandOwner } from './productIntegrat
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
-import { DataDirLease } from './systemIntegration/persistence/dataDirLease.js';
 
 // Source-catalog ownership is not operational egress authority. A normal
 // verifier-style boot stays local unless an effectful public-source campaign
@@ -120,20 +119,16 @@ const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
 const sourceLogoFailures = new Map<string, number>();
 
 const { dataDir: canonicalDataDir } = DATA_DIR_AUTHORITY;
-// This process lease is acquired before the Ledger, boot-generation mutation,
-// listeners, timers, transports, or any owner runtime can start. Lease loss is
-// a fatal fail-closed condition: continuing with uncertain writer ownership is
-// less safe than an immediate nonzero process exit.
-const dataDirLease = new DataDirLease(canonicalDataDir, Object.freeze({
-  onLost: () => {
-    console.error('canonical DATA_DIR writer lease lost; exiting fail-closed');
-    process.exit(1);
-  },
-}));
+// Environment bootstrap acquired both the normalized logical-path lease and
+// the physical-directory lease before DATA_DIR was created or resolved. Both
+// remain held through final durable shutdown.
+const dataDirLease = DATA_DIR_LEASE;
 const ledger = (() => {
   try {
-    assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
-    return new Ledger(canonicalDataDir);
+    dataDirLease.assertHeld();
+    return new Ledger(canonicalDataDir, Object.freeze({
+      beforeMutation: () => dataDirLease.assertHeld(),
+    }));
   } catch (error) {
     try { dataDirLease.release(); } catch { /* Preserve the Ledger startup failure. */ }
     throw error;
@@ -197,6 +192,7 @@ const bootReleasePersistence = createSystemBootReleasePersistenceAdapter({
     modelRevision: process.env.I00_MODEL_REVISION,
   }),
 });
+dataDirLease.assertHeld();
 const bootReleaseStart = bootReleasePersistence.start();
 if (!bootReleaseStart.ok) {
   console.error('boot/release persistence started fail-closed:', bootReleaseStart.code);
@@ -304,7 +300,10 @@ canonicalOpsReadback = createCanonicalSupervisorOpsReadback({
   readBlockingIdentityReferences: (limit) => ledger.readProductBlockingIdentityReferences(limit),
   deploymentFreeze: deploymentFreezeReadback,
 });
-const systemIntegrationStart = bootReleaseStart.ok ? systemIntegration.start() : null;
+const systemIntegrationStart = bootReleaseStart.ok ? (() => {
+  dataDirLease.assertHeld();
+  return systemIntegration.start();
+})() : null;
 if (systemIntegrationStart !== null && !systemIntegrationStart.ok) {
   console.error(
     'system integration started fail-closed:',
@@ -3625,6 +3624,7 @@ function startServerTimers(): void {
 }
 
 if (canonicalApplicationStartOk) {
+  dataDirLease.assertHeld();
   server.listen(PORT, HOST, () => {
     startServerTimers();
     console.log(`cosmos control room listening on http://${HOST}:${PORT}`);

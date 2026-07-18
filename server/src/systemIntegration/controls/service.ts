@@ -49,7 +49,9 @@ function digest(value: unknown): string {
 }
 
 function requiresRuntimePublication(mutation: Readonly<SystemControlMutation>): boolean {
-  return mutation.command === 'RESTART_COMPONENT' || mutation.command === 'SET_COMPONENT_STATE';
+  return mutation.command === 'RESTART_COMPONENT'
+    || mutation.command === 'SET_COMPONENT_STATE'
+    || mutation.command === 'CLEAR_DEPLOYMENT_FREEZE';
 }
 
 export function controlRequestDigest(request: Readonly<SystemControlMutationRequest>): string {

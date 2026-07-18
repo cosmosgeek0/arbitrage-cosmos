@@ -800,6 +800,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       }
       return 'UNKNOWN';
     }
+    if (request.mutation.command === 'CLEAR_DEPLOYMENT_FREEZE') {
+      return this.options.deploymentFreezeClear?.readEffect() ?? 'UNKNOWN';
+    }
     const read = this.options.lifecycleTruth?.readControlRuntimeEffect;
     if (typeof read !== 'function') return 'UNKNOWN';
     try {
@@ -854,6 +857,16 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
+    if (mutation.command === 'CLEAR_DEPLOYMENT_FREEZE') {
+      const owner = this.options.deploymentFreezeClear;
+      if (owner === undefined) {
+        return this.decision(false, 'DEPLOYMENT_FREEZE_CLEAR_OWNER_NOT_WIRED', 'The canonical freeze clear owner is unavailable.', false);
+      }
+      const decision = await owner.canClear(mutation.expectedObservedAtUtc, this.options.clock.nowMs());
+      return decision.ok
+        ? this.decision(true, 'FREEZE_CLEAR_ACCEPTED', '', true)
+        : this.decision(false, decision.code, 'Canonical healthy recovery readback did not authorize freeze clearing.', false);
+    }
     if (mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION') {
       const state = this.persistence.currentState();
       if (!state.ok) return this.decision(false, state.code, 'Durable owner references are unavailable.', false);
@@ -894,7 +907,9 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   ): Promise<void> {
     if (!receipt.applied) return;
     const mutation = request.mutation;
-    const runtimeEffectId = mutation.command === 'RESTART_COMPONENT' || mutation.command === 'SET_COMPONENT_STATE'
+    const runtimeEffectId = mutation.command === 'RESTART_COMPONENT'
+      || mutation.command === 'SET_COMPONENT_STATE'
+      || mutation.command === 'CLEAR_DEPLOYMENT_FREEZE'
       ? this.runtimePublicationEffectId(request, receipt)
       : null;
     const restartGenerationBefore = mutation.command === 'RESTART_COMPONENT'
@@ -910,6 +925,16 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         else command = this.composition.read().supervisor.phase === 'PAUSED'
           ? this.composition.issue('RESUME')
           : this.composition.start();
+      } else if (mutation.command === 'CLEAR_DEPLOYMENT_FREEZE') {
+        const result = await this.options.deploymentFreezeClear?.clear(Object.freeze({
+          idempotencyKey: request.idempotencyKey,
+          expectedObservedAtUtc: mutation.expectedObservedAtUtc,
+          reason: request.reason,
+          requestedAtMs: request.requestedAtMs,
+          actor: Object.freeze({ ..._actor }),
+        }));
+        if (result?.ok !== true) throw new Error(result?.code ?? 'DEPLOYMENT_FREEZE_CLEAR_OWNER_NOT_WIRED');
+        if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'APPLIED');
       }
     } catch {
       if (runtimeEffectId !== null) this.runtimePublicationEffects.set(runtimeEffectId, 'NOT_APPLIED');

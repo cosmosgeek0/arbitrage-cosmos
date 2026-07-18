@@ -2,171 +2,50 @@
 
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-
-const REQUIRED_C2_PARENT = 'dea2d2a5c2b5e83d3aea75b0e368f0a478596561';
-const REJECTED_PREDECESSOR_FRAGMENT = '41752d6';
-const REJECTED_C8_CANDIDATE = '6ab02a82931ae8234456c0710cca41b94fdc12c9';
-const REJECTED_C8_TREE = '4dbb427b357b87b9c58bfe97d06a584bd5c973ef';
-const REJECTED_CANDIDATE_SHAS = Object.freeze([
-  '41752d6a87dc1cb1b933bb4460c9cabfc15ff694',
-  '78f708d6cdb9d1618c53d3f08f71097b4320a63b',
-  '4c9143a0bcc331aa170e9e26b741240b39df8b9e',
-  '959a5f9900e25f53414710bbfb3464c3ccb67a5d',
-  '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
-  'a283eb859ec1142aadecbd64e0b84959535f6216',
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  C9_CORRECTION_GRANTS,
+  D_LAUNCH_65_AUTHORITY as D_LAUNCH_65,
+  EXACT_C9_CANDIDATE,
+  EXACT_C9_TREE,
+  EXACT_EVIDENCE_DESCENDANT_FILES,
+  EXACT_EVIDENCE_OUTPUTS,
+  EXACT_EVIDENCE_PROOF_REFERENCES,
+  EXACT_EVIDENCE_TOOLING_FILES,
+  FORBIDDEN_HUMAN_GATE_TOKENS,
+  FRONTIER_REFERENCE_COMMITS,
+  HISTORICAL_PAYLOAD_COMMIT_SPECS,
+  HUMAN_EVIDENCE_ARTIFACT_SPECS,
+  LOCK_INVENTORY_MATRIX_REQUIREMENT_ID,
   REJECTED_C8_CANDIDATE,
-]);
-const REJECTED_SELECTION_HISTORY = Object.freeze([
-  Object.freeze({
-    label: 'C3',
-    sha: '78f708d6cdb9d1618c53d3f08f71097b4320a63b',
-    tree: '9e54ae92bd3cc4d30d3114590d7da6d81e019f16',
-    disposition: 'REJECTED_FINAL_VERIFICATION',
-    reason: 'SIX_FINAL_VERIFIER_FINDINGS_AND_INELIGIBLE_ANCESTRY',
-  }),
-  Object.freeze({
-    label: 'C4',
-    sha: '4c9143a0bcc331aa170e9e26b741240b39df8b9e',
-    tree: '164c5e812f609364ce6cd3fa37fb91530a226db2',
-    disposition: 'REJECTED_REPORT_PARITY',
-    reason: 'CANONICAL_AND_SINGLE_BRANCH_REPORT_PARITY_42_OF_44_STALE_MACHINE_REPORT',
-  }),
-  Object.freeze({
-    label: 'C5',
-    sha: '959a5f9900e25f53414710bbfb3464c3ccb67a5d',
-    tree: '28d3d9922cc1201333775a458919afe9158e6dc2',
-    disposition: 'REJECTED_FINAL_VERIFICATION',
-    reason: 'VFINAL5_UNBOUND_GENERATOR_INCOMPLETE_INPUT_MAP_STALE_CENSUS_LEDGER_WATCHMAN_FALSE_GREEN',
-  }),
-  Object.freeze({
-    label: 'C6',
-    sha: '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
-    tree: '2dd6399ff0aa2fb21c3b4632815333cf015c053a',
-    disposition: 'REJECTED_CANONICAL_SECURITY_GATE',
-    reason: 'CAMPAIGN_CONTRACT_TEST_USED_FORBIDDEN_CHILD_PROCESS_AND_ENVIRONMENT_ACCESS',
-  }),
-  Object.freeze({
-    label: 'C7',
-    sha: 'a283eb859ec1142aadecbd64e0b84959535f6216',
-    tree: 'ffe2be1f1c4504fbb17228d2a905fe8b763af5e6',
-    disposition: 'REJECTED_EXACT_EVIDENCE_INTEGRITY',
-    reason: 'STALE_PAYLOAD_INVENTORY_CHECKSUM_AND_FALSE_PROVENANCE_BLOB_COUNT',
-  }),
-  Object.freeze({
-    label: 'C8',
-    sha: REJECTED_C8_CANDIDATE,
-    tree: REJECTED_C8_TREE,
-    disposition: 'REJECTED_EXACT_CENSUS_NON_IDEMPOTENT',
-    reason: 'POST_EVIDENCE_GENERATOR_PASS_REWROTE_CUSTODY_HEAD_DERIVED_CENSUS_FIELDS',
-  }),
-]);
+  REJECTED_C8_TREE,
+  REJECTED_CANDIDATE_SHAS,
+  REJECTED_SELECTION_HISTORY,
+  REQUIRED_C2_PARENT,
+  SAME_TREE_LANDING_COMMIT,
+  SEALED_C9_SOURCE_PATHS,
+  SEALED_C9_EVIDENCE_COMMIT,
+  SEALED_C9_EVIDENCE_PARENTS,
+  SEALED_C9_EVIDENCE_TREE,
+  SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+} from './campaign-input-registry.mjs';
+import { renderCanonicalHumanArtifact } from './human-evidence-renderer.mjs';
+
+const REJECTED_PREDECESSOR_FRAGMENT = '41752d6';
 const ABSENT_CANDIDATE_PATH_PREFIXES = Object.freeze([
   'ops/aiOps/sentinel/',
   'server/src/aiOps/verifier/',
   'frontier/',
 ]);
-const FRONTIER_REFERENCE_COMMITS = Object.freeze([
-  Object.freeze({
-    sha: 'f0168cb37bd04d21bc90591ab2256770de3b75bc',
-    role: 'ACCEPTED_PRE_FRONTIER_BASE_WITH_ZERO_FRONTIER_PATHS',
-    expected_ancestor_of_candidate: true,
-  }),
-  Object.freeze({
-    sha: '887221418345ad54d7b98881b359fab85a6188e6',
-    role: 'PARKED_FRONTIER_COORDINATOR_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: 'e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5',
-    role: 'PARKED_FRONTIER_F0_DOCK_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: 'e435c1f0c6850b2c53501d3410dd5ce92b64b286',
-    role: 'PARKED_FRONTIER_F1_VENUE_MESH_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '56a08f4efb3f1b82205c4265c1dd18bbd1a70209',
-    role: 'PARKED_FRONTIER_F2_PORTFOLIO_LAB_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '3c9c794e88513bee340f336c5fc4d2dd8eebf47e',
-    role: 'PARKED_FRONTIER_F3_STRATEGY_ARENA_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '7a658b9850f743b944c35253568ae4a231a768b0',
-    role: 'PARKED_FRONTIER_F8_EDGE_METER_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '2c29de4e4d01e8087c00e79f180b731790943baa',
-    role: 'PARKED_FRONTIER_F13_DECISION_LAB_BLOCKED_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-]);
 const CAMPAIGN_ROOT = 'verification/product-truth-20260716';
-const LOCK_INVENTORY_MATRIX_REQUIREMENT_ID = 'CAMP-09-PROVENANCE';
-const C9_CORRECTION_GRANTS = Object.freeze([
-  '.gitattributes',
-  'STATE.md',
-  'WORKTREE_LEDGER.md',
-  'integration/reports/i00-proof-evidence.json',
-  'server/src/productIntegration/runtime/projection.ts',
-  'server/src/productIntegration/runtime/types.ts',
-  'server/test/productIntegration/runtime/runtime.test.mjs',
-  'test/i00/commands/donor-equality.test.mjs',
-  'test/i00/donor-equality.mjs',
-  'test/i00/performance/campaign-evidence-contract.test.mjs',
-  'verification/product-truth-20260716/',
-  'web/src/components/Header.tsx',
-  'web/src/features/productControlRoom/components/ControlRegistryPanel.tsx',
-  'web/src/features/productControlRoom/components/SurfaceBindingPanel.tsx',
-  'web/src/features/productControlRoom/fixtureBinding.ts',
-  'web/src/features/productControlRoom/styles/productControlRoom.css',
-  'web/src/lib/canonicalCockpitTruth.ts',
-  'web/src/lib/operatorControlPosture.ts',
-  'web/src/lib/productIntegration/model.ts',
-  'web/src/pages/Dashboard.tsx',
-  'web/src/pages/NotificationsPage.tsx',
-  'web/src/pages/SystemHealth.tsx',
-  'web/src/styles.css',
-  'web/test/productControlRoom/canonical-presentation.test.mjs',
-  'web/test/productControlRoom/contracts.test.mjs',
-]);
-const EXACT_EVIDENCE_PATHS = Object.freeze([
-  'AI_OPS_C2_DISPOSITION.json',
-  'C2_PROOF_BINDING.json',
-  'CAPABILITY_TRUTH_MATRIX.csv',
-  'COCKPIT_BINDING_MATRIX.csv',
-  'DIRECTIVE_COVERAGE_MATRIX.csv',
-  'EVIDENCE_SELECTION.json',
-  'INDEPENDENT_FINDINGS.json',
-  'INPUTS.lock',
-  'LOCKED_INPUT_PAYLOADS.json',
-  'MANIFEST.json',
-  'MANIFEST.sha256',
-  'MERGE_PROVENANCE.json',
-  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
-  'STATE.md',
-  'WORKTREE_CENSUS.json',
-].map((name) => `${CAMPAIGN_ROOT}/${name}`));
-
-const D_LAUNCH_65 = Object.freeze({
-  commit: '9c8c9f98c7fbd491fb97fce70d723b6c8bed2a4d',
-  tree: '7a5fc0d56fec5e3bf5c345bcb7c476896f3509a7',
-  parent: 'f0c030d37b762198b1e34d6b689112a433efa4c8',
-  path: 'QL_DIRECTOR_STATE.md',
-  git_blob: 'e8fb856c19a14c4a5278e4c7c8f7e2cd51a85b12',
-  sha256: '9471fef43baf638d7cc8bd958c2e45b881405cc14178cdfb24c78ebec1ed6ffb',
-  byte_length: 73_589,
-  ruling_lines: '288-289',
-  archive_source_commit: '0e4b364849075a454d7dd624ca068c238f4196c2',
-  archive_source_tree: '45eb6c6128f0a24cf17d242b704a0079c8e5a6ab',
-  archive_subtree: 'bf67e1bb6ba154ef7ae89e2907149d572fa9daa8',
-});
+const EXACT_EVIDENCE_PATHS = Object.freeze(EXACT_EVIDENCE_DESCENDANT_FILES.map(
+  (name) => `${CAMPAIGN_ROOT}/${name}`,
+));
+if (resolve(dirname(fileURLToPath(import.meta.url))) !== resolve(process.cwd(), CAMPAIGN_ROOT)) {
+  throw new Error('VERIFIER_MUST_RUN_FROM_TARGET_REPOSITORY_TOOLING');
+}
 
 const MATRIX_SPECS = Object.freeze([
   Object.freeze({ file: 'DIRECTIVE_COVERAGE_MATRIX.csv', count: 153, identity: ['requirement_id'] }),
@@ -174,23 +53,7 @@ const MATRIX_SPECS = Object.freeze([
   Object.freeze({ file: 'COCKPIT_BINDING_MATRIX.csv', count: 178, identity: ['surface_id', 'field_id'] }),
 ]);
 
-const GENERATED_ACTIVE_ARTIFACTS = Object.freeze([
-  'AI_OPS_C2_DISPOSITION.json',
-  'C2_PROOF_BINDING.json',
-  'CAPABILITY_TRUTH_MATRIX.csv',
-  'COCKPIT_BINDING_MATRIX.csv',
-  'DIRECTIVE_COVERAGE_MATRIX.csv',
-  'EVIDENCE_SELECTION.json',
-  'INDEPENDENT_FINDINGS.json',
-  'INPUTS.lock',
-  'LOCKED_INPUT_PAYLOADS.json',
-  'MANIFEST.json',
-  'MANIFEST.sha256',
-  'MERGE_PROVENANCE.json',
-  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
-  'STATE.md',
-  'WORKTREE_CENSUS.json',
-]);
+const GENERATED_ACTIVE_ARTIFACTS = EXACT_EVIDENCE_OUTPUTS;
 
 const argv = process.argv.slice(2);
 function option(name, fallback = null) {
@@ -247,12 +110,13 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function gitBlobOid(bytes) {
+function gitObjectOid(type, bytes) {
   return createHash('sha1')
-    .update(Buffer.from(`blob ${bytes.length}\0`, 'utf8'))
+    .update(Buffer.from(`${type} ${bytes.length}\0`, 'utf8'))
     .update(bytes)
     .digest('hex');
 }
+function gitBlobOid(bytes) { return gitObjectOid('blob', bytes); }
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -263,6 +127,147 @@ function canonicalJson(value) {
       .join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function decodeCanonicalBase64(value, label) {
+  assert(typeof value === 'string' && value.length > 0, `${label}_BASE64_MISSING`);
+  const bytes = Buffer.from(value, 'base64');
+  assert(bytes.toString('base64') === value, `${label}_BASE64_NON_CANONICAL`);
+  return bytes;
+}
+
+function parseCommitObject(bytes, label) {
+  const headerText = bytes.toString('utf8').split('\n\n', 1)[0];
+  const tree = headerText.match(/^tree ([a-f0-9]{40})$/mu)?.[1] ?? null;
+  const parents = [...headerText.matchAll(/^parent ([a-f0-9]{40})$/gmu)].map((match) => match[1]);
+  assert(tree !== null, `${label}_TREE_HEADER_MISSING`);
+  return { tree, parents };
+}
+
+function parseTreeObject(bytes, label) {
+  const entries = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const space = bytes.indexOf(0x20, offset);
+    const nul = bytes.indexOf(0x00, space + 1);
+    assert(space > offset && nul > space, `${label}_TREE_RECORD_INVALID`);
+    const mode = bytes.subarray(offset, space).toString('ascii');
+    const name = bytes.subarray(space + 1, nul).toString('utf8');
+    const oidStart = nul + 1;
+    const oidEnd = oidStart + 20;
+    assert(oidEnd <= bytes.length, `${label}_TREE_OID_TRUNCATED`);
+    entries.push({ mode, name, oid: bytes.subarray(oidStart, oidEnd).toString('hex') });
+    offset = oidEnd;
+  }
+  return entries;
+}
+
+function treeBlobForPath(treeObjectByOid, rootTree, relativePath, label) {
+  const components = relativePath.split('/');
+  let treeOid = rootTree;
+  for (let index = 0; index < components.length; index += 1) {
+    const entries = treeObjectByOid.get(treeOid);
+    assert(entries, `${label}_TREE_OBJECT_MISSING:${treeOid}`);
+    const entry = entries.find((row) => row.name === components[index]);
+    assert(entry, `${label}_TREE_PATH_MISSING:${components.slice(0, index + 1).join('/')}`);
+    if (index === components.length - 1) {
+      assert(entry.mode !== '40000', `${label}_PATH_IS_TREE:${relativePath}`);
+      return entry.oid;
+    }
+    assert(entry.mode === '40000', `${label}_PATH_COMPONENT_NOT_TREE:${components[index]}`);
+    treeOid = entry.oid;
+  }
+  throw new Error(`${label}_EMPTY_PATH`);
+}
+
+function verifyHistoricalProofPayloadBundle(metadata, candidateReachable) {
+  const bundle = metadata?.sealed_git_object_payload_bundle;
+  assert(bundle && typeof bundle === 'object', 'SEALED_PAYLOAD_BUNDLE_MISSING');
+  const digest = sha256(Buffer.from(canonicalJson(bundle), 'utf8'));
+  assertEqual('SEALED_PAYLOAD_BUNDLE_DECLARED_SHA256', metadata.sealed_git_object_payload_bundle_sha256, digest);
+  assertEqual('SEALED_PAYLOAD_BUNDLE_REGISTRY_SHA256', digest, SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256);
+  assertEqual('SEALED_PAYLOAD_BUNDLE_SCHEMA', bundle.schema, 'sealed-git-object-payload-bundle.v1');
+  assertEqual('SEALED_PAYLOAD_BUNDLE_TRUTH_CLASS', bundle.truth_class, 'TRACKED_REHASH_ONLY_NO_ANCESTRY_OR_AUTHORITY');
+
+  const sealed = bundle.sealed_machine_evidence;
+  assertEqual('SEALED_PAYLOAD_COMMIT', sealed?.sha, SEALED_C9_EVIDENCE_COMMIT);
+  assertEqual('SEALED_PAYLOAD_ROLE', sealed.role, 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE');
+  const sealedCommitBytes = decodeCanonicalBase64(sealed.object_base64, 'SEALED_PAYLOAD_COMMIT');
+  assertEqual('SEALED_PAYLOAD_COMMIT_LENGTH', sealed.byte_length, sealedCommitBytes.length);
+  assertEqual('SEALED_PAYLOAD_COMMIT_SHA256', sealed.sha256, sha256(sealedCommitBytes));
+  assertEqual('SEALED_PAYLOAD_COMMIT_OID', gitObjectOid('commit', sealedCommitBytes), SEALED_C9_EVIDENCE_COMMIT);
+  const sealedHeaders = parseCommitObject(sealedCommitBytes, 'SEALED_PAYLOAD_COMMIT');
+  assertEqual('SEALED_PAYLOAD_TREE', sealed.tree, SEALED_C9_EVIDENCE_TREE);
+  assertEqual('SEALED_PAYLOAD_COMMIT_TREE_HEADER', sealedHeaders.tree, SEALED_C9_EVIDENCE_TREE);
+  assertEqual('SEALED_PAYLOAD_PARENTS', sealed.parents, [...SEALED_C9_EVIDENCE_PARENTS]);
+  assertEqual('SEALED_PAYLOAD_COMMIT_PARENT_HEADERS', sealedHeaders.parents, sealed.parents);
+  assert(!candidateReachable.has(SEALED_C9_EVIDENCE_COMMIT), 'SEALED_PAYLOAD_COMMIT_IN_CANDIDATE_ANCESTRY');
+
+  assertEqual('SEALED_PAYLOAD_TREE_OBJECT_COUNT', sealed.tree_objects?.length, 3);
+  const treeObjectByOid = new Map();
+  for (const row of sealed.tree_objects) {
+    assert(!treeObjectByOid.has(row.oid), `SEALED_PAYLOAD_TREE_DUPLICATE:${row.oid}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `SEALED_PAYLOAD_TREE:${row.oid}`);
+    assertEqual(`SEALED_PAYLOAD_TREE_LENGTH:${row.oid}`, row.byte_length, bytes.length);
+    assertEqual(`SEALED_PAYLOAD_TREE_SHA256:${row.oid}`, row.sha256, sha256(bytes));
+    assertEqual(`SEALED_PAYLOAD_TREE_OID:${row.oid}`, row.oid, gitObjectOid('tree', bytes));
+    treeObjectByOid.set(row.oid, parseTreeObject(bytes, `SEALED_PAYLOAD_TREE:${row.oid}`));
+  }
+  assert(treeObjectByOid.has(SEALED_C9_EVIDENCE_TREE), 'SEALED_PAYLOAD_ROOT_TREE_MISSING');
+
+  assertEqual(
+    'SEALED_PAYLOAD_FILE_PATH_SET',
+    sealed.files?.map((row) => row.path).sort(),
+    SEALED_C9_SOURCE_PATHS.map(campaignPath).sort(),
+  );
+  const fileByPath = new Map();
+  for (const row of sealed.files) {
+    assert(!fileByPath.has(row.path), `SEALED_PAYLOAD_FILE_DUPLICATE:${row.path}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `SEALED_PAYLOAD_FILE:${row.path}`);
+    assertEqual(`SEALED_PAYLOAD_FILE_LENGTH:${row.path}`, row.byte_length, bytes.length);
+    assertEqual(`SEALED_PAYLOAD_FILE_SHA256:${row.path}`, row.sha256, sha256(bytes));
+    assertEqual(`SEALED_PAYLOAD_FILE_BLOB:${row.path}`, row.git_blob, gitBlobOid(bytes));
+    assertEqual(
+      `SEALED_PAYLOAD_TREE_PATH_BLOB:${row.path}`,
+      treeBlobForPath(treeObjectByOid, SEALED_C9_EVIDENCE_TREE, row.path, 'SEALED_PAYLOAD'),
+      row.git_blob,
+    );
+    fileByPath.set(row.path, bytes);
+  }
+  for (const reference of EXACT_EVIDENCE_PROOF_REFERENCES.filter(
+    (row) => row.commit === SEALED_C9_EVIDENCE_COMMIT,
+  )) {
+    const bytes = fileByPath.get(reference.path);
+    assert(bytes, `SEALED_PAYLOAD_PROOF_PATH:${reference.proof_reference_id}`);
+    assertEqual(`SEALED_PAYLOAD_PROOF_BLOB:${reference.proof_reference_id}`, gitBlobOid(bytes), reference.git_blob);
+    assertEqual(`SEALED_PAYLOAD_PROOF_SHA256:${reference.proof_reference_id}`, sha256(bytes), reference.sha256);
+    assertEqual(`SEALED_PAYLOAD_PROOF_LENGTH:${reference.proof_reference_id}`, bytes.length, reference.byte_length);
+    const text = bytes.toString('utf8');
+    for (const symbol of reference.required_symbols) {
+      assert(text.includes(symbol), `SEALED_PAYLOAD_PROOF_SYMBOL:${reference.proof_reference_id}:${symbol}`);
+    }
+  }
+
+  assertEqual(
+    'HISTORICAL_PAYLOAD_COMMIT_SET',
+    bundle.historical_commits?.map((row) => ({ sha: row.sha, role: row.role })),
+    HISTORICAL_PAYLOAD_COMMIT_SPECS,
+  );
+  const historicalCommitBySha = new Map();
+  for (const row of bundle.historical_commits) {
+    assert(!historicalCommitBySha.has(row.sha), `HISTORICAL_PAYLOAD_COMMIT_DUPLICATE:${row.sha}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `HISTORICAL_PAYLOAD_COMMIT:${row.sha}`);
+    assertEqual(`HISTORICAL_PAYLOAD_COMMIT_LENGTH:${row.sha}`, row.byte_length, bytes.length);
+    assertEqual(`HISTORICAL_PAYLOAD_COMMIT_SHA256:${row.sha}`, row.sha256, sha256(bytes));
+    assertEqual(`HISTORICAL_PAYLOAD_COMMIT_OID:${row.sha}`, row.sha, gitObjectOid('commit', bytes));
+    const headers = parseCommitObject(bytes, `HISTORICAL_PAYLOAD_COMMIT:${row.sha}`);
+    assertEqual(`HISTORICAL_PAYLOAD_COMMIT_TREE:${row.sha}`, row.tree, headers.tree);
+    assertEqual(`HISTORICAL_PAYLOAD_COMMIT_PARENTS:${row.sha}`, row.parents, headers.parents);
+    assert(!candidateReachable.has(row.sha), `HISTORICAL_PAYLOAD_COMMIT_IN_CANDIDATE_ANCESTRY:${row.sha}`);
+    historicalCommitBySha.set(row.sha, row);
+  }
+  assertEqual('SAME_TREE_LANDING_PAYLOAD_TREE', historicalCommitBySha.get(SAME_TREE_LANDING_COMMIT)?.tree, EXACT_C9_TREE);
+  return { bundle, digest, fileByPath, historicalCommitBySha };
 }
 
 function treeBlobMap(ref) {
@@ -305,8 +310,10 @@ function campaignPath(relativePath) {
 
 const candidate = gitText('rev-parse', `${requestedCandidate}^{commit}`);
 assertEqual('CANDIDATE_SHA', candidate, requestedCandidate);
+assertEqual('EXACT_C9_CANDIDATE', candidate, EXACT_C9_CANDIDATE);
 assert(!REJECTED_CANDIDATE_SHAS.includes(candidate), `REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidate}`);
 const candidateTree = gitText('rev-parse', `${candidate}^{tree}`);
+assertEqual('EXACT_C9_TREE', candidateTree, EXACT_C9_TREE);
 const parentRecord = gitText('rev-list', '--parents', '-n', '1', candidate).split(/\s+/u);
 assertEqual('CANDIDATE_PARENT_COUNT', parentRecord.length - 1, 1);
 assertEqual('CANDIDATE_SOLE_DIRECT_PARENT', parentRecord[1], REQUIRED_C2_PARENT);
@@ -314,7 +321,11 @@ assert(
   String(runGit(['show', `${candidate}:STATE.md`]).stdout).includes('| Account A correction candidate C9 |'),
   'C9_SOURCE_STATE_MARKER_MISSING',
 );
+const candidateReachable = new Set(gitText('rev-list', candidate).split('\n').filter(Boolean));
 const evidenceCommit = gitText('rev-parse', `${requestedEvidenceRef}^{commit}`);
+const evidenceParentRecord = gitText('rev-list', '--parents', '-n', '1', evidenceCommit).split(/\s+/u);
+assertEqual('EVIDENCE_PARENT_COUNT', evidenceParentRecord.length - 1, 1);
+assertEqual('EVIDENCE_SOLE_DIRECT_PARENT', evidenceParentRecord[1], candidate);
 assertEqual(
   'CANDIDATE_ANCESTOR_OF_EVIDENCE_REF',
   runGit(['merge-base', '--is-ancestor', candidate, evidenceCommit], { allowFailure: true }).status,
@@ -452,6 +463,7 @@ const manifest = evidenceJson('MANIFEST.json');
 const aiOpsDisposition = evidenceJson('AI_OPS_C2_DISPOSITION.json');
 const independentFindings = evidenceJson('INDEPENDENT_FINDINGS.json');
 const productAssuranceDisposition = evidenceJson('PRODUCT_ASSURANCE_C2_DISPOSITION.json');
+const historicalPayload = verifyHistoricalProofPayloadBundle(payloadMetadata, candidateReachable);
 
 for (const [label, artifact] of [
   ['INPUTS_LOCK', inputLock],
@@ -474,6 +486,13 @@ assertEqual('INPUT_LOCK_CANDIDATE', inputLock.candidate, candidate);
 assertEqual('INPUT_LOCK_TREE', inputLock.candidate_tree, candidateTree);
 assertEqual('INPUT_LOCK_PARENT', inputLock.candidate_parent, REQUIRED_C2_PARENT);
 assertEqual('INPUT_LOCK_BRANCH', inputLock.candidate_branch, 'truth-campaign-20260716');
+assertEqual('INPUT_LOCK_SEALED_PAYLOAD', inputLock.sealed_historical_proof_payload, {
+  path: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+  bundle_sha256: SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+  sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+  raw_historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
+  authority_granted: false,
+});
 assertEqual(
   'INPUT_LOCK_INVENTORY_COUNTS',
   inputLock.inventory_counts,
@@ -490,18 +509,68 @@ assertEqual(
 assertEqual('SELECTION_CANDIDATE', evidenceSelection.source_candidate, candidate);
 assertEqual('SELECTION_TREE', evidenceSelection.source_candidate_tree, candidateTree);
 assertEqual('SELECTION_PARENT', evidenceSelection.source_candidate_parent, REQUIRED_C2_PARENT);
-assertEqual('SELECTION_SCHEMA', evidenceSelection.schema, 'product-truth-c9-evidence-selection.v2');
+assertEqual('SELECTION_SCHEMA', evidenceSelection.schema, 'product-truth-c9-evidence-selection.v5');
+assertEqual('SELECTION_BINDING', evidenceSelection.binding, 'EXACT_CANDIDATE_GENERATED_ARTIFACTS_SELF_CONTAINED_TOOLING_AND_TRACKED_SEALED_OBJECT_PAYLOAD');
 assertEqual(
   'SELECTION_RULE',
   evidenceSelection.selection_rule,
-  'Select only this exact C9 candidate and an evidence descendant whose post-C9 diff equals the exact generated-output allowlist and whose manifest verifies byte-for-byte.',
+  'Select only the registry-bound exact C9 commit and a sole evidence descendant whose post-C9 diff equals 21 generated artifacts plus the exact five-file executable tooling package; generation and verification must run from that descendant tooling and its registry-digest-bound tracked sealed-object payload.',
 );
-assertEqual('SELECTION_VALID_CHAIN', evidenceSelection.valid_chain, 'C2 -> C9; custody bridge/evidence descendants may follow but cannot alter C9');
+assertEqual('SELECTION_VALID_CHAIN', evidenceSelection.valid_chain, 'C2 -> exact C9 -> sole self-contained evidence descendant with tracked rehash-only historical payload; candidate source stays immutable');
 assertEqual(
   'SELECTION_POST_CANDIDATE_ALLOWLIST',
   [...evidenceSelection.post_candidate_path_allowlist].sort(),
   [...EXACT_EVIDENCE_PATHS].sort(),
 );
+assertEqual('SELECTION_GENERATED_OUTPUT_COUNT', evidenceSelection.exact_generated_output_count, EXACT_EVIDENCE_OUTPUTS.length);
+assertEqual('SELECTION_GENERATED_OUTPUTS', evidenceSelection.exact_generated_outputs, [...EXACT_EVIDENCE_OUTPUTS]);
+assertEqual('SELECTION_TOOLING_FILE_COUNT', evidenceSelection.exact_tooling_file_count, EXACT_EVIDENCE_TOOLING_FILES.length);
+assertEqual('SELECTION_TOOLING_FILES', evidenceSelection.exact_tooling_files, [...EXACT_EVIDENCE_TOOLING_FILES]);
+assertEqual('SELECTION_DESCENDANT_PATH_COUNT', evidenceSelection.exact_descendant_path_count, EXACT_EVIDENCE_DESCENDANT_FILES.length);
+assertEqual('SELECTION_REQUIRED_BINDING', evidenceSelection.required_binding, 'product-truth-manifest.v5 plus MANIFEST.sha256 plus exact tooling bundle plus tracked sealed-object payload digest');
+assertEqual('SELECTION_FINAL_HANDOFF', evidenceSelection.final_verifier_handoff, 'PENDING_FRESH_VERIFIER');
+const evidenceToolingBindings = EXACT_EVIDENCE_TOOLING_FILES.map((name) => {
+  const bytes = evidenceBytes(name);
+  return {
+    path: name,
+    sha256: sha256(bytes),
+    git_blob: gitBlobOid(bytes),
+    byte_length: bytes.length,
+  };
+});
+const runtimeToolingBindings = EXACT_EVIDENCE_TOOLING_FILES.map((name) => {
+  const bytes = readFileSync(resolve(process.cwd(), CAMPAIGN_ROOT, name));
+  return {
+    path: name,
+    sha256: sha256(bytes),
+    git_blob: gitBlobOid(bytes),
+    byte_length: bytes.length,
+  };
+});
+assertEqual('SELECTION_TOOLING_BINDINGS', evidenceSelection.tooling_bindings, evidenceToolingBindings);
+assertEqual('TOOLING_RUNTIME_EVIDENCE_BINDING', runtimeToolingBindings, evidenceToolingBindings);
+assertEqual(
+  'SELECTION_TOOLING_BUNDLE_SHA256',
+  evidenceSelection.tooling_bundle_sha256,
+  sha256(Buffer.from(canonicalJson(evidenceToolingBindings), 'utf8')),
+);
+assertEqual('SELECTION_SEALED_SOURCE', evidenceSelection.sealed_machine_evidence_source, {
+  commit: SEALED_C9_EVIDENCE_COMMIT,
+  tree: SEALED_C9_EVIDENCE_TREE,
+  state: 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE',
+});
+assertEqual('SELECTION_SAME_TREE_LANDING', evidenceSelection.same_tree_landing, {
+  commit: SAME_TREE_LANDING_COMMIT,
+  tree: EXACT_C9_TREE,
+  disposition: 'NOT_CANDIDATE_TRUTH_SAME_TREE_COMMIT_IDENTITY_IS_INSUFFICIENT',
+});
+assertEqual('SELECTION_SEALED_PAYLOAD_BUNDLE', evidenceSelection.sealed_git_object_payload_bundle, {
+  path: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+  sha256: historicalPayload.digest,
+  sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+  raw_historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
+  authority_granted: false,
+});
 assertEqual('SELECTION_REJECTION_HISTORY', evidenceSelection.rejected_candidate_history, REJECTED_SELECTION_HISTORY);
 assertEqual('SELECTION_REJECTED_C8', evidenceSelection.prior_candidate_sha, REJECTED_C8_CANDIDATE);
 assertEqual('SELECTION_REJECTED_C8_TREE', evidenceSelection.prior_candidate_tree, REJECTED_C8_TREE);
@@ -528,6 +597,122 @@ assertEqual(
   evidenceSelection.vfinal5_candidate_disposition,
   'C5_REJECTED_BY_VFINAL5',
 );
+
+assert(Array.isArray(evidenceSelection.proof_references), 'SELECTION_PROOF_REFERENCES_MISSING');
+assertEqual('SELECTION_PROOF_REFERENCE_COUNT', evidenceSelection.proof_references.length, EXACT_EVIDENCE_PROOF_REFERENCES.length);
+const proofReferenceById = new Map();
+for (const reference of evidenceSelection.proof_references) {
+  assert(typeof reference.proof_reference_id === 'string', 'PROOF_REFERENCE_ID_MISSING');
+  assert(!proofReferenceById.has(reference.proof_reference_id), `PROOF_REFERENCE_DUPLICATE:${reference.proof_reference_id}`);
+  proofReferenceById.set(reference.proof_reference_id, reference);
+}
+for (const expected of EXACT_EVIDENCE_PROOF_REFERENCES) {
+  const reference = proofReferenceById.get(expected.proof_reference_id);
+  assert(reference, `PROOF_REFERENCE_OMITTED:${expected.proof_reference_id}`);
+  assertEqual(`PROOF_REFERENCE_COMMIT:${expected.proof_reference_id}`, reference.source_commit, expected.commit);
+  assertEqual(`PROOF_REFERENCE_PATH:${expected.proof_reference_id}`, reference.source_path, expected.path);
+  assertEqual(`PROOF_REFERENCE_BLOB:${expected.proof_reference_id}`, reference.source_git_blob, expected.git_blob);
+  assertEqual(`PROOF_REFERENCE_SHA256:${expected.proof_reference_id}`, reference.source_sha256, expected.sha256);
+  assertEqual(`PROOF_REFERENCE_LENGTH:${expected.proof_reference_id}`, reference.source_byte_length, expected.byte_length);
+  assertEqual(`PROOF_REFERENCE_SYMBOLS:${expected.proof_reference_id}`, reference.required_symbols, [...expected.required_symbols]);
+  assertEqual(
+    `PROOF_REFERENCE_VALIDATION:${expected.proof_reference_id}`,
+    reference.validation,
+    'GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED',
+  );
+  const payloadBacked = reference.source_commit === SEALED_C9_EVIDENCE_COMMIT;
+  const sourceBytes = payloadBacked
+    ? historicalPayload.fileByPath.get(reference.source_path)
+    : objectBytes(reference.source_commit, reference.source_path);
+  assert(sourceBytes, `PROOF_REFERENCE_OBJECT_PATH:${expected.proof_reference_id}`);
+  const observedBlob = payloadBacked
+    ? gitBlobOid(sourceBytes)
+    : gitText('rev-parse', `${reference.source_commit}:${reference.source_path}`);
+  assertEqual(`PROOF_REFERENCE_OBJECT_BLOB:${expected.proof_reference_id}`, observedBlob, reference.source_git_blob);
+  assertEqual(`PROOF_REFERENCE_OBJECT_SHA256:${expected.proof_reference_id}`, sha256(sourceBytes), reference.source_sha256);
+  assertEqual(`PROOF_REFERENCE_OBJECT_LENGTH:${expected.proof_reference_id}`, sourceBytes.length, reference.source_byte_length);
+  const sourceText = sourceBytes.toString('utf8');
+  for (const symbol of reference.required_symbols) {
+    assert(sourceText.includes(symbol), `PROOF_REFERENCE_SYMBOL_MISSING:${expected.proof_reference_id}:${symbol}`);
+  }
+}
+const canonicalProofReferences = EXACT_EVIDENCE_PROOF_REFERENCES.map((reference) => ({
+  proof_reference_id: reference.proof_reference_id,
+  source_commit: reference.commit,
+  source_path: reference.path,
+  source_git_blob: reference.git_blob,
+  source_sha256: reference.sha256,
+  source_byte_length: reference.byte_length,
+  required_symbols: [...reference.required_symbols],
+  validation: 'GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED',
+}));
+
+assert(Array.isArray(evidenceSelection.human_artifacts), 'SELECTION_HUMAN_ARTIFACTS_MISSING');
+assertEqual('SELECTION_HUMAN_ARTIFACT_COUNT', evidenceSelection.human_artifacts.length, HUMAN_EVIDENCE_ARTIFACT_SPECS.length);
+const humanArtifactByPath = new Map();
+const candidateCommitTime = gitText('show', '-s', '--format=%cI', candidate);
+for (const artifact of evidenceSelection.human_artifacts) {
+  assert(typeof artifact.path === 'string', 'HUMAN_ARTIFACT_PATH_MISSING');
+  assert(!humanArtifactByPath.has(artifact.path), `HUMAN_ARTIFACT_DUPLICATE:${artifact.path}`);
+  humanArtifactByPath.set(artifact.path, artifact);
+}
+for (const expected of HUMAN_EVIDENCE_ARTIFACT_SPECS) {
+  const artifact = humanArtifactByPath.get(expected.path);
+  assert(artifact, `HUMAN_ARTIFACT_OMITTED:${expected.path}`);
+  assertEqual(`HUMAN_ARTIFACT_SCHEMA:${expected.path}`, artifact.schema, 'product-truth-human-evidence-artifact.v1');
+  assertEqual(`HUMAN_ARTIFACT_SELECTION:${expected.path}`, artifact.selection_id, expected.selection_id);
+  assertEqual(`HUMAN_ARTIFACT_CANDIDATE:${expected.path}`, artifact.candidate_sha, candidate);
+  assertEqual(`HUMAN_ARTIFACT_TREE:${expected.path}`, artifact.candidate_tree, candidateTree);
+  assertEqual(`HUMAN_ARTIFACT_PARENT:${expected.path}`, artifact.candidate_parent, REQUIRED_C2_PARENT);
+  assertEqual(`HUMAN_ARTIFACT_STATE:${expected.path}`, artifact.state, expected.state);
+  assertEqual(`HUMAN_ARTIFACT_ACTOR:${expected.path}`, artifact.actor, expected.actor);
+  assertEqual(`HUMAN_ARTIFACT_WRITE_AUTHORITY:${expected.path}`, artifact.candidate_write_authority, false);
+  assertEqual(`HUMAN_ARTIFACT_PROOF_REFERENCES:${expected.path}`, artifact.proof_reference_ids, [...expected.proof_reference_ids]);
+  for (const referenceId of artifact.proof_reference_ids) {
+    assert(proofReferenceById.has(referenceId), `HUMAN_ARTIFACT_UNKNOWN_PROOF_REFERENCE:${expected.path}:${referenceId}`);
+  }
+  const bytes = evidenceBytes(expected.path);
+  const text = bytes.toString('utf8');
+  for (const forbidden of FORBIDDEN_HUMAN_GATE_TOKENS) {
+    assert(!text.includes(forbidden), `HUMAN_ARTIFACT_FORBIDDEN_GATE_TOKEN:${expected.path}:${forbidden}`);
+  }
+  const canonicalBytes = Buffer.from(renderCanonicalHumanArtifact({
+    spec: expected,
+    proofReferences: canonicalProofReferences,
+    candidateSha: candidate,
+    candidateTree,
+    candidateParent: REQUIRED_C2_PARENT,
+    candidateCommitTime,
+  }), 'utf8');
+  assert(bytes.equals(canonicalBytes), `HUMAN_ARTIFACT_CANONICAL_RENDER:${expected.path}`);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_SHA256_METADATA:${expected.path}`, artifact.sha256, expected.sha256);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_GIT_BLOB_METADATA:${expected.path}`, artifact.git_blob, expected.git_blob);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_LENGTH_METADATA:${expected.path}`, artifact.byte_length, expected.byte_length);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_SHA256_BYTES:${expected.path}`, sha256(bytes), expected.sha256);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_GIT_BLOB_BYTES:${expected.path}`, gitBlobOid(bytes), expected.git_blob);
+  assertEqual(`HUMAN_ARTIFACT_CANONICAL_LENGTH_BYTES:${expected.path}`, bytes.length, expected.byte_length);
+  assertEqual(`HUMAN_ARTIFACT_SHA256:${expected.path}`, artifact.sha256, sha256(bytes));
+  assertEqual(`HUMAN_ARTIFACT_GIT_BLOB:${expected.path}`, artifact.git_blob, gitBlobOid(bytes));
+  assertEqual(`HUMAN_ARTIFACT_LENGTH:${expected.path}`, artifact.byte_length, bytes.length);
+  for (const token of [
+    `Status: \`${expected.state}\``,
+    `Selection ID: \`${expected.selection_id}\``,
+    candidate,
+    candidateTree,
+    REQUIRED_C2_PARENT,
+    expected.actor,
+  ]) {
+    assert(text.includes(token), `HUMAN_ARTIFACT_REQUIRED_TEXT:${expected.path}:${token}`);
+  }
+  assertEqual(`HUMAN_RECEIPT_ACTION:${expected.path}`, artifact.receipt.command_or_operator_action, 'DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS');
+  assertEqual(`HUMAN_RECEIPT_START:${expected.path}`, artifact.receipt.start_time_utc, candidateCommitTime);
+  assertEqual(`HUMAN_RECEIPT_END:${expected.path}`, artifact.receipt.end_time_utc, candidateCommitTime);
+  assertEqual(`HUMAN_RECEIPT_TIMESTAMP:${expected.path}`, artifact.receipt.timestamp_basis, 'EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC');
+  assertEqual(`HUMAN_RECEIPT_STATE:${expected.path}`, artifact.receipt.artifact_generation_state, expected.state);
+  assertEqual(`HUMAN_RECEIPT_WRITE_AUTHORITY:${expected.path}`, artifact.receipt.candidate_source_write_authority, false);
+  assertEqual(`HUMAN_RECEIPT_NO_LIVE_CENSUS:${expected.path}`, artifact.receipt.live_worktree_census_performed, false);
+}
+assertEqual('HUMAN_ARTIFACT_EXACT_PATH_SET', [...humanArtifactByPath.keys()].sort(), HUMAN_EVIDENCE_ARTIFACT_SPECS.map((row) => row.path).sort());
 assertEqual('PROVENANCE_PARENT', mergeProvenance.candidate_parent_sha, REQUIRED_C2_PARENT);
 assertEqual('PROVENANCE_PARENT_COUNT', mergeProvenance.candidate_parent_count, 1);
 assertEqual('AI_OPS_DISPOSITION_SCHEMA', aiOpsDisposition.schema, 'ai-ops-c9-acceptance-disposition.v2');
@@ -623,24 +808,24 @@ assertEqual(
   FRONTIER_REFERENCE_COMMITS,
 );
 for (const row of absenceProof.frontier_reference_ancestry ?? []) {
-  assertEqual(
-    `FRONTIER_REFERENCE_OBJECT:${row.sha}`,
-    gitText('rev-parse', `${row.sha}^{commit}`),
-    row.sha,
-  );
-  const status = runGit(
-    ['merge-base', '--is-ancestor', row.sha, candidate],
-    { allowFailure: true },
-  ).status;
-  assertEqual(
-    `FRONTIER_REFERENCE_ANCESTRY_STATUS:${row.sha}`,
-    status,
-    row.expected_ancestor_of_candidate ? 0 : 1,
-  );
+  const ancestorOfCandidate = candidateReachable.has(row.sha);
+  if (row.expected_ancestor_of_candidate) {
+    assertEqual(`FRONTIER_REFERENCE_OBJECT:${row.sha}`, gitText('rev-parse', `${row.sha}^{commit}`), row.sha);
+  } else {
+    assert(historicalPayload.historicalCommitBySha.has(row.sha), `FRONTIER_REFERENCE_PAYLOAD_MISSING:${row.sha}`);
+  }
+  assertEqual(`FRONTIER_REFERENCE_ANCESTRY_STATUS:${row.sha}`, ancestorOfCandidate, row.expected_ancestor_of_candidate);
   assertEqual(
     `FRONTIER_REFERENCE_ANCESTRY:${row.sha}`,
     row.ancestor_of_candidate,
-    status === 0,
+    ancestorOfCandidate,
+  );
+  assertEqual(
+    `FRONTIER_REFERENCE_PROOF_SOURCE:${row.sha}`,
+    row.proof_source,
+    row.expected_ancestor_of_candidate
+      ? 'git rev-list exact-candidate includes accepted reference commit'
+      : 'tracked raw commit payload OID plus git rev-list exact-candidate exclusion',
   );
 }
 
@@ -937,6 +1122,8 @@ assertEqual(
 assert(Array.isArray(payloadMetadata.authority_members), 'PAYLOAD_AUTHORITY_MEMBERS_MISSING');
 assertEqual('PAYLOAD_AUTHORITY_MEMBER_COUNT', payloadMetadata.authority_members.length, 2);
 assertEqual('PAYLOAD_TOTAL_FILES', payloadMetadata.totals?.payload_files, 25);
+assertEqual('PAYLOAD_SEALED_MACHINE_FILES', payloadMetadata.totals?.sealed_machine_evidence_files, SEALED_C9_SOURCE_PATHS.length);
+assertEqual('PAYLOAD_HISTORICAL_COMMIT_OBJECTS', payloadMetadata.totals?.historical_commit_objects, HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1);
 if (payloadMetadata.candidate !== null && payloadMetadata.candidate !== undefined) {
   const payloadCandidate = typeof payloadMetadata.candidate === 'string'
     ? payloadMetadata.candidate
@@ -1470,7 +1657,7 @@ assertEqual(
 assertEqual(
   'CENSUS_TRUTH_A_CUSTODY_NORMALIZATION',
   truthARow.exact_candidate_custody_normalization,
-  'LIVE_HEAD_VALIDATED_AS_EXACT_CANDIDATE_OR_EXACT_15_PATH_EVIDENCE_DESCENDANT; OUTPUT_BOUND_TO_EXACT_CANDIDATE',
+  'SEALED_HEAD_WAS_EXACT_CANDIDATE_OR_EXACT_15_PATH_EVIDENCE_DESCENDANT; V5_DESCENDANT_ALLOWLIST_IS_EXACT_21_GENERATED_PLUS_5_BOUND_TOOLING_WITH_TRACKED_SEALED_OBJECT_PAYLOAD_WITHOUT_LIVE_RECENSUS',
 );
 assertEqual('CENSUS_TRUTH_A_DIRTY_TRACKED', truthARow.dirty_tracked_paths, []);
 assertEqual('CENSUS_TRUTH_A_UNTRACKED', truthARow.untracked_paths, []);
@@ -1559,9 +1746,21 @@ assertEqual('WORKTREE_LEDGER_LIVE_ROW_COUNT', liveLedgerRows.length, 96);
 assertEqual('WORKTREE_LEDGER_TRUTH_A_ROW_COUNT', liveLedgerRows.filter((row) => /\|\s*~\/truth-a\s*\|/u.test(row)).length, 1);
 assertEqual('WORKTREE_LEDGER_TRUTH_B_ROW_COUNT', liveLedgerRows.filter((row) => /\|\s*~\/truth-b\s*\|/u.test(row)).length, 1);
 
-assertEqual('MANIFEST_SCHEMA', manifest.schema, 'product-truth-manifest.v2');
+assertEqual('MANIFEST_SCHEMA', manifest.schema, 'product-truth-manifest.v5');
 assertEqual('MANIFEST_CANDIDATE_PARENT', manifest.candidate_parent_sha, REQUIRED_C2_PARENT);
 assertEqual('MANIFEST_CANDIDATE_PARENT_COUNT', manifest.candidate_parent_count, 1);
+assertEqual('MANIFEST_EXACT_OUTPUT_COUNT', manifest.exact_generated_output_count, EXACT_EVIDENCE_OUTPUTS.length);
+assertEqual('MANIFEST_EXACT_OUTPUTS', manifest.exact_generated_outputs, [...EXACT_EVIDENCE_OUTPUTS]);
+assertEqual('MANIFEST_EXACT_TOOLING_COUNT', manifest.exact_tooling_file_count, EXACT_EVIDENCE_TOOLING_FILES.length);
+assertEqual('MANIFEST_EXACT_TOOLING_FILES', manifest.exact_tooling_files, [...EXACT_EVIDENCE_TOOLING_FILES]);
+assertEqual('MANIFEST_EXACT_DESCENDANT_COUNT', manifest.exact_descendant_path_count, EXACT_EVIDENCE_DESCENDANT_FILES.length);
+assertEqual('MANIFEST_EXACT_DESCENDANT_PATHS', manifest.exact_descendant_paths, [...EXACT_EVIDENCE_DESCENDANT_FILES]);
+assertEqual('MANIFEST_TOOLING_BUNDLE_SHA256', manifest.tooling_bundle_sha256, evidenceSelection.tooling_bundle_sha256);
+assertEqual(
+  'MANIFEST_SEALED_PAYLOAD_BUNDLE_SHA256',
+  manifest.sealed_git_object_payload_bundle_sha256,
+  SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+);
 assert(Array.isArray(manifest.entries), 'MANIFEST_ENTRIES_MISSING');
 assertEqual('MANIFEST_ENTRY_COUNT', manifest.entry_count, manifest.entries.length);
 const manifestEntries = new Map();

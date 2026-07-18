@@ -1,33 +1,33 @@
-# Unmerged Delta Report
+# Exact C9 Delta Review
 
-Status: `INTEGRATED` for candidate-source containment and Pass 0; Account-B exact-C verification remains `BLOCKED`.
+Status: `BLOCKED:FRESH_FINAL_VERIFIER_PENDING`
 
-Candidate: `41752d6a87dc1cb1b933bb4460c9cabfc15ff694`
+Selection ID: `C9_DELTA_REVIEW_BLOCKED_PENDING_FRESH_VERIFIER`
 
-The authoritative denominator is `WORKTREE_CENSUS.json` over all 101 worktrees registered by `/Users/cosmosgeek/Desktop/Main`.
+- Exact candidate: `d8a86f722689ed82ad40f9ec44bbbc19c2347646`
+- Candidate tree: `1da28eb2dcc03a0545fc2bc51e2a735e88826014`
+- Sole direct parent: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+- Actor: `CAMPAIGN_EVIDENCE_GENERATOR`
+- Candidate source write authority: `false`
 
-| Classification | Count | Ruling |
-|---|---:|---|
-| `ACTIVE_DIRTY` | 0 | No active dirty source writer remains. |
-| `SEALED_UNMERGED` | 0 | Every mandatory sealed admission has an exact C disposition. |
-| `MERGED_RETAINED` | 42 | Candidate, landed core, and admitted donor vessels are retained. |
-| `BLOCKED` | 6 | `truth-b` remains at pre-freeze `787b73d…`; five D-LAUNCH-61 read-only shards are detached at exact C with zero tracked/source changes. Authorized untracked advisory outputs are preserved and censused. None has candidate-write or acceptance authority. Filenames and Git metadata were censused; Account A did not read verifier reasoning or artifacts. |
-| `SUPERSEDED_SAFE` | 33 | Includes CI hotfix #2 as `REFERENCE_ONLY`. |
-| `ABANDONED_SAFE` | 20 | Frontier/scout work remains parked and excluded. |
-| `DUPLICATE_PATCH` | 0 | No exact duplicate delta identity was found. |
-| `UNKNOWN` | 0 | Gate condition satisfied. |
+## Result
 
-Tracked source dirt is zero. Preserved untracked inputs are enumerated per tree and per path in the census; none is admitted silently. No worktree was cleaned, pruned, reset, or deleted.
+The immutable sealed census and provenance are retained as historical C9 machine evidence; the mutable live workstation was not recensused.
 
-The 12 admitted post-Main lanes have 326 unique changed paths, zero cross-lane overlaps, zero grant violations, and 326/326 exact donor blobs at C. `MERGE_PROVENANCE.json` is the machine-readable proof.
+Unavailable or skipped: Fresh-verifier review is required before any later custody or operational claim.
+
+## Machine proof references
+
+| Proof ID | Commit | Path | Git blob | SHA-256 | Bytes |
+| --- | --- | --- | --- | --- | ---: |
+| `SEALED_C9_CENSUS` | `5fd74604082420fbe46d98e408ef4ca0d1b57711` | `verification/product-truth-20260716/WORKTREE_CENSUS.json` | `8b71a2f4383184e52fe87871c9542c61739da47f` | `104347b7ae72b71acd09a82d8c034a3dd89f155674d97dc989bbc0012e810846` | 311293 |
+| `SEALED_C9_PROVENANCE` | `5fd74604082420fbe46d98e408ef4ca0d1b57711` | `verification/product-truth-20260716/MERGE_PROVENANCE.json` | `751ce7a6e02f6895cdc3a99969914527dc72e7c4` | `9c4039e90424d92274e7f0a5cb990ce57fd21ed4d08801ba62d317debe0613b7` | 71232 |
 
 ## Receipt fields
 
-- Command/operator action: `git -C /Users/cosmosgeek/Desktop/Main worktree list --porcelain -z`, per-tree Git status, ancestry, receipt, and diff identity probes.
-- Environment/toolchain digest: `8261c1fcbc27b3a2384abc506a285768333d4f4d5350fec83cd5364211a763ca`.
-- Dependency lock SHA-256: `3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf`.
-- Start/end UTC: the exact census timestamps are stored in `WORKTREE_CENSUS.json`.
-- Exit code: `0`; test count: `101/101` worktree records.
-- Artifact hashes: `MANIFEST.sha256` is generated last and excludes itself.
-- Actor: `ACCOUNT_A`; candidate source write permission after freeze: `false`.
-- Deviations/skips/unavailable: Account B filenames only; no Account B content read; no destructive worktree action.
+- Command or operator action: deterministic output-only rendering from verified Git objects; no candidate mutation and no live-worktree census.
+- Start UTC: `2026-07-17T14:43:20+05:30`
+- End UTC: `2026-07-17T14:43:20+05:30`
+- Timestamp basis: `EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC`
+- Artifact generation result: `BLOCKED:FRESH_FINAL_VERIFIER_PENDING`
+- Candidate source write authority: `false`

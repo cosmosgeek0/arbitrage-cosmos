@@ -43,3 +43,12 @@ test('FIX-108 donor-history assertions require both corresponding donor objects'
     assert.equal(result.verificationTarget, 'CURRENT_HEAD_TREE');
   }
 });
+
+test('FIX-109 donor-looking branch diagnostics cannot override integrated Git objects', () => {
+  const scenario = AI_OPS_IDENTITY_REGRESSION_MATRIX.find((row) => row.item === 'FIX-109');
+  assert.ok(scenario);
+  assert.equal(scenario.branchDiagnostic, 'port-a5-20260716');
+  const result = classifyAiOpsGitIdentity(scenario.head, AI_OPS_DONOR_IDENTITIES.A5);
+  assert.equal(result.mode, 'INTEGRATED');
+  assert.equal(result.verificationTarget, 'CURRENT_HEAD_TREE');
+});

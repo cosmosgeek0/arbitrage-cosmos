@@ -109,11 +109,36 @@ const MACRO_SOURCE_KEYS = new Set([
   'japan-fsa', 'china-nbs', 'pboc', 'safe', 'uk-fca', 'esma', 'bis-press', 'bis-speeches', 'bis-statistics',
 ]);
 
-function readFeedCache(): { context: NewsPayload | null; binance: BinancePayload | null } {
+function discardFeedCache(storage: Pick<Storage, 'removeItem'>): void {
+  try { storage.removeItem(FEED_CACHE_KEY); } catch { /* cache is optional */ }
+}
+
+export function readFeedCache(
+  storage: Pick<Storage, 'getItem' | 'removeItem'> = localStorage,
+): { context: NewsPayload | null; binance: BinancePayload | null } {
   try {
-    const parsed = JSON.parse(localStorage.getItem(FEED_CACHE_KEY) ?? 'null') as { context?: NewsPayload; binance?: BinancePayload } | null;
-    return { context: parsed?.context ?? null, binance: parsed?.binance ?? null };
-  } catch { return { context: null, binance: null }; }
+    const cached = storage.getItem(FEED_CACHE_KEY);
+    if (cached === null) return { context: null, binance: null };
+    const parsed = JSON.parse(cached) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      discardFeedCache(storage);
+      return { context: null, binance: null };
+    }
+    const candidate = parsed as { context?: unknown; binance?: unknown };
+    const context = candidate.context ?? null;
+    const binance = candidate.binance ?? null;
+    if (
+      (context !== null && !validContextPayload(context)) ||
+      (binance !== null && !validBinancePayload(binance))
+    ) {
+      discardFeedCache(storage);
+      return { context: null, binance: null };
+    }
+    return { context, binance };
+  } catch {
+    discardFeedCache(storage);
+    return { context: null, binance: null };
+  }
 }
 
 function persistFeedCache(context: NewsPayload | null, binance: BinancePayload | null): void {
@@ -205,36 +230,41 @@ function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null)
   return { ...metadata, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
 }
 
-function validContextPayload(payload: NewsPayload): boolean {
+function validContextPayload(payload: unknown): payload is NewsPayload {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const candidate = payload as Partial<NewsPayload>;
   return Boolean(
-    payload &&
-    Number.isFinite(payload.fetchedAt) &&
-    payload.fetchedAt > 0 &&
-    Array.isArray(payload.items) &&
-    payload.items.every((item) => (
+    typeof candidate.source === 'string' &&
+    Number.isFinite(candidate.fetchedAt) &&
+    (candidate.fetchedAt ?? 0) > 0 &&
+    Array.isArray(candidate.items) &&
+    candidate.items.every((item) => (
       item &&
       typeof item.id === 'string' &&
       typeof item.title === 'string' &&
       typeof item.source === 'string' &&
       Array.isArray(item.symbols) &&
       Array.isArray(item.tags) &&
-      (item.ts === null || Number.isFinite(item.ts))
+      (item.ts === null || Number.isFinite(item.ts)) &&
+      authoritativeNewsImpact(item) === (item.impact ?? null)
     )) &&
-    Array.isArray(payload.sources) &&
-    payload.sources.every((source) => source && typeof source.key === 'string' && typeof source.label === 'string')
+    Array.isArray(candidate.sources) &&
+    candidate.sources.every((source) => source && typeof source.key === 'string' && typeof source.label === 'string')
   );
 }
 
-function validBinancePayload(payload: BinancePayload): boolean {
+function validBinancePayload(payload: unknown): payload is BinancePayload {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+  const candidate = payload as Partial<BinancePayload>;
   return Boolean(
-    payload &&
-    Array.isArray(payload.items) &&
-    payload.items.every((item) => (
+    Array.isArray(candidate.items) &&
+    candidate.items.every((item) => (
       item &&
       Number.isSafeInteger(item.id) &&
       typeof item.title === 'string' &&
       typeof item.url === 'string' &&
-      (item.date === null || typeof item.date === 'string')
+      (item.date === null || typeof item.date === 'string') &&
+      authoritativeNewsImpact(item) === (item.impact ?? null)
     ))
   );
 }

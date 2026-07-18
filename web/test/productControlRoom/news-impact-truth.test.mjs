@@ -46,3 +46,67 @@ test('News preserves missing impact as UNKNOWN and excludes it from scored total
     await server.close();
   }
 });
+
+test('News rejects and removes invalid cached payloads before they reach feed state', async () => {
+  const server = await createServer({
+    root: new URL('../..', import.meta.url).pathname,
+    server: { middlewareMode: true },
+    appType: 'custom',
+  });
+
+  try {
+    const news = await server.ssrLoadModule('/src/pages/News.tsx');
+    assert.equal(typeof news.readFeedCache, 'function');
+
+    const invalidStorage = fakeStorage(JSON.stringify({
+      context: { source: 'cache', fetchedAt: 'not-a-timestamp', items: [], sources: [] },
+      binance: null,
+    }));
+    assert.deepEqual(news.readFeedCache(invalidStorage), { context: null, binance: null });
+    assert.deepEqual(invalidStorage.removed, ['cosmos-news-feed-cache-v4']);
+
+    const malformedStorage = fakeStorage('{broken-json');
+    assert.deepEqual(news.readFeedCache(malformedStorage), { context: null, binance: null });
+    assert.deepEqual(malformedStorage.removed, ['cosmos-news-feed-cache-v4']);
+
+    const validContext = {
+      source: 'cache',
+      fetchedAt: 1_700_000_000_000,
+      items: [{
+        id: 'missing-impact',
+        title: 'Server omitted impact',
+        summary: null,
+        url: null,
+        source: 'Primary',
+        channel: 'primary',
+        ts: 1_700_000_000_000,
+        timeLabel: '12:00',
+        symbols: [],
+        tags: [],
+        tone: 'idle',
+      }],
+      sources: [{
+        key: 'primary',
+        label: 'Primary',
+        status: 'live',
+        detail: 'Cached source',
+        fetchedAt: 1_700_000_000_000,
+        count: 1,
+      }],
+    };
+    const validStorage = fakeStorage(JSON.stringify({ context: validContext, binance: null }));
+    assert.deepEqual(news.readFeedCache(validStorage), { context: validContext, binance: null });
+    assert.deepEqual(validStorage.removed, []);
+    assert.equal(news.authoritativeNewsImpact(news.readFeedCache(validStorage).context.items[0]), null);
+  } finally {
+    await server.close();
+  }
+});
+
+function fakeStorage(value) {
+  return {
+    removed: [],
+    getItem() { return value; },
+    removeItem(key) { this.removed.push(key); },
+  };
+}

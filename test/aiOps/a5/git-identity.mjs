@@ -80,4 +80,18 @@ export const AI_OPS_IDENTITY_REGRESSION_MATRIX = Object.freeze([
     lanes: Object.freeze(['A1', 'A2', 'A5']),
     heads: AI_OPS_DONOR_IDENTITIES,
   }),
+  Object.freeze({
+    item: 'FIX-108',
+    environment: 'DONOR_OBJECT_NEAR_MATCHES',
+    nearMatches: Object.freeze([
+      Object.freeze({
+        commit: AI_OPS_DONOR_IDENTITIES.A2.commit,
+        tree: AI_OPS_DONOR_IDENTITIES.A5.tree,
+      }),
+      Object.freeze({
+        commit: AI_OPS_DONOR_IDENTITIES.A5.commit,
+        tree: AI_OPS_DONOR_IDENTITIES.A2.tree,
+      }),
+    ]),
+  }),
 ]);

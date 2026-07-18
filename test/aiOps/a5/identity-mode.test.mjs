@@ -33,3 +33,13 @@ test('FIX-107 every named AI-Ops lane uses the same commit-tree identity rule', 
     assert.equal(result.verificationTarget, 'SEALED_DONOR_HISTORY', lane);
   }
 });
+
+test('FIX-108 donor-history assertions require both corresponding donor objects', () => {
+  const scenario = AI_OPS_IDENTITY_REGRESSION_MATRIX.find((row) => row.item === 'FIX-108');
+  assert.ok(scenario);
+  for (const head of scenario.nearMatches) {
+    const result = classifyAiOpsGitIdentity(head, AI_OPS_DONOR_IDENTITIES.A5);
+    assert.equal(result.mode, 'INTEGRATED');
+    assert.equal(result.verificationTarget, 'CURRENT_HEAD_TREE');
+  }
+});

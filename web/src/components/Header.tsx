@@ -3464,25 +3464,26 @@ function NewsModal({ onClose }: { onClose: () => void }) {
   const [loadStatus, setLoadStatus] = useState<QuickViewLoadStatus>('LOADING');
 
   useEffect(() => {
-    let alive = true;
+    const controller = new AbortController();
     setItems(null);
     setLoadStatus('LOADING');
-    fetch(`/api/news?catalog=${tab}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
+    void fetchJson<unknown>(
+      `/api/news?catalog=${tab}`,
+      { cache: 'no-store', signal: controller.signal },
+      6_000,
+    )
       .then((payload: unknown) => {
         const nextItems = parseQuickViewItems<NewsRow>(payload);
-        if (!alive) return;
+        if (controller.signal.aborted) return;
         setItems(nextItems);
         setLoadStatus('CURRENT');
       })
       .catch(() => {
-        if (!alive) return;
+        if (controller.signal.aborted) return;
         setItems(null);
         setLoadStatus('UNAVAILABLE');
       });
-    return () => {
-      alive = false;
-    };
+    return () => controller.abort();
   }, [tab]);
 
   return (
@@ -3528,25 +3529,26 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
 
   useEffect(() => {
-    let alive = true;
+    const controller = new AbortController();
     setItems(null);
     setLoadStatus('LOADING');
-    fetch('/api/calendar')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
+    void fetchJson<unknown>(
+      '/api/calendar',
+      { cache: 'no-store', signal: controller.signal },
+      6_000,
+    )
       .then((payload: unknown) => {
         const nextItems = parseQuickViewItems<CalItem>(payload);
-        if (!alive) return;
+        if (controller.signal.aborted) return;
         setItems(nextItems);
         setLoadStatus('CURRENT');
       })
       .catch(() => {
-        if (!alive) return;
+        if (controller.signal.aborted) return;
         setItems(null);
         setLoadStatus('UNAVAILABLE');
       });
-    return () => {
-      alive = false;
-    };
+    return () => controller.abort();
   }, []);
 
   const days: { key: string; label: string; rows: CalItem[] }[] = [];

@@ -6,11 +6,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 I00_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 RELEASE="" DESTINATION="" AUTHORIZATION="" TARGET_HOST="" TARGET_ENVIRONMENT="" TARGET_ACCOUNT="" RESULT_RECEIPT="" RECONCILIATION_RECEIPT="" SIMULATION_ROOT="" SIMULATION=0
+OPERATOR="" CONFIG_VERSION="" RISK_VERSION="" AUTHORIZATION_NONCE="" SERVER_PREVIEW_DIGEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --release) RELEASE="${2:?--release needs a value}"; shift 2 ;;
     --destination) DESTINATION="${2:?--destination needs a value}"; shift 2 ;;
     --authorization) AUTHORIZATION="${2:?--authorization needs a value}"; shift 2 ;;
+    --operator) OPERATOR="${2:?--operator needs a value}"; shift 2 ;;
+    --config-version) CONFIG_VERSION="${2:?--config-version needs a value}"; shift 2 ;;
+    --risk-version) RISK_VERSION="${2:?--risk-version needs a value}"; shift 2 ;;
+    --authorization-nonce) AUTHORIZATION_NONCE="${2:?--authorization-nonce needs a value}"; shift 2 ;;
+    --server-preview-digest) SERVER_PREVIEW_DIGEST="${2:?--server-preview-digest needs a value}"; shift 2 ;;
     --host) TARGET_HOST="${2:?--host needs a value}"; shift 2 ;;
     --environment) TARGET_ENVIRONMENT="${2:?--environment needs a value}"; shift 2 ;;
     --account) TARGET_ACCOUNT="${2:?--account needs a value}"; shift 2 ;;
@@ -31,16 +37,20 @@ if [ "$SIMULATION" = 1 ]; then
   case "$DEST_PARENT" in "$ROOT_CANON"|"$ROOT_CANON"/*) : ;; *) printf 'I00_OPS_BLOCKED: simulation destination is outside fake root\n' >&2; exit 1 ;; esac
   VALIDATION_JSON="$(node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --allow-simulation)"
 else
-  [ -n "$AUTHORIZATION" ] && [ -n "$TARGET_HOST" ] && [ -n "$TARGET_ENVIRONMENT" ] && [ -n "$TARGET_ACCOUNT" ] && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] \
-    || { printf 'I00_OPS_BLOCKED: real install requires exact authorization, account, host, environment, and receipt targets\n' >&2; exit 1; }
+  [ -n "$AUTHORIZATION" ] && [ -n "$OPERATOR" ] && [ -n "$CONFIG_VERSION" ] && [ -n "$RISK_VERSION" ] \
+    && [ -n "$AUTHORIZATION_NONCE" ] && [ -n "$SERVER_PREVIEW_DIGEST" ] && [ -n "$TARGET_HOST" ] \
+    && [ -n "$TARGET_ENVIRONMENT" ] && [ -n "$TARGET_ACCOUNT" ] && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] \
+    || { printf 'I00_OPS_BLOCKED: real install requires exact independent authorization expectations and target/receipt identity\n' >&2; exit 1; }
   VALIDATION_JSON="$(node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE")"
   CANDIDATE_SHA="$(node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.testedSha)' "$VALIDATION_JSON")"
   MANIFEST_SHA="$(node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(v.artifactManifestSha256)' "$VALIDATION_JSON")"
   TRUSTED_BUILD_KEY_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}")"
-  AUTH_BASE=(--input "$AUTHORIZATION" --class OPS_BUNDLE_INSTALL --command install-ops-bundle --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-ops-bundle-install --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 ops bundle" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission filesystem:InstallImmutableOpsBundle --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "install one exact immutable ops bundle without service mutation")
-  for endpoint in "release-sha:$CANDIDATE_SHA" "artifact-manifest-sha256:$MANIFEST_SHA" "trusted-builder-public-key-sha256:$TRUSTED_BUILD_KEY_SHA" "destination:$(cd "$(dirname "$DESTINATION")" && pwd -P)/$(basename "$DESTINATION")"; do
-    node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-endpoint "$endpoint" >/dev/null
-  done
+  AUTH_BASE=(--input "$AUTHORIZATION" --class OPS_BUNDLE_INSTALL --command install-ops-bundle --expected-operator "$OPERATOR" --expected-deployed-sha "$CANDIDATE_SHA" --expected-config-version "$CONFIG_VERSION" --expected-risk-version "$RISK_VERSION" --expected-nonce "$AUTHORIZATION_NONCE" --expected-server-preview-digest "$SERVER_PREVIEW_DIGEST" --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-ops-bundle-install --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 ops bundle" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission filesystem:InstallImmutableOpsBundle --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "install one exact immutable ops bundle without service mutation")
+  node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" \
+    --expected-endpoint "release-sha:$CANDIDATE_SHA" \
+    --expected-endpoint "artifact-manifest-sha256:$MANIFEST_SHA" \
+    --expected-endpoint "trusted-builder-public-key-sha256:$TRUSTED_BUILD_KEY_SHA" \
+    --expected-endpoint "destination:$(cd "$(dirname "$DESTINATION")" && pwd -P)/$(basename "$DESTINATION")" >/dev/null
 fi
 
 EXPECTED_I00_ENFORCEMENT_DIGEST="$(node --input-type=module -e '

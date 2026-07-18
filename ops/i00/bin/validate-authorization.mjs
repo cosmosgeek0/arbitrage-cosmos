@@ -1,9 +1,39 @@
 #!/usr/bin/env node
 import { fail, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
 
-const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
-if (!args.input || !args.class || !args.command || !args['expected-host'] || !args['expected-environment']) {
-  fail('--input, --class, --command, --expected-host, and --expected-environment are required');
+function extractRepeatable(argv, name) {
+  const values = [];
+  const remaining = [];
+  const option = `--${name}`;
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== option) {
+      remaining.push(argv[index]);
+      continue;
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith('--')) fail(`${option} requires a value`);
+    values.push(value);
+    index += 1;
+  }
+  return { values, remaining };
+}
+
+const endpointArguments = extractRepeatable(process.argv.slice(2), 'expected-endpoint');
+const expectedEndpoints = endpointArguments.values;
+const args = parseArgs(endpointArguments.remaining, new Set(['simulation-clock']));
+const REQUIRED_EXPECTATIONS = [
+  'input', 'class', 'command', 'expected-operator', 'expected-deployed-sha',
+  'expected-config-version', 'expected-risk-version', 'expected-nonce',
+  'expected-server-preview-digest', 'expected-host', 'expected-environment',
+  'expected-scope', 'expected-account', 'expected-product',
+  'expected-credential-type', 'expected-permission', 'expected-result-receipt',
+  'expected-reconciliation-receipt', 'expected-maximum-capital',
+  'expected-maximum-notional', 'expected-maximum-effect',
+];
+const missingExpectations = REQUIRED_EXPECTATIONS.filter((name) => !args[name]);
+if (missingExpectations.length > 0 || expectedEndpoints.length === 0) {
+  const missing = [...missingExpectations, ...(expectedEndpoints.length === 0 ? ['expected-endpoint'] : [])];
+  fail(`complete independent expectations are required: ${missing.map((name) => `--${name}`).join(', ')}`);
 }
 if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only with --simulation-clock');
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
@@ -71,14 +101,22 @@ function exactList(value, label, options = {}) {
   return normalized;
 }
 
-function bindOptional(name, actual, label) {
+function bindExact(name, actual, label) {
   const expected = args[name];
-  if (expected !== undefined && actual !== expected) fail(`${label} does not match --${name}`);
+  if (actual !== expected) fail(`${label} does not match --${name}`);
 }
 
-function bindOptionalMember(name, actual, label) {
+function bindExactSingleton(name, actual, label) {
   const expected = args[name];
-  if (expected !== undefined && !actual.includes(expected)) fail(`${label} does not include exact --${name}`);
+  if (actual.length !== 1 || actual[0] !== expected) fail(`${label} is not the complete exact --${name} set`);
+}
+
+function bindExactSet(expected, actual, label) {
+  const expectedSet = exactList(expected, `independent ${label} expectations`, { forbidBroad: true });
+  if (expectedSet.length !== actual.length
+      || [...expectedSet].sort().some((value, index) => value !== [...actual].sort()[index])) {
+    fail(`${label} does not equal the complete independent expectation set`);
+  }
 }
 
 requireExactObject(authorization, TOP_LEVEL_KEYS, 'external authorization');
@@ -119,7 +157,9 @@ if (Date.parse(effectiveNow) < startsAt || Date.parse(effectiveNow) >= expiresAt
 const allowedCommands = exactList(authorization.allowedCommands, 'allowedCommands', { forbidBroad: true });
 const allowedEndpoints = exactList(authorization.allowedEndpoints, 'allowedEndpoints', { forbidBroad: true });
 const allowedProducts = exactList(authorization.allowedProducts, 'allowedProducts', { forbidBroad: true });
-if (!allowedCommands.includes(args.command)) fail(`authorization does not include exact command ${args.command}`);
+if (allowedCommands.length !== 1 || allowedCommands[0] !== args.command) {
+  fail(`authorization does not grant only exact command ${args.command}`);
+}
 
 requireExactObject(authorization.allowedCredentials, ['types', 'permissions'], 'allowedCredentials');
 const credentialTypes = exactList(authorization.allowedCredentials.types, 'allowedCredentials.types', { forbidBroad: true });
@@ -160,17 +200,23 @@ if (authorizationStrings.some((value) => /\bwithdraw(?:al)?\b|\btransfer[ _-]*ou
 
 if (host !== args['expected-host']) fail('authorization host does not match the target host');
 if (environment !== args['expected-environment']) fail('authorization environment does not match the target environment');
-bindOptional('expected-scope', scope, 'authorization scope');
-bindOptional('expected-account', account, 'authorization account');
-bindOptionalMember('expected-endpoint', allowedEndpoints, 'allowedEndpoints');
-bindOptionalMember('expected-product', allowedProducts, 'allowedProducts');
-bindOptionalMember('expected-credential-type', credentialTypes, 'allowedCredentials.types');
-bindOptionalMember('expected-permission', credentialPermissions, 'allowedCredentials.permissions');
-bindOptional('expected-result-receipt', resultReceiptTarget, 'result receipt target');
-bindOptional('expected-reconciliation-receipt', reconciliationReceiptTarget, 'reconciliation receipt target');
-bindOptional('expected-maximum-capital', maximumCapital, 'maximum capital');
-bindOptional('expected-maximum-notional', maximumNotional, 'maximum notional');
-bindOptional('expected-maximum-effect', maximumOperationalEffect, 'maximum operational effect');
+bindExact('expected-operator', operator, 'authorization operator');
+bindExact('expected-deployed-sha', deployedSha, 'deployed SHA');
+bindExact('expected-config-version', configVersion, 'configuration version');
+bindExact('expected-risk-version', riskVersion, 'risk version');
+bindExact('expected-nonce', nonce, 'authorization nonce');
+bindExact('expected-server-preview-digest', serverPreviewDigest, 'server preview digest');
+bindExact('expected-scope', scope, 'authorization scope');
+bindExact('expected-account', account, 'authorization account');
+bindExactSet(expectedEndpoints, allowedEndpoints, 'allowedEndpoints');
+bindExactSingleton('expected-product', allowedProducts, 'allowedProducts');
+bindExactSingleton('expected-credential-type', credentialTypes, 'allowedCredentials.types');
+bindExactSingleton('expected-permission', credentialPermissions, 'allowedCredentials.permissions');
+bindExact('expected-result-receipt', resultReceiptTarget, 'result receipt target');
+bindExact('expected-reconciliation-receipt', reconciliationReceiptTarget, 'reconciliation receipt target');
+bindExact('expected-maximum-capital', maximumCapital, 'maximum capital');
+bindExact('expected-maximum-notional', maximumNotional, 'maximum notional');
+bindExact('expected-maximum-effect', maximumOperationalEffect, 'maximum operational effect');
 
 process.stdout.write(`${JSON.stringify({
   status: 'AUTHORIZATION_VALID',

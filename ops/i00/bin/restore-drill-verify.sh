@@ -7,12 +7,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 I00_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 DONOR_ROOT="${DONOR_ROOT:-$I00_ROOT/accepted-ops-live}"
 BACKUP="" TARGET="" ENV_FILE="" AUTHORIZATION="" TARGET_HOST="" TARGET_ENVIRONMENT="" TARGET_ACCOUNT="" RESULT_RECEIPT="" RECONCILIATION_RECEIPT="" SIMULATION_ROOT="" SIMULATION=0
+OPERATOR="" DEPLOYED_SHA="" CONFIG_VERSION="" RISK_VERSION="" AUTHORIZATION_NONCE="" SERVER_PREVIEW_DIGEST=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --backup) BACKUP="${2:?--backup needs a value}"; shift 2 ;;
     --target) TARGET="${2:?--target needs a value}"; shift 2 ;;
     --env-file) ENV_FILE="${2:?--env-file needs a value}"; shift 2 ;;
     --authorization) AUTHORIZATION="${2:?--authorization needs a value}"; shift 2 ;;
+    --operator) OPERATOR="${2:?--operator needs a value}"; shift 2 ;;
+    --deployed-sha) DEPLOYED_SHA="${2:?--deployed-sha needs a value}"; shift 2 ;;
+    --config-version) CONFIG_VERSION="${2:?--config-version needs a value}"; shift 2 ;;
+    --risk-version) RISK_VERSION="${2:?--risk-version needs a value}"; shift 2 ;;
+    --authorization-nonce) AUTHORIZATION_NONCE="${2:?--authorization-nonce needs a value}"; shift 2 ;;
+    --server-preview-digest) SERVER_PREVIEW_DIGEST="${2:?--server-preview-digest needs a value}"; shift 2 ;;
     --host) TARGET_HOST="${2:?--host needs a value}"; shift 2 ;;
     --environment) TARGET_ENVIRONMENT="${2:?--environment needs a value}"; shift 2 ;;
     --account) TARGET_ACCOUNT="${2:?--account needs a value}"; shift 2 ;;
@@ -29,8 +36,11 @@ if [ "$SIMULATION" = 1 ]; then
   [ -n "$SIMULATION_ROOT" ] || { printf 'I00_OPS_BLOCKED: simulation restore requires a marked --simulation-root\n' >&2; exit 1; }
   node "$SCRIPT_DIR/validate-simulation-root.mjs" --root "$SIMULATION_ROOT" >/dev/null
 else
-  [ -n "$AUTHORIZATION" ] && [ -n "$TARGET_HOST" ] && [ -n "$TARGET_ENVIRONMENT" ] && [ -n "$TARGET_ACCOUNT" ] && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] \
-    || { printf 'I00_OPS_BLOCKED: real isolated restore requires exact authorization, target identity, and receipt targets\n' >&2; exit 1; }
+  [ -n "$AUTHORIZATION" ] && [ -n "$OPERATOR" ] && [ -n "$DEPLOYED_SHA" ] && [ -n "$CONFIG_VERSION" ] \
+    && [ -n "$RISK_VERSION" ] && [ -n "$AUTHORIZATION_NONCE" ] && [ -n "$SERVER_PREVIEW_DIGEST" ] \
+    && [ -n "$TARGET_HOST" ] && [ -n "$TARGET_ENVIRONMENT" ] && [ -n "$TARGET_ACCOUNT" ] \
+    && [ -n "$RESULT_RECEIPT" ] && [ -n "$RECONCILIATION_RECEIPT" ] \
+    || { printf 'I00_OPS_BLOCKED: real isolated restore requires exact independent authorization expectations, target identity, and receipt targets\n' >&2; exit 1; }
 fi
 [ -x "$DONOR_ROOT/bin/restore.sh" ] || { printf 'I00_OPS_BLOCKED: effective L15 restore.sh is unavailable\n' >&2; exit 1; }
 node "$SCRIPT_DIR/verify-donor.mjs" --contract "$I00_ROOT/donor-contract.json" \
@@ -52,10 +62,12 @@ DELEGATE_ENV_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.
 if [ "$SIMULATION" = 1 ]; then
   for path in "$DATA_DIR" "$BACKUP_DIR" "$OPS_STATE_DIR" "$BACKUP" "$TARGET"; do node "$SCRIPT_DIR/validate-simulation-path.mjs" --root "$SIMULATION_ROOT" --path "$path" >/dev/null; done
 else
-  AUTH_BASE=(--input "$AUTHORIZATION" --class ISOLATED_RESTORE --command restore-drill-verify --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-isolated-restore --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 isolated restore drill" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission filesystem:CreateExactIsolatedRestore --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "restore and verify one exact backup into one exact isolated target")
-  for endpoint in "donor-env-sha256:$DELEGATE_ENV_SHA" "backup-path:$(cd "$BACKUP" && pwd -P)" "isolated-target:$TARGET" "sqlite-command:$SQLITE"; do
-    node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" --expected-endpoint "$endpoint" >/dev/null
-  done
+  AUTH_BASE=(--input "$AUTHORIZATION" --class ISOLATED_RESTORE --command restore-drill-verify --expected-operator "$OPERATOR" --expected-deployed-sha "$DEPLOYED_SHA" --expected-config-version "$CONFIG_VERSION" --expected-risk-version "$RISK_VERSION" --expected-nonce "$AUTHORIZATION_NONCE" --expected-server-preview-digest "$SERVER_PREVIEW_DIGEST" --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-isolated-restore --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 isolated restore drill" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission filesystem:CreateExactIsolatedRestore --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "restore and verify one exact backup into one exact isolated target")
+  node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" \
+    --expected-endpoint "donor-env-sha256:$DELEGATE_ENV_SHA" \
+    --expected-endpoint "backup-path:$(cd "$BACKUP" && pwd -P)" \
+    --expected-endpoint "isolated-target:$TARGET" \
+    --expected-endpoint "sqlite-command:$SQLITE" >/dev/null
 fi
 trap 'rm -rf "$SANITIZED_DIR"' EXIT
 node "$SCRIPT_DIR/verify-sqlite-version.mjs" --version "$($SQLITE --version)" >/dev/null

@@ -10,7 +10,6 @@
  * when the kill switch is on.
  */
 import type {
-  BookTicker,
   Clock,
   Decision,
   MarkFunding,
@@ -31,6 +30,7 @@ import { priorityFor } from './priority.js';
 import { basisConfig, type BasisConfig } from './config.js';
 import type { EventSink } from '../v0/types.js';
 import type {
+  BasisBookObservation,
   BasisDirection,
   BasisFeatureSnapshot,
   BasisProposal,
@@ -262,12 +262,22 @@ export class BasisEngine {
     });
   }
 
-  onSpotBook(t: BookTicker): void {
-    this.market.onSpotBook(t);
+  onSpotBook(t: BasisBookObservation): void {
+    this.gaps.onBookIngest(this.market.onSpotBook(t));
   }
 
-  onPerpBook(t: BookTicker): void {
-    this.market.onPerpBook(t);
+  onPerpBook(t: BasisBookObservation): void {
+    this.gaps.onBookIngest(this.market.onPerpBook(t));
+  }
+
+  onBookPair(symbol: string, spot: BasisBookObservation | null, perpetual: BasisBookObservation | null): void {
+    this.gaps.onBookIngest(this.market.onBookPair(symbol, spot, perpetual));
+  }
+
+  /** Stop/restart fence: no causal move may bridge an observation outage. */
+  resetBookContinuity(): void {
+    this.market.resetBookContinuity();
+    this.gaps.clear();
   }
 
   onMarkFunding(t: MarkFunding): void {

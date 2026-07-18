@@ -19,6 +19,14 @@ import {
   webSocketCloseDiagnosticAttributes,
   type WebSocketCloseDiagnostic,
 } from './lib/webSocketCloseDiagnostic';
+import {
+  INITIAL_WEB_SOCKET_PROTOCOL_HEALTH,
+  WEB_SOCKET_PROTOCOL_CLOSE_CODE,
+  WEB_SOCKET_PROTOCOL_CLOSE_REASON,
+  decodeWebSocketProtocolEnvelope,
+  reduceWebSocketProtocolHealth,
+  type WebSocketProtocolObservation,
+} from './lib/webSocketProtocolHealth';
 import type {
   AppConfig,
   MarketRow,
@@ -339,7 +347,98 @@ function isCanonicalSupervisorDeltaMessage(value: unknown): value is Readonly<{
   return payload.schemaVersion === 'canonical-supervisor-delta.v1'
     && typeof payload.revision === 'string'
     && payload.revision.length > 0
-    && payload.revision.length <= 256;
+    && payload.revision.length <= 256
+    && ['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY', 'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN'].includes(String(payload.truthLabel))
+    && ['STOPPED', 'WARMING', 'READY', 'DEGRADED', 'BLOCKED', 'FAILED'].includes(String(payload.overallPosture))
+    && (payload.firstRootBlockerComponentId === null
+      || (typeof payload.firstRootBlockerComponentId === 'string'
+        && payload.firstRootBlockerComponentId.length > 0
+        && payload.firstRootBlockerComponentId.length <= 128))
+    && Number.isSafeInteger(payload.runtimeGeneration)
+    && Number(payload.runtimeGeneration) >= 0
+    && Number.isSafeInteger(payload.controlGeneration)
+    && Number(payload.controlGeneration) >= 0
+    && Number.isSafeInteger(payload.controlRevision)
+    && Number(payload.controlRevision) >= 0
+    && ['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY'].includes(String(payload.safeMode))
+    && typeof payload.killSwitchEngaged === 'boolean'
+    && typeof payload.intakePaused === 'boolean';
+}
+
+function isDecimalWebSocketCursor(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^(?:0|[1-9]\d{0,18})$/.test(value)
+    && BigInt(value) <= 9_223_372_036_854_775_807n;
+}
+
+function isMaterialEventPageMessage(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== 'material-event-page'
+      || !message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)) return false;
+  const payload = message.payload as Record<string, unknown>;
+  if (!isDecimalWebSocketCursor(payload.afterCursor)
+      || !isDecimalWebSocketCursor(payload.nextCursor)
+      || BigInt(payload.nextCursor) < BigInt(payload.afterCursor)
+      || !Array.isArray(payload.events)
+      || payload.events.length > 200
+      || !payload.events.every((event) => Boolean(event && typeof event === 'object' && !Array.isArray(event)))
+      || !['CONTINUOUS', 'GAP_REQUIRES_BACKFILL', 'TRUNCATED_REQUIRES_BACKFILL'].includes(String(payload.continuity))
+      || typeof payload.hasMore !== 'boolean') return false;
+  const missingFrom = payload.missingFromCursor;
+  const missingTo = payload.missingToCursor;
+  return (missingFrom === null && missingTo === null)
+    || (isDecimalWebSocketCursor(missingFrom)
+      && isDecimalWebSocketCursor(missingTo)
+      && BigInt(missingFrom) <= BigInt(missingTo));
+}
+
+function isPositiveNumericString(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 64) return false;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+function isBookLevel(value: unknown): value is [string, string] {
+  return Array.isArray(value)
+    && value.length === 2
+    && isPositiveNumericString(value[0])
+    && isPositiveNumericString(value[1]);
+}
+
+function isLiveBookMessage(value: unknown): value is LiveBookMsg {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (typeof message.symbol !== 'string' || !/^[A-Z0-9]{2,32}$/.test(message.symbol)) return false;
+  if (message.type === 'book') {
+    if (!Array.isArray(message.bids) || message.bids.length < 1 || message.bids.length > 20
+        || !Array.isArray(message.asks) || message.asks.length < 1 || message.asks.length > 20
+        || !message.bids.every(isBookLevel) || !message.asks.every(isBookLevel)
+        || !Number.isSafeInteger(message.ts) || Number(message.ts) <= 0) return false;
+    return Number(message.bids[0][0]) < Number(message.asks[0][0]);
+  }
+  if (message.type !== 'btrades'
+      || !Array.isArray(message.trades)
+      || message.trades.length < 1
+      || message.trades.length > 400) return false;
+  let previousId = -1;
+  for (const trade of message.trades) {
+    if (!trade || typeof trade !== 'object' || Array.isArray(trade)) return false;
+    const row = trade as Record<string, unknown>;
+    if (!Number.isSafeInteger(row.id) || Number(row.id) <= previousId
+        || !Number.isFinite(row.price) || Number(row.price) <= 0
+        || !Number.isFinite(row.qty) || Number(row.qty) <= 0
+        || !Number.isSafeInteger(row.time) || Number(row.time) <= 0
+        || typeof row.isBuyerMaker !== 'boolean') return false;
+    previousId = Number(row.id);
+  }
+  return true;
+}
+
+function isKnownWebSocketEnvelope(value: unknown): boolean {
+  return isCanonicalSupervisorDeltaMessage(value)
+    || isMaterialEventPageMessage(value)
+    || isLiveBookMessage(value);
 }
 
 function failClosedConfig(config: AppConfig): AppConfig {
@@ -639,28 +738,40 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
       const ws = new WebSocket(socketUrl.toString());
       let connectionEstablished = false;
+      let protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
+      const applyProtocolObservation = (observation: WebSocketProtocolObservation) => {
+        protocolHealth = reduceWebSocketProtocolHealth(protocolHealth, observation);
+        if (protocolHealth.status === 'DEGRADED') setConnected(false);
+        else if (connectionEstablished) setConnected(true);
+        return protocolHealth;
+      };
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         connectionEstablished = true;
+        protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
       };
       ws.onmessage = (msg) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
-        try {
-          const data: unknown = JSON.parse(msg.data as string);
-          if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
-          else if (data && typeof data === 'object'
-              && ((data as { type?: unknown }).type === 'book' || (data as { type?: unknown }).type === 'btrades')) {
-            for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
+        const decoded = decodeWebSocketProtocolEnvelope(msg.data, isKnownWebSocketEnvelope);
+        if (!decoded.ok) {
+          const degraded = applyProtocolObservation('INVALID_ENVELOPE');
+          if (degraded.reconnectRequired && ws.readyState === WebSocket.OPEN) {
+            ws.close(WEB_SOCKET_PROTOCOL_CLOSE_CODE, WEB_SOCKET_PROTOCOL_CLOSE_REASON);
           }
-          // Material-event cursor consumption stays with the existing Product
-          // Control Room binding; this compatibility store never advances it.
-        } catch {
-          // ignore
+          return;
         }
+        applyProtocolObservation('VALID_ENVELOPE');
+        const data = decoded.value;
+        if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
+        else if (isLiveBookMessage(data)) {
+          for (const fn of liveBookListeners) fn(data);
+        }
+        // Material-event cursor consumption stays with the existing Product
+        // Control Room binding; this compatibility store never advances it.
       };
       ws.onclose = (event) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;

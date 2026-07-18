@@ -118,6 +118,8 @@ export interface ProductRuntimeReadPorts {
     | Readonly<SystemTraceSnapshot>
     | null
     | Promise<Readonly<SystemTraceSnapshot> | null>;
+  incidents?(): Readonly<ProductRuntimeIncidentSnapshot>
+    | Promise<Readonly<ProductRuntimeIncidentSnapshot>>;
 }
 
 export interface ProductRuntimeClock {
@@ -354,6 +356,48 @@ export interface ProductRuntimeIncidentAvailability {
   readonly blocker: string | null;
 }
 
+export interface ProductRuntimeIncidentProjection {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly ledgerEventId: number;
+  readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  readonly rootComponentId: string;
+  readonly sourceGroup: string;
+  readonly capitalRelevant: boolean;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly count: number;
+  readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  readonly reasonCode: 'CONNECTION_UNHEALTHY';
+  readonly operatorAction: string;
+  readonly correlationId: string;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly acknowledgementControlId: string;
+  readonly routing: Readonly<{
+    readonly inApp: Readonly<{
+      readonly state: 'WIRED_LOCAL';
+      readonly receiptId: string;
+    }>;
+    readonly externalPaging: Readonly<{
+      readonly state: 'NOT_CONFIGURED';
+      readonly receiptId: null;
+      readonly blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED';
+    }>;
+  }>;
+  readonly recoveryProof: Readonly<{
+    readonly state: 'PENDING' | 'PROVEN';
+    readonly sourceEventId: number | null;
+    readonly resolvedAtMs: number | null;
+  }>;
+}
+
+export interface ProductRuntimeIncidentSnapshot {
+  readonly availability: Readonly<ProductRuntimeIncidentAvailability>;
+  readonly incidents: readonly Readonly<ProductRuntimeIncidentProjection>[];
+}
+
 export type ProductRuntimeControlWiringState =
   | 'WIRED_LIVE' | `UNAVAILABLE:${string}` | `PENDING_BACKEND:${string}` | 'OWNER_GATED';
 
@@ -414,11 +458,21 @@ export interface ProductRuntimeComponentProjection {
 export type ProductRuntimeManagedInventoryState =
   | 'EVIDENCE_PRESENT' | 'OWNER_GATED' | 'NOT_CONFIGURED' | 'MISSING';
 
-export interface ProductRuntimeManagedInventoryEvidenceRef {
+export interface ProductRuntimeManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
 }
+
+export interface ProductRuntimeManagedInventoryOwnerEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_OWNER_PROJECTION';
+  readonly ownerId: 'productIntegration.incident-router';
+  readonly truthLabel: 'BUILT_AND_TESTED';
+}
+
+export type ProductRuntimeManagedInventoryEvidenceRef =
+  | ProductRuntimeManagedInventoryComponentEvidenceRef
+  | ProductRuntimeManagedInventoryOwnerEvidenceRef;
 
 /**
  * A role-to-owner reference. `evidence` reuses canonical Product component
@@ -585,7 +639,7 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly controls: readonly Readonly<ProductRuntimeControlRegistryEntry>[];
   readonly traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
   readonly incidentAvailability: Readonly<ProductRuntimeIncidentAvailability>;
-  readonly incidents: readonly never[];
+  readonly incidents: readonly Readonly<ProductRuntimeIncidentProjection>[];
   readonly materialEvents: Readonly<ProductRuntimeMaterialEventPage>;
   readonly surfaces: Readonly<Record<string, Readonly<ProductRuntimeSurfaceProjection>>>;
 }

@@ -3,6 +3,7 @@ import type {
   ProductIncidentAvailability,
   ProductIncidentProjection,
 } from '../../../lib/productIntegration';
+import { IncidentAcknowledgementButton } from './IncidentAcknowledgementButton';
 
 export function IncidentCursorPanel({ availability, incidents, materialEvents, onTrace }: {
   availability: Readonly<ProductIncidentAvailability>;
@@ -29,12 +30,14 @@ export function IncidentCursorPanel({ availability, incidents, materialEvents, o
         ) : incidents.length === 0 ? (
           <p>Incident owner is available; no grouped incident requires attention.</p>
         ) : incidents.map((incident) => (
-          <article key={incident.fingerprint}>
+          <article key={incident.incidentId}>
             <span><strong>{incident.reasonCode}</strong><small>{incident.operatorAction ?? 'No operator action published.'}</small></span>
             <span>
               <code>{incident.rootComponentId}</code>
-              <small>{incident.count} grouped · {incident.state}</small>
+              <small>{incident.count} grouped · {incident.state} · {incident.routing.inApp.state}</small>
+              <small>External paging {incident.routing.externalPaging.state} · Recovery {incident.recoveryProof.state}</small>
               {incident.correlationId && onTrace && <button className="pcr-trace-link" type="button" onClick={() => onTrace(incident.correlationId!)}>Read Trace</button>}
+              <IncidentAcknowledgementButton incident={incident} />
             </span>
             <em className={`severity-${incident.severity.toLowerCase()} state-${incident.state.toLowerCase()}`}>{incident.severity}{incident.capitalRelevant ? ' · CAPITAL' : ''}</em>
           </article>

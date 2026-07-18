@@ -104,8 +104,9 @@ test('frozen product-integration v1 routes enforce identity, exact paths, and qu
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ controlId: incidentControlId, expectedRevision: '17', targetId: incidentTargetId }),
     });
-    assert.equal(incidentPreview.status, 409, 'the exact incident preview shape reaches owner configuration');
-    assert.equal((await incidentPreview.json()).code, 'CONTROL_NOT_CONFIGURED');
+    assert.equal(incidentPreview.status, 503,
+      'the exact incident preview shape fails closed when the canonical incident router is missing');
+    assert.equal((await incidentPreview.json()).code, 'INCIDENT_ROUTER_UNAVAILABLE');
     const missingIncidentTarget = await request('/api/product-integration/v1/commands/preview', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ controlId: incidentControlId, expectedRevision: '17' }),

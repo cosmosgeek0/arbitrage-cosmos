@@ -26,6 +26,7 @@ import {
 } from '../../src/lib/productIntegration/useProductControlRoomBinding.ts';
 import { buildProductControlRoomFixture } from '../../src/features/productControlRoom/fixtureBinding.ts';
 import { controlResultTruthLabel } from '../../src/features/productControlRoom/components/ControlRegistryPanel.tsx';
+import { browserIncidentAcknowledgementControlId } from '../../src/lib/productIntegration/sha256.ts';
 
 const NOW = 1_800_000_000_000;
 
@@ -427,6 +428,79 @@ test('incident availability prevents an empty array from becoming false all-clea
     incidentAvailability: { state: 'AVAILABLE', truthLabel: 'UNAVAILABLE', blocker: null },
   };
   assert.ok(validateProductSupervisorEnvelope(falseAvailable).includes('INCIDENT_AVAILABILITY_TRUTH_MISMATCH'));
+});
+
+test('I00-050 browser contract accepts exact durable routing and rejects forged recovery or paging truth', () => {
+  const fixture = buildProductControlRoomFixture(createFixtureSession('DEGRADED_STALE_SOURCES', 'incident-routing', NOW));
+  const entries = fixture.managedInventory.entries.map((entry) => entry.identity === 'notification-incident-router'
+    ? {
+        identity: entry.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds: [],
+        inventoryState: 'EVIDENCE_PRESENT',
+        evidence: [{
+          source: 'PRODUCT_RUNTIME_OWNER_PROJECTION',
+          ownerId: 'productIntegration.incident-router',
+          truthLabel: 'BUILT_AND_TESTED',
+        }],
+        reasonCode: null,
+      }
+    : entry);
+  const snapshot = {
+    ...fixture,
+    incidentAvailability: { state: 'AVAILABLE', truthLabel: 'BUILT_AND_TESTED', blocker: null },
+    incidents: fixture.incidents.map((incident) => ({
+      ...incident,
+      reasonCode: 'CONNECTION_UNHEALTHY',
+      acknowledgementControlId: browserIncidentAcknowledgementControlId(incident.incidentId),
+    })),
+    managedInventory: {
+      ...fixture.managedInventory,
+      mappedIdentityCount: fixture.managedInventory.mappedIdentityCount + 1,
+      evidencePresentCount: fixture.managedInventory.evidencePresentCount + 1,
+      notConfiguredCount: fixture.managedInventory.notConfiguredCount - 1,
+      entries,
+    },
+  };
+  assert.deepEqual(validateProductSupervisorEnvelope(snapshot), []);
+  const incident = snapshot.incidents[0];
+  assert.equal(incident.routing.inApp.state, 'WIRED_LOCAL');
+  assert.equal(incident.routing.externalPaging.state, 'NOT_CONFIGURED');
+  assert.equal(incident.recoveryProof.state, 'PENDING');
+
+  const forgedExternal = {
+    ...snapshot,
+    incidents: [{
+      ...incident,
+      routing: { ...incident.routing, externalPaging: { ...incident.routing.externalPaging, state: 'ACTIVE' } },
+    }],
+  };
+  assert.ok(validateProductSupervisorEnvelope(forgedExternal).includes('INCIDENT_ENTRY_INVALID'));
+  const forgedRecovery = {
+    ...snapshot,
+    incidents: [{
+      ...incident,
+      recoveryProof: { state: 'PROVEN', sourceEventId: 99, resolvedAtMs: incident.lastSeenAtMs },
+    }],
+  };
+  assert.ok(validateProductSupervisorEnvelope(forgedRecovery).includes('INCIDENT_STATE_RELATIONSHIP_INVALID'));
+  const impossibleAcknowledgementChronology = {
+    ...snapshot,
+    incidents: [{
+      ...incident,
+      state: 'ACKNOWLEDGED',
+      acknowledgedAtMs: incident.firstSeenAtMs - 1,
+      acknowledgedByOperatorId: 'operator-1',
+    }],
+  };
+  assert.ok(validateProductSupervisorEnvelope(impossibleAcknowledgementChronology)
+    .includes('INCIDENT_STATE_RELATIONSHIP_INVALID'));
+  const forgedAcknowledgementControl = {
+    ...snapshot,
+    incidents: [{ ...incident, acknowledgementControlId: `incident.ack.${'f'.repeat(64)}` }],
+  };
+  assert.ok(validateProductSupervisorEnvelope(forgedAcknowledgementControl)
+    .includes('INCIDENT_STATE_RELATIONSHIP_INVALID'));
 });
 
 test('owner machine readiness requires dashboard READY plus published advance evidence', () => {

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
 import { MarketEngine, type MarketLiquidationProjectionPort } from './engine/marketData.js';
-import { Ledger } from './ledger.js';
+import { Ledger, type LedgerEvent } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
   fetchBinanceServerTime,
@@ -74,6 +74,8 @@ import {
   finalizeSystemBootReleaseCleanShutdown,
   LiveEdgeMutationJournalPersistenceAdapter,
   type ProductIncidentPersistenceInput,
+  type ProductIncidentRotationInput,
+  type ProductPersistenceAuditRecord,
 } from './systemIntegration/persistence/index.js';
 import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
@@ -102,7 +104,10 @@ import {
   type ProductRuntimeReadPorts,
 } from './productIntegration/runtime/index.js';
 import { createProductRuntimeSystemControlCommandOwner } from './productIntegration/runtime/systemControlCommandOwner.js';
-import { createProductIncidentOwner } from './productIntegration/incidents/index.js';
+import {
+  createProductIncidentOwner,
+  createProductIncidentRouter,
+} from './productIntegration/incidents/index.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
@@ -377,12 +382,94 @@ const publicSourceIsolation = createSourceIsolationOwner({
     restart: (sourceId) => engine.restartPublicSource(sourceId),
   } satisfies SourceIsolationPhysicalPort),
 });
+const productIncidentRouter = createProductIncidentRouter(Object.freeze({
+  readProductIncident: (incidentId: string) => ledger.readProductIncident(incidentId),
+  readProductIncidentSourceEvent: (sourceEventId: number) => (
+    ledger.readProductIncidentSourceEvent(sourceEventId)
+  ),
+  readProductIncidentsByFingerprintPrefix: (fingerprintPrefix: string, limit: number) => (
+    ledger.readProductIncidentsByFingerprintPrefix(fingerprintPrefix, limit)
+  ),
+  countProductIncidentsByFingerprintPrefix: (fingerprintPrefix: string) => (
+    ledger.countProductIncidentsByFingerprintPrefix(fingerprintPrefix)
+  ),
+  readProductIncidentRoutingBySourceEventId: (sourceEventId: number) => (
+    ledger.readProductIncidentRoutingBySourceEventId(sourceEventId)
+  ),
+  readProductIncidentRoutingByReceiptEventId: (receiptEventId: number) => (
+    ledger.readProductIncidentRoutingByReceiptEventId(receiptEventId)
+  ),
+  readLatestProductIncidentSourceDisposition: (componentId: string, sourceGroup: string) => (
+    ledger.readLatestProductIncidentSourceDisposition(componentId, sourceGroup)
+  ),
+  readPreviousProductIncidentSourceDisposition: (
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ) => ledger.readPreviousProductIncidentSourceDisposition(
+    componentId,
+    sourceGroup,
+    beforeSourceEventId,
+  ),
+  readPreviousProductIncidentRoutedDisposition: (
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ) => ledger.readPreviousProductIncidentRoutedDisposition(
+    componentId,
+    sourceGroup,
+    beforeSourceEventId,
+  ),
+  readProductIncidentAcknowledgementByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentAcknowledgementByIncidentId(incidentId)
+  ),
+  readProductIncidentOpeningRoutingByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentOpeningRoutingByIncidentId(incidentId)
+  ),
+  readProductIncidentRotationByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentRotationByIncidentId(incidentId)
+  ),
+  readOldestResolvedProductIncidentByFingerprintPrefix: (fingerprintPrefix: string) => (
+    ledger.readOldestResolvedProductIncidentByFingerprintPrefix(fingerprintPrefix)
+  ),
+  compareAndTransitionProductIncident: (input: Readonly<ProductIncidentPersistenceInput>) => (
+    ledger.compareAndTransitionProductIncident(input)
+  ),
+  compareAndRotateResolvedProductIncident: (input: Readonly<ProductIncidentRotationInput>) => (
+    ledger.compareAndRotateResolvedProductIncident(input)
+  ),
+  recordProductIncidentSourceDisposition: (audit: Readonly<ProductPersistenceAuditRecord>) => (
+    ledger.recordProductIncidentSourceDisposition(audit)
+  ),
+  advanceProductIncidentRouterCheckpoint: (sourceEventId: number) => (
+    ledger.advanceProductIncidentRouterCheckpoint(sourceEventId)
+  ),
+}));
+ledger.on('event', (event: LedgerEvent) => {
+  try {
+    productIncidentRouter.ingest(event);
+  } catch {
+    productIncidentRouter.failClosed('INCIDENT_ROUTER_LIVE_INGEST_FAILED');
+  }
+});
+productIncidentRouter.beginBootstrap();
+try {
+  while (true) {
+    const page = ledger.readProductIncidentRouterBootstrapPage(500);
+    if (!productIncidentRouter.bootstrapPage(page)) break;
+    if (page.length < 500) break;
+  }
+  productIncidentRouter.completeBootstrap();
+} catch {
+  productIncidentRouter.failClosed('INCIDENT_ROUTER_LIVE_INGEST_FAILED');
+}
 const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   applicationStartOk: () => canonicalApplicationStartOk,
   applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
   supervisor: () => systemIntegration.supervisor(),
   opsReadback: (supervisor: Readonly<SystemSupervisorReadModel>) => readCanonicalOps(supervisor),
   bootReleaseReadback: () => bootReleasePersistence.readback(),
+  incidents: () => productIncidentRouter.readProjection(),
   events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
     ledger.readProductOperatorEventPage(afterCursor, limit)
   ),
@@ -795,6 +882,8 @@ function safeLogEvent(kind: string, symbol: string | null, data: unknown): void 
 }
 
 function notificationRoutingSnapshot() {
+  const incidentRouting = productIncidentRouter.readProjection().availability;
+  const localAvailable = incidentRouting.state === 'AVAILABLE';
   return {
     sources: {
       bot: { available: true, label: 'Bot Runtime', detail: 'Engine, controls, and dependency state changes' },
@@ -811,11 +900,18 @@ function notificationRoutingSnapshot() {
       },
     },
     destinations: {
-      inApp: { available: true, label: 'In-App', detail: 'Active in this control room' },
-      email: { available: false, label: 'Email', detail: 'Delivery provider is not connected' },
-      telegram: { available: false, label: 'Telegram', detail: 'Bot token and chat routing are not connected' },
-      whatsapp: { available: false, label: 'WhatsApp', detail: 'WhatsApp Cloud API is not connected' },
-      awsSns: { available: false, label: 'AWS SNS', detail: 'SNS topic and publish role are not connected' },
+      inApp: {
+        available: localAvailable,
+        state: localAvailable ? 'WIRED_LOCAL' : incidentRouting.state,
+        label: 'In-App',
+        detail: localAvailable
+          ? 'Canonical Product incident router is active in this control room'
+          : `Canonical Product incident router is ${incidentRouting.state}: ${incidentRouting.blocker}`,
+      },
+      email: { available: false, state: 'NOT_CONFIGURED', label: 'Email', detail: 'Delivery provider is not connected' },
+      telegram: { available: false, state: 'NOT_CONFIGURED', label: 'Telegram', detail: 'Bot token and chat routing are not connected' },
+      whatsapp: { available: false, state: 'NOT_CONFIGURED', label: 'WhatsApp', detail: 'WhatsApp Cloud API is not connected' },
+      awsSns: { available: false, state: 'NOT_CONFIGURED', label: 'AWS SNS', detail: 'SNS topic and publish role are not connected' },
     },
     policy: {
       transitionsOnly: true,
@@ -2730,9 +2826,15 @@ function connectionWatchmanSnapshot(
       value: cloudflarePresent ? 'Present' : 'Localhost', required: cloudflarePresent, updatedAt: now,
     },
     {
-      id: 'alert-routing', label: 'Failure Notification Route', group: 'infrastructure', status: 'operational',
-      detail: `${Object.values(notificationRouting.destinations).filter((destination) => destination.available).length} active route · transition-only policy`,
-      value: 'In-App Live', required: true, updatedAt: now,
+      id: 'alert-routing', label: 'Failure Notification Route', group: 'infrastructure',
+      status: notificationRouting.destinations.inApp.available ? 'operational' : 'outage',
+      detail: notificationRouting.destinations.inApp.available
+        ? `${Object.values(notificationRouting.destinations).filter((destination) => destination.available).length} active local route · transition-only policy`
+        : `Canonical in-app incident route unavailable · ${notificationRouting.destinations.inApp.detail}`,
+      value: notificationRouting.destinations.inApp.available
+        ? 'WIRED_LOCAL'
+        : notificationRouting.destinations.inApp.state,
+      required: true, updatedAt: now,
     },
   ];
 

@@ -233,6 +233,12 @@ export interface ProductIncidentRecord {
   }>;
 }
 
+export interface ProductIncidentRotationInput {
+  readonly incidentId: string;
+  readonly expectedLedgerEventId: number;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
 export interface ProductBootReleasePersistenceInput {
   readonly operationId: string;
   readonly operationType: string;

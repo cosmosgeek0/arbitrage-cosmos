@@ -16,8 +16,9 @@ import {
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RUNNER = path.join(ROOT, 'test/run-quant-gates.mjs');
 
-test('Q-133 package surface exposes all fourteen modes through the sole Quant runner', () => {
+test('Q-133 exposes all fourteen modes through one Quant gate runner alongside the locked bootstrap', () => {
   const packageJson = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(packageJson.scripts['bootstrap:quant:locked'], 'node test/run-quant-bootstrap.mjs');
   assert.equal(packageJson.scripts['test:quant:built'], 'node test/run-quant-gates.mjs');
   assert.deepEqual(Object.keys(QUANT_PACKAGE_SCRIPTS), QUANT_COMMAND_MODES.map((mode) => `quant:${mode}`));
   for (const [script, mode] of Object.entries(QUANT_PACKAGE_SCRIPTS)) {
@@ -26,7 +27,7 @@ test('Q-133 package surface exposes all fourteen modes through the sole Quant ru
   }
   assert.deepEqual(
     readdirSync(path.join(ROOT, 'test')).filter((name) => name.startsWith('run-quant-')).sort(),
-    ['run-quant-gates.mjs'],
+    ['run-quant-bootstrap.mjs', 'run-quant-gates.mjs'],
   );
 });
 

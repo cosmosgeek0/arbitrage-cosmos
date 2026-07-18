@@ -223,15 +223,26 @@ test('page capability and control matrices separate historical fixtures from cur
       || control.wiringState.startsWith('NOT_CONFIGURED:'));
   }
   const wired = catalog.controls.filter((row) => row.wiringState === 'WIRED_SOURCE');
-  assert.deepEqual(wired.map((row) => row.id).sort(), ['CTRL-INTAKE', 'CTRL-KILL', 'CTRL-MODE', 'CTRL-RESTART']);
+  assert.deepEqual(wired.map((row) => row.id).sort(), ['CTRL-ACK', 'CTRL-INTAKE', 'CTRL-KILL', 'CTRL-MODE', 'CTRL-RESTART']);
   assert.deepEqual(wired.map((row) => row.runtimeControlId).sort(), [
-    'component.engine-supervisor.restart', 'global.intake.pause', 'global.kill-switch.engage', 'global.safe-mode.read-only',
+    'component.engine-supervisor.restart', 'global.intake.pause', 'global.kill-switch.engage', 'global.safe-mode.read-only', 'incident.ack.<incident-sha256>',
   ]);
-  assert(wired.every((row) => row.reversible === false && row.closureState === 'SOURCE_BUILT_RUNTIME_MEASUREMENT_PENDING'));
+  assert(wired.every((row) => row.reversible === false));
+  assert(wired.filter((row) => row.id !== 'CTRL-ACK')
+    .every((row) => row.closureState === 'SOURCE_BUILT_RUNTIME_MEASUREMENT_PENDING'));
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-KILL').payloadSchema, '{engaged:true}');
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-MODE').payloadSchema, '{safeMode:READ_ONLY}');
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-INTAKE').payloadSchema, '{paused:true}');
   assert.equal(catalog.controls.find((row) => row.id === 'CTRL-RESTART').payloadSchema, '{componentId:engine-supervisor}');
+  const acknowledgement = catalog.controls.find((row) => row.id === 'CTRL-ACK');
+  assert.deepEqual(
+    [acknowledgement.command, acknowledgement.owner, acknowledgement.wiringState, acknowledgement.closureState],
+    ['ACK_INCIDENT', 'productIntegration/incidents', 'WIRED_SOURCE', 'BUILT_AND_TESTED'],
+  );
+  const notifications = catalog.pages.find((row) => row.pageId === 'notifications');
+  assert.equal(notifications.closureState, 'BUILT_AND_TESTED:IN_APP_WIRED_LOCAL_EXTERNAL_PAGING_NOT_CONFIGURED');
+  assert.match(notifications.canonicalApi, /\/api\/notification-routing/u);
+  assert.doesNotMatch(`${notifications.canonicalApi} ${notifications.blocker}`, /PENDING_INCIDENT_ADAPTER|CANONICAL_INCIDENT_ACK_COMMAND_ABSENT/u);
   assert.deepEqual(catalog.requiredAbsentSurfaces, []);
   assert.equal(catalog.canonicalRoutes.length, 15);
   assert.deepEqual(
@@ -316,10 +327,11 @@ test('current machine evidence is input-driven for both legal candidate phases a
   assert.equal(current.counts.phase2Donors, closure.acceptedEvidence.filter((row) => row.phase2Donor).length);
   assert.equal(current.counts.provenanceItems, readJson('fixtures/i00/receipt-provenance.json').items.length);
   assert(current.frozenInputs.every((input) => input.passed), JSON.stringify(current.frozenInputs.filter((input) => !input.passed)));
-  assert.equal(current.historicalFrozenInputs.filter((input) => input.passed).length, 12);
+  assert.equal(current.historicalFrozenInputs.filter((input) => input.passed).length, 11);
   assert.deepEqual(current.historicalFrozenInputs.filter((input) => !input.passed).map((input) => input.path), [
     'QL_DIRECTOR_STATE.md',
     'QL_PARALLEL_DAG.md',
+    'ARCHITECTURE.md',
   ]);
   assert.equal(current.livingDirectorInputAcceptance.passed, true);
   assert(current.authority.scanPassed);

@@ -378,6 +378,13 @@ function acknowledgementEvidenceFromEvent(
   });
 }
 
+/** Strict decoder shared by the router when proving ACK-owned incident revisions. */
+export function readProductIncidentAcknowledgementEvidence(
+  event: Readonly<LedgerEventRecord>,
+): Readonly<ProductIncidentAcknowledgementEvidence> | null {
+  return acknowledgementEvidenceFromEvent(event);
+}
+
 function acknowledgementFromEvent(
   event: Readonly<LedgerEventRecord>,
   request: Readonly<ProductIncidentAcknowledgementRequest>,

@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -27,6 +28,7 @@ import {
   type ProductIdentityReferenceRecord,
   type ProductIncidentPersistenceInput,
   type ProductIncidentRecord,
+  type ProductIncidentRotationInput,
   type ProductPersistenceAuditRecord,
   type ProductPersistenceMutationResult,
   type LedgerSchemaCompatibilityReadback,
@@ -79,6 +81,65 @@ const PRODUCT_DOMAIN_STATE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
 const PRODUCT_INCIDENT_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const);
 const PRODUCT_INCIDENT_STATES = Object.freeze(['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] as const);
 const PRODUCT_INCIDENT_ROUTE_SCHEMA = 'cosmos.product-incident-route.v1';
+const PRODUCT_INCIDENT_ROTATION_SCHEMA = 'cosmos.product-incident-rotation.v1';
+const PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA = 'cosmos.product-incident-source-disposition.v1';
+const PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY = 'product.incident.router.checkpoint.v1';
+const PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA = 'cosmos.product-incident-router-checkpoint.v2';
+const PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST = '0'.repeat(64);
+
+function productIncidentRouterCheckpointDigest(input: Readonly<{
+  priorChainDigest: string;
+  priorSourceEventId: number;
+  priorDispositionEventId: number;
+  sourceEventId: number;
+  dispositionEventId: number;
+  sourceData: unknown;
+  dispositionData: unknown;
+}>): string {
+  return createHash('sha256')
+    .update('product-incident-router-checkpoint.v2\0', 'utf8')
+    .update(input.priorChainDigest, 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.priorSourceEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.priorDispositionEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.sourceEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.dispositionEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(canonicalProductPersistenceJson(input.sourceData, 'product incident checkpoint source'), 'utf8')
+    .update('\0', 'utf8')
+    .update(canonicalProductPersistenceJson(
+      input.dispositionData,
+      'product incident checkpoint disposition',
+    ), 'utf8')
+    .digest('hex');
+}
+const PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS = Object.freeze([
+  'schema', 'operation', 'sourceEventId', 'sourceEventKind', 'sourceGroup',
+  'sourceStatus', 'sourceDetail', 'sourceObservedAtMs', 'incidentId', 'fingerprint', 'rootComponentId',
+  'severity', 'capitalRelevant', 'state', 'firstSeenAtMs', 'lastSeenAtMs',
+  'eventCount', 'acknowledgedAtMs', 'acknowledgedByOperatorId', 'resolvedAtMs',
+  'reasonCode', 'correlationId', 'routing', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS = Object.freeze([
+  'schema', 'operation', 'sourceEventId', 'sourceEventKind', 'sourceGroup',
+  'sourceStatus', 'sourceDetail', 'sourceObservedAtMs', 'rootComponentId',
+  'groupingDigest', 'incidentId', 'priorDispositionEventId', 'priorSourceEventId',
+  'priorObservedAtMs', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_ROTATION_KEYS = Object.freeze([
+  'schema', 'operation', 'incidentId', 'expectedLedgerEventId', 'reasonCode',
+  'retentionLimit', 'snapshot', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_SNAPSHOT_KEYS = Object.freeze([
+  'incidentId', 'fingerprint', 'rootComponentId', 'severity', 'capitalRelevant',
+  'state', 'firstSeenAtMs', 'lastSeenAtMs', 'eventCount', 'acknowledgedAtMs',
+  'acknowledgedByOperatorId', 'resolvedAtMs', 'correlationId', 'ledgerEventId',
+  'sourceGroup', 'openingRoutingReceiptEventId', 'openingSourceEventId',
+  'recoveryRoutingReceiptEventId', 'recoverySourceEventId',
+]);
 const PRODUCT_INCIDENT_ACK_SCHEMAS = new Set([
   'cosmos.product-incident-ack.v1',
   'cosmos.product-incident-ack.v2',
@@ -816,6 +877,80 @@ export class Ledger extends EventEmitter {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS product_incident_source_dispositions (
+        source_event_id INTEGER PRIMARY KEY REFERENCES events(id),
+        disposition_event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+        previous_source_event_id INTEGER NOT NULL,
+        previous_disposition_event_id INTEGER NOT NULL,
+        processed_count INTEGER NOT NULL UNIQUE CHECK(processed_count >= 1),
+        chain_digest TEXT NOT NULL UNIQUE CHECK(length(chain_digest) = 64)
+      );
+      CREATE TRIGGER IF NOT EXISTS product_incident_source_dispositions_no_update
+        BEFORE UPDATE ON product_incident_source_dispositions
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint history is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS product_incident_source_dispositions_no_delete
+        BEFORE DELETE ON product_incident_source_dispositions
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint history is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS product_incident_checkpoint_events_no_update
+        BEFORE UPDATE ON events
+        WHEN EXISTS (
+          SELECT 1 FROM product_incident_source_dispositions
+          WHERE source_event_id = OLD.id OR disposition_event_id = OLD.id
+        )
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint evidence is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS product_incident_checkpoint_events_no_delete
+        BEFORE DELETE ON events
+        WHEN EXISTS (
+          SELECT 1 FROM product_incident_source_dispositions
+          WHERE source_event_id = OLD.id OR disposition_event_id = OLD.id
+        )
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint evidence is immutable'); END;
+      CREATE INDEX IF NOT EXISTS idx_events_product_incident_source
+        ON events(kind, id);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_events_product_incident_disposition_source_event
+        ON events(
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+          'product.incident.source_ignored'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') IN (
+            'cosmos.product-incident-route.v1',
+            'cosmos.product-incident-source-disposition.v1'
+          );
+      CREATE INDEX IF NOT EXISTS idx_events_product_incident_disposition_stream
+        ON events(
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END,
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END,
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC,
+          id DESC
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+          'product.incident.source_ignored'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') IN (
+            'cosmos.product-incident-route.v1',
+            'cosmos.product-incident-source-disposition.v1'
+          );
+      CREATE INDEX IF NOT EXISTS idx_events_product_incident_route_stream
+        ON events(
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END,
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END,
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC,
+          id DESC
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1';
       CREATE TABLE IF NOT EXISTS product_component_desired_state (
         component_id TEXT PRIMARY KEY,
         desired_state TEXT NOT NULL,
@@ -2574,6 +2709,135 @@ export class Ledger extends EventEmitter {
         input.correlationId,
         event.id,
       );
+      if (plainLedgerRecord(audit.data)
+        && audit.data.schema === PRODUCT_INCIDENT_ROUTE_SCHEMA
+        && Number.isSafeInteger(audit.data.sourceEventId)) {
+        this.advanceProductIncidentRouterCheckpointInTransaction(
+          Number(audit.data.sourceEventId),
+          event.id,
+        );
+      }
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Appends one immutable disposition for an admitted source that creates no incident mutation. */
+  recordProductIncidentSourceDisposition(
+    input: Readonly<ProductPersistenceAuditRecord>,
+  ): ProductPersistenceMutationResult {
+    const audit = prepareProductPersistenceAudit(input);
+    const data = audit.data;
+    if (audit.kind !== 'product.incident.source_ignored'
+      || audit.symbol !== null
+      || !plainLedgerRecord(data)
+      || Object.keys(data).length !== PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS.length
+      || !PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS.every((key) => Object.hasOwn(data, key))
+      || data.schema !== PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA
+      || (data.operation !== 'IGNORE_NO_ACTIVE' && data.operation !== 'IGNORE_LATE')
+      || !Number.isSafeInteger(data.sourceEventId) || Number(data.sourceEventId) < 1
+      || (data.sourceEventKind !== 'connection_alert' && data.sourceEventKind !== 'connection_recovered')
+      || typeof data.sourceGroup !== 'string' || !PRODUCT_IDENTIFIER.test(data.sourceGroup)
+      || (data.sourceStatus !== 'degraded' && data.sourceStatus !== 'outage' && data.sourceStatus !== 'operational')
+      || typeof data.sourceDetail !== 'string' || data.sourceDetail.length > 2_000
+      || !validProductUtcMillis(data.sourceObservedAtMs)
+      || typeof data.rootComponentId !== 'string' || !PRODUCT_IDENTIFIER.test(data.rootComponentId)
+      || typeof data.groupingDigest !== 'string' || !/^[a-f0-9]{64}$/.test(data.groupingDigest)
+      || data.incidentId !== null
+      || !((data.priorDispositionEventId === null
+        && data.priorSourceEventId === null
+        && data.priorObservedAtMs === null)
+        || (Number.isSafeInteger(data.priorDispositionEventId)
+          && Number(data.priorDispositionEventId) >= 1
+          && Number.isSafeInteger(data.priorSourceEventId)
+          && Number(data.priorSourceEventId) >= 1
+          && validProductUtcMillis(data.priorObservedAtMs)))
+      || (data.operation === 'IGNORE_NO_ACTIVE' && data.sourceEventKind !== 'connection_recovered')
+      || (data.operation === 'IGNORE_NO_ACTIVE'
+        && data.priorObservedAtMs !== null
+        && Number(data.priorObservedAtMs) > Number(data.sourceObservedAtMs))
+      || (data.operation === 'IGNORE_LATE'
+        && (data.priorSourceEventId === null
+          || Number(data.priorSourceEventId) >= Number(data.sourceEventId)
+          || Number(data.priorObservedAtMs) <= Number(data.sourceObservedAtMs)))
+      || data.externalActionAuthorization !== 'NONE') {
+      throw new TypeError('product incident source disposition is invalid');
+    }
+    const source = this.readProductIncidentSourceEvent(Number(data.sourceEventId));
+    if (!source || source.kind !== data.sourceEventKind || !plainLedgerRecord(source.data)
+      || source.data.componentId !== data.rootComponentId
+      || source.data.group !== data.sourceGroup
+      || source.data.status !== data.sourceStatus
+      || source.data.detail !== data.sourceDetail
+      || source.data.observedAt !== data.sourceObservedAtMs) {
+      throw new Error('product incident source disposition does not match durable source truth');
+    }
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.readProductIncidentRoutingBySourceEventId(Number(data.sourceEventId));
+      if (existing !== null) {
+        if (existing.kind === audit.kind
+          && existing.symbol === audit.symbol
+          && canonicalProductPersistenceJson(existing.data, 'existing product incident source disposition')
+            === audit.serialized) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.id, audit),
+            String(existing.id),
+          );
+        }
+        return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, String(existing.id));
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.advanceProductIncidentRouterCheckpointInTransaction(Number(data.sourceEventId), event.id);
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Atomically rotates one resolved top-N projection while preserving immutable Ledger history. */
+  compareAndRotateResolvedProductIncident(
+    input: Readonly<ProductIncidentRotationInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)
+      || Object.keys(input).length !== 3
+      || !Object.hasOwn(input, 'incidentId')
+      || !Object.hasOwn(input, 'expectedLedgerEventId')
+      || !Object.hasOwn(input, 'audit')) {
+      throw new TypeError('product incident rotation input is invalid');
+    }
+    assertProductIdentifier(input.incidentId, 'product incident rotation incidentId');
+    assertProductPositiveInteger(input.expectedLedgerEventId, 'product incident rotation expectedLedgerEventId');
+    const audit = prepareProductPersistenceAudit(input.audit);
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const row = this.db.prepare(`
+        SELECT * FROM product_incidents WHERE incident_id = ? LIMIT 1
+      `).get(input.incidentId) as ProductIncidentDbRow | undefined;
+      if (!row) {
+        const existing = this.readProductIncidentRotationByIncidentId(input.incidentId);
+        if (existing && existing.kind === audit.kind && existing.symbol === audit.symbol
+          && canonicalProductPersistenceJson(existing.data, 'existing product incident rotation') === audit.serialized) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.id, audit),
+            String(existing.id),
+          );
+        }
+        return frozenProductPersistenceResult('VERSION_CONFLICT', null, null);
+      }
+      productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id));
+      if (row.ledger_event_id !== input.expectedLedgerEventId) {
+        return frozenProductPersistenceResult('VERSION_CONFLICT', null, String(row.ledger_event_id));
+      }
+      if (row.state !== 'RESOLVED' || !productIncidentRotationAuditMatchesRow(audit.data, row)
+        || audit.kind !== 'product.incident.rotated' || audit.symbol !== null) {
+        throw new TypeError('product incident rotation audit does not match resolved projection truth');
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      const removed = this.db.prepare(`
+        DELETE FROM product_incidents
+        WHERE incident_id = ? AND ledger_event_id = ? AND state = 'RESOLVED'
+      `).run(row.incident_id, row.ledger_event_id);
+      if (removed.changes !== 1) throw new Error('product incident rotation compare-and-delete failed');
       return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
     });
     return this.publishProductPersistenceResult(commit.immediate());
@@ -2589,9 +2853,485 @@ export class Ledger extends EventEmitter {
     return productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id));
   }
 
+  /** Bounded deterministic incident list for one exact owner fingerprint namespace. */
+  readProductIncidentsByFingerprintPrefix(
+    fingerprintPrefix: string,
+    limit = 200,
+  ): readonly Readonly<ProductIncidentRecord>[] {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const safeLimit = boundedInteger(limit, 1, 200, 200);
+    const rows = this.db.prepare(`
+      SELECT * FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ?
+      ORDER BY
+        CASE state WHEN 'OPEN' THEN 0 WHEN 'ACKNOWLEDGED' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END,
+        CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END,
+        last_seen_at_ms DESC,
+        incident_id ASC
+      LIMIT ?
+    `).all(fingerprintPrefix, fingerprintPrefix, safeLimit) as ProductIncidentDbRow[];
+    return Object.freeze(rows.map((row) => (
+      productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id))
+    )));
+  }
+
+  /** Exact owner-namespace cardinality prevents a bounded read from hiding overflow. */
+  countProductIncidentsByFingerprintPrefix(fingerprintPrefix: string): number {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ?
+    `).get(fingerprintPrefix, fingerprintPrefix) as { count: number };
+    assertProductNonNegativeInteger(row.count, 'product incident namespace count');
+    return row.count;
+  }
+
+  /** Reads admitted source events oldest-first for explicit startup catch-up. */
+  readProductIncidentSourceEvents(
+    afterId: number,
+    limit = 500,
+  ): readonly Readonly<LedgerEvent>[] {
+    if (!Number.isSafeInteger(afterId) || afterId < 0) {
+      throw new TypeError('product incident source cursor is invalid');
+    }
+    const safeLimit = boundedInteger(limit, 1, 500, 500);
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id > ? AND kind IN ('connection_alert', 'connection_recovered')
+      ORDER BY id ASC
+      LIMIT ?
+    `).all(afterId, safeLimit) as EventDbRow[];
+    return Object.freeze(rows.map((row) => Object.freeze(parseEvent(row))));
+  }
+
+  private advanceProductIncidentRouterCheckpointInTransaction(
+    sourceEventId: number,
+    dispositionEventId: number,
+  ): void {
+    assertProductPositiveInteger(sourceEventId, 'product incident checkpoint sourceEventId');
+    assertProductPositiveInteger(dispositionEventId, 'product incident checkpoint dispositionEventId');
+    const current = this.readProductIncidentRouterCheckpoint();
+    const currentSourceEventId = current.sourceEventId;
+    const currentDispositionEventId = current.dispositionEventId;
+    const currentProcessedCount = current.processedCount;
+    const currentChainDigest = current.chainDigest;
+    if (sourceEventId === currentSourceEventId) {
+      if (dispositionEventId !== currentDispositionEventId) {
+        throw new Error('product incident router checkpoint disposition conflicts');
+      }
+      return;
+    }
+    if (sourceEventId < currentSourceEventId) {
+      const mapping = this.db.prepare(`
+        SELECT disposition_event_id FROM product_incident_source_dispositions
+        WHERE source_event_id = ?
+      `).get(sourceEventId) as { disposition_event_id: number } | undefined;
+      if (!mapping || mapping.disposition_event_id !== dispositionEventId) {
+        throw new Error('product incident router historical checkpoint mapping conflicts');
+      }
+      return;
+    }
+    const nextSource = this.db.prepare(`
+      SELECT id FROM events
+      WHERE kind IN ('connection_alert', 'connection_recovered') AND id > ?
+      ORDER BY id ASC LIMIT 1
+    `).get(currentSourceEventId) as { id: number } | undefined;
+    if (!nextSource || nextSource.id !== sourceEventId) {
+      throw new Error('product incident router checkpoint advance has a source gap');
+    }
+    const source = this.readProductIncidentSourceEvent(sourceEventId);
+    const disposition = this.readProductIncidentRoutingBySourceEventId(sourceEventId);
+    if (source === null || disposition === null || disposition.id !== dispositionEventId
+      || disposition.id <= source.id || !plainLedgerRecord(disposition.data)
+      || disposition.data.sourceEventId !== source.id
+      || ![
+        PRODUCT_INCIDENT_ROUTE_SCHEMA,
+        PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA,
+      ].includes(String(disposition.data.schema))) {
+      throw new Error('product incident router checkpoint advance proof is invalid');
+    }
+    const processedCount = currentProcessedCount + 1;
+    if (!Number.isSafeInteger(processedCount)) {
+      throw new Error('product incident router checkpoint count is exhausted');
+    }
+    const chainDigest = productIncidentRouterCheckpointDigest({
+      priorChainDigest: currentChainDigest,
+      priorSourceEventId: currentSourceEventId,
+      priorDispositionEventId: currentDispositionEventId,
+      sourceEventId,
+      dispositionEventId,
+      sourceData: source.data,
+      dispositionData: disposition.data,
+    });
+    const inserted = this.db.prepare(`
+      INSERT INTO product_incident_source_dispositions (
+        source_event_id, disposition_event_id, previous_source_event_id,
+        previous_disposition_event_id, processed_count, chain_digest
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_event_id) DO NOTHING
+    `).run(
+      sourceEventId,
+      dispositionEventId,
+      currentSourceEventId,
+      currentDispositionEventId,
+      processedCount,
+      chainDigest,
+    );
+    if (inserted.changes !== 1) throw new Error('product incident router checkpoint mapping conflicts');
+    this.db.prepare(`
+      INSERT INTO config (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY, JSON.stringify({
+      schema: PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA,
+      sourceEventId,
+      dispositionEventId,
+      processedCount,
+      chainDigest,
+    }));
+  }
+
+  /**
+   * Reads only the bounded suffix after the atomically advanced incident-router
+   * checkpoint. The latest immutable chained receipt authenticates the prefix,
+   * so restart work is independent of lifetime source-event history.
+   */
+  readProductIncidentRouterBootstrapPage(limit = 500): readonly Readonly<LedgerEvent>[] {
+    const safeLimit = boundedInteger(limit, 1, 500, 500);
+    const checkpoint = this.readProductIncidentRouterCheckpoint();
+    return this.readProductIncidentSourceEvents(checkpoint.sourceEventId, safeLimit);
+  }
+
+  /** Exact durable high-water used to avoid lifetime-history replay on restart. */
+  readProductIncidentRouterCheckpoint(): Readonly<{
+    sourceEventId: number;
+    dispositionEventId: number;
+    processedCount: number;
+    chainDigest: string;
+  }> {
+    const raw = this.getConfigValue(PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY);
+    if (raw === null) {
+      const mapping = this.db.prepare(`
+        SELECT source_event_id FROM product_incident_source_dispositions LIMIT 1
+      `).get() as { source_event_id: number } | undefined;
+      if (mapping) throw new Error('product incident router checkpoint is missing');
+      return Object.freeze({
+        sourceEventId: 0,
+        dispositionEventId: 0,
+        processedCount: 0,
+        chainDigest: PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST,
+      });
+    }
+    let value: unknown;
+    try { value = JSON.parse(raw) as unknown; } catch {
+      throw new Error('product incident router checkpoint is invalid');
+    }
+    if (!plainLedgerRecord(value)
+      || Object.keys(value).length !== 5
+      || value.schema !== PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA
+      || !Number.isSafeInteger(value.sourceEventId) || Number(value.sourceEventId) < 1
+      || !Number.isSafeInteger(value.dispositionEventId) || Number(value.dispositionEventId) < 1
+      || !Number.isSafeInteger(value.processedCount) || Number(value.processedCount) < 1
+      || typeof value.chainDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.chainDigest)) {
+      throw new Error('product incident router checkpoint is invalid');
+    }
+    const mapping = this.db.prepare(`
+      SELECT disposition_event_id, previous_source_event_id, previous_disposition_event_id,
+        processed_count, chain_digest
+      FROM product_incident_source_dispositions
+      WHERE source_event_id = ?
+    `).get(Number(value.sourceEventId)) as {
+      disposition_event_id: number;
+      previous_source_event_id: number;
+      previous_disposition_event_id: number;
+      processed_count: number;
+      chain_digest: string;
+    } | undefined;
+    if (!mapping || mapping.disposition_event_id !== value.dispositionEventId
+      || mapping.processed_count !== value.processedCount
+      || mapping.chain_digest !== value.chainDigest
+      || !Number.isSafeInteger(mapping.previous_source_event_id)
+      || mapping.previous_source_event_id < 0
+      || mapping.previous_source_event_id >= Number(value.sourceEventId)
+      || !Number.isSafeInteger(mapping.previous_disposition_event_id)
+      || mapping.previous_disposition_event_id < 0
+      || mapping.previous_disposition_event_id >= Number(value.dispositionEventId)
+      || ((mapping.previous_source_event_id === 0)
+        !== (mapping.previous_disposition_event_id === 0))) {
+      throw new Error('product incident router checkpoint mapping is invalid');
+    }
+    const latest = this.db.prepare(`
+      SELECT source_event_id, disposition_event_id, processed_count, chain_digest
+      FROM product_incident_source_dispositions
+      ORDER BY processed_count DESC LIMIT 1
+    `).get() as {
+      source_event_id: number;
+      disposition_event_id: number;
+      processed_count: number;
+      chain_digest: string;
+    } | undefined;
+    if (!latest
+      || latest.source_event_id !== value.sourceEventId
+      || latest.disposition_event_id !== value.dispositionEventId
+      || latest.processed_count !== value.processedCount
+      || latest.chain_digest !== value.chainDigest) {
+      throw new Error('product incident router checkpoint is not the immutable high-water');
+    }
+    const source = this.readProductIncidentSourceEvent(Number(value.sourceEventId));
+    const disposition = this.readProductIncidentRoutingBySourceEventId(Number(value.sourceEventId));
+    if (source === null || disposition === null || disposition.id !== value.dispositionEventId
+      || disposition.id <= source.id || !plainLedgerRecord(disposition.data)
+      || disposition.data.sourceEventId !== source.id) {
+      throw new Error('product incident router checkpoint proof is invalid');
+    }
+    let priorChainDigest = PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST;
+    if (mapping.previous_source_event_id === 0) {
+      if (mapping.processed_count !== 1) {
+        throw new Error('product incident router checkpoint genesis count is invalid');
+      }
+    } else {
+      const prior = this.db.prepare(`
+        SELECT disposition_event_id, processed_count, chain_digest
+        FROM product_incident_source_dispositions
+        WHERE source_event_id = ?
+      `).get(mapping.previous_source_event_id) as {
+        disposition_event_id: number;
+        processed_count: number;
+        chain_digest: string;
+      } | undefined;
+      if (!prior
+        || prior.disposition_event_id !== mapping.previous_disposition_event_id
+        || prior.processed_count !== mapping.processed_count - 1
+        || !/^[a-f0-9]{64}$/.test(prior.chain_digest)) {
+        throw new Error('product incident router checkpoint predecessor is invalid');
+      }
+      priorChainDigest = prior.chain_digest;
+    }
+    const expectedChainDigest = productIncidentRouterCheckpointDigest({
+      priorChainDigest,
+      priorSourceEventId: mapping.previous_source_event_id,
+      priorDispositionEventId: mapping.previous_disposition_event_id,
+      sourceEventId: Number(value.sourceEventId),
+      dispositionEventId: Number(value.dispositionEventId),
+      sourceData: source.data,
+      dispositionData: disposition.data,
+    });
+    if (expectedChainDigest !== value.chainDigest) {
+      throw new Error('product incident router checkpoint chain digest is invalid');
+    }
+    return Object.freeze({
+      sourceEventId: Number(value.sourceEventId),
+      dispositionEventId: Number(value.dispositionEventId),
+      processedCount: Number(value.processedCount),
+      chainDigest: value.chainDigest,
+    });
+  }
+
+  /** Advances an existing exact source disposition during idempotent catch-up. */
+  advanceProductIncidentRouterCheckpoint(sourceEventId: number): void {
+    assertProductPositiveInteger(sourceEventId, 'product incident checkpoint sourceEventId');
+    const disposition = this.readProductIncidentRoutingBySourceEventId(sourceEventId);
+    if (disposition === null) throw new Error('product incident checkpoint disposition is missing');
+    const commit = this.db.transaction(() => {
+      this.advanceProductIncidentRouterCheckpointInTransaction(sourceEventId, disposition.id);
+    });
+    commit.immediate();
+  }
+
+  /** Exact durable admitted source event for router input authentication. */
+  readProductIncidentSourceEvent(sourceEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(sourceEventId, 'product incident sourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id = ? AND kind IN ('connection_alert', 'connection_recovered')
+    `).get(sourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact durable source-event dedupe for Product incident routing audits. */
+  readProductIncidentRoutingBySourceEventId(sourceEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(sourceEventId, 'product incident sourceEventId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(sourceEventId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident source routing events');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Exact immutable Product incident route by its Ledger receipt revision. */
+  readProductIncidentRoutingByReceiptEventId(receiptEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(receiptEventId, 'product incident routing receiptEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id = ?
+        AND kind IN ('product.incident.opened', 'product.incident.grouped', 'product.incident.resolved')
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+      LIMIT 1
+    `).get(receiptEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Latest exact processed-source high-water for one component/group stream. */
+  readLatestProductIncidentSourceDisposition(
+    componentId: string,
+    sourceGroup: string,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact predecessor disposition for ignored-source causal proof. */
+  readPreviousProductIncidentSourceDisposition(
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    assertProductPositiveInteger(beforeSourceEventId, 'product incident beforeSourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END < ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup, beforeSourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact predecessor route, excluding ignored late/unmatched source dispositions. */
+  readPreviousProductIncidentRoutedDisposition(
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    assertProductPositiveInteger(beforeSourceEventId, 'product incident beforeSourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN ('product.incident.opened', 'product.incident.grouped', 'product.incident.resolved')
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END < ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup, beforeSourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Stable immutable in-app opening receipt for one routed incident episode. */
+  readProductIncidentOpeningRoutingByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = 'product.incident.opened'
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident opening routes');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** One immutable ACK transition for an incident episode, independent of idempotency-key lookup. */
+  readProductIncidentAcknowledgementByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-ack.v1',
+          'cosmos.product-incident-ack.v2'
+        )
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(PRODUCT_INCIDENT_ACK_EVENT_KIND, incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident ACK transitions');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Immutable proof that a resolved projection episode was top-N rotated. */
+  readProductIncidentRotationByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = 'product.incident.rotated'
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-rotation.v1'
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident rotation events');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Oldest resolved projection eligible for deterministic top-N rotation. */
+  readOldestResolvedProductIncidentByFingerprintPrefix(
+    fingerprintPrefix: string,
+  ): Readonly<ProductIncidentRecord> | null {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const row = this.db.prepare(`
+      SELECT * FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ? AND state = 'RESOLVED'
+      ORDER BY resolved_at_ms ASC, incident_id ASC
+      LIMIT 1
+    `).get(fingerprintPrefix, fingerprintPrefix) as ProductIncidentDbRow | undefined;
+    return row ? productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id)) : null;
+  }
+
   /**
    * Reads the one immutable acknowledgement event by Product incident and
-   * idempotency identity. The canonical `/api/events` route exposes this same
+   * idempotency identity. The canonical Ledger event-history route exposes this same
    * Ledger row; no operator-event projection or second store is involved.
    */
   readProductIncidentAcknowledgement(
@@ -3568,6 +4308,43 @@ function productIncidentAuditSnapshotMatchesRow(
     && value.correlationId === row.correlation_id;
 }
 
+function productIncidentRotationAuditMatchesRow(
+  value: unknown,
+  row: Readonly<ProductIncidentDbRow>,
+): boolean {
+  if (!plainLedgerRecord(value)
+    || Object.keys(value).length !== PRODUCT_INCIDENT_ROTATION_KEYS.length
+    || !PRODUCT_INCIDENT_ROTATION_KEYS.every((key) => Object.hasOwn(value, key))
+    || value.schema !== PRODUCT_INCIDENT_ROTATION_SCHEMA
+    || value.operation !== 'ROTATE_RESOLVED'
+    || value.incidentId !== row.incident_id
+    || value.expectedLedgerEventId !== row.ledger_event_id
+    || value.reasonCode !== 'BOUNDED_TOP_N_RETENTION'
+    || value.retentionLimit !== 200
+    || value.externalActionAuthorization !== 'NONE'
+    || !plainLedgerRecord(value.snapshot)) {
+    return false;
+  }
+  const snapshot = value.snapshot;
+  return Object.keys(snapshot).length === PRODUCT_INCIDENT_SNAPSHOT_KEYS.length
+    && PRODUCT_INCIDENT_SNAPSHOT_KEYS.every((key) => Object.hasOwn(snapshot, key))
+    && productIncidentAuditSnapshotMatchesRow(snapshot, row)
+    && snapshot.ledgerEventId === row.ledger_event_id
+    && typeof snapshot.sourceGroup === 'string'
+    && PRODUCT_IDENTIFIER.test(snapshot.sourceGroup)
+    && Number.isSafeInteger(snapshot.openingRoutingReceiptEventId)
+    && Number(snapshot.openingRoutingReceiptEventId) >= 1
+    && Number.isSafeInteger(snapshot.openingSourceEventId)
+    && Number(snapshot.openingSourceEventId) >= 1
+    && Number(snapshot.openingSourceEventId) < Number(snapshot.openingRoutingReceiptEventId)
+    && Number.isSafeInteger(snapshot.recoveryRoutingReceiptEventId)
+    && snapshot.recoveryRoutingReceiptEventId === row.ledger_event_id
+    && Number.isSafeInteger(snapshot.recoverySourceEventId)
+    && Number(snapshot.recoverySourceEventId) >= 1
+    && Number(snapshot.recoverySourceEventId) < Number(snapshot.recoveryRoutingReceiptEventId)
+    && Number(snapshot.openingRoutingReceiptEventId) < Number(snapshot.recoveryRoutingReceiptEventId);
+}
+
 function productIncidentAuditMatchesRow(
   row: Readonly<ProductIncidentDbRow>,
   audit: Readonly<LedgerEvent>,
@@ -3586,8 +4363,15 @@ function productIncidentAuditMatchesRow(
           : null;
     return expected !== null
       && audit.symbol === null
+      && Object.keys(data).length === PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS.length
+      && PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS.every((key) => Object.hasOwn(data, key))
       && data.operation === expected.operation
       && data.sourceEventKind === expected.sourceKind
+      && typeof data.sourceGroup === 'string'
+      && PRODUCT_IDENTIFIER.test(data.sourceGroup)
+      && typeof data.sourceDetail === 'string'
+      && data.sourceDetail.length <= 2_000
+      && validProductUtcMillis(data.sourceObservedAtMs)
       && Number.isSafeInteger(data.sourceEventId)
       && Number(data.sourceEventId) >= 1
       && (expected.state === null || row.state === expected.state)
@@ -3595,9 +4379,17 @@ function productIncidentAuditMatchesRow(
       && data.rootComponentId === row.root_component_id
       && data.severity === row.severity
       && data.capitalRelevant === (row.capital_relevant === 1)
+      && data.state === row.state
+      && data.firstSeenAtMs === row.first_seen_at_ms
+      && data.lastSeenAtMs === row.last_seen_at_ms
+      && data.eventCount === row.event_count
+      && data.acknowledgedAtMs === row.acknowledged_at_ms
+      && data.acknowledgedByOperatorId === row.acknowledged_by_operator_id
+      && data.resolvedAtMs === row.resolved_at_ms
       && data.correlationId === row.correlation_id
       && data.reasonCode === 'CONNECTION_UNHEALTHY'
       && plainLedgerRecord(data.routing)
+      && Object.keys(data.routing).length === 2
       && data.routing.inApp === 'WIRED_LOCAL'
       && data.routing.externalPaging === 'NOT_CONFIGURED'
       && data.externalActionAuthorization === 'NONE'

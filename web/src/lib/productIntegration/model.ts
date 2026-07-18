@@ -1,9 +1,13 @@
+import { browserIncidentAcknowledgementControlId } from './sha256';
+
 export const PRODUCT_SUPERVISOR_SCHEMA = 'product-supervisor.v1' as const;
 export const PRODUCT_COMMAND_SCHEMA = 'product-command.v1' as const;
 export const MATERIAL_CURSOR_SCHEMA = 'material-cursor.v1' as const;
 export const PRODUCT_MANAGED_INVENTORY_SCHEMA = 'i00-managed-inventory.v1' as const;
 export const SAFE_LIVE_BACKEND_COMMAND_IDS: readonly string[] = Object.freeze([
   'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
+  'SET_PUBLIC_SOURCE_LIFECYCLE', 'SET_BASIS_INTAKE', 'SET_VOLUME_INTAKE',
+  'ACK_INCIDENT',
 ]);
 export const PRODUCT_TRACE_STAGES: readonly string[] = Object.freeze([
   'Market Source',
@@ -259,11 +263,21 @@ export type ProductManagedInventoryState =
   | 'NOT_CONFIGURED'
   | 'MISSING';
 
-export interface ProductManagedInventoryEvidenceRef {
+export interface ProductManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
 }
+
+export interface ProductManagedInventoryOwnerEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_OWNER_PROJECTION';
+  readonly ownerId: 'productIntegration.incident-router';
+  readonly truthLabel: 'BUILT_AND_TESTED';
+}
+
+export type ProductManagedInventoryEvidenceRef =
+  | ProductManagedInventoryComponentEvidenceRef
+  | ProductManagedInventoryOwnerEvidenceRef;
 
 export interface ProductManagedInventoryEntry {
   readonly identity: I00ManagedComponentIdentity;
@@ -498,17 +512,37 @@ export interface ProductIncidentAvailability {
 }
 
 export interface ProductIncidentProjection {
+  readonly incidentId: string;
   readonly fingerprint: string;
+  readonly ledgerEventId: number;
   readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   readonly rootComponentId: string;
+  readonly sourceGroup: string;
   readonly capitalRelevant: boolean;
   readonly firstSeenAtMs: number;
   readonly lastSeenAtMs: number;
   readonly count: number;
   readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   readonly reasonCode: string;
-  readonly operatorAction: string | null;
-  readonly correlationId: string | null;
+  readonly operatorAction: string;
+  readonly correlationId: string;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly acknowledgementControlId: string;
+  readonly routing: Readonly<{
+    readonly inApp: Readonly<{ readonly state: 'WIRED_LOCAL'; readonly receiptId: string }>;
+    readonly externalPaging: Readonly<{
+      readonly state: 'NOT_CONFIGURED';
+      readonly receiptId: null;
+      readonly blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED';
+    }>;
+  }>;
+  readonly recoveryProof: Readonly<{
+    readonly state: 'PENDING' | 'PROVEN';
+    readonly sourceEventId: number | null;
+    readonly resolvedAtMs: number | null;
+  }>;
 }
 
 export interface MaterialEventProjection {
@@ -1356,15 +1390,32 @@ function fixtureIncident(
   reasonCode: string,
   capitalRelevant: boolean,
 ): ProductIncidentProjection {
+  const ledgerEventId = Math.max(1, session.tick + 1);
   return Object.freeze({
+    incidentId: `incident.fixture.${session.sessionId}.${rootComponentId}`,
     fingerprint: `fixture:${rootComponentId}:${reasonCode}`,
+    ledgerEventId,
     severity, rootComponentId, capitalRelevant,
+    sourceGroup: rootComponentId === 'aws-runner' ? 'infrastructure' : 'bot',
     firstSeenAtMs: session.startedAtMs,
     lastSeenAtMs: session.nowMs,
     count: Math.max(1, session.tick + 1),
     state: 'OPEN', reasonCode,
     operatorAction: capitalRelevant ? 'Inspect the synthetic recovery control.' : 'Inspect the synthetic source/control evidence.',
     correlationId: `fixture-correlation-${session.sessionId}`,
+    acknowledgedAtMs: null,
+    acknowledgedByOperatorId: null,
+    resolvedAtMs: null,
+    acknowledgementControlId: `incident.ack.${'0'.repeat(64)}`,
+    routing: Object.freeze({
+      inApp: Object.freeze({ state: 'WIRED_LOCAL', receiptId: `ledger-event:${ledgerEventId}` }),
+      externalPaging: Object.freeze({
+        state: 'NOT_CONFIGURED',
+        receiptId: null,
+        blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED',
+      }),
+    }),
+    recoveryProof: Object.freeze({ state: 'PENDING', sourceEventId: null, resolvedAtMs: null }),
   });
 }
 
@@ -1792,7 +1843,12 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
     }
   }
   errors.push(...validateCanonicalCockpitTruth(value.canonicalCockpit, value.components, value.ownerView));
-  errors.push(...validateProductManagedInventory(value.managedInventory, value.components, value.ownerView));
+  errors.push(...validateProductManagedInventory(
+    value.managedInventory,
+    value.components,
+    value.ownerView,
+    value.incidentAvailability,
+  ));
   if (!Array.isArray(value.dependencyEdges)) errors.push('DEPENDENCY_EDGES_MISSING');
   else {
     if (value.dependencyEdges.length > 1_000) errors.push('DEPENDENCY_EDGES_OUT_OF_BOUNDS');
@@ -1817,7 +1873,9 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       && (typeof value.incidentAvailability.blocker !== 'string' || value.incidentAvailability.blocker.length === 0))) {
     errors.push('INCIDENT_AVAILABILITY_INVALID');
   } else if ((value.incidentAvailability.state === 'AVAILABLE'
-      && !['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY'].includes(String(value.incidentAvailability.truthLabel)))
+      && value.incidentAvailability.truthLabel !== 'BUILT_AND_TESTED'
+      && !(value.truthLabel === 'SYNTHETIC_ONLY'
+        && value.incidentAvailability.truthLabel === 'SYNTHETIC_ONLY'))
     || (value.incidentAvailability.state === 'NOT_CONFIGURED' && value.incidentAvailability.truthLabel !== 'NOT_CONFIGURED')
     || (value.incidentAvailability.state === 'UNAVAILABLE'
       && !['UNAVAILABLE', 'UNKNOWN'].includes(String(value.incidentAvailability.truthLabel)))) {
@@ -1826,19 +1884,102 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (!Array.isArray(value.incidents)) errors.push('INCIDENT_PROJECTION_MISSING');
   else {
     if (value.incidents.length > 200) errors.push('INCIDENT_PROJECTION_OUT_OF_BOUNDS');
+    const incidentIds = new Set<string>();
+    const incidentFingerprints = new Set<string>();
+    const incidentKeys = [
+      'incidentId', 'fingerprint', 'ledgerEventId', 'severity', 'rootComponentId',
+      'sourceGroup', 'capitalRelevant', 'firstSeenAtMs', 'lastSeenAtMs', 'count',
+      'state', 'reasonCode', 'operatorAction', 'correlationId', 'acknowledgedAtMs',
+      'acknowledgedByOperatorId', 'resolvedAtMs', 'acknowledgementControlId',
+      'routing', 'recoveryProof',
+    ];
     for (const incident of value.incidents) {
       if (!isRecord(incident)
-        || typeof incident.fingerprint !== 'string' || incident.fingerprint.length === 0
-        || typeof incident.rootComponentId !== 'string' || incident.rootComponentId.length === 0
-        || typeof incident.reasonCode !== 'string' || incident.reasonCode.length === 0
+        || !exactRecordKeys(incident, incidentKeys)
+        || typeof incident.incidentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.incidentId)
+        || typeof incident.fingerprint !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.fingerprint)
+        || !Number.isSafeInteger(incident.ledgerEventId) || Number(incident.ledgerEventId) < 1
+        || typeof incident.rootComponentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.rootComponentId)
+        || typeof incident.sourceGroup !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.sourceGroup)
+        || typeof incident.reasonCode !== 'string' || incident.reasonCode.length === 0 || incident.reasonCode.length > 128
         || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(String(incident.severity))
         || !['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].includes(String(incident.state))
         || typeof incident.capitalRelevant !== 'boolean'
-        || !Number.isFinite(incident.firstSeenAtMs)
-        || !Number.isFinite(incident.lastSeenAtMs)
+        || !Number.isSafeInteger(incident.firstSeenAtMs)
+        || !Number.isSafeInteger(incident.lastSeenAtMs)
+        || Number(incident.firstSeenAtMs) < 0
+        || Number(incident.firstSeenAtMs) > PRODUCT_BOOT_RELEASE_MAX_UTC_MS
+        || Number(incident.lastSeenAtMs) > PRODUCT_BOOT_RELEASE_MAX_UTC_MS
+        || Number(incident.lastSeenAtMs) < Number(incident.firstSeenAtMs)
         || !Number.isInteger(incident.count) || Number(incident.count) < 1
-        || !isStringOrNull(incident.operatorAction)
-        || !isStringOrNull(incident.correlationId)) errors.push('INCIDENT_ENTRY_INVALID');
+        || typeof incident.operatorAction !== 'string' || incident.operatorAction.length < 1 || incident.operatorAction.length > 2_000
+        || typeof incident.correlationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.correlationId)
+        || !(incident.acknowledgedAtMs === null
+          || (Number.isSafeInteger(incident.acknowledgedAtMs)
+            && Number(incident.acknowledgedAtMs) >= 0
+            && Number(incident.acknowledgedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))
+        || !(incident.acknowledgedByOperatorId === null
+          || (typeof incident.acknowledgedByOperatorId === 'string' && incident.acknowledgedByOperatorId.length > 0))
+        || !(incident.resolvedAtMs === null
+          || (Number.isSafeInteger(incident.resolvedAtMs)
+            && Number(incident.resolvedAtMs) >= 0
+            && Number(incident.resolvedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))
+        || typeof incident.acknowledgementControlId !== 'string'
+        || !/^incident\.ack\.[a-f0-9]{64}$/.test(incident.acknowledgementControlId)
+        || !isRecord(incident.routing)
+        || !exactRecordKeys(incident.routing, ['inApp', 'externalPaging'])
+        || !isRecord(incident.routing.inApp)
+        || !exactRecordKeys(incident.routing.inApp, ['state', 'receiptId'])
+        || incident.routing.inApp.state !== 'WIRED_LOCAL'
+        || typeof incident.routing.inApp.receiptId !== 'string'
+        || !/^ledger-event:[1-9][0-9]{0,15}$/.test(incident.routing.inApp.receiptId)
+        || !Number.isSafeInteger(Number(incident.routing.inApp.receiptId.slice('ledger-event:'.length)))
+        || Number(incident.routing.inApp.receiptId.slice('ledger-event:'.length)) > Number(incident.ledgerEventId)
+        || !isRecord(incident.routing.externalPaging)
+        || !exactRecordKeys(incident.routing.externalPaging, ['state', 'receiptId', 'blocker'])
+        || incident.routing.externalPaging.state !== 'NOT_CONFIGURED'
+        || incident.routing.externalPaging.receiptId !== null
+        || incident.routing.externalPaging.blocker !== 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED'
+        || !isRecord(incident.recoveryProof)
+        || !exactRecordKeys(incident.recoveryProof, ['state', 'sourceEventId', 'resolvedAtMs'])
+        || !['PENDING', 'PROVEN'].includes(String(incident.recoveryProof.state))
+        || !(incident.recoveryProof.sourceEventId === null
+          || (Number.isSafeInteger(incident.recoveryProof.sourceEventId)
+            && Number(incident.recoveryProof.sourceEventId) >= 1))
+        || !(incident.recoveryProof.resolvedAtMs === null
+          || (Number.isSafeInteger(incident.recoveryProof.resolvedAtMs)
+            && Number(incident.recoveryProof.resolvedAtMs) >= 0
+            && Number(incident.recoveryProof.resolvedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))) {
+        errors.push('INCIDENT_ENTRY_INVALID');
+        continue;
+      }
+      const hasAck = incident.acknowledgedAtMs !== null && incident.acknowledgedByOperatorId !== null;
+      const exactAck = hasAck === (
+        incident.acknowledgedAtMs !== null || incident.acknowledgedByOperatorId !== null
+      );
+      const resolved = incident.state === 'RESOLVED';
+      if (!exactAck
+        || (incident.state === 'OPEN' && hasAck)
+        || (incident.state === 'ACKNOWLEDGED' && !hasAck)
+        || (incident.acknowledgedAtMs !== null
+          && Number(incident.acknowledgedAtMs) < Number(incident.firstSeenAtMs))
+        || resolved !== (incident.resolvedAtMs !== null)
+        || resolved !== (incident.recoveryProof.state === 'PROVEN')
+        || resolved !== (incident.recoveryProof.sourceEventId !== null)
+        || incident.recoveryProof.resolvedAtMs !== incident.resolvedAtMs
+        || (incident.resolvedAtMs !== null && incident.resolvedAtMs !== incident.lastSeenAtMs)
+        || (isRecord(value.incidentAvailability)
+          && value.incidentAvailability.truthLabel === 'BUILT_AND_TESTED'
+          && (incident.reasonCode !== 'CONNECTION_UNHEALTHY'
+            || incident.acknowledgementControlId
+              !== browserIncidentAcknowledgementControlId(incident.incidentId)))) {
+        errors.push('INCIDENT_STATE_RELATIONSHIP_INVALID');
+      }
+      if (incidentIds.has(incident.incidentId) || incidentFingerprints.has(incident.fingerprint)) {
+        errors.push('INCIDENT_IDENTITY_DUPLICATE');
+      }
+      incidentIds.add(incident.incidentId);
+      incidentFingerprints.add(incident.fingerprint);
     }
     if (isRecord(value.incidentAvailability) && value.incidentAvailability.state !== 'AVAILABLE' && value.incidents.length > 0) {
       errors.push('INCIDENTS_PUBLISHED_WHILE_UNAVAILABLE');
@@ -2066,6 +2207,7 @@ function validateProductManagedInventory(
   inventoryValue: unknown,
   componentsValue: unknown,
   ownerViewValue: unknown,
+  incidentAvailabilityValue: unknown,
 ): readonly string[] {
   if (!isRecord(inventoryValue)) return Object.freeze(['MANAGED_INVENTORY_MISSING']);
   const errors: string[] = [];
@@ -2089,6 +2231,13 @@ function validateProductManagedInventory(
   )).length;
 
   const entries = inventoryValue.entries;
+  const durableIncidentOwnerAvailable = isRecord(incidentAvailabilityValue)
+    && incidentAvailabilityValue.state === 'AVAILABLE'
+    && incidentAvailabilityValue.truthLabel === 'BUILT_AND_TESTED'
+    && incidentAvailabilityValue.blocker === null;
+  const durableIncidentOwnerUnavailable = isRecord(incidentAvailabilityValue)
+    && incidentAvailabilityValue.state === 'UNAVAILABLE'
+    && typeof incidentAvailabilityValue.blocker === 'string';
   const validEntries: Record<string, unknown>[] = [];
   if (!Array.isArray(entries)) {
     errors.push('MANAGED_INVENTORY_ENTRIES_MISSING');
@@ -2105,7 +2254,11 @@ function validateProductManagedInventory(
       }
       validEntries.push(entry);
       if (entry.identity !== contract.identity) errors.push('MANAGED_INVENTORY_IDENTITY_ORDER_INVALID');
-      if (entry.owner !== contract.owner) errors.push('MANAGED_INVENTORY_OWNER_MISMATCH');
+      const dynamicIncidentOwner = contract.identity === 'notification-incident-router'
+        && (durableIncidentOwnerAvailable || durableIncidentOwnerUnavailable);
+      if (entry.owner !== (dynamicIncidentOwner ? 'PRODUCT_INTEGRATION_INCIDENT_ROUTER' : contract.owner)) {
+        errors.push('MANAGED_INVENTORY_OWNER_MISMATCH');
+      }
       if (!Array.isArray(entry.canonicalComponentIds)
         || entry.canonicalComponentIds.length !== contract.canonicalComponentIds.length
         || entry.canonicalComponentIds.some((componentId, componentIndex) => (
@@ -2118,6 +2271,27 @@ function validateProductManagedInventory(
       }
 
       if (contract.canonicalComponentIds.length === 0) {
+        if (contract.identity === 'notification-incident-router' && durableIncidentOwnerAvailable) {
+          if (entry.inventoryState !== 'EVIDENCE_PRESENT'
+            || entry.reasonCode !== null
+            || !Array.isArray(entry.evidence)
+            || entry.evidence.length !== 1
+            || !isRecord(entry.evidence[0])
+            || entry.evidence[0].source !== 'PRODUCT_RUNTIME_OWNER_PROJECTION'
+            || entry.evidence[0].ownerId !== 'productIntegration.incident-router'
+            || entry.evidence[0].truthLabel !== 'BUILT_AND_TESTED') {
+            errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+          }
+          continue;
+        }
+        if (contract.identity === 'notification-incident-router' && durableIncidentOwnerUnavailable) {
+          if (entry.inventoryState !== 'MISSING'
+            || entry.evidence !== null
+            || entry.reasonCode !== incidentAvailabilityValue.blocker) {
+            errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+          }
+          continue;
+        }
         if (entry.inventoryState !== contract.unavailableState
           || entry.evidence !== null
           || entry.reasonCode !== contract.unavailableReason) {
@@ -2179,7 +2353,8 @@ function validateProductManagedInventory(
   )).length;
   const countExpectations: Readonly<Record<string, number>> = Object.freeze({
     expectedIdentityCount: 33,
-    mappedIdentityCount: PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length,
+    mappedIdentityCount: PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length
+      + (durableIncidentOwnerAvailable ? 1 : 0),
     evidencePresentCount: stateCount('EVIDENCE_PRESENT'),
     ownerGatedCount: stateCount('OWNER_GATED'),
     notConfiguredCount: stateCount('NOT_CONFIGURED'),

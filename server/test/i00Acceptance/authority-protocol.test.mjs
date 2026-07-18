@@ -96,10 +96,11 @@ test('final D-LAUNCH-7 repin accepts exact current-main objects while historical
 
   const historical = historicalFrozenInputScan(catalog);
   assert.equal(historical.length, 14);
-  assert.equal(historical.filter((result) => result.passed).length, 12);
+  assert.equal(historical.filter((result) => result.passed).length, 11);
   assert.deepEqual(historical.filter((result) => !result.passed).map((result) => result.path), [
     'QL_DIRECTOR_STATE.md',
     'QL_PARALLEL_DAG.md',
+    'ARCHITECTURE.md',
   ]);
 
   const effective = effectiveFrozenInputScan(catalog, livingInputAcceptance);
@@ -145,7 +146,7 @@ test('D-LAUNCH-7 acceptance fails closed on policy path provenance observation o
 
 test('one owner and producer registry passes scoped rules with conflicts classified from evidence', () => {
   const scan = runAuthorityScan(catalog);
-  assert.equal(scan.authorityConcepts, 13);
+  assert.equal(scan.authorityConcepts, 14);
   assert.equal(scan.semanticStreams, 6);
   assert(scan.scanPassed, JSON.stringify(scan.rules.filter((rule) => !rule.passed)));
   assert.equal(scan.authorityConverged, true);

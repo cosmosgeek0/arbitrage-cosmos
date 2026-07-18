@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore, useResolvedTheme, type Page } from '../store';
-import type { LedgerEvent } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
-import { curateNotifications, groupNotifications, notificationEnabled } from '../lib/notifications';
+import { notificationEnabled } from '../lib/notifications';
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
-import { type ProductBindingContinuity, type ProductComponentProjection } from '../lib/productIntegration';
+import {
+  projectCanonicalIncidentNotifications,
+  type ProductBindingContinuity,
+  type ProductComponentProjection,
+} from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
@@ -819,13 +822,13 @@ function AlertsMenu() {
   const { prefs, updatePref } = useStore();
   const { open, setOpen, ref } = useMenu<HTMLDivElement>();
   const a = prefs.alerts;
-  const rows: { key: keyof typeof a; label: string; sub: string }[] = [
+  const rows: { key: keyof typeof a; label: string; sub: string; configured?: boolean }[] = [
     { key: 'critical', label: 'Needs attention', sub: 'Failures, blocks, and emergency controls' },
-    { key: 'execution', label: 'Execution outcomes', sub: 'Orders, fills, loans, and risk decisions' },
+    { key: 'execution', label: 'Execution NOT_CONFIGURED', sub: 'No canonical execution incident producer is mounted', configured: false },
     { key: 'health', label: 'Bot health', sub: 'Engine, stream, and control transitions' },
     { key: 'infrastructure', label: 'Infrastructure', sub: 'Owner-gated external-infrastructure notices' },
   ];
-  const on = Object.values(a).filter(Boolean).length;
+  const on = Object.entries(a).filter(([key, value]) => key !== 'execution' && value).length;
   return (
     <div className="menu-wrap" ref={ref}>
       <button className={`hdr-ic ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} title="Alerts" aria-label="Alerts">
@@ -844,12 +847,12 @@ function AlertsMenu() {
                 <span className="alert-label">{r.label}</span>
                 <span className="alert-sub">{r.sub}</span>
               </div>
-              <button className={`toggle ${a[r.key] ? 'on' : ''}`} onClick={() => updatePref('alerts', { ...a, [r.key]: !a[r.key] })} aria-label={`Toggle ${r.label}`}>
+              <button className={`toggle ${a[r.key] && r.configured !== false ? 'on' : ''}`} disabled={r.configured === false} aria-disabled={r.configured === false} onClick={() => updatePref('alerts', { ...a, [r.key]: !a[r.key] })} aria-label={r.configured === false ? `${r.label}` : `Toggle ${r.label}`}>
                 <span className="knob" />
               </button>
             </div>
           ))}
-          <div className="menu-foot">Delivery wiring lands with live mode — toggles are saved.</div>
+          <div className="menu-foot">Only canonical incident producers can be enabled; external delivery stays owner-gated.</div>
         </div>
       )}
     </div>
@@ -1362,13 +1365,6 @@ function SharedTopBar() {
   const [now, setNow] = useState(() => new Date());
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
-  const [notifLiveEvents, setNotifLiveEvents] = useState<LedgerEvent[]>([]);
-  const [notificationFeedState, setNotificationFeedState] = useState<{
-    status: 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
-    lastSuccessAt: number | null;
-    error: string | null;
-  }>({ status: 'LOADING', lastSuccessAt: null, error: null });
-  const notifLiveCursor = useRef(0);
   const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
   const [currencyBusy, setCurrencyBusy] = useState(false);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
@@ -1390,68 +1386,6 @@ function SharedTopBar() {
       .finally(() => { if (alive) setCurrencyBusy(false); });
     return () => { alive = false; };
   }, [active]);
-  useEffect(() => {
-    let bootstrapped = false;
-    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-    const readEventRows = async (url: string, signal: AbortSignal): Promise<LedgerEvent[]> => {
-      const rows = await fetchJson<LedgerEvent[]>(url, { cache: 'no-store', signal }, 10_000);
-      if (!Array.isArray(rows)) throw new Error('events payload is invalid');
-      return rows;
-    };
-    const notificationPoll = createSettledPoll<LedgerEvent[]>({
-      intervalMs: 5_000,
-      timeoutMs: 15_000,
-      request: async (signal) => {
-        let items: LedgerEvent[] = [];
-        if (!bootstrapped) {
-          const head = await readEventRows('/api/events?limit=1', signal);
-          const highWater = head[0]?.id ?? 0;
-          const since = Date.now() - 24 * 60 * 60_000;
-          const before = highWater > 0 ? `&beforeId=${highWater + 1}` : '';
-          const bootstrapReads = await Promise.allSettled(relevantKinds.map((kind) => readEventRows(
-            `/api/events?since=${since}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
-            signal,
-          )));
-          const bootstrapFailure = bootstrapReads.find((result) => result.status === 'rejected');
-          if (bootstrapFailure?.status === 'rejected') throw bootstrapFailure.reason;
-          items = bootstrapReads.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
-          notifLiveCursor.current = Math.max(notifLiveCursor.current, highWater);
-          bootstrapped = true;
-        } else {
-          let afterId = notifLiveCursor.current;
-          for (let page = 0; page < 5; page += 1) {
-            const rows = await readEventRows(`/api/events?afterId=${afterId}&limit=2000`, signal);
-            items.push(...rows);
-            if (rows.length < 2_000) break;
-            afterId = Math.max(afterId, ...rows.map((item) => item.id));
-          }
-        }
-        return items;
-      },
-      onSuccess: (items) => {
-        if (items.length > 0) {
-          notifLiveCursor.current = Math.max(notifLiveCursor.current, ...items.map((item) => item.id));
-          setNotifLiveEvents((current) => {
-            const merged = new Map<number, LedgerEvent>();
-            for (const item of current) merged.set(item.id, item);
-            for (const item of items) merged.set(item.id, item);
-            return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 2_000);
-          });
-        }
-        setNotificationFeedState({ status: 'CURRENT', lastSuccessAt: Date.now(), error: null });
-      },
-      onError: (error) => {
-        setNotificationFeedState((current) => ({
-          status: current.lastSuccessAt === null ? 'UNAVAILABLE' : 'STALE',
-          lastSuccessAt: current.lastSuccessAt,
-          error: apiErrorMessage(error, 'Notification feed unavailable'),
-        }));
-      },
-    });
-    notificationPoll.start();
-    return notificationPoll.stop;
-  }, []);
-
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
   const computeGeo = (k: MK) => {
     const btn = btnRefs.current[k]; const row = rowRef.current;
@@ -1631,17 +1565,19 @@ function SharedTopBar() {
   const basisUnitLabel = basisIsBps ? 'Basis Points' : basisIsDecimal ? 'Decimal Rate' : 'Percent';
   const activeAccent = ACCENTS[prefs.accent] ?? ACCENTS.b;
   const appearanceZoom = Math.round((prefs.zoom || 1) * 100);
-  const al = prefs.alerts; const alertsOn = Object.values(al).filter(Boolean).length;
-  const compactSource = notifLiveEvents.length ? notifLiveEvents : events;
-  // Collapse state transitions before applying category preferences. Otherwise
-  // disabling routine health notices drops a recovery while leaving its older
-  // critical outage visible as if it were still active.
-  const compactNotifications = groupNotifications(
-    curateNotifications(compactSource),
-    prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined,
+  const al = prefs.alerts; const alertsOn = Object.entries(al).filter(([key, value]) => key !== 'execution' && value).length;
+  const productSnapshot = productBinding.snapshot;
+  const incidentAvailability = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.incidentAvailability
+    : { state: 'UNAVAILABLE' as const, truthLabel: 'UNAVAILABLE' as const, blocker: productBinding.error ?? `SUPERVISOR_CONTINUITY_${productBinding.continuity}` };
+  const canonicalIncidents = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.incidents
+    : [];
+  const compactNotifications = projectCanonicalIncidentNotifications(
+    incidentAvailability,
+    canonicalIncidents,
   ).filter((item) => notificationEnabled(item, al));
   const unread = compactNotifications.filter((item) => item.id > seen).length;
-  const productSnapshot = productBinding.snapshot;
   const killSwitchControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_KILL_SWITCH') ?? null;
   const intakeControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_INTAKE_PAUSED') ?? null;
   const safeModeControl = productSnapshot?.controls.find((control) => control.backendCommandId === 'SET_SAFE_MODE') ?? null;
@@ -1675,9 +1611,9 @@ function SharedTopBar() {
     closeMenu();
     setPage('notifications');
   };
-  const alertRows: { key: NotificationRuleKey; label: string; sub: string }[] = [
+  const alertRows: { key: NotificationRuleKey; label: string; sub: string; configured?: boolean }[] = [
     { key: 'critical', label: 'Needs Attention', sub: 'Failures, blocked actions, and emergency controls' },
-    { key: 'execution', label: 'Execution Outcomes', sub: 'Orders, fills, loans, and risk decisions' },
+    { key: 'execution', label: 'Execution NOT_CONFIGURED', sub: 'No canonical execution incident producer is mounted', configured: false },
     { key: 'health', label: 'Bot Health', sub: 'Engine, stream, connection, and control transitions' },
     { key: 'infrastructure', label: 'Infrastructure', sub: 'Owner-gated external-infrastructure notices' },
   ];
@@ -1690,7 +1626,6 @@ function SharedTopBar() {
   const notifTabs: { id: typeof notifTab; label: string; code: string }[] = [
     { id: 'all', label: 'All Alerts', code: 'All' },
     { id: 'critical', label: 'Attention', code: 'Attention' },
-    { id: 'execution', label: 'Execution', code: 'Execution' },
     { id: 'health', label: 'Bot Health', code: 'Health' },
     { id: 'infrastructure', label: 'Infrastructure', code: 'Infra' },
     { id: 'prefs', label: 'Preferences', code: 'Prefs' },
@@ -1717,6 +1652,19 @@ function SharedTopBar() {
   const filteredNotifEvents = filterNotifEvents(notifTab);
   const compactNotifEvents = compactNotifications;
   const compactNotifGroups = compactNotifications.slice(0, 7);
+  const notificationFeedState = productSnapshot
+    && productBinding.continuity === 'PROVEN'
+    && productSnapshot.incidentAvailability.state === 'AVAILABLE'
+    ? { status: 'CURRENT' as const, lastSuccessAt: productSnapshot.evaluatedAtMs, error: null }
+    : productSnapshot && productBinding.continuity !== 'PROVEN'
+      ? { status: 'STALE' as const, lastSuccessAt: productSnapshot.evaluatedAtMs, error: productBinding.error }
+      : productBinding.loading
+        ? { status: 'LOADING' as const, lastSuccessAt: null, error: null }
+        : {
+            status: 'UNAVAILABLE' as const,
+            lastSuccessAt: productSnapshot?.evaluatedAtMs ?? null,
+            error: productSnapshot?.incidentAvailability.blocker ?? productBinding.error ?? 'Incident owner unavailable',
+          };
   const notificationFeedStatus = notificationFeedState.status === 'CURRENT'
     ? 'Current'
     : notificationFeedState.status === 'STALE'
@@ -1725,24 +1673,24 @@ function SharedTopBar() {
         ? 'Unavailable'
         : 'Loading';
   const notificationFeedTone: OpsTone = notificationFeedState.status === 'CURRENT'
-    ? unread ? 'accent' : 'ok'
+    ? compactNotifications.some((item) => item.severity === 'critical') ? 'bad' : unread ? 'accent' : 'idle'
     : notificationFeedState.status === 'UNAVAILABLE'
       ? 'bad'
       : notificationFeedState.status === 'STALE'
         ? 'warn'
         : 'idle';
   const notificationTriggerTruth = notificationFeedState.status === 'CURRENT'
-    ? unread ? `${unread} unread` : 'no unread events'
+    ? unread ? `${unread} unread` : 'no unread incidents'
     : notificationFeedState.status === 'STALE'
       ? unread ? `${unread} last-known unread` : 'last-known feed'
       : notificationFeedState.status === 'UNAVAILABLE'
         ? 'feed unavailable'
         : 'feed loading';
   const notificationFeedDetail = notificationFeedState.status === 'CURRENT'
-    ? `Updated ${timeAgo(notificationFeedState.lastSuccessAt ?? Date.now())}`
+    ? `Canonical supervisor evaluated ${timeAgo(notificationFeedState.lastSuccessAt ?? Date.now())}`
     : notificationFeedState.status === 'LOADING'
-      ? 'Loading the bounded notification history.'
-      : notificationFeedState.error ?? 'Notification feed unavailable';
+      ? 'Loading canonical Product incident truth.'
+      : notificationFeedState.error ?? 'Canonical Product incident truth unavailable';
   const notifTone = compactNotifications.some((item) => item.severity === 'critical') ? 'hot' : unread > 0 ? 'live' : compactNotifications.length > 0 ? 'armed' : alertsOn > 0 ? 'armed' : 'idle';
   const advisorOverallPresentation = productSnapshot && productBinding.continuity === 'PROVEN'
     ? productSnapshot.canonicalCockpit.watchmanOverall
@@ -2287,7 +2235,7 @@ function SharedTopBar() {
                     <b>{r.label}</b>
                     <small>{r.sub}</small>
                   </span>
-                  <button className={`toggle ${al[r.key] ? 'on' : ''}`} type="button" onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })} aria-label={`Toggle ${r.label}`}>
+                  <button className={`toggle ${al[r.key] && r.configured !== false ? 'on' : ''}`} type="button" disabled={r.configured === false} aria-disabled={r.configured === false} onClick={() => updatePref('alerts', { ...al, [r.key]: !al[r.key] })} aria-label={r.configured === false ? r.label : `Toggle ${r.label}`}>
                     <span className="knob" />
                   </button>
                 </div>
@@ -2511,7 +2459,7 @@ function SharedTopBar() {
               icon={<PopupSourceMark tone="#f0a400" brand><img className="notification-source-image" src={NOTIFICATION_MARK} alt="" /></PopupSourceMark>}
               title="Notifications"
               subtitle="Interventions, state changes, and routed alerts"
-              status={notificationFeedState.status === 'CURRENT' ? unread ? `${unread} new` : compactNotifications.length ? 'Read' : 'Clear' : notificationFeedStatus}
+              status={notificationFeedState.status === 'CURRENT' ? unread ? `${unread} new` : compactNotifications.length ? `${compactNotifications.length} episodes` : 'No Episodes' : notificationFeedStatus}
               tone={notificationFeedTone}
             />
             <div className="ops-inline-tools" aria-label="Notification actions">
@@ -2520,17 +2468,21 @@ function SharedTopBar() {
               <button type="button" onClick={openNotificationCenter}><IconMaximize size={13} /> Open Center</button>
             </div>
             <div className="ops-list ops-notification-list">
-              {compactNotifGroups.length ? compactNotifGroups.map((item) => (
-                <OpsRow
+              {compactNotifGroups.length ? compactNotifGroups.map((item) => {
+                const incident = canonicalIncidents.find((candidate) => candidate.ledgerEventId === item.id);
+                const detail = incident
+                  ? `${item.detail} · ${incident.count} grouped · ${incident.state} · external ${incident.routing.externalPaging.state}`
+                  : item.detail;
+                return <OpsRow
                   key={item.id}
                   icon={notifIcon(item.category, 15)}
                   title={item.title}
-                  detail={item.count > 1 ? `${item.detail} · ${item.count} grouped` : item.detail}
+                  detail={detail}
                   value={timeAgo(item.ts)}
                   tone={item.severity === 'critical' ? 'bad' : item.severity === 'resolved' ? 'ok' : 'idle'}
                   onClick={openNotificationCenter}
-                />
-              )) : notificationFeedState.status !== 'CURRENT' ? (
+                />;
+              }) : notificationFeedState.status !== 'CURRENT' ? (
                 <OpsRow
                   icon={<IconBell size={15} />}
                   title={notificationFeedState.status === 'LOADING' ? 'Feed Loading' : notificationFeedState.status === 'STALE' ? 'Last-Known Feed' : 'Notification Feed Unavailable'}
@@ -2541,10 +2493,10 @@ function SharedTopBar() {
               ) : (
                 <OpsRow
                   icon={<IconBell size={15} />}
-                  title="Inbox Clear"
-                  detail="Only owner-relevant alerts appear here. Full telemetry stays in Logs."
-                  value="Clear"
-                  tone="ok"
+                  title="No Durable Incident Episodes"
+                  detail="The Product incident owner is available. This is not a derived system all-clear; full evidence stays in Logs."
+                  value="Owner Available"
+                  tone="idle"
                 />
               )}
             </div>

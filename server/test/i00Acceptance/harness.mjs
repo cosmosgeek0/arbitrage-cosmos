@@ -335,13 +335,14 @@ const FROZEN_SHA256 = Object.freeze({
   'packages/edge-protocol/fixtures/fixtures-v1.json': 'c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4',
   'packages/edge-protocol-tests/protocol.test.mjs': 'b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9',
   'EDGE_PROTOCOL_V1.md': '951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1',
-  'ARCHITECTURE.md': 'beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db',
+  'ARCHITECTURE.md': '0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac',
   'docs/DASHBOARD_TRUTH.md': '9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7',
   'docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md': '460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162',
 });
 
 const HISTORICAL_PACKET_SHA256 = Object.freeze({
   ...FROZEN_SHA256,
+  'ARCHITECTURE.md': 'beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db',
   'QL_DIRECTOR_STATE.md': 'dd641c11e56197f415e26fa3b9d65f79d122e4b0dbfc48778b4e86520bbb3278',
   'QL_PARALLEL_DAG.md': '275c9c7d2773f56d9fdf3b00dae75259d5ea4299d3d7d97ff8c995b4644b4546',
 });

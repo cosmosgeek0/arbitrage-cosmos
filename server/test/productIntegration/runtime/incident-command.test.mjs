@@ -60,8 +60,26 @@ function incidentOwner(ledger) {
   }));
 }
 
-function harness(ledger, now) {
+function canonicalIncidentSnapshot(ledger) {
+  const incident = ledger.readProductIncident(INCIDENT_ID);
+  return Object.freeze({
+    availability: Object.freeze({ state: 'AVAILABLE', truthLabel: 'BUILT_AND_TESTED', blocker: null }),
+    incidents: incident === null ? Object.freeze([]) : Object.freeze([Object.freeze({
+      incidentId: incident.incidentId,
+      ledgerEventId: incident.ledgerEventId,
+      state: incident.state,
+      acknowledgedAtMs: incident.acknowledgedAtMs,
+      acknowledgedByOperatorId: incident.acknowledgedByOperatorId,
+      resolvedAtMs: incident.resolvedAtMs,
+      acknowledgementControlId: productIncidentAcknowledgementControlId(incident.incidentId),
+      routing: Object.freeze({ inApp: Object.freeze({ state: 'WIRED_LOCAL' }) }),
+    })]),
+  });
+}
+
+function harness(ledger, now, incidentRead = () => canonicalIncidentSnapshot(ledger)) {
   let mutateCalls = 0;
+  const ownerCalls = { preview: 0, submit: 0 };
   const controlState = Object.freeze({
     revision: 0,
     generation: 0,
@@ -80,13 +98,41 @@ function harness(ledger, now) {
     readResult: async () => null,
   });
   const incidents = incidentOwner(ledger);
-  const owner = createProductRuntimeSystemControlCommandOwner({ controls, incidents });
+  const canonicalOwner = createProductRuntimeSystemControlCommandOwner({ controls, incidents });
+  const owner = new Proxy(canonicalOwner, {
+    get(target, property) {
+      if (property === 'preview') {
+        return async (...args) => {
+          ownerCalls.preview += 1;
+          return target.preview(...args);
+        };
+      }
+      if (property === 'submit') {
+        return async (...args) => {
+          ownerCalls.submit += 1;
+          return target.submit(...args);
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const baseRead = makeRead();
   const service = createProductIntegrationRuntime({
-    read: makeRead(),
+    read: incidentRead === null
+      ? baseRead
+      : Object.freeze({ ...baseRead, incidents: incidentRead }),
     clock: { nowMs: () => now.value },
     commandOwner: owner,
   });
-  return Object.freeze({ service, owner, incidents, controlState, mutateCalls: () => mutateCalls });
+  return Object.freeze({
+    service,
+    owner,
+    incidents,
+    controlState,
+    mutateCalls: () => mutateCalls,
+    ownerCalls: () => Object.freeze({ ...ownerCalls }),
+  });
 }
 
 function commandRequest(controlId, incident, preview, idempotencyKey = 'incident.command.api.0001') {
@@ -299,6 +345,96 @@ test('PROV-004A rejects stale, forged, cross-incident, actor, and idempotency co
       result: null,
       failureCode: 'INCIDENT_RESULT_OWNER_UNAVAILABLE',
     });
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('incident preview and submit fail before command-owner mutation when canonical router truth is absent or withheld', async () => {
+  const dataDir = tempDataDir();
+  const ledger = new Ledger(dataDir);
+  const now = { value: T0 };
+  try {
+    const opened = ledger.compareAndTransitionProductIncident(incidentInput({ eventCount: 1 }));
+    const current = ledger.readProductIncident(INCIDENT_ID);
+    const controlId = productIncidentAcknowledgementControlId(INCIDENT_ID);
+    const canonical = harness(ledger, now);
+    const preview = await canonical.service.previewCommand({
+      controlId,
+      targetId: INCIDENT_ID,
+      expectedRevision: String(opened.ledgerEvent.id),
+      operator: ACTOR,
+    });
+    const request = commandRequest(controlId, current, preview, 'incident.command.router-gate.0001');
+    const hostileRouterCuts = [
+      Object.freeze({
+        name: 'missing',
+        read: null,
+        code: 'INCIDENT_ROUTER_UNAVAILABLE',
+      }),
+      Object.freeze({
+        name: 'throwing',
+        read: () => { throw new Error('router read failed'); },
+        code: 'INCIDENT_ROUTER_UNAVAILABLE',
+      }),
+      Object.freeze({
+        name: 'unavailable',
+        read: () => Object.freeze({
+          availability: Object.freeze({
+            state: 'UNAVAILABLE',
+            truthLabel: 'UNAVAILABLE',
+            blocker: 'INCIDENT_OWNER_UNAVAILABLE',
+          }),
+          incidents: Object.freeze([]),
+        }),
+        code: 'INCIDENT_COMMAND_TRUTH_UNAVAILABLE',
+      }),
+      Object.freeze({
+        name: 'withheld',
+        read: () => Object.freeze({
+          availability: Object.freeze({ state: 'AVAILABLE', truthLabel: 'BUILT_AND_TESTED', blocker: null }),
+          incidents: Object.freeze([]),
+        }),
+        code: 'INCIDENT_COMMAND_TRUTH_UNAVAILABLE',
+      }),
+    ];
+
+    for (const hostile of hostileRouterCuts) {
+      const world = harness(ledger, now, hostile.read);
+      await assert.rejects(
+        world.service.previewCommand({
+          controlId,
+          targetId: INCIDENT_ID,
+          expectedRevision: String(opened.ledgerEvent.id),
+          operator: ACTOR,
+        }),
+        (error) => error?.code === hostile.code,
+        `${hostile.name} router must block preview`,
+      );
+      await assert.rejects(
+        world.service.submitCommand(request, ACTOR),
+        (error) => error?.code === hostile.code,
+        `${hostile.name} router must block submit`,
+      );
+      assert.deepEqual(world.ownerCalls(), { preview: 0, submit: 0 },
+        `${hostile.name} router gate must run before the command owner`);
+      assert.equal(world.mutateCalls(), 0);
+      assert.equal(ledger.countEvents('incident_acknowledged'), 0);
+      assert.equal(ledger.readProductIncident(INCIDENT_ID).state, 'OPEN');
+    }
+
+    const applied = await canonical.service.submitCommand(request, ACTOR);
+    assert.equal(applied.status, 'APPLIED');
+    assert.equal(ledger.countEvents('incident_acknowledged'), 1);
+
+    const missingRouterAfterCommit = harness(ledger, now, null);
+    const replay = await missingRouterAfterCommit.service.submitCommand(request, ACTOR);
+    assert.equal(replay.status, 'ALREADY_APPLIED', 'an exact durable terminal replay does not require live router truth');
+    assert.equal(replay.receiptId, applied.receiptId);
+    assert.equal(ledger.countEvents('incident_acknowledged'), 1, 'exact replay appends no second acknowledgement');
+    assert.deepEqual(missingRouterAfterCommit.ownerCalls(), { preview: 0, submit: 1 });
+    assert.equal(missingRouterAfterCommit.mutateCalls(), 0);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

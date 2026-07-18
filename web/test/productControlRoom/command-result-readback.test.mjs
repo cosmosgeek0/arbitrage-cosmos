@@ -187,6 +187,16 @@ test('HTTP transport issues one exact same-origin no-store result query', async 
     assert.equal(observed.init.cache, 'no-store');
     assert.equal(observed.init.method, undefined);
 
+    const incidentId = 'incident.product.market-streams.episode.41';
+    await transport.previewCommand(`incident.ack.${'a'.repeat(64)}`, '41', incidentId);
+    assert.equal(observed.input, '/api/product-integration/v1/commands/preview');
+    assert.equal(observed.init.method, 'POST');
+    assert.deepEqual(JSON.parse(observed.init.body), {
+      controlId: `incident.ack.${'a'.repeat(64)}`,
+      expectedRevision: '41',
+      targetId: incidentId,
+    });
+
     const attention = Object.freeze({ ...RESULT, status: 'FAILED_ATTENTION_REQUIRED', receiptId: null });
     globalThis.fetch = async () => new Response(JSON.stringify(attention), {
       status: 503,

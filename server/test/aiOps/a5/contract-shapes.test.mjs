@@ -439,19 +439,28 @@ test('landed remediation resource acquisition is atomic and conflict graph stays
   assert.equal(graph.length, 1);
 });
 
-test('Product preserves four global fail-safe controls and registers two delegated source-local lifecycle controls', () => {
+test('Product preserves four global fail-safe controls, two source-local lifecycle controls, and two strategy-intake controls', () => {
   const controls = buildProductRuntimeControlRegistry(makeSupervisor());
   assert.deepEqual(controls.map(({ backendCommandId }) => backendCommandId), [
     ...PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.slice(0, 4),
     'SET_PUBLIC_SOURCE_LIFECYCLE',
     'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_BASIS_INTAKE',
+    'SET_VOLUME_INTAKE',
   ]);
-  assert.equal(controls.length, 6);
-  assert.deepEqual([...new Set(controls.map(({ backendCommandId }) => backendCommandId))], PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS);
+  assert.equal(controls.length, 8);
+  assert.deepEqual(
+    [...new Set(controls.map(({ backendCommandId }) => backendCommandId))],
+    PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.filter((command) => !['PIN_FOCUS', 'ACK_INCIDENT'].includes(command)),
+  );
+  assert.equal(controls.some(({ backendCommandId }) => ['PIN_FOCUS', 'ACK_INCIDENT'].includes(backendCommandId)), false);
   assert.ok(controls.every(({ wiringState, authority }) => (
     wiringState.startsWith('UNAVAILABLE:') && authority === 'NOT_CONFIGURED'
   )));
-  assert.ok(PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.every((command) => SYSTEM_CONTROL_COMMANDS.includes(command)));
+  assert.ok(PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS
+    .filter((command) => command !== 'ACK_INCIDENT')
+    .every((command) => SYSTEM_CONTROL_COMMANDS.includes(command)));
+  assert.equal(SYSTEM_CONTROL_COMMANDS.includes('ACK_INCIDENT'), false);
   assert.equal(controls.some(({ controlId }) => /AI_OPS/u.test(controlId)), false);
   assert.equal(typeof SystemControlService, 'function');
   assert.throws(() => new SystemControlService({ initialState: {} }), /valid fail-closed initial state/u);

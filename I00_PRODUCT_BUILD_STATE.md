@@ -114,10 +114,12 @@ Dashboard equivalence is likewise limited to `d04fdc71ffbd9c8266c969524a56e325ec
 | QL-EDGE-PROTOCOL-DOCUMENT | SHA-256 | `951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1` |
 | EDGE-PROTOCOL-SCHEMA | SHA-256 | `229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c` |
 | EDGE-PROTOCOL-FIXTURES | SHA-256 | `c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4` |
-| ARCHITECTURE-AUTHORITY-MAP | SHA-256 | `beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db` |
+| ARCHITECTURE-AUTHORITY-MAP | SHA-256 | `0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac` |
 | Q-DIRECTIVE-LOCK | SHA-256 | `d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24` |
 | QL-DIRECTOR-STATE | SHA-256 | `77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc` |
 | QL-PARALLEL-DAG | SHA-256 | `cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec` |
+
+`QL_DIRECTOR_STATE.md` remains the byte-frozen 2026-07-12 launch snapshot, so its embedded authority-map hash is historical launch evidence. `ARCHITECTURE-AUTHORITY-MAP` above is the current Part II authority pin.
 
 The current living-input authority protocol passes `14/14` against immutable cutoff `d78be24f4da14632c857ee250b62e3fec33c2743`. A later board-only descendant is acceptable only if the cutoff remains an ancestor; it cannot change the donor denominator or silently replace protocol/config input.
 

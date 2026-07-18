@@ -14,9 +14,15 @@ const authorization = readJson(args.input, 'external authorization');
 const TOP_LEVEL_KEYS = [
   'schemaVersion',
   'authorizationId',
+  'operator',
   'status',
   'actionClasses',
   'scope',
+  'deployedSha',
+  'configVersion',
+  'riskVersion',
+  'nonce',
+  'serverPreviewDigest',
   'account',
   'environment',
   'host',
@@ -76,15 +82,24 @@ function bindOptionalMember(name, actual, label) {
 }
 
 requireExactObject(authorization, TOP_LEVEL_KEYS, 'external authorization');
-if (authorization.schemaVersion !== 1) fail('external authorization schemaVersion must be 1');
+if (authorization.schemaVersion !== 2) fail('external authorization schemaVersion must be 2');
 if (authorization.status !== 'APPROVED') fail('external authorization is not APPROVED');
 
 const authorizationId = exactText(authorization.authorizationId, 'authorizationId', { forbidBroad: true });
+const operator = exactText(authorization.operator, 'operator', { forbidBroad: true });
 const actionClasses = exactList(authorization.actionClasses, 'actionClasses', { forbidBroad: true });
 if (actionClasses.length !== 1) fail('authorization must grant exactly one separate action class');
 if (actionClasses[0] !== args.class) fail(`authorization does not grant exact action class ${args.class}`);
 
 const scope = exactText(authorization.scope, 'scope', { forbidBroad: true });
+const deployedSha = exactText(authorization.deployedSha, 'deployedSha', { forbidBroad: true });
+if (!/^[a-f0-9]{40}$/.test(deployedSha)) fail('deployedSha must be one exact lowercase full Git SHA');
+const configVersion = exactText(authorization.configVersion, 'configVersion', { forbidBroad: true });
+const riskVersion = exactText(authorization.riskVersion, 'riskVersion', { forbidBroad: true });
+const nonce = exactText(authorization.nonce, 'nonce', { forbidBroad: true });
+if (!/^(?:[a-f0-9]{2}){16,64}$/.test(nonce)) fail('nonce must be a bounded 128- to 512-bit lowercase cryptographic identifier');
+const serverPreviewDigest = exactText(authorization.serverPreviewDigest, 'serverPreviewDigest', { forbidBroad: true });
+if (!/^sha256:[a-f0-9]{64}$/.test(serverPreviewDigest)) fail('serverPreviewDigest must be one exact SHA-256 digest');
 const account = exactText(authorization.account, 'account', { forbidBroad: true });
 const environment = exactText(authorization.environment, 'environment', { forbidBroad: true });
 const host = exactText(authorization.host, 'host', { forbidBroad: true });
@@ -131,7 +146,8 @@ const reconciliationReceiptTarget = exactText(authorization.receiptTargets.recon
 if (resultReceiptTarget === reconciliationReceiptTarget) fail('result and reconciliation receipt targets must be distinct');
 
 const authorizationStrings = [
-  authorizationId, scope, account, environment, host,
+  authorizationId, operator, scope, deployedSha, configVersion, riskVersion, nonce,
+  serverPreviewDigest, account, environment, host,
   ...actionClasses, ...allowedCommands, ...allowedEndpoints, ...allowedProducts,
   ...credentialTypes, ...credentialPermissions, ...preconditions,
   maximumCapital, maximumNotional, maximumOperationalEffect,
@@ -159,8 +175,14 @@ bindOptional('expected-maximum-effect', maximumOperationalEffect, 'maximum opera
 process.stdout.write(`${JSON.stringify({
   status: 'AUTHORIZATION_VALID',
   authorizationId,
+  operator,
   actionClass: args.class,
   scope,
+  deployedSha,
+  configVersion,
+  riskVersion,
+  nonce,
+  serverPreviewDigest,
   account,
   host,
   environment,

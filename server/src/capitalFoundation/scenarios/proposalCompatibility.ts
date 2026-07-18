@@ -4,6 +4,7 @@ import {
   capitalDigest,
   normalizeExactDecimal,
   normalizeNonNegativeExactDecimal,
+  validateConservativeEconomicFactBinding,
   weakestCapitalTruth,
   type ConservativeEconomicInputs,
   type ExactDecimal,
@@ -136,6 +137,17 @@ function canonicalUnsigned(
 
 function exactEconomics(
   input: Readonly<ConservativeEconomicInputs>,
+  evaluatedAtMs: number,
+  scope: Readonly<{
+    proposalId: string;
+    proposalRevision: string | null;
+    proposalUpdatedAtMs: number;
+    proposalConfigRevision: string;
+    correlationId: string;
+    strategy: 'BASIS' | 'VOLUME';
+    symbol: string;
+    instrumentIds: readonly string[];
+  }>,
 ): Readonly<ConservativeEconomicInputs> {
   if (!input || !nonEmpty(input.valuationAsset)) {
     throw new TypeError('caller exact economics requires a valuation asset');
@@ -152,6 +164,13 @@ function exactEconomics(
   const estimatedBorrowCost = canonicalUnsigned(input.estimatedBorrowCost, 'estimatedBorrowCost');
   const estimatedSpreadCost = canonicalUnsigned(input.estimatedSpreadCost, 'estimatedSpreadCost');
   const estimatedSlippage = canonicalUnsigned(input.estimatedSlippage, 'estimatedSlippage');
+  const estimatedLatencyCost = canonicalUnsigned(input.estimatedLatencyCost, 'estimatedLatencyCost');
+  const estimatedAdverseSelectionCost = canonicalUnsigned(input.estimatedAdverseSelectionCost, 'estimatedAdverseSelectionCost');
+  const estimatedRecoveryCost = canonicalUnsigned(input.estimatedRecoveryCost, 'estimatedRecoveryCost');
+  const estimatedCapitalOpportunityCost = canonicalUnsigned(
+    input.estimatedCapitalOpportunityCost,
+    'estimatedCapitalOpportunityCost',
+  );
   const liquidityCapacity = canonicalUnsigned(input.liquidityCapacity, 'liquidityCapacity');
   const values = {
     requestedCapital,
@@ -162,6 +181,10 @@ function exactEconomics(
     estimatedBorrowCost,
     estimatedSpreadCost,
     estimatedSlippage,
+    estimatedLatencyCost,
+    estimatedAdverseSelectionCost,
+    estimatedRecoveryCost,
+    estimatedCapitalOpportunityCost,
     liquidityCapacity,
   } as const;
   for (const [field, value] of Object.entries(values)) {
@@ -169,9 +192,43 @@ function exactEconomics(
   }
   const exactSourceIds = sortedUnique(input.exactSourceIds);
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
+  const boundFact = (
+    name: 'fundingFact' | 'borrowFact' | 'capitalOpportunityFact',
+    kind: 'FUNDING' | 'BORROW' | 'CAPITAL_OPPORTUNITY',
+    value: ExactDecimal | null,
+  ) => {
+    const binding = input[name];
+    if (value === null || binding === null) {
+      missing.add(name);
+      return null;
+    }
+    const issues = validateConservativeEconomicFactBinding(binding, {
+      kind,
+      value,
+      unit: input.valuationAsset,
+      evaluatedAtMs,
+      admissionMode: 'SYNTHETIC_TEST',
+      ...scope,
+      borrowScope: input.expectedBorrowScope,
+    });
+    if (issues.length > 0) {
+      missing.add(name);
+      issues.forEach((issue) => missing.add(`${name}.${issue}`));
+      return null;
+    }
+    return binding;
+  };
   return cloneAndFreeze({
     valuationAsset: input.valuationAsset,
     ...values,
+    expectedBorrowScope: input.expectedBorrowScope,
+    fundingFact: boundFact('fundingFact', 'FUNDING', estimatedFunding),
+    borrowFact: boundFact('borrowFact', 'BORROW', estimatedBorrowCost),
+    capitalOpportunityFact: boundFact(
+      'capitalOpportunityFact',
+      'CAPITAL_OPPORTUNITY',
+      estimatedCapitalOpportunityCost,
+    ),
     exactSourceIds,
     missingFields: [...missing].sort(),
   });
@@ -421,14 +478,29 @@ function buildIntake(
   sourceKind: SourceKind,
 ): Readonly<ProposalIntakeRecord> {
   validateCommon(input);
-  const economics = exactEconomics(input.economics);
+  const canonical = input.canonical;
+  const instrumentIds = input.instruments.strategy === 'BASIS'
+    ? sortedUnique([
+        input.instruments.spotInstrumentId,
+        input.instruments.perpetualInstrumentId,
+      ].filter(nonEmpty))
+    : sortedUnique([input.instruments.instrumentId].filter(nonEmpty));
+  const economics = exactEconomics(input.economics, input.evaluatedAtMs, Object.freeze({
+    proposalId: canonical.sourceId,
+    proposalRevision: null,
+    proposalUpdatedAtMs: input.metadata.updatedAtMs,
+    proposalConfigRevision: input.configuration.revision ?? 'UNKNOWN',
+    correlationId: input.metadata.correlationId,
+    strategy: canonical.source,
+    symbol: canonical.symbol,
+    instrumentIds,
+  }));
   const report = lossReport(
     sourceKind,
     input.configuration,
     input.expiration,
     input.instruments,
   );
-  const canonical = input.canonical;
   const proposalWithoutDigest = {
     sourceProposalId: asStrategyProposalId(canonical.sourceId),
     canonicalProposalId: canonical.canonicalId,

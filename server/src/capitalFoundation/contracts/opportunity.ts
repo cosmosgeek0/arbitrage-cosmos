@@ -6,6 +6,10 @@ import type {
   StrategyProposalId,
 } from './identity.js';
 import type { CapitalTruthState, TruthMetadata } from './truth.js';
+import type {
+  ConservativeBorrowFactScope,
+  ConservativeEconomicFactBinding,
+} from './conservativeEconomics.js';
 
 export const CAPITAL_CONSIDERATION_MODES = Object.freeze(['ADVISORY', 'VALIDATE_ONLY', 'MANUAL_ARMED'] as const);
 export type CapitalConsiderationMode = (typeof CAPITAL_CONSIDERATION_MODES)[number];
@@ -69,7 +73,19 @@ export interface ConservativeEconomicInputs {
   readonly estimatedBorrowCost: NonNegativeDecimal | null;
   readonly estimatedSpreadCost: NonNegativeDecimal | null;
   readonly estimatedSlippage: NonNegativeDecimal | null;
+  readonly estimatedLatencyCost: NonNegativeDecimal | null;
+  readonly estimatedAdverseSelectionCost: NonNegativeDecimal | null;
+  readonly estimatedRecoveryCost: NonNegativeDecimal | null;
+  readonly estimatedCapitalOpportunityCost: NonNegativeDecimal | null;
   readonly liquidityCapacity: NonNegativeDecimal | null;
+  /** Exact canonical owner bindings; a free-form source ID is never enough. */
+  readonly expectedBorrowScope: Readonly<Omit<
+    ConservativeBorrowFactScope,
+    'truthEvaluatedAtMs' | 'truthExpiresAtMs'
+  >> | null;
+  readonly fundingFact: Readonly<ConservativeEconomicFactBinding> | null;
+  readonly borrowFact: Readonly<ConservativeEconomicFactBinding> | null;
+  readonly capitalOpportunityFact: Readonly<ConservativeEconomicFactBinding> | null;
   readonly exactSourceIds: readonly string[];
   readonly missingFields: readonly string[];
 }

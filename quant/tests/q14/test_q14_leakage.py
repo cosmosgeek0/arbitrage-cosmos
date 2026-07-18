@@ -245,11 +245,11 @@ def test_invalid_input_verdict_when_metric_is_unmeasurable() -> None:
 
 def test_control_failure_verdict_when_probe_escapes_band() -> None:
     # Regression fixture found by deterministic search: with 9 samples, 8 band
-    # replicates and band seed 3, the extra shuffled probe draw falls outside the
+    # replicates and band seed 10, the extra shuffled probe draw falls outside the
     # measured envelope and the factory rejects the evaluation pipeline.
     samples = make_sample_set(9)
     predictions = informative_predictions(samples)
-    assessment = assess_leakage(samples, predictions, _spec(band_seed=3, band_replicates=8))
+    assessment = assess_leakage(samples, predictions, _spec(band_seed=10, band_replicates=8))
     assert assessment.verdict is LeakageVerdict.REJECTED_CONTROL_FAILURE
     assert assessment.band is not None
     assert assessment.shuffled_probe is not None

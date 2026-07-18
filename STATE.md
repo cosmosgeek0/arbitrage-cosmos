@@ -112,6 +112,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 3 | `FIX-005` | `BUILT_AND_TESTED` | The named merged-scope audit mounts FIX-031 then FIX-017, preserves the first child failure exit, and cannot report success until both residual finding regressions pass. Its command-contract suite is 3/3 and the live two-finding audit exits 0. |
 | 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap now loads `.env` before path-owning modules, and one resolver owns the canonical data directory plus icon, liquidation, profile, and news archive paths. The fresh-process regression imports all four owners with a `.env`-only `DATA_DIR` and proves their exact shared authority. |
 | 5 | `FIX-171` | `BUILT_AND_TESTED` | All ten Foundation import-purity wrappers install one deterministic synchronous fetch denial instead of forwarding to ambient transport. A shared negative control performs an actual hostile fetch attempt and proves the exact fail-closed code before every import check. |
+| 6 | `FIX-170` | `BUILT_AND_TESTED` | Routine pull-request CI now has separate bounded canonical-full and local-ops jobs. The full job installs exact Node, Python 3.13.14, uv 0.11.28, all locked Quant groups/extras, then runs `test:all`; the ops job runs both fail-preserving local aggregates. The hostile workflow contract is 2/2, and staging/private/signed commands remain outside routine CI. |
 
 ## Previous source evidence
 

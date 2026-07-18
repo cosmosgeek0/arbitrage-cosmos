@@ -7,7 +7,12 @@
  * wall clock, timer, environment read, or production wiring in this test.
  * Run after: npm run build -w server
  */
-import { buildCanonicalReadModel } from '../../../dist/foundation/readModel/index.js';
+import {
+  buildCanonicalReadModel,
+  canonicalizeDecision,
+  canonicalizeProposal,
+  decisionEngineKey,
+} from '../../../dist/foundation/readModel/index.js';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -26,8 +31,18 @@ function clone(value) {
 }
 function view(input) {
   const result = buildCanonicalReadModel(input);
-  if (!result.ok) throw new Error(`expected view, got ${result.failure.code}: ${result.failure.message}`);
+  if (!result.ok) {
+    const failure = 'structuralFailure' in result ? result.structuralFailure : result.failure;
+    throw new Error(`expected view, got ${failure.code}: ${failure.message}`);
+  }
   return result.value;
+}
+function attemptBuild(input) {
+  try {
+    return { threw: false, result: buildCanonicalReadModel(input) };
+  } catch (error) {
+    return { threw: true, error };
+  }
 }
 
 const T0 = 1_750_000_000_000;
@@ -403,6 +418,367 @@ section('14. sparse record arrays become named rejects and reconcile');
   check('both sparse slots use PORT_RECORD_INVALID', built.basis.rejects.length === 2 && built.basis.rejects.every((r) => r.code === 'PORT_RECORD_INVALID'));
   check('sparse array lengths reconcile exactly', built.basis.reconciliation.inputDecisions === 3 && built.basis.reconciliation.inputProposals === 2 && built.basis.reconciliation.balanced);
   check('global sparse counts reconcile', built.reconciliation.inputRecords === 5 && built.reconciliation.canonicalRecords === 3 && built.reconciliation.rejectedRecords === 2 && built.reconciliation.balanced);
+}
+
+section('15. hostile getters and Proxies are isolated without hiding healthy siblings');
+{
+  let inputGetterReads = 0;
+  const inputWithGetter = buildInput({
+    volume: snapshot('engine.volume.snapshot', { decisions: [decision({ correlationId: 'cor_healthy_input_sibling' })] }),
+  });
+  Object.defineProperty(inputWithGetter, 'basis', {
+    get() {
+      inputGetterReads += 1;
+      throw new Error('top-level basis getter must not run');
+    },
+  });
+  const inputAttempt = attemptBuild(inputWithGetter);
+  check('top-level source getter is never invoked and becomes a named input-shape failure', !inputAttempt.threw
+    && inputGetterReads === 0
+    && !inputAttempt.result.ok
+    && inputAttempt.result.failure.code === 'READ_MODEL_INPUT_SHAPE_INVALID');
+
+  let snapshotGetterReads = 0;
+  const snapshotWithGetter = snapshot('engine.basis.snapshot', {
+    decisions: [decision({ correlationId: 'cor_snapshot_getter_record' })],
+  });
+  Object.defineProperty(snapshotWithGetter, 'sourceId', {
+    get() {
+      snapshotGetterReads += 1;
+      throw new Error('snapshot getter must not run');
+    },
+  });
+  const snapshotAttempt = attemptBuild(buildInput({
+    basis: snapshotWithGetter,
+    volume: snapshot('engine.volume.snapshot', {
+      decisions: [decision({ correlationId: 'cor_snapshot_getter_healthy_sibling' })],
+    }),
+  }));
+  const snapshotView = !snapshotAttempt.threw && snapshotAttempt.result.ok ? snapshotAttempt.result.value : null;
+  check('snapshot accessor is never invoked and only its source becomes INVALID', snapshotGetterReads === 0
+    && snapshotView?.basis.presence === 'INVALID');
+  check('healthy source remains PRESENT when sibling snapshot has an accessor', snapshotView?.volume.presence === 'PRESENT'
+    && snapshotView.volume.decisions.length === 1);
+
+  let recordGetterReads = 0;
+  const decisionWithGetter = decision({ correlationId: 'cor_record_getter' });
+  Object.defineProperty(decisionWithGetter, 'symbol', {
+    get() {
+      recordGetterReads += 1;
+      throw new Error('record getter must not run');
+    },
+  });
+  let recordProxyTraps = 0;
+  const proxiedDecision = new Proxy(decision({ correlationId: 'cor_record_proxy' }), {
+    get() {
+      recordProxyTraps += 1;
+      throw new Error('record Proxy get trap must not run');
+    },
+    getOwnPropertyDescriptor() {
+      recordProxyTraps += 1;
+      throw new Error('record Proxy descriptor trap must not run');
+    },
+    getPrototypeOf() {
+      recordProxyTraps += 1;
+      throw new Error('record Proxy prototype trap must not run');
+    },
+  });
+  const recordAttempt = attemptBuild(buildInput({
+    basis: snapshot('engine.basis.snapshot', {
+      decisions: [
+        decisionWithGetter,
+        proxiedDecision,
+        decision({ correlationId: 'cor_record_healthy' }),
+      ],
+    }),
+    volume: snapshot('engine.volume.snapshot', {
+      proposals: [proposal({ id: 'volume-record-sibling' })],
+    }),
+  }));
+  const recordView = !recordAttempt.threw && recordAttempt.result.ok ? recordAttempt.result.value : null;
+  check('record getter and Proxy traps remain uninvoked while both records are named rejects', recordGetterReads === 0
+    && recordProxyTraps === 0
+    && recordView?.basis.decisions.length === 1
+    && recordView.basis.rejects.length === 2
+    && recordView.basis.rejects.every((rejected) => rejected.code === 'PORT_RECORD_INVALID')
+    && recordView.basis.reconciliation.balanced);
+  check('healthy records and the other source survive hostile record isolation', recordView?.basis.decisions[0]?.sourceId.includes('cor_record_healthy')
+    && recordView.volume.presence === 'PRESENT'
+    && recordView.volume.proposals.length === 1);
+
+  let snapshotProxyTraps = 0;
+  const proxiedSnapshot = new Proxy(snapshot('engine.basis.snapshot'), {
+    get() {
+      snapshotProxyTraps += 1;
+      throw new Error('snapshot Proxy get trap must not run');
+    },
+    getOwnPropertyDescriptor() {
+      snapshotProxyTraps += 1;
+      throw new Error('snapshot Proxy descriptor trap must not run');
+    },
+    getPrototypeOf() {
+      snapshotProxyTraps += 1;
+      throw new Error('snapshot Proxy prototype trap must not run');
+    },
+  });
+  const proxyAttempt = attemptBuild(buildInput({
+    basis: proxiedSnapshot,
+    volume: snapshot('engine.volume.snapshot', {
+      decisions: [decision({ correlationId: 'cor_snapshot_proxy_healthy_sibling' })],
+    }),
+  }));
+  const proxyView = !proxyAttempt.threw && proxyAttempt.result.ok ? proxyAttempt.result.value : null;
+  check('snapshot Proxy is rejected before every trap and cannot hide healthy sibling truth', snapshotProxyTraps === 0
+    && proxyView?.basis.presence === 'INVALID'
+    && proxyView.volume.presence === 'PRESENT'
+    && proxyView.volume.decisions.length === 1);
+}
+
+section('16. hostile outer metadata and provenance stay value-level failures');
+{
+  let wholeInputTraps = 0;
+  const wholeInputProxy = new Proxy(buildInput(), {
+    get() {
+      wholeInputTraps += 1;
+      throw new Error('whole-input get trap must not run');
+    },
+    getOwnPropertyDescriptor() {
+      wholeInputTraps += 1;
+      throw new Error('whole-input descriptor trap must not run');
+    },
+    getPrototypeOf() {
+      wholeInputTraps += 1;
+      throw new Error('whole-input prototype trap must not run');
+    },
+    ownKeys() {
+      wholeInputTraps += 1;
+      throw new Error('whole-input ownKeys trap must not run');
+    },
+  });
+  const wholeInputAttempt = attemptBuild(wholeInputProxy);
+  check('whole-input Proxy produces structural rejection with zero trap invocation', !wholeInputAttempt.threw
+    && wholeInputTraps === 0
+    && !wholeInputAttempt.result.ok
+    && wholeInputAttempt.result.failureKind === 'STRUCTURAL_INPUT_REJECTION'
+    && wholeInputAttempt.result.structuralFailure.occurredAt === null
+    && wholeInputAttempt.result.structuralFailure.correlationId === null
+    && wholeInputAttempt.result.structuralFailure.metadataAuthority === 'UNAVAILABLE');
+
+  let nowGetterReads = 0;
+  const nowAccessorInput = buildInput();
+  Object.defineProperty(nowAccessorInput, 'nowMs', {
+    get() {
+      nowGetterReads += 1;
+      throw new Error('nowMs getter must not run');
+    },
+  });
+  const nowAttempt = attemptBuild(nowAccessorInput);
+  check('nowMs accessor is never invoked and returns unavailable structural metadata', !nowAttempt.threw
+    && nowGetterReads === 0
+    && !nowAttempt.result.ok
+    && nowAttempt.result.failureKind === 'STRUCTURAL_INPUT_REJECTION'
+    && nowAttempt.result.structuralFailure.occurredAt === null);
+
+  let correlationGetterReads = 0;
+  const correlationAccessorInput = buildInput();
+  Object.defineProperty(correlationAccessorInput, 'correlationId', {
+    get() {
+      correlationGetterReads += 1;
+      throw new Error('correlationId getter must not run');
+    },
+  });
+  const correlationAttempt = attemptBuild(correlationAccessorInput);
+  check('correlation accessor is never invoked and returns unavailable structural metadata', !correlationAttempt.threw
+    && correlationGetterReads === 0
+    && !correlationAttempt.result.ok
+    && correlationAttempt.result.failureKind === 'STRUCTURAL_INPUT_REJECTION'
+    && correlationAttempt.result.structuralFailure.correlationId === null);
+
+  const customPrototypeInput = Object.assign(
+    Object.create({ inherited: true }),
+    buildInput(),
+  );
+  const customPrototypeAttempt = attemptBuild(customPrototypeInput);
+  check('custom-prototype outer shape preserves valid own-data metadata in a StructuredFailure', !customPrototypeAttempt.threw
+    && !customPrototypeAttempt.result.ok
+    && customPrototypeAttempt.result.failure.code === 'READ_MODEL_INPUT_SHAPE_INVALID'
+    && customPrototypeAttempt.result.failure.occurredAt === NOW
+    && customPrototypeAttempt.result.failure.correlationId === 'cor_read_model_build_1');
+
+  const arrayOuterInput = Object.assign([], buildInput());
+  const arrayOuterAttempt = attemptBuild(arrayOuterInput);
+  check('Array outer shape preserves valid own-data metadata in a StructuredFailure', !arrayOuterAttempt.threw
+    && !arrayOuterAttempt.result.ok
+    && arrayOuterAttempt.result.failure.code === 'READ_MODEL_INPUT_SHAPE_INVALID'
+    && arrayOuterAttempt.result.failure.occurredAt === NOW
+    && arrayOuterAttempt.result.failure.correlationId === 'cor_read_model_build_1');
+
+  let provenanceTraps = 0;
+  const provenanceProxy = new Proxy({
+    sourceId: 'engine.hostile.snapshot',
+    receivedAtMs: T0 + 350,
+    maxAgeMs: 10_000,
+    authority: 'SYNTHETIC_TEST',
+    completeness: 'COMPLETE',
+    configVersion: 'cfg_hostile',
+  }, {
+    get() {
+      provenanceTraps += 1;
+      throw new Error('provenance get trap must not run');
+    },
+    getOwnPropertyDescriptor() {
+      provenanceTraps += 1;
+      throw new Error('provenance descriptor trap must not run');
+    },
+    getPrototypeOf() {
+      provenanceTraps += 1;
+      throw new Error('provenance prototype trap must not run');
+    },
+  });
+  const hostileDecision = canonicalizeDecision('BASIS', decision(), provenanceProxy);
+  const hostileProposal = canonicalizeProposal('BASIS', proposal(), provenanceProxy);
+  check('public canonicalizers reject provenance Proxy without traps or throws', provenanceTraps === 0
+    && !hostileDecision.ok
+    && hostileDecision.reject.code === 'PORT_RECORD_INVALID'
+    && !hostileProposal.ok
+    && hostileProposal.reject.code === 'PORT_RECORD_INVALID');
+
+  let identityTraps = 0;
+  const identityProxy = new Proxy(decision(), {
+    get() {
+      identityTraps += 1;
+      throw new Error('identity get trap must not run');
+    },
+    getOwnPropertyDescriptor() {
+      identityTraps += 1;
+      throw new Error('identity descriptor trap must not run');
+    },
+    getPrototypeOf() {
+      identityTraps += 1;
+      throw new Error('identity prototype trap must not run');
+    },
+  });
+  let identityRejected = false;
+  try {
+    decisionEngineKey(identityProxy);
+  } catch (error) {
+    identityRejected = error instanceof TypeError;
+  }
+  check('public identity helper uses guarded descriptors and never invokes Proxy traps', identityRejected && identityTraps === 0);
+}
+
+section('17. record and evidence resource ceilings fail closed');
+{
+  const oversizedSparseDecisions = new Array(20_001);
+  const oversizedAttempt = attemptBuild(buildInput({
+    basis: snapshot('engine.basis.snapshot', { decisions: oversizedSparseDecisions }),
+    volume: snapshot('engine.volume.snapshot', {
+      decisions: [decision({ correlationId: 'cor_oversize_healthy_sibling' })],
+    }),
+  }));
+  const oversizedView = !oversizedAttempt.threw && oversizedAttempt.result.ok ? oversizedAttempt.result.value : null;
+  check('20,001-slot sparse record array is bounded before iteration and invalidates only its source', oversizedView?.basis.presence === 'INVALID'
+    && oversizedView.basis.reconciliation.inputDecisions === 20_001
+    && oversizedView.basis.reconciliation.rejectedDecisions === 20_001
+    && oversizedView.basis.reconciliation.balanced
+    && oversizedView.volume.decisions.length === 1);
+
+  let deepEvidence = { terminal: true };
+  for (let depth = 0; depth < 34; depth += 1) deepEvidence = { nested: deepEvidence };
+  const wideEvidence = Object.fromEntries(Array.from({ length: 1_001 }, (_, index) => [`key${index}`, index]));
+  const longKeyEvidence = { ['k'.repeat(1_025)]: true };
+  const nodeHeavyEvidence = {
+    chunks: Array.from({ length: 21 }, () => Array.from({ length: 1_000 }, () => 1)),
+  };
+  const evidenceAttempt = attemptBuild(buildInput({
+    basis: snapshot('engine.basis.snapshot', {
+      proposals: [
+        proposal({ id: 'evidence-depth-limit', evidence: deepEvidence }),
+        proposal({ id: 'evidence-object-key-count-limit', evidence: wideEvidence }),
+        proposal({ id: 'evidence-array-limit', evidence: { rows: new Array(10_001).fill(1) } }),
+        proposal({ id: 'evidence-node-limit', evidence: nodeHeavyEvidence }),
+        proposal({ id: 'evidence-string-limit', evidence: { text: 'x'.repeat(262_145) } }),
+        proposal({ id: 'evidence-key-length-limit', evidence: longKeyEvidence }),
+        proposal({ id: 'evidence-byte-limit', evidence: { left: 'x'.repeat(262_144), right: 'y'.repeat(262_144) } }),
+        proposal({
+          id: 'evidence-container-byte-limit',
+          evidence: {
+            left: 'x'.repeat(250_000),
+            right: 'y'.repeat(250_000),
+            empties: Array.from({ length: 10_000 }, () => []),
+          },
+        }),
+        proposal({ id: 'evidence-healthy', evidence: { bounded: true } }),
+      ],
+    }),
+  }));
+  const evidenceView = !evidenceAttempt.threw && evidenceAttempt.result.ok ? evidenceAttempt.result.value : null;
+  check('depth/node/array/key-count/key-length/string/byte ceilings reject every oversized evidence record', evidenceView?.basis.proposals.length === 1
+    && evidenceView.basis.proposals[0].sourceId === 'evidence-healthy'
+    && evidenceView.basis.rejects.length === 8
+    && evidenceView.basis.rejects.every((rejected) => rejected.code === 'EVIDENCE_INVALID')
+    && evidenceView.basis.reconciliation.balanced);
+
+  const recordTextView = view(buildInput({
+    basis: snapshot('engine.basis.snapshot', {
+      decisions: [
+        decision({ correlationId: 'cor_long_human_reason', humanReason: 'h'.repeat(10_001) }),
+        decision({ correlationId: 'cor_bounded_human_reason' }),
+      ],
+      proposals: [
+        proposal({ id: 'proposal-long-reason', reason: 'r'.repeat(10_001) }),
+        proposal({ id: 'proposal-long-rejection', rejectionReasons: ['x'.repeat(1_001)] }),
+        proposal({ id: 'proposal-many-rejections', rejectionReasons: new Array(1_001).fill('bounded') }),
+        proposal({ id: 'proposal-bounded-record-text' }),
+      ],
+    }),
+  }));
+  check('human reason, proposal reason, rejection count, and rejection string limits preserve healthy siblings', recordTextView.basis.decisions.length === 1
+    && recordTextView.basis.proposals.length === 1
+    && recordTextView.basis.proposals[0].sourceId === 'proposal-bounded-record-text'
+    && recordTextView.basis.rejects.length === 4
+    && recordTextView.basis.reconciliation.balanced);
+}
+
+section('18. closed shapes reject symbols, side fields, and Array subclasses');
+{
+  const symbolInput = buildInput();
+  symbolInput[Symbol('input-side-field')] = true;
+  const symbolInputAttempt = attemptBuild(symbolInput);
+  check('symbol build-input field is a named shape failure using trusted metadata', !symbolInputAttempt.threw
+    && !symbolInputAttempt.result.ok
+    && symbolInputAttempt.result.failure.code === 'READ_MODEL_INPUT_SHAPE_INVALID'
+    && symbolInputAttempt.result.failure.occurredAt === NOW);
+
+  const symbolSnapshot = snapshot('engine.basis.snapshot');
+  symbolSnapshot[Symbol('snapshot-side-field')] = true;
+  const symbolSnapshotView = view(buildInput({
+    basis: symbolSnapshot,
+    volume: snapshot('engine.volume.snapshot', {
+      decisions: [decision({ correlationId: 'cor_symbol_snapshot_sibling' })],
+    }),
+  }));
+  check('symbol snapshot field invalidates only that source', symbolSnapshotView.basis.presence === 'INVALID'
+    && symbolSnapshotView.volume.decisions.length === 1);
+
+  const symbolDecision = decision({ correlationId: 'cor_symbol_record' });
+  symbolDecision[Symbol('record-side-field')] = true;
+  const sideFieldArray = [decision({ correlationId: 'cor_side_array' })];
+  sideFieldArray.extra = true;
+  class DecisionArraySubclass extends Array {}
+  const subclassArray = new DecisionArraySubclass(decision({ correlationId: 'cor_subclass_array' }));
+  const symbolRecordView = view(buildInput({
+    basis: snapshot('engine.basis.snapshot', {
+      decisions: [symbolDecision, decision({ correlationId: 'cor_symbol_record_healthy' })],
+    }),
+  }));
+  const sideArrayView = view(buildInput({ basis: snapshot('engine.basis.snapshot', { decisions: sideFieldArray }) }));
+  const subclassArrayView = view(buildInput({ basis: snapshot('engine.basis.snapshot', { decisions: subclassArray }) }));
+  check('symbol record is rejected while healthy record survives', symbolRecordView.basis.decisions.length === 1
+    && symbolRecordView.basis.rejects.length === 1
+    && symbolRecordView.basis.reconciliation.balanced);
+  check('array side field and Array subclass are rejected as snapshot shapes', sideArrayView.basis.presence === 'INVALID'
+    && subclassArrayView.basis.presence === 'INVALID');
 }
 
 const passed = results.filter((r) => r.pass).length;

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from decimal import getcontext, localcontext
+
+import pytest
+
+from quant_edge.errors import ContractValueError
 from quant_edge.features.domains import BarV1
-from quant_edge.features.fixedpoint import FixedPointV1
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
 from quant_edge.lake.contracts import ExactScaledValueV1
 from quant_edge.micro.equivalence import run_micro_equivalence
 from quant_edge.micro.flow import (
@@ -18,10 +23,200 @@ from quant_edge.micro.flow import (
 )
 from quant_edge.micro.inputs import JoinedTradeV1, TopOfBookPointV1, TradePointV1
 from quant_edge.micro.l1 import fp_from_fraction
+from quant_edge.micro.point_process import (
+    EVENT_KINDS,
+    PUBLIC_REMOVAL_SEMANTICS,
+    TRUE_CANCEL_STATUS,
+    HawkesSpecV1,
+    HawkesStatus,
+    PointEventV1,
+    PublicEventKind,
+    exponential_intensities,
+    hawkes_assessment,
+    poisson_intensities,
+    time_rescaling_residuals,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
 FP_ONE = 10**12
+
+
+def _point_event(ordinal: int, kind: PublicEventKind) -> PointEventV1:
+    return PointEventV1(
+        event_id=f"point-{ordinal}",
+        event_time_ns=BASE_NS + ordinal * SECOND_NS,
+        ordinal=ordinal,
+        kind=kind,
+    )
+
+
+def _hawkes_spec(*, explosive: bool = False, max_events: int = 4_096) -> HawkesSpecV1:
+    zero = FixedPointV1(0)
+    alpha = FixedPointV1(FIXED_POINT_SCALE if explosive else FIXED_POINT_SCALE // 5)
+    return HawkesSpecV1(
+        spec_id="public-flow-v1",
+        baselines=(FixedPointV1(FIXED_POINT_SCALE // 10),) * 4,
+        excitation=tuple(
+            tuple(alpha if row == column else zero for column in range(4)) for row in range(4)
+        ),
+        decay_per_second=FixedPointV1(FIXED_POINT_SCALE),
+        max_events=max_events,
+    )
+
+
+class TestPublicPointProcessFamily:
+    def test_public_removal_never_impersonates_true_cancel(self) -> None:
+        assert tuple(kind.value for kind in EVENT_KINDS) == (
+            "BUY",
+            "SELL",
+            "ADD",
+            "REMOVE_OR_EXECUTE",
+        )
+        assert TRUE_CANCEL_STATUS == "BLOCKED_DATA"
+        assert "do not identify true cancellation" in PUBLIC_REMOVAL_SEMANTICS
+        with pytest.raises(ContractValueError, match="true CANCEL is BLOCKED_DATA"):
+            PointEventV1("cancel-1", BASE_NS, 0, "CANCEL")  # type: ignore[arg-type]
+
+    def test_poisson_baselines_are_exact_for_all_four_types(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.BUY),
+            _point_event(3, PublicEventKind.SELL),
+            _point_event(4, PublicEventKind.REMOVE_OR_EXECUTE),
+        )
+
+        rates = poisson_intensities(events, start_ns=BASE_NS, end_ns=BASE_NS + 5 * SECOND_NS)
+
+        assert tuple(rate.count for rate in rates) == (2, 1, 0, 1)
+        assert (rates[0].events_per_second.numerator, rates[0].events_per_second.denominator) == (
+            2,
+            5,
+        )
+        assert rates[2].events_per_second.is_zero
+
+    def test_exponential_intensity_is_bounded_recency_weighted_and_deterministic(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.BUY),
+            _point_event(3, PublicEventKind.SELL),
+        )
+
+        first = exponential_intensities(
+            events, as_of_ns=BASE_NS + 3 * SECOND_NS, decay_ns=SECOND_NS
+        )
+
+        assert first == exponential_intensities(
+            events, as_of_ns=BASE_NS + 3 * SECOND_NS, decay_ns=SECOND_NS
+        )
+        assert 0 < first[0].mantissa < 2 * FIXED_POINT_SCALE
+        assert first[1].mantissa == FIXED_POINT_SCALE
+        assert first[2].is_zero
+        assert first[3].is_zero
+
+    def test_decimal_results_ignore_and_restore_hostile_ambient_precision(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.SELL),
+            _point_event(3, PublicEventKind.ADD),
+        )
+        original = getcontext().copy()
+
+        with localcontext() as ambient:
+            ambient.prec = 6
+            low_precision = (
+                exponential_intensities(
+                    events,
+                    as_of_ns=BASE_NS + 4 * SECOND_NS,
+                    decay_ns=3 * SECOND_NS,
+                ),
+                time_rescaling_residuals(events, spec=_hawkes_spec()),
+            )
+            assert getcontext().prec == 6
+
+            ambient.prec = 28
+            ordinary_precision = (
+                exponential_intensities(
+                    events,
+                    as_of_ns=BASE_NS + 4 * SECOND_NS,
+                    decay_ns=3 * SECOND_NS,
+                ),
+                time_rescaling_residuals(events, spec=_hawkes_spec()),
+            )
+            assert getcontext().prec == 28
+
+        assert low_precision == ordinary_precision
+        assert getcontext().prec == original.prec
+        assert getcontext().rounding == original.rounding
+        assert getcontext().flags == original.flags
+        assert getcontext().traps == original.traps
+
+    def test_stable_multivariate_hawkes_exposes_challenger_intensities(self) -> None:
+        events = tuple(_point_event(index, kind) for index, kind in enumerate(EVENT_KINDS, 1))
+
+        assessment = hawkes_assessment(
+            events, as_of_ns=BASE_NS + 5 * SECOND_NS, spec=_hawkes_spec()
+        )
+
+        assert assessment.status is HawkesStatus.STABLE_CHALLENGER
+        assert all(row.numerator < row.denominator for row in assessment.branching_row_sums)
+        assert all(value is not None and value.mantissa > 0 for value in assessment.intensities)
+
+    def test_explosive_fit_is_rejected_before_intensity_or_residual_output(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.SELL),
+        )
+        spec = _hawkes_spec(explosive=True)
+
+        assessment = hawkes_assessment(events, as_of_ns=BASE_NS + 3 * SECOND_NS, spec=spec)
+        residuals = time_rescaling_residuals(events, spec=spec)
+
+        assert assessment.status is HawkesStatus.REJECTED_EXPLOSIVE
+        assert assessment.intensities == (None, None, None, None)
+        assert residuals.status is HawkesStatus.REJECTED_EXPLOSIVE
+        assert residuals.compensator_increments == ()
+
+    def test_time_rescaling_is_positive_and_hostile_order_and_capacity_fail_closed(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.SELL),
+            _point_event(3, PublicEventKind.ADD),
+        )
+
+        report = time_rescaling_residuals(events, spec=_hawkes_spec())
+
+        assert report.status is HawkesStatus.STABLE_CHALLENGER
+        assert len(report.compensator_increments) == 2
+        assert all(value.mantissa > 0 for value in report.compensator_increments)
+        assert report == time_rescaling_residuals(events, spec=_hawkes_spec())
+        with pytest.raises(ContractValueError, match="strictly chronological"):
+            poisson_intensities(
+                (events[1], events[0]), start_ns=BASE_NS, end_ns=BASE_NS + 4 * SECOND_NS
+            )
+        with pytest.raises(ContractValueError, match="bounded at 2"):
+            hawkes_assessment(
+                events, as_of_ns=BASE_NS + 4 * SECOND_NS, spec=_hawkes_spec(max_events=2)
+            )
+
+    def test_duplicate_identity_and_sequence_gap_fail_closed(self) -> None:
+        duplicate = (
+            _point_event(1, PublicEventKind.BUY),
+            PointEventV1("point-1", BASE_NS + 2 * SECOND_NS, 2, PublicEventKind.SELL),
+        )
+        with pytest.raises(ContractValueError, match="identifiers must be unique"):
+            poisson_intensities(
+                duplicate,
+                start_ns=BASE_NS,
+                end_ns=BASE_NS + 3 * SECOND_NS,
+            )
+
+        gap = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(3, PublicEventKind.SELL),
+        )
+        with pytest.raises(ContractValueError, match="gap-free"):
+            hawkes_assessment(gap, as_of_ns=BASE_NS + 4 * SECOND_NS, spec=_hawkes_spec())
 
 
 def _scaled(coefficient: int) -> ExactScaledValueV1:

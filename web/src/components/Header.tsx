@@ -2877,6 +2877,32 @@ type BrowserHealthProbe = {
   observationReported: boolean;
   observationError: string | null;
 };
+type WatchmanHealthFreshnessStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+export const WATCHMAN_HEALTH_STALE_AFTER_MS = 15_000;
+
+export function resolveWatchmanHealthFreshness(input: {
+  probeStatus: 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+  lastSuccessAt: number | null;
+  observedAt: number;
+  staleAfterMs: number;
+}): { status: WatchmanHealthFreshnessStatus; lastSuccessAt: number | null; ageMs: number | null } {
+  if (input.lastSuccessAt === null) {
+    return {
+      status: input.probeStatus === 'LOADING' ? 'LOADING' : 'UNAVAILABLE',
+      lastSuccessAt: null,
+      ageMs: null,
+    };
+  }
+  const ageMs = Math.max(0, input.observedAt - input.lastSuccessAt);
+  const staleAfterMs = Number.isFinite(input.staleAfterMs) && input.staleAfterMs > 0
+    ? input.staleAfterMs
+    : WATCHMAN_HEALTH_STALE_AFTER_MS;
+  return {
+    status: input.probeStatus === 'UNAVAILABLE' || ageMs >= staleAfterMs ? 'STALE' : 'CURRENT',
+    lastSuccessAt: input.lastSuccessAt,
+    ageMs,
+  };
+}
 type WatchmanComponent = {
   id: string;
   label: string;
@@ -2962,6 +2988,8 @@ export function RefreshDock() {
   const [healthProbeError, setHealthProbeError] = useState<string | null>(null);
   const [browserObservationError, setBrowserObservationError] = useState<string | null>(null);
   const [healthProbeStatus, setHealthProbeStatus] = useState<'LOADING' | 'CURRENT' | 'UNAVAILABLE'>('LOADING');
+  const [healthProbeLastSuccessAt, setHealthProbeLastSuccessAt] = useState<number | null>(null);
+  const [healthObservedAt, setHealthObservedAt] = useState(0);
   const busy = useRef(false);
   const healthPollRef = useRef<SettledPoll | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -2996,14 +3024,17 @@ export function RefreshDock() {
       timeoutMs: 8_000,
       request: runHealthProbe,
       onSuccess: (probe) => {
+        const successAt = Date.now();
         setHealthProbeStatus('CURRENT');
+        setHealthProbeLastSuccessAt(successAt);
+        setHealthObservedAt(successAt);
         setAppRtt(probe.rttMs);
         setHealthProbeError(null);
         setBrowserObservationError(probe.observationReported ? null : probe.observationError);
       },
       onError: (error) => {
         setHealthProbeStatus('UNAVAILABLE');
-        setAppRtt(null);
+        setHealthObservedAt(Date.now());
         setHealthProbeError(apiErrorMessage(error, 'Watchman health probe failed'));
         setBrowserObservationError(null);
       },
@@ -3015,6 +3046,18 @@ export function RefreshDock() {
       healthPoll.stop();
     };
   }, [runHealthProbe]);
+
+  useEffect(() => {
+    if (healthProbeLastSuccessAt === null) return;
+    const staleAt = healthProbeLastSuccessAt + WATCHMAN_HEALTH_STALE_AFTER_MS;
+    const remainingMs = Math.max(0, staleAt - Date.now());
+    if (remainingMs === 0) {
+      setHealthObservedAt(staleAt);
+      return;
+    }
+    const timer = window.setTimeout(() => setHealthObservedAt(Date.now()), remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [healthProbeLastSuccessAt]);
 
   useEffect(() => () => recoveryStatusReset.cancel(), [recoveryStatusReset]);
 
@@ -3061,31 +3104,41 @@ export function RefreshDock() {
   const productBindingContinuity = binding.continuity;
   const canonicalComponents = (productSnapshot?.components ?? []).map((component) => watchmanComponentFromSupervisor(component, productBindingContinuity));
   const effectiveLastResetTs = lastRefreshTs;
+  const healthFreshness = resolveWatchmanHealthFreshness({
+    probeStatus: healthProbeStatus,
+    lastSuccessAt: healthProbeLastSuccessAt,
+    observedAt: healthObservedAt,
+    staleAfterMs: WATCHMAN_HEALTH_STALE_AFTER_MS,
+  });
   const browserStatus: WatchmanStatus = !connected || appRtt === null
     ? 'outage'
-    : browserObservationError
+    : healthFreshness.status === 'LOADING' || healthFreshness.status === 'UNAVAILABLE'
+      ? 'outage'
+      : healthFreshness.status === 'STALE' || browserObservationError
       ? 'degraded'
-      : appRtt >= 800
-        ? 'outage'
-        : appRtt >= 350
-          ? 'degraded'
-          : 'operational';
+        : appRtt >= 800
+          ? 'outage'
+          : appRtt >= 350
+            ? 'degraded'
+            : 'operational';
   const browserComponent: WatchmanComponent = {
     id: 'browser-session',
     label: 'Browser / Website Session',
     group: 'control_path',
     status: browserStatus,
     statusLabel: watchmanStatusLabel(browserStatus),
-    detail: healthProbeStatus === 'LOADING'
+    detail: healthFreshness.status === 'LOADING'
       ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · liveness probe loading · browser observation unreported`
-      : healthProbeError
+      : healthFreshness.status === 'UNAVAILABLE'
       ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · ${healthProbeError}`
+      : healthFreshness.status === 'STALE'
+        ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · liveness evidence stale · last successful probe ${timeAgo(healthFreshness.lastSuccessAt!)} · ${healthProbeError ?? 'stale threshold exceeded'}`
       : browserObservationError
         ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · browser observation stale · ${browserObservationError}`
         : `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /health/live liveness round trip · browser observation reported`,
     value: appRtt === null ? 'Offline' : msLabel(appRtt),
     required: false,
-    updatedAt: Date.now(),
+    updatedAt: healthFreshness.lastSuccessAt,
     latencyMs: appRtt,
   };
   // Private account and external infrastructure are explicit owner boundaries,

@@ -308,7 +308,7 @@ function fullPublicEvidence(atMs = T0, options = {}) {
       filledQuantity: 1,
       averagePrice: 49_900,
       sampledPerWindow: true,
-      samplingSelection: 'LARGEST_PER_SYMBOL',
+      samplingSelection: 'LATEST_PER_SYMBOL',
       sampleWindowMs: 1_000,
       truth: truth(atMs, {
         sourceRecordIds: ['liquidation-1'], sourceId: 'binance-futures-market-stream', dataset: 'usd_m.liquidation', endpointClass: 'MARKET',

@@ -114,11 +114,13 @@ function createWorld() {
     decisions: [],
     proposals: [],
   };
+  let volumeEvidenceObserver = null;
   const volume = {
     async start() { calls.volumeStart += 1; volumeStatus.running = true; },
     stop() { calls.volumeStop += 1; volumeStatus.running = false; },
     connectionStatus() { return { ...volumeStatus }; },
     integrationSnapshot() { return structuredClone(volumeSnapshot); },
+    setEvidenceObserver(observer) { volumeEvidenceObserver = observer; },
   };
   const ports = createProductionSystemIntegrationPorts({
     clock,
@@ -146,6 +148,10 @@ function createWorld() {
     volume,
     volumeStatus,
     volumeSnapshot,
+    emitVolumeEvidence(cut) {
+      assert.equal(typeof volumeEvidenceObserver, 'function');
+      volumeEvidenceObserver(structuredClone(cut));
+    },
     ports,
     ctx,
   };
@@ -196,6 +202,13 @@ test('rejected Basis and Volume starts stop partial runtimes and preserve the st
 async function startMarket(world) {
   await world.ports.runtimes.market.init();
   world.ports.runtimes.market.start();
+}
+
+function routingCapability(world, name) {
+  const value = world.ports.intelligenceEvidence.readRoutingSnapshot().capabilities
+    .find((entry) => entry.capability === name);
+  assert.ok(value, `missing routing capability ${name}`);
+  return value;
 }
 
 test('factory construction is inert and exposes only passive public source projections', () => {
@@ -408,6 +421,95 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
   assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), []);
   assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
+});
+
+test('one production router projects current mark/funding and OI with fresh, missing, restart, and stale truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+    openInterest: 2_000, openInterestUsd: 120_000_000,
+    openInterestChangePct: 1.2, openInterestUpdatedAt: START - 150,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'FRESH');
+  const firstSources = world.ports.intelligenceEvidence.readRoutingSnapshot().sources;
+  assert.ok(firstSources.some((entry) => entry.generation === 1 && entry.bootstrapped));
+
+  world.market.feeds['futures-markprice'] = 'closed';
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'MISSING');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'MISSING');
+
+  world.clock.now = START + 5_000;
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START + 4_900);
+  world.usdm.set('BTCUSDT', START + 4_950);
+  world.market.rows[0].openInterestUpdatedAt = START + 4_940;
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'FRESH');
+
+  world.clock.now = START + 15_001;
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'STALE');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'STALE');
+});
+
+test('production Volume owner publishes one lifecycle-bound trade source and delayed pre-close LIVE stays fenced', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+
+  const tradeCut = (generation, revision, id, continuity) => ({
+    kind: 'SPOT_AGG_TRADE', generation, revision, receivedAtMs: START,
+    continuity, baseAsset: 'BTC',
+    raw: {
+      e: 'aggTrade', E: START - 100 + id, T: START - 99 + id, s: 'BTCUSDT',
+      a: id, f: id, l: id, p: '60000', q: '0.01', m: false,
+    },
+  });
+  world.emitVolumeEvidence(tradeCut(1, 1, 1, 'UNKNOWN'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(1, 2, 2, 'CONTIGUOUS'));
+  assert.equal(
+    routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness,
+    'FRESH',
+    JSON.stringify(world.ports.intelligenceEvidence.readRoutingSnapshot()),
+  );
+
+  world.emitVolumeEvidence({ kind: 'SOURCE_CLOSED', generation: 1, revision: 3, observedAtMs: START });
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(1, 4, 3, 'CONTIGUOUS'));
+  const closed = world.ports.intelligenceEvidence.readRoutingSnapshot().sources
+    .find((entry) => entry.dataset === 'spot.aggregate_trade');
+  assert.deepEqual([closed.generation, closed.revision, closed.closed], [1, 3, true]);
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+
+  world.emitVolumeEvidence(tradeCut(3, 1, 4, 'UNKNOWN'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(3, 2, 5, 'CONTIGUOUS'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'FRESH');
+  const restarted = world.ports.intelligenceEvidence.readRoutingSnapshot().sources
+    .find((entry) => entry.dataset === 'spot.aggregate_trade');
+  assert.deepEqual([restarted.generation, restarted.revision, restarted.closed, restarted.bootstrapped], [3, 2, false, true]);
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {

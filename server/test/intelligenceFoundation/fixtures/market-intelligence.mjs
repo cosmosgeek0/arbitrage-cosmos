@@ -203,7 +203,7 @@ export function normalizedLiquidation({ symbol = 'DORMUSDT', eventTimeMs, quoteN
     filledQuantity: quoteNotional / price,
     averagePrice: price,
     sampledPerWindow: true,
-    samplingSelection: 'LARGEST_PER_SYMBOL',
+    samplingSelection: 'LATEST_PER_SYMBOL',
     sampleWindowMs: 1_000,
   };
 }

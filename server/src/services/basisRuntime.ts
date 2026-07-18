@@ -1,7 +1,7 @@
 import { fetchAllBookTickers } from '../binance/rest.js';
 import type { BasisConfig } from '../engine/basis/config.js';
 import { BasisEngine } from '../engine/basis/engine.js';
-import type { BasisProposal } from '../engine/basis/types.js';
+import type { BasisBookObservation, BasisProposal } from '../engine/basis/types.js';
 import { systemClock } from '../engine/v0/clock.js';
 import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
@@ -144,6 +144,9 @@ export class BasisRuntime {
     this.universeTimer = null;
     this.eligibleSymbols = [];
     this.engine.stop();
+    this.engine.resetBookContinuity();
+    this.lastBookTs = null;
+    this.lastMarkTs = null;
   }
 
   connectionStatus(): {
@@ -386,26 +389,31 @@ export class BasisRuntime {
       for (const symbol of active) {
         const spot = spotBooks.get(symbol);
         const perp = perpBooks.get(symbol);
-        if (usableBook(spot)) {
-          this.engine.onSpotBook({
+        const spotObservation: BasisBookObservation | null = usableBook(spot)
+          ? {
             symbol,
             bid: spot!.bidPrice,
             ask: spot!.askPrice,
             bidQty: spot!.bidQty,
             askQty: spot!.askQty,
             ts: receivedTs,
-          });
-        }
-        if (usableBook(perp)) {
-          this.engine.onPerpBook({
+            sourceEventTimeMs: spot!.time ?? null,
+            sourceSequence: null,
+          }
+          : null;
+        const perpetualObservation: BasisBookObservation | null = usableBook(perp)
+          ? {
             symbol,
             bid: perp!.bidPrice,
             ask: perp!.askPrice,
             bidQty: perp!.bidQty,
             askQty: perp!.askQty,
             ts: receivedTs,
-          });
-        }
+            sourceEventTimeMs: perp!.time ?? null,
+            sourceSequence: null,
+          }
+          : null;
+        this.engine.onBookPair(symbol, spotObservation, perpetualObservation);
         if (this.engine.market.spotBook(symbol)?.ts === receivedTs && this.engine.market.perpBook(symbol)?.ts === receivedTs) {
           booksSeen += 1;
         }

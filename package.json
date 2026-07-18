@@ -26,7 +26,7 @@
     "rollback:preflight": "node test/i00/ops-command.mjs rollback-preflight",
     "test:app:built": "node server/test/gates.mjs",
     "test:app": "npm run build && npm run test:app:built",
-    "test:engine:basis:built": "node server/test/engine-basis.mjs",
+    "test:engine:basis:built": "node server/test/engine-basis.mjs && node --test --test-concurrency=1 server/test/engine-basis-causal-gap.test.mjs server/test/engine-basis-runtime-causality.test.mjs",
     "test:engine:basis": "npm run build -w server && npm run test:engine:basis:built",
     "test:engine:volume:built": "node server/test/engine-volume.mjs",
     "test:engine:volume": "npm run build -w server && npm run test:engine:volume:built",

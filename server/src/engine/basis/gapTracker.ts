@@ -7,12 +7,33 @@
 import type { Clock } from '../v0/types.js';
 import { coefficientOfVariation, slopePerMinute } from './math.js';
 import type { BasisConfig } from './config.js';
-import type { BasisDirection, GapState } from './types.js';
+import { gapLongSpotShortPerpPct, gapShortSpotLongPerpPct } from './math.js';
+import type {
+  BasisBookIngestResult,
+  BasisBookPair,
+  BasisCausalMarket,
+  BasisDirection,
+  BasisGapCausality,
+  BasisGapTrend,
+  GapState,
+} from './types.js';
 
 interface TrackerBucket {
   samples: Array<{ ts: number; v: number }>;
   openedTs: number | null; // when the gap first crossed watchGapPct
   persistTicks: number; // consecutive ticks ≥ watchGapPct
+  causality: BasisGapCausality;
+}
+
+function unknownCausality(): BasisGapCausality {
+  return {
+    quadrant: 'UNKNOWN',
+    trend: 'UNKNOWN',
+    initiatingMarket: 'UNKNOWN',
+    initiatingSourceTs: null,
+    initiatingSourceSequence: null,
+    acceptedEventSequence: null,
+  };
 }
 
 export class GapTracker {
@@ -31,17 +52,39 @@ export class GapTracker {
     const k = this.key(symbol, direction);
     let b = this.buckets.get(k);
     if (!b) {
-      b = { samples: [], openedTs: null, persistTicks: 0 };
+      b = { samples: [], openedTs: null, persistTicks: 0, causality: unknownCausality() };
       if (this.buckets.size < this.cfg.maxUniverseSize * 2) this.buckets.set(k, b);
     }
     return b;
+  }
+
+  /** Attribute accepted, chronologically ordered price changes exactly once. */
+  onBookIngest(result: BasisBookIngestResult | null): void {
+    if (result === null) return;
+    if (result.kind === 'DISCONTINUITY') {
+      this.resetCausality(result.symbol);
+      return;
+    }
+    // Causality belongs to the immutable cut that produced it. A later
+    // refresh of the opposite leg must never make a stale or over-skewed
+    // baseline look usable after the fact, so both sides of this accepted
+    // event are judged at its own acceptance time.
+    if (
+      !this.causalPairUsable(result.before, result.acceptedAtMs) ||
+      !this.causalPairUsable(result.after, result.acceptedAtMs)
+    ) {
+      this.resetCausality(result.symbol);
+      return;
+    }
+    this.attribute(result.symbol, 'long_spot_short_perp', result.market, result.before, result.after, result.sourceEventTimeMs, result.sourceSequence, result.acceptedEventSequence);
+    this.attribute(result.symbol, 'short_spot_long_perp', result.market, result.before, result.after, result.sourceEventTimeMs, result.sourceSequence, result.acceptedEventSequence);
   }
 
   /**
    * Record the current executable gap for one direction (call once per engine
    * tick) and return the derived state.
    */
-  observe(symbol: string, direction: BasisDirection, gapPct: number | null): GapState {
+  observe(symbol: string, direction: BasisDirection, gapPct: number | null, causalUsable = true): GapState {
     const b = this.bucket(symbol, direction);
     const now = this.clock.now();
 
@@ -56,17 +99,21 @@ export class GapTracker {
       } else {
         b.openedTs = null;
         b.persistTicks = 0;
+        b.causality = unknownCausality();
       }
     } else {
       // no data → the gap cannot be said to persist
       b.openedTs = null;
       b.persistTicks = 0;
+      b.causality = unknownCausality();
     }
 
-    return this.state(symbol, direction, gapPct);
+    if (!causalUsable) b.causality = unknownCausality();
+
+    return this.state(symbol, direction, gapPct, causalUsable);
   }
 
-  state(symbol: string, direction: BasisDirection, gapPct: number | null): GapState {
+  state(symbol: string, direction: BasisDirection, gapPct: number | null, causalUsable = true): GapState {
     const b = this.bucket(symbol, direction);
     const now = this.clock.now();
     // stability over the recent open-gap stretch only (all-window CV would
@@ -80,7 +127,61 @@ export class GapTracker {
       slopePctPerMin: slopePerMinute(b.samples),
       stabilityCv: recent.length >= 3 ? coefficientOfVariation(recent) : null,
       samples: b.samples.length,
+      causality: causalUsable ? { ...b.causality } : unknownCausality(),
     };
+  }
+
+  private attribute(
+    symbol: string,
+    direction: BasisDirection,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    before: BasisBookPair,
+    after: BasisBookPair,
+    sourceEventTimeMs: number | null,
+    sourceSequence: number | null,
+    acceptedEventSequence: number,
+  ): void {
+    const bucket = this.bucket(symbol, direction);
+    const prior = this.gap(direction, before);
+    const current = this.gap(direction, after);
+    if (prior === null || current === null || current < this.cfg.watchGapPct) {
+      bucket.causality = unknownCausality();
+      return;
+    }
+    const delta = current - prior;
+    if (!Number.isFinite(delta) || Math.abs(delta) < this.cfg.causalMoveThresholdPct) return;
+    const trend: Exclude<BasisGapTrend, 'UNKNOWN'> = delta > 0 ? 'RISING' : 'FALLING';
+    bucket.causality = {
+      quadrant: `${trend}_${market === 'PERPETUAL' ? 'PERPETUAL' : 'SPOT'}_LED`,
+      trend,
+      initiatingMarket: market,
+      initiatingSourceTs: sourceEventTimeMs,
+      initiatingSourceSequence: sourceSequence,
+      acceptedEventSequence,
+    };
+  }
+
+  private gap(direction: BasisDirection, pair: BasisBookPair): number | null {
+    if (!pair.spot || !pair.perpetual) return null;
+    return direction === 'long_spot_short_perp'
+      ? gapLongSpotShortPerpPct(pair.spot.ask, pair.perpetual.bid)
+      : gapShortSpotLongPerpPct(pair.spot.bid, pair.perpetual.ask);
+  }
+
+  private causalPairUsable(pair: BasisBookPair, acceptedAtMs: number): boolean {
+    if (!pair.spot || !pair.perpetual || !Number.isSafeInteger(acceptedAtMs)) return false;
+    const spotAgeMs = Math.max(0, acceptedAtMs - pair.spot.ts);
+    const perpetualAgeMs = Math.max(0, acceptedAtMs - pair.perpetual.ts);
+    return spotAgeMs <= this.cfg.staleMs &&
+      perpetualAgeMs <= this.cfg.staleMs &&
+      Math.abs(pair.spot.ts - pair.perpetual.ts) <= this.cfg.maxLegSkewMs;
+  }
+
+  private resetCausality(symbol: string): void {
+    for (const direction of ['long_spot_short_perp', 'short_spot_long_perp'] as const) {
+      const bucket = this.buckets.get(this.key(symbol, direction));
+      if (bucket) bucket.causality = unknownCausality();
+    }
   }
 
   /** Drop tracking state (symbol left the universe / entered cooldown). */

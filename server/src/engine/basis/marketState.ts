@@ -5,19 +5,39 @@
  */
 import type { BookTicker, Clock, MarkFunding, SymbolMeta } from '../v0/types.js';
 import { basisConfig, type BasisConfig } from './config.js';
-import type { BorrowInfo, DepthLadder, FundingHistoryPoint, LadderLevel } from './types.js';
+import type {
+  BasisBookIngestResult,
+  BasisBookDiscontinuity,
+  BasisBookObservation,
+  BasisBookPair,
+  BasisCausalMarket,
+  BorrowInfo,
+  DepthLadder,
+  FundingHistoryPoint,
+  LadderLevel,
+} from './types.js';
 
 interface SymbolBucket {
   meta: SymbolMeta;
-  spotBook: BookTicker | null;
+  spotBook: BasisBookObservation | null;
   spotSeenTs: number | null;
-  perpBook: BookTicker | null;
+  spotSourceEventTimeMs: number | null;
+  spotSourceSequence: number | null;
+  spotObservedSourceEventTimeMs: number | null;
+  spotObservedSourceSequence: number | null;
+  perpBook: BasisBookObservation | null;
   perpSeenTs: number | null;
+  perpSourceEventTimeMs: number | null;
+  perpSourceSequence: number | null;
+  perpObservedSourceEventTimeMs: number | null;
+  perpObservedSourceSequence: number | null;
   markFunding: MarkFunding | null;
   markSeenTs: number | null;
   spotDepth: DepthLadder | null;
   perpDepth: DepthLadder | null;
   fundingHistory: FundingHistoryPoint[];
+  acceptedBookSequence: number;
+  lastAcceptedExactSourceEventTimeMs: number | null;
 }
 
 const SYMBOL_RE = /^[A-Z0-9]{2,32}$/;
@@ -68,13 +88,23 @@ function emptyBucket(meta: SymbolMeta): SymbolBucket {
     meta: cloneMeta(meta),
     spotBook: null,
     spotSeenTs: null,
+    spotSourceEventTimeMs: null,
+    spotSourceSequence: null,
+    spotObservedSourceEventTimeMs: null,
+    spotObservedSourceSequence: null,
     perpBook: null,
     perpSeenTs: null,
+    perpSourceEventTimeMs: null,
+    perpSourceSequence: null,
+    perpObservedSourceEventTimeMs: null,
+    perpObservedSourceSequence: null,
     markFunding: null,
     markSeenTs: null,
     spotDepth: null,
     perpDepth: null,
     fundingHistory: [],
+    acceptedBookSequence: 0,
+    lastAcceptedExactSourceEventTimeMs: null,
   };
 }
 
@@ -128,28 +158,103 @@ export class BasisMarketState {
     }
   }
 
-  onSpotBook(tick: BookTicker): void {
-    const bucket = this.buckets.get(tick.symbol);
-    if (!bucket || this.outOfOrder(tick.ts, bucket.spotBook?.ts)) return;
-    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) {
-      bucket.spotBook = null;
-      bucket.spotSeenTs = null;
-      return;
-    }
-    bucket.spotBook = { ...tick };
-    bucket.spotSeenTs = this.clock.now();
+  onSpotBook(tick: BasisBookObservation): BasisBookIngestResult | null {
+    return this.onBook(tick, 'SPOT');
   }
 
-  onPerpBook(tick: BookTicker): void {
-    const bucket = this.buckets.get(tick.symbol);
-    if (!bucket || this.outOfOrder(tick.ts, bucket.perpBook?.ts)) return;
-    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) {
-      bucket.perpBook = null;
-      bucket.perpSeenTs = null;
-      return;
+  onPerpBook(tick: BasisBookObservation): BasisBookIngestResult | null {
+    return this.onBook(tick, 'PERPETUAL');
+  }
+
+  /**
+   * Accept one paired REST cut atomically. Receipt simultaneity is never cast
+   * into exchange chronology: a sole changed leg is structurally attributable,
+   * while dual changes require two distinct exact source-event clocks.
+   */
+  onBookPair(
+    symbol: string,
+    spot: BasisBookObservation | null,
+    perpetual: BasisBookObservation | null,
+  ): BasisBookIngestResult | null {
+    const bucket = this.buckets.get(symbol);
+    if (!bucket) return null;
+    if (!spot || !perpetual) {
+      if (!spot) this.clearLiveBook(bucket, 'SPOT');
+      else if (this.validBookObservation(spot)
+          && this.sourceDiscontinuity(bucket, 'SPOT', spot) === null) {
+        this.acceptBook(bucket, 'SPOT', spot, true);
+      }
+      if (!perpetual) this.clearLiveBook(bucket, 'PERPETUAL');
+      else if (this.validBookObservation(perpetual)
+          && this.sourceDiscontinuity(bucket, 'PERPETUAL', perpetual) === null) {
+        this.acceptBook(bucket, 'PERPETUAL', perpetual, true);
+      }
+      return {
+        kind: 'DISCONTINUITY',
+        symbol,
+        market: !spot && !perpetual ? 'UNKNOWN' : !spot ? 'SPOT' : 'PERPETUAL',
+        reason: 'MISSING_PAIRED_LEG',
+      };
     }
-    bucket.perpBook = { ...tick };
-    bucket.perpSeenTs = this.clock.now();
+    if (spot.symbol !== symbol || perpetual.symbol !== symbol) {
+      return { kind: 'DISCONTINUITY', symbol, market: 'UNKNOWN', reason: 'INVALID_OR_STALE_BOOK' };
+    }
+    if (!this.validBookObservation(spot) || !this.validBookObservation(perpetual)) {
+      if (!this.validBookObservation(spot)) this.clearLiveBook(bucket, 'SPOT');
+      if (!this.validBookObservation(perpetual)) this.clearLiveBook(bucket, 'PERPETUAL');
+      return { kind: 'DISCONTINUITY', symbol, market: 'UNKNOWN', reason: 'INVALID_OR_STALE_BOOK' };
+    }
+
+    const before = this.bookPair(bucket);
+    const spotChanged = this.priceChanged(bucket.spotBook, spot);
+    const perpetualChanged = this.priceChanged(bucket.perpBook, perpetual);
+    const spotBreak = this.sourceDiscontinuity(bucket, 'SPOT', spot);
+    const perpetualBreak = this.sourceDiscontinuity(bucket, 'PERPETUAL', perpetual);
+    if (spotBreak || perpetualBreak) {
+      return {
+        kind: 'DISCONTINUITY',
+        symbol,
+        market: spotBreak && perpetualBreak ? 'UNKNOWN' : spotBreak ? 'SPOT' : 'PERPETUAL',
+        reason: spotBreak ?? perpetualBreak!,
+      };
+    }
+
+    this.acceptBook(bucket, 'SPOT', spot, !spotChanged);
+    this.acceptBook(bucket, 'PERPETUAL', perpetual, !perpetualChanged);
+    if (!spotChanged && !perpetualChanged) return null;
+
+    if (spotChanged !== perpetualChanged) {
+      const market = spotChanged ? 'SPOT' : 'PERPETUAL';
+      const initiating = spotChanged ? spot : perpetual;
+      return this.acceptedBookEvent(bucket, market, initiating, 'SINGLE_CHANGED_LEG', before);
+    }
+
+    const spotSourceTime = this.exactSourceEventTime(spot);
+    const perpetualSourceTime = this.exactSourceEventTime(perpetual);
+    for (const exactTime of [spotSourceTime, perpetualSourceTime]) {
+      if (exactTime !== null) {
+        bucket.lastAcceptedExactSourceEventTimeMs = Math.max(
+          bucket.lastAcceptedExactSourceEventTimeMs ?? exactTime,
+          exactTime,
+        );
+      }
+    }
+    if (spotSourceTime === null || perpetualSourceTime === null || spotSourceTime === perpetualSourceTime) {
+      return { kind: 'DISCONTINUITY', symbol, market: 'UNKNOWN', reason: 'AMBIGUOUS_PAIRED_CHANGE' };
+    }
+    const market = spotSourceTime < perpetualSourceTime ? 'SPOT' : 'PERPETUAL';
+    const initiating = market === 'SPOT' ? spot : perpetual;
+    return this.acceptedBookEvent(bucket, market, initiating, 'EXACT_SOURCE_ORDER', before);
+  }
+
+  /** A runtime stop is a causal fence; post-restart data must bootstrap anew. */
+  resetBookContinuity(): void {
+    for (const bucket of this.buckets.values()) {
+      this.clearBookContinuity(bucket, 'SPOT');
+      this.clearBookContinuity(bucket, 'PERPETUAL');
+      bucket.acceptedBookSequence = 0;
+      bucket.lastAcceptedExactSourceEventTimeMs = null;
+    }
   }
 
   onMarkFunding(tick: MarkFunding): void {
@@ -298,6 +403,196 @@ export class BasisMarketState {
       finitePositive(tick.askQty) &&
       tick.bid <= tick.ask
     );
+  }
+
+  private onBook(
+    tick: BasisBookObservation,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+  ): BasisBookIngestResult | null {
+    const bucket = this.buckets.get(tick.symbol);
+    if (!bucket) return null;
+    const previous = market === 'SPOT' ? bucket.spotBook : bucket.perpBook;
+    if (!this.validBookObservation(tick)) {
+      this.clearLiveBook(bucket, market);
+      return { kind: 'DISCONTINUITY', symbol: tick.symbol, market, reason: 'INVALID_OR_STALE_BOOK' };
+    }
+
+    const before = this.bookPair(bucket);
+    const changed = this.priceChanged(previous, tick);
+    const discontinuity = this.sourceDiscontinuity(bucket, market, tick);
+    if (discontinuity) return { kind: 'DISCONTINUITY', symbol: tick.symbol, market, reason: discontinuity };
+    this.acceptBook(bucket, market, tick, !changed);
+    if (!changed) return null;
+    return this.acceptedBookEvent(bucket, market, tick, 'SINGLE_CHANGED_LEG', before);
+  }
+
+  private acceptedBookEvent(
+    bucket: SymbolBucket,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    tick: BasisBookObservation,
+    chronology: 'EXACT_SOURCE_ORDER' | 'SINGLE_CHANGED_LEG',
+    before: BasisBookPair,
+  ): BasisBookIngestResult {
+    bucket.acceptedBookSequence += 1;
+    const sourceEventTimeMs = this.exactSourceEventTime(tick);
+    if (sourceEventTimeMs !== null) {
+      bucket.lastAcceptedExactSourceEventTimeMs = Math.max(
+        bucket.lastAcceptedExactSourceEventTimeMs ?? sourceEventTimeMs,
+        sourceEventTimeMs,
+      );
+    }
+    return {
+      kind: 'ACCEPTED',
+      symbol: tick.symbol,
+      market,
+      sourceEventTimeMs,
+      sourceSequence: this.exactSourceSequence(tick),
+      acceptedAtMs: this.clock.now(),
+      acceptedEventSequence: bucket.acceptedBookSequence,
+      chronology,
+      before,
+      after: this.bookPair(bucket),
+    };
+  }
+
+  private validBookObservation(tick: BasisBookObservation): boolean {
+    if (!this.freshTimestamp(tick.ts, this.cfg.staleMs) || !this.validBook(tick)) return false;
+    const sourceEventTimeMs = tick.sourceEventTimeMs;
+    if (sourceEventTimeMs !== undefined && sourceEventTimeMs !== null) {
+      if (!Number.isSafeInteger(sourceEventTimeMs) || sourceEventTimeMs <= 0) return false;
+      if (!this.freshTimestamp(sourceEventTimeMs, this.cfg.staleMs)) return false;
+      if (sourceEventTimeMs > tick.ts + this.cfg.maxFutureSkewMs) return false;
+    }
+    const sourceSequence = tick.sourceSequence;
+    return sourceSequence === undefined || sourceSequence === null ||
+      (Number.isSafeInteger(sourceSequence) && sourceSequence >= 0);
+  }
+
+  private sourceDiscontinuity(
+    bucket: SymbolBucket,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    tick: BasisBookObservation,
+  ): BasisBookDiscontinuity['reason'] | null {
+    const priorBook = market === 'SPOT' ? bucket.spotBook : bucket.perpBook;
+    const priorTime = market === 'SPOT'
+      ? bucket.spotObservedSourceEventTimeMs
+      : bucket.perpObservedSourceEventTimeMs;
+    const priorSequence = market === 'SPOT'
+      ? bucket.spotObservedSourceSequence
+      : bucket.perpObservedSourceSequence;
+    const nextTime = this.exactSourceEventTime(tick);
+    const nextSequence = this.exactSourceSequence(tick);
+    const changed = this.priceChanged(priorBook, tick);
+    if (priorBook !== null && tick.ts < priorBook.ts) return 'RECEIPT_CLOCK_REVERSAL';
+    if (
+      changed &&
+      bucket.lastAcceptedExactSourceEventTimeMs !== null &&
+      nextTime !== null &&
+      nextTime < bucket.lastAcceptedExactSourceEventTimeMs
+    ) return 'SOURCE_CLOCK_REVERSAL';
+    if (priorSequence !== null && nextSequence !== null) {
+      if (nextSequence < priorSequence) return 'SOURCE_SEQUENCE_REVERSAL';
+      if (nextSequence === priorSequence && changed) return 'SOURCE_REPLAY_CONFLICT';
+    }
+    if (priorTime !== null && nextTime !== null) {
+      if (nextTime < priorTime) return 'SOURCE_CLOCK_REVERSAL';
+      if (nextTime === priorTime && changed) return 'SOURCE_REPLAY_CONFLICT';
+    }
+    return null;
+  }
+
+  private acceptBook(
+    bucket: SymbolBucket,
+    market: Exclude<BasisCausalMarket, 'UNKNOWN'>,
+    tick: BasisBookObservation,
+    preserveSourceStamp = false,
+  ): void {
+    const current = market === 'SPOT' ? bucket.spotBook : bucket.perpBook;
+    if (current !== null && tick.ts < current.ts) return;
+    const clone = { ...tick };
+    const observedSourceEventTimeMs = this.exactSourceEventTime(tick);
+    const observedSourceSequence = this.exactSourceSequence(tick);
+    if (market === 'SPOT') {
+      bucket.spotBook = clone;
+      bucket.spotSeenTs = this.clock.now();
+      if (observedSourceEventTimeMs !== null) {
+        bucket.spotObservedSourceEventTimeMs = observedSourceEventTimeMs;
+      }
+      if (observedSourceSequence !== null) {
+        bucket.spotObservedSourceSequence = observedSourceSequence;
+      }
+      if (!preserveSourceStamp || bucket.spotSourceEventTimeMs === null) {
+        bucket.spotSourceEventTimeMs = observedSourceEventTimeMs;
+      }
+      if (!preserveSourceStamp || bucket.spotSourceSequence === null) {
+        bucket.spotSourceSequence = observedSourceSequence;
+      }
+    } else {
+      bucket.perpBook = clone;
+      bucket.perpSeenTs = this.clock.now();
+      if (observedSourceEventTimeMs !== null) {
+        bucket.perpObservedSourceEventTimeMs = observedSourceEventTimeMs;
+      }
+      if (observedSourceSequence !== null) {
+        bucket.perpObservedSourceSequence = observedSourceSequence;
+      }
+      if (!preserveSourceStamp || bucket.perpSourceEventTimeMs === null) {
+        bucket.perpSourceEventTimeMs = observedSourceEventTimeMs;
+      }
+      if (!preserveSourceStamp || bucket.perpSourceSequence === null) {
+        bucket.perpSourceSequence = observedSourceSequence;
+      }
+    }
+  }
+
+  /**
+   * Missing or invalid delivery clears price truth and its causal stamp, but it
+   * is not a source restart. The independent observed-source watermarks must
+   * survive so a delayed T2 cannot bootstrap behind an already accepted T3.
+   */
+  private clearLiveBook(bucket: SymbolBucket, market: Exclude<BasisCausalMarket, 'UNKNOWN'>): void {
+    if (market === 'SPOT') {
+      bucket.spotBook = null;
+      bucket.spotSeenTs = null;
+      bucket.spotSourceEventTimeMs = null;
+      bucket.spotSourceSequence = null;
+    } else {
+      bucket.perpBook = null;
+      bucket.perpSeenTs = null;
+      bucket.perpSourceEventTimeMs = null;
+      bucket.perpSourceSequence = null;
+    }
+  }
+
+  /** Explicit runtime restart is the sole in-place continuity reset. */
+  private clearBookContinuity(bucket: SymbolBucket, market: Exclude<BasisCausalMarket, 'UNKNOWN'>): void {
+    this.clearLiveBook(bucket, market);
+    if (market === 'SPOT') {
+      bucket.spotObservedSourceEventTimeMs = null;
+      bucket.spotObservedSourceSequence = null;
+    } else {
+      bucket.perpObservedSourceEventTimeMs = null;
+      bucket.perpObservedSourceSequence = null;
+    }
+  }
+
+  private priceChanged(previous: BookTicker | null, next: BookTicker): boolean {
+    return previous === null || previous.bid !== next.bid || previous.ask !== next.ask;
+  }
+
+  private exactSourceEventTime(tick: BasisBookObservation): number | null {
+    return Number.isSafeInteger(tick.sourceEventTimeMs) ? tick.sourceEventTimeMs! : null;
+  }
+
+  private exactSourceSequence(tick: BasisBookObservation): number | null {
+    return Number.isSafeInteger(tick.sourceSequence) ? tick.sourceSequence! : null;
+  }
+
+  private bookPair(bucket: SymbolBucket): BasisBookPair {
+    return {
+      spot: bucket.spotBook ? { ...bucket.spotBook } : null,
+      perpetual: bucket.perpBook ? { ...bucket.perpBook } : null,
+    };
   }
 
   private validBorrow(info: BorrowInfo): boolean {

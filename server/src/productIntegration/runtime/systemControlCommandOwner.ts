@@ -11,6 +11,7 @@ import type {
   SystemControlMutation,
   SystemControlMutationRequest,
   SystemControlState,
+  SystemFocusPinReadback,
 } from '../../systemIntegration/contracts/index.js';
 import { controlRequestDigest, type SystemControlService } from '../../systemIntegration/controls/index.js';
 import {
@@ -72,6 +73,10 @@ export interface ProductRuntimeSystemControlCommandOwnerDependencies {
       state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
     }>;
   }>;
+  readonly attentionFocus?: Readonly<{
+    readState(symbol: string): Readonly<SystemFocusPinReadback>;
+    readPinnedSymbols(): readonly string[];
+  }>;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -129,6 +134,16 @@ function exactPayload(value: unknown, expected: Readonly<Record<string, string |
   return plainObject(value)
     && exactKeys(value, Object.keys(expected))
     && canonical(value) === canonical(expected);
+}
+
+function focusControlIdentity(controlId: unknown): Readonly<{ symbol: string; pinned: boolean }> | null {
+  if (typeof controlId !== 'string') return null;
+  const matched = controlId.match(/^attention\.focus\.([a-z0-9]{4,20})\.(pin|unpin)$/);
+  if (!matched) return null;
+  const symbol = matched[1].toUpperCase();
+  return /^[A-Z0-9]{4,20}$/.test(symbol)
+    ? Object.freeze({ symbol, pinned: matched[2] === 'pin' })
+    : null;
 }
 
 function resolveIntent(value: unknown): ResolvedControlIntent | null {
@@ -195,6 +210,21 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
       consequence: value.payload.paused
         ? `Only ${strategy} proposal intake pauses; supervision and risk reduction continue.`
         : `Only ${strategy} proposal intake resumes after stricter canonical gates pass.`,
+    });
+  }
+  const focus = focusControlIdentity(value.controlId);
+  if (focus !== null
+    && value.backendCommandId === 'PIN_FOCUS'
+    && value.targetType === 'SYMBOL'
+    && value.targetId === focus.symbol
+    && exactPayload(value.payload, { symbol: focus.symbol, pinned: focus.pinned })) {
+    return Object.freeze({
+      kind: 'SYSTEM',
+      revision,
+      mutation: Object.freeze({ command: 'PIN_FOCUS', symbol: focus.symbol, pinned: focus.pinned }),
+      consequence: focus.pinned
+        ? `The canonical attention owner requests bounded FOCUS for ${focus.symbol}; hard capacity remains authoritative.`
+        : `Only the operator focus pin for ${focus.symbol} is released; other attention owners remain authoritative.`,
     });
   }
   if (value.controlId === 'component.engine-supervisor.restart'
@@ -396,6 +426,13 @@ function mutationMatchesControl(controlId: string, value: unknown): boolean {
       && value.command === 'SET_VOLUME_INTAKE'
       && typeof value.paused === 'boolean';
   }
+  const focus = focusControlIdentity(controlId);
+  if (focus !== null) {
+    return exactKeys(value, ['command', 'symbol', 'pinned'])
+      && value.command === 'PIN_FOCUS'
+      && value.symbol === focus.symbol
+      && value.pinned === focus.pinned;
+  }
   return controlId === 'component.engine-supervisor.restart'
     && exactKeys(value, ['command', 'componentId'])
     && value.command === 'RESTART_COMPONENT'
@@ -456,6 +493,7 @@ function failureStatus(code: string, retryable: boolean): ProductRuntimeControlR
     return 'REJECTED_STALE_REVISION';
   }
   if (code === 'OPERATOR_REQUIRED' || code === 'LIVE_EXECUTION_NOT_IMPLEMENTED') return 'REJECTED_AUTHORITY';
+  if (code === 'FOCUS_SYMBOL_INELIGIBLE' || code === 'FOCUS_CAPACITY_UNAVAILABLE') return 'REJECTED_BOUNDS';
   if (code.includes('NOT_SUPPORTED') || code === 'COMMAND_NOT_APPLICABLE') return 'REJECTED_NOT_SUPPORTED';
   if (code === 'CONTROL_PERSISTENCE_UNAVAILABLE') return retryable ? 'FAILED_RECOVERABLE' : 'FAILED_ATTENTION_REQUIRED';
   if (code === 'CONTROL_COMMITTED_RUNTIME_PENDING' || code === 'SOURCE_CONTROL_EFFECT_PENDING') return 'FAILED_ATTENTION_REQUIRED';
@@ -467,6 +505,7 @@ function failureStatus(code: string, retryable: boolean): ProductRuntimeControlR
 function capability(
   sourceIsolationConfigured: boolean,
   strategyIntakeConfigured: boolean,
+  attentionFocusConfigured: boolean,
 ): Readonly<ProductRuntimeCommandOwnerCapability> {
   const supportedBackendCommandIds: ProductRuntimeSafeBackendCommand[] = [
     'SET_SAFE_MODE',
@@ -475,6 +514,7 @@ function capability(
     'RESTART_COMPONENT',
     ...(sourceIsolationConfigured ? ['SET_PUBLIC_SOURCE_LIFECYCLE' as const] : []),
     ...(strategyIntakeConfigured ? ['SET_BASIS_INTAKE' as const, 'SET_VOLUME_INTAKE' as const] : []),
+    ...(attentionFocusConfigured ? ['PIN_FOCUS' as const] : []),
   ];
   return Object.freeze({
     ownerId: 'systemIntegration.canonical-control-service',
@@ -492,6 +532,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
   private readonly controls: ProductRuntimeSystemControlCommandOwnerDependencies['controls'];
   private readonly sourceIsolation: SourceIsolationOwnerPort | undefined;
   private readonly strategyIntake: ProductRuntimeSystemControlCommandOwnerDependencies['strategyIntake'];
+  private readonly attentionFocus: ProductRuntimeSystemControlCommandOwnerDependencies['attentionFocus'];
 
   constructor(dependencies: Readonly<ProductRuntimeSystemControlCommandOwnerDependencies>) {
     if (!dependencies?.controls
@@ -511,10 +552,82 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     if (dependencies.strategyIntake && typeof dependencies.strategyIntake.readState !== 'function') {
       throw new TypeError('Product command owner strategy intake dependency is invalid.');
     }
+    if (dependencies.attentionFocus && (typeof dependencies.attentionFocus.readState !== 'function'
+      || typeof dependencies.attentionFocus.readPinnedSymbols !== 'function')) {
+      throw new TypeError('Product command owner focus dependency is invalid.');
+    }
     this.controls = dependencies.controls;
     this.sourceIsolation = dependencies.sourceIsolation;
     this.strategyIntake = dependencies.strategyIntake;
-    this.capability = capability(this.sourceIsolation !== undefined, this.strategyIntake !== undefined);
+    this.attentionFocus = dependencies.attentionFocus;
+    this.capability = capability(
+      this.sourceIsolation !== undefined,
+      this.strategyIntake !== undefined,
+      this.attentionFocus !== undefined,
+    );
+  }
+
+  readFocusPinnedSymbols(): readonly string[] {
+    if (!this.attentionFocus) return Object.freeze([]);
+    try {
+      const symbols = this.attentionFocus.readPinnedSymbols();
+      if (!Array.isArray(symbols) || symbols.length > 25
+        || symbols.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+        || new Set(symbols).size !== symbols.length) {
+        return Object.freeze([]);
+      }
+      return Object.freeze([...symbols].sort((left, right) => left < right ? -1 : left > right ? 1 : 0));
+    } catch {
+      return Object.freeze([]);
+    }
+  }
+
+  readFocusControlState(symbol: string): Readonly<SystemFocusPinReadback> | null {
+    if (!this.attentionFocus || !/^[A-Z0-9]{4,20}$/.test(symbol)) return null;
+    try {
+      const state = this.attentionFocus.readState(symbol);
+      if (!plainObject(state) || !exactKeys(state, [
+        'symbol', 'desiredPinned', 'ownerPinned', 'eligible', 'canPin', 'effectivePinned',
+        'effectiveTier', 'attentionPlanId', 'attentionPlanAtMs', 'pinCount', 'pinCapacity',
+        'controlRevision', 'state',
+      ]) || state.symbol !== symbol || typeof state.desiredPinned !== 'boolean'
+        || !(state.ownerPinned === null || typeof state.ownerPinned === 'boolean')
+        || !(state.eligible === null || typeof state.eligible === 'boolean')
+        || !(state.canPin === null || typeof state.canPin === 'boolean')
+        || (state.canPin === true && state.eligible !== true)
+        || !(state.effectivePinned === null || typeof state.effectivePinned === 'boolean')
+        || !(state.effectiveTier === null
+          || ['UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS', 'RELEASED'].includes(String(state.effectiveTier)))
+        || !(state.attentionPlanId === null
+          || typeof state.attentionPlanId === 'string'
+          && state.attentionPlanId.trim().length > 0
+          && state.attentionPlanId.length <= 256)
+        || !(state.attentionPlanAtMs === null || utcMillis(state.attentionPlanAtMs))
+        || (state.attentionPlanId === null) !== (state.attentionPlanAtMs === null)
+        || !(state.pinCount === null || Number.isSafeInteger(state.pinCount) && Number(state.pinCount) >= 0)
+        || !(state.pinCapacity === null || Number.isSafeInteger(state.pinCapacity) && Number(state.pinCapacity) >= 1)
+        || (state.pinCount === null) !== (state.pinCapacity === null)
+        || (typeof state.pinCount === 'number' && typeof state.pinCapacity === 'number'
+          && state.pinCount > state.pinCapacity)
+        || (state.ownerPinned === true && typeof state.pinCount === 'number' && state.pinCount < 1)
+        || (state.effectivePinned === true
+          && (state.ownerPinned !== true || !['FOCUS', 'DEEP_FOCUS'].includes(String(state.effectiveTier))))
+        || !Number.isSafeInteger(state.controlRevision) || state.controlRevision < 0
+        || !['APPLIED', 'UNAVAILABLE', 'OWNER_NOT_WIRED'].includes(String(state.state))
+        || (state.state === 'APPLIED' && (
+          state.ownerPinned !== state.desiredPinned
+          || (state.desiredPinned && (state.eligible !== true || state.effectivePinned !== true))
+          || (!state.desiredPinned && state.effectivePinned === true)
+        ))
+        || (state.state === 'OWNER_NOT_WIRED' && [
+          state.ownerPinned, state.eligible, state.canPin, state.effectivePinned,
+          state.effectiveTier, state.attentionPlanId, state.attentionPlanAtMs,
+          state.pinCount, state.pinCapacity,
+        ].some((value) => value !== null))) return null;
+      return Object.freeze({ ...state });
+    } catch {
+      return null;
+    }
   }
 
   readStrategyIntakeControlState(strategy: 'basis' | 'volume'): Readonly<{
@@ -635,6 +748,14 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
       const applicable = this.sourceIsolation.canApply(resolved.sourceId, resolved.action, resolved.revision);
       if (!applicable.ok) throw new Error(`Product source control is not applicable: ${applicable.code}`);
+    }
+    if (resolved.kind === 'SYSTEM' && resolved.mutation.command === 'PIN_FOCUS') {
+      const state = this.readFocusControlState(resolved.mutation.symbol);
+      if (state === null || state.controlRevision !== resolved.revision
+        || (resolved.mutation.pinned
+          && (state.state !== 'APPLIED' || state.eligible !== true || state.canPin !== true))) {
+        throw new Error('Product focus control is not applicable to current canonical attention truth.');
+      }
     }
     const expiresAtMs = intent.nowMs + PREVIEW_TTL_MS;
     if (!utcMillis(expiresAtMs)) throw new RangeError('Product control preview expiry exceeds its UTC bound.');
@@ -849,7 +970,8 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const restartPublication = mutation.command === 'RESTART_COMPONENT';
     const requiresPublication = restartPublication
       || mutation.command === 'SET_BASIS_INTAKE'
-      || mutation.command === 'SET_VOLUME_INTAKE';
+      || mutation.command === 'SET_VOLUME_INTAKE'
+      || mutation.command === 'PIN_FOCUS';
     const transitionValid = receipt.applied
       ? receipt.after.revision === receipt.before.revision + 1
         && receipt.after.correlationId === expected.correlationId

@@ -187,6 +187,19 @@ export interface BridgeEvaluationInput {
   sourceQuality?: readonly InstrumentQualityOverride[];
 }
 
+export interface OperatorFocusPinReadback {
+  symbol: string;
+  pinned: boolean;
+  eligible: boolean | null;
+  canPin: boolean;
+  effectivePinned: boolean | null;
+  effectiveTier: AttentionAllocation['tier'] | null;
+  attentionPlanId: string | null;
+  attentionPlanAtMs: number | null;
+  pinCount: number;
+  pinCapacity: number;
+}
+
 export interface BridgeIntelligenceArtifact {
   id: string;
   candidateId: string;

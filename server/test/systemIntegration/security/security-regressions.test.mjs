@@ -500,7 +500,7 @@ test('read ports are passive and expose no refresh, lifecycle, mutation, or tran
   assert.ok(integrationRead && ts.isInterfaceDeclaration(integrationRead));
   assert.deepEqual(
     integrationRead.members.map((member) => nodeName(member.name)).sort(),
-    ['controls', 'events', 'graph', 'supervisor', 'trace'],
+    ['controls', 'events', 'focusPin', 'graph', 'supervisor', 'trace'],
   );
 });
 

@@ -66,6 +66,10 @@ export function parseControlBody(value: unknown): ParsedControlBody {
       allowed = ['command', 'expectedRevision', 'reason', 'strategy', 'threshold', 'value'];
       mutation = { command: value.command, strategy: value.strategy, threshold: value.threshold, value: value.value };
       break;
+    case 'PIN_FOCUS':
+      allowed = ['command', 'expectedRevision', 'reason', 'symbol', 'pinned'];
+      mutation = { command: value.command, symbol: value.symbol, pinned: value.pinned };
+      break;
     case 'SET_SAFE_MODE':
       allowed = ['command', 'expectedRevision', 'reason', 'safeMode'];
       mutation = { command: value.command, safeMode: value.safeMode };

@@ -146,4 +146,21 @@ export interface ProductionSystemIntegrationPorts {
     BASIS: Readonly<{ readThreshold(): string | null; setThreshold(value: string): boolean }>;
     VOLUME: Readonly<{ readThreshold(): string | null; setThreshold(value: string): boolean }>;
   }>;
+  readonly attentionFocus: Readonly<{
+    readPinnedSymbols(): readonly string[];
+    readFocusState(symbol: string): Readonly<{
+      symbol: string;
+      pinned: boolean;
+      eligible: boolean | null;
+      canPin: boolean;
+      effectivePinned: boolean | null;
+      effectiveTier: 'UNIVERSE' | 'WATCH' | 'CANDIDATE' | 'FOCUS' | 'DEEP_FOCUS' | 'RELEASED' | null;
+      attentionPlanId: string | null;
+      attentionPlanAtMs: number | null;
+      pinCount: number;
+      pinCapacity: number;
+    }>;
+    setPinned(symbol: string, pinned: boolean): boolean;
+    restorePinnedSymbols(symbols: readonly string[]): boolean;
+  }>;
 }

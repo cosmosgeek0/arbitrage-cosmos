@@ -278,6 +278,22 @@ export interface SystemControlState {
   readonly correlationId: string;
 }
 
+export interface SystemFocusPinReadback {
+  readonly symbol: string;
+  readonly desiredPinned: boolean;
+  readonly ownerPinned: boolean | null;
+  readonly eligible: boolean | null;
+  readonly canPin: boolean | null;
+  readonly effectivePinned: boolean | null;
+  readonly effectiveTier: 'UNIVERSE' | 'WATCH' | 'CANDIDATE' | 'FOCUS' | 'DEEP_FOCUS' | 'RELEASED' | null;
+  readonly attentionPlanId: string | null;
+  readonly attentionPlanAtMs: number | null;
+  readonly pinCount: number | null;
+  readonly pinCapacity: number | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
 export type SystemControlMutation =
   | { readonly command: 'SET_COMPONENT_STATE'; readonly componentId: SystemComponentId; readonly desiredState: DesiredRuntimeState }
   | { readonly command: 'SET_INTAKE_PAUSED'; readonly paused: boolean }
@@ -307,7 +323,8 @@ export type SystemControlMutation =
       readonly strategy: 'BASIS' | 'VOLUME';
       readonly threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
       readonly value: string;
-    };
+    }
+  | { readonly command: 'PIN_FOCUS'; readonly symbol: string; readonly pinned: boolean };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

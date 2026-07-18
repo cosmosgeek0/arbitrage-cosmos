@@ -80,6 +80,7 @@ interface WorkingAllocation {
   tier: AttentionTier;
   desiredTier: AttentionTier;
   protected: boolean;
+  operatorPinned: boolean;
   priority: number | null;
   hintIds: string[];
   lastSignalAtMs: number | null;
@@ -263,6 +264,7 @@ function validateInstrument(instrument: AttentionInstrument, atMs: number): Vali
   if (
     !isNonEmptyString(instrument.instrumentId) ||
     !isNonEmptyString(instrument.symbol) ||
+    !(instrument.operatorPinned === undefined || typeof instrument.operatorPinned === 'boolean') ||
     typeof instrument.protectedCapital !== 'boolean' ||
     typeof instrument.releaseRequested !== 'boolean' ||
     !isStringArray(instrument.releaseReasonCodes) ||
@@ -288,6 +290,7 @@ function validateInstrument(instrument: AttentionInstrument, atMs: number): Vali
     ok: true,
     value: {
       ...instrument,
+      operatorPinned: instrument.operatorPinned === true,
       releaseReasonCodes: sortedUnique(instrument.releaseReasonCodes),
       focusEligibility: {
         state: instrument.focusEligibility.state,
@@ -367,12 +370,14 @@ function transition(
   atMs: number,
 ): WorkingAllocation {
   const currentTier = previous?.tier ?? 'UNIVERSE';
+  const operatorPinned = instrument.operatorPinned === true;
   const protectedCapital = instrument.protectedCapital || summary.protected;
   const minimumProtectedTier = config.protectedMinimumTier;
   const sourceCeiling = config.sourceTierCeilings[quality];
   const eligibilityCeiling = config.focusEligibilityTierCeilings[instrument.focusEligibility.state];
   const effectiveCeiling = lowerActiveTier(sourceCeiling, eligibilityCeiling);
-  let desiredTier = summary.desiredTier;
+  const requestedTier = operatorPinned ? higherTier(summary.desiredTier, 'FOCUS') : summary.desiredTier;
+  let desiredTier = requestedTier;
   const promotionReasons = [...summary.reasonCodes];
   const demotionReasons: string[] = [...instrument.sourceQuality.reasonCodes];
 
@@ -380,8 +385,9 @@ function transition(
     desiredTier = lowerActiveTier(desiredTier, sourceCeiling);
     desiredTier = lowerActiveTier(desiredTier, eligibilityCeiling);
   }
-  if (rank(summary.desiredTier) > rank(sourceCeiling)) demotionReasons.push(`SOURCE_${quality}_PROMOTION_CAPPED`);
-  if (rank(summary.desiredTier) > rank(eligibilityCeiling)) {
+  if (operatorPinned) promotionReasons.push('OPERATOR_FOCUS_PIN');
+  if (rank(requestedTier) > rank(sourceCeiling)) demotionReasons.push(`SOURCE_${quality}_PROMOTION_CAPPED`);
+  if (rank(requestedTier) > rank(eligibilityCeiling)) {
     demotionReasons.push(
       `FOCUS_ELIGIBILITY_${instrument.focusEligibility.state}_PROMOTION_CAPPED`,
       ...instrument.focusEligibility.reasonCodes,
@@ -406,6 +412,10 @@ function transition(
     tier = minimumProtectedTier;
     cooldownUntilMs = null;
     promotionReasons.push('PROTECTED_FOCUS_FLOOR');
+  } else if (operatorPinned && rank(effectiveCeiling) >= rank('FOCUS') && rank(tier) < rank('FOCUS')) {
+    tier = 'FOCUS';
+    cooldownUntilMs = null;
+    promotionReasons.push('OPERATOR_FOCUS_PIN_APPLIED');
   } else if (instrument.releaseRequested && !protectedCapital) {
     tier = 'RELEASED';
     cooldownUntilMs = atMs + config.promotionCooldownMs;
@@ -469,6 +479,7 @@ function transition(
     tier,
     desiredTier,
     protected: protectedCapital,
+    operatorPinned,
     priority: summary.priority,
     hintIds: summary.hintIds,
     lastSignalAtMs,
@@ -481,6 +492,7 @@ function transition(
 
 function allocationCompare(left: WorkingAllocation, right: WorkingAllocation): number {
   if (left.protected !== right.protected) return left.protected ? -1 : 1;
+  if (left.operatorPinned !== right.operatorPinned) return left.operatorPinned ? -1 : 1;
   if (QUALITY_PRIORITY[left.sourceQuality] !== QUALITY_PRIORITY[right.sourceQuality]) {
     return QUALITY_PRIORITY[right.sourceQuality] - QUALITY_PRIORITY[left.sourceQuality];
   }

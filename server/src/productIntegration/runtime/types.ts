@@ -138,6 +138,7 @@ export const PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS = Object.freeze([
   'SET_PUBLIC_SOURCE_LIFECYCLE',
   'SET_BASIS_INTAKE',
   'SET_VOLUME_INTAKE',
+  'PIN_FOCUS',
 ] as const);
 export type ProductRuntimeSafeBackendCommand = (typeof PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS)[number];
 
@@ -224,7 +225,7 @@ export type ProductRuntimeCommandResultReadback =
 export interface ProductRuntimeCommandIntent {
   readonly controlId: string;
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
-  readonly targetType: 'SYSTEM' | 'COMPONENT';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly expectedRevision: string;
@@ -247,6 +248,22 @@ export interface ProductRuntimeCommandOwnerPort {
     readonly effectivePaused: boolean | null;
     readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
   }> | null;
+  readFocusControlState?(symbol: string): Readonly<{
+    readonly symbol: string;
+    readonly desiredPinned: boolean;
+    readonly ownerPinned: boolean | null;
+    readonly eligible: boolean | null;
+    readonly canPin: boolean | null;
+    readonly effectivePinned: boolean | null;
+    readonly effectiveTier: string | null;
+    readonly attentionPlanId: string | null;
+    readonly attentionPlanAtMs: number | null;
+    readonly pinCount: number | null;
+    readonly pinCapacity: number | null;
+    readonly controlRevision: number;
+    readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+  }> | null;
+  readFocusPinnedSymbols?(): readonly string[];
   /**
    * Authorizes only an exact command whose desired mutation is already durable
    * and whose runtime publication is still pending. This recovery seam may
@@ -334,7 +351,7 @@ export interface ProductRuntimeControlRegistryEntry {
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
   readonly wiringState: ProductRuntimeControlWiringState;
   readonly owner: string;
-  readonly targetType: 'SYSTEM' | 'COMPONENT';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly payloadSchema: string;

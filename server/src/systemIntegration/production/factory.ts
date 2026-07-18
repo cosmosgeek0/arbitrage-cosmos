@@ -688,6 +688,38 @@ class PublicIntelligenceLifecycle {
     );
   }
 
+  readPinnedSymbols(): readonly string[] {
+    return this.bridge.operatorFocusPins();
+  }
+
+  readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
+    const readback = this.bridge.focusPinState(symbol);
+    if (this.focusTruthCurrent()) return readback;
+    return Object.freeze({
+      ...readback,
+      eligible: null,
+      canPin: false,
+      // Absence of the desired operator pin is current owner truth even when
+      // broader market eligibility/tier truth is unavailable. This does not
+      // claim that strategy or protected-capital focus has been released.
+      effectivePinned: readback.pinned ? null : false,
+      effectiveTier: null,
+      attentionPlanId: null,
+      attentionPlanAtMs: null,
+    });
+  }
+
+  setPinned(symbol: string, pinned: boolean): boolean {
+    if (pinned && !this.readFocusState(symbol).canPin) {
+      throw new RangeError('focus pin requires an eligible symbol and available FOCUS capacity');
+    }
+    return this.bridge.setOperatorFocusPinned(symbol, pinned);
+  }
+
+  restorePinnedSymbols(symbols: readonly string[]): boolean {
+    return this.bridge.restoreOperatorFocusPins(symbols);
+  }
+
   startRuntime(): Promise<void> {
     this.runtimeActive = true;
     return Promise.resolve();
@@ -762,6 +794,22 @@ class PublicIntelligenceLifecycle {
     this.lastEvidenceReady = false;
   }
 
+  private focusTruthCurrent(): boolean {
+    if (!this.runtimeActive || !this.intelligenceActive
+        || !this.lastUniverseReady || !this.lastEvidenceReady
+        || this.lastProjectedSpotTimestamp === null || this.lastProjectedUsdmTimestamp === null) return false;
+    try {
+      const nowMs = this.clock.nowMs();
+      return isValidUtcMillis(nowMs)
+        && this.market.feeds['spot-miniticker'] === 'open'
+        && this.market.feeds['futures-markprice'] === 'open'
+        && evaluateFreshness(this.lastProjectedSpotTimestamp, nowMs).state === 'FRESH'
+        && evaluateFreshness(this.lastProjectedUsdmTimestamp, nowMs).state === 'FRESH';
+    } catch {
+      return false;
+    }
+  }
+
   private refresh(ctx: ComponentStepContext): Readonly<IntelligenceRefresh> {
     // Receipt time and evaluation time belong to the same deterministic
     // supervisor step. Taking a second clock sample here can place a newly
@@ -782,6 +830,7 @@ class PublicIntelligenceLifecycle {
         usdmTimestamp: usdm.timestamp,
       });
     }
+    if (!usdmFresh) this.lastEvidenceReady = false;
 
     const key = `${spot.timestamp?.sourceTimeMs ?? 'receive'}:${usdmFresh ? usdm.timestamp?.sourceTimeMs ?? 'receive' : 'unavailable'}`;
     const projectionDue = this.lastProjectionAtMs === null
@@ -856,6 +905,7 @@ class PublicIntelligenceLifecycle {
     const universeReceipt = this.bridge.updateUniverse(graph);
     const universeReady = universeReceipt.accepted && universeReceipt.nodeCount > 0;
     if (!universeReady || usdmTimestamp === null) {
+      if (universeReady) this.bridge.evaluate();
       return Object.freeze({ universeReady, evidenceReady: false });
     }
 
@@ -903,7 +953,10 @@ class PublicIntelligenceLifecycle {
         qualityFailures.push(...result.failures);
       }
     }
-    if (normalized.length === 0) return Object.freeze({ universeReady, evidenceReady: false });
+    if (normalized.length === 0) {
+      this.bridge.evaluate();
+      return Object.freeze({ universeReady, evidenceReady: false });
+    }
     const receipt = this.bridge.ingest({
       correlationId: stableId('existing-market-intelligence-ingest', {
         sourceTimeMs: usdmTimestamp.sourceTimeMs,
@@ -913,9 +966,10 @@ class PublicIntelligenceLifecycle {
       evidence: normalized,
       qualityFailures,
     });
+    const evaluation = this.bridge.evaluate();
     return Object.freeze({
       universeReady,
-      evidenceReady: receipt.accepted + receipt.duplicate > 0,
+      evidenceReady: receipt.accepted + receipt.duplicate > 0 && evaluation.attentionPlan !== null,
     });
   }
 }
@@ -1287,7 +1341,14 @@ export function createProductionSystemIntegrationPorts(
     }),
   });
 
+  const attentionFocus = Object.freeze({
+    readPinnedSymbols: () => publicIntelligence.readPinnedSymbols(),
+    readFocusState: (symbol: string) => publicIntelligence.readFocusState(symbol),
+    setPinned: (symbol: string, pinned: boolean) => publicIntelligence.setPinned(symbol, pinned),
+    restorePinnedSymbols: (symbols: readonly string[]) => publicIntelligence.restorePinnedSymbols(symbols),
+  });
+
   return Object.freeze({
-    sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds,
+    sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
   });
 }

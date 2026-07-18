@@ -2,6 +2,16 @@ from __future__ import annotations
 
 import pytest
 
+from quant_edge.derivatives.cross_market import (
+    AssetReturnV1,
+    ChallengeCandidateV1,
+    ChallengeStatus,
+    EvidenceStatus,
+    cross_sectional_report,
+    dynamic_beta,
+    holm_stability_decisions,
+    lead_lag_capabilities,
+)
 from quant_edge.derivatives.leadlag import (
     EVIDENCE_ONLY,
     MAX_LAG_BARS,
@@ -12,7 +22,7 @@ from quant_edge.derivatives.leadlag import (
     leg_feature_series,
 )
 from quant_edge.errors import ContractValueError
-from quant_edge.labels.rational import make_ratio, ratio_compare
+from quant_edge.labels.rational import ExactRatioV1, make_ratio, ratio_compare
 from quant_edge.labels.series import EvidenceSeriesV1, PricePointV1, QuotePointV1, SeriesKind
 from quant_edge.lake.contracts import (
     EvidencePosture,
@@ -26,6 +36,168 @@ BAR_NS = 10 * SECOND_NS
 
 # A deterministic move pattern with enough sign variety for correlations.
 MOVES = [7, -3, 5, -8, 2, 9, -4, 6, -1, 3, -7, 8, 4, -6, 1, -2, 5, -9, 3, 6]
+RETURN_COHORT = "q076-cross-section-v1"
+RETURN_AS_OF_NS = BASE_NS + 100 * SECOND_NS
+
+
+def _asset_return(
+    asset_id: str,
+    sector_id: str,
+    value: ExactRatioV1 | None,
+    *,
+    cohort_id: str = RETURN_COHORT,
+    as_of_ns: int = RETURN_AS_OF_NS,
+) -> AssetReturnV1:
+    return AssetReturnV1(asset_id, sector_id, cohort_id, as_of_ns, value)
+
+
+class TestCrossMarketResearch:
+    def test_market_sector_residuals_and_breadth_are_exact(self) -> None:
+        report = cross_sectional_report(
+            (
+                _asset_return("asset-a", "tech", make_ratio(1, 10)),
+                _asset_return("asset-b", "tech", make_ratio(-1, 20)),
+                _asset_return("asset-c", "defi", make_ratio(1, 5)),
+            )
+        )
+
+        assert report.status is EvidenceStatus.AVAILABLE
+        assert report.known_assets == 3
+        assert report.market_return == make_ratio(1, 12)
+        assert report.advance_breadth == make_ratio(2, 3)
+        assert dict(report.sector_returns) == {
+            "defi": make_ratio(1, 5),
+            "tech": make_ratio(1, 40),
+        }
+        assert report.residuals[0].market_residual == make_ratio(1, 60)
+        assert report.residuals[0].sector_residual == make_ratio(3, 40)
+        assert all(item.market_residual is not None for item in report.residuals)
+
+    def test_unknown_partial_asynchronous_and_duplicate_cross_sections_fail_honestly(self) -> None:
+        report = cross_sectional_report((_asset_return("asset-a", "tech", None),))
+
+        assert report.status is EvidenceStatus.UNKNOWN
+        assert report.market_return is None
+        assert report.advance_breadth is None
+
+        partial = cross_sectional_report(
+            (
+                _asset_return("asset-a", "tech", make_ratio(1, 10)),
+                _asset_return("asset-b", "tech", None),
+            )
+        )
+        assert partial.status is EvidenceStatus.PARTIAL_RESEARCH_ONLY
+        assert partial.known_assets == 1
+        assert partial.total_assets == 2
+        assert partial.market_return is None
+        assert partial.advance_breadth is None
+        assert partial.sector_returns == ()
+        assert all(item.market_residual is None for item in partial.residuals)
+
+        with pytest.raises(ContractValueError, match="sorted and unique"):
+            cross_sectional_report(
+                (
+                    _asset_return("asset-a", "tech", make_ratio(1, 10)),
+                    _asset_return("asset-a", "tech", make_ratio(1, 5)),
+                )
+            )
+        with pytest.raises(ContractValueError, match="one cohort_id and as_of_ns"):
+            cross_sectional_report(
+                (
+                    _asset_return("asset-a", "tech", make_ratio(1, 10)),
+                    _asset_return(
+                        "asset-b",
+                        "tech",
+                        make_ratio(1, 5),
+                        as_of_ns=RETURN_AS_OF_NS + 1,
+                    ),
+                )
+            )
+
+    def test_dynamic_beta_is_exact_bounded_and_zero_variance_is_unknown(self) -> None:
+        factor = (make_ratio(-1, 100), make_ratio(0, 1), make_ratio(1, 100))
+        asset = (make_ratio(-1, 50), make_ratio(0, 1), make_ratio(1, 50))
+
+        report = dynamic_beta(asset, factor, window=3)
+        unknown = dynamic_beta(asset, (make_ratio(1, 10),) * 3, window=3)
+
+        assert report.status is EvidenceStatus.AVAILABLE
+        assert report.beta == make_ratio(2, 1)
+        assert unknown.status is EvidenceStatus.UNKNOWN
+        assert unknown.reason == "ZERO_FACTOR_VARIANCE"
+        with pytest.raises(ContractValueError, match="must align"):
+            dynamic_beta(asset, factor[:-1], window=3)
+
+    def test_holm_selection_requires_multiplicity_and_half_stability(self) -> None:
+        decisions = holm_stability_decisions(
+            (
+                ChallengeCandidateV1("candidate-a", make_ratio(1, 1_000), 1, 1, 100),
+                ChallengeCandidateV1("candidate-b", make_ratio(1, 100), 1, -1, 100),
+                ChallengeCandidateV1("candidate-c", make_ratio(1, 10), 1, 1, 100),
+            ),
+            family_alpha=make_ratio(1, 20),
+            min_samples=32,
+        )
+
+        assert {item.candidate_id: item.status for item in decisions} == {
+            "candidate-a": ChallengeStatus.SELECTED_RESEARCH_ONLY,
+            "candidate-b": ChallengeStatus.REJECTED_UNSTABLE,
+            "candidate-c": ChallengeStatus.REJECTED_MULTIPLICITY,
+        }
+
+    def test_insufficient_challenger_support_cannot_be_selected(self) -> None:
+        decision = holm_stability_decisions(
+            (ChallengeCandidateV1("candidate-a", make_ratio(1, 10_000), 1, 1, 7),),
+            family_alpha=make_ratio(1, 20),
+            min_samples=32,
+        )[0]
+
+        assert decision.status is ChallengeStatus.DATA_INSUFFICIENT
+        with pytest.raises(ContractValueError, match="identifiers must be unique"):
+            holm_stability_decisions(
+                (
+                    ChallengeCandidateV1("candidate-a", make_ratio(1, 100), 1, 1, 50),
+                    ChallengeCandidateV1("candidate-a", make_ratio(1, 100), 1, 1, 50),
+                ),
+                family_alpha=make_ratio(1, 20),
+                min_samples=32,
+            )
+
+    def test_holm_latches_first_threshold_failure_even_when_support_is_insufficient(self) -> None:
+        decisions = holm_stability_decisions(
+            (
+                ChallengeCandidateV1("insufficient-first", make_ratio(3, 100), 1, 1, 7),
+                ChallengeCandidateV1("later-smaller-alpha", make_ratio(4, 100), 1, 1, 100),
+            ),
+            family_alpha=make_ratio(1, 20),
+            min_samples=32,
+        )
+
+        assert {item.candidate_id: item.status for item in decisions} == {
+            "insufficient-first": ChallengeStatus.DATA_INSUFFICIENT,
+            "later-smaller-alpha": ChallengeStatus.REJECTED_MULTIPLICITY,
+        }
+        assert {item.candidate_id: item.holm_threshold for item in decisions} == {
+            "insufficient-first": make_ratio(1, 40),
+            "later-smaller-alpha": make_ratio(1, 20),
+        }
+
+    def test_only_existing_spot_perp_owner_is_available_on_mounted_data(self) -> None:
+        capabilities = lead_lag_capabilities()
+        available = tuple(
+            item.capability_id
+            for item in capabilities
+            if item.status is ChallengeStatus.AVAILABLE_EXISTING_OWNER
+        )
+
+        assert available == ("spot-perp-leadlag",)
+        assert all(
+            item.status is ChallengeStatus.BLOCKED_DATA
+            for item in capabilities
+            if item.capability_id != "spot-perp-leadlag"
+        )
+        assert any(item.capability_id == "lagged-ofi-transfer" for item in capabilities)
+        assert any(item.capability_id == "cross-venue-leadership" for item in capabilities)
 
 
 def _usdt(price: int) -> ExactScaledValueV1:

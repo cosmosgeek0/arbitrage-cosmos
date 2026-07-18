@@ -21,6 +21,7 @@ import type {
 } from '../v0/types.js';
 import type { VolumeConfig } from './config.js';
 import { makeEvent } from './events.js';
+import { projectVolumeRejectDisposition } from './rejectVocabulary.js';
 import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol } from './validation.js';
 
 interface FocusEntry extends FocusSession {
@@ -180,6 +181,11 @@ export class FocusManager {
         return;
       }
       case 'reject': {
+        const projection = projectVolumeRejectDisposition(d.rejectCode);
+        if (projection.successorOutcome === 'ignore') {
+          this.applyIgnore(symbol, now);
+          return;
+        }
         // kill switch blocks EXECUTION, not observation: the signal is real,
         // keep watching it, no cooldown, no focus teardown
         if (d.rejectCode === 'kill_switch_on') {
@@ -197,7 +203,7 @@ export class FocusManager {
         }
         // fake/blocked signal: close focus if held, cool the symbol down
         if (this.focus.has(symbol)) {
-          this.close(symbol, d.rejectCode === 'risk_blocked' ? 'risk_rejected' : 'signal_expired', now);
+          this.close(symbol, projection.focusExitReason, now);
         }
         if (this.candidates.delete(symbol)) {
           this.sink.emit(
@@ -211,12 +217,16 @@ export class FocusManager {
         return;
       }
       case 'ignore': {
-        if (this.focus.has(symbol) && !this.isProtected(symbol)) {
-          this.close(symbol, 'volume_normalized', now);
-          this.cooldownUntil.set(symbol, now + this.cfg.cooldownMs);
-        }
+        this.applyIgnore(symbol, now);
         return;
       }
+    }
+  }
+
+  private applyIgnore(symbol: string, now: number): void {
+    if (this.focus.has(symbol) && !this.isProtected(symbol)) {
+      this.close(symbol, 'volume_normalized', now);
+      this.cooldownUntil.set(symbol, now + this.cfg.cooldownMs);
     }
   }
 

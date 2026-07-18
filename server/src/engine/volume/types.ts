@@ -5,7 +5,9 @@
  * and flagged for Director reconciliation in the lane report.
  */
 import type {
+  EngineProposal,
   FeatureSnapshot,
+  RiskVerdictBridge,
   WindowKey,
 } from '../v0/types.js';
 import type { VolumeRejectCode } from './rejectVocabulary.js';
@@ -129,6 +131,18 @@ export interface PriorityBreakdown {
   spreadQuality: number;
   depthQuality: number;
   focusAgePenalty: number;
+}
+
+/** Volume-owned proposal fields copied from the decisive feature cut. */
+export interface VolumeProposal extends EngineProposal {
+  /** Robust completed-minute median supplied by the baseline owner. */
+  baselineVolume: number | null;
+  /** Current rolling 60-second quote volume supplied by the window owner. */
+  currentVolume1m: number | null;
+  /** Detector's decisive 5-second trade-count multiple. */
+  tradeCountMultiple: number | null;
+  /** Attached result from the existing risk bridge; null until supplied. */
+  riskResult: Readonly<Omit<RiskVerdictBridge, 'reasons'> & { readonly reasons: readonly string[] }> | null;
 }
 
 // ---------- proposal invalidation ----------

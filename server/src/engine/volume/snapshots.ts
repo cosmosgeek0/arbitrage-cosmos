@@ -6,13 +6,12 @@ import type {
   Candidate,
   Decision,
   EngineEvent,
-  EngineProposal,
   EngineSnapshots,
   EngineStatusSnapshot,
   FocusSession,
   SymbolMeta,
 } from '../v0/types.js';
-import type { WakeupSnapshot } from './types.js';
+import type { VolumeProposal, WakeupSnapshot } from './types.js';
 import type { VolumeEngine } from './engine.js';
 import {
   volumeRejectVocabularySnapshot,
@@ -55,7 +54,7 @@ export class VolumeSnapshots implements EngineSnapshots {
     return this.engine.focusMgr.focusSessions();
   }
 
-  proposals(): EngineProposal[] {
+  proposals(): VolumeProposal[] {
     return this.engine.proposalStore.all();
   }
 

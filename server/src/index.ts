@@ -376,6 +376,9 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
   commandOwner: createProductRuntimeSystemControlCommandOwner({
     controls: systemIntegration.controls,
     sourceIsolation: publicSourceIsolation,
+    strategyIntake: Object.freeze({
+      readState: (strategy: 'basis' | 'volume') => systemIntegration.strategyIntakeState(strategy),
+    }),
   }),
 });
 

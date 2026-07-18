@@ -321,6 +321,11 @@ section('8. kill switch ⇒ blocked from the execution path');
   const ok = h2.engine.prepareOrderIntents(p.id);
   check('unkilled: two-leg intent stubs (BUY spot / SELL perp)', !ok.blocked && ok.intents.length === 2 && ok.intents[0].side === 'BUY' && ok.intents[1].side === 'SELL');
   check('intents are stubs for the risk gate (source=proposal)', ok.intents.every((i) => i.source === 'proposal' && i.proposalId === p.id));
+  h2.engine.setIntakePaused(true);
+  const intakeBlocked = h2.engine.prepareOrderIntents(p.id);
+  check('paused Basis intake blocks an already-open proposal at the final intent bridge',
+    intakeBlocked.blocked === true && intakeBlocked.verdict.reasons.includes('intake_paused') && intakeBlocked.intents.length === 0);
+  check('pausing Basis invalidates the pre-existing proposal', h2.engine.proposals.get(p.id)?.status === 'expired');
 
   // (c) traceability — one signal end-to-end by correlationId
   section('9. correlationId traces one signal end-to-end');

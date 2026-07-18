@@ -2294,6 +2294,7 @@ export class SystemLedgerPersistenceAdapter {
       traceEvent: trace,
       transition: (state) => {
         let desiredComponents = state.desiredComponents;
+        let strategyIntake = state.strategyIntake;
         let reservations = state.reservations;
         let approvals = state.approvals;
         const mutation: Readonly<SystemControlMutation> = commit.request.mutation;
@@ -2307,6 +2308,16 @@ export class SystemLedgerPersistenceAdapter {
               updatedAtMs: commit.request.requestedAtMs,
             },
           ].sort((left, right) => left.componentId.localeCompare(right.componentId, 'en'));
+        } else if (commit.applied && mutation.command === 'SET_BASIS_INTAKE') {
+          strategyIntake = Object.freeze({
+            ...state.strategyIntake,
+            basisPaused: mutation.paused,
+          });
+        } else if (commit.applied && mutation.command === 'SET_VOLUME_INTAKE') {
+          strategyIntake = Object.freeze({
+            ...state.strategyIntake,
+            volumePaused: mutation.paused,
+          });
         } else if (commit.applied && mutation.command === 'REVOKE_RESERVATION') {
           reservations = state.reservations.map((entry) => entry.reservationId === mutation.reservationId
             ? { ...entry, blocksAllocation: false, correlationId: commit.request.correlationId, updatedAtMs: commit.request.requestedAtMs }
@@ -2322,6 +2333,7 @@ export class SystemLedgerPersistenceAdapter {
             revision: state.revision + 1,
             generation: commit.after.generation,
             control: commit.after,
+            strategyIntake,
             desiredComponents,
             reservations,
             approvals,

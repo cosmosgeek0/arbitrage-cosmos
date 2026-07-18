@@ -7,8 +7,12 @@ import type {
   SourceReceipt,
   SourceIsolationSnapshot,
 } from '../../intelligenceRuntime/lifecycle/index.js';
-import type { SystemControlMutation, SystemControlState } from '../../systemIntegration/contracts/index.js';
-import type { SystemControlService } from '../../systemIntegration/controls/index.js';
+import type {
+  SystemControlMutation,
+  SystemControlMutationRequest,
+  SystemControlState,
+} from '../../systemIntegration/contracts/index.js';
+import { controlRequestDigest, type SystemControlService } from '../../systemIntegration/controls/index.js';
 import {
   PRODUCT_RUNTIME_COMMAND_SCHEMA,
   type ProductRuntimeCommandIntent,
@@ -58,6 +62,16 @@ export interface ProductRuntimeSystemControlCommandOwnerDependencies {
   readonly controls: Pick<SystemControlService, 'snapshot' | 'mutate' | 'readResult'>;
   /** Intelligence Runtime remains the source-lifecycle state and effect owner. */
   readonly sourceIsolation?: SourceIsolationOwnerPort;
+  /** System Integration composes durable desired posture with strategy-owner effect readback. */
+  readonly strategyIntake?: Readonly<{
+    readState(strategy: 'basis' | 'volume'): Readonly<{
+      strategy: 'basis' | 'volume';
+      desiredPaused: boolean;
+      effectivePaused: boolean | null;
+      controlRevision: number;
+      state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+    }>;
+  }>;
 }
 
 function plainObject(value: unknown): value is Record<string, unknown> {
@@ -159,6 +173,28 @@ function resolveIntent(value: unknown): ResolvedControlIntent | null {
       revision,
       mutation: Object.freeze({ command: 'SET_INTAKE_PAUSED', paused: true }),
       consequence: 'New intake pauses while reconciliation and supervision remain available.',
+    });
+  }
+  if ((value.controlId === 'strategy.basis.intake' || value.controlId === 'strategy.volume.intake')
+    && (value.backendCommandId === 'SET_BASIS_INTAKE' || value.backendCommandId === 'SET_VOLUME_INTAKE')
+    && value.targetType === 'COMPONENT'
+    && ((value.controlId === 'strategy.basis.intake'
+      && value.backendCommandId === 'SET_BASIS_INTAKE'
+      && value.targetId === 'basis-engine')
+      || (value.controlId === 'strategy.volume.intake'
+        && value.backendCommandId === 'SET_VOLUME_INTAKE'
+        && value.targetId === 'volume-engine'))
+    && plainObject(value.payload)
+    && typeof value.payload.paused === 'boolean'
+    && exactPayload(value.payload, { paused: value.payload.paused })) {
+    const strategy = value.backendCommandId === 'SET_BASIS_INTAKE' ? 'Basis' : 'Volume';
+    return Object.freeze({
+      kind: 'SYSTEM',
+      revision,
+      mutation: Object.freeze({ command: value.backendCommandId, paused: value.payload.paused }),
+      consequence: value.payload.paused
+        ? `Only ${strategy} proposal intake pauses; supervision and risk reduction continue.`
+        : `Only ${strategy} proposal intake resumes after stricter canonical gates pass.`,
     });
   }
   if (value.controlId === 'component.engine-supervisor.restart'
@@ -350,6 +386,16 @@ function mutationMatchesControl(controlId: string, value: unknown): boolean {
       && value.command === 'SET_INTAKE_PAUSED'
       && value.paused === true;
   }
+  if (controlId === 'strategy.basis.intake') {
+    return exactKeys(value, ['command', 'paused'])
+      && value.command === 'SET_BASIS_INTAKE'
+      && typeof value.paused === 'boolean';
+  }
+  if (controlId === 'strategy.volume.intake') {
+    return exactKeys(value, ['command', 'paused'])
+      && value.command === 'SET_VOLUME_INTAKE'
+      && typeof value.paused === 'boolean';
+  }
   return controlId === 'component.engine-supervisor.restart'
     && exactKeys(value, ['command', 'componentId'])
     && value.command === 'RESTART_COMPONENT'
@@ -418,13 +464,17 @@ function failureStatus(code: string, retryable: boolean): ProductRuntimeControlR
   return 'REJECTED_STATE';
 }
 
-function capability(sourceIsolationConfigured: boolean): Readonly<ProductRuntimeCommandOwnerCapability> {
+function capability(
+  sourceIsolationConfigured: boolean,
+  strategyIntakeConfigured: boolean,
+): Readonly<ProductRuntimeCommandOwnerCapability> {
   const supportedBackendCommandIds: ProductRuntimeSafeBackendCommand[] = [
     'SET_SAFE_MODE',
     'SET_KILL_SWITCH',
     'SET_INTAKE_PAUSED',
     'RESTART_COMPONENT',
     ...(sourceIsolationConfigured ? ['SET_PUBLIC_SOURCE_LIFECYCLE' as const] : []),
+    ...(strategyIntakeConfigured ? ['SET_BASIS_INTAKE' as const, 'SET_VOLUME_INTAKE' as const] : []),
   ];
   return Object.freeze({
     ownerId: 'systemIntegration.canonical-control-service',
@@ -441,6 +491,7 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
   readonly capability: Readonly<ProductRuntimeCommandOwnerCapability>;
   private readonly controls: ProductRuntimeSystemControlCommandOwnerDependencies['controls'];
   private readonly sourceIsolation: SourceIsolationOwnerPort | undefined;
+  private readonly strategyIntake: ProductRuntimeSystemControlCommandOwnerDependencies['strategyIntake'];
 
   constructor(dependencies: Readonly<ProductRuntimeSystemControlCommandOwnerDependencies>) {
     if (!dependencies?.controls
@@ -457,9 +508,38 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
       || typeof dependencies.sourceIsolation.pendingAction !== 'function'
       || typeof dependencies.sourceIsolation.readResult !== 'function'
     )) throw new TypeError('Product command owner source lifecycle dependency is invalid.');
+    if (dependencies.strategyIntake && typeof dependencies.strategyIntake.readState !== 'function') {
+      throw new TypeError('Product command owner strategy intake dependency is invalid.');
+    }
     this.controls = dependencies.controls;
     this.sourceIsolation = dependencies.sourceIsolation;
-    this.capability = capability(this.sourceIsolation !== undefined);
+    this.strategyIntake = dependencies.strategyIntake;
+    this.capability = capability(this.sourceIsolation !== undefined, this.strategyIntake !== undefined);
+  }
+
+  readStrategyIntakeControlState(strategy: 'basis' | 'volume'): Readonly<{
+    controlRevision: number;
+    desiredPaused: boolean;
+    effectivePaused: boolean | null;
+    state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+  }> | null {
+    if (!this.strategyIntake) return null;
+    try {
+      const readback = this.strategyIntake.readState(strategy);
+      if (!readback || readback.strategy !== strategy
+        || !Number.isSafeInteger(readback.controlRevision) || readback.controlRevision < 0
+        || typeof readback.desiredPaused !== 'boolean'
+        || !(readback.effectivePaused === null || typeof readback.effectivePaused === 'boolean')
+        || !['APPLIED', 'EFFECT_UNAVAILABLE', 'OWNER_NOT_WIRED'].includes(readback.state)) return null;
+      return Object.freeze({
+        controlRevision: readback.controlRevision,
+        desiredPaused: readback.desiredPaused,
+        effectivePaused: readback.effectivePaused,
+        state: readback.state,
+      });
+    } catch {
+      return null;
+    }
   }
 
   readSourceControlState(sourceId: IsolatablePublicSourceId): Readonly<{
@@ -486,6 +566,61 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     if (resolved.kind === 'SYSTEM') return this.controls.snapshot();
     if (!this.sourceIsolation) throw new Error('Product source control owner is not configured.');
     return this.sourceIsolation.snapshot(resolved.sourceId);
+  }
+
+  async authorizePendingReplay(input: Readonly<{
+    request: Readonly<ProductRuntimeCommandRequest>;
+    intent: Readonly<ProductRuntimeCommandIntent>;
+  }>): Promise<boolean> {
+    if (!plainObject(input) || !exactKeys(input, ['request', 'intent']) || !validRequest(input.request)) return false;
+    const { request, intent } = input;
+    const resolved = resolveIntent(intent);
+    if (resolved === null || resolved.kind !== 'SYSTEM'
+      || !IDEMPOTENCY_KEY.test(request.idempotencyKey)
+      || !CONTROL_ID.test(request.controlId)
+      || request.controlId !== intent.controlId
+      || request.backendCommandId !== intent.backendCommandId
+      || request.targetType !== intent.targetType
+      || request.targetId !== intent.targetId
+      || canonical(request.payload) !== canonical(intent.payload)
+      || request.currentRevision !== request.expectedRevision
+      || request.expectedRevision !== intent.expectedRevision
+      || !DIGEST.test(request.previewDigest)
+      || !PREVIEW_ID.test(request.previewId)) return false;
+    const previewIssuedAtMs = request.expiresAtMs - PREVIEW_TTL_MS;
+    if (!utcMillis(previewIssuedAtMs)) return false;
+    const expectedPreview = buildPreview(intent, resolved, request.expiresAtMs);
+    if (!constantTimeTextEqual(request.previewDigest, expectedPreview.digest)
+      || !constantTimeTextEqual(request.previewId, expectedPreview.previewId)) return false;
+
+    let stored;
+    try { stored = await this.controls.readResult(request.idempotencyKey); } catch { return false; }
+    if (stored === null
+      || stored.runtimePublication !== 'PENDING'
+      || typeof stored.requestDigest !== 'string'
+      || !/^[a-f0-9]{64}$/.test(stored.requestDigest)
+      || stored.correlationId !== commandIdentity(request).correlationId
+      || !utcMillis(stored.recordedAtMs)
+      || stored.recordedAtMs < previewIssuedAtMs
+      || stored.recordedAtMs >= request.expiresAtMs
+      || stored.mutation === null
+      || canonical(stored.mutation) !== canonical(resolved.mutation)
+      || !mutationMatchesControl(request.controlId, stored.mutation)
+      || stored.receipt.applied !== true
+      || stored.receipt.before.revision !== resolved.revision
+      || stored.receipt.after.revision !== resolved.revision + 1
+      || stored.receipt.after.correlationId !== stored.correlationId
+      || !Number.isSafeInteger(stored.receipt.ledgerEventId)
+      || Number(stored.receipt.ledgerEventId) < 1) return false;
+    const systemRequest: Readonly<SystemControlMutationRequest> = Object.freeze({
+      idempotencyKey: request.idempotencyKey,
+      expectedRevision: resolved.revision,
+      reason: request.reason,
+      requestedAtMs: stored.recordedAtMs,
+      correlationId: stored.correlationId,
+      mutation: resolved.mutation,
+    });
+    return constantTimeTextEqual(stored.requestDigest, controlRequestDigest(systemRequest));
   }
 
   async preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>> {
@@ -517,7 +652,10 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
     const resolved = resolveIntent(input.intent);
     if (!resolved) throw new TypeError('Product control submission intent is invalid or unsupported.');
     const before = this.currentState(resolved);
-    if (request.expiresAtMs <= input.intent.nowMs) {
+    const pendingReplay = request.expiresAtMs <= input.intent.nowMs
+      ? await this.authorizePendingReplay(input)
+      : false;
+    if (request.expiresAtMs <= input.intent.nowMs && !pendingReplay) {
       return result(request, 'EXPIRED', before, before, input.intent.nowMs);
     }
     if (request.expiresAtMs - input.intent.nowMs > PREVIEW_TTL_MS
@@ -708,11 +846,14 @@ export class ProductRuntimeSystemControlCommandOwner implements ProductRuntimeCo
 
     const receipt = stored.receipt;
     const mutation = stored.mutation as Readonly<SystemControlMutation>;
-    const requiresPublication = mutation.command === 'RESTART_COMPONENT';
+    const restartPublication = mutation.command === 'RESTART_COMPONENT';
+    const requiresPublication = restartPublication
+      || mutation.command === 'SET_BASIS_INTAKE'
+      || mutation.command === 'SET_VOLUME_INTAKE';
     const transitionValid = receipt.applied
       ? receipt.after.revision === receipt.before.revision + 1
         && receipt.after.correlationId === expected.correlationId
-        && (requiresPublication
+        && (restartPublication
           ? receipt.after.generation === receipt.before.generation + 1
           : receipt.after.generation === receipt.before.generation)
       : canonical(receipt.after) === canonical(receipt.before);

@@ -339,6 +339,16 @@ export interface PersistedDesiredComponentState {
 }
 
 /**
+ * Durable desired posture for the two strategy-owned proposal intake gates.
+ * This is deliberately separate from component lifecycle: a paused intake
+ * must not stop observation, supervision, reconciliation, or risk reduction.
+ */
+export interface PersistedStrategyIntakePosture {
+  readonly basisPaused: boolean;
+  readonly volumePaused: boolean;
+}
+
+/**
  * Opaque owner reference. Persistence preserves identity and revision but does
  * not infer proposal, mandate, configuration, or position policy semantics.
  */
@@ -556,6 +566,7 @@ export interface SystemIntegrationCheckpointState {
   readonly revision: number;
   readonly generation: number;
   readonly control: Readonly<SystemControlState>;
+  readonly strategyIntake: Readonly<PersistedStrategyIntakePosture>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];

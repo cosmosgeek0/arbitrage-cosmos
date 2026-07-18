@@ -140,6 +140,7 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.deepEqual(envelope.controls.map((control) => control.backendCommandId), [
     'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
     'SET_PUBLIC_SOURCE_LIFECYCLE', 'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_BASIS_INTAKE', 'SET_VOLUME_INTAKE',
   ]);
   assert.ok(envelope.controls.every((control) => control.wiringState === 'UNAVAILABLE:COMMAND_OWNER_NOT_CONFIGURED'));
   assert.ok(envelope.controls.every((control) => control.preview === null && control.disabledReason === 'COMMAND_OWNER_NOT_CONFIGURED'));

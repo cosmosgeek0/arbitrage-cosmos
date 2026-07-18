@@ -106,6 +106,7 @@ export class VolumeEngine {
     if (typeof paused !== 'boolean') throw new TypeError('volume intake posture must be boolean');
     if (paused === this.intakePausedValue) return false;
     this.intakePausedValue = paused;
+    if (paused) this.proposalStore.expireAll('intake_paused');
     this.sink.emit(makeEvent(
       'heartbeat',
       this.clock.now(),
@@ -214,7 +215,7 @@ export class VolumeEngine {
 
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----
   intentFor(proposalId: string): IntentResult {
-    return this.proposalStore.intentFor(proposalId, this.killSwitchOn);
+    return this.proposalStore.intentFor(proposalId, this.killSwitchOn, this.intakePausedValue);
   }
 
   recordRiskResult(proposalId: string, verdict: Readonly<RiskVerdictBridge>): boolean {

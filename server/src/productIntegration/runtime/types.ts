@@ -136,6 +136,8 @@ export const PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS = Object.freeze([
   'SET_INTAKE_PAUSED',
   'RESTART_COMPONENT',
   'SET_PUBLIC_SOURCE_LIFECYCLE',
+  'SET_BASIS_INTAKE',
+  'SET_VOLUME_INTAKE',
 ] as const);
 export type ProductRuntimeSafeBackendCommand = (typeof PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS)[number];
 
@@ -239,6 +241,22 @@ export interface ProductRuntimeCommandOwnerPort {
     readonly observedLifecycle: string;
     readonly pendingAction: 'ISOLATE' | 'RESTART' | null;
   }> | null;
+  readStrategyIntakeControlState?(strategy: 'basis' | 'volume'): Readonly<{
+    readonly controlRevision: number;
+    readonly desiredPaused: boolean;
+    readonly effectivePaused: boolean | null;
+    readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+  }> | null;
+  /**
+   * Authorizes only an exact command whose desired mutation is already durable
+   * and whose runtime publication is still pending. This recovery seam may
+   * bypass a now-unavailable registry projection or an expired preview, but it
+   * must never admit a new mutation.
+   */
+  authorizePendingReplay?(input: Readonly<{
+    request: Readonly<ProductRuntimeCommandRequest>;
+    intent: Readonly<ProductRuntimeCommandIntent>;
+  }>): Promise<boolean>;
   preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>>;
   submit(input: Readonly<{
     request: Readonly<ProductRuntimeCommandRequest>;

@@ -154,6 +154,14 @@ function controlIds(component: Readonly<SystemComponentSnapshot>): readonly stri
     if (component.supportedControls.includes('SET_INTAKE_PAUSED')) ids.push('global.intake.pause');
     if (component.supportedControls.includes('RESTART_COMPONENT')) ids.push('component.engine-supervisor.restart');
   }
+  if (component.componentId === 'basis-engine'
+      && component.supportedControls.includes('SET_BASIS_INTAKE')) {
+    ids.push('strategy.basis.intake');
+  }
+  if (component.componentId === 'volume-engine'
+      && component.supportedControls.includes('SET_VOLUME_INTAKE')) {
+    ids.push('strategy.volume.intake');
+  }
   return Object.freeze(ids);
 }
 

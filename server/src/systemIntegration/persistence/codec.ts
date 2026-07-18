@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -283,6 +283,14 @@ export function validateCheckpointState(value: unknown): string[] {
     if (typeof control.intakePaused !== 'boolean') issues.push('$.control.intakePaused:BOOLEAN_REQUIRED');
     if (!utcMillis(control.updatedAtMs)) issues.push('$.control.updatedAtMs:UTC_MILLIS_INVALID');
     if (!boundedIdentifier(control.correlationId)) issues.push('$.control.correlationId:CORRELATION_ID_INVALID');
+  }
+
+  const strategyIntake = value.strategyIntake;
+  if (!plainObject(strategyIntake)) issues.push('$.strategyIntake:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategyIntake, ['basisPaused', 'volumePaused'], '$.strategyIntake', issues);
+    if (typeof strategyIntake.basisPaused !== 'boolean') issues.push('$.strategyIntake.basisPaused:BOOLEAN_REQUIRED');
+    if (typeof strategyIntake.volumePaused !== 'boolean') issues.push('$.strategyIntake.volumePaused:BOOLEAN_REQUIRED');
   }
 
   const desired = validateArray(
@@ -550,9 +558,15 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
     if (parsed.checksum !== expected) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint checksum does not match its state' };
     if (canonicalPersistenceJson(parsed) !== serialized) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint is not canonically serialized' };
     if (!plainObject(parsed.state)) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint state must be an object' };
-    const migratedState = Object.hasOwn(parsed.state, 'liveEdgeControlEvents')
-      ? parsed.state
-      : { ...parsed.state, liveEdgeControlEvents: [] };
+    const migratedState = {
+      ...parsed.state,
+      ...(Object.hasOwn(parsed.state, 'liveEdgeControlEvents') ? {} : { liveEdgeControlEvents: [] }),
+      // Historical checkpoints did not carry strategy-local desired posture.
+      // Restore them fail-closed instead of guessing that proposal intake was open.
+      ...(Object.hasOwn(parsed.state, 'strategyIntake')
+        ? {}
+        : { strategyIntake: { basisPaused: true, volumePaused: true } }),
+    };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };
     return { ok: true, value: frozenClone(migratedState as unknown as SystemIntegrationCheckpointState) };

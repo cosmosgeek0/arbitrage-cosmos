@@ -45,6 +45,20 @@ def quantize_binary64(value: float, *, field: str) -> FixedPointV1:
     return FixedPointV1(mantissa)
 
 
+def quantize_binary64_with_abs_error(
+    value: float,
+    *,
+    field: str,
+) -> tuple[FixedPointV1, FixedPointV1]:
+    """Quantize once and publish a conservative exact-grid absolute error."""
+
+    quantized = quantize_binary64(value, field=field)
+    exact_scaled = Fraction.from_float(value) * FIXED_POINT_SCALE
+    error = abs(exact_scaled - quantized.mantissa)
+    error_mantissa = (error.numerator + error.denominator - 1) // error.denominator
+    return quantized, FixedPointV1(error_mantissa)
+
+
 def quantize_probability(value: float, *, field: str) -> FixedPointV1:
     """Quantize a probability and fail closed outside [0, 1]."""
 

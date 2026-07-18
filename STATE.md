@@ -109,6 +109,7 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | ---: | --- | --- | --- |
 | 1 | `FIX-031` | `BUILT_AND_TESTED` | Application bootstrap acquires one atomic PID/heartbeat lease before opening the canonical `DATA_DIR`, Ledger, boot generation, listener, or runtime. The hostile lease suite is 4/4, System Integration is 412/412, and live competitors exit before a second boot revision while dead same-host ownership recovers atomically. |
 | 2 | `FIX-017` | `BUILT_AND_TESTED` | Q08 basis-path arithmetic now requires distinct instrument identities with matching base-size and quote-price units before cross-leg subtraction. The focused hostile file is 19/19, Q08 is 198 passed plus four exact shard-only skips, Q17 is 389/389, and the full Quant gate is 3,057 passed plus six exact allowed skips (3,063 total). Both owning generators reproduced current evidence (Q08 byte-identically; Q17 with explicit pending FIX-017 provenance). |
+| 11 | `L-011` | `BUILT_AND_TESTED` | The canonical validate-only orchestrator now yields an exact `DATABASE_FAILURE_BEFORE_SEND` owner witness only when persistence fails before approval, risk, coordinator, reconciliation, or any sealed-venue call. The focused hostile regression proves one database read failure, one fail-closed durable result attempt, zero venue/submission calls, no execution plan, and no execution authority. |
 
 ## Previous source evidence
 

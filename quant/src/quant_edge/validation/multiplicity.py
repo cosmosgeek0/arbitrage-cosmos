@@ -19,7 +19,7 @@ from typing import Final
 from quant_edge.canonical import canonical_json_bytes
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FixedPointV1, round_half_even
-from quant_edge.labels.rational import ExactRatioV1
+from quant_edge.labels.rational import ExactRatioV1, make_ratio
 from quant_edge.lake.contracts import (
     DigestV1,
     require_contract_id,
@@ -289,6 +289,134 @@ def benjamini_hochberg(
         fdr_per_myriad=fdr_per_myriad,
         tested_count=total,
         rejected_trial_ids=rejected,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class HolmDecisionV1:
+    trial_id: str
+    raw_p_value: ExactRatioV1 | None
+    effective_p_value: ExactRatioV1
+    threshold: ExactRatioV1
+    selected: bool
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.trial_id, field="trial_id")
+        if self.raw_p_value is not None and not isinstance(self.raw_p_value, ExactRatioV1):
+            raise ContractValueError("raw_p_value must be ExactRatioV1 or None")
+        for field in ("effective_p_value", "threshold"):
+            value = getattr(self, field)
+            if not isinstance(value, ExactRatioV1):
+                raise ContractValueError(f"{field} must be ExactRatioV1")
+
+
+@dataclass(frozen=True, slots=True)
+class HolmReportV1:
+    familywise_alpha_per_myriad: int
+    tested_count: int
+    decisions: tuple[HolmDecisionV1, ...]
+    rejected_trial_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        require_strict_int(
+            self.familywise_alpha_per_myriad,
+            field="familywise_alpha_per_myriad",
+            minimum=1,
+            maximum=9_999,
+        )
+        require_strict_int(self.tested_count, field="tested_count", minimum=1, maximum=MAX_TRIALS)
+        if len(self.decisions) != self.tested_count:
+            raise ContractValueError("Holm decisions must cover every attempted trial")
+        ids = tuple(item.trial_id for item in self.decisions)
+        if ids != tuple(sorted(set(ids))):
+            raise ContractValueError("Holm decisions must be sorted by unique trial_id")
+        selected = tuple(item.trial_id for item in self.decisions if item.selected)
+        if self.rejected_trial_ids != selected:
+            raise ContractValueError("rejected_trial_ids must equal selected decisions")
+
+
+def holm_bonferroni(
+    ledger: TrialLedgerV1,
+    raw_p_values: tuple[tuple[str, ExactRatioV1 | None], ...],
+    *,
+    familywise_alpha_per_myriad: int,
+) -> HolmReportV1:
+    """Exact step-down Holm correction over every attempted ledger trial.
+
+    Failed and abandoned trials remain in the multiplicity family with effective
+    p-value one. Completed trials must carry an internally calculated p-value.
+    """
+
+    if not isinstance(ledger, TrialLedgerV1):
+        raise ContractValueError("ledger must be TrialLedgerV1")
+    require_strict_int(
+        familywise_alpha_per_myriad,
+        field="familywise_alpha_per_myriad",
+        minimum=1,
+        maximum=9_999,
+    )
+    if not isinstance(raw_p_values, tuple):
+        raise ContractValueError("raw_p_values must be a tuple")
+    supplied: dict[str, ExactRatioV1 | None] = {}
+    for entry in raw_p_values:
+        if not isinstance(entry, tuple) or len(entry) != 2:
+            raise ContractValueError("each p-value entry must be (trial_id, value_or_none)")
+        trial_id, value = entry
+        require_contract_id(trial_id, field="trial_id")
+        if trial_id in supplied:
+            raise ContractValueError(f"duplicate trial id: {trial_id}")
+        if value is not None:
+            if not isinstance(value, ExactRatioV1):
+                raise ContractValueError("p-values must be ExactRatioV1 or None")
+            fraction = Fraction(value.numerator, value.denominator)
+            if fraction < 0 or fraction > 1:
+                raise ContractValueError("p-values must lie in [0, 1]")
+        supplied[trial_id] = value
+    ledger_ids = tuple(trial.trial_id for trial in ledger.trials)
+    if tuple(sorted(supplied)) != ledger_ids:
+        raise ContractValueError("p-value identities must exactly equal the trial ledger")
+
+    ordered: list[tuple[Fraction, str, ExactRatioV1 | None, ExactRatioV1]] = []
+    for trial in ledger.trials:
+        raw = supplied[trial.trial_id]
+        if trial.status is TrialStatus.COMPLETED and raw is None:
+            raise ContractValueError("completed trials require an exact raw p-value")
+        if trial.status is not TrialStatus.COMPLETED and raw is not None:
+            raise ContractValueError("non-completed trials must carry no raw p-value")
+        effective = make_ratio(1, 1) if raw is None else raw
+        ordered.append(
+            (
+                Fraction(effective.numerator, effective.denominator),
+                trial.trial_id,
+                raw,
+                effective,
+            )
+        )
+    ordered.sort(key=lambda item: (item[0], item[1]))
+    total = ledger.attempted_count
+    alpha = make_ratio(familywise_alpha_per_myriad, 10_000)
+    latched_failure = False
+    by_id: dict[str, HolmDecisionV1] = {}
+    for index, (fraction, trial_id, raw, effective) in enumerate(ordered):
+        threshold = make_ratio(alpha.numerator, alpha.denominator * (total - index))
+        passes = not latched_failure and fraction <= Fraction(
+            threshold.numerator, threshold.denominator
+        )
+        if not passes:
+            latched_failure = True
+        by_id[trial_id] = HolmDecisionV1(
+            trial_id=trial_id,
+            raw_p_value=raw,
+            effective_p_value=effective,
+            threshold=threshold,
+            selected=passes,
+        )
+    decisions = tuple(by_id[trial_id] for trial_id in ledger_ids)
+    return HolmReportV1(
+        familywise_alpha_per_myriad=familywise_alpha_per_myriad,
+        tested_count=total,
+        decisions=decisions,
+        rejected_trial_ids=tuple(item.trial_id for item in decisions if item.selected),
     )
 
 

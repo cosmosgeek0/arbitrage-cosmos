@@ -120,6 +120,8 @@ from quant_edge.validation.metrics import (
 )
 from quant_edge.validation.multiplicity import (
     BhReportV1,
+    HolmDecisionV1,
+    HolmReportV1,
     PboReportV1,
     PboStatus,
     TrialLedgerV1,
@@ -127,6 +129,7 @@ from quant_edge.validation.multiplicity import (
     TrialStatus,
     benjamini_hochberg,
     distinct_trial_count,
+    holm_bonferroni,
     pbo_cscv,
 )
 from quant_edge.validation.normal import (
@@ -206,6 +209,8 @@ __all__ = [
     "FoldStatus",
     "FoldV1",
     "HoldoutGrantV1",
+    "HolmDecisionV1",
+    "HolmReportV1",
     "IncrementalEngineValueV1",
     "LeakageAssessmentV1",
     "LeakageSpecV1",
@@ -268,6 +273,7 @@ __all__ = [
     "fixed_sqrt",
     "fold_prediction_output_digest",
     "future_leaked_predictions",
+    "holm_bonferroni",
     "incremental_engine_value",
     "inject_false_bursts",
     "no_skill_band",

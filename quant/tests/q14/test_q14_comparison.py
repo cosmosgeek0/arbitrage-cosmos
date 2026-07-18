@@ -328,7 +328,15 @@ def test_subset_and_restrict_helpers() -> None:
     assert subset.dataset_id == "q14-test.subset"
     restricted = restrict_predictions(predictions, subset)
     assert restricted.dataset_digest == subset.digest()
+    assert restricted.parent_dataset_digest == samples.digest()
     assert len(restricted.predictions) == 2
+    foreign_samples = make_sample_set(6, dataset_id="foreign-parent")
+    foreign_predictions = predictions_from_scores(
+        foreign_samples,
+        {sample.sample_id: make_ratio(1, 2) for sample in foreign_samples.samples},
+    )
+    with pytest.raises(ContractValueError, match="parent sample set"):
+        restrict_predictions(foreign_predictions, subset)
     with pytest.raises(ContractValueError, match="SampleSetV1"):
         subset_by_ids("nope", ("s-0001",))  # type: ignore[arg-type]
     with pytest.raises(ContractValueError, match="non-empty tuple"):

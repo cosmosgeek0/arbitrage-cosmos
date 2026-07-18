@@ -116,11 +116,16 @@ class SampleSetV1:
     dataset_id: str
     posture: EvidencePosture
     samples: tuple[ValidationSampleV1, ...]
+    parent_dataset_digest: DigestV1 | None = None
 
     def __post_init__(self) -> None:
         require_contract_id(self.dataset_id, field="dataset_id")
         if not isinstance(self.posture, EvidencePosture):
             raise ContractValueError("posture must be an EvidencePosture")
+        if self.parent_dataset_digest is not None and not isinstance(
+            self.parent_dataset_digest, DigestV1
+        ):
+            raise ContractValueError("parent_dataset_digest must be DigestV1 or None")
         if not isinstance(self.samples, tuple) or not self.samples:
             raise ContractValueError("samples must be a non-empty tuple")
         if len(self.samples) > MAX_SAMPLES:
@@ -153,13 +158,16 @@ class SampleSetV1:
         raise ContractValueError(f"unknown sample id: {sample_id}")
 
     def as_mapping(self) -> dict[str, object]:
-        return {
+        mapping: dict[str, object] = {
             "datasetId": self.dataset_id,
             "posture": self.posture.value,
             "sampleCount": len(self.samples),
             "samples": [sample.as_mapping() for sample in self.samples],
             "schema": "Q14SampleSetV1",
         }
+        if self.parent_dataset_digest is not None:
+            mapping["parentDatasetDigest"] = self.parent_dataset_digest.hexdigest
+        return mapping
 
     def digest(self) -> DigestV1:
         return DigestV1(
@@ -292,6 +300,7 @@ class PredictionSetV1:
     predictions: tuple[PredictionV1, ...]
     lineage: PredictionLineageV1 | None = None
     fold_fit_receipts: tuple[FoldFitReceiptV1, ...] = ()
+    parent_dataset_digest: DigestV1 | None = None
 
     def __post_init__(self) -> None:
         require_contract_id(self.model_id, field="model_id")
@@ -301,6 +310,10 @@ class PredictionSetV1:
             raise ContractValueError("predictions must be a non-empty tuple")
         if self.lineage is not None and not isinstance(self.lineage, PredictionLineageV1):
             raise ContractValueError("lineage must be PredictionLineageV1 or None")
+        if self.parent_dataset_digest is not None and not isinstance(
+            self.parent_dataset_digest, DigestV1
+        ):
+            raise ContractValueError("parent_dataset_digest must be DigestV1 or None")
         if not isinstance(self.fold_fit_receipts, tuple) or any(
             not isinstance(receipt, FoldFitReceiptV1) for receipt in self.fold_fit_receipts
         ):
@@ -340,6 +353,8 @@ class PredictionSetV1:
             mapping["foldFitReceipts"] = [
                 receipt.as_mapping() for receipt in self.fold_fit_receipts
             ]
+        if self.parent_dataset_digest is not None:
+            mapping["parentDatasetDigest"] = self.parent_dataset_digest.hexdigest
         return mapping
 
     def digest(self) -> DigestV1:
@@ -364,6 +379,7 @@ def subset_by_ids(samples: SampleSetV1, ids: tuple[str, ...]) -> SampleSetV1:
         dataset_id=f"{samples.dataset_id}.subset",
         posture=samples.posture,
         samples=tuple(sample for sample in samples.samples if sample.sample_id in selected),
+        parent_dataset_digest=samples.digest(),
     )
 
 
@@ -377,6 +393,12 @@ def restrict_predictions(
         raise ContractValueError("predictions must be PredictionSetV1")
     if not isinstance(samples, SampleSetV1):
         raise ContractValueError("samples must be SampleSetV1")
+    expected_parent = samples.parent_dataset_digest
+    if expected_parent is None:
+        if predictions.dataset_digest != samples.digest():
+            raise ContractValueError("predictions are bound to a different sample set")
+    elif predictions.dataset_digest != expected_parent:
+        raise ContractValueError("predictions are bound to a different parent sample set")
     wanted = set(samples.sample_ids)
     kept = tuple(
         prediction for prediction in predictions.predictions if prediction.sample_id in wanted
@@ -389,6 +411,7 @@ def restrict_predictions(
         predictions=kept,
         lineage=predictions.lineage,
         fold_fit_receipts=predictions.fold_fit_receipts,
+        parent_dataset_digest=predictions.dataset_digest,
     )
 
 
@@ -413,6 +436,7 @@ def rebind_predictions(predictions: PredictionSetV1, samples: SampleSetV1) -> Pr
         predictions=predictions.predictions,
         lineage=predictions.lineage,
         fold_fit_receipts=predictions.fold_fit_receipts,
+        parent_dataset_digest=predictions.parent_dataset_digest,
     )
 
 

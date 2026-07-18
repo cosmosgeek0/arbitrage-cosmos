@@ -473,6 +473,59 @@ test('browser accepts only fail-closed relational Ledger schema compatibility tr
   assert.equal(validateProductSupervisorEnvelope(unavailable).includes('DASHBOARD_SUMMARY_INVALID:ledger'), false);
 });
 
+test('browser risk contract rejects missing correlation and forged review semantics', () => {
+  const snapshot = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'risk-contract', NOW));
+  const risk = snapshot.dashboard.summaries.risk;
+  const withRisk = (next) => ({
+    ...snapshot,
+    dashboard: {
+      ...snapshot.dashboard,
+      summaries: { ...snapshot.dashboard.summaries, risk: next },
+    },
+  });
+  const missingCorrelation = { ...risk };
+  delete missingCorrelation.correlationId;
+  const missingDecisionSnapshot = { ...risk };
+  delete missingDecisionSnapshot.decisiveInputSnapshot;
+  const decisivePass = { code: 'MAX_GROSS_NOTIONAL', status: 'PASS', detail: 'Exact gross passed.', observed: '1', limit: '2', evidenceTimestamp: NOW };
+  const decisiveFail = { ...decisivePass, status: 'FAIL' };
+  for (const hostile of [
+    missingCorrelation,
+    missingDecisionSnapshot,
+    { ...risk, unreviewedField: true },
+    { ...risk, correlationId: null },
+    { ...risk, correlationId: '-malformed-correlation' },
+    { ...risk, correlationId: 123 },
+    { ...risk, latestVerdict: ['APPROVE'] },
+    { ...risk, maxAllowedSize: '1'.repeat(81) },
+    { ...risk, decisiveInputSnapshot: [{ ...decisivePass, code: ['MAX_GROSS_NOTIONAL'] }] },
+    { ...risk, decisiveInputSnapshot: [{ ...decisivePass, status: ['PASS'] }] },
+    { ...risk, decisiveInputSnapshot: [{ ...decisivePass, detail: '   ' }] },
+    { ...risk, reasonCodes: [['MAX_GROSS_NOTIONAL']] },
+    { ...risk, decisiveInputSnapshot: [decisiveFail], reasonCodes: ['MAX_GROSS_NOTIONAL'] },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', requiredConfirmation: false },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', requiredConfirmation: true, maxAllowedSize: '0', correlationId: 'corr-review', decisiveInputSnapshot: [{ code: 'ACCOUNT_TRUTH', status: 'UNKNOWN', detail: 'Account truth is unavailable.', observed: null, limit: null, evidenceTimestamp: null }] },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', requiredConfirmation: true, maxAllowedSize: null, correlationId: 'corr-review-fail', decisiveInputSnapshot: [{ ...decisiveFail, code: 'ACCOUNT_TRUTH' }], reasonCodes: ['ACCOUNT_TRUTH'] },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', requiredConfirmation: true, maxAllowedSize: null, correlationId: 'corr-review-order', decisiveInputSnapshot: [{ ...decisivePass, code: 'ACCOUNT_TRUTH', status: 'UNKNOWN' }], reasonCodes: ['OTHER_TRUTH'] },
+    { ...risk, maxAllowedSize: '-1' },
+    { ...risk, decisiveInputSnapshot: [{ code: 'account_truth', status: 'UNKNOWN', detail: 'bad code', observed: null, limit: null, evidenceTimestamp: null }] },
+    { ...risk, decisiveInputSnapshot: [{ ...decisivePass, observed: '' }] },
+    { ...risk, decisiveInputSnapshot: [{ ...decisivePass, limit: 'x'.repeat(301) }] },
+  ]) {
+    assert.ok(validateProductSupervisorEnvelope(withRisk(hostile)).includes('DASHBOARD_SUMMARY_INVALID:risk'));
+  }
+  const review = {
+    ...risk,
+    latestVerdict: 'NEEDS_REVIEW',
+    correlationId: 'corr-review-valid',
+    maxAllowedSize: null,
+    requiredConfirmation: true,
+    decisiveInputSnapshot: [{ code: 'ACCOUNT_TRUTH', status: 'UNKNOWN', detail: 'Account truth is unavailable.', observed: null, limit: null, evidenceTimestamp: null }],
+    reasonCodes: ['ACCOUNT_TRUTH'],
+  };
+  assert.equal(validateProductSupervisorEnvelope(withRisk(review)).includes('DASHBOARD_SUMMARY_INVALID:risk'), false);
+});
+
 test('READY posture with null meaningful advance cannot validate YES or render header green', () => {
   const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'null-advance', NOW));
   const health = ready.surfaces.health;

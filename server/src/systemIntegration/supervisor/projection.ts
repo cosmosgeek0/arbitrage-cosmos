@@ -12,6 +12,7 @@ import {
   isRuntimePhase,
   isStructuredFailure,
   isValidUtcMillis,
+  MAX_RISK_VERDICT_CHECKS,
   ok,
   validateSourcedTimestamp,
   weakestAuthority,
@@ -69,6 +70,8 @@ import type {
 const MAX_COUNT = 1_000_000_000;
 const CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,99}$/;
 const DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
+const NON_NEGATIVE_DECIMAL_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const VALIDATE_ONLY_COMPONENTS = new Set<SystemComponentId>([
   'multileg-risk',
   'execution-coordinator-validate-only',
@@ -298,11 +301,59 @@ function validateSummaries(summaries: SystemSupervisorSummaries): void {
   codes('capital.blockerCodes', capital.blockerCodes);
 
   const risk = summaries.risk;
-  if (!['APPROVE', 'REJECT', 'CAP', 'UNAVAILABLE'].includes(risk.latestVerdict)) throw new TypeError('risk.latestVerdict is invalid');
+  if (!['APPROVE', 'REJECT', 'NEEDS_REVIEW', 'CAP', 'UNAVAILABLE'].includes(risk.latestVerdict)) throw new TypeError('risk.latestVerdict is invalid');
   optionalTimestamp('risk.latestVerdictAtMs', risk.latestVerdictAtMs);
   optionalString('risk.latestVerdictId', risk.latestVerdictId, 256);
+  optionalString('risk.correlationId', risk.correlationId, 128);
+  if (risk.maxAllowedSize !== null
+    && (risk.maxAllowedSize.length > 80 || !NON_NEGATIVE_DECIMAL_PATTERN.test(risk.maxAllowedSize))) {
+    throw new TypeError('risk.maxAllowedSize must be null or a non-negative exact decimal string');
+  }
+  if (risk.requiredConfirmation !== null && typeof risk.requiredConfirmation !== 'boolean') throw new TypeError('risk.requiredConfirmation is invalid');
+  if (!Array.isArray(risk.decisiveInputSnapshot) || risk.decisiveInputSnapshot.length > MAX_RISK_VERDICT_CHECKS) throw new TypeError('risk.decisiveInputSnapshot is invalid');
+  for (const [index, item] of risk.decisiveInputSnapshot.entries()) {
+    const keys = Object.keys(item).sort().join('|');
+    if (keys !== ['code', 'detail', 'evidenceTimestamp', 'limit', 'observed', 'status'].sort().join('|')
+      || !CODE_PATTERN.test(item.code)
+      || !['PASS', 'FAIL', 'UNKNOWN'].includes(item.status)
+      || typeof item.detail !== 'string'
+      || item.detail.trim().length < 1
+      || item.detail.length > 1_000
+      || (item.observed !== null && (typeof item.observed !== 'string' || item.observed.length < 1 || item.observed.length > 300))
+      || (item.limit !== null && (typeof item.limit !== 'string' || item.limit.length < 1 || item.limit.length > 300))
+      || (item.evidenceTimestamp !== null && !isValidUtcMillis(item.evidenceTimestamp))) {
+      throw new TypeError(`risk.decisiveInputSnapshot[${index}] is invalid`);
+    }
+  }
   nonNegativeCount('risk.rejectionCount', risk.rejectionCount);
   codes('risk.reasonCodes', risk.reasonCodes);
+  if (['APPROVE', 'REJECT', 'NEEDS_REVIEW'].includes(risk.latestVerdict)) {
+    if (risk.correlationId === null || !CORRELATION_ID_PATTERN.test(risk.correlationId)) {
+      throw new TypeError('risk decision correlation is invalid');
+    }
+    if (risk.decisiveInputSnapshot.length === 0) throw new TypeError('risk decision has no decisive inputs');
+    if (risk.latestVerdict === 'APPROVE') {
+      if (risk.maxAllowedSize === null
+        || risk.requiredConfirmation !== false
+        || risk.reasonCodes.length !== 0
+        || risk.decisiveInputSnapshot.some((item) => item.status !== 'PASS')) {
+        throw new TypeError('risk approval semantics are inconsistent');
+      }
+    } else {
+      if (risk.requiredConfirmation !== (risk.latestVerdict === 'NEEDS_REVIEW')
+        || risk.decisiveInputSnapshot.some((item) => item.status === 'PASS')
+        || risk.decisiveInputSnapshot.map((item) => item.code).join('|') !== risk.reasonCodes.join('|')) {
+        throw new TypeError('risk blocking semantics are inconsistent');
+      }
+      if (risk.latestVerdict === 'REJECT'
+        ? risk.maxAllowedSize !== '0' || !risk.decisiveInputSnapshot.some((item) => item.status === 'FAIL')
+        : risk.maxAllowedSize !== null
+          || risk.decisiveInputSnapshot.some((item) => item.status === 'FAIL')
+          || !risk.decisiveInputSnapshot.some((item) => item.status === 'UNKNOWN')) {
+        throw new TypeError('risk decision authority is inconsistent');
+      }
+    }
+  }
 
   const execution = summaries.execution;
   if (!['VALIDATE_ONLY', 'UNAVAILABLE'].includes(execution.mode)) throw new TypeError('execution.mode is invalid');
@@ -449,6 +500,7 @@ function normalizeSummaries(
   const risk: SystemRiskSummary = Object.freeze({
     ...input.risk,
     truthLabel: truth(input.risk.truthLabel, ['multileg-risk']),
+    decisiveInputSnapshot: Object.freeze(input.risk.decisiveInputSnapshot.map((item) => Object.freeze({ ...item }))),
     reasonCodes: Object.freeze([...input.risk.reasonCodes]),
   });
   const executionComponent = components.get('execution-coordinator-validate-only');

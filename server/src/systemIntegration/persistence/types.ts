@@ -624,6 +624,8 @@ export interface PersistenceAuditInput {
   readonly occurredAtMs: number;
   readonly traceEvent?: Readonly<SystemTraceEvent>;
   readonly traceEvents?: readonly Readonly<SystemTraceEvent>[];
+  /** Present only on a durable canonical RiskVerdict Ledger event. */
+  readonly riskDecision?: SystemJsonValue;
 }
 
 export interface PersistedCommitReceipt {
@@ -637,6 +639,7 @@ interface IdempotentTransitionBase<T extends SystemJsonValue> {
   readonly requestDigest: string;
   readonly correlationId: string;
   readonly occurredAtMs: number;
+  readonly riskDecision?: SystemJsonValue;
   readonly transition: (
     current: Readonly<SystemIntegrationCheckpointState>,
   ) => {

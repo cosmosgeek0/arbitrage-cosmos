@@ -147,6 +147,7 @@ function allowedInput() {
   const intentDigest = deriveRiskIntentDigest(intent);
 
   return {
+    correlationId: 'corr_risk_001',
     nowMs: NOW,
     intent,
     proposal: {
@@ -393,6 +394,9 @@ section('1. complete allowed fixture and verdict contract');
   const before = JSON.stringify(input);
   const verdict = evaluateMultiLegRisk(input);
   check('complete entry is allowed', verdict.allowed, `blocking=${verdict.blockingCodes.join(',')}`);
+  check('complete entry is explicitly approved', verdict.decision === 'APPROVED' && verdict.requiredConfirmation === false);
+  check('complete entry caps authority at the exact evaluated gross size', verdict.maxAllowedSize === 200);
+  check('approved decisive inputs are frozen and ordered', Object.isFrozen(verdict.decisiveInputSnapshot) && verdict.decisiveInputSnapshot.checks[0]?.code === 'KILL_SWITCH');
   check('all required entry checks pass', verdict.checks.every((item) => item.status === 'PASS'), codesWithStatus(verdict, 'FAIL').join(','));
   check('injected evaluation time is preserved', verdict.evaluatedAt === NOW);
   check('expiry is clamped to the earliest evidence horizon', verdict.expiresAt === NOW + 990);
@@ -413,14 +417,19 @@ section('2. fail-closed unknown and stale evidence');
   missing.market = null;
   const unknownVerdict = evaluateMultiLegRisk(missing);
   check('missing market evidence blocks', !unknownVerdict.allowed);
+  check('unknown blocking evidence needs review without override', unknownVerdict.decision === 'NEEDS_REVIEW' && unknownVerdict.requiredConfirmation === true && unknownVerdict.allowed === false);
+  check('unknown decisive evidence cannot fabricate max size', unknownVerdict.maxAllowedSize === null);
   check('required unknown is retained as UNKNOWN', codesWithStatus(unknownVerdict, 'UNKNOWN').includes('EVIDENCE_AUTHORITY'));
   check('blocking UNKNOWN is listed', unknownVerdict.blockingCodes.includes('EVIDENCE_AUTHORITY'));
   check('unknown observed value stays null', checkByCode(unknownVerdict, 'LEG_EVIDENCE_FRESHNESS_SPOT_BUY')?.observed === null);
+  check('unknown decisive snapshot preserves null and blocker order', unknownVerdict.decisiveInputSnapshot.checks.some((item) => item.code === 'LEG_EVIDENCE_FRESHNESS_SPOT_BUY' && item.observed === null) && unknownVerdict.decisiveInputSnapshot.checks.map((item) => item.code).join(',') === unknownVerdict.blockingCodes.join(','));
 
   const stale = allowedInput();
   stale.market.legs[0].observedAt.sourceTimeMs = NOW - 1_001;
   const staleVerdict = evaluateMultiLegRisk(stale);
   check('stale evidence blocks', !staleVerdict.allowed);
+  check('known blocking failure is explicitly rejected', staleVerdict.decision === 'REJECTED' && staleVerdict.requiredConfirmation === false);
+  check('known rejection authorizes zero size', staleVerdict.maxAllowedSize === 0);
   check('stale leg is an explicit FAIL', checkByCode(staleVerdict, 'LEG_EVIDENCE_FRESHNESS_SPOT_BUY')?.status === 'FAIL');
 
   const partial = allowedInput();

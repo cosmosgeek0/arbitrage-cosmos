@@ -408,6 +408,8 @@ export interface CooldownEvidence {
 // ---------- the full snapshot ----------
 
 export interface RiskEvaluationInput {
+  /** Stable caller correlation; supplied independently of mutable evidence. */
+  correlationId: string;
   /** From the caller's injected clock (real, replay-virtual, or test). */
   nowMs: number;
   intent: PlanIntent;
@@ -702,6 +704,9 @@ export function validateRiskEvaluationInput(input: unknown): ValidationIssue[] {
   }
   const rec = input as Record<string, unknown>;
   const issues: ValidationIssue[] = [];
+  if (typeof rec.correlationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(rec.correlationId)) {
+    pushIssue(issues, 'correlationId', 'CORRELATION_ID_INVALID', 'correlationId must be a bounded stable identifier');
+  }
   if (!isValidUtcMillis(rec.nowMs)) {
     pushIssue(issues, 'nowMs', 'UTC_MILLIS_INVALID', 'nowMs must be a safe-integer UTC ms from an injected clock');
   }

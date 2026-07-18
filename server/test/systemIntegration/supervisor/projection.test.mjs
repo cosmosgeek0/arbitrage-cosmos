@@ -478,6 +478,23 @@ test('owner unknowns and exact decimal strings survive without fabricated zeros'
   assert.equal(snapshot.summaries.capital.reservedAmount, '0.00000001');
 });
 
+test('risk summary rejects missing correlation, false approval, review contradictions, and unbounded evidence', () => {
+  const risk = projectionInput().summaries.risk;
+  const check = risk.decisiveInputSnapshot[0];
+  const hostiles = [
+    { ...risk, correlationId: null },
+    { ...risk, decisiveInputSnapshot: [{ ...check, status: 'FAIL' }], reasonCodes: ['MAX_GROSS_NOTIONAL'] },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', maxAllowedSize: null, requiredConfirmation: true, decisiveInputSnapshot: [{ ...check, status: 'FAIL' }], reasonCodes: ['MAX_GROSS_NOTIONAL'] },
+    { ...risk, latestVerdict: 'NEEDS_REVIEW', maxAllowedSize: null, requiredConfirmation: true, decisiveInputSnapshot: [{ ...check, status: 'UNKNOWN' }], reasonCodes: ['OTHER_TRUTH'] },
+    { ...risk, decisiveInputSnapshot: [{ ...check, detail: '   ' }] },
+    { ...risk, decisiveInputSnapshot: [{ ...check, observed: '' }] },
+    { ...risk, decisiveInputSnapshot: [{ ...check, limit: 'x'.repeat(301) }] },
+  ];
+  for (const hostile of hostiles) {
+    assert.throws(() => project(projectionInput({ summaryOverrides: { risk: hostile } })), /risk/i);
+  }
+});
+
 test('unavailable owner summaries are never upgraded from component process state', () => {
   const base = projectionInput().summaries;
   const snapshot = project(projectionInput({
@@ -488,6 +505,10 @@ test('unavailable owner summaries are never upgraded from component process stat
         latestVerdict: 'UNAVAILABLE',
         latestVerdictAtMs: null,
         latestVerdictId: null,
+        correlationId: null,
+        maxAllowedSize: null,
+        requiredConfirmation: null,
+        decisiveInputSnapshot: [],
       },
       execution: {
         ...base.execution,

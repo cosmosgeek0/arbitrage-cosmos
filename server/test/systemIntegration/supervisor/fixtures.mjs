@@ -165,6 +165,13 @@ export function summaries(over = {}) {
       latestVerdict: 'APPROVE',
       latestVerdictAtMs: NOW - 30,
       latestVerdictId: 'risk-verdict-1',
+      correlationId: 'corr-risk-verdict-1',
+      maxAllowedSize: '200',
+      requiredConfirmation: false,
+      decisiveInputSnapshot: [{
+        code: 'MAX_GROSS_NOTIONAL', status: 'PASS', detail: 'Exact evaluated gross size is within the cap.',
+        observed: '200', limit: '400', evidenceTimestamp: NOW - 30,
+      }],
       rejectionCount: 0,
       reasonCodes: [],
     },

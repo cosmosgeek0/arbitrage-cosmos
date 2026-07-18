@@ -298,7 +298,7 @@ test('accepted dashboard donor bridge preserves snapshot and before/after contro
     strategies: { basis: engineSummary, volume: engineSummary },
     intelligence: { truthLabel: 'UNAVAILABLE', evidenceCount: null, attentionCount: null, focusRequestedCount: null, focusActiveCount: null, thesisCount: null, insufficientEvidenceCount: null, lastUpdateAtMs: null },
     capital: { truthLabel: 'UNAVAILABLE', accountTruthState: 'UNAVAILABLE', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, checkpointRevision: null, blockerCodes: ['SYNTHETIC_ONLY'] },
-    risk: { truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, rejectionCount: null, reasonCodes: ['SYNTHETIC_ONLY'] },
+    risk: { truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: [], rejectionCount: null, reasonCodes: ['SYNTHETIC_ONLY'] },
     execution: { truthLabel: 'UNAVAILABLE', mode: 'UNAVAILABLE', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED', planId: null, planLifecycle: null, coordinatorState: 'UNAVAILABLE', legCount: null, recoveryState: null, lastTransitionAtMs: null },
     reconciliation: { truthLabel: 'UNAVAILABLE', status: 'UNAVAILABLE', blocksNewExposure: true, recommendation: null, checkpointId: null, evaluatedAtMs: null, reasonCodes: ['SYNTHETIC_ONLY'] },
     ledger: { truthLabel: 'SYNTHETIC_ONLY', writable: true, lastEventId: null, lastPersistedAtMs: null, checkpointRevision: null, recentTraceCount: null, lastCleanShutdownAtMs: null },
@@ -308,6 +308,32 @@ test('accepted dashboard donor bridge preserves snapshot and before/after contro
   const mutation = { command: 'SET_KILL_SWITCH', engaged: true };
   const bridge = createDashboardDonorBridgeFixture({ nowMs: PRODUCT_FIXTURE_NOW_MS, correlationId: 'fixture-dashboard-donor', snapshot, mutation, receipt });
   assert.throws(() => createDashboardDonorBridgeFixture({ nowMs: PRODUCT_FIXTURE_NOW_MS, correlationId: 'fixture-dashboard-malformed', snapshot: { ...snapshot, components: [{}], edges: [{}], attentionQueue: [{}], recentCorrelatedDecisions: [{}] }, mutation, receipt }), /invalid/);
+  const approvedRisk = {
+    ...summaries.risk,
+    truthLabel: 'DRY_RUN', latestVerdict: 'APPROVE', latestVerdictAtMs: PRODUCT_FIXTURE_NOW_MS,
+    latestVerdictId: 'risk-1', correlationId: 'corr-risk-1', maxAllowedSize: '1', requiredConfirmation: false,
+    decisiveInputSnapshot: [{ code: 'MAX_GROSS_NOTIONAL', status: 'PASS', detail: 'Exact gross passed.', observed: '1', limit: '2', evidenceTimestamp: PRODUCT_FIXTURE_NOW_MS }],
+    rejectionCount: 0, reasonCodes: [],
+  };
+  const withRisk = (risk) => ({ ...snapshot, summaries: { ...summaries, risk } });
+  assert.doesNotThrow(() => createDashboardDonorBridgeFixture({ nowMs: PRODUCT_FIXTURE_NOW_MS, correlationId: 'fixture-dashboard-risk-valid', snapshot: withRisk(approvedRisk), mutation, receipt }));
+  for (const [index, hostileRisk] of [
+    { ...approvedRisk, correlationId: null },
+    { ...approvedRisk, correlationId: '-malformed' },
+    { ...approvedRisk, correlationId: 123 },
+    { ...approvedRisk, latestVerdict: ['APPROVE'] },
+    { ...approvedRisk, maxAllowedSize: '1'.repeat(81) },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], code: ['MAX_GROSS_NOTIONAL'] }] },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], status: ['PASS'] }] },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], detail: '   ' }] },
+    { ...approvedRisk, reasonCodes: [['MAX_GROSS_NOTIONAL']] },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], status: 'FAIL' }], reasonCodes: ['MAX_GROSS_NOTIONAL'] },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], observed: '' }] },
+    { ...approvedRisk, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], limit: 'x'.repeat(301) }] },
+    { ...approvedRisk, latestVerdict: 'NEEDS_REVIEW', maxAllowedSize: null, requiredConfirmation: true, decisiveInputSnapshot: [{ ...approvedRisk.decisiveInputSnapshot[0], status: 'UNKNOWN' }], reasonCodes: ['OTHER_CODE'] },
+  ].entries()) {
+    assert.throws(() => createDashboardDonorBridgeFixture({ nowMs: PRODUCT_FIXTURE_NOW_MS, correlationId: `fixture-dashboard-risk-hostile-${index}`, snapshot: withRisk(hostileRisk), mutation, receipt }), /invalid/);
+  }
   assert.deepEqual(bridge.readSnapshot().value, snapshot);
   assert.deepEqual(bridge.readLastReceipt().value, receipt);
   assert.equal((await bridge.mutate({ mutation, reason: 'already safe' })).value.code, 'CONTROL_NOOP');

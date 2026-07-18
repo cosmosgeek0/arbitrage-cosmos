@@ -1,5 +1,6 @@
 import {
   evaluateFreshness,
+  riskMaximumExactDecimal,
   type RuntimePhase,
 } from '../../foundation/contracts/index.js';
 import {
@@ -351,7 +352,7 @@ function dryRunComponent(
   const state = componentId === 'capital-supervision'
     ? run.capitalReservationDialect
     : componentId === 'multileg-risk'
-      ? run.riskVerdict?.allowed ? 'APPROVED' : 'REJECTED'
+      ? run.riskVerdict?.decision ?? 'UNAVAILABLE'
       : componentId === 'execution-coordinator-validate-only'
         ? run.executionState?.lifecycle ?? run.disposition
         : run.reconciliation?.status ?? run.disposition;
@@ -359,9 +360,13 @@ function dryRunComponent(
     ? run.reconciliation?.status !== 'EXACT'
     : componentId === 'execution-coordinator-validate-only'
       ? run.disposition === 'EXECUTION_PREFLIGHT_REJECTED'
-      : false;
+      : componentId === 'multileg-risk'
+        ? run.riskVerdict?.allowed === false
+        : false;
   const blockerCodes = domainBlocked
-    ? Object.freeze([run.failure?.code ?? `${componentId.replaceAll('-', '_').toUpperCase()}_BLOCKED`])
+    ? componentId === 'multileg-risk' && run.riskVerdict
+      ? Object.freeze([...run.riskVerdict.blockingCodes])
+      : Object.freeze([run.failure?.code ?? `${componentId.replaceAll('-', '_').toUpperCase()}_BLOCKED`])
     : Object.freeze([] as string[]);
   return Object.freeze({
     componentId,
@@ -588,7 +593,9 @@ export function defaultApplicationSummaries(
     }),
     risk: Object.freeze({
       truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null,
-      latestVerdictId: null, rejectionCount: null, reasonCodes: Object.freeze([]),
+      latestVerdictId: null, correlationId: null, maxAllowedSize: null,
+      requiredConfirmation: null, decisiveInputSnapshot: Object.freeze([]),
+      rejectionCount: null, reasonCodes: Object.freeze([]),
     }),
     execution: Object.freeze({
       truthLabel: 'UNAVAILABLE', mode: 'UNAVAILABLE', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
@@ -635,9 +642,24 @@ export function mergeApplicationSummaries(
       activeExposureCount: 0, checkpointRevision: null, blockerCodes: Object.freeze([]),
     });
     risk = run.riskVerdict ? Object.freeze({
-      truthLabel: 'DRY_RUN', latestVerdict: run.riskVerdict.allowed ? 'APPROVE' : 'REJECT',
+      truthLabel: 'DRY_RUN', latestVerdict: run.riskVerdict.decision === 'APPROVED'
+        ? 'APPROVE' as const
+        : run.riskVerdict.decision === 'REJECTED'
+          ? 'REJECT' as const
+          : 'NEEDS_REVIEW' as const,
       latestVerdictAtMs: run.riskVerdict.evaluatedAt, latestVerdictId: run.recordId,
-      rejectionCount: run.riskVerdict.allowed ? 0 : 1,
+      correlationId: run.riskVerdict.correlationId,
+      maxAllowedSize: riskMaximumExactDecimal(run.riskVerdict.maxAllowedSize),
+      requiredConfirmation: run.riskVerdict.requiredConfirmation,
+      decisiveInputSnapshot: Object.freeze(run.riskVerdict.decisiveInputSnapshot.checks.map((check) => Object.freeze({
+        code: check.code,
+        status: check.status,
+        detail: check.detail,
+        observed: check.observed === null ? null : String(check.observed),
+        limit: check.limit === null ? null : String(check.limit),
+        evidenceTimestamp: check.evidenceTimestamp,
+      }))),
+      rejectionCount: run.riskVerdict.decision === 'REJECTED' ? 1 : 0,
       reasonCodes: Object.freeze([...run.riskVerdict.blockingCodes]),
     }) : defaults.risk;
     execution = run.executionState ? Object.freeze({

@@ -91,7 +91,7 @@ export interface ValidateOnlyExecutionTerms {
 /** Risk owner input excluding facts integration must derive and bind itself. */
 export type ValidateOnlyRiskEvidence = Omit<
   RiskEvaluationInput,
-  'nowMs' | 'intent' | 'proposal' | 'approval'
+  'correlationId' | 'nowMs' | 'intent' | 'proposal' | 'approval'
 >;
 
 export interface ValidateOnlySupervisionInput {

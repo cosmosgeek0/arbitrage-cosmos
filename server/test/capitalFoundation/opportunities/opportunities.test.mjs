@@ -54,7 +54,14 @@ function economics(overrides = {}) {
     estimatedBorrowCost: '0',
     estimatedSpreadCost: '3.25',
     estimatedSlippage: '2',
+    estimatedLatencyCost: '0.25',
+    estimatedAdverseSelectionCost: '0.5',
+    estimatedRecoveryCost: '0.75',
+    estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '2500',
+    fundingSourceIds: ['funding-owner-1'],
+    borrowSourceIds: ['borrow-owner-1'],
+    capitalOpportunitySourceIds: ['capital-opportunity-owner-1'],
     exactSourceIds: ['economics-caller-1'],
     missingFields: [],
     ...overrides,
@@ -567,6 +574,38 @@ test('hostile float injection becomes missing truth rather than financial arithm
   assert.equal(result.economics.expectedNetEdge, null);
   assert.ok(result.economics.missingFields.includes('requestedCapital'));
   assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
+});
+
+test('all-in economics blocks when latency, adverse-selection, recovery, or capital-opportunity truth is absent', () => {
+  const result = one(candidate({
+    intake: intake({
+      economics: {
+        estimatedLatencyCost: null,
+        estimatedAdverseSelectionCost: null,
+        estimatedRecoveryCost: null,
+        estimatedCapitalOpportunityCost: null,
+        fundingSourceIds: [],
+        borrowSourceIds: [],
+        capitalOpportunitySourceIds: [],
+        missingFields: [],
+      },
+    }),
+  }));
+  assert.equal(result.status, 'BLOCKED');
+  assert.deepEqual(
+    result.economics.missingFields.filter((field) => field.startsWith('estimated')),
+    [
+      'estimatedAdverseSelectionCost',
+      'estimatedCapitalOpportunityCost',
+      'estimatedLatencyCost',
+      'estimatedRecoveryCost',
+    ],
+  );
+  assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
+  assert.deepEqual(result.economics.fundingSourceIds, []);
+  assert.ok(result.economics.missingFields.includes('fundingSourceIds'));
+  assert.ok(result.economics.missingFields.includes('borrowSourceIds'));
+  assert.ok(result.economics.missingFields.includes('capitalOpportunitySourceIds'));
 });
 
 test('freshness is reevaluated against injected now rather than trusting an old fresh label', () => {

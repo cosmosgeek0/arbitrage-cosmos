@@ -153,6 +153,63 @@ export interface RuntimeStatusSnapshot {
 
 export const LIVE_EXECUTION_BLOCK_CODE = 'LIVE_EXECUTION_NOT_IMPLEMENTED';
 
+/**
+ * Classify a synchronous-port result as thenable and attach a same-turn
+ * rejection handler. Callers must reject a true result as malformed even when
+ * the object is decorated with otherwise valid-looking contract fields.
+ * Property access and invocation are each guarded so a hostile thenable cannot
+ * throw through the observing boundary. A custom `then` property is read at
+ * most once; direct invocation avoids a second accessor/Promise.resolve read.
+ * Invocation results are observed through a bounded, cycle-safe walk because
+ * a hostile async `then` can itself return a rejected Promise.
+ */
+const MAX_RETURNED_THENABLE_DEPTH = 8;
+const ignoreThenResolution = (): undefined => undefined;
+
+function observeRejectedThenableAtDepth(
+  value: unknown,
+  seen: Set<object>,
+  depth: number,
+): boolean {
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return false;
+  const objectValue = value as object;
+  if (seen.has(objectValue)) return true;
+  seen.add(objectValue);
+
+  // Native promises can have a hostile own `then` surface. The intrinsic call
+  // observes their internal state without consulting that property.
+  try {
+    Reflect.apply(Promise.prototype.then, value, [ignoreThenResolution, ignoreThenResolution]);
+    return true;
+  } catch {
+    // Not a native Promise (or an unsuppressible hostile SpeciesConstructor).
+  }
+  if (depth > MAX_RETURNED_THENABLE_DEPTH) return true;
+
+  let then: unknown;
+  try {
+    then = Reflect.get(objectValue, 'then');
+  } catch {
+    return true;
+  }
+  if (typeof then !== 'function') return false;
+  let returned: unknown;
+  try {
+    returned = Reflect.apply(then, value, [ignoreThenResolution, ignoreThenResolution]);
+  } catch {
+    // Invocation failure is still a malformed thenable, never a thrown port.
+    return true;
+  }
+  if (returned !== value) {
+    observeRejectedThenableAtDepth(returned, seen, depth + 1);
+  }
+  return true;
+}
+
+export function observeRejectedThenable(value: unknown): boolean {
+  return observeRejectedThenableAtDepth(value, new Set(), 0);
+}
+
 export interface RunModeCheckContext {
   /** From the caller's injected clock. */
   nowMs: number;

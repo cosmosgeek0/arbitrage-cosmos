@@ -222,12 +222,15 @@ function mergeItems(context: NewsPayload | null, binance: BinancePayload | null)
     });
 }
 
-function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null): NewsPayload {
+export function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null): NewsPayload {
   if (!current) return incoming;
+  const incomingIsNewer = incoming.fetchedAt > current.fetchedAt;
+  const olderPayload = incomingIsNewer ? current : incoming;
+  const newerPayload = incomingIsNewer ? incoming : current;
   const byId = new Map<string, NewsItem>();
-  [...current.items, ...incoming.items].forEach((item) => byId.set(item.id, item));
-  const metadata = incoming.fetchedAt >= current.fetchedAt ? incoming : current;
-  return { ...metadata, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
+  for (const item of olderPayload.items) byId.set(item.id, item);
+  for (const item of newerPayload.items) byId.set(item.id, item);
+  return { ...newerPayload, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
 }
 
 function validContextPayload(payload: unknown): payload is NewsPayload {

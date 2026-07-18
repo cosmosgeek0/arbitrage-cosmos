@@ -103,10 +103,74 @@ test('News rejects and removes invalid cached payloads before they reach feed st
   }
 });
 
+test('News merge keeps the freshest same-ID row regardless of payload arrival order', async () => {
+  const server = await createServer({
+    root: new URL('../..', import.meta.url).pathname,
+    server: { middlewareMode: true },
+    appType: 'custom',
+  });
+
+  try {
+    const news = await server.ssrLoadModule('/src/pages/News.tsx');
+    assert.equal(typeof news.mergeContextPayload, 'function');
+
+    const current = newsPayload(200, [
+      newsItem('shared', 'Newer row content', 200, undefined),
+      newsItem('current-only', 'Current-only row', 190, 1),
+    ]);
+    const delayed = newsPayload(100, [
+      newsItem('shared', 'Older row content', 100, 3),
+      newsItem('older-only', 'Older unique row', 90, 2),
+    ]);
+
+    const delayedMerge = news.mergeContextPayload(delayed, current);
+    assert.equal(delayedMerge.fetchedAt, 200);
+    assert.equal(delayedMerge.items.find((item) => item.id === 'shared').title, 'Newer row content');
+    assert.equal(news.authoritativeNewsImpact(delayedMerge.items.find((item) => item.id === 'shared')), null);
+    assert.equal(delayedMerge.items.some((item) => item.id === 'older-only'), true);
+    assert.deepEqual(news.mergeContextPayload(delayed, current), delayedMerge);
+
+    const next = newsPayload(300, [newsItem('shared', 'Newest row content', 300, 2)]);
+    const nextMerge = news.mergeContextPayload(next, current);
+    assert.equal(nextMerge.fetchedAt, 300);
+    assert.equal(nextMerge.items.find((item) => item.id === 'shared').title, 'Newest row content');
+    assert.equal(news.authoritativeNewsImpact(nextMerge.items.find((item) => item.id === 'shared')), 2);
+
+    const equalVersion = newsPayload(200, [newsItem('shared', 'Ambiguous equal-version row', 250, 3)]);
+    assert.equal(
+      news.mergeContextPayload(equalVersion, current).items.find((item) => item.id === 'shared').title,
+      'Newer row content',
+    );
+  } finally {
+    await server.close();
+  }
+});
+
 function fakeStorage(value) {
   return {
     removed: [],
     getItem() { return value; },
     removeItem(key) { this.removed.push(key); },
+  };
+}
+
+function newsPayload(fetchedAt, items) {
+  return { source: `source-${fetchedAt}`, fetchedAt, items, sources: [] };
+}
+
+function newsItem(id, title, ts, impact) {
+  return {
+    id,
+    title,
+    summary: null,
+    url: null,
+    source: 'Primary',
+    channel: 'primary',
+    ts,
+    timeLabel: '12:00',
+    symbols: [],
+    tags: [],
+    tone: 'idle',
+    impact,
   };
 }

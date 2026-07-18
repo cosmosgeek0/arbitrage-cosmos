@@ -16,6 +16,7 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
+import { formatClockZone } from '../lib/time';
 
 export interface TvCandle {
   t: number;
@@ -76,10 +77,13 @@ function chartTheme() {
   };
 }
 
-function fmtTime(ts: UTCTimestamp): string {
-  const d = new Date(Number(ts) * 1000);
-  const pad = (x: number) => String(x).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+function fmtTime(ts: UTCTimestamp, clockZone: string): string {
+  return formatClockZone(Number(ts) * 1000, clockZone, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }, 'en-GB');
 }
 
 export function TradingViewChart({
@@ -90,6 +94,7 @@ export function TradingViewChart({
   color,
   valueFmt,
   resetKey,
+  clockZone,
   tools = false,
 }: {
   candles?: TvCandle[];
@@ -99,6 +104,7 @@ export function TradingViewChart({
   color?: string;
   valueFmt: (v: number) => string;
   resetKey: string;
+  clockZone: string;
   /** Interactive tool rail (zoom/fit/live/log/volume/MA) — token page only. */
   tools?: boolean;
 }) {
@@ -174,7 +180,7 @@ export function TradingViewChart({
       },
       localization: {
         priceFormatter: (v: number) => fmtRef.current(v),
-        timeFormatter: (time: Time) => (typeof time === 'number' ? fmtTime(time as UTCTimestamp) : String(time)),
+        timeFormatter: (time: Time) => (typeof time === 'number' ? fmtTime(time as UTCTimestamp, clockZone) : String(time)),
       },
       grid: {
         vertLines: { color: 'rgba(148, 163, 184, .10)' },
@@ -256,7 +262,7 @@ export function TradingViewChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [kind, height, color, themeTick]);
+  }, [kind, height, color, themeTick, clockZone]);
 
   useEffect(() => {
     if (!chartRef.current) return;

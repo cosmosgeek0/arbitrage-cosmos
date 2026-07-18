@@ -4,6 +4,7 @@ import {
   normalizeTvCandles,
   type TvCandle,
 } from './TradingViewChart';
+import { tradingViewClockZone } from '../lib/time';
 
 const TV_WIDGET_SCRIPT_URL = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
 
@@ -86,7 +87,7 @@ function fallbackPrice(value: number): string {
   return value.toLocaleString('en-US', { maximumFractionDigits });
 }
 
-export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: string; win: string; height?: number }) {
+export function TradingViewWidget({ symbol, win, clockZone, height = 520 }: { symbol: string; win: string; clockZone: string; height?: number }) {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => currentTheme());
   const [liveness, dispatchLiveness] = useReducer(
     reduceTradingViewLiveness,
@@ -106,7 +107,7 @@ export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: strin
       autosize: true,
       symbol: tvSymbol(symbol),
       interval: tvInterval(win),
-      timezone: 'Etc/UTC',
+      timezone: tradingViewClockZone(clockZone),
       theme,
       style: '1',
       locale: 'en',
@@ -127,7 +128,7 @@ export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: strin
       enabled_features: ['header_fullscreen_button'],
       support_host: 'https://www.tradingview.com',
     }),
-    [symbol, theme, win]
+    [clockZone, symbol, theme, win]
   );
 
   const fallbackUrl = useMemo(() => tradingViewFallbackRequest(symbol, win), [symbol, win]);
@@ -242,6 +243,7 @@ export function TradingViewWidget({ symbol, win, height = 520 }: { symbol: strin
             height={height}
             valueFmt={fallbackPrice}
             resetKey={`${symbol}:${win}:same-origin-fallback`}
+            clockZone={clockZone}
             tools
           />
           <span

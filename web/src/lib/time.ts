@@ -6,6 +6,43 @@ export const TIME_ZONE_OPTIONS = [
   { id: 'Europe/London', label: 'Europe' },
 ] as const;
 
+/**
+ * Resolve a persisted clock-zone preference to the canonical IANA identifier
+ * understood by Intl. Invalid preferences fail closed to UTC so a stale local
+ * storage value cannot make an entire React render throw.
+ */
+export function canonicalClockZone(clockZone: string): string {
+  const requested = !clockZone || clockZone === 'local'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : clockZone;
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: requested }).resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** Format one instant in the operator-selected clock zone. */
+export function formatClockZone(
+  timestamp: number | string | Date,
+  clockZone: string,
+  options: Intl.DateTimeFormatOptions,
+  locale = 'en-US',
+): string {
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return '—';
+  return new Intl.DateTimeFormat(locale, {
+    ...options,
+    timeZone: canonicalClockZone(clockZone),
+  }).format(date);
+}
+
+/** TradingView names UTC as Etc/UTC; other canonical IANA zones pass through. */
+export function tradingViewClockZone(clockZone: string): string {
+  const canonical = canonicalClockZone(clockZone);
+  return canonical === 'UTC' ? 'Etc/UTC' : canonical;
+}
+
 export function dayKey(date: Date, zone?: string): string {
   return date.toLocaleDateString('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
 }

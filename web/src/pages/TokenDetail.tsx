@@ -14,6 +14,7 @@ import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot }
 import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
+import { formatClockZone } from '../lib/time';
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
@@ -192,7 +193,7 @@ function Chg({ pct, children }: { pct: number | null | undefined; children?: Rea
 }
 
 /** The Coinbase chart: smooth line over a dotted area fill, axis right. */
-function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: boolean }) {
+function PriceChart({ points, up, clockZone }: { points: { t: number; v: number }[]; up: boolean; clockZone: string }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [chartWidth, setChartWidth] = useState(1080);
   useEffect(() => {
@@ -248,14 +249,13 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
     const times = Array.from({ length: 7 }, (_, i) => points[Math.round((i / 6) * (points.length - 1))].t);
     const spanMs = points[points.length - 1].t - points[0].t;
     const timeFmt = (t: number) => {
-      const dte = new Date(t);
-      if (spanMs < 864e5 * 2) return dte.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      if (spanMs < 864e5 * 400) return dte.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return dte.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      if (spanMs < 864e5 * 2) return formatClockZone(t, clockZone, { hour: 'numeric', minute: '2-digit' });
+      if (spanMs < 864e5 * 400) return formatClockZone(t, clockZone, { month: 'short', day: 'numeric' });
+      return formatClockZone(t, clockZone, { month: 'short', year: '2-digit' });
     };
     const last = xy[xy.length - 1];
     return { d, area, ticks, y, times, timeFmt, last };
-  }, [H, W, points]);
+  }, [H, W, clockZone, points]);
 
   if (!model) return <div className="tdx-chart-empty">Waiting For Candles…</div>;
   const stroke = up ? 'var(--up)' : 'var(--down)';
@@ -291,9 +291,14 @@ function fmtFull(v: number, dec = 2): string {
   return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-function tipTime(t: number): string {
-  const d = new Date(t);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+function tipTime(t: number, clockZone: string): string {
+  return formatClockZone(t, clockZone, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).replace(',', '');
 }
 
 function ChartTip({ x, w, title, rows }: { x: number; w: number; title: string; rows: { dot: string; label: string; value: string }[] }) {
@@ -626,7 +631,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
 }
 
 /* ==== TASK 3: Basis — Binance futures token data =========================== */
-function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: string; hasPerp: boolean; market: MarketRow | undefined }) {
+function BasisCard({ symbol, base, hasPerp, market, clockZone }: { symbol: string; base: string; hasPerp: boolean; market: MarketRow | undefined; clockZone: string }) {
   const [period, setPeriod] = useState<'5m' | '1h' | '4h' | '1d'>('1h');
   const [rows, setRows] = useState<BasisPoint[]>([]);
   const [hov, setHov] = useState<number | null>(null);
@@ -769,7 +774,7 @@ function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: st
               ))}
               {model.times.map((i) => (
                 <text key={`t${i}`} x={model.x(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
-                  {new Date(rows[i].t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  {formatClockZone(rows[i].t, clockZone, { hour: 'numeric', minute: '2-digit' })}
                 </text>
               ))}
             </svg>
@@ -777,7 +782,7 @@ function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: st
               <ChartTip
                 x={mouse.x}
                 w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(rows[hov].t)}
+                title={tipTime(rows[hov].t, clockZone)}
                 rows={[
                   { dot: '#F0B90B', label: 'Futures Price', value: fmtFull(rows[hov].futuresPrice, 2) },
                   { dot: 'var(--text)', label: 'Price Index', value: fmtFull(rows[hov].indexPrice, 2) },
@@ -918,7 +923,7 @@ const INTEL_TITLE: Record<IntelTab, string> = {
   basis: 'Basis',
 };
 
-function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
+function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot, clockZone }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null; clockZone: string }) {
   const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
   const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp));
   const [tab, setTab] = useState<IntelTab>(initialTab);
@@ -1176,13 +1181,13 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
               ))}
               {(tab === 'funding' || tab === 'liq' || tab === 'basis') && <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
               <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-              {model.times.map((index) => <text key={`t${index}`} x={model.xi(index)} y={H - 8} textAnchor="middle" className="tdx-axis">{new Date(points[index].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}</text>)}
+              {model.times.map((index) => <text key={`t${index}`} x={model.xi(index)} y={H - 8} textAnchor="middle" className="tdx-axis">{formatClockZone(points[index].t, clockZone, points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}</text>)}
             </svg>
             {activePoint && mouse && (
               <ChartTip
                 x={mouse.x}
                 w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(activePoint.t)}
+                title={tipTime(activePoint.t, clockZone)}
                 rows={[
                   ...(tab === 'liq'
                     ? [
@@ -1198,7 +1203,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
           <div className="tdx-legend">
             {tab === 'liq' ? <><span><i className="sw" style={{ background: 'var(--down)' }} />Long Liquidations</span><span><i className="sw" style={{ background: 'var(--up)' }} />Short Liquidations</span></> : <span><i className="sw" style={{ background: 'var(--accent)', opacity: 0.8 }} />{INTEL_TITLE[tab]}</span>}
             <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
-            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
+            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
           </div>
         </>
       )}
@@ -1215,7 +1220,7 @@ type CgxTab = 'funding' | 'oi' | 'volume' | 'liq';
 
 interface CgxPoint { t: number; a: number; b?: number }
 
-function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
+function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot, clockZone }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null; clockZone: string }) {
   const [tab, setTab] = useState<CgxTab>('volume');
   const [opt, setOpt] = useState<string>('1d');
   const [points, setPoints] = useState<CgxPoint[]>([]);
@@ -1403,7 +1408,7 @@ function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }:
       ) : !model ? (
         tab === 'liq' ? (
           <div className="tdx-cgx-empty">
-            <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${new Date(liqSince).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
+            <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
           </div>
         ) : (
           <div className="tdx-cgx-empty">
@@ -1455,7 +1460,7 @@ function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }:
               <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
               {model.times.map((i) => (
                 <text key={`t${i}`} x={model.xi(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
-                  {new Date(points[i].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
+                  {formatClockZone(points[i].t, clockZone, points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
                 </text>
               ))}
             </svg>
@@ -1463,7 +1468,7 @@ function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }:
               <ChartTip
                 x={mouse.x}
                 w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(p.t)}
+                title={tipTime(p.t, clockZone)}
                 rows={[
                   ...(tab === 'liq'
                     ? [
@@ -1486,7 +1491,7 @@ function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }:
               <span><i className="sw" style={{ background: 'var(--up)', opacity: tab === 'oi' ? 0.4 : 0.8 }} />{TAB_TITLE[tab]}</span>
             )}
             <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
-            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Upstream History</span> : null}
+            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric' })} · No Upstream History</span> : null}
           </div>
         </>
       )}
@@ -1494,7 +1499,7 @@ function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }:
   );
 }
 
-function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: string }) {
+function ProfilePanel({ profile, base, clockZone }: { profile: TokenProfile | null; base: string; clockZone: string }) {
   const [copied, setCopied] = useState<string | null>(null);
 
   const copyAddress = async (address: string) => {
@@ -1561,7 +1566,7 @@ function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: s
             </div>
           ))}
           <div><span>From All-Time High</span><strong className="down">{fmtPct(profile.athChangePct, 2)}</strong></div>
-          {profile.athDate ? <small>ATH recorded {new Date(profile.athDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</small> : null}
+          {profile.athDate ? <small>ATH recorded {formatClockZone(profile.athDate, clockZone, { month: 'short', day: 'numeric', year: 'numeric' })}</small> : null}
         </div>
       </div>
 
@@ -1591,7 +1596,7 @@ function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: s
 }
 
 export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, toggleWatch, setPage, openDetail } = useStore();
+  const { markets, state, prefs, toggleWatch, setPage, openDetail } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -1910,10 +1915,10 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </div>
           </div>
           {tv ? (
-            <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={390} />
+            <TradingViewWidget symbol={tvSymbol} win={tvInterval} clockZone={prefs.clockZone} height={390} />
           ) : (
             <div className="tdx-line-frame">
-              <PriceChart points={points} up={up} />
+              <PriceChart points={points} up={up} clockZone={prefs.clockZone} />
               {candleError ? <p className="tdx-updated" role="status">{candles.length ? 'Candle refresh unavailable · showing the last verified series.' : candleError}</p> : null}
             </div>
           )}
@@ -1922,7 +1927,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <MoneyFlowCard symbol={symbol} base={base} />
             <PositioningCard symbol={symbol} base={base} hasPerp={hasPerp} />
           </div>
-          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterestSnapshot={openInterestSnapshot} />
+          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterestSnapshot={openInterestSnapshot} clockZone={prefs.clockZone} />
         </div>
       </section>
       {chartFocus && (
@@ -1935,7 +1940,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </span>
             <button type="button" aria-label="Close Full Chart" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setChartFocus(false); }}><IconClose size={17} /></button>
           </div>
-          <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={Math.round(window.innerHeight * 0.78)} />
+          <TradingViewWidget symbol={tvSymbol} win={tvInterval} clockZone={prefs.clockZone} height={Math.round(window.innerHeight * 0.78)} />
         </div>
       )}
     </div>

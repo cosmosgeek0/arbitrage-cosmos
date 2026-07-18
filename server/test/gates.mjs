@@ -206,6 +206,7 @@ const tokenIconSource = readFileSync('web/src/components/TokenIcon.tsx', 'utf8')
 const profileSource = readFileSync('server/src/binance/profile.ts', 'utf8');
 const iconSource = readFileSync('server/src/binance/icons.ts', 'utf8');
 const liquidationSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
+const newsContextSource = readFileSync('server/src/services/newsContext.ts', 'utf8');
 const environmentSource = readFileSync('server/src/bootstrap/environment.ts', 'utf8');
 check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
@@ -257,10 +258,13 @@ check(
     /const\s+chain\s*=\s*\[resolved\]\.filter\(Boolean\)/.test(tokenIconSource)
 );
 check(
-  'browser campaign public caches default under the isolated DATA_DIR',
-  [profileSource, iconSource, liquidationSource].every((source) => (
+  'browser campaign public caches share the process-bound physical DATA_DIR authority',
+  [profileSource, iconSource, liquidationSource, newsContextSource].every((source) => (
     /resolveDataDirAuthority\(\)/.test(source)
   )) && /environment\.DATA_DIR/.test(environmentSource) &&
+    /PROCESS_DATA_DIR_AUTHORITY/.test(environmentSource) &&
+    /realpathSync\.native/.test(environmentSource) &&
+    /assertDataDirAuthorityHeld\(DATA_DIR_AUTHORITY\)/.test(serverIndex) &&
     /icon_cache\.json/.test(environmentSource) &&
     /profile_cache\.json/.test(environmentSource) &&
     /liquidations\.json/.test(environmentSource)

@@ -1,4 +1,7 @@
-import { resolveDataDirAuthority } from './bootstrap/environment.js';
+import {
+  DATA_DIR_AUTHORITY,
+  assertDataDirAuthorityHeld,
+} from './bootstrap/environment.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
@@ -116,8 +119,7 @@ const sourceLogoCache = new Map<string, SourceLogoEntry>();
 const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
 const sourceLogoFailures = new Map<string, number>();
 
-const { dataDir: canonicalDataDir } = resolveDataDirAuthority();
-fs.mkdirSync(canonicalDataDir, { recursive: true });
+const { dataDir: canonicalDataDir } = DATA_DIR_AUTHORITY;
 // This process lease is acquired before the Ledger, boot-generation mutation,
 // listeners, timers, transports, or any owner runtime can start. Lease loss is
 // a fatal fail-closed condition: continuing with uncertain writer ownership is
@@ -130,6 +132,7 @@ const dataDirLease = new DataDirLease(canonicalDataDir, Object.freeze({
 }));
 const ledger = (() => {
   try {
+    assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
     return new Ledger(canonicalDataDir);
   } catch (error) {
     try { dataDirLease.release(); } catch { /* Preserve the Ledger startup failure. */ }

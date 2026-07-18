@@ -24,6 +24,47 @@ from quant_edge.inference.transport import create_unix_server
 from .conftest import QUANT_ROOT, REPO_ROOT
 
 
+def test_test_subprocesses_have_positive_local_deadlines() -> None:
+    targets = (
+        "quant/tests/q15/test_q15_campaign.py",
+        "quant/tests/q15/test_q15_restart_chaos.py",
+        "quant/tests/q16/test_q16_generation_safety.py",
+        "quant/tests/q16/test_q16_protocol.py",
+    )
+    missing_or_invalid: list[str] = []
+    observed = 0
+    for relative_path in targets:
+        path = REPO_ROOT / relative_path
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subprocess"
+                and node.func.attr == "run"
+            ):
+                continue
+            observed += 1
+            timeout = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "timeout"),
+                None,
+            )
+            if not (
+                isinstance(timeout, ast.Constant)
+                and isinstance(timeout.value, (int, float))
+                and not isinstance(timeout.value, bool)
+                and timeout.value > 0
+            ):
+                missing_or_invalid.append(f"{relative_path}:{node.lineno}")
+
+    assert observed == 15
+    assert not missing_or_invalid, (
+        "subprocess.run calls require an explicit positive local timeout: "
+        + ", ".join(missing_or_invalid)
+    )
+
+
 def test_python_subprocesses_reuse_active_test_interpreter() -> None:
     tree = ast.parse(Path(__file__).read_text())
     python_command_heads: list[ast.expr] = []
@@ -56,6 +97,7 @@ def test_python_subprocesses_reuse_active_test_interpreter() -> None:
         check=True,
         capture_output=True,
         text=True,
+        timeout=10,
     )
     assert Path(completed.stdout.strip()).samefile(sys.executable)
 
@@ -92,6 +134,7 @@ def test_generation_is_cwd_timezone_and_hash_seed_stable(tmp_path: Path) -> None
             check=True,
             capture_output=True,
             text=True,
+            timeout=120,
         )
         outputs.append(completed.stdout)
     assert len(set(outputs)) == 1
@@ -127,6 +170,7 @@ def test_generated_clients_are_syntax_valid_and_assessment_is_protocol_canonical
     subprocess.run(
         ["node", "--check", str(QUANT_ROOT / "generated" / "q16" / "node_client_v1.mjs")],
         check=True,
+        timeout=10,
     )
     subprocess.run(
         [
@@ -136,6 +180,7 @@ def test_generated_clients_are_syntax_valid_and_assessment_is_protocol_canonical
             str(QUANT_ROOT / "generated" / "q16" / "python_client_v1.py"),
         ],
         check=True,
+        timeout=10,
     )
     assessment_raw = (QUANT_ROOT / "generated" / "q16" / "edge_assessment.v1.json").read_bytes()
     assessment = strict_json_object(assessment_raw, maximum_bytes=262_144)
@@ -369,6 +414,7 @@ console.log('strict-ok');
         check=True,
         capture_output=True,
         text=True,
+        timeout=15,
     )
     assert completed.stdout.strip() == "strict-ok"
 
@@ -513,6 +559,7 @@ else:
             str(health_response),
         ],
         check=True,
+        timeout=15,
     )
 
 
@@ -561,6 +608,7 @@ console.log(`${response.schema}:${response.payload.advisoryAction}`);
             check=True,
             capture_output=True,
             text=True,
+            timeout=15,
         )
         assert completed.stdout.strip() == ("Q16LocalInferenceResponseV1:ABSTAIN_UNKNOWN")
     finally:
@@ -614,6 +662,7 @@ try {
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         assert completed.stdout.strip() == "timeout-ok"
     finally:
@@ -676,6 +725,7 @@ else:
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         assert completed.stdout.strip() == "timeout-ok"
     finally:

@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from decimal import getcontext, localcontext
+
+import pytest
+
+from quant_edge.errors import ContractValueError
 from quant_edge.features.domains import BarV1
-from quant_edge.features.fixedpoint import FixedPointV1
-from quant_edge.lake.contracts import ExactScaledValueV1
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.labels.rational import make_ratio
+from quant_edge.lake.contracts import DigestV1, ExactScaledValueV1
 from quant_edge.micro.equivalence import run_micro_equivalence
 from quant_edge.micro.flow import (
     FLOW_WINDOW,
@@ -18,10 +24,318 @@ from quant_edge.micro.flow import (
 )
 from quant_edge.micro.inputs import JoinedTradeV1, TopOfBookPointV1, TradePointV1
 from quant_edge.micro.l1 import fp_from_fraction
+from quant_edge.micro.point_process import (
+    EVENT_KINDS,
+    PUBLIC_REMOVAL_SEMANTICS,
+    HawkesSpecV1,
+    HawkesStatus,
+    PointCoverageStatus,
+    PointEventSegmentV1,
+    PointEventSemantics,
+    PointEventV1,
+    PointEvidencePosture,
+    PointProcessStatus,
+    PublicEventKind,
+    add_intensity_feature,
+    cancel_intensity_feature,
+    exponential_intensities,
+    hawkes_assessment,
+    poisson_intensities,
+    time_rescaling_residuals,
+)
 
 BASE_NS = 1_772_000_000_000_000_000
 SECOND_NS = 1_000_000_000
 FP_ONE = 10**12
+
+
+def _point_event(ordinal: int, kind: PublicEventKind) -> PointEventV1:
+    return PointEventV1(
+        event_id=f"point-{ordinal}",
+        event_time_ns=BASE_NS + ordinal * SECOND_NS,
+        ordinal=ordinal,
+        kind=kind,
+    )
+
+
+def _point_segment(
+    events: tuple[PointEventV1, ...],
+    *,
+    segment_id: str = "public-flow-segment",
+    coverage: PointCoverageStatus = PointCoverageStatus.COMPLETE,
+    semantics: PointEventSemantics = PointEventSemantics.PUBLIC_ORDER_LIFECYCLE,
+    seconds: int = 8,
+) -> PointEventSegmentV1:
+    return PointEventSegmentV1(
+        segment_id=segment_id,
+        source_id="public-research-source",
+        source_revision="revision-v1",
+        source_sha256=DigestV1("a" * 64),
+        posture=PointEvidencePosture.PUBLIC_REPLAY_RESEARCH_ONLY,
+        coverage=coverage,
+        semantics=semantics,
+        start_ns=BASE_NS,
+        end_ns=BASE_NS + seconds * SECOND_NS,
+        events=events,
+    )
+
+
+def _hawkes_spec(*, explosive: bool = False, max_events: int = 4_096) -> HawkesSpecV1:
+    zero = FixedPointV1(0)
+    alpha = FixedPointV1(FIXED_POINT_SCALE if explosive else FIXED_POINT_SCALE // 5)
+    return HawkesSpecV1(
+        spec_id="public-flow-v1",
+        baselines=(FixedPointV1(FIXED_POINT_SCALE // 10),) * len(EVENT_KINDS),
+        excitation=tuple(
+            tuple(alpha if row == column else zero for column in range(len(EVENT_KINDS)))
+            for row in range(len(EVENT_KINDS))
+        ),
+        decay_per_second=FixedPointV1(FIXED_POINT_SCALE),
+        max_events=max_events,
+    )
+
+
+class TestPublicPointProcessFamily:
+    def test_true_cancel_is_distinct_and_requires_order_lifecycle_semantics(self) -> None:
+        assert tuple(kind.value for kind in EVENT_KINDS) == (
+            "BUY",
+            "SELL",
+            "ADD",
+            "CANCEL",
+            "REMOVE_OR_EXECUTE",
+        )
+        assert "the two intensities are distinct" in PUBLIC_REMOVAL_SEMANTICS
+        cancel = _point_event(1, PublicEventKind.CANCEL)
+        removal = _point_event(1, PublicEventKind.REMOVE_OR_EXECUTE)
+
+        with pytest.raises(ContractValueError, match="cannot identify CANCEL"):
+            _point_segment(
+                (cancel,),
+                semantics=PointEventSemantics.AGGREGATE_PUBLIC_DELTA,
+            )
+        with pytest.raises(ContractValueError, match="distinguish CANCEL"):
+            _point_segment((removal,))
+        with pytest.raises(ContractValueError, match="public/research-only"):
+            PointEventSegmentV1(
+                "bad-posture",
+                "public-source",
+                "revision-v1",
+                DigestV1("a" * 64),
+                "LIVE_PRODUCTION",  # type: ignore[arg-type]
+                PointCoverageStatus.COMPLETE,
+                PointEventSemantics.PUBLIC_ORDER_LIFECYCLE,
+                BASE_NS,
+                BASE_NS + SECOND_NS,
+                (),
+            )
+
+    def test_absent_partial_and_complete_empty_coverage_are_not_conflated(self) -> None:
+        absent = poisson_intensities(None)
+        partial = poisson_intensities(_point_segment((), coverage=PointCoverageStatus.PARTIAL))
+        complete_empty = poisson_intensities(_point_segment(()))
+
+        assert all(item.status is PointProcessStatus.DATA_INSUFFICIENT for item in absent)
+        assert all(item.events_per_second is None for item in absent)
+        assert all(item.status is PointProcessStatus.DATA_INSUFFICIENT for item in partial)
+        available_empty = tuple(
+            item for item in complete_empty if item.kind is not PublicEventKind.REMOVE_OR_EXECUTE
+        )
+        assert all(
+            item.status is PointProcessStatus.AVAILABLE_RESEARCH_ONLY for item in available_empty
+        )
+        assert all(item.count == 0 for item in available_empty)
+        assert all(
+            item.events_per_second is not None and item.events_per_second.is_zero
+            for item in available_empty
+        )
+        removal = complete_empty[-1]
+        assert removal.status is PointProcessStatus.DATA_INSUFFICIENT
+        assert removal.events_per_second is None
+        with pytest.raises(ContractValueError, match="observation window must be bounded"):
+            _point_segment((), seconds=86_401)
+
+    def test_poisson_cancel_and_aggregate_removal_intensities_are_exact_and_distinct(self) -> None:
+        lifecycle = _point_segment(
+            (
+                _point_event(1, PublicEventKind.CANCEL),
+                _point_event(2, PublicEventKind.CANCEL),
+                _point_event(3, PublicEventKind.ADD),
+            ),
+            seconds=5,
+        )
+        aggregate = _point_segment(
+            (
+                _point_event(1, PublicEventKind.REMOVE_OR_EXECUTE),
+                _point_event(2, PublicEventKind.ADD),
+            ),
+            segment_id="aggregate-segment",
+            semantics=PointEventSemantics.AGGREGATE_PUBLIC_DELTA,
+            seconds=5,
+        )
+
+        lifecycle_rates = {item.kind: item for item in poisson_intensities(lifecycle)}
+        aggregate_rates = {item.kind: item for item in poisson_intensities(aggregate)}
+
+        assert lifecycle_rates[PublicEventKind.CANCEL].count == 2
+        assert lifecycle_rates[PublicEventKind.CANCEL].events_per_second == make_ratio(2, 5)
+        assert lifecycle_rates[PublicEventKind.REMOVE_OR_EXECUTE].events_per_second is None
+        assert aggregate_rates[PublicEventKind.CANCEL].events_per_second is None
+        assert aggregate_rates[PublicEventKind.REMOVE_OR_EXECUTE].count == 1
+        assert aggregate_rates[PublicEventKind.REMOVE_OR_EXECUTE].events_per_second == make_ratio(
+            1, 5
+        )
+
+    def test_exponential_intensity_is_bounded_recency_weighted_and_deterministic(self) -> None:
+        segment = _point_segment(
+            (
+                _point_event(1, PublicEventKind.CANCEL),
+                _point_event(2, PublicEventKind.CANCEL),
+                _point_event(3, PublicEventKind.ADD),
+            ),
+            seconds=4,
+        )
+
+        first = exponential_intensities(segment, decay_ns=SECOND_NS)
+        by_kind = {item.kind: item for item in first}
+
+        assert first == exponential_intensities(segment, decay_ns=SECOND_NS)
+        cancel = by_kind[PublicEventKind.CANCEL].weighted_count
+        add = by_kind[PublicEventKind.ADD].weighted_count
+        assert cancel is not None
+        assert 0 < cancel.mantissa < 2 * FIXED_POINT_SCALE
+        assert add is not None
+        assert 0 < add.mantissa < FIXED_POINT_SCALE
+        assert by_kind[PublicEventKind.REMOVE_OR_EXECUTE].weighted_count is None
+
+    def test_decimal_results_ignore_and_restore_hostile_ambient_precision(self) -> None:
+        segment = _point_segment(
+            (
+                _point_event(1, PublicEventKind.BUY),
+                _point_event(2, PublicEventKind.SELL),
+                _point_event(3, PublicEventKind.CANCEL),
+            ),
+            seconds=4,
+        )
+        original = getcontext().copy()
+
+        with localcontext() as ambient:
+            ambient.prec = 6
+            low_precision = (
+                exponential_intensities(
+                    segment,
+                    decay_ns=3 * SECOND_NS,
+                ),
+                time_rescaling_residuals(segment, spec=_hawkes_spec()),
+            )
+            assert getcontext().prec == 6
+
+            ambient.prec = 28
+            ordinary_precision = (
+                exponential_intensities(
+                    segment,
+                    decay_ns=3 * SECOND_NS,
+                ),
+                time_rescaling_residuals(segment, spec=_hawkes_spec()),
+            )
+            assert getcontext().prec == 28
+
+        assert low_precision == ordinary_precision
+        assert getcontext().prec == original.prec
+        assert getcontext().rounding == original.rounding
+        assert getcontext().flags == original.flags
+        assert getcontext().traps == original.traps
+
+    def test_stable_multivariate_hawkes_exposes_challenger_intensities(self) -> None:
+        events = tuple(_point_event(index, kind) for index, kind in enumerate(EVENT_KINDS[:-1], 1))
+        segment = _point_segment(events, seconds=6)
+
+        assessment = hawkes_assessment(segment, spec=_hawkes_spec())
+
+        assert assessment.status is HawkesStatus.STABLE_CHALLENGER
+        assert all(row.numerator < row.denominator for row in assessment.branching_row_sums)
+        assert assessment.unavailable_kinds == (PublicEventKind.REMOVE_OR_EXECUTE,)
+        assert all(
+            value is not None and value.mantissa > 0 for value in assessment.intensities[:-1]
+        )
+        assert assessment.intensities[-1] is None
+
+    def test_explosive_fit_is_rejected_before_intensity_or_residual_output(self) -> None:
+        segment = _point_segment(
+            (
+                _point_event(1, PublicEventKind.BUY),
+                _point_event(2, PublicEventKind.SELL),
+            )
+        )
+        spec = _hawkes_spec(explosive=True)
+
+        assessment = hawkes_assessment(segment, spec=spec)
+        residuals = time_rescaling_residuals(segment, spec=spec)
+
+        assert assessment.status is HawkesStatus.REJECTED_EXPLOSIVE
+        assert assessment.intensities == (None,) * len(EVENT_KINDS)
+        assert residuals.status is HawkesStatus.REJECTED_EXPLOSIVE
+        assert residuals.compensator_increments == ()
+
+    def test_time_rescaling_is_positive_and_hostile_order_and_capacity_fail_closed(self) -> None:
+        events = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(2, PublicEventKind.SELL),
+            _point_event(3, PublicEventKind.ADD),
+        )
+        segment = _point_segment(events)
+
+        report = time_rescaling_residuals(segment, spec=_hawkes_spec())
+
+        assert report.status is HawkesStatus.STABLE_CHALLENGER
+        assert len(report.compensator_increments) == 2
+        assert all(value.mantissa > 0 for value in report.compensator_increments)
+        assert report == time_rescaling_residuals(segment, spec=_hawkes_spec())
+        with pytest.raises(ContractValueError, match="strictly chronological"):
+            _point_segment((events[1], events[0]))
+        with pytest.raises(ContractValueError, match="bounded at 2"):
+            hawkes_assessment(segment, spec=_hawkes_spec(max_events=2))
+
+    def test_duplicate_identity_and_sequence_gap_fail_closed(self) -> None:
+        duplicate = (
+            _point_event(1, PublicEventKind.BUY),
+            PointEventV1("point-1", BASE_NS + 2 * SECOND_NS, 2, PublicEventKind.SELL),
+        )
+        with pytest.raises(ContractValueError, match="identifiers must be unique"):
+            _point_segment(duplicate)
+
+        gap = (
+            _point_event(1, PublicEventKind.BUY),
+            _point_event(3, PublicEventKind.SELL),
+        )
+        with pytest.raises(ContractValueError, match="gap-free"):
+            _point_segment(gap)
+
+    def test_cancel_and_add_features_are_canonical_equivalent_and_unknown_when_partial(
+        self,
+    ) -> None:
+        complete = _point_segment(
+            (
+                _point_event(1, PublicEventKind.ADD),
+                _point_event(2, PublicEventKind.CANCEL),
+                _point_event(3, PublicEventKind.CANCEL),
+            )
+        )
+        partial = _point_segment(
+            (),
+            segment_id="partial-segment",
+            coverage=PointCoverageStatus.PARTIAL,
+        )
+        segments = (complete, partial, _point_segment((), segment_id="complete-empty"))
+
+        cancel_report = run_micro_equivalence(cancel_intensity_feature(), segments)
+        add_report = run_micro_equivalence(add_intensity_feature(), segments)
+
+        assert cancel_report.passed
+        assert add_report.passed
+        assert cancel_report.feature_id == "cancel_intensity:v1"
+        assert add_report.feature_id == "add_intensity:v1"
+        assert cancel_report.compared_values == 2
+        assert add_report.compared_values == 2
 
 
 def _scaled(coefficient: int) -> ExactScaledValueV1:

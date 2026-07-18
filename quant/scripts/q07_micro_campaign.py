@@ -27,7 +27,7 @@ from pathlib import Path
 from quant_edge.canonical import canonical_json_bytes
 from quant_edge.features.domains import BarV1
 from quant_edge.features.registry import FeatureRegistryV1, render_registry_markdown
-from quant_edge.lake.contracts import EvidencePosture, ExactScaledValueV1
+from quant_edge.lake.contracts import DigestV1, EvidencePosture, ExactScaledValueV1
 from quant_edge.micro.activity import (
     ActivityObservationV1,
     activity_surprise_feature,
@@ -73,6 +73,16 @@ from quant_edge.micro.l1 import (
     l1_queue_imbalance_feature,
     microprice_displacement_feature,
     ofi_l1_feature,
+)
+from quant_edge.micro.point_process import (
+    PointCoverageStatus,
+    PointEventSegmentV1,
+    PointEventSemantics,
+    PointEventV1,
+    PointEvidencePosture,
+    PublicEventKind,
+    add_intensity_feature,
+    cancel_intensity_feature,
 )
 from quant_edge.randomness import DeterministicRandom
 
@@ -207,6 +217,45 @@ def _golden_activity() -> tuple[ActivityObservationV1, ...]:
     )
 
 
+def _golden_point_segments() -> tuple[PointEventSegmentV1, ...]:
+    segments: list[PointEventSegmentV1] = []
+    for segment_index in range(12):
+        start_ns = BASE_NS + segment_index * 12 * SECOND_NS
+        kinds = (
+            ()
+            if segment_index == 5
+            else (
+                PublicEventKind.ADD,
+                PublicEventKind.CANCEL,
+                PublicEventKind.BUY,
+                PublicEventKind.CANCEL,
+            )
+        )
+        segments.append(
+            PointEventSegmentV1(
+                segment_id=f"q07-golden-point-{segment_index:02d}",
+                source_id="q07-golden-public-lifecycle",
+                source_revision="synthetic-v1",
+                source_sha256=DigestV1("7" * 64),
+                posture=PointEvidencePosture.SYNTHETIC_RESEARCH_ONLY,
+                coverage=PointCoverageStatus.COMPLETE,
+                semantics=PointEventSemantics.PUBLIC_ORDER_LIFECYCLE,
+                start_ns=start_ns,
+                end_ns=start_ns + 10 * SECOND_NS,
+                events=tuple(
+                    PointEventV1(
+                        event_id=f"q07-golden-point-{segment_index:02d}-{ordinal:02d}",
+                        event_time_ns=start_ns + ordinal * SECOND_NS,
+                        ordinal=ordinal,
+                        kind=kind,
+                    )
+                    for ordinal, kind in enumerate(kinds, 1)
+                ),
+            )
+        )
+    return tuple(segments)
+
+
 def _seeded_quotes(rng: DeterministicRandom) -> tuple[TopOfBookPointV1, ...]:
     points = []
     bid = 5_000 + int(rng.next_u64() % 10_000)
@@ -323,6 +372,44 @@ def _seeded_activity(rng: DeterministicRandom) -> tuple[ActivityObservationV1, .
     )
 
 
+def _seeded_point_segments(
+    rng: DeterministicRandom,
+) -> tuple[PointEventSegmentV1, ...]:
+    segments: list[PointEventSegmentV1] = []
+    lifecycle_kinds = (
+        PublicEventKind.BUY,
+        PublicEventKind.SELL,
+        PublicEventKind.ADD,
+        PublicEventKind.CANCEL,
+    )
+    for segment_index in range(8 + int(rng.next_u64() % 9)):
+        start_ns = BASE_NS + segment_index * 12 * SECOND_NS
+        event_count = int(rng.next_u64() % 8)
+        segments.append(
+            PointEventSegmentV1(
+                segment_id=f"q07-seeded-point-{segment_index:02d}",
+                source_id="q07-seeded-public-lifecycle",
+                source_revision="synthetic-v1",
+                source_sha256=DigestV1("8" * 64),
+                posture=PointEvidencePosture.SYNTHETIC_RESEARCH_ONLY,
+                coverage=PointCoverageStatus.COMPLETE,
+                semantics=PointEventSemantics.PUBLIC_ORDER_LIFECYCLE,
+                start_ns=start_ns,
+                end_ns=start_ns + 10 * SECOND_NS,
+                events=tuple(
+                    PointEventV1(
+                        event_id=f"q07-seeded-point-{segment_index:02d}-{ordinal:02d}",
+                        event_time_ns=start_ns + ordinal * SECOND_NS,
+                        ordinal=ordinal,
+                        kind=lifecycle_kinds[int(rng.next_u64() % len(lifecycle_kinds))],
+                    )
+                    for ordinal in range(1, event_count + 1)
+                ),
+            )
+        )
+    return tuple(segments)
+
+
 def _quote_features() -> tuple[MicroFeatureImplementationV1[TopOfBookPointV1], ...]:
     return (ofi_l1_feature(), l1_queue_imbalance_feature(), microprice_displacement_feature())
 
@@ -353,12 +440,17 @@ def _activity_features() -> tuple[MicroFeatureImplementationV1[ActivityObservati
     return (activity_surprise_feature(),)
 
 
+def _point_features() -> tuple[MicroFeatureImplementationV1[PointEventSegmentV1], ...]:
+    return (add_intensity_feature(), cancel_intensity_feature())
+
+
 def _run_all(
     quotes: tuple[TopOfBookPointV1, ...],
     ladders: tuple[LadderSnapshotV1, ...],
     joined: tuple[JoinedTradeV1, ...],
     bars: tuple[BarV1, ...],
     activity: tuple[ActivityObservationV1, ...],
+    point_segments: tuple[PointEventSegmentV1, ...],
 ) -> list[MicroEquivalenceReportV1]:
     reports: list[MicroEquivalenceReportV1] = []
     reports.extend(run_micro_equivalence(impl, quotes) for impl in _quote_features())
@@ -366,6 +458,7 @@ def _run_all(
     reports.extend(run_micro_equivalence(impl, joined) for impl in _trade_features())
     reports.append(run_micro_equivalence(amihud_illiquidity_feature(), bars))
     reports.extend(run_micro_equivalence(impl, activity) for impl in _activity_features())
+    reports.extend(run_micro_equivalence(impl, point_segments) for impl in _point_features())
     return reports
 
 
@@ -375,6 +468,7 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
     all_cards.extend(impl.card for impl in _trade_features())
     all_cards.append(amihud_illiquidity_feature().card)
     all_cards.extend(impl.card for impl in _activity_features())
+    all_cards.extend(impl.card for impl in _point_features())
     registry = FeatureRegistryV1(
         registry_version="q07-micro-v1",
         cards=tuple(sorted(all_cards, key=lambda card: card.feature_id)),
@@ -386,6 +480,7 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
         _golden_joined(),
         _golden_bars(),
         _golden_activity(),
+        _golden_point_segments(),
     )
     for report in golden_reports:
         if not report.passed:
@@ -401,7 +496,8 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
         joined = _seeded_joined(rng)
         bars = _seeded_bars(rng)
         activity = _seeded_activity(rng)
-        for report in _run_all(quotes, ladders, joined, bars, activity):
+        point_segments = _seeded_point_segments(rng)
+        for report in _run_all(quotes, ladders, joined, bars, activity, point_segments):
             if not report.passed:
                 raise ValueError(
                     f"seeded equivalence failed for {report.feature_id} in scenario {index}"
@@ -420,6 +516,7 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
                 "bars": len(bars),
                 "joinedTrades": len(joined),
                 "ladders": len(ladders),
+                "pointSegments": len(point_segments),
                 "quotes": len(quotes),
                 "scenario": index,
             }
@@ -501,12 +598,14 @@ def wall_time_evidence() -> list[str]:
     joined = _golden_joined()
     bars = _golden_bars()
     activity = _golden_activity()
+    point_segments = _golden_point_segments()
     lines = ["# environment-specific wall-time evidence (non-deterministic, informational)"]
     lines.extend(_time_streaming(impl, quotes) for impl in _quote_features())
     lines.extend(_time_streaming(impl, ladders) for impl in _ladder_features())
     lines.extend(_time_streaming(impl, joined) for impl in _trade_features())
     lines.append(_time_streaming(amihud_illiquidity_feature(), bars))
     lines.extend(_time_streaming(impl, activity) for impl in _activity_features())
+    lines.extend(_time_streaming(impl, point_segments) for impl in _point_features())
     return lines
 
 

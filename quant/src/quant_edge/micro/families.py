@@ -133,9 +133,13 @@ SECTION_13_1_DISPOSITIONS: Final[tuple[FamilyRecordV1, ...]] = (
     FamilyRecordV1(
         bullet_id="13.1-10-cancel-add-intensity",
         bullet="cancellation/addition intensity where reconstructable from L2",
-        disposition=FamilyDisposition.BLOCKED_DATA,
-        reason=_SNAPSHOT_LIMIT,
-        implemented_features=(),
+        disposition=FamilyDisposition.ADAPT,
+        reason=(
+            "exact rates require bounded COMPLETE public event segments; CANCEL is "
+            "accepted only from order-lifecycle evidence, while anonymous snapshot "
+            "depth loss remains REMOVE_OR_EXECUTE and never impersonates cancellation"
+        ),
+        implemented_features=("add_intensity:v1", "cancel_intensity:v1"),
     ),
     FamilyRecordV1(
         bullet_id="13.1-11-wall-persistence",

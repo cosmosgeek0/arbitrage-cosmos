@@ -16,9 +16,11 @@ from quant_edge.micro import (
     TopOfBookPointV1,
     absorption_ratio_feature,
     activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     disposition_table_digest,
@@ -48,9 +50,11 @@ from quant_edge.micro.activity import (
 ALL_FEATURE_FACTORIES = (
     absorption_ratio_feature,
     activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     effective_spread_feature,
@@ -284,7 +288,7 @@ class TestSection131Table:
             for feature_id in record.implemented_features
         }
 
-        assert len(library_ids) == 17
+        assert len(library_ids) == 19
         assert table_ids == library_ids
 
     def test_unimplemented_families_name_their_reason(self) -> None:
@@ -295,7 +299,7 @@ class TestSection131Table:
             in (FamilyDisposition.BLOCKED_DATA, FamilyDisposition.REFERENCE_ONLY)
         ]
 
-        assert len(blocked) == 4
+        assert len(blocked) == 3
         for record in blocked:
             assert not record.implemented_features
             assert len(record.reason) > 20

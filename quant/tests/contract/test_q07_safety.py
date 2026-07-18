@@ -29,6 +29,7 @@ from quant_edge.micro.l1 import (
     microprice_displacement_feature,
     ofi_l1_feature,
 )
+from quant_edge.micro.point_process import add_intensity_feature, cancel_intensity_feature
 
 QUANT_ROOT = Path(__file__).resolve().parents[2]
 MICRO_SOURCES = tuple(
@@ -42,6 +43,7 @@ MICRO_SOURCES = tuple(
         "flow.py",
         "families.py",
         "activity.py",
+        "point_process.py",
     )
 )
 CAMPAIGN_SCRIPT = QUANT_ROOT / "scripts" / "q07_micro_campaign.py"
@@ -49,9 +51,11 @@ CAMPAIGN_SCRIPT = QUANT_ROOT / "scripts" / "q07_micro_campaign.py"
 ALL_FEATURE_FACTORIES = (
     absorption_ratio_feature,
     activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     effective_spread_feature,

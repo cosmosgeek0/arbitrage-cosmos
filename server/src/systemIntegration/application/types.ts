@@ -82,6 +82,8 @@ export interface SystemIntegrationApplicationOptions {
   }>;
   /** Existing Capital/config owners expose only downward size-ceiling application. */
   readonly sizeCeilings?: Readonly<Partial<Record<'SYSTEM' | 'BASIS' | 'VOLUME', SizeCeilingOwnerPort>>>;
+  /** Closed, approved threshold catalog; strategy runtimes remain the config owners. */
+  readonly strategyThresholds?: Readonly<Partial<Record<'BASIS' | 'VOLUME', StrategyThresholdOwnerPort>>>;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
@@ -123,6 +125,20 @@ export interface SizeCeilingControlReadback {
   readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
   readonly desiredMaximumNotionalUsd: string | null;
   readonly effectiveMaximumNotionalUsd: string | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface StrategyThresholdOwnerPort {
+  readThreshold(): string | null;
+  setThreshold(value: string): boolean;
+}
+
+export interface StrategyThresholdControlReadback {
+  readonly strategy: 'BASIS' | 'VOLUME';
+  readonly threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+  readonly desiredValue: string | null;
+  readonly effectiveValue: string | null;
   readonly controlRevision: number;
   readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
 }
@@ -198,6 +214,7 @@ export interface SystemIntegrationApplicationFacade {
     symbol: string,
   ): Readonly<StrategySymbolPolicyControlReadback>;
   sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback>;
+  strategyThresholdState(strategy: 'BASIS' | 'VOLUME'): Readonly<StrategyThresholdControlReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

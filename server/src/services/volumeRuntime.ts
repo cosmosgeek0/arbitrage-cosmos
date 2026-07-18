@@ -242,6 +242,19 @@ export class VolumeRuntime {
     return this.engine.setSuggestedNotionalUsd(numeric);
   }
 
+  strategyThreshold(): string | null {
+    try { return normalizeNonNegativeExactDecimal(String(this.engine.cfg.vol1sMultiple)); } catch { return null; }
+  }
+
+  setStrategyThreshold(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    const numeric = Number(canonical);
+    if (canonical !== value || !Number.isFinite(numeric) || numeric < 1 || numeric > 100 || String(numeric) !== canonical) {
+      throw new RangeError('Volume 1s threshold is invalid or inexact at the legacy boundary');
+    }
+    return this.engine.setVolume1sMultiple(numeric);
+  }
+
   private async refreshUniverse(generation: number): Promise<void> {
     if (!this.isActive(generation)) return;
     const config = this.readConfig();

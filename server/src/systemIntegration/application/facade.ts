@@ -88,6 +88,7 @@ import type {
   StrategyIntakeControlReadback,
   StrategySymbolPolicyControlReadback,
   SizeCeilingControlReadback,
+  StrategyThresholdControlReadback,
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
@@ -290,6 +291,32 @@ function failedCommand(
     recommendedOperatorAction: 'Use the authenticated control shell after startup persistence is healthy.',
     correlationId: correlationId('system-application-command', nowMs),
   }));
+}
+
+function thresholdIdentity(strategy: 'BASIS' | 'VOLUME'): Readonly<{
+  threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+  field: 'basisMinNetPct' | 'volume1sMultiple';
+}> {
+  return strategy === 'BASIS'
+    ? Object.freeze({ threshold: 'MIN_NET_BASIS_PCT', field: 'basisMinNetPct' })
+    : Object.freeze({ threshold: 'VOLUME_1S_MULTIPLE', field: 'volume1sMultiple' });
+}
+
+function canonicalStrategyThreshold(strategy: 'BASIS' | 'VOLUME', value: unknown): NonNegativeDecimal {
+  if (typeof value !== 'string'
+    || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(value)
+    || value.replace('.', '').length > 12) {
+    throw new TypeError('strategy threshold must be a bounded canonical positive decimal');
+  }
+  const canonical = normalizeNonNegativeExactDecimal(value);
+  const numeric = Number(canonical);
+  const bounded = strategy === 'BASIS'
+    ? numeric >= 0.01 && numeric <= 100
+    : numeric >= 1 && numeric <= 100;
+  if (canonical !== value || !Number.isFinite(numeric) || String(numeric) !== canonical || !bounded) {
+    throw new TypeError('strategy threshold is outside the approved exact range');
+  }
+  return canonical;
 }
 
 /**
@@ -651,6 +678,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreStrategyThresholds(current.value.strategyThresholds)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_THRESHOLD_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -862,6 +905,16 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       try {
         const effective = owner.readCeiling();
         return effective === request.mutation.maximumNotionalUsd ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'SET_STRATEGY_THRESHOLD') {
+      const owner = this.options.strategyThresholds?.[request.mutation.strategy];
+      if (!owner || typeof owner.readThreshold !== 'function') return 'UNKNOWN';
+      try {
+        const effective = owner.readThreshold();
+        return effective === request.mutation.value ? 'APPLIED' : 'NOT_APPLIED';
       } catch {
         return 'UNKNOWN';
       }
@@ -1084,6 +1137,52 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         desired !== target || effective !== target,
       );
     }
+    if (mutation.command === 'SET_STRATEGY_THRESHOLD') {
+      const identity = thresholdIdentity(mutation.strategy);
+      if (mutation.threshold !== identity.threshold) {
+        return this.decision(false, 'STRATEGY_THRESHOLD_PAIR_INVALID', 'The requested threshold is not owned by this strategy.', false);
+      }
+      const owner = this.options.strategyThresholds?.[mutation.strategy];
+      if (!owner || typeof owner.readThreshold !== 'function' || typeof owner.setThreshold !== 'function') {
+        return this.decision(false, 'STRATEGY_THRESHOLD_OWNER_NOT_WIRED', 'Canonical strategy threshold owner is unavailable.', false);
+      }
+      let target: NonNegativeDecimal;
+      let effective: NonNegativeDecimal;
+      try {
+        target = canonicalStrategyThreshold(mutation.strategy, mutation.value);
+        const read = owner.readThreshold();
+        if (read === null) throw new TypeError('strategy threshold unavailable');
+        effective = canonicalStrategyThreshold(mutation.strategy, read);
+      } catch {
+        return this.decision(false, 'STRATEGY_THRESHOLD_EFFECT_UNAVAILABLE', 'Canonical exact strategy threshold readback is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'STRATEGY_THRESHOLD_DESIRED_STATE_UNAVAILABLE', 'Durable strategy threshold posture is unavailable.', false);
+      }
+      let desired: NonNegativeDecimal | null = null;
+      try {
+        const desiredRaw = persisted.strategyThresholds[identity.field];
+        desired = desiredRaw === null ? null : canonicalStrategyThreshold(mutation.strategy, desiredRaw);
+      } catch {
+        return this.decision(false, 'STRATEGY_THRESHOLD_DESIRED_STATE_UNAVAILABLE', 'Durable exact strategy threshold posture is invalid.', false);
+      }
+      const riskIncreasing = compareExactDecimals(target, effective) < 0
+        || (desired !== null && compareExactDecimals(target, desired) < 0);
+      if (riskIncreasing && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'A strategy threshold cannot be lowered while a stricter global posture is active.', false);
+      }
+      if (riskIncreasing && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'A strategy threshold cannot be lowered until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'STRATEGY_THRESHOLD_ACCEPTED',
+        '',
+        desired !== target || effective !== target,
+        riskIncreasing,
+      );
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -1167,6 +1266,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         const owner = this.options.sizeCeilings?.[mutation.scope];
         if (!owner || typeof owner.setCeiling !== 'function') throw new Error('SIZE_CEILING_OWNER_NOT_WIRED');
         owner.setCeiling(mutation.maximumNotionalUsd);
+      } else if (mutation.command === 'SET_STRATEGY_THRESHOLD') {
+        const owner = this.options.strategyThresholds?.[mutation.strategy];
+        if (!owner || typeof owner.setThreshold !== 'function') throw new Error('STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
+        owner.setThreshold(mutation.value);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -1342,6 +1445,36 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
   }
 
+  strategyThresholdState(strategy: 'BASIS' | 'VOLUME'): Readonly<StrategyThresholdControlReadback> {
+    const identity = thresholdIdentity(strategy);
+    const checkpoint = this.checkpoint();
+    const desiredValue = checkpoint?.strategyThresholds[identity.field] ?? null;
+    const owner = this.options.strategyThresholds?.[strategy];
+    const base = {
+      strategy,
+      threshold: identity.threshold,
+      desiredValue,
+      controlRevision: this.controls.snapshot().revision,
+    } as const;
+    if (!owner || typeof owner.readThreshold !== 'function') {
+      return Object.freeze({ ...base, effectiveValue: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const read = owner.readThreshold();
+      if (read === null) throw new TypeError('strategy threshold readback unavailable');
+      const effectiveValue = canonicalStrategyThreshold(strategy, read);
+      return Object.freeze({
+        ...base,
+        effectiveValue,
+        state: desiredValue !== null && desiredValue === effectiveValue
+          && pending.ok && pending.value.length === 0 ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveValue: null, state: 'UNAVAILABLE' });
+    }
+  }
+
   private restoreStrategyIntake(
     posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
   ): boolean {
@@ -1407,6 +1540,26 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         ) > 0) return false;
         owner.setCeiling(desired);
         if (owner.readCeiling() !== desired) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreStrategyThresholds(
+    thresholds: Readonly<{ basisMinNetPct: string | null; volume1sMultiple: string | null }>,
+  ): boolean {
+    for (const strategy of ['BASIS', 'VOLUME'] as const) {
+      const identity = thresholdIdentity(strategy);
+      const desired = thresholds[identity.field];
+      if (desired === null) continue;
+      const owner = this.options.strategyThresholds?.[strategy];
+      if (!owner || typeof owner.readThreshold !== 'function' || typeof owner.setThreshold !== 'function') return false;
+      try {
+        if (canonicalStrategyThreshold(strategy, desired) !== desired) return false;
+        owner.setThreshold(desired);
+        if (owner.readThreshold() !== desired) return false;
       } catch {
         return false;
       }

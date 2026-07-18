@@ -90,6 +90,25 @@ export function validateControlMutation(value: unknown): MutationValidation {
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     }
+    case 'SET_STRATEGY_THRESHOLD': {
+      const decimal = value.value;
+      const pairValid = (value.strategy === 'BASIS' && value.threshold === 'MIN_NET_BASIS_PCT')
+        || (value.strategy === 'VOLUME' && value.threshold === 'VOLUME_1S_MULTIPLE');
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const bounded = value.strategy === 'BASIS'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (!exactKeys(value, ['command', 'strategy', 'threshold', 'value'])
+        || !pairValid
+        || typeof decimal !== 'string'
+        || !POSITIVE_EXACT_DECIMAL_PATTERN.test(decimal)
+        || decimal.replace('.', '').length > 12
+        || !Number.isFinite(numeric)
+        || !bounded) {
+        return invalid('Strategy threshold requires one approved strategy/key pair and a bounded canonical value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    }
     case 'SET_SAFE_MODE':
       if (!exactKeys(value, ['command', 'safeMode']) || typeof value.safeMode !== 'string') {
         return invalid('Mode mutation requires one safeMode value.');

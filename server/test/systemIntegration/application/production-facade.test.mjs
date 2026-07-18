@@ -220,6 +220,11 @@ function fixture(options = {}) {
     VOLUME: options.initialVolumeSizeCeiling ?? '10',
   };
   const sizeCeilingOrder = [];
+  const strategyThresholdState = {
+    BASIS: options.initialBasisThreshold ?? '0.25',
+    VOLUME: options.initialVolumeThreshold ?? '3',
+  };
+  const strategyThresholdOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -300,6 +305,30 @@ function fixture(options = {}) {
           return changed;
         },
       })]),
+    )),
+    strategyThresholds: Object.freeze(Object.fromEntries(
+      ['BASIS', 'VOLUME']
+        .filter((strategy) => options.strategyThresholdOwnerUnavailable !== strategy)
+        .map((strategy) => [strategy, Object.freeze({
+          readThreshold: () => {
+            if (options.strategyThresholdReadUnavailable === strategy) return null;
+            if (options.strategyThresholdReadThrows === strategy) throw new Error(`deterministic ${strategy} threshold read failure`);
+            return strategyThresholdState[strategy];
+          },
+          setThreshold: (value) => {
+            strategyThresholdOrder.push(`${strategy}:${value}`);
+            order.push(`threshold:set:${strategy}:${value}`);
+            if (options.strategyThresholdRestoreThrows === strategy) throw new Error(`deterministic ${strategy} threshold restore failure`);
+            const numeric = Number(value);
+            const valid = strategy === 'BASIS'
+              ? numeric >= 0.01 && numeric <= 100
+              : numeric >= 1 && numeric <= 100;
+            if (!Number.isFinite(numeric) || !valid) throw new Error('strategy threshold outside owner range');
+            const changed = strategyThresholdState[strategy] !== value;
+            strategyThresholdState[strategy] = value;
+            return changed;
+          },
+        })]),
     )),
     ...(options.traces ? { traces: options.traces } : {}),
     lifecycleTruth: {
@@ -394,6 +423,8 @@ function fixture(options = {}) {
     strategySymbolPolicyOrder,
     sizeCeilingState,
     sizeCeilingOrder,
+    strategyThresholdState,
+    strategyThresholdOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -668,6 +699,114 @@ test('MIS-074 reduces exact Capital/config size ceilings only and reports unavai
   assert.equal(failedStart.ok, false, 'restart restore cannot widen a stricter runtime owner');
   assert.equal(failedStart.phase, 'FAILED');
   assert.equal(widenedRuntime.states.market.starts, 0);
+});
+
+test('MIS-076 mutates only approved versioned strategy thresholds, guards lowering, and restores exact owner state', async () => {
+  for (const hostile of [
+    { strategy: 'BASIS', threshold: 'VOLUME_1S_MULTIPLE', value: '1' },
+    { strategy: 'VOLUME', threshold: 'MIN_NET_BASIS_PCT', value: '1' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '0.009' },
+    { strategy: 'VOLUME', threshold: 'VOLUME_1S_MULTIPLE', value: '101' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '1e-2' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '0.10' },
+  ]) {
+    assert.equal(parseControlBody({
+      command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+      reason: 'hostile closed-catalog threshold', ...hostile,
+    }).ok, false, JSON.stringify(hostile));
+  }
+  assert.equal(parseControlBody({
+    command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+    reason: 'reject arbitrary payload expansion', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5', arbitrary: true,
+  }).ok, false);
+  assert.equal(parseControlBody({
+    command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+    reason: 'approved bounded threshold', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }).ok, true);
+
+  const restartTruth = Object.freeze({
+    publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0,
+  });
+  const first = fixture({ externalKill: false, restartTruth });
+  assert.equal(first.app.start().ok, true);
+  assert.deepEqual(first.app.strategyThresholdState('BASIS'), {
+    strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', desiredValue: null,
+    effectiveValue: '0.25', controlRevision: 0, state: 'UNAVAILABLE',
+  });
+
+  const raised = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }, 'basis-threshold-raise'), ACTOR);
+  assert.equal(raised.ok, true, 'raising a selectivity threshold is risk-reducing');
+  assert.equal(first.strategyThresholdState.BASIS, '0.5');
+
+  const stale = validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'VOLUME',
+    threshold: 'VOLUME_1S_MULTIPLE', value: '4',
+  }, 'volume-threshold-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const guarded = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.2',
+  }, 'basis-threshold-lower-guarded'), ACTOR);
+  assert.equal(guarded.ok, false);
+  assert.equal(guarded.failure.code, 'EFFECTIVE_INTAKE_PAUSED');
+  assert.equal(first.strategyThresholdState.BASIS, '0.5');
+
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_KILL_SWITCH', engaged: false,
+  }, 'threshold-release-kill'), ACTOR)).ok, true);
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_INTAKE_PAUSED', paused: false,
+  }, 'threshold-release-intake'), ACTOR)).ok, true);
+  const lowered = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.2',
+  }, 'basis-threshold-lower'), ACTOR);
+  assert.equal(lowered.ok, true);
+  const volumeRaised = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'VOLUME',
+    threshold: 'VOLUME_1S_MULTIPLE', value: '4',
+  }, 'volume-threshold-raise'), ACTOR);
+  assert.equal(volumeRaised.ok, true);
+
+  assert.deepEqual(first.app.strategyThresholdState('BASIS'), {
+    strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', desiredValue: '0.2',
+    effectiveValue: '0.2', controlRevision: 5, state: 'APPLIED',
+  });
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.strategyThresholds, { basisMinNetPct: '0.2', volume1sMultiple: '4' });
+
+  const recovered = fixture({ ledger: first.ledger, externalKill: false });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.strategyThresholdOrder, ['BASIS:0.2', 'VOLUME:4']);
+  assert.deepEqual(recovered.strategyThresholdState, { BASIS: '0.2', VOLUME: '4' });
+  await drive(recovered, 4);
+  assert.ok(recovered.order.indexOf('runtime:start:basis') > recovered.order.indexOf('threshold:set:BASIS:0.2'));
+
+  const failed = fixture({ ledger: first.ledger, externalKill: false, strategyThresholdRestoreThrows: 'VOLUME' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+
+  const unavailable = fixture({ strategyThresholdOwnerUnavailable: 'BASIS' });
+  assert.equal(unavailable.app.start().ok, true);
+  const refused = await unavailable.app.controls.mutate(validControlRequest(unavailable, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }, 'basis-threshold-owner-unavailable'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
+  assert.equal(unavailable.app.strategyThresholdState('BASIS').state, 'OWNER_NOT_WIRED');
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {

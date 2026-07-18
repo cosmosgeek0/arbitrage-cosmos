@@ -164,6 +164,27 @@ export class VolumeEngine {
     return true;
   }
 
+  setVolume1sMultiple(value: number): boolean {
+    if (!Number.isFinite(value) || value < 1 || value > 100) {
+      throw new RangeError('volume 1s threshold must be within 1..100');
+    }
+    if (this.cfg.vol1sMultiple === value) return false;
+    this.cfg.vol1sMultiple = value;
+    this.proposalStore.expireAll('config_changed');
+    this.features.invalidateThresholdDerivedState();
+    this.focusMgr.invalidateThresholdDerivedState();
+    this.decisionsRing = [];
+    this.signalCorrelation.clear();
+    this.lastDecisionKey.clear();
+    this.lastDecisionPersistedAt.clear();
+    this.sink.emit(makeEvent(
+      'heartbeat', this.clock.now(), newCorrelationId(this.clock, 've'),
+      'volume threshold revised; signal-derived state reset',
+      { payload: { threshold: 'VOLUME_1S_MULTIPLE', value } },
+    ));
+    return true;
+  }
+
   pin(symbol: string, pinned = true): void {
     if (!this.universeMap.get(symbol)?.eligible || !this.features.observe(symbol)) return;
     this.focusMgr.pin(symbol, pinned);

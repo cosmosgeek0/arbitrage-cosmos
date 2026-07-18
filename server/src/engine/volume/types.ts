@@ -142,7 +142,8 @@ export type InvalidationReason =
   | 'capacity_pruned'
   | 'intake_paused'
   | 'symbol_blocked'
-  | 'size_ceiling_changed';
+  | 'size_ceiling_changed'
+  | 'config_changed';
 
 export interface InvalidationRule {
   /** 60s volume multiple at/below this ⇒ volume_normalized */

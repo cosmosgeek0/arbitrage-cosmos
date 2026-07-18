@@ -96,6 +96,14 @@ export class VolumeFeatureEngine {
     return [...this.state.keys()];
   }
 
+  /** Retain raw public observations while discarding threshold-derived signal age/cache. */
+  invalidateThresholdDerivedState(): void {
+    for (const state of this.state.values()) {
+      state.triggerFirstTs = null;
+      state.baselineCache = null;
+    }
+  }
+
   /** FeatureSource contract. */
   snapshot(symbol: string): FeatureSnapshot | null {
     return this.snapshotEx(symbol, 0);

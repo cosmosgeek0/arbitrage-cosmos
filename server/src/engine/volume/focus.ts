@@ -235,6 +235,15 @@ export class FocusManager {
     }
   }
 
+  /** Threshold revisions invalidate signal-derived focus without erasing owner pins/positions. */
+  invalidateThresholdDerivedState(): void {
+    const now = this.clock.now();
+    for (const symbol of [...this.focus.keys()]) this.close(symbol, 'signal_expired', now);
+    this.candidates.clear();
+    this.cooldownUntil.clear();
+    this.proposedSet.clear();
+  }
+
   /** Admission with soft/hard caps and priority replacement. */
   promote(symbol: string, reason: FocusReason, score: number, correlationId: string, now: number): boolean {
     if (this.focus.has(symbol)) {

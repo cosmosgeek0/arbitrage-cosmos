@@ -462,6 +462,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     SET_BASIS_SYMBOL_POLICY: ['command', 'action', 'symbol'],
     SET_VOLUME_SYMBOL_POLICY: ['command', 'action', 'symbol'],
     REDUCE_SIZE_CEILING: ['command', 'scope', 'maximumNotionalUsd'],
+    SET_STRATEGY_THRESHOLD: ['command', 'strategy', 'threshold', 'value'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -486,6 +487,21 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
         || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
         || decimal.replace('.', '').length > 96) {
         issues.push(issue('mutation', 'SIZE_CEILING_INVALID', 'size ceiling reduction requires a canonical positive exact decimal'));
+      }
+      break;
+    }
+    case 'SET_STRATEGY_THRESHOLD': {
+      const decimal = mutation.value;
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const pairValid = (mutation.strategy === 'BASIS' && mutation.threshold === 'MIN_NET_BASIS_PCT')
+        || (mutation.strategy === 'VOLUME' && mutation.threshold === 'VOLUME_1S_MULTIPLE');
+      const bounded = mutation.strategy === 'BASIS'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (!pairValid || typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 12 || !Number.isFinite(numeric) || !bounded) {
+        issues.push(issue('mutation', 'STRATEGY_THRESHOLD_INVALID', 'strategy threshold must use an approved pair and bounded canonical value'));
       }
       break;
     }

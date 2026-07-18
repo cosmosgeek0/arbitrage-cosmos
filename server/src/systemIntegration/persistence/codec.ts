@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'strategyThresholds', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -318,6 +318,24 @@ export function validateCheckpointState(value: unknown): string[] {
         || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
         || decimal.replace('.', '').length > 96)) {
         issues.push(`$.sizeCeilings.${field}:EXACT_DECIMAL_INVALID`);
+      }
+    }
+  }
+
+  const strategyThresholds = value.strategyThresholds;
+  if (!plainObject(strategyThresholds)) issues.push('$.strategyThresholds:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategyThresholds, ['basisMinNetPct', 'volume1sMultiple'], '$.strategyThresholds', issues);
+    for (const field of ['basisMinNetPct', 'volume1sMultiple'] as const) {
+      const decimal = strategyThresholds[field];
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const bounded = field === 'basisMinNetPct'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (decimal !== null && (typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 12 || !Number.isFinite(numeric) || !bounded)) {
+        issues.push(`$.strategyThresholds.${field}:THRESHOLD_INVALID`);
       }
     }
   }
@@ -603,6 +621,9 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
       ...(Object.hasOwn(parsed.state, 'sizeCeilings')
         ? {}
         : { sizeCeilings: { system: null, basis: null, volume: null } }),
+      ...(Object.hasOwn(parsed.state, 'strategyThresholds')
+        ? {}
+        : { strategyThresholds: { basisMinNetPct: null, volume1sMultiple: null } }),
     };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };

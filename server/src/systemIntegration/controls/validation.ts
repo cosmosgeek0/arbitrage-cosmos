@@ -123,6 +123,13 @@ export function validateControlMutation(value: unknown): MutationValidation {
         return invalid('Freeze clear requires one exact canonical observedAtUtc revision.');
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_PUBLIC_SOURCE_LIFECYCLE':
+      if (!exactKeys(value, ['command', 'sourceId', 'action'])
+        || (value.sourceId !== 'public-spot-source' && value.sourceId !== 'public-usdm-source')
+        || (value.action !== 'ISOLATE' && value.action !== 'RESTART')) {
+        return invalid('Public-source lifecycle control requires one known sourceId and ISOLATE or RESTART.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
   }
   return invalid('Mutation command is unsupported.');
 }

@@ -458,6 +458,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     REVOKE_RESERVATION: ['command', 'reservationId'],
     RESTART_COMPONENT: ['command', 'componentId'],
     CLEAR_DEPLOYMENT_FREEZE: ['command', 'expectedObservedAtUtc'],
+    SET_PUBLIC_SOURCE_LIFECYCLE: ['command', 'sourceId', 'action'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -469,6 +470,12 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       break;
     case 'SET_SAFE_MODE':
       if (!isSystemSafeMode(mutation.safeMode)) issues.push(issue('mutation.safeMode', 'SAFE_MODE_INVALID', 'only safe convergence modes are accepted'));
+      break;
+    case 'SET_PUBLIC_SOURCE_LIFECYCLE':
+      if ((mutation.sourceId !== 'public-spot-source' && mutation.sourceId !== 'public-usdm-source')
+        || (mutation.action !== 'ISOLATE' && mutation.action !== 'RESTART')) {
+        issues.push(issue('mutation', 'SOURCE_LIFECYCLE_INVALID', 'source lifecycle target and action must be canonical'));
+      }
       break;
     case 'SET_KILL_SWITCH':
       if (typeof mutation.engaged !== 'boolean') issues.push(issue('mutation.engaged', 'BOOLEAN_REQUIRED', 'engaged must be boolean'));

@@ -26,7 +26,8 @@ interface SourceState {
   readonly expectedPhysicalGeneration: number;
 }
 
-interface SourceReceipt {
+export interface SourceReceipt {
+  readonly receiptId: string;
   readonly idempotencyKey: string;
   readonly requestDigest: string;
   readonly sourceId: IsolatablePublicSourceId;
@@ -70,8 +71,13 @@ export interface SourceIsolationRequest {
 }
 
 export type SourceIsolationResult =
-  | Readonly<{ ok: true; status: 'APPLIED'; snapshot: Readonly<SourceIsolationSnapshot> }>
-  | Readonly<{ ok: false; code: string }>;
+  | Readonly<{
+      ok: true;
+      status: 'APPLIED' | 'ALREADY_APPLIED';
+      receiptId: string;
+      snapshot: Readonly<SourceIsolationSnapshot>;
+    }>
+  | Readonly<{ ok: false; code: string; receiptId?: string }>;
 
 export interface SourceIsolationOwnerPort {
   canApply(sourceId: string, action: string, expectedSourceRevision: number): Readonly<{ ok: boolean; code: string }>;
@@ -215,17 +221,24 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
           if (replay.action === 'ISOLATE') this.options.physical.isolate(replay.sourceId);
           else this.options.physical.restart(replay.sourceId);
         } catch {
-          return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
+          return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: replay.receiptId });
         }
       }
-      if (this.readEffect(request.sourceId) !== 'APPLIED') return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
-      return Object.freeze({ ok: true, status: 'APPLIED', snapshot: this.snapshot(request.sourceId) });
+      if (this.readEffect(request.sourceId) !== 'APPLIED') {
+        return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: replay.receiptId });
+      }
+      return Object.freeze({
+        ok: true,
+        status: 'ALREADY_APPLIED',
+        receiptId: replay.receiptId,
+        snapshot: this.snapshot(request.sourceId),
+      });
     }
     let nowMs: number;
     try { nowMs = this.options.clock.nowMs(); } catch {
       return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_CLOCK_INVALID' });
     }
-    if (!Number.isSafeInteger(nowMs) || nowMs < 0 || request.requestedAtMs !== nowMs) {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0 || Math.abs(nowMs - request.requestedAtMs) > 60_000) {
       return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_CLOCK_INVALID' });
     }
     const source = before.sources[request.sourceId];
@@ -249,6 +262,7 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
       expectedPhysicalGeneration: physicalBefore.generation + 1,
     });
     const receipt: Readonly<SourceReceipt> = Object.freeze({
+      receiptId: `source-control:${requestDigest}`,
       idempotencyKey: request.idempotencyKey,
       requestDigest,
       sourceId: request.sourceId,
@@ -275,10 +289,17 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
       if (request.action === 'ISOLATE') this.options.physical.isolate(request.sourceId);
       else this.options.physical.restart(request.sourceId);
     } catch {
-      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
+      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: receipt.receiptId });
     }
-    if (this.readEffect(request.sourceId) !== 'APPLIED') return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
-    return Object.freeze({ ok: true, status: 'APPLIED', snapshot: this.snapshot(request.sourceId) });
+    if (this.readEffect(request.sourceId) !== 'APPLIED') {
+      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: receipt.receiptId });
+    }
+    return Object.freeze({
+      ok: true,
+      status: 'APPLIED',
+      receiptId: receipt.receiptId,
+      snapshot: this.snapshot(request.sourceId),
+    });
   }
 }
 

@@ -36,6 +36,10 @@ export interface SourceReceipt {
   readonly reason: string;
   readonly requestedAtMs: number;
   readonly sourceRevision: number;
+  readonly effectState: 'PENDING' | 'APPLIED';
+  readonly before: Readonly<SourceIsolationSnapshot>;
+  readonly after: Readonly<SourceIsolationSnapshot> | null;
+  readonly completedAtMs: number | null;
 }
 
 export interface SourceIsolationState {
@@ -79,11 +83,23 @@ export type SourceIsolationResult =
     }>
   | Readonly<{ ok: false; code: string; receiptId?: string }>;
 
+export type SourceIsolationResultReadback =
+  | Readonly<{ state: 'NOT_FOUND'; receipt: null; snapshot: null; failureCode: null }>
+  | Readonly<{
+      state: 'PENDING' | 'TERMINAL';
+      receipt: Readonly<SourceReceipt>;
+      snapshot: Readonly<SourceIsolationSnapshot>;
+      failureCode: null;
+    }>
+  | Readonly<{ state: 'FAIL_CLOSED'; receipt: null; snapshot: null; failureCode: string }>;
+
 export interface SourceIsolationOwnerPort {
   canApply(sourceId: string, action: string, expectedSourceRevision: number): Readonly<{ ok: boolean; code: string }>;
   apply(request: Readonly<SourceIsolationRequest>): Promise<SourceIsolationResult>;
   snapshot(sourceId: IsolatablePublicSourceId): Readonly<SourceIsolationSnapshot>;
   readEffect(sourceId: IsolatablePublicSourceId): 'APPLIED' | 'NOT_APPLIED' | 'UNKNOWN';
+  pendingAction(sourceId: IsolatablePublicSourceId): SourceIsolationAction | null;
+  readResult(idempotencyKey: string): Readonly<SourceIsolationResultReadback>;
 }
 
 export interface SourceIsolationOwnerOptions {
@@ -93,6 +109,8 @@ export interface SourceIsolationOwnerOptions {
 }
 
 const KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
+const RECEIPT_ID = /^source-control:sha256:[a-f0-9]{64}$/;
+const DIGEST = /^sha256:[a-f0-9]{64}$/;
 
 function canonical(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -110,6 +128,80 @@ function validPhysical(value: unknown): value is Readonly<SourceControlPhysicalR
     && ['LIVE', 'WARMING', 'DEGRADED', 'ISOLATED', 'FAILED', 'STOPPED'].includes(String((value as SourceControlPhysicalReadback).lifecycle))
     && Number.isSafeInteger((value as SourceControlPhysicalReadback).generation)
     && (value as SourceControlPhysicalReadback).generation >= 0;
+}
+
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validSnapshot(value: unknown, sourceId?: IsolatablePublicSourceId): value is Readonly<SourceIsolationSnapshot> {
+  if (!record(value) || !validPhysical(value)) return false;
+  const row = value as unknown as Record<string, unknown>;
+  return (row.sourceId === 'public-spot-source' || row.sourceId === 'public-usdm-source')
+    && (sourceId === undefined || row.sourceId === sourceId)
+    && Number.isSafeInteger(row.sourceRevision) && Number(row.sourceRevision) >= 0
+    && (row.desiredLifecycle === 'LIVE' || row.desiredLifecycle === 'ISOLATED')
+    && row.observedLifecycle === row.lifecycle;
+}
+
+function validReceipt(value: unknown): value is Readonly<SourceReceipt> {
+  if (!record(value)
+    || typeof value.receiptId !== 'string' || !RECEIPT_ID.test(value.receiptId)
+    || typeof value.idempotencyKey !== 'string' || !KEY.test(value.idempotencyKey)
+    || typeof value.requestDigest !== 'string' || !DIGEST.test(value.requestDigest)
+    || (value.sourceId !== 'public-spot-source' && value.sourceId !== 'public-usdm-source')
+    || (value.action !== 'ISOLATE' && value.action !== 'RESTART')
+    || !record(value.actor)
+    || typeof value.actor.id !== 'string' || value.actor.id.trim().length === 0 || value.actor.id.length > 160
+    || !(value.actor.email === null || (typeof value.actor.email === 'string' && value.actor.email.length <= 320))
+    || (value.actor.source !== 'loopback' && value.actor.source !== 'cloudflare-access')
+    || typeof value.reason !== 'string' || value.reason.trim() !== value.reason || value.reason.length < 1 || value.reason.length > 240
+    || !Number.isSafeInteger(value.requestedAtMs) || Number(value.requestedAtMs) < 0
+    || !Number.isSafeInteger(value.sourceRevision) || Number(value.sourceRevision) < 1
+    || (value.effectState !== 'PENDING' && value.effectState !== 'APPLIED')
+    || !validSnapshot(value.before, value.sourceId)) return false;
+  if (value.before.sourceRevision + 1 !== value.sourceRevision) return false;
+  if (value.effectState === 'PENDING') return value.after === null && value.completedAtMs === null;
+  if (!validSnapshot(value.after, value.sourceId)
+    || value.after.sourceRevision !== value.sourceRevision
+    || !Number.isSafeInteger(value.completedAtMs)
+    || Number(value.completedAtMs) < Number(value.requestedAtMs)) return false;
+  return value.action === 'ISOLATE'
+    ? value.after.desiredLifecycle === 'ISOLATED' && value.after.observedLifecycle === 'ISOLATED'
+    : value.after.desiredLifecycle === 'LIVE'
+      && ['LIVE', 'WARMING', 'DEGRADED'].includes(value.after.observedLifecycle);
+}
+
+function validState(value: unknown): value is Readonly<SourceIsolationState> {
+  if (!record(value)
+    || value.schema !== 'cosmos.source-isolation.v1'
+    || !Number.isSafeInteger(value.revision) || Number(value.revision) < 1
+    || !record(value.sources)
+    || !Array.isArray(value.receipts) || value.receipts.length > 256) return false;
+  const sources = value.sources as Record<string, unknown>;
+  const sourceIds = Object.keys(sources).sort();
+  if (sourceIds.length !== ISOLATABLE_PUBLIC_SOURCE_IDS.length
+    || sourceIds.some((sourceId, index) => sourceId !== [...ISOLATABLE_PUBLIC_SOURCE_IDS].sort()[index])) return false;
+  for (const sourceId of ISOLATABLE_PUBLIC_SOURCE_IDS) {
+    const source = sources[sourceId];
+    if (!record(source)
+      || !Number.isSafeInteger(source.sourceRevision) || Number(source.sourceRevision) < 0
+      || (source.desiredLifecycle !== 'LIVE' && source.desiredLifecycle !== 'ISOLATED')
+      || !Number.isSafeInteger(source.expectedPhysicalGeneration) || Number(source.expectedPhysicalGeneration) < 0) return false;
+  }
+  return value.receipts.every((receipt) => validReceipt(receipt)
+    && receipt.sourceRevision <= Number((sources[receipt.sourceId] as Record<string, unknown>).sourceRevision));
+}
+
+function pendingReceipt(
+  state: Readonly<SourceIsolationState>,
+  sourceId: IsolatablePublicSourceId,
+): Readonly<SourceReceipt> | null {
+  return state.receipts.find((receipt) => (
+    receipt.sourceId === sourceId
+    && receipt.sourceRevision === state.sources[sourceId].sourceRevision
+    && receipt.effectState === 'PENDING'
+  )) ?? null;
 }
 
 function initial(physical: SourceIsolationPhysicalPort): Readonly<SourceIsolationState> {
@@ -163,7 +255,42 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     state: Readonly<SourceIsolationState>;
   }> {
     const persisted = this.options.persistence.load();
+    if (persisted !== null && !validState(persisted)) throw new TypeError('source isolation state is invalid');
     return Object.freeze({ persisted, state: persisted ?? initial(this.options.physical) });
+  }
+
+  private finalizeReceipt(
+    state: Readonly<SourceIsolationState>,
+    receipt: Readonly<SourceReceipt>,
+    after: Readonly<SourceIsolationSnapshot>,
+  ): Readonly<SourceReceipt> | null {
+    let nowMs: number;
+    try { nowMs = this.options.clock.nowMs(); } catch { return null; }
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) return null;
+    const applied = Object.freeze({
+      ...receipt,
+      effectState: 'APPLIED' as const,
+      after: Object.freeze({ ...after }),
+      completedAtMs: Math.max(receipt.requestedAtMs, nowMs),
+    });
+    const next = Object.freeze({
+      ...state,
+      revision: state.revision + 1,
+      receipts: Object.freeze(state.receipts.map((candidate) => (
+        candidate.receiptId === receipt.receiptId ? applied : candidate
+      ))),
+    });
+    try {
+      if (this.options.persistence.compareAndSet(state, next, applied)) return applied;
+      const raced = this.options.persistence.load();
+      if (raced !== null && validState(raced)) {
+        const recovered = raced.receipts.find((candidate) => candidate.receiptId === receipt.receiptId);
+        return recovered?.effectState === 'APPLIED' ? recovered : null;
+      }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   canApply(sourceId: string, action: string, expectedSourceRevision: number): Readonly<{ ok: boolean; code: string }> {
@@ -175,6 +302,9 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     const state = this.load().state;
     const source = state.sources[sourceId as IsolatablePublicSourceId];
     if (source.sourceRevision !== expectedSourceRevision) return Object.freeze({ ok: false, code: 'STALE_SOURCE_REVISION' });
+    if (pendingReceipt(state, sourceId as IsolatablePublicSourceId)) {
+      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
+    }
     if (action === 'ISOLATE' && source.desiredLifecycle === 'ISOLATED') return Object.freeze({ ok: false, code: 'SOURCE_ALREADY_ISOLATED' });
     if (action === 'RESTART' && source.desiredLifecycle !== 'ISOLATED') return Object.freeze({ ok: false, code: 'SOURCE_NOT_ISOLATED' });
     return Object.freeze({ ok: true, code: 'SOURCE_CONTROL_ACCEPTED' });
@@ -203,6 +333,42 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     }
   }
 
+  pendingAction(sourceId: IsolatablePublicSourceId): SourceIsolationAction | null {
+    try { return pendingReceipt(this.load().state, sourceId)?.action ?? null; } catch { return null; }
+  }
+
+  readResult(idempotencyKey: string): Readonly<SourceIsolationResultReadback> {
+    if (!KEY.test(idempotencyKey)) {
+      return Object.freeze({ state: 'FAIL_CLOSED', receipt: null, snapshot: null, failureCode: 'SOURCE_RESULT_IDENTITY_INVALID' });
+    }
+    try {
+      const state = this.load().state;
+      const receipt = state.receipts.find((candidate) => candidate.idempotencyKey === idempotencyKey);
+      if (!receipt) return Object.freeze({ state: 'NOT_FOUND', receipt: null, snapshot: null, failureCode: null });
+      if (receipt.effectState === 'PENDING'
+        && state.sources[receipt.sourceId].sourceRevision !== receipt.sourceRevision) {
+        return Object.freeze({
+          state: 'FAIL_CLOSED', receipt: null, snapshot: null,
+          failureCode: 'SOURCE_RESULT_SUPERSEDED_PENDING',
+        });
+      }
+      const snapshot = receipt.effectState === 'APPLIED'
+        ? receipt.after
+        : this.snapshot(receipt.sourceId);
+      if (!snapshot) {
+        return Object.freeze({ state: 'FAIL_CLOSED', receipt: null, snapshot: null, failureCode: 'SOURCE_RESULT_READBACK_INVALID' });
+      }
+      return Object.freeze({
+        state: receipt.effectState === 'APPLIED' ? 'TERMINAL' : 'PENDING',
+        receipt,
+        snapshot,
+        failureCode: null,
+      });
+    } catch {
+      return Object.freeze({ state: 'FAIL_CLOSED', receipt: null, snapshot: null, failureCode: 'SOURCE_RESULT_STATE_UNAVAILABLE' });
+    }
+  }
+
   async apply(request: Readonly<SourceIsolationRequest>): Promise<SourceIsolationResult> {
     if (!validRequest(request)) return Object.freeze({ ok: false, code: 'INVALID_SOURCE_CONTROL_REQUEST' });
     let loaded: ReturnType<SourceIsolationOwner['load']>;
@@ -216,6 +382,17 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     const replay = before.receipts.find((receipt) => receipt.idempotencyKey === request.idempotencyKey);
     if (replay) {
       if (replay.requestDigest !== requestDigest) return Object.freeze({ ok: false, code: 'IDEMPOTENCY_CONFLICT' });
+      if (replay.effectState === 'APPLIED' && replay.after !== null) {
+        return Object.freeze({
+          ok: true,
+          status: 'ALREADY_APPLIED',
+          receiptId: replay.receiptId,
+          snapshot: replay.after,
+        });
+      }
+      if (before.sources[replay.sourceId].sourceRevision !== replay.sourceRevision) {
+        return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_RESULT_SUPERSEDED_UNKNOWN', receiptId: replay.receiptId });
+      }
       if (this.readEffect(request.sourceId) !== 'APPLIED') {
         try {
           if (replay.action === 'ISOLATE') this.options.physical.isolate(replay.sourceId);
@@ -227,11 +404,16 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
       if (this.readEffect(request.sourceId) !== 'APPLIED') {
         return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: replay.receiptId });
       }
+      const replayAfter = this.snapshot(request.sourceId);
+      const finalizedReplay = this.finalizeReceipt(before, replay, replayAfter);
+      if (!finalizedReplay?.after) {
+        return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_RESULT_PENDING', receiptId: replay.receiptId });
+      }
       return Object.freeze({
         ok: true,
         status: 'ALREADY_APPLIED',
         receiptId: replay.receiptId,
-        snapshot: this.snapshot(request.sourceId),
+        snapshot: finalizedReplay.after,
       });
     }
     let nowMs: number;
@@ -244,6 +426,9 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     const source = before.sources[request.sourceId];
     if (source.sourceRevision !== request.expectedSourceRevision) {
       return Object.freeze({ ok: false, code: 'STALE_SOURCE_REVISION' });
+    }
+    if (pendingReceipt(before, request.sourceId)) {
+      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING' });
     }
     if (request.action === 'ISOLATE' && source.desiredLifecycle === 'ISOLATED') {
       return Object.freeze({ ok: false, code: 'SOURCE_ALREADY_ISOLATED' });
@@ -271,6 +456,10 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
       reason: request.reason,
       requestedAtMs: request.requestedAtMs,
       sourceRevision: nextSource.sourceRevision,
+      effectState: 'PENDING' as const,
+      before: sourceSnapshot(request.sourceId, before, physicalBefore),
+      after: null,
+      completedAtMs: null,
     });
     const next = Object.freeze({
       schema: 'cosmos.source-isolation.v1' as const,
@@ -294,11 +483,16 @@ class SourceIsolationOwner implements SourceIsolationOwnerPort {
     if (this.readEffect(request.sourceId) !== 'APPLIED') {
       return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_EFFECT_PENDING', receiptId: receipt.receiptId });
     }
+    const after = this.snapshot(request.sourceId);
+    const finalized = this.finalizeReceipt(next, receipt, after);
+    if (!finalized?.after) {
+      return Object.freeze({ ok: false, code: 'SOURCE_CONTROL_RESULT_PENDING', receiptId: receipt.receiptId });
+    }
     return Object.freeze({
       ok: true,
       status: 'APPLIED',
       receiptId: receipt.receiptId,
-      snapshot: this.snapshot(request.sourceId),
+      snapshot: finalized.after,
     });
   }
 }

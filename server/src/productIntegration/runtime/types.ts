@@ -237,6 +237,7 @@ export interface ProductRuntimeCommandOwnerPort {
     readonly sourceRevision: number;
     readonly desiredLifecycle: 'LIVE' | 'ISOLATED';
     readonly observedLifecycle: string;
+    readonly pendingAction: 'ISOLATE' | 'RESTART' | null;
   }> | null;
   preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>>;
   submit(input: Readonly<{

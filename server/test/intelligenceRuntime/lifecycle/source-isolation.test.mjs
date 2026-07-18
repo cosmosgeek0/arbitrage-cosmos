@@ -24,7 +24,7 @@ function world() {
     persistence: {
       load: () => durable,
       compareAndSet(expected, next, audit) {
-        if (durable !== expected) return false;
+        if (JSON.stringify(durable) !== JSON.stringify(expected)) return false;
         durable = structuredClone(next);
         calls.push({ kind: 'persist', audit });
         return true;
@@ -50,6 +50,7 @@ function world() {
     durable: () => structuredClone(durable),
     physical: () => structuredClone(physical),
     failPhysical: () => { failPhysical = true; },
+    corrupt: (mutate) => { durable = mutate(structuredClone(durable)); },
   };
 }
 
@@ -73,7 +74,7 @@ test('isolate is source-specific, CAS-bound, Ledger-first, and exact-readback pr
   assert.equal(result.snapshot.sourceRevision, 1);
   assert.equal(result.snapshot.desiredLifecycle, 'ISOLATED');
   assert.equal(result.snapshot.observedLifecycle, 'ISOLATED');
-  assert.deepEqual(w.calls.map((row) => row.kind), ['persist', 'isolate']);
+  assert.deepEqual(w.calls.map((row) => row.kind), ['persist', 'isolate', 'persist']);
   assert.equal(w.physical()['public-usdm-source'].lifecycle, 'LIVE');
   assert.equal(w.durable().receipts[0].actor.id, ACTOR.id);
   assert.equal(w.durable().receipts[0].reason, request('public-spot-source', 'ISOLATE', 0, 'source.isolate.0001').reason);
@@ -83,7 +84,8 @@ test('isolate is source-specific, CAS-bound, Ledger-first, and exact-readback pr
   assert.equal(replay.status, 'ALREADY_APPLIED');
   assert.equal(replay.receiptId, result.receiptId);
   assert.deepEqual(replay.snapshot, result.snapshot);
-  assert.deepEqual(w.calls.map((row) => row.kind), ['persist', 'isolate']);
+  assert.deepEqual(w.calls.map((row) => row.kind), ['persist', 'isolate', 'persist']);
+  assert.equal(w.owner.readResult('source.isolate.0001').state, 'TERMINAL');
 });
 
 test('stale revision and idempotency conflict append no effect, while restart is independently bound', async () => {
@@ -115,6 +117,7 @@ test('physical failure remains durable pending and exact readback never false-gr
   assert.equal(w.durable().revision, 1);
   assert.equal(w.durable().sources['public-spot-source'].desiredLifecycle, 'ISOLATED');
   assert.equal(w.owner.readEffect('public-spot-source'), 'NOT_APPLIED');
+  assert.equal(w.owner.readResult('source.isolate.0001').state, 'PENDING');
 });
 
 test('canonical Ledger CAS keeps source intent and audit atomic across owner reconstruction', async () => {
@@ -151,10 +154,10 @@ test('canonical Ledger CAS keeps source intent and audit atomic across owner rec
     assert.equal(physical['public-spot-source'].lifecycle, 'LIVE');
 
     const events = ledger.recentEvents(10, 'intelligence_runtime.source_control');
-    assert.equal(events.length, 1);
+    assert.equal(events.length, 2);
     assert.equal(events[0].data.sourceId, 'public-usdm-source');
     assert.equal(events[0].data.actor.id, ACTOR.id);
-    assert.equal(JSON.parse(ledger.getConfigValue('ops.public-source-isolation.v1')).revision, 1);
+    assert.equal(JSON.parse(ledger.getConfigValue('ops.public-source-isolation.v1')).revision, 2);
 
     const recoveredOwner = createSourceIsolationOwner({
       clock: { nowMs: () => T0 + 50 }, persistence, physical: physicalPort,
@@ -162,7 +165,13 @@ test('canonical Ledger CAS keeps source intent and audit atomic across owner rec
     const replay = await recoveredOwner.apply(command);
     assert.equal(replay.ok, true);
     assert.equal(replay.snapshot.sourceRevision, 1);
-    assert.equal(ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 1);
+    assert.equal(ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 2);
+    assert.equal(recoveredOwner.readResult(command.idempotencyKey).state, 'TERMINAL');
+
+    ledger.setConfigValue('ops.public-source-isolation.v1', '{"schema":"cosmos.source-isolation.v1","revision":3,"sources":{},"receipts":[]}');
+    const corrupt = recoveredOwner.readResult(command.idempotencyKey);
+    assert.equal(corrupt.state, 'FAIL_CLOSED');
+    assert.equal(corrupt.failureCode, 'SOURCE_RESULT_STATE_UNAVAILABLE');
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

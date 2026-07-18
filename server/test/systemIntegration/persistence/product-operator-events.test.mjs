@@ -264,7 +264,7 @@ test('transactional retention keeps the newest fixed window, audit history, floo
   const ledger = new Ledger(dataDir);
   try {
     const insertLedger = ledger.db.prepare(
-      "INSERT INTO events (ts, kind, symbol, data) VALUES (?, 'retention.seed', NULL, '{}')",
+      "INSERT INTO events (ts, kind, symbol, data, created_at) VALUES (?, 'retention.seed', NULL, '{}', ?)",
     );
     const insertOperator = ledger.db.prepare(`
       INSERT INTO product_operator_events (
@@ -279,7 +279,7 @@ test('transactional retention keeps the newest fixed window, audit history, floo
     `);
     ledger.db.transaction(() => {
       for (let cursor = 1; cursor <= PRODUCT_OPERATOR_EVENT_RETENTION_MAX; cursor += 1) {
-        const inserted = insertLedger.run(T0 + cursor);
+        const inserted = insertLedger.run(T0 + cursor, T0 + cursor);
         insertOperator.run(Number(inserted.lastInsertRowid), `retention.seed.${cursor}`, T0 + cursor, T0 + cursor);
       }
     })();

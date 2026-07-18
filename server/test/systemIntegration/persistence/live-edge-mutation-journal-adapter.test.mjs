@@ -6,6 +6,8 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
+import Database from 'better-sqlite3';
+
 import { Ledger } from '../../../dist/ledger.js';
 import { canonicalPersistenceJson } from '../../../dist/systemIntegration/persistence/codec.js';
 import {
@@ -604,10 +606,13 @@ test('audit insert failure rolls back registry and dedicated event as an unsplit
     assert.equal(ledger.countEvents(), 0);
     ledger.close();
 
+    assert.throws(() => new Ledger(dataDir), /LEDGER_EVENT_SCHEMA_MALFORMED/);
+    const repair = new Database(path.join(dataDir, 'cosmos.db'));
+    repair.exec('DROP TRIGGER reject_live_edge_audit');
+    repair.close();
     reopenedLedger = new Ledger(dataDir);
     assert.equal(reopenedLedger.getConfigValue(LIVE_EDGE_MUTATION_JOURNAL_CONFIG_KEY), null);
     assert.equal(reopenedLedger.countEvents(), 0);
-    reopenedLedger.db.exec('DROP TRIGGER reject_live_edge_audit');
     const restartedAdapter = new LiveEdgeMutationJournalPersistenceAdapter(reopenedLedger);
     const committed = appendAndRead(restartedAdapter, prepared);
     assert.equal(committed.snapshot.journalVersion, 1);

@@ -106,9 +106,10 @@ try {
   ledger.db.exec('DROP TRIGGER reject_atomic_audit');
   check('config and audit roll back as one transaction', transactionRejected && ledger.getConfigValue('atomic-test') === 'old');
 
+  const corruptTs = Date.now();
   const corrupt = ledger.db.prepare(
-    'INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)',
-  ).run(Date.now(), 'corrupt_json_test', null, '{broken');
+    'INSERT INTO events (ts, kind, symbol, data, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(corruptTs, 'corrupt_json_test', null, '{broken', corruptTs);
   const corruptEvent = ledger.recentEvents(1, 'corrupt_json_test')[0];
   check(
     'corrupt event JSON is decoded safely',
@@ -157,12 +158,13 @@ try {
   );
 
   const retentionNow = Date.now();
-  const insertEventAt = ledger.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
-  insertEventAt.run(retentionNow - 7 * 60 * 60_000, 'strategy_decision', null, '{}');
-  insertEventAt.run(retentionNow - 25 * 60 * 60_000, 'heartbeat', null, '{}');
-  insertEventAt.run(retentionNow - 8 * 24 * 60 * 60_000, 'candidate_opened', null, '{}');
-  insertEventAt.run(retentionNow - 30 * 24 * 60 * 60_000, 'order_response', 'BTCUSDT', '{}');
-  insertEventAt.run(retentionNow, 'strategy_decision', null, '{}');
+  const insertEventAt = ledger.db.prepare('INSERT INTO events (ts, kind, symbol, data, created_at) VALUES (?, ?, ?, ?, ?)');
+  const insertAt = (ts, kind, symbol, data) => insertEventAt.run(ts, kind, symbol, data, ts);
+  insertAt(retentionNow - 7 * 60 * 60_000, 'strategy_decision', null, '{}');
+  insertAt(retentionNow - 25 * 60 * 60_000, 'heartbeat', null, '{}');
+  insertAt(retentionNow - 8 * 24 * 60 * 60_000, 'candidate_opened', null, '{}');
+  insertAt(retentionNow - 30 * 24 * 60 * 60_000, 'order_response', 'BTCUSDT', '{}');
+  insertAt(retentionNow, 'strategy_decision', null, '{}');
   const pruned = ledger.pruneEphemeralEvents(retentionNow, 100);
   const oldEphemeral = ledger.db.prepare(`
     SELECT COUNT(*) AS count FROM events
@@ -325,6 +327,13 @@ try {
       rollback_floor INTEGER NOT NULL
     );
     INSERT INTO ledger_schema_compatibility VALUES (1, 1, 1);
+    CREATE TABLE events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      symbol TEXT,
+      data TEXT
+    );
     CREATE TABLE fills (
       symbol TEXT NOT NULL,
       trade_id INTEGER NOT NULL,
@@ -348,7 +357,7 @@ try {
     const legacyFill = migrated.allFillsAsc()[0];
     check(
       'v1 binary64 fill migration preserves the stored value and marks it non-authoritative',
-      migrated.db.pragma('user_version', { simple: true }) === 2
+      migrated.db.pragma('user_version', { simple: true }) === 3
         && legacyFill?.price === '0.1'
         && legacyFill?.moneyEncoding === 'LEGACY_BINARY64',
     );
@@ -383,6 +392,13 @@ try {
       rollback_floor INTEGER NOT NULL
     );
     INSERT INTO ledger_schema_compatibility VALUES (1, 1, 1);
+    CREATE TABLE events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      symbol TEXT,
+      data TEXT
+    );
     CREATE TABLE fills (
       symbol TEXT NOT NULL, trade_id INTEGER NOT NULL, order_id INTEGER,
       side TEXT NOT NULL, price REAL NOT NULL, qty REAL NOT NULL,

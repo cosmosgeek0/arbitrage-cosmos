@@ -5,6 +5,7 @@ import {
   addExactDecimals,
   assessCapitalTruth,
   capitalDigest,
+  createSyntheticConservativeEconomicFactBinding,
   deriveCapitalConfigRevision,
   deriveAllocationDecisionId,
   deriveCapitalMandateId,
@@ -25,6 +26,37 @@ const NOW = 1_800_000_000_000;
 const ELIGIBILITY_POLICY_REVISION = deriveCapitalConfigRevision('allocation-test-eligibility', { revision: 1 });
 const bound = (value) => ({ value, minimum: '0', maximum: '1000000', unit: 'USDT' });
 const integerBound = (value, maximum, unit = 'COUNT') => ({ value, minimum: 0, maximum, unit });
+
+function economicFact(kind, value, sourceId, valuationAsset = 'USDT') {
+  return createSyntheticConservativeEconomicFactBinding({
+    kind,
+    scope: {
+      proposalId: 'allocation-fixture-proposal', proposalRevision: 'allocation-proposal-r1',
+      proposalUpdatedAtMs: NOW - 10, proposalConfigRevision: 'proposal-config-r1',
+      correlationId: 'allocation-fixture-correlation', strategy: 'BASIS', symbol: 'BTCUSDT',
+      instrumentIds: ['BTCUSDT:PERP', 'BTCUSDT:SPOT'],
+      ownerRecordId: `${sourceId}-record`, ownerConfigRevision: 'proposal-config-r1',
+    },
+    borrowScope: kind === 'BORROW' ? {
+      accountId: 'synthetic-account', symbol: 'BTCUSDT', asset: 'BTC',
+      mode: 'CROSS_CLASSIC', permissionId: 'synthetic-permission',
+      truthEvaluatedAtMs: NOW - 10, truthExpiresAtMs: NOW + 990,
+    } : null,
+    value,
+    unit: valuationAsset,
+    source: {
+      sourceTimeMs: NOW - 10,
+      receivedAtMs: NOW - 5,
+      maxAgeMs: 1_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
 
 function truth(overrides = {}) {
   return assessCapitalTruth({
@@ -168,8 +200,18 @@ function candidate(key, amount = '80', overrides = {}) {
       estimatedLatencyCost: '0', estimatedAdverseSelectionCost: '0',
       estimatedRecoveryCost: '0', estimatedCapitalOpportunityCost: '0',
       liquidityCapacity: requestedAmount,
-      fundingSourceIds: [`funding-${key}`], borrowSourceIds: [`borrow-${key}`],
-      capitalOpportunitySourceIds: [`capital-opportunity-${key}`],
+      expectedBorrowScope: {
+        accountId: 'synthetic-account', symbol, asset: symbol.replace('USDT', ''),
+        mode: 'CROSS_CLASSIC', permissionId: 'synthetic-permission',
+      },
+      fundingFact: economicFact('FUNDING', '0', `funding-${key}`, valuationAsset),
+      borrowFact: economicFact('BORROW', '0', `borrow-${key}`, valuationAsset),
+      capitalOpportunityFact: economicFact(
+        'CAPITAL_OPPORTUNITY',
+        '0',
+        `capital-opportunity-${key}`,
+        valuationAsset,
+      ),
       exactSourceIds: [`source-${key}`], missingFields: [],
     },
     evidencePacketIds: [],

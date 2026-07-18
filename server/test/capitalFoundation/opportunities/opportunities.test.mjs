@@ -5,7 +5,10 @@ import {
   deriveOpportunityEligibilityPolicyRevision,
   evaluateOpportunityEligibility,
 } from '../../../dist/capitalFoundation/opportunities/index.js';
-import { assessCapitalTruth } from '../../../dist/capitalFoundation/contracts/index.js';
+import {
+  assessCapitalTruth,
+  createSyntheticConservativeEconomicFactBinding,
+} from '../../../dist/capitalFoundation/contracts/index.js';
 
 const NOW = 1_800_000_000_000;
 
@@ -43,8 +46,58 @@ function intelligenceTruth(overrides = {}) {
   };
 }
 
-function economics(overrides = {}) {
-  return {
+function economicFact(kind, value, sourceId, proposal) {
+  if (value === null) return null;
+  const base = proposal.symbol.replace('USDT', '');
+  const instrumentIds = proposal.instrumentIds ?? (proposal.strategy === 'BASIS'
+    ? [`${base}-PERP`, `${base}-SPOT`]
+    : [`${base}-SPOT`]);
+  return createSyntheticConservativeEconomicFactBinding({
+    kind,
+    scope: {
+      proposalId: proposal.sourceProposalId,
+      proposalRevision: proposal.sourceRevision,
+      proposalUpdatedAtMs: proposal.updatedAtMs,
+      proposalConfigRevision: proposal.sourceConfigRevision,
+      correlationId: proposal.sourceCorrelationId,
+      strategy: proposal.strategy,
+      symbol: proposal.symbol,
+      instrumentIds,
+      ownerRecordId: `${sourceId}-record`,
+      ownerConfigRevision: 'basis-cfg-1',
+    },
+    borrowScope: kind === 'BORROW' ? {
+      accountId: 'synthetic-account',
+      symbol: proposal.symbol,
+      asset: base,
+      mode: 'CROSS_CLASSIC',
+      permissionId: 'synthetic-permission',
+      truthEvaluatedAtMs: NOW - 100,
+      truthExpiresAtMs: NOW + 900,
+    } : null,
+    value,
+    unit: 'USDT',
+    source: {
+      sourceTimeMs: NOW - 100,
+      receivedAtMs: NOW - 90,
+      maxAgeMs: 1_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
+
+function economics(overrides = {}, proposal = {
+  sourceProposalId: 'bp-1', sourceRevision: 'r17', updatedAtMs: NOW - 100,
+  sourceConfigRevision: 'basis-cfg-1', sourceCorrelationId: 'basis-correlation-1',
+  strategy: 'BASIS', symbol: 'BTCUSDT',
+}) {
+  const base = proposal.symbol.replace('USDT', '');
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '1000.00',
     expectedGrossEdge: '21.5',
@@ -59,12 +112,28 @@ function economics(overrides = {}) {
     estimatedRecoveryCost: '0.75',
     estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '2500',
-    fundingSourceIds: ['funding-owner-1'],
-    borrowSourceIds: ['borrow-owner-1'],
-    capitalOpportunitySourceIds: ['capital-opportunity-owner-1'],
+    expectedBorrowScope: {
+      accountId: 'synthetic-account',
+      symbol: proposal.symbol,
+      asset: base,
+      mode: 'CROSS_CLASSIC',
+      permissionId: 'synthetic-permission',
+    },
     exactSourceIds: ['economics-caller-1'],
     missingFields: [],
     ...overrides,
+  };
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : economicFact('FUNDING', values.estimatedFunding, 'basis.funding-owner-1', proposal),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : economicFact('BORROW', values.estimatedBorrowCost, 'foundation.borrow-owner-1', proposal),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : economicFact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'capital.opportunity-owner-1', proposal),
   };
 }
 
@@ -87,7 +156,10 @@ function intake(overrides = {}) {
   };
   return {
     proposal,
-    economics: economics(overrides.economics),
+    economics: economics(overrides.economics, {
+      ...proposal,
+      instrumentIds: overrides.instrumentIds,
+    }),
     truth: overrides.truth ?? capitalTruth(overrides.capitalTruth),
     lossReport: {
       omittedFields: ['netEdgePct', 'confidence', 'evidence'],
@@ -529,7 +601,10 @@ test('same-symbol proposals are both blocked with symmetric conflict IDs', () =>
 test('shared instrument conflicts even when symbols differ', () => {
   const a = candidate();
   const b = candidate({
-    intake: intake({ proposal: { sourceProposalId: 'bp-2', canonicalProposalId: 'cprop-bp-2', symbol: 'ETHUSDT', intakeDigest: 'digest-bp-2' } }),
+    intake: intake({
+      proposal: { sourceProposalId: 'bp-2', canonicalProposalId: 'cprop-bp-2', symbol: 'ETHUSDT', intakeDigest: 'digest-bp-2' },
+      instrumentIds: ['BTC-PERP', 'ETH-SPOT'],
+    }),
     structure: { kind: 'BASIS_TWO_LEG', spotInstrumentId: 'ETH-SPOT', perpetualInstrumentId: 'BTC-PERP' },
     evidenceReferences: [evidence('ev-1', { instrumentId: 'BTC-PERP' })],
   });
@@ -541,7 +616,10 @@ test('shared instrument conflicts even when symbols differ', () => {
 test('shared exclusive capital claim conflicts without treating every common collateral pool as exclusive', () => {
   const a = candidate({ conflictScope: { exclusiveCapitalClaimIds: ['locked-slice-7'] } });
   const b = candidate({
-    intake: intake({ proposal: { sourceProposalId: 'bp-2', canonicalProposalId: 'cprop-bp-2', symbol: 'ETHUSDT', intakeDigest: 'digest-bp-2' } }),
+    intake: intake({
+      proposal: { sourceProposalId: 'bp-2', canonicalProposalId: 'cprop-bp-2', symbol: 'ETHUSDT', intakeDigest: 'digest-bp-2' },
+      instrumentIds: ['ETH-PERP', 'ETH-SPOT'],
+    }),
     structure: { kind: 'BASIS_TWO_LEG', spotInstrumentId: 'ETH-SPOT', perpetualInstrumentId: 'ETH-PERP' },
     evidenceReferences: [evidence('ev-1', { instrumentId: 'ETH-SPOT' })],
     conflictScope: { exclusiveCapitalClaimIds: ['locked-slice-7'] },
@@ -584,9 +662,9 @@ test('all-in economics blocks when latency, adverse-selection, recovery, or capi
         estimatedAdverseSelectionCost: null,
         estimatedRecoveryCost: null,
         estimatedCapitalOpportunityCost: null,
-        fundingSourceIds: [],
-        borrowSourceIds: [],
-        capitalOpportunitySourceIds: [],
+        fundingFact: null,
+        borrowFact: null,
+        capitalOpportunityFact: null,
         missingFields: [],
       },
     }),
@@ -602,10 +680,23 @@ test('all-in economics blocks when latency, adverse-selection, recovery, or capi
     ],
   );
   assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
-  assert.deepEqual(result.economics.fundingSourceIds, []);
-  assert.ok(result.economics.missingFields.includes('fundingSourceIds'));
-  assert.ok(result.economics.missingFields.includes('borrowSourceIds'));
-  assert.ok(result.economics.missingFields.includes('capitalOpportunitySourceIds'));
+  assert.equal(result.economics.fundingFact, null);
+  assert.ok(result.economics.missingFields.includes('fundingFact'));
+  assert.ok(result.economics.missingFields.includes('borrowFact'));
+  assert.ok(result.economics.missingFields.includes('capitalOpportunityFact'));
+});
+
+test('arbitrary source IDs cannot bind owner economics or produce eligibility', () => {
+  const forged = economics({
+    exactSourceIds: ['funding-owner-1', 'borrow-owner-1', 'capital-opportunity-owner-1'],
+    fundingFact: null,
+    borrowFact: null,
+    capitalOpportunityFact: null,
+  });
+  const result = one(candidate({ intake: intake({ economics: forged }) }));
+  assert.equal(result.status, 'BLOCKED');
+  assert.ok(result.reasons.includes('CONSERVATIVE_ECONOMICS_INCOMPLETE'));
+  assert.ok(result.economics.missingFields.includes('fundingFact'));
 });
 
 test('freshness is reevaluated against injected now rather than trusting an old fresh label', () => {

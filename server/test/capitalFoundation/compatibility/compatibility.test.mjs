@@ -47,7 +47,10 @@ globalThis.setInterval = realSetInterval;
 Math.random = realRandom;
 
 const globalsAfter = new Set(Object.getOwnPropertyNames(globalThis));
-const { assessCapitalTruth } = await import('../../../dist/capitalFoundation/contracts/index.js');
+const {
+  assessCapitalTruth,
+  createSyntheticConservativeEconomicFactBinding,
+} = await import('../../../dist/capitalFoundation/contracts/index.js');
 const { MAX_UTC_MS } = await import('../../../dist/foundation/contracts/index.js');
 
 function source(sourceId, overrides = {}) {
@@ -114,8 +117,38 @@ function intelligenceTruth(overrides = {}) {
   };
 }
 
+function economicFact(kind, value, sourceId) {
+  if (value === null) return null;
+  return createSyntheticConservativeEconomicFactBinding({
+    kind,
+    scope: {
+      proposalId: 'basis-proposal-1',
+      proposalRevision: null,
+      proposalUpdatedAtMs: NOW - 100,
+      proposalConfigRevision: 'basis-config-1',
+      correlationId: 'basis-correlation-1',
+      strategy: 'BASIS',
+      symbol: 'BTCUSDT',
+      instrumentIds: ['BINANCE:SPOT:BTCUSDT', 'BINANCE:USD_M_PERPETUAL:BTCUSDT'],
+      ownerRecordId: `${sourceId}-record`,
+      ownerConfigRevision: 'basis-config-1',
+    },
+    borrowScope: kind === 'BORROW' ? {
+      accountId: 'synthetic-account', symbol: 'BTCUSDT', asset: 'BTC',
+      mode: 'CROSS_CLASSIC', permissionId: 'synthetic-permission',
+      truthEvaluatedAtMs: NOW - 100, truthExpiresAtMs: NOW + 900,
+    } : null,
+    value,
+    unit: 'USDT',
+    source: source(sourceId),
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+}
+
 function exactEconomics(overrides = {}) {
-  return {
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '1000',
     expectedGrossEdge: '20.5',
@@ -130,12 +163,25 @@ function exactEconomics(overrides = {}) {
     estimatedRecoveryCost: '0.75',
     estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '5000',
-    fundingSourceIds: ['funding-owner-1'],
-    borrowSourceIds: ['borrow-owner-1'],
-    capitalOpportunitySourceIds: ['capital-opportunity-owner-1'],
+    expectedBorrowScope: {
+      accountId: 'synthetic-account', symbol: 'BTCUSDT', asset: 'BTC',
+      mode: 'CROSS_CLASSIC', permissionId: 'synthetic-permission',
+    },
     exactSourceIds: ['exact-economics-1'],
     missingFields: [],
     ...overrides,
+  };
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : economicFact('FUNDING', values.estimatedFunding, 'basis.funding-owner-1'),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : economicFact('BORROW', values.estimatedBorrowCost, 'foundation.borrow-owner-1'),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : economicFact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'capital.opportunity-owner-1'),
   };
 }
 

@@ -74,7 +74,7 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('PIN_FOCUS'),
   }),
   'market-intelligence': Object.freeze({
     owner: 'MARKET_INTELLIGENCE', ownerPath: 'server/src/intelligenceFoundation',

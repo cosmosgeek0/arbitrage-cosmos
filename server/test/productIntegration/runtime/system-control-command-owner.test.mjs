@@ -10,6 +10,7 @@ import { createSourceIsolationOwner } from '../../../dist/intelligenceRuntime/li
 import {
   createProductIntegrationRuntime,
 } from '../../../dist/productIntegration/runtime/index.js';
+import { buildProductRuntimeControlRegistry } from '../../../dist/productIntegration/runtime/controls.js';
 import {
   createProductRuntimeSystemControlCommandOwner,
 } from '../../../dist/productIntegration/runtime/systemControlCommandOwner.js';
@@ -113,7 +114,21 @@ function sourceControlIntent(sourceId, action, expectedRevision, nowMs, operator
   });
 }
 
-function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
+function focusControlIntent(symbol, pinned, expectedRevision, nowMs, operator = ACTOR) {
+  const action = pinned ? 'pin' : 'unpin';
+  return Object.freeze({
+    controlId: `attention.focus.${symbol.toLowerCase()}.${action}`,
+    backendCommandId: 'PIN_FOCUS',
+    targetType: 'SYMBOL',
+    targetId: symbol,
+    payload: Object.freeze({ symbol, pinned }),
+    expectedRevision: String(expectedRevision),
+    nowMs,
+    operator,
+  });
+}
+
+function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED', focusOptions = null) {
   const ledger = new Ledger(dataDir);
   const persistence = new SystemLedgerPersistenceAdapter(ledger);
   const loaded = persistence.load(T0, 'product.control.owner.bootstrap');
@@ -123,6 +138,9 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
   const publicationEffects = new Map();
   let currentPublicationEffect = publicationEffect;
   const strategyEffective = { basis: false, volume: false };
+  const focusPins = new Set();
+  const focusEligibleSymbols = new Set(focusOptions?.eligibleSymbols ?? []);
+  const focusCapacity = focusOptions?.capacity ?? 25;
   const composition = {
     async inspectMutation(mutation) {
       inspections.push(mutation);
@@ -140,6 +158,10 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
       publications.push(Object.freeze({ request, actor, receipt }));
       if (request.mutation.command === 'SET_BASIS_INTAKE') strategyEffective.basis = request.mutation.paused;
       if (request.mutation.command === 'SET_VOLUME_INTAKE') strategyEffective.volume = request.mutation.paused;
+      if (request.mutation.command === 'PIN_FOCUS') {
+        if (request.mutation.pinned) focusPins.add(request.mutation.symbol);
+        else focusPins.delete(request.mutation.symbol);
+      }
       if (currentPublicationEffect !== null) {
         publicationEffects.set(
           `${request.idempotencyKey}:${receipt.after.revision}:${receipt.after.generation}`,
@@ -186,7 +208,7 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
     persistence: sourcePersistence,
     physical: sourcePhysicalPort,
   });
-  const strategyIntake = Object.freeze({
+  const strategyIntakeFor = (controlOwner) => Object.freeze({
     readState(strategy) {
       const state = persistence.currentState();
       assert.equal(state.ok, true);
@@ -199,21 +221,83 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
         strategy,
         desiredPaused,
         effectivePaused: strategyEffective[strategy],
-        controlRevision: controls.snapshot().revision,
+        controlRevision: controlOwner.snapshot().revision,
         state: pending.value.length === 0 && desiredPaused === strategyEffective[strategy]
           ? 'APPLIED'
           : 'EFFECT_UNAVAILABLE',
       });
     },
   });
-  const owner = createProductRuntimeSystemControlCommandOwner({ controls, sourceIsolation, strategyIntake });
+  const attentionFocusFor = (controlOwner) => focusOptions === null ? undefined : Object.freeze({
+    readPinnedSymbols: () => focusOptions?.pinnedSymbolsOverride
+      ?? Object.freeze([...focusPins].sort()),
+    readState(symbol) {
+      const persisted = persistence.currentState();
+      const pending = persistence.readPendingControlRuntimePublications();
+      assert.equal(persisted.ok, true);
+      assert.equal(pending.ok, true);
+      const pinned = focusPins.has(symbol);
+      const desiredPinned = persisted.value.focusPins.symbols.includes(symbol);
+      const eligible = focusEligibleSymbols.has(symbol);
+      const readback = {
+        symbol,
+        desiredPinned,
+        ownerPinned: pinned,
+        eligible,
+        canPin: eligible && (pinned || focusPins.size < focusCapacity),
+        effectivePinned: pinned,
+        effectiveTier: pinned ? 'FOCUS' : 'UNIVERSE',
+        attentionPlanId: 'attention-plan:product-focus-test',
+        attentionPlanAtMs: T0,
+        pinCount: focusPins.size,
+        pinCapacity: focusCapacity,
+        controlRevision: controlOwner.snapshot().revision,
+        state: pending.value.length === 0 && desiredPinned === pinned ? 'APPLIED' : 'UNAVAILABLE',
+      };
+      return Object.freeze(focusOptions?.readbackTransform
+        ? focusOptions.readbackTransform(structuredClone(readback))
+        : readback);
+    },
+  });
+  const strategyIntake = strategyIntakeFor(controls);
+  const attentionFocus = attentionFocusFor(controls);
+  const owner = createProductRuntimeSystemControlCommandOwner({
+    controls,
+    sourceIsolation,
+    strategyIntake,
+    ...(attentionFocus === undefined ? {} : { attentionFocus }),
+  });
+  const reconstructControlOwner = () => {
+    const state = persistence.currentState();
+    assert.equal(state.ok, true);
+    const recoveredControls = new SystemControlService({
+      initialState: state.value.control,
+      persistence,
+      composition,
+    });
+    const recoveredStrategyIntake = strategyIntakeFor(recoveredControls);
+    const recoveredAttentionFocus = attentionFocusFor(recoveredControls);
+    const recoveredOwner = createProductRuntimeSystemControlCommandOwner({
+      controls: recoveredControls,
+      sourceIsolation,
+      strategyIntake: recoveredStrategyIntake,
+      ...(recoveredAttentionFocus === undefined ? {} : { attentionFocus: recoveredAttentionFocus }),
+    });
+    return Object.freeze({
+      controls: recoveredControls,
+      owner: recoveredOwner,
+      strategyIntake: recoveredStrategyIntake,
+      attentionFocus: recoveredAttentionFocus,
+    });
+  };
   return {
     dataDir, ledger, persistence, composition, controls, owner, sourceIsolation,
     sourcePersistence, sourcePhysicalPort,
     setSourceEffectFailure: (value) => { sourceEffectFailure = value; },
-    setPublicationEffect: (value) => { currentPublicationEffect = value; },
     sourcePhysical: () => structuredClone(sourcePhysical), inspections, publications,
-    strategyEffective, strategyIntake,
+    strategyEffective, strategyIntake, focusPins, attentionFocus,
+    setPublicationEffect: (value) => { currentPublicationEffect = value; },
+    reconstructControlOwner,
   };
 }
 
@@ -389,23 +473,8 @@ test('MIS-072 exposes independent durable strategy intake controls and fails clo
         (error) => error?.code === 'CONTROL_NOT_CONFIGURED',
       );
 
-      const recoveredState = pendingWorld.persistence.currentState();
-      assert.equal(recoveredState.ok, true);
-      const recoveredControls = new SystemControlService({
-        initialState: recoveredState.value.control,
-        persistence: pendingWorld.persistence,
-        composition: pendingWorld.composition,
-      });
-      const recoveredOwner = createProductRuntimeSystemControlCommandOwner({
-        controls: recoveredControls,
-        sourceIsolation: pendingWorld.sourceIsolation,
-        strategyIntake: pendingWorld.strategyIntake,
-      });
-      const recoveredService = runtime(Object.freeze({
-        ...pendingWorld,
-        controls: recoveredControls,
-        owner: recoveredOwner,
-      }), now);
+      const recovered = pendingWorld.reconstructControlOwner();
+      const recoveredService = runtime(Object.freeze({ ...pendingWorld, ...recovered }), now);
       pendingWorld.setPublicationEffect('APPLIED');
       const replay = await recoveredService.submitCommand(request, ACTOR);
       assert.equal(replay.status, 'ALREADY_APPLIED');
@@ -428,6 +497,235 @@ test('MIS-072 exposes independent durable strategy intake controls and fails clo
       pendingWorld.ledger.close();
       rmSync(pendingWorld.dataDir, { recursive: true, force: true });
     }
+  }
+});
+
+test('I00-037 exposes revision-bound 30-second focus pin controls with durable result and bounded readback', async () => {
+  const world = createWorld(
+    tempDataDir(),
+    'APPLIED',
+    { eligibleSymbols: ['BTCUSDT', 'ETHUSDT'], capacity: 1 },
+  );
+  try {
+    const now = { value: T0 + 4_000 };
+    const service = runtime(world, now);
+    const pinControlId = 'attention.focus.btcusdt.pin';
+    const unpinControlId = 'attention.focus.btcusdt.unpin';
+
+    const expiredPreview = await service.previewCommand({
+      controlId: pinControlId,
+      expectedRevision: '0',
+      operator: ACTOR,
+    });
+    assert.equal(expiredPreview.expiresAtMs, now.value + 30_000);
+    const expiredRequest = commandRequest(
+      focusControlIntent('BTCUSDT', true, 0, now.value),
+      expiredPreview,
+      'product.focus.btcusdt.expired.0001',
+    );
+    now.value = expiredPreview.expiresAtMs;
+    await assert.rejects(
+      service.submitCommand(expiredRequest, ACTOR),
+      (error) => error?.code === 'EXPIRED',
+    );
+    assert.equal(world.controls.snapshot().revision, 0);
+    assert.deepEqual([...world.focusPins], []);
+
+    now.value += 1;
+    const staleUnpinPreview = await service.previewCommand({
+      controlId: unpinControlId,
+      expectedRevision: '0',
+      operator: ACTOR,
+    });
+    const staleUnpinRequest = commandRequest(
+      focusControlIntent('BTCUSDT', false, 0, now.value),
+      staleUnpinPreview,
+      'product.focus.btcusdt.unpin.stale.0001',
+    );
+    const pinPreview = await service.previewCommand({
+      controlId: pinControlId,
+      expectedRevision: '0',
+      operator: ACTOR,
+    });
+    assert.equal(pinPreview.expiresAtMs, now.value + 30_000);
+    const pinRequest = commandRequest(
+      focusControlIntent('BTCUSDT', true, 0, now.value),
+      pinPreview,
+      'product.focus.btcusdt.pin.0001',
+    );
+    const pinned = await service.submitCommand(pinRequest, ACTOR);
+    assert.equal(pinned.status, 'APPLIED');
+    assert.match(pinned.receiptId, /^ledger-event:[1-9][0-9]*$/);
+    assert.deepEqual([...world.focusPins], ['BTCUSDT']);
+    assert.equal(world.controls.snapshot().revision, 1);
+    const persistedPin = world.persistence.currentState();
+    assert.equal(persistedPin.ok, true);
+    assert.deepEqual(persistedPin.value.focusPins, { symbols: ['BTCUSDT'] });
+
+    const pinReadback = await service.readCommandResult(resultIdentity(
+      pinRequest.idempotencyKey,
+      pinRequest.controlId,
+    ));
+    assert.equal(pinReadback.state, 'TERMINAL');
+    assert.equal(pinReadback.result.status, 'APPLIED');
+    assert.equal(pinReadback.result.receiptId, pinned.receiptId);
+
+    const registry = buildProductRuntimeControlRegistry(
+      makeSupervisor({ control: world.controls.snapshot() }),
+      world.owner,
+    );
+    const exposedUnpin = registry.find((control) => control.controlId === unpinControlId);
+    assert.ok(exposedUnpin);
+    assert.equal(exposedUnpin.wiringState, 'WIRED_LIVE');
+    assert.equal(exposedUnpin.currentStateRevision, '1');
+    assert.equal(exposedUnpin.currentDesiredValue, 'PINNED');
+    assert.equal(exposedUnpin.currentEffectiveValue, 'FOCUS');
+
+    await assert.rejects(
+      service.previewCommand({
+        controlId: 'attention.focus.ethusdt.pin',
+        expectedRevision: '1',
+        operator: ACTOR,
+      }),
+      (error) => error?.code === 'CONTROL_NOT_CONFIGURED'
+        && error?.message === 'FOCUS_CAPACITY_UNAVAILABLE',
+    );
+
+    now.value += 1;
+    const staleUnpin = await service.submitCommand(staleUnpinRequest, ACTOR);
+    assert.equal(staleUnpin.status, 'REJECTED_STALE_REVISION');
+    assert.deepEqual([...world.focusPins], ['BTCUSDT']);
+
+    const unpinPreview = await service.previewCommand({
+      controlId: unpinControlId,
+      expectedRevision: '1',
+      operator: ACTOR,
+    });
+    const unpinRequest = commandRequest(
+      focusControlIntent('BTCUSDT', false, 1, now.value),
+      unpinPreview,
+      'product.focus.btcusdt.unpin.0001',
+    );
+    const unpinned = await service.submitCommand(unpinRequest, ACTOR);
+    assert.equal(unpinned.status, 'APPLIED');
+    assert.deepEqual([...world.focusPins], []);
+    assert.equal(world.controls.snapshot().revision, 2);
+    const persistedUnpin = world.persistence.currentState();
+    assert.equal(persistedUnpin.ok, true);
+    assert.deepEqual(persistedUnpin.value.focusPins, { symbols: [] });
+
+    const unpinReadback = await service.readCommandResult(resultIdentity(
+      unpinRequest.idempotencyKey,
+      unpinRequest.controlId,
+    ));
+    assert.equal(unpinReadback.state, 'TERMINAL');
+    assert.equal(unpinReadback.result.status, 'APPLIED');
+    assert.equal(unpinReadback.result.receiptId, unpinned.receiptId);
+  } finally {
+    world.ledger.close();
+    rmSync(world.dataDir, { recursive: true, force: true });
+  }
+});
+
+test('I00-037 recovers only the exact durable pending focus publication after expiry and reconstruction', async () => {
+  const world = createWorld(
+    tempDataDir(),
+    null,
+    { eligibleSymbols: ['BTCUSDT'], capacity: 1 },
+  );
+  try {
+    const now = { value: T0 + 8_000 };
+    const service = runtime(world, now);
+    const intent = focusControlIntent('BTCUSDT', true, 0, now.value);
+    const preview = await service.previewCommand({
+      controlId: intent.controlId,
+      expectedRevision: '0',
+      operator: ACTOR,
+    });
+    const request = commandRequest(intent, preview, 'product.focus.btcusdt.pending.0001');
+    const first = await service.submitCommand(request, ACTOR);
+    assert.equal(first.status, 'FAILED_ATTENTION_REQUIRED');
+    assert.deepEqual(world.persistence.currentState().value.focusPins, { symbols: ['BTCUSDT'] });
+    const pending = world.persistence.readPendingControlRuntimePublications();
+    assert.equal(pending.ok, true);
+    assert.equal(pending.value.length, 1);
+    const durableBeforeReplay = world.persistence.currentState();
+    assert.equal(durableBeforeReplay.ok, true);
+    const mutationTraceCount = durableBeforeReplay.value.traceIndex
+      .filter((entry) => entry.eventId.startsWith('control.mutation')).length;
+    const idempotencyReceiptCount = durableBeforeReplay.value.idempotencyReceipts.length;
+    now.value = preview.expiresAtMs + 60_000;
+
+    await assert.rejects(
+      service.submitCommand(Object.freeze({
+        ...request,
+        payload: Object.freeze({ symbol: 'BTCUSDT', pinned: false }),
+      }), ACTOR),
+      (error) => error?.code === 'CONTROL_NOT_CONFIGURED',
+    );
+    await assert.rejects(
+      service.submitCommand(Object.freeze({
+        ...request,
+        previewDigest: `${request.previewDigest.slice(0, -1)}${request.previewDigest.endsWith('0') ? '1' : '0'}`,
+      }), ACTOR),
+      (error) => error?.code === 'CONTROL_NOT_CONFIGURED',
+    );
+
+    const recovered = world.reconstructControlOwner();
+    const recoveredService = runtime(Object.freeze({ ...world, ...recovered }), now);
+    world.setPublicationEffect('APPLIED');
+    const replay = await recoveredService.submitCommand(request, ACTOR);
+    assert.equal(replay.status, 'ALREADY_APPLIED');
+    assert.match(replay.receiptId, /^ledger-event:[1-9][0-9]*$/);
+    const durableAfterReplay = world.persistence.currentState();
+    assert.equal(durableAfterReplay.ok, true);
+    assert.equal(
+      durableAfterReplay.value.traceIndex.filter((entry) => entry.eventId.startsWith('control.mutation')).length,
+      mutationTraceCount,
+    );
+    assert.equal(durableAfterReplay.value.idempotencyReceipts.length, idempotencyReceiptCount);
+    const cleared = world.persistence.readPendingControlRuntimePublications();
+    assert.equal(cleared.ok, true);
+    assert.equal(cleared.value.length, 0);
+    const terminal = await recoveredService.readCommandResult(resultIdentity(request.idempotencyKey, request.controlId));
+    assert.equal(terminal.state, 'TERMINAL');
+    assert.equal(terminal.result.status, 'APPLIED');
+  } finally {
+    world.ledger.close();
+    rmSync(world.dataDir, { recursive: true, force: true });
+  }
+});
+
+test('I00-037 rejects malformed focus owner readback instead of normalizing a false green', () => {
+  const malformed = [
+    (state) => ({ ...state, extra: true }),
+    (state) => ({ ...state, effectivePinned: true, ownerPinned: true, desiredPinned: true, effectiveTier: 'UNIVERSE' }),
+    (state) => ({ ...state, attentionPlanAtMs: null }),
+    (state) => ({ ...state, pinCount: 2, pinCapacity: 1 }),
+    (state) => ({ ...state, desiredPinned: true, ownerPinned: false, state: 'APPLIED' }),
+  ];
+  for (const readbackTransform of malformed) {
+    const world = createWorld(tempDataDir(), 'APPLIED', {
+      eligibleSymbols: ['BTCUSDT'],
+      readbackTransform,
+    });
+    try {
+      assert.equal(world.owner.readFocusControlState('BTCUSDT'), null);
+    } finally {
+      world.ledger.close();
+      rmSync(world.dataDir, { recursive: true, force: true });
+    }
+  }
+
+  const duplicates = createWorld(tempDataDir(), 'APPLIED', {
+    eligibleSymbols: ['BTCUSDT'],
+    pinnedSymbolsOverride: Object.freeze(['BTCUSDT', 'BTCUSDT']),
+  });
+  try {
+    assert.deepEqual(duplicates.owner.readFocusPinnedSymbols(), []);
+  } finally {
+    duplicates.ledger.close();
+    rmSync(duplicates.dataDir, { recursive: true, force: true });
   }
 });
 

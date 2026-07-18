@@ -109,6 +109,14 @@ export function validateControlMutation(value: unknown): MutationValidation {
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     }
+    case 'PIN_FOCUS':
+      if (!exactKeys(value, ['command', 'symbol', 'pinned'])
+        || typeof value.symbol !== 'string'
+        || !STRATEGY_SYMBOL_PATTERN.test(value.symbol)
+        || typeof value.pinned !== 'boolean') {
+        return invalid('Focus pin requires one canonical symbol and boolean pinned value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     case 'SET_SAFE_MODE':
       if (!exactKeys(value, ['command', 'safeMode']) || typeof value.safeMode !== 'string') {
         return invalid('Mode mutation requires one safeMode value.');

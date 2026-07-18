@@ -88,6 +88,9 @@ export function createInitialCheckpointState(
       basisMinNetPct: null,
       volume1sMultiple: null,
     },
+    focusPins: {
+      symbols: [],
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

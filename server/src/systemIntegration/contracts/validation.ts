@@ -463,6 +463,7 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     SET_VOLUME_SYMBOL_POLICY: ['command', 'action', 'symbol'],
     REDUCE_SIZE_CEILING: ['command', 'scope', 'maximumNotionalUsd'],
     SET_STRATEGY_THRESHOLD: ['command', 'strategy', 'threshold', 'value'],
+    PIN_FOCUS: ['command', 'symbol', 'pinned'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -505,6 +506,12 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       }
       break;
     }
+    case 'PIN_FOCUS':
+      if (typeof mutation.symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(mutation.symbol)
+        || typeof mutation.pinned !== 'boolean') {
+        issues.push(issue('mutation', 'FOCUS_PIN_INVALID', 'focus pin requires one canonical symbol and boolean pinned value'));
+      }
+      break;
     case 'SET_SAFE_MODE':
       if (!isSystemSafeMode(mutation.safeMode)) issues.push(issue('mutation.safeMode', 'SAFE_MODE_INVALID', 'only safe convergence modes are accepted'));
       break;

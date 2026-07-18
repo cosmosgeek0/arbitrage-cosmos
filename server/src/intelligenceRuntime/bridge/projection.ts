@@ -272,6 +272,19 @@ export function primaryInstrument(node: UniverseMarketNode): InstrumentIdentity 
 }
 
 export function derivedSourceQuality(node: UniverseMarketNode): AttentionSourceQuality {
+  const focusTruth = node.focusTruth?.truth ?? null;
+  if (focusTruth !== null) {
+    if (focusTruth.freshness.state === 'STALE') {
+      return { state: 'STALE', reasonCodes: ['FOCUS_TRUTH_RECEIPT_STALE'] };
+    }
+    if (focusTruth.freshness.state === 'UNAVAILABLE' || focusTruth.completeness.state === 'MISSING') {
+      return { state: 'FAILED', reasonCodes: ['FOCUS_TRUTH_RECEIPT_UNAVAILABLE'] };
+    }
+    if (focusTruth.freshness.state !== 'FRESH' || focusTruth.completeness.state !== 'COMPLETE') {
+      return { state: 'DEGRADED', reasonCodes: ['FOCUS_TRUTH_RECEIPT_PARTIAL'] };
+    }
+    return { state: 'HEALTHY', reasonCodes: [] };
+  }
   const truths = [node.spot?.truth, node.usdMPerpetual?.truth]
     .filter((truth): truth is TruthMetadata => truth !== undefined);
   if (truths.length === 0) return { state: 'FAILED', reasonCodes: ['NO_PUBLIC_MARKET_LEG'] };

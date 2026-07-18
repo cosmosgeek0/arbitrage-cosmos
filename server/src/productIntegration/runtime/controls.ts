@@ -45,6 +45,9 @@ function ownerBlocker(
       && typeof owner.readStrategyIntakeControlState !== 'function') {
     return 'STRATEGY_INTAKE_READBACK_NOT_PROVEN';
   }
+  if (command === 'PIN_FOCUS' && typeof owner.readFocusControlState !== 'function') {
+    return 'FOCUS_CONTROL_READBACK_NOT_PROVEN';
+  }
   if (command === 'RESTART_COMPONENT' && capability.managedRestartComponentId !== 'engine-supervisor') {
     return 'MANAGED_ROOT_RESTART_NOT_PROVEN';
   }
@@ -57,7 +60,7 @@ function entry(
   input: Readonly<{
     controlId: string;
     backendCommandId: ProductRuntimeSafeBackendCommand;
-    targetType: 'SYSTEM' | 'COMPONENT';
+    targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL';
     targetId: string;
     payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
     payloadSchema: string;
@@ -85,11 +88,15 @@ function entry(
     owner: blocker === null ? owner!.capability.ownerId : 'systemIntegration canonical control owner',
     group: input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
       ? 'Source Lifecycle'
+      : input.backendCommandId === 'PIN_FOCUS'
+        ? 'Universe Attention'
       : input.backendCommandId === 'SET_BASIS_INTAKE' || input.backendCommandId === 'SET_VOLUME_INTAKE'
         ? 'Strategy Intake'
       : input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
     authority: blocker === null ? 'SERVER_DERIVED_OPERATOR' : 'NOT_CONFIGURED',
-    requiredPosture: input.backendCommandId === 'RESTART_COMPONENT' ? 'NO_CAPITAL_EXPOSED' : 'PROCESS_ALIVE',
+    requiredPosture: input.backendCommandId === 'RESTART_COMPONENT'
+      ? 'NO_CAPITAL_EXPOSED'
+      : input.backendCommandId === 'PIN_FOCUS' ? 'ACCEPTED_RUNTIME_ADAPTER' : 'PROCESS_ALIVE',
     expiryPolicy: 'Canonical owner preview expiry is authoritative.',
     currentStateRevision: currentStateRevision ?? String(snapshot.control.revision),
     disabledReason: blocker === null ? null : blocker,
@@ -145,6 +152,68 @@ function strategyIntakeEntry(
 
 type PublicSourceControlId = 'public-spot-source' | 'public-usdm-source';
 
+const FOCUS_CONTROL_ID = /^attention\.focus\.([a-z0-9]{4,20})\.(pin|unpin)$/;
+
+function focusControlSpec(controlId: string): Readonly<{ symbol: string; pinned: boolean }> | null {
+  const matched = controlId.match(FOCUS_CONTROL_ID);
+  if (!matched) return null;
+  const symbol = matched[1].toUpperCase();
+  return /^[A-Z0-9]{4,20}$/.test(symbol)
+    ? Object.freeze({ symbol, pinned: matched[2] === 'pin' })
+    : null;
+}
+
+function focusControlId(symbol: string, pinned: boolean): string {
+  return `attention.focus.${symbol.toLowerCase()}.${pinned ? 'pin' : 'unpin'}`;
+}
+
+function focusEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  symbol: string,
+  pinned: boolean,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readFocusControlState']>> = null;
+  try { state = owner?.readFocusControlState?.(symbol) ?? null; } catch { state = null; }
+  const configured = ownerBlocker(owner, 'PIN_FOCUS') === null;
+  const blocker = state === null
+    ? 'FOCUS_CONTROL_STATE_UNAVAILABLE'
+    : pinned && state.state !== 'APPLIED'
+      ? state.state
+      : pinned && state.eligible !== true
+        ? 'FOCUS_SYMBOL_INELIGIBLE'
+        : pinned && state.canPin !== true ? 'FOCUS_CAPACITY_UNAVAILABLE' : null;
+  return entry(snapshot, owner, {
+    controlId: focusControlId(symbol, pinned),
+    backendCommandId: 'PIN_FOCUS',
+    targetType: 'SYMBOL',
+    targetId: symbol,
+    payload: Object.freeze({ symbol, pinned }),
+    payloadSchema: '{ symbol: canonical symbol, pinned: boolean }',
+    payloadEnumeration: Object.freeze([true, false]),
+    defaultValue: false,
+    label: `${pinned ? 'Pin' : 'Unpin'} ${symbol} Focus`,
+    explanation: pinned
+      ? 'Requests bounded enrichment attention from the canonical Intelligence Runtime owner.'
+      : 'Releases only the operator pin; strategy and protected-capital attention truth remain authoritative.',
+    safeBounds: 'eligible canonical symbol and cumulative FOCUS cap',
+    currentDesiredValue: state === null ? 'UNKNOWN' : state.desiredPinned ? 'PINNED' : 'UNPINNED',
+    currentEffectiveValue: state?.effectivePinned === null || state === null
+      ? 'UNKNOWN'
+      : state.effectivePinned ? state.effectiveTier ?? 'FOCUS' : 'UNPINNED',
+    effect: 'IMMEDIATE',
+    reversibility: 'The inverse transition requires a fresh 30-second preview and exact canonical revision.',
+    invariants: Object.freeze([
+      'The canonical attention planner retains eligibility and hard-cap authority.',
+      'No strategy, proposal, risk, capital, or execution authority is created.',
+    ]),
+    effectTelemetry: Object.freeze(['desired pin set', 'effective attention tier', 'attention plan identity', 'durable receipt']),
+    confirmationText: `Confirm focus ${pinned ? 'pin' : 'unpin'} for ${symbol}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.controlRevision),
+    ...(configured && blocker !== null ? { forcedBlocker: blocker } : {}),
+  });
+}
+
 function sourceLifecycleEntry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
@@ -185,12 +254,13 @@ function sourceLifecycleEntry(
   });
 }
 
-/** Eight bounded non-money controls; global, source-local, or strategy-local only. */
+/** Bounded non-money controls; focus entries are symbol-scoped and capped at 25. */
 export function buildProductRuntimeControlRegistry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner?: Readonly<ProductRuntimeCommandOwnerPort>,
+  requestedControlId?: string,
 ): readonly Readonly<ProductRuntimeControlRegistryEntry>[] {
-  return Object.freeze([
+  const controls: Readonly<ProductRuntimeControlRegistryEntry>[] = [
     entry(snapshot, owner, {
       controlId: 'global.safe-mode.read-only', backendCommandId: 'SET_SAFE_MODE', targetType: 'SYSTEM', targetId: 'machine',
       payload: Object.freeze({ safeMode: 'READ_ONLY' }), payloadSchema: '{ safeMode: READ_ONLY }', payloadEnumeration: Object.freeze(['READ_ONLY']), defaultValue: 'READ_ONLY',
@@ -227,7 +297,25 @@ export function buildProductRuntimeControlRegistry(
     sourceLifecycleEntry(snapshot, owner, 'public-usdm-source'),
     strategyIntakeEntry(snapshot, owner, 'basis'),
     strategyIntakeEntry(snapshot, owner, 'volume'),
-  ]);
+  ];
+  const focusControls = new Map<string, Readonly<{ symbol: string; pinned: boolean }>>();
+  const requested = requestedControlId === undefined ? null : focusControlSpec(requestedControlId);
+  if (requested !== null) focusControls.set(focusControlId(requested.symbol, requested.pinned), requested);
+  try {
+    const pinned = owner?.readFocusPinnedSymbols?.() ?? [];
+    if (Array.isArray(pinned) && pinned.length <= 25) {
+      for (const symbol of pinned) {
+        if (typeof symbol === 'string' && /^[A-Z0-9]{4,20}$/.test(symbol)) {
+          focusControls.set(focusControlId(symbol, false), Object.freeze({ symbol, pinned: false }));
+        }
+      }
+    }
+  } catch { /* Absence is represented by the owner blocker, never a synthetic entry. */ }
+  for (const spec of [...focusControls.values()]
+    .sort((left, right) => focusControlId(left.symbol, left.pinned).localeCompare(focusControlId(right.symbol, right.pinned), 'en'))) {
+    controls.push(focusEntry(snapshot, owner, spec.symbol, spec.pinned));
+  }
+  return Object.freeze(controls);
 }
 
 function findWiredControl(
@@ -274,7 +362,7 @@ function requestBoundIntent(
   operator: Readonly<ProductRuntimeOperator>,
 ): Readonly<ProductRuntimeCommandIntent> | null {
   if (!PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.includes(request.backendCommandId as ProductRuntimeSafeBackendCommand)
-      || !['SYSTEM', 'COMPONENT'].includes(request.targetType)) return null;
+      || !['SYSTEM', 'COMPONENT', 'SYMBOL'].includes(request.targetType)) return null;
   return Object.freeze({
     controlId: request.controlId,
     backendCommandId: request.backendCommandId as ProductRuntimeSafeBackendCommand,

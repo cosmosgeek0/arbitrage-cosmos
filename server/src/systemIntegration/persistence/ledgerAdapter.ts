@@ -154,7 +154,8 @@ function requiresRuntimePublication(command: unknown): boolean {
     || command === 'SET_BASIS_SYMBOL_POLICY'
     || command === 'SET_VOLUME_SYMBOL_POLICY'
     || command === 'REDUCE_SIZE_CEILING'
-    || command === 'SET_STRATEGY_THRESHOLD';
+    || command === 'SET_STRATEGY_THRESHOLD'
+    || command === 'PIN_FOCUS';
 }
 
 function idempotencyEventKind(idempotencyKey: string): string {
@@ -2450,6 +2451,7 @@ export class SystemLedgerPersistenceAdapter {
         let strategySymbolPolicy = state.strategySymbolPolicy;
         let sizeCeilings = state.sizeCeilings;
         let strategyThresholds = state.strategyThresholds;
+        let focusPins = state.focusPins;
         let reservations = state.reservations;
         let approvals = state.approvals;
         const mutation: Readonly<SystemControlMutation> = commit.request.mutation;
@@ -2496,6 +2498,11 @@ export class SystemLedgerPersistenceAdapter {
             ...state.strategyThresholds,
             [field]: mutation.value,
           });
+        } else if (commit.applied && mutation.command === 'PIN_FOCUS') {
+          const symbols = mutation.pinned
+            ? [...new Set([...state.focusPins.symbols, mutation.symbol])].sort((left, right) => left.localeCompare(right, 'en'))
+            : state.focusPins.symbols.filter((symbol) => symbol !== mutation.symbol);
+          focusPins = Object.freeze({ symbols: Object.freeze(symbols) });
         } else if (commit.applied && mutation.command === 'REVOKE_RESERVATION') {
           reservations = state.reservations.map((entry) => entry.reservationId === mutation.reservationId
             ? { ...entry, blocksAllocation: false, correlationId: commit.request.correlationId, updatedAtMs: commit.request.requestedAtMs }
@@ -2515,6 +2522,7 @@ export class SystemLedgerPersistenceAdapter {
             strategySymbolPolicy,
             sizeCeilings,
             strategyThresholds,
+            focusPins,
             desiredComponents,
             reservations,
             approvals,

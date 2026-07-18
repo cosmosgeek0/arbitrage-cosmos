@@ -201,7 +201,7 @@ export class ProductIntegrationRuntimeService {
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner);
+    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner, input.controlId);
     return previewProductRuntimeControl({
       registry,
       owner: this.options.commandOwner,
@@ -219,7 +219,7 @@ export class ProductIntegrationRuntimeService {
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner);
+    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner, request.controlId);
     return submitProductRuntimeControl({ registry, owner: this.options.commandOwner, request, nowMs, operator });
   }
 

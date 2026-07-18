@@ -366,6 +366,11 @@ export interface PersistedStrategyThresholds {
   readonly volume1sMultiple: string | null;
 }
 
+/** Desired operator attention pins; the Intelligence Runtime planner owns delivery. */
+export interface PersistedFocusPins {
+  readonly symbols: readonly string[];
+}
+
 /**
  * Opaque owner reference. Persistence preserves identity and revision but does
  * not infer proposal, mandate, configuration, or position policy semantics.
@@ -588,6 +593,7 @@ export interface SystemIntegrationCheckpointState {
   readonly strategySymbolPolicy: Readonly<PersistedStrategySymbolPolicy>;
   readonly sizeCeilings: Readonly<PersistedSizeCeilings>;
   readonly strategyThresholds: Readonly<PersistedStrategyThresholds>;
+  readonly focusPins: Readonly<PersistedFocusPins>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];

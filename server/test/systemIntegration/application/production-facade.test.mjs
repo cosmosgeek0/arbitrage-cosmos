@@ -225,6 +225,8 @@ function fixture(options = {}) {
     VOLUME: options.initialVolumeThreshold ?? '3',
   };
   const strategyThresholdOrder = [];
+  const focusPinState = new Set();
+  const focusPinOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -330,6 +332,48 @@ function fixture(options = {}) {
           },
         })]),
     )),
+    ...(options.focusOwnerUnavailable === true ? {} : {
+      attentionFocus: Object.freeze({
+        readPinnedSymbols: () => [...focusPinState].sort(),
+        readFocusState: (symbol) => {
+          const readback = {
+            symbol,
+            pinned: focusPinState.has(symbol),
+            eligible: options.focusIneligibleSymbol === symbol ? false : true,
+            canPin: options.focusIneligibleSymbol !== symbol
+              && (focusPinState.has(symbol) || focusPinState.size < (options.focusPinCapacity ?? 25)),
+            effectivePinned: focusPinState.has(symbol),
+            effectiveTier: focusPinState.has(symbol) ? 'FOCUS' : 'UNIVERSE',
+            attentionPlanId: 'fixture-attention-plan',
+            attentionPlanAtMs: clock.nowMs(),
+            pinCount: focusPinState.size,
+            pinCapacity: options.focusPinCapacity ?? 25,
+          };
+          return Object.freeze(options.focusReadbackTransform
+            ? options.focusReadbackTransform(structuredClone(readback))
+            : readback);
+        },
+        setPinned: (symbol, pinned) => {
+          focusPinOrder.push(`${pinned ? 'PIN' : 'UNPIN'}:${symbol}`);
+          if (options.focusPinSetThrows === symbol) throw new Error('deterministic focus-pin owner failure');
+          if (pinned && options.focusIneligibleSymbol === symbol) throw new Error('focus symbol ineligible');
+          const before = focusPinState.has(symbol);
+          if (pinned) focusPinState.add(symbol);
+          else focusPinState.delete(symbol);
+          return before !== pinned;
+        },
+        restorePinnedSymbols: (symbols) => {
+          if (options.focusPinRestoreThrows === true) throw new Error('deterministic focus-pin restore failure');
+          focusPinState.clear();
+          for (const symbol of symbols) {
+            focusPinOrder.push(`RESTORE:${symbol}`);
+            order.push(`focus:restore:${symbol}`);
+            focusPinState.add(symbol);
+          }
+          return true;
+        },
+      }),
+    }),
     ...(options.traces ? { traces: options.traces } : {}),
     lifecycleTruth: {
       ...(options.restartTruth !== undefined || options.restartTruthThrows === true
@@ -425,6 +469,8 @@ function fixture(options = {}) {
     sizeCeilingOrder,
     strategyThresholdState,
     strategyThresholdOrder,
+    focusPinState,
+    focusPinOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -807,6 +853,135 @@ test('MIS-076 mutates only approved versioned strategy thresholds, guards loweri
   assert.equal(refused.ok, false);
   assert.equal(refused.failure.code, 'STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
   assert.equal(unavailable.app.strategyThresholdState('BASIS').state, 'OWNER_NOT_WIRED');
+});
+
+test('I00-037 revision-binds bounded focus pins, persists desired attention, and restores before runtime admission', async () => {
+  assert.equal(parseControlBody({
+    command: 'PIN_FOCUS', expectedRevision: 0, reason: 'pin bounded focus',
+    symbol: 'BTCUSDT', pinned: true,
+  }).ok, true);
+  for (const hostile of [
+    { symbol: 'btcusdt', pinned: true },
+    { symbol: 'BTCUSDT', pinned: 'true' },
+    { symbol: 'BTCUSDT', pinned: true, arbitrary: true },
+  ]) {
+    assert.equal(parseControlBody({
+      command: 'PIN_FOCUS', expectedRevision: 0, reason: 'hostile focus payload', ...hostile,
+    }).ok, false, JSON.stringify(hostile));
+  }
+
+  const first = fixture({ focusPinCapacity: 1 });
+  assert.equal(first.app.start().ok, true);
+  const pinned = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-btc'), ACTOR);
+  assert.equal(pinned.ok, true);
+  assert.deepEqual([...first.focusPinState], ['BTCUSDT']);
+  assert.deepEqual(await first.app.read.focusPin('BTCUSDT'), {
+    symbol: 'BTCUSDT', desiredPinned: true, ownerPinned: true, eligible: true, canPin: true,
+    effectivePinned: true, effectiveTier: 'FOCUS', attentionPlanId: 'fixture-attention-plan',
+    attentionPlanAtMs: T0, pinCount: 1, pinCapacity: 1, controlRevision: 1, state: 'APPLIED',
+  });
+
+  const stale = validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-pin-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const exhausted = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'ETHUSDT', pinned: true,
+  }, 'focus-pin-capacity'), ACTOR);
+  assert.equal(exhausted.ok, false);
+  assert.equal(exhausted.failure.code, 'FOCUS_CAPACITY_UNAVAILABLE');
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.focusPins, { symbols: ['BTCUSDT'] });
+
+  const ineligible = fixture({ focusIneligibleSymbol: 'ETHUSDT' });
+  assert.equal(ineligible.app.start().ok, true);
+  const refused = await ineligible.app.controls.mutate(validControlRequest(ineligible, {
+    command: 'PIN_FOCUS', symbol: 'ETHUSDT', pinned: true,
+  }, 'focus-pin-ineligible'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'FOCUS_SYMBOL_INELIGIBLE');
+
+  const failed = fixture({ ledger: first.ledger, focusPinRestoreThrows: true });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.intelligenceRuntime.starts, 0);
+
+  const recovered = fixture({ ledger: first.ledger, focusPinCapacity: 1 });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.focusPinOrder, ['RESTORE:BTCUSDT']);
+  assert.deepEqual([...recovered.focusPinState], ['BTCUSDT']);
+  await drive(recovered, 4);
+  assert.ok(
+    recovered.order.indexOf('runtime:start:intelligence-runtime')
+      > recovered.order.indexOf('focus:restore:BTCUSDT'),
+    'Intelligence Runtime must start only after the durable desired pin set is restored',
+  );
+
+  const unpinned = await recovered.app.controls.mutate(validControlRequest(recovered, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-unpin-btc'), ACTOR);
+  assert.equal(unpinned.ok, true);
+  assert.deepEqual([...recovered.focusPinState], []);
+  assert.equal(recovered.app.focusPinState('BTCUSDT').state, 'APPLIED');
+
+  const hostileReadback = fixture({
+    focusReadbackTransform: (state) => ({
+      ...state,
+      pinned: true,
+      effectivePinned: true,
+      effectiveTier: 'UNIVERSE',
+      pinCount: 1,
+    }),
+  });
+  assert.equal(hostileReadback.app.start().ok, true);
+  const rejectedReadback = hostileReadback.app.focusPinState('BTCUSDT');
+  assert.equal(rejectedReadback.state, 'UNAVAILABLE');
+  assert.equal(rejectedReadback.effectivePinned, null);
+
+  const ineffectivePublication = fixture({
+    focusReadbackTransform: (state) => state.pinned
+      ? { ...state, effectivePinned: false, effectiveTier: 'UNIVERSE' }
+      : state,
+  });
+  assert.equal(ineffectivePublication.app.start().ok, true);
+  const ineffectiveRequest = validControlRequest(ineffectivePublication, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-ineffective-plan');
+  const ineffective = await ineffectivePublication.app.controls.mutate(ineffectiveRequest, ACTOR);
+  assert.equal(ineffective.ok, false);
+  assert.equal(ineffective.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.deepEqual([...ineffectivePublication.focusPinState], ['BTCUSDT']);
+  const ineffectiveReceipt = await ineffectivePublication.app.controls.readResult(ineffectiveRequest.idempotencyKey);
+  assert.equal(ineffectiveReceipt.runtimePublication, 'PENDING');
+  assert.equal(ineffectivePublication.app.focusPinState('BTCUSDT').state, 'UNAVAILABLE');
+
+  const retainedCanonicalFocus = fixture({
+    focusReadbackTransform: (state) => state.pinned
+      ? state
+      : { ...state, effectivePinned: false, effectiveTier: 'FOCUS' },
+  });
+  assert.equal(retainedCanonicalFocus.app.start().ok, true);
+  const retainedPin = await retainedCanonicalFocus.app.controls.mutate(validControlRequest(retainedCanonicalFocus, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-before-protected-focus'), ACTOR);
+  assert.equal(retainedPin.ok, true);
+  const retainedUnpin = await retainedCanonicalFocus.app.controls.mutate(validControlRequest(retainedCanonicalFocus, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-unpin-with-protected-focus'), ACTOR);
+  assert.equal(retainedUnpin.ok, true);
+  const retainedReadback = retainedCanonicalFocus.app.focusPinState('BTCUSDT');
+  assert.equal(retainedReadback.ownerPinned, false);
+  assert.equal(retainedReadback.effectivePinned, false);
+  assert.equal(retainedReadback.effectiveTier, 'FOCUS');
+  assert.equal(retainedReadback.state, 'APPLIED');
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {

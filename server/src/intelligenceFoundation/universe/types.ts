@@ -160,6 +160,14 @@ export interface FocusEligibility {
   reasonCodes: string[];
 }
 
+export interface FocusTruthReceipt {
+  id: string;
+  scope: 'ATTENTION_FOCUS';
+  configurationVersion: string;
+  contentDigest: string;
+  truth: TruthMetadata;
+}
+
 export interface UniverseMarketNode {
   id: string;
   canonicalMarket: string;
@@ -179,6 +187,8 @@ export interface UniverseMarketNode {
   activity: 'DORMANT' | 'LOW_VOLUME' | 'ACTIVE' | 'UNKNOWN';
   visibility: { state: 'VISIBLE'; reasonCodes: string[] };
   focusEligibility: FocusEligibility;
+  /** Canonical field-scoped receipt; broader node truth remains unchanged. */
+  focusTruth: FocusTruthReceipt;
   reasonCodes: string[];
   truth: TruthMetadata;
 }

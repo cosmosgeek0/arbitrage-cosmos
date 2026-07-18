@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'strategyThresholds', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'strategyThresholds', 'focusPins', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -337,6 +337,19 @@ export function validateCheckpointState(value: unknown): string[] {
         || decimal.replace('.', '').length > 12 || !Number.isFinite(numeric) || !bounded)) {
         issues.push(`$.strategyThresholds.${field}:THRESHOLD_INVALID`);
       }
+    }
+  }
+
+  const focusPins = value.focusPins;
+  if (!plainObject(focusPins)) issues.push('$.focusPins:OBJECT_REQUIRED');
+  else {
+    exactKeys(focusPins, ['symbols'], '$.focusPins', issues);
+    const symbols = focusPins.symbols;
+    if (!Array.isArray(symbols) || symbols.length > 25
+      || symbols.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+      || new Set(symbols).size !== symbols.length
+      || symbols.some((symbol, index) => index > 0 && String(symbols[index - 1]).localeCompare(String(symbol), 'en') >= 0)) {
+      issues.push('$.focusPins.symbols:FOCUS_PINS_INVALID');
     }
   }
 
@@ -624,6 +637,9 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
       ...(Object.hasOwn(parsed.state, 'strategyThresholds')
         ? {}
         : { strategyThresholds: { basisMinNetPct: null, volume1sMultiple: null } }),
+      ...(Object.hasOwn(parsed.state, 'focusPins')
+        ? {}
+        : { focusPins: { symbols: [] } }),
     };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };

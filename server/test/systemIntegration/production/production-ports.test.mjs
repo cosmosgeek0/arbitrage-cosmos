@@ -368,6 +368,12 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(intelligence.running, true);
   assert.equal(intelligence.timestamp.sourceTimeMs, START - 200);
+  const focusReadback = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(focusReadback.canPin, true, JSON.stringify(focusReadback));
+  assert.equal(focusReadback.effectivePinned, false);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), ['BTCUSDT']);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, true);
   await world.ports.runtimes.q.start();
   assert.equal(world.ports.runtimes.q.health(world.ctx()).fatal.code, 'CHAMPION_UNAVAILABLE');
 
@@ -390,6 +396,18 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(stale.timestamp, null);
   assert.equal(allRowsReads, 6);
+  const staleFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(staleFocus.pinned, true);
+  assert.equal(staleFocus.canPin, false);
+  assert.equal(staleFocus.effectivePinned, null);
+  assert.equal(staleFocus.effectiveTier, null);
+  assert.throws(
+    () => world.ports.attentionFocus.setPinned('BTCUSDT', true),
+    /eligible symbol and available FOCUS capacity/,
+  );
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), []);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
@@ -414,12 +432,46 @@ test('market intelligence fails closed when USD-M disconnects with fresh cached 
     world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp.sourceTimeMs,
     START - 200,
   );
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, true);
   world.market.feeds['futures-markprice'] = 'closed';
 
   const disconnected = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(disconnected.running, true);
   assert.equal(disconnected.timestamp, null);
+  const disconnectedFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(disconnectedFocus.pinned, true);
+  assert.equal(disconnectedFocus.canPin, false);
+  assert.equal(disconnectedFocus.effectivePinned, null);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
   assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp.sourceTimeMs, START - 250);
+});
+
+test('focus readback becomes unavailable immediately when the intelligence owner stops', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+
+  world.ports.runtimes.marketIntelligence.stop();
+  const stopped = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(stopped.pinned, true);
+  assert.equal(stopped.canPin, false);
+  assert.equal(stopped.effectivePinned, null);
+  assert.equal(stopped.attentionPlanId, null);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
 });
 
 test('sibling intelligence probes share exactly one same-step refresh and never a later call', async () => {

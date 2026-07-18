@@ -11,6 +11,7 @@ import type {
 import type {
   SystemComponentSnapshot,
   SystemControlState,
+  SystemFocusPinReadback,
   SystemTraceEvent,
 } from '../contracts/types.js';
 import type {
@@ -84,6 +85,8 @@ export interface SystemIntegrationApplicationOptions {
   readonly sizeCeilings?: Readonly<Partial<Record<'SYSTEM' | 'BASIS' | 'VOLUME', SizeCeilingOwnerPort>>>;
   /** Closed, approved threshold catalog; strategy runtimes remain the config owners. */
   readonly strategyThresholds?: Readonly<Partial<Record<'BASIS' | 'VOLUME', StrategyThresholdOwnerPort>>>;
+  /** Intelligence Runtime owns desired focus pins and effective attention readback. */
+  readonly attentionFocus?: AttentionFocusOwnerPort;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
@@ -141,6 +144,26 @@ export interface StrategyThresholdControlReadback {
   readonly effectiveValue: string | null;
   readonly controlRevision: number;
   readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface AttentionFocusOwnerReadback {
+  readonly symbol: string;
+  readonly pinned: boolean;
+  readonly eligible: boolean | null;
+  readonly canPin: boolean;
+  readonly effectivePinned: boolean | null;
+  readonly effectiveTier: SystemFocusPinReadback['effectiveTier'];
+  readonly attentionPlanId: string | null;
+  readonly attentionPlanAtMs: number | null;
+  readonly pinCount: number;
+  readonly pinCapacity: number;
+}
+
+export interface AttentionFocusOwnerPort {
+  readPinnedSymbols(): readonly string[];
+  readFocusState(symbol: string): Readonly<AttentionFocusOwnerReadback>;
+  setPinned(symbol: string, pinned: boolean): boolean;
+  restorePinnedSymbols(symbols: readonly string[]): boolean;
 }
 
 export type SystemApplicationPhase =
@@ -215,6 +238,7 @@ export interface SystemIntegrationApplicationFacade {
   ): Readonly<StrategySymbolPolicyControlReadback>;
   sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback>;
   strategyThresholdState(strategy: 'BASIS' | 'VOLUME'): Readonly<StrategyThresholdControlReadback>;
+  focusPinState(symbol: string): Readonly<SystemFocusPinReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

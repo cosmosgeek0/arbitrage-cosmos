@@ -21,6 +21,7 @@ import type {
   SystemControlMutationReceipt,
   SystemControlMutationRequest,
   SystemControlState,
+  SystemFocusPinReadback,
   SystemTraceEvent,
 } from '../contracts/types.js';
 import {
@@ -126,6 +127,7 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_BASIS_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   if (mutation.command === 'SET_VOLUME_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   if (mutation.command === 'REDUCE_SIZE_CEILING') return true;
+  if (mutation.command === 'PIN_FOCUS') return mutation.pinned === false;
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -402,6 +404,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       },
       events: (query: Readonly<SystemIntegrationEventQuery>) => this.eventPage(query),
       controls: () => this.controlState(),
+      focusPin: (symbol: string) => this.focusPinState(symbol),
       trace: (traceCorrelationId: string) => traceByCorrelationId(this.supervisor().traceIndex, traceCorrelationId),
     });
   }
@@ -694,6 +697,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreFocusPins(current.value.focusPins.symbols)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'FOCUS_PIN_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -915,6 +934,55 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       try {
         const effective = owner.readThreshold();
         return effective === request.mutation.value ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'PIN_FOCUS') {
+      const owner = this.options.attentionFocus;
+      if (!owner || typeof owner.readPinnedSymbols !== 'function'
+        || typeof owner.readFocusState !== 'function') return 'UNKNOWN';
+      try {
+        const pins = owner.readPinnedSymbols();
+        const readback = owner.readFocusState(request.mutation.symbol);
+        if (!Array.isArray(pins) || pins.length > 25
+          || pins.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+          || new Set(pins).size !== pins.length
+          || readback.symbol !== request.mutation.symbol
+          || typeof readback.pinned !== 'boolean'
+          || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+          || typeof readback.canPin !== 'boolean'
+          || !(readback.effectivePinned === null || typeof readback.effectivePinned === 'boolean')
+          || !(readback.effectiveTier === null
+            || ['UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS', 'RELEASED'].includes(readback.effectiveTier))
+          || !(readback.attentionPlanId === null
+            || typeof readback.attentionPlanId === 'string'
+            && readback.attentionPlanId.trim().length > 0
+            && readback.attentionPlanId.length <= 256)
+          || !(readback.attentionPlanAtMs === null
+            || Number.isSafeInteger(readback.attentionPlanAtMs) && readback.attentionPlanAtMs >= 0)
+          || (readback.attentionPlanId === null) !== (readback.attentionPlanAtMs === null)
+          || !Number.isSafeInteger(readback.pinCount) || readback.pinCount < 0
+          || !Number.isSafeInteger(readback.pinCapacity) || readback.pinCapacity < 1
+          || readback.pinCount > readback.pinCapacity
+          || pins.length !== readback.pinCount
+          || pins.length > readback.pinCapacity
+          || readback.pinned !== pins.includes(request.mutation.symbol)) return 'UNKNOWN';
+        if (!request.mutation.pinned) {
+          return readback.pinned === false && readback.effectivePinned === false ? 'APPLIED' : 'NOT_APPLIED';
+        }
+        const effectivePlanCurrent = readback.attentionPlanId !== null
+          && readback.attentionPlanAtMs !== null
+          && readback.attentionPlanAtMs >= receipt.after.updatedAtMs
+          && readback.attentionPlanAtMs <= this.options.clock.nowMs();
+        return readback.pinned === true
+          && readback.eligible === true
+          && readback.canPin === true
+          && readback.effectivePinned === true
+          && (readback.effectiveTier === 'FOCUS' || readback.effectiveTier === 'DEEP_FOCUS')
+          && effectivePlanCurrent
+          ? 'APPLIED'
+          : 'NOT_APPLIED';
       } catch {
         return 'UNKNOWN';
       }
@@ -1183,6 +1251,45 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         riskIncreasing,
       );
     }
+    if (mutation.command === 'PIN_FOCUS') {
+      const owner = this.options.attentionFocus;
+      if (!owner || typeof owner.readPinnedSymbols !== 'function'
+        || typeof owner.readFocusState !== 'function' || typeof owner.setPinned !== 'function') {
+        return this.decision(false, 'FOCUS_PIN_OWNER_NOT_WIRED', 'Canonical Intelligence Runtime focus owner is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'FOCUS_PIN_DESIRED_STATE_UNAVAILABLE', 'Durable focus-pin posture is unavailable.', false);
+      }
+      try {
+        const pins = owner.readPinnedSymbols();
+        const readback = owner.readFocusState(mutation.symbol);
+        if (!Array.isArray(pins)
+          || pins.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+          || readback.symbol !== mutation.symbol
+          || typeof readback.pinned !== 'boolean'
+          || typeof readback.canPin !== 'boolean'
+          || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+          || (readback.canPin && readback.eligible !== true)) {
+          return this.decision(false, 'FOCUS_PIN_READBACK_INVALID', 'Canonical focus-pin readback is invalid.', false);
+        }
+        if (mutation.pinned && !readback.canPin) {
+          return this.decision(false, readback.eligible === false ? 'FOCUS_SYMBOL_INELIGIBLE' : 'FOCUS_CAPACITY_UNAVAILABLE', 'Focus pin requires an eligible symbol and available hard capacity.', false);
+        }
+        const desiredPinned = persisted.focusPins.symbols.includes(mutation.symbol);
+        const ownerPinned = pins.includes(mutation.symbol);
+        return this.decision(
+          true,
+          'FOCUS_PIN_ACCEPTED',
+          '',
+          desiredPinned !== mutation.pinned
+            || ownerPinned !== mutation.pinned
+            || (mutation.pinned && readback.effectivePinned !== true),
+        );
+      } catch {
+        return this.decision(false, 'FOCUS_PIN_READBACK_UNAVAILABLE', 'Canonical focus-pin readback is unavailable.', false);
+      }
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -1270,6 +1377,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         const owner = this.options.strategyThresholds?.[mutation.strategy];
         if (!owner || typeof owner.setThreshold !== 'function') throw new Error('STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
         owner.setThreshold(mutation.value);
+      } else if (mutation.command === 'PIN_FOCUS') {
+        const owner = this.options.attentionFocus;
+        if (!owner || typeof owner.setPinned !== 'function') throw new Error('FOCUS_PIN_OWNER_NOT_WIRED');
+        owner.setPinned(mutation.symbol, mutation.pinned);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -1475,6 +1586,94 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
   }
 
+  focusPinState(symbol: string): Readonly<SystemFocusPinReadback> {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('symbol must be canonical');
+    const checkpoint = this.checkpoint();
+    const desiredPinned = checkpoint?.focusPins.symbols.includes(symbol) ?? false;
+    const owner = this.options.attentionFocus;
+    const base = { symbol, desiredPinned, controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readPinnedSymbols !== 'function' || typeof owner.readFocusState !== 'function') {
+      return Object.freeze({
+        ...base,
+        ownerPinned: null,
+        eligible: null,
+        canPin: null,
+        effectivePinned: null,
+        effectiveTier: null,
+        attentionPlanId: null,
+        attentionPlanAtMs: null,
+        pinCount: null,
+        pinCapacity: null,
+        state: 'OWNER_NOT_WIRED',
+      });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const pins = owner.readPinnedSymbols();
+      const readback = owner.readFocusState(symbol);
+      if (!Array.isArray(pins) || pins.length > 25
+        || pins.some((pin) => typeof pin !== 'string' || !/^[A-Z0-9]{4,20}$/.test(pin))
+        || readback.symbol !== symbol
+        || typeof readback.pinned !== 'boolean'
+        || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+        || typeof readback.canPin !== 'boolean'
+        || (readback.canPin && readback.eligible !== true)
+        || !(readback.effectivePinned === null || typeof readback.effectivePinned === 'boolean')
+        || !(readback.effectiveTier === null
+          || ['UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS', 'RELEASED'].includes(readback.effectiveTier))
+        || !(readback.attentionPlanId === null
+          || typeof readback.attentionPlanId === 'string'
+          && readback.attentionPlanId.trim().length > 0
+          && readback.attentionPlanId.length <= 256)
+        || !(readback.attentionPlanAtMs === null
+          || Number.isSafeInteger(readback.attentionPlanAtMs) && readback.attentionPlanAtMs >= 0)
+        || (readback.attentionPlanId === null) !== (readback.attentionPlanAtMs === null)
+        || !Number.isSafeInteger(readback.pinCount) || readback.pinCount < 0
+        || !Number.isSafeInteger(readback.pinCapacity) || readback.pinCapacity < 1
+        || readback.pinCount > readback.pinCapacity
+        || pins.length > readback.pinCapacity
+        || new Set(pins).size !== pins.length
+        || readback.pinCount !== pins.length
+        || readback.pinned !== pins.includes(symbol)
+        || (readback.effectivePinned === true
+          && (!readback.pinned || !['FOCUS', 'DEEP_FOCUS'].includes(readback.effectiveTier ?? '')))) {
+        throw new TypeError('focus pin owner readback is invalid');
+      }
+      const ownerPinned = pins.includes(symbol);
+      const applied = checkpoint !== null && pending.ok && pending.value.length === 0
+        && desiredPinned === ownerPinned
+        && readback.pinned === ownerPinned
+        && (!desiredPinned || readback.effectivePinned === true);
+      return Object.freeze({
+        ...base,
+        ownerPinned,
+        eligible: readback.eligible,
+        canPin: readback.canPin,
+        effectivePinned: readback.effectivePinned,
+        effectiveTier: readback.effectiveTier,
+        attentionPlanId: readback.attentionPlanId,
+        attentionPlanAtMs: readback.attentionPlanAtMs,
+        pinCount: readback.pinCount,
+        pinCapacity: readback.pinCapacity,
+        state: applied ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({
+        ...base,
+        ownerPinned: null,
+        eligible: null,
+        canPin: null,
+        effectivePinned: null,
+        effectiveTier: null,
+        attentionPlanId: null,
+        attentionPlanAtMs: null,
+        pinCount: null,
+        pinCapacity: null,
+        state: 'UNAVAILABLE',
+      });
+    }
+  }
+
   private restoreStrategyIntake(
     posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
   ): boolean {
@@ -1565,6 +1764,21 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       }
     }
     return true;
+  }
+
+  private restoreFocusPins(symbols: readonly string[]): boolean {
+    const owner = this.options.attentionFocus;
+    if (!owner || typeof owner.readPinnedSymbols !== 'function' || typeof owner.restorePinnedSymbols !== 'function') {
+      return symbols.length === 0;
+    }
+    try {
+      owner.restorePinnedSymbols(symbols);
+      const restored = owner.readPinnedSymbols();
+      return Array.isArray(restored)
+        && JSON.stringify([...restored].sort()) === JSON.stringify([...symbols].sort());
+    } catch {
+      return false;
+    }
   }
 
   private externalKillSwitchEngaged(): boolean {

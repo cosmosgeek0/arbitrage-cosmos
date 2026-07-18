@@ -310,6 +310,7 @@ systemIntegration = createSystemIntegrationApplication({
     VOLUME: systemIntegrationProduction.sizeCeilings.VOLUME,
   }),
   strategyThresholds: systemIntegrationProduction.strategyThresholds,
+  attentionFocus: systemIntegrationProduction.attentionFocus,
   traces: canonicalOwnerEvidence,
   ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({
@@ -401,6 +402,10 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
     sourceIsolation: publicSourceIsolation,
     strategyIntake: Object.freeze({
       readState: (strategy: 'basis' | 'volume') => systemIntegration.strategyIntakeState(strategy),
+    }),
+    attentionFocus: Object.freeze({
+      readState: (symbol: string) => systemIntegration.focusPinState(symbol),
+      readPinnedSymbols: () => systemIntegrationProduction.attentionFocus.readPinnedSymbols(),
     }),
   }),
 });

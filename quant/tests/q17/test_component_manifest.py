@@ -94,7 +94,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
     rows = cast(list[dict[str, object]], manifest["components"])
 
     assert [row["phase"] for row in rows] == [f"Q{index:02}" for index in range(18)]
-    corrected_indices = {2, 5, 8, 16}
+    corrected_indices = {2, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16}
     assert all(
         row["implementationState"]
         == (
@@ -112,10 +112,10 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "01b648ee6ae5f9d4dbba345b775d4f19b4d1ce2276036d9161554c73ab8f49ba"
             ),
             "currentSourceSha256": (
-                "3d755d7255a030528008e22b590f33b8355d87f74ed68620825ba245c1ff9bfc"
+                "b67b951d1f00299d45e5a7c94036293cee1e1b6dd11fb0eef6f5d478534dcaa9"
             ),
             "fixCommits": ["039c3866619c3e3af9533c651284af32a7bc114d"],
-            "pendingCorrectionIds": [],
+            "correctionRefs": ["Q-052"],
             "historicalPrimarySha256": (
                 "01b648ee6ae5f9d4dbba345b775d4f19b4d1ce2276036d9161554c73ab8f49ba"
             ),
@@ -135,7 +135,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "42e431fbc8ee8823cba826f759737ce3b3f52465",
                 "039c3866619c3e3af9533c651284af32a7bc114d",
             ],
-            "pendingCorrectionIds": [],
+            "correctionRefs": [],
             "historicalPrimarySha256": (
                 "f36a9b089fe2c935c08f6f67e8b7debcf40b8d67cde46ae73271835b725afe47"
             ),
@@ -149,14 +149,14 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8"
             ),
             "currentSourceSha256": (
-                "46ceb4f5d530e1d3f2ed38dd634989debe84d1926a35497fafc260a7afaf2bb7"
+                "c39a0c893f885e637f3d6ac22cb25df753a0bcf0388b4966342e0a8a0aecfd53"
             ),
             "fixCommits": [
                 "19f674a35944f1f3fdd4fdafd396fba9df6fd255",
                 "42e431fbc8ee8823cba826f759737ce3b3f52465",
                 "039c3866619c3e3af9533c651284af32a7bc114d",
             ],
-            "pendingCorrectionIds": ["FIX-017"],
+            "correctionRefs": ["FIX-017", "Q-076"],
             "historicalPrimarySha256": (
                 "d2054e47d0050ef521d91f653b9ab6f60411a2d2f0633933c7ec65e76145525b"
             ),
@@ -192,10 +192,10 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
         assert current_primary["bytes"] == len(current_primary_raw)
         assert current_primary["sha256"] == hashlib.sha256(current_primary_raw).hexdigest()
         assert provenance == {
+            "correctionRefs": expected["correctionRefs"],
             "directorIntegrationCommit": "5f887cf27ce246d80b7fc553eed470b015976963",
             "directorIntegrationTree": "813a383df420e318dc97522c860d6b1e6b99aab4",
             "fixCommits": expected["fixCommits"],
-            "pendingCorrectionIds": expected["pendingCorrectionIds"],
             "tipCommit": "039c3866619c3e3af9533c651284af32a7bc114d",
             "tipTree": "6724c8fa53fb74df5ef840d37ca3de8364b7c64f",
         }
@@ -204,9 +204,157 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
         assert "NOT_ACCEPTED" in dispositions
         assert "EXACT_COMMIT_ACCEPTED" not in dispositions
         assert "CURRENT_BYTES_VERIFIED" not in dispositions
-        for pending_id in cast(list[str], expected["pendingCorrectionIds"]):
-            assert f"{pending_id}_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION" in dispositions
-            assert f"{pending_id}_COMMIT_AND_TREE_PENDING_NOT_EMBEDDED" in cast(
+        for correction_ref in cast(list[str], expected["correctionRefs"]):
+            assert f"{correction_ref}_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION" in dispositions
+            assert f"{correction_ref}_COMMIT_AND_TREE_PENDING_NOT_EMBEDDED" in cast(
+                list[str], row["limitations"]
+            )
+        assert row["evidencePosture"] == (
+            "HISTORICAL_ACCEPTANCE_WITH_POST_ACCEPTANCE_CORRECTION_PENDING"
+        )
+        assert cast(dict[str, object], row["evidenceSeal"])["status"] == (
+            "HISTORICAL_RECEIPT_BYTES_VERIFIED_CORRECTION_NOT_ATTESTED"
+        )
+        assert f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_Q{index:02}_RECEIPTS" in cast(
+            list[str], row["limitations"]
+        )
+
+    real_gap_expectations = {
+        6: {
+            "correctionId": "REAL_GAP_Q06_FEATURE_DIAGNOSTICS",
+            "correctionRefs": ["Q-070"],
+            "currentFileCount": 9,
+            "currentSourceSha256": (
+                "37dd298eb104eacbc917562dccfccc2b83be59874ba34c3e0ce200fac7049dd8"
+            ),
+            "historicalSourceSha256": (
+                "c005edec4d0e3ec20263a8c026fca15620e918bc06f6304b3fe528d7707c5d3e"
+            ),
+        },
+        7: {
+            "correctionId": "REAL_GAP_Q07_ACTIVITY_POINT_PROCESS",
+            "correctionRefs": ["Q-073", "Q-074"],
+            "currentFileCount": 9,
+            "currentSourceSha256": (
+                "a548b1c53b6c56037a6d9e8ed7b9c7785e440c8b68ba57e0dacbd40b7d9e3d85"
+            ),
+            "historicalSourceSha256": (
+                "cd50265ea4e986b32c07f5766b1de3b904a28a136450af8888f7712e36a65798"
+            ),
+        },
+        9: {
+            "correctionId": "REAL_GAP_Q09_OOD_CHALLENGERS",
+            "correctionRefs": ["Q-083"],
+            "currentFileCount": 14,
+            "currentSourceSha256": (
+                "4366111f09993b386b84e39afba8682cde2758985c005db0b1bff076d93b4636"
+            ),
+            "historicalSourceSha256": (
+                "89b8e3747755f595d6adbb2a94e4c0d88b4eb0882a3ec5fec240a8dac3a697ae"
+            ),
+        },
+        10: {
+            "correctionId": "REAL_GAP_Q10_DIAGNOSTICS_FOCUS_BUDGET",
+            "correctionRefs": ["Q-070", "Q-080"],
+            "currentFileCount": 11,
+            "currentSourceSha256": (
+                "2763fdc1d0428637bcd51387fbc806741c70032e6a0f1ded6c354b31a4cc01e2"
+            ),
+            "historicalSourceSha256": (
+                "7ffde23cbe6d07b6b9cef99aab27151e9069b5ffffd254e32f8f3586ebeefb7a"
+            ),
+        },
+        11: {
+            "correctionId": "REAL_GAP_Q11_PASSIVE_FILL_SURVIVAL",
+            "correctionRefs": ["L-065"],
+            "currentFileCount": 9,
+            "currentSourceSha256": (
+                "e3652f19bf965b9e2e085f714068af35babad98caff0f2231bf0bb4991738ffd"
+            ),
+            "historicalSourceSha256": (
+                "0f635f5e6f3924fc6f0e071dfd82b49a724b06b4163cfc6a1b0e214e2963642c"
+            ),
+        },
+        12: {
+            "correctionId": "REAL_GAP_Q12_REGIME_MIXTURE",
+            "correctionRefs": ["Q-084"],
+            "currentFileCount": 8,
+            "currentSourceSha256": (
+                "625d8d72cc5b72451a29c2595db7cbdd142946f7fdf244e06b1fea9d76635d22"
+            ),
+            "historicalSourceSha256": (
+                "0e933737922c1d6255b90e1be275bdd47f34318e239d549caf051246fa8c449d"
+            ),
+        },
+        14: {
+            "correctionId": "REAL_GAP_Q14_FEATURE_DIAGNOSTICS",
+            "correctionRefs": ["Q-070"],
+            "currentFileCount": 13,
+            "currentSourceSha256": (
+                "78e7c8450d53f5be8a33e7df102d5c263995ba24b22de9257507187d9d643faf"
+            ),
+            "historicalSourceSha256": (
+                "8c4482643582c9e9fbd7be3bd470c4d106717955bd10ad80854df9314e6b7356"
+            ),
+        },
+        15: {
+            "correctionId": "REAL_GAP_Q15_RECORDED_CALIBRATION",
+            "correctionRefs": ["L-068", "L-110"],
+            "currentFileCount": 8,
+            "currentSourceSha256": (
+                "bf9e3dbef0a6941eea73218a46c369167235642f03e48e428d0306f9f898948f"
+            ),
+            "historicalSourceSha256": (
+                "ccb0a8dd86e8b6548728d11bb3b28db29ce0e3e8e6d3288653375ef4d39af262"
+            ),
+        },
+        16: {
+            "correctionId": "Q16_CUMULATIVE_POST_ACCEPTANCE_CORRECTION",
+            "correctionRefs": ["RB13_QUANT_INFERENCE_WORKER_ISOLATION", "Q-070"],
+            "currentFileCount": 8,
+            "currentSourceSha256": (
+                "8df1b57a7a53b94d1c036751a32b4dc593792fcc4c43b6dd12a1ba6d2fbee322"
+            ),
+            "historicalSourceSha256": (
+                "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"
+            ),
+        },
+    }
+    for index, gap_expected in real_gap_expectations.items():
+        row = rows[index]
+        correction = cast(dict[str, object], row["postAcceptanceCorrection"])
+        current_primary = cast(dict[str, object], correction["currentPrimaryEvidence"])
+        current_source = cast(dict[str, object], correction["currentSourceRoot"])
+        provenance = cast(dict[str, object], correction["currentBytesProvenance"])
+        source_root = cast(dict[str, object], row["sourceRoot"])
+        evidence_refs = cast(list[dict[str, object]], row["evidenceRefs"])
+
+        assert correction["acceptanceState"] == "NOT_ACCEPTED"
+        assert correction["correctionId"] == gap_expected["correctionId"]
+        assert correction["historicalReceipts"] == "DOES_NOT_ATTEST_CORRECTED_BYTES"
+        assert correction["implementationCommit"] == components.PENDING
+        assert correction["implementationTree"] == components.PENDING
+        assert correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
+        assert provenance == {
+            "correctionRefs": gap_expected["correctionRefs"],
+            "identityPosture": "CURRENT_BYTES_PINNED_EXACT_COMMIT_PENDING",
+        }
+        assert source_root["sha256"] == gap_expected["historicalSourceSha256"]
+        assert current_source["fileCount"] == gap_expected["currentFileCount"]
+        assert current_source["sha256"] == gap_expected["currentSourceSha256"]
+        assert correction["historicalAcceptedPrimaryEvidenceSha256"] == evidence_refs[2]["sha256"]
+        current_primary_raw = (REPO_ROOT / cast(str, current_primary["path"])).read_bytes()
+        assert current_primary["bytes"] == len(current_primary_raw)
+        assert current_primary["sha256"] == hashlib.sha256(current_primary_raw).hexdigest()
+        dispositions = cast(list[str], row["dispositions"])
+        assert f"Q{index:02}_POST_ACCEPTANCE_CORRECTION_IMPLEMENTED" in dispositions
+        assert "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED" in dispositions
+        assert "NOT_ACCEPTED" in dispositions
+        assert "EXACT_COMMIT_ACCEPTED" not in dispositions
+        assert "CURRENT_BYTES_VERIFIED" not in dispositions
+        for correction_ref in cast(list[str], gap_expected["correctionRefs"]):
+            assert f"{correction_ref}_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION" in dispositions
+            assert f"{correction_ref}_COMMIT_AND_TREE_PENDING_NOT_EMBEDDED" in cast(
                 list[str], row["limitations"]
             )
         assert row["evidencePosture"] == (
@@ -236,7 +384,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
     }
     q16_correction = cast(dict[str, object], rows[16]["postAcceptanceCorrection"])
     assert q16_correction["acceptanceState"] == "NOT_ACCEPTED"
-    assert q16_correction["correctionId"] == "RB13_QUANT_INFERENCE_WORKER_ISOLATION"
+    assert q16_correction["correctionId"] == "Q16_CUMULATIVE_POST_ACCEPTANCE_CORRECTION"
     assert q16_correction["historicalAcceptedServiceSha256"] == (
         "9531d45a513d28c08945adffbb51f149dc3e27afbc897f09bf66d660bf43f59f"
     )
@@ -246,7 +394,9 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
     assert q16_correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
     current_source = cast(dict[str, object], q16_correction["currentSourceRoot"])
     current_service = cast(dict[str, object], q16_correction["currentServiceSource"])
-    assert current_source["sha256"] == components._Q16_RB13_SOURCE_SPEC.seal_sha256
+    assert current_source["sha256"] == (
+        components._POST_ACCEPTANCE_CORRECTIONS["Q16"].current_source.seal_sha256
+    )
     service_raw = (REPO_ROOT / "quant/src/quant_edge/inference/service.py").read_bytes()
     assert current_service["bytes"] == len(service_raw)
     assert current_service["sha256"] == hashlib.sha256(service_raw).hexdigest()
@@ -475,7 +625,7 @@ def test_validator_rejects_duplicates_forgery_hash_and_traversal(
         refs = cast(list[dict[str, object]], rows[3]["evidenceRefs"])
         refs[0]["path"] = "../escape"
     elif mutation == "correction-acceptance":
-        for index in (2, 5, 8, 16):
+        for index in (2, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16):
             correction = cast(dict[str, object], rows[index]["postAcceptanceCorrection"])
             correction["acceptanceState"] = "ACCEPTED"
     else:
@@ -492,7 +642,7 @@ def test_validator_rejects_duplicates_forgery_hash_and_traversal(
         ("quant/fixtures/q05_label_golden_v1.json", "tamper"),
         ("quant/generated/q08/derivatives_campaign.v1.json", "tamper"),
         ("quant/RECEIPTS/Q15_ACCEPTANCE.md", "symlink"),
-        ("", "money-source-tamper"),
+        ("", "current-source-tamper"),
         ("quant/src/quant_edge/inference/service.py", "source-tamper"),
         ("quant/src/quant_edge/book/injected.py", "source-addition"),
         ("quant/src/quant_edge/book/native.so", "source-unexpected-file"),
@@ -505,15 +655,24 @@ def test_current_byte_tamper_symlink_and_source_inventory_fail_closed(
     relative_path: str,
     kind: str,
 ) -> None:
-    if kind == "money-source-tamper":
+    if kind == "current-source-tamper":
         for index, correction_path in enumerate(
             (
-                "quant/src/quant_edge/lake/store.py",
+                "quant/src/quant_edge/lake/instruments.py",
                 "quant/src/quant_edge/labels/basis.py",
-                "quant/src/quant_edge/derivatives/executable.py",
+                "quant/src/quant_edge/features/diagnostics.py",
+                "quant/src/quant_edge/micro/activity.py",
+                "quant/src/quant_edge/derivatives/cross_market.py",
+                "quant/src/quant_edge/regime/ood_challengers.py",
+                "quant/src/quant_edge/models/focus_budget.py",
+                "quant/src/quant_edge/survival/passive_fill.py",
+                "quant/src/quant_edge/ensemble/regime_mixture.py",
+                "quant/src/quant_edge/validation/feature_diagnostics.py",
+                "quant/src/quant_edge/registry_ops/recorded_outcomes.py",
+                "quant/src/quant_edge/inference/artifacts.py",
             )
         ):
-            case_root = tmp_path / f"money-source-{index}"
+            case_root = tmp_path / f"current-source-{index}"
             case_root.mkdir()
             mirror = _component_mirror(case_root)
             target = mirror / correction_path
@@ -552,7 +711,8 @@ def test_q16_service_pin_rejects_tamper_even_when_current_tree_is_resealed(
     original = service.read_bytes()
     service.write_bytes(original[:-1] + b" ")
 
-    source_spec = components._Q16_RB13_SOURCE_SPEC
+    correction_spec = components._POST_ACCEPTANCE_CORRECTIONS["Q16"]
+    source_spec = correction_spec.current_source
     source_root = mirror / source_spec.relative_path
     files: list[dict[str, object]] = []
     for path in sorted(source_root.glob("*.py"), key=lambda child: child.name):
@@ -565,10 +725,13 @@ def test_q16_service_pin_rejects_tamper_even_when_current_tree_is_resealed(
             }
         )
     resealed = hashlib.sha256(canonical_json_bytes({"files": files})).hexdigest()
-    monkeypatch.setattr(
-        components,
-        "_Q16_RB13_SOURCE_SPEC",
-        replace(source_spec, seal_sha256=resealed),
+    monkeypatch.setitem(
+        components._POST_ACCEPTANCE_CORRECTIONS,
+        "Q16",
+        replace(
+            correction_spec,
+            current_source=replace(source_spec, seal_sha256=resealed),
+        ),
     )
 
     with pytest.raises(ComponentManifestError, match="current correction source digest changed"):

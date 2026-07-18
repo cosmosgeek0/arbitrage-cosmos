@@ -13,6 +13,34 @@ type FeedChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' 
 type NewsCategory = 'Crypto' | 'Macro' | 'Markets' | 'Regulation' | 'Exchange' | 'On-Chain' | 'Security' | 'Protocol';
 type NewsBucket = 'all' | 'crypto' | 'macro' | 'markets' | 'regulation' | 'exchange' | 'onchain-security';
 type ImpactFilter = 'all' | 'high' | 'medium' | 'low';
+export type NewsImpact = 1 | 2 | 3 | null;
+
+export type NewsImpactSummary = Readonly<{
+  high: number;
+  medium: number;
+  low: number;
+  unknown: number;
+  scored: number;
+}>;
+
+export function authoritativeNewsImpact(item: Readonly<{ impact?: unknown }>): NewsImpact {
+  return item.impact === 1 || item.impact === 2 || item.impact === 3 ? item.impact : null;
+}
+
+export function summarizeNewsImpacts(items: readonly Readonly<{ impact?: unknown }>[]): NewsImpactSummary {
+  let high = 0;
+  let medium = 0;
+  let low = 0;
+  let unknown = 0;
+  for (const item of items) {
+    const impact = authoritativeNewsImpact(item);
+    if (impact === 3) high += 1;
+    else if (impact === 2) medium += 1;
+    else if (impact === 1) low += 1;
+    else unknown += 1;
+  }
+  return { high, medium, low, unknown, scored: high + medium + low };
+}
 
 interface NewsItem {
   id: string;
@@ -30,7 +58,7 @@ interface NewsItem {
   tags: string[];
   category?: NewsCategory;
   tone: NewsTone;
-  impact?: 1 | 2 | 3;
+  impact?: NewsImpact;
 }
 
 interface NewsSource {
@@ -51,7 +79,7 @@ interface NewsPayload {
   sources: NewsSource[];
 }
 
-interface BinanceItem { id: number; title: string; date: string | null; url: string; impact?: 1 | 2 | 3 }
+interface BinanceItem { id: number; title: string; date: string | null; url: string; impact?: NewsImpact }
 interface BinancePayload { catalog: number | string; fetchedAt?: number; items: BinanceItem[] }
 
 const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v4';
@@ -120,15 +148,6 @@ function itemDay(item: NewsItem, zone?: string): string | null {
   return item.publishedDay || null;
 }
 
-function fallbackImpact(item: NewsItem): 1 | 2 | 3 {
-  if (item.impact) return item.impact;
-  const text = `${item.title} ${item.tags.join(' ')}`.toLowerCase();
-  if (/\b(hack|exploit|breach|stolen|drain(?:ed)?|depeg|bankruptcy|trading suspension|withdrawal halt|bridge pause|chain halt|service outage)\b/.test(text)) return 3;
-  if (item.tags.includes('Security') || item.tags.includes('Delisting')) return 3;
-  if (item.channel === 'primary' || item.channel === 'venue' || item.channel === 'protocol' || item.channel === 'issuer') return 2;
-  return 1;
-}
-
 function mapBinance(item: BinanceItem): NewsItem {
   const publishedDay = item.title.match(/(?:\(|[-–—]\s*)(\d{4}-\d{2}-\d{2})\)?\s*$/)?.[1] ?? item.date;
   return {
@@ -147,7 +166,7 @@ function mapBinance(item: BinanceItem): NewsItem {
     tags: ['Exchange'],
     category: 'Exchange',
     tone: 'idle',
-    impact: item.impact ?? 2,
+    impact: authoritativeNewsImpact(item),
   };
 }
 
@@ -275,7 +294,12 @@ const SourceLogo = memo(function SourceLogo({ domain, label, size = 24 }: { doma
   </span>;
 });
 
-function ImpactBars({ impact }: { impact: 1 | 2 | 3 }) {
+function ImpactBars({ impact }: { impact: NewsImpact }) {
+  if (impact === null) {
+    return <span className="newsx-impact level-unknown" title="Impact Unknown" aria-label="Impact Unknown">
+      {[1, 2, 3].map((bar) => <i key={bar} />)}
+    </span>;
+  }
   const label = impact === 3 ? 'High Impact' : impact === 2 ? 'Medium Impact' : 'Low Impact';
   return <span className={`newsx-impact level-${impact}`} title={label} aria-label={label}>
     {[1, 2, 3].map((bar) => <i key={bar} className={bar <= impact ? 'on' : ''} />)}
@@ -288,7 +312,7 @@ const NewsRow = memo(function NewsRow({ item, fresh, zone }: { item: NewsItem; f
   return <div className={`newsx-row ${fresh ? 'fresh' : ''}`}>
     <span className="newsx-time" title={item.timeLabel}><b>{publishedTime(item, zone)}</b></span>
     <span className="newsx-source"><SourceLogo domain={itemDomain(item)} label={source} /><b title={source}>{source}</b></span>
-    <ImpactBars impact={fallbackImpact(item)} />
+    <ImpactBars impact={authoritativeNewsImpact(item)} />
     <span className="newsx-headline">
       {item.url ? <a href={item.url} target="_blank" rel="noreferrer noopener" title={`${source} · ${item.title}`}>{item.title}</a> : <b title={item.title}>{item.title}</b>}
     </span>
@@ -469,7 +493,7 @@ export function News() {
   }, [binance, binanceFailed, context?.sources]);
   const selectedImpact = IMPACTS.find((option) => option.id === impactFilter)?.value ?? null;
   const filtered = useMemo(() => selectedItems.filter((item) =>
-    (selectedImpact === null || fallbackImpact(item) === selectedImpact) &&
+    (selectedImpact === null || authoritativeNewsImpact(item) === selectedImpact) &&
     matchesBucket(item, bucket) &&
     (provider === 'all' || itemSourceKey(item) === provider) &&
     matchesQuery(item, deferredQuery)
@@ -484,9 +508,7 @@ export function News() {
       : lastCheckedAt
         ? `${streamConnected ? 'Live' : 'Updating'} · ${liveAge(lastCheckedAt)}`
         : 'Loading';
-  const selectedHigh = selectedItems.filter((item) => fallbackImpact(item) === 3).length;
-  const selectedMedium = selectedItems.filter((item) => fallbackImpact(item) === 2).length;
-  const selectedLow = selectedItems.filter((item) => fallbackImpact(item) === 1).length;
+  const selectedImpactSummary = summarizeNewsImpacts(selectedItems);
   const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
   const returnToday = () => setSelectedDay(today);
 
@@ -516,13 +538,11 @@ export function News() {
       <section className="calx-week newsx-week" aria-label="News Days">
         {dayKeys.map((key) => {
           const rows = itemsByDay.get(key) ?? [];
-          const high = rows.filter((item) => fallbackImpact(item) === 3).length;
-          const medium = rows.filter((item) => fallbackImpact(item) === 2).length;
-          const low = rows.filter((item) => fallbackImpact(item) === 1).length;
+          const impactSummary = summarizeNewsImpacts(rows);
           return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
             <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
             <span><em>News</em><b>{rows.length}</b></span>
-            <span className="newsx-day-impact"><em>Impact</em><b><i className="high">H {high}</i><i className="medium">M {medium}</i><i className="low">L {low}</i></b></span>
+            <span className="newsx-day-impact"><em>Impact</em><b><i className="high">H {impactSummary.high}</i><i className="medium">M {impactSummary.medium}</i><i className="low">L {impactSummary.low}</i></b></span>
           </button>;
         })}
       </section>
@@ -544,7 +564,7 @@ export function News() {
       <section className="newsx-tape" aria-label="News Feed">
         <div className="newsx-day-header">
           <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
-          <span>{selectedItems.length} News · {selectedHigh} High · {selectedMedium} Medium · {selectedLow} Low · {resolvedZoneLabel(prefs.clockZone)}</span>
+          <span>{selectedItems.length} News · {selectedImpactSummary.high} High · {selectedImpactSummary.medium} Medium · {selectedImpactSummary.low} Low · {selectedImpactSummary.unknown} Unknown · {resolvedZoneLabel(prefs.clockZone)}</span>
         </div>
         <div className="newsx-header"><span>Time</span><span>Source</span><span>Impact</span><span>Headline</span><span>Category</span><span /></div>
         <div className="newsx-day-body" key={selectedDay}>

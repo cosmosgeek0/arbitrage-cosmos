@@ -98,6 +98,7 @@ export interface SystemSupervisorSummaries {
     heartbeatAtMs: number | null;
     candidateCount: number | null;
     proposalCount: number | null;
+    cooldownCount: number | null;
     rejectionCount: number | null;
     acceptedCount: number | null;
     lastDecisionAtMs: number | null;
@@ -123,6 +124,7 @@ export interface SystemSupervisorSummaries {
     reservationCount: number | null;
     stagedMandateCount: number | null;
     activeExposureCount: number | null;
+    recoveryCount: number | null;
     checkpointRevision: string | null;
     blockerCodes: string[];
   };

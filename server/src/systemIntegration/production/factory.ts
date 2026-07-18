@@ -44,6 +44,8 @@ import type {
   RuntimeHealthEvidence,
 } from '../composition/types.js';
 import type {
+  SystemCapitalSummary,
+  SystemIntelligenceSummary,
   SystemStrategyRuntimeSummary,
   SystemSupervisorSummaries,
 } from '../supervisor/types.js';
@@ -192,6 +194,103 @@ function safeStrategySnapshot(runtime: {
   } catch {
     return null;
   }
+}
+
+function safeStrategyOwnerSummary(
+  snapshot: Readonly<ProductionStrategySnapshot>,
+): Readonly<ProductionStrategySnapshot['ownerSummary']> | null {
+  try {
+    const summary = snapshot.ownerSummary;
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)
+        || Object.getPrototypeOf(summary) !== Object.prototype
+        || Object.getOwnPropertySymbols(summary).length !== 0) return null;
+    const keys = Object.keys(summary).sort();
+    const expected = ['candidateCount', 'cooldownCount', 'opportunityCount'];
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(summary);
+    for (const key of expected) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')
+          || !descriptor.enumerable) return null;
+      const value = descriptor.value;
+      if (!Number.isSafeInteger(value) || value < 0 || value > MAX_MARKET_ROWS) return null;
+    }
+    return Object.freeze({ ...summary });
+  } catch {
+    return null;
+  }
+}
+
+function boundedUniqueStrings(value: unknown, maximum: number, maximumLength: number): readonly string[] | null {
+  if (!Array.isArray(value) || value.length > maximum) return null;
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.length === 0 || entry.length > maximumLength
+        || entry.trim() !== entry || seen.has(entry)) return null;
+    seen.add(entry);
+    result.push(entry);
+  }
+  return Object.freeze(result);
+}
+
+function safeCapitalRestartSummary(
+  owner: ProductionSystemIntegrationInput['capitalRestart'],
+): Readonly<SystemCapitalSummary> | null {
+  if (!owner) return null;
+  try {
+    const projection = owner.readRestartProjection();
+    if (!projection || typeof projection !== 'object' || Array.isArray(projection)) return null;
+    const checkpointId = projection.checkpointId;
+    const revision = projection.checkpointState?.revision;
+    const safety = projection.safety;
+    if (typeof checkpointId !== 'string' || checkpointId.length === 0 || checkpointId.length > 256
+        || checkpointId.trim() !== checkpointId
+        || !Number.isSafeInteger(revision) || revision < 0
+        || !safety || typeof safety !== 'object' || Array.isArray(safety)
+        || typeof safety.canOpenOrIncrease !== 'boolean'
+        || typeof safety.supervisionContinues !== 'boolean') return null;
+    const visible = boundedUniqueStrings(safety.visiblePositionIds, MAX_MARKET_ROWS, 256);
+    const recovery = boundedUniqueStrings(safety.recoveryRequiredPositionIds, MAX_MARKET_ROWS, 256);
+    const activeReservations = boundedUniqueStrings(safety.effectiveActiveReservationIds, MAX_MARKET_ROWS, 256);
+    const blockers = boundedUniqueStrings(safety.reasonCodes, 256, 256);
+    if (visible === null || recovery === null || activeReservations === null || blockers === null) return null;
+    const visibleIds = new Set(visible);
+    if (recovery.some((id) => !visibleIds.has(id))) return null;
+    return Object.freeze({
+      truthLabel: 'RECORDED_REPLAY',
+      accountTruthState: safety.canOpenOrIncrease ? 'RESTART_TRUTH_READY' : 'RESTART_TRUTH_BLOCKED',
+      allocatableAmount: null,
+      reservedAmount: null,
+      activeExposureAmount: null,
+      eligibleCount: null,
+      reservationCount: activeReservations.length,
+      stagedMandateCount: null,
+      activeExposureCount: visible.length,
+      recoveryCount: recovery.length,
+      checkpointRevision: String(revision),
+      blockerCodes: blockers,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function unavailableCapitalRestartSummary(reason: string): Readonly<SystemCapitalSummary> {
+  return Object.freeze({
+    truthLabel: 'UNAVAILABLE',
+    accountTruthState: 'UNAVAILABLE',
+    allocatableAmount: null,
+    reservedAmount: null,
+    activeExposureAmount: null,
+    eligibleCount: null,
+    reservationCount: null,
+    stagedMandateCount: null,
+    activeExposureCount: null,
+    recoveryCount: null,
+    checkpointRevision: null,
+    blockerCodes: Object.freeze([reason]),
+  });
 }
 
 class MarketEvidenceReader {
@@ -692,6 +791,20 @@ class PublicIntelligenceLifecycle {
     return this.bridge.operatorFocusPins();
   }
 
+  readSummary(nowMs: number): Readonly<SystemIntelligenceSummary> {
+    const summary = this.focusTruthCurrent(nowMs) ? this.bridge.attentionFocusSummary() : null;
+    return Object.freeze({
+      truthLabel: summary === null ? 'UNAVAILABLE' : 'LIVE_PUBLIC',
+      evidenceCount: null,
+      attentionCount: null,
+      focusRequestedCount: summary?.focusRequestedCount ?? null,
+      focusActiveCount: summary?.focusActiveCount ?? null,
+      thesisCount: null,
+      insufficientEvidenceCount: null,
+      lastUpdateAtMs: summary?.observedAtMs ?? null,
+    });
+  }
+
   readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
     const readback = this.bridge.focusPinState(symbol);
     if (this.focusTruthCurrent()) return readback;
@@ -794,12 +907,12 @@ class PublicIntelligenceLifecycle {
     this.lastEvidenceReady = false;
   }
 
-  private focusTruthCurrent(): boolean {
+  private focusTruthCurrent(evaluatedAtMs?: number): boolean {
     if (!this.runtimeActive || !this.intelligenceActive
         || !this.lastUniverseReady || !this.lastEvidenceReady
         || this.lastProjectedSpotTimestamp === null || this.lastProjectedUsdmTimestamp === null) return false;
     try {
-      const nowMs = this.clock.nowMs();
+      const nowMs = evaluatedAtMs ?? this.clock.nowMs();
       return isValidUtcMillis(nowMs)
         && this.market.feeds['spot-miniticker'] === 'open'
         && this.market.feeds['futures-markprice'] === 'open'
@@ -1158,6 +1271,7 @@ function strategySummary(
       heartbeatAtMs: null,
       candidateCount: null,
       proposalCount: null,
+      cooldownCount: null,
       rejectionCount: null,
       acceptedCount: null,
       lastDecisionAtMs: null,
@@ -1169,11 +1283,13 @@ function strategySummary(
     .filter((value): value is number => value !== null);
   const freshness = health.timestamp ? evaluateFreshness(health.timestamp, nowMs) : null;
   const live = health.running && freshness?.state === 'FRESH';
+  const ownerSummary = safeStrategyOwnerSummary(snapshot);
   return Object.freeze({
     truthLabel: live ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
     heartbeatAtMs: validUtcOrNull(snapshot.lastTickTs),
-    candidateCount: snapshot.decisions.filter((decision) => decision.kind === 'watch' || decision.kind === 'focus').length,
-    proposalCount: snapshot.proposals.length,
+    candidateCount: ownerSummary?.candidateCount ?? null,
+    proposalCount: ownerSummary?.opportunityCount ?? null,
+    cooldownCount: ownerSummary?.cooldownCount ?? null,
     rejectionCount: snapshot.decisions.filter((decision) => decision.kind === 'reject').length,
     acceptedCount: snapshot.decisions.filter((decision) => decision.kind === 'proposal').length,
     lastDecisionAtMs: timestamps.length > 0 ? Math.max(...timestamps) : null,
@@ -1275,7 +1391,11 @@ export function createProductionSystemIntegrationPorts(
       });
       const basisHealth = basisLifecycle.health(ctx);
       const volumeHealth = volumeLifecycle.health(ctx);
-      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies'>> = {
+      const capital = safeCapitalRestartSummary(input.capitalRestart)
+        ?? unavailableCapitalRestartSummary(input.capitalRestart
+          ? 'CAPITAL_RESTART_OWNER_MALFORMED'
+          : 'CAPITAL_RESTART_OWNER_UNAVAILABLE');
+      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies' | 'intelligence' | 'capital'>> = {
         sourceCoverage: Object.freeze({
           truthLabel: marketLive ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
           universeSymbols: facts.universeSymbols,
@@ -1290,6 +1410,8 @@ export function createProductionSystemIntegrationPorts(
           basis: strategySummary(safeStrategySnapshot(input.basis), basisHealth, nowMs),
           volume: strategySummary(safeStrategySnapshot(input.volume), volumeHealth, nowMs),
         }),
+        intelligence: publicIntelligence.readSummary(nowMs),
+        capital,
       };
       return Object.freeze(result);
     },

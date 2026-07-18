@@ -12,6 +12,7 @@ import type {
 } from '../composition/types.js';
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
 import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
+import type { RestoredCapitalProjection } from '../../capitalFoundation/checkpoint/types.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -48,6 +49,12 @@ export interface ProductionStrategySnapshot {
   readonly lastTickTs: number | null;
   readonly decisions: readonly Readonly<Decision>[];
   readonly proposals: readonly Readonly<EngineProposal>[];
+  /** Exact strategy-owner counts; integration must not recount raw records. */
+  readonly ownerSummary: Readonly<{
+    readonly candidateCount: number;
+    readonly opportunityCount: number;
+    readonly cooldownCount: number;
+  }>;
 }
 
 export interface ProductionBasisConnectionStatus {
@@ -98,11 +105,22 @@ export interface ProductionVolumeRuntimePort {
   setStrategyThreshold(value: string): boolean;
 }
 
+/**
+ * Passive readback from the canonical Capital checkpoint/restart owner. The
+ * production integration factory may count the owner's already-projected IDs;
+ * it receives no checkpoint mutation or capital-policy method.
+ */
+export interface ProductionCapitalRestartReadPort {
+  readRestartProjection(): Readonly<RestoredCapitalProjection> | null;
+}
+
 export interface ProductionSystemIntegrationInput {
   readonly clock: UtcClock;
   readonly market: ProductionMarketEnginePort;
   readonly basis: ProductionBasisRuntimePort;
   readonly volume: ProductionVolumeRuntimePort;
+  /** Omitted while the canonical Capital checkpoint owner is not mounted. */
+  readonly capitalRestart?: ProductionCapitalRestartReadPort | null;
   /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** One freshness law for existing public market observations. */

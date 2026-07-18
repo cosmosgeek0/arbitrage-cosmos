@@ -55,6 +55,7 @@ function EngineSection({
         <div className="sdx-stat"><span>Heartbeat</span><b className={summary.heartbeatAtMs === null ? 'unk' : ''}>{ageText(summary.heartbeatAtMs, nowMs)}</b></div>
         <div className="sdx-stat"><span>Candidates</span><b className={summary.candidateCount === null ? 'unk' : ''}>{countText(summary.candidateCount)}</b></div>
         <div className="sdx-stat"><span>Proposals</span><b className={summary.proposalCount === null ? 'unk' : ''}>{countText(summary.proposalCount)}</b></div>
+        <div className="sdx-stat"><span>Cooldown</span><b className={summary.cooldownCount === null ? 'unk' : (summary.cooldownCount > 0 ? 'warn' : '')}>{countText(summary.cooldownCount)}</b></div>
         <div className="sdx-stat"><span>Accepted</span><b className={summary.acceptedCount === null ? 'unk' : ''}>{countText(summary.acceptedCount)}</b></div>
         <div className="sdx-stat"><span>Rejected</span><b className={summary.rejectionCount === null ? 'unk' : (summary.rejectionCount > 0 ? 'warn' : '')}>{countText(summary.rejectionCount)}</b></div>
       </div>

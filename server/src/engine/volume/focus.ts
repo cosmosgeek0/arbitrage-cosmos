@@ -104,6 +104,14 @@ export class FocusManager {
     return [...this.focus.values()].sort((a, b) => b.score - a.score);
   }
 
+  /** Current owner truth without exposing or copying the cooldown map. */
+  activeCooldownCount(): number {
+    const now = this.clock.now();
+    let count = 0;
+    for (const until of this.cooldownUntil.values()) if (until > now) count += 1;
+    return count;
+  }
+
   closedFocusSessions(limit = 100): FocusSession[] {
     const safeLimit = Number.isSafeInteger(limit) ? Math.max(0, Math.min(limit, 500)) : 100;
     if (safeLimit === 0) return [];

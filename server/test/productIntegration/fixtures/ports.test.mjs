@@ -292,12 +292,12 @@ test('accepted L14 fixture preserves NOOP/AWARENESS and all durable lookup state
 
 test('accepted dashboard donor bridge preserves snapshot and before/after control receipt', async () => {
   const controlState = { revision: 2, generation: 1, safeMode: 'VALIDATE_ONLY', killSwitchEngaged: true, intakePaused: true, updatedAtMs: PRODUCT_FIXTURE_NOW_MS, correlationId: 'trace-dashboard' };
-  const engineSummary = { truthLabel: 'SYNTHETIC_ONLY', heartbeatAtMs: null, candidateCount: null, proposalCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null };
+  const engineSummary = { truthLabel: 'SYNTHETIC_ONLY', heartbeatAtMs: null, candidateCount: null, proposalCount: null, cooldownCount: null, rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null, sourceRevision: null };
   const summaries = {
     sourceCoverage: { truthLabel: 'SYNTHETIC_ONLY', universeSymbols: null, spotCoveredSymbols: null, usdMCoveredSymbols: null, quietSymbolsRetained: null, materialGapCount: null, rateLimitedSourceCount: null, lastMaterialGapAtMs: null },
     strategies: { basis: engineSummary, volume: engineSummary },
     intelligence: { truthLabel: 'UNAVAILABLE', evidenceCount: null, attentionCount: null, focusRequestedCount: null, focusActiveCount: null, thesisCount: null, insufficientEvidenceCount: null, lastUpdateAtMs: null },
-    capital: { truthLabel: 'UNAVAILABLE', accountTruthState: 'UNAVAILABLE', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, checkpointRevision: null, blockerCodes: ['SYNTHETIC_ONLY'] },
+    capital: { truthLabel: 'UNAVAILABLE', accountTruthState: 'UNAVAILABLE', allocatableAmount: null, reservedAmount: null, activeExposureAmount: null, eligibleCount: null, reservationCount: null, stagedMandateCount: null, activeExposureCount: null, recoveryCount: null, checkpointRevision: null, blockerCodes: ['SYNTHETIC_ONLY'] },
     risk: { truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null, latestVerdictId: null, correlationId: null, maxAllowedSize: null, requiredConfirmation: null, decisiveInputSnapshot: [], rejectionCount: null, reasonCodes: ['SYNTHETIC_ONLY'] },
     execution: { truthLabel: 'UNAVAILABLE', mode: 'UNAVAILABLE', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED', planId: null, planLifecycle: null, coordinatorState: 'UNAVAILABLE', legCount: null, recoveryState: null, lastTransitionAtMs: null },
     reconciliation: { truthLabel: 'UNAVAILABLE', status: 'UNAVAILABLE', blocksNewExposure: true, recommendation: null, checkpointId: null, evaluatedAtMs: null, reasonCodes: ['SYNTHETIC_ONLY'] },

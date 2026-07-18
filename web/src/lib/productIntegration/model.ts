@@ -725,7 +725,7 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   basis: Object.freeze(['directional-cases', 'economics', 'gap', 'funding', 'depth-slippage', 'borrow', 'feasibility', 'staging', 'proposal-reject', 'execution-recovery']),
   volume: Object.freeze(['quiet-baseline', 'transition-stage', 'anomaly-follow-through', 'spot-perp-leadership', 'liquidity-crowding', 'analogues-false-positives', 'q-uncertainty', 'proposal-reject', 'position-outcome']),
   opportunities: Object.freeze(['strategy-source-revision', 'evidence-conflict-missing', 'model-assessment', 'net-economics', 'capital-risk-verdict', 'size-staging', 'expiry-invalidation', 'entry-exit-recovery', 'approval', 'rejection']),
-  borrow: Object.freeze(['availability-inventory', 'maximum-borrowable', 'rate-interest', 'account-collateral', 'freshness', 'principal-accrual-repay', 'proposal-ticket', 'unsupported']),
+  borrow: Object.freeze(['mode-eligibility', 'borrow-eligibility', 'maximum-borrowable', 'borrow-limit', 'hourly-borrow-rate', 'current-borrowed', 'accrued-interest', 'collateral-amount', 'collateral-asset', 'current-ltv', 'liability-source-freshness', 'collateral-source-freshness', 'blocker']),
   execution: Object.freeze(['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'one-leg-timer', 'exit-capacity', 'funding-borrow', 'controls', 'pnl-attribution']),
   orders: Object.freeze(['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'controls']),
   positions: Object.freeze(['ticket-position-link', 'gross-net-unhedged', 'one-leg-timer', 'exit-capacity', 'recovery']),
@@ -737,13 +737,28 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   notifications: Object.freeze(['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof']),
 });
 
+/**
+ * Required rows whose values are conditional rather than readiness-blocking.
+ * ENGINE section 11 permits collateral/LTV to stay unknown when no exact
+ * same-margin owner exists; the rows remain visible so the absence is honest.
+ */
+export const OPTIONAL_SURFACE_EVIDENCE: Readonly<Partial<Record<SurfaceId, readonly string[]>>> = Object.freeze({
+  borrow: Object.freeze([
+    'collateral-amount',
+    'collateral-asset',
+    'current-ltv',
+    'collateral-source-freshness',
+  ]),
+});
+
 const PRODUCT_SURFACE_BLOCKING_TRUTH = new Set<ProductTruthLabel>([
   'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
 ]);
 
 /**
- * Cross-field readiness law. Shape-valid fields are not enough: every required
- * datum must be present and non-blocking before a surface may render ready.
+ * Cross-field readiness law. Shape-valid fields are not enough: every
+ * readiness-required datum must be present and non-blocking before a surface
+ * may render ready. Conditional rows remain visible without fabricating facts.
  */
 export function productSurfaceReadinessBlocker(
   surface: Readonly<Pick<ProductSurfaceProjection, 'surfaceId' | 'evidence'>>,
@@ -752,6 +767,7 @@ export function productSurfaceReadinessBlocker(
     const matches = surface.evidence.filter((datum) => datum.fieldId === fieldId);
     if (matches.length !== 1) return `REQUIRED_EVIDENCE_CARDINALITY:${fieldId}`;
     const datum = matches[0]!;
+    if (OPTIONAL_SURFACE_EVIDENCE[surface.surfaceId]?.includes(fieldId)) continue;
     if (datum.value === null || PRODUCT_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)) {
       return `REQUIRED_EVIDENCE_${datum.truthLabel}:${fieldId}`;
     }

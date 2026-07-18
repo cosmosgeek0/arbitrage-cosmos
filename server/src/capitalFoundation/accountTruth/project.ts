@@ -1,16 +1,7 @@
 import {
-  BORROW_TRUTH_STATES,
-  MARGIN_ACCOUNT_MODES,
-  type BorrowTruth,
+  BORROW_EVIDENCE_AUTHORITIES,
+  validateBorrowTruthForConsumption,
 } from '../../foundation/borrow/index.js';
-import {
-  createSourcedTimestamp,
-  isDataAuthority,
-  isFreshnessState,
-  isValidUtcMillis,
-  type FreshnessReport,
-  type SourcedTimestamp,
-} from '../../foundation/contracts/index.js';
 import {
   absoluteExactDecimal,
   addExactDecimals,
@@ -50,7 +41,6 @@ import {
 const ZERO = '0' as NonNegativeDecimal;
 const ONE = '1' as NonNegativeDecimal;
 const ASSET = /^[A-Z0-9]{1,20}$/;
-const SYMBOL = /^[A-Z0-9]{2,30}$/;
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 function sortedUnique(values: readonly string[]): readonly string[] {
@@ -78,19 +68,6 @@ function identifier(value: unknown, path: string): string {
   const normalized = text(value, path);
   if (!IDENTIFIER.test(normalized)) throw new TypeError(`${path} must be a canonical identifier`);
   return normalized;
-}
-
-function symbol(value: unknown, path: string): string {
-  const normalized = text(value, path);
-  if (!SYMBOL.test(normalized)) throw new TypeError(`${path} must be an uppercase venue symbol`);
-  return normalized;
-}
-
-function safeInteger(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw new TypeError(`${path} must be a safe integer`);
-  }
-  return value;
 }
 
 function nonNegative(value: unknown, path: string): NonNegativeDecimal {
@@ -148,103 +125,6 @@ function snapshotProvenance(
     accountId: identifier(snapshot.provenance.accountId, `${key}.provenance.accountId`),
     capitalPoolId: identifier(snapshot.provenance.capitalPoolId, `${key}.provenance.capitalPoolId`),
     coherentCutId: identifier(snapshot.provenance.coherentCutId, `${key}.provenance.coherentCutId`),
-  });
-}
-
-function cloneSourcedTimestamp(value: Readonly<SourcedTimestamp> | null, path: string): Readonly<SourcedTimestamp> | null {
-  if (value === null) return null;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${path} must be an object or null`);
-  try {
-    return createSourcedTimestamp({
-      sourceTimeMs: value.sourceTimeMs,
-      receivedAtMs: value.receivedAtMs,
-      maxAgeMs: value.maxAgeMs,
-      authority: value.authority,
-      completeness: value.completeness,
-      sourceId: value.sourceId,
-    });
-  } catch (error) {
-    throw new TypeError(`${path} must be a canonical sourced timestamp`, { cause: error });
-  }
-}
-
-function cloneFreshnessReport(value: Readonly<FreshnessReport> | null, path: string): Readonly<FreshnessReport> | null {
-  if (value === null) return null;
-  if (typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${path} must be an object or null`);
-  if (!isFreshnessState(value.state)) throw new TypeError(`${path}.state is invalid`);
-  if (!['SOURCE_TIME', 'RECEIPT_TIME', 'NONE'].includes(value.basis)) throw new TypeError(`${path}.basis is invalid`);
-  if (!isDataAuthority(value.effectiveAuthority)) throw new TypeError(`${path}.effectiveAuthority is invalid`);
-  if (!isValidUtcMillis(value.evaluatedAt)) throw new TypeError(`${path}.evaluatedAt is invalid`);
-  const ageMs = value.ageMs === null ? null : safeInteger(value.ageMs, `${path}.ageMs`);
-  if ((value.basis === 'NONE') !== (ageMs === null)) {
-    throw new TypeError(`${path}.basis and ageMs contradict one another`);
-  }
-  return Object.freeze({
-    state: value.state,
-    ageMs,
-    basis: value.basis,
-    effectiveAuthority: value.effectiveAuthority,
-    evaluatedAt: value.evaluatedAt,
-  });
-}
-
-function cloneBorrowTruth(value: Readonly<BorrowTruth>, path: string): Readonly<BorrowTruth> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
-  const mode = value.mode;
-  if (!(MARGIN_ACCOUNT_MODES as readonly string[]).includes(mode)) throw new TypeError(`${path}.mode is invalid`);
-  if (!(BORROW_TRUTH_STATES as readonly string[]).includes(value.state)) throw new TypeError(`${path}.state is invalid`);
-  if (!['MARGIN_CROSS', 'MARGIN_ISOLATED'].includes(value.positionBucket)) {
-    throw new TypeError(`${path}.positionBucket is invalid`);
-  }
-  const expectedBucket = mode === 'ISOLATED' ? 'MARGIN_ISOLATED' : 'MARGIN_CROSS';
-  if (value.positionBucket !== expectedBucket) throw new TypeError(`${path}.positionBucket contradicts mode`);
-  const maxBorrowableAsset = value.maxBorrowableAsset === null
-    ? null
-    : nonNegative(value.maxBorrowableAsset, `${path}.maxBorrowableAsset`);
-  const borrowLimitAsset = value.borrowLimitAsset === null
-    ? null
-    : nonNegative(value.borrowLimitAsset, `${path}.borrowLimitAsset`);
-  const hourlyRate = value.hourlyRate === null
-    ? null
-    : nonNegative(value.hourlyRate, `${path}.hourlyRate`);
-  if (
-    maxBorrowableAsset !== null && borrowLimitAsset !== null
-    && compareExactDecimals(maxBorrowableAsset, borrowLimitAsset) > 0
-  ) {
-    throw new TypeError(`${path}.maxBorrowableAsset cannot exceed borrowLimitAsset`);
-  }
-  if (!isValidUtcMillis(value.evaluatedAtMs)) throw new TypeError(`${path}.evaluatedAtMs is invalid`);
-  if (value.expiresAtMs !== null && !isValidUtcMillis(value.expiresAtMs)) {
-    throw new TypeError(`${path}.expiresAtMs is invalid`);
-  }
-  const provenance = Object.freeze({
-    account: cloneSourcedTimestamp(value.provenance.account, `${path}.provenance.account`),
-    permission: cloneSourcedTimestamp(value.provenance.permission, `${path}.provenance.permission`),
-    maxBorrow: cloneSourcedTimestamp(value.provenance.maxBorrow, `${path}.provenance.maxBorrow`),
-    rate: cloneSourcedTimestamp(value.provenance.rate, `${path}.provenance.rate`),
-  });
-  const freshness = Object.freeze({
-    account: cloneFreshnessReport(value.freshness.account, `${path}.freshness.account`),
-    permission: cloneFreshnessReport(value.freshness.permission, `${path}.freshness.permission`),
-    maxBorrow: cloneFreshnessReport(value.freshness.maxBorrow, `${path}.freshness.maxBorrow`),
-    rate: cloneFreshnessReport(value.freshness.rate, `${path}.freshness.rate`),
-  });
-  return Object.freeze({
-    accountId: identifier(value.accountId, `${path}.accountId`),
-    symbol: symbol(value.symbol, `${path}.symbol`),
-    asset: asset(value.asset, `${path}.asset`),
-    mode,
-    permissionId: identifier(value.permissionId, `${path}.permissionId`),
-    state: value.state,
-    reason: text(value.reason, `${path}.reason`) as BorrowTruth['reason'],
-    positionBucket: value.positionBucket,
-    maxBorrowableAsset,
-    borrowLimitAsset,
-    hourlyRate,
-    evaluatedAtMs: value.evaluatedAtMs,
-    expiresAtMs: value.expiresAtMs,
-    provenance,
-    freshness,
   });
 }
 
@@ -620,20 +500,43 @@ function deriveBorrow(
     }
     ids.add(referenceId);
     const capacityPoolId = identifier(reference.capacityPoolId, `borrowTruthReferences[${index}].capacityPoolId`);
-    if (typeof reference.requiredForNewAllocation !== 'boolean') throw new TypeError(`borrowTruthReferences[${index}].requiredForNewAllocation must be boolean`);
-    const truth = cloneBorrowTruth(reference.truth, `borrowTruthReferences[${index}].truth`);
+    const requiredForNewAllocation = reference.requiredForNewAllocation;
+    if (typeof requiredForNewAllocation !== 'boolean') throw new TypeError(`borrowTruthReferences[${index}].requiredForNewAllocation must be boolean`);
+    const validation = validateBorrowTruthForConsumption(reference.truth, {
+      evaluatedAtMs: input.evaluatedAtMs,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    });
+    const validationIssues = validation.issues;
+    const schemaIssues = validationIssues.filter((issue) => issue.includes('SCHEMA_INVALID'));
+    if (validation.truth === null) {
+      throw new TypeError(
+        `borrowTruthReferences[${index}].truth violates the exact BorrowTruth schema: ${schemaIssues.join(', ') || validationIssues.join(', ')}`,
+      );
+    }
+    // From this point onward, the caller-owned object is never read again.
+    // Every projection and capacity decision uses the single validator-owned,
+    // deeply frozen snapshot captured above.
+    const truth = validation.truth;
     const maxBorrow = truth.maxBorrowableAsset as NonNegativeDecimal | null;
     const current = truth.evaluatedAtMs <= input.evaluatedAtMs
       && truth.expiresAtMs !== null
       && input.evaluatedAtMs <= truth.expiresAtMs;
+    const integrityIssues = validationIssues.filter(
+      (issue) => issue !== 'BORROW_TRUTH_NOT_CURRENT' && !issue.endsWith('_EVIDENCE_EXPIRED'),
+    );
     const availableStateConsistent = truth.state !== 'AVAILABLE'
-      || (maxBorrow !== null && positive(maxBorrow) && truth.reason === 'BORROW_AMOUNT_POSITIVE');
-    if (!availableStateConsistent) unavailable.push(`BORROW_TRUTH_${referenceId}_CONTRADICTORY_AVAILABLE_STATE`);
+      || integrityIssues.length === 0;
+    if (!availableStateConsistent) {
+      integrityIssues.forEach((issue) => {
+        unavailable.push(`BORROW_TRUTH_${referenceId}_${issue.replace(/^BORROW_TRUTH_/, '')}`);
+      });
+    }
     const accountMatches = truth.accountId === expectedAccountId;
     if (!accountMatches) unavailable.push(`BORROW_TRUTH_${referenceId}_ACCOUNT_MISMATCH`);
     const usable = truth.state === 'AVAILABLE' && current && maxBorrow !== null
-      && availableStateConsistent && accountMatches;
-    if (reference.requiredForNewAllocation && !usable) {
+      && validationIssues.length === 0 && availableStateConsistent && accountMatches;
+    if (requiredForNewAllocation && !usable) {
       const reason = current ? `BORROW_TRUTH_${referenceId}_${truth.state}` : `BORROW_TRUTH_${referenceId}_EXPIRED_OR_UNBOUNDED`;
       if (['UNAVAILABLE', 'PERMISSION_MISSING', 'ACCOUNT_MODE_MISMATCH'].includes(truth.state)) unavailable.push(reason);
       else unknown.push(reason);
@@ -641,7 +544,7 @@ function deriveBorrow(
     return Object.freeze({
       referenceId,
       capacityPoolId,
-      requiredForNewAllocation: reference.requiredForNewAllocation,
+      requiredForNewAllocation,
       current,
       usableForNewAllocation: usable,
       maxBorrowableAsset: maxBorrow,
@@ -690,6 +593,11 @@ function deriveBorrow(
       && left.maxBorrowableAsset === right.maxBorrowableAsset
       && left.borrowLimitAsset === right.borrowLimitAsset
       && left.hourlyRate === right.hourlyRate
+      && left.currentBorrowedAsset === right.currentBorrowedAsset
+      && left.accruedInterestAsset === right.accruedInterestAsset
+      && left.collateralAmount === right.collateralAmount
+      && left.collateralAsset === right.collateralAsset
+      && left.currentLtv === right.currentLtv
       && expected.current === reference.current
       && expected.usableForNewAllocation === reference.usableForNewAllocation;
     if (!samePoolFacts) {

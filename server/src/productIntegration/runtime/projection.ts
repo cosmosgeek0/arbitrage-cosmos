@@ -44,7 +44,7 @@ const SURFACE_EVIDENCE = Object.freeze({
   basis: ['directional-cases', 'economics', 'gap', 'funding', 'depth-slippage', 'borrow', 'feasibility', 'staging', 'proposal-reject', 'execution-recovery'],
   volume: ['quiet-baseline', 'transition-stage', 'anomaly-follow-through', 'spot-perp-leadership', 'liquidity-crowding', 'analogues-false-positives', 'q-uncertainty', 'proposal-reject', 'position-outcome'],
   opportunities: ['strategy-source-revision', 'evidence-conflict-missing', 'model-assessment', 'net-economics', 'capital-risk-verdict', 'size-staging', 'expiry-invalidation', 'entry-exit-recovery', 'approval', 'rejection'],
-  borrow: ['availability-inventory', 'maximum-borrowable', 'rate-interest', 'account-collateral', 'freshness', 'principal-accrual-repay', 'proposal-ticket', 'unsupported'],
+  borrow: ['mode-eligibility', 'borrow-eligibility', 'maximum-borrowable', 'borrow-limit', 'hourly-borrow-rate', 'current-borrowed', 'accrued-interest', 'collateral-amount', 'collateral-asset', 'current-ltv', 'liability-source-freshness', 'collateral-source-freshness', 'blocker'],
   execution: ['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'one-leg-timer', 'exit-capacity', 'funding-borrow', 'controls', 'pnl-attribution'],
   orders: ['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'controls'],
   positions: ['ticket-position-link', 'gross-net-unhedged', 'one-leg-timer', 'exit-capacity', 'recovery'],
@@ -55,6 +55,20 @@ const SURFACE_EVIDENCE = Object.freeze({
   'logs-ledger': ['event-class-severity', 'component-strategy-symbol', 'correlation', 'fingerprint', 'bounded-pagination', 'saved-filters', 'trace', 'redaction', 'retention', 'raw-debug'],
   notifications: ['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof'],
 } as const);
+
+/**
+ * Fields that must retain a row but may remain unknown without downgrading the
+ * owning surface. ENGINE section 11 makes collateral/LTV conditional on an
+ * exact same-margin owner, unlike the required borrow-preflight evidence.
+ */
+const OPTIONAL_SURFACE_EVIDENCE: Readonly<Partial<Record<keyof typeof SURFACE_EVIDENCE, readonly string[]>>> = Object.freeze({
+  borrow: Object.freeze([
+    'collateral-amount',
+    'collateral-asset',
+    'current-ltv',
+    'collateral-source-freshness',
+  ]),
+});
 
 const SURFACE_LABELS: Readonly<Record<keyof typeof SURFACE_EVIDENCE, string>> = Object.freeze({
   dashboard: 'Dashboard', 'control-room': 'Control Room', account: 'Account', markets: 'Markets', token: 'Token',
@@ -708,6 +722,24 @@ const REQUIRED_SURFACE_BLOCKING_TRUTH = new Set<ProductRuntimeTruthLabel>([
   'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
 ]);
 
+function isOptionalSurfaceDatum(
+  surfaceId: keyof typeof SURFACE_EVIDENCE,
+  fieldId: string,
+): boolean {
+  return OPTIONAL_SURFACE_EVIDENCE[surfaceId]?.includes(fieldId) ?? false;
+}
+
+/** Pure relational readiness law; optional evidence rows never mint blockers. */
+export function productRuntimeSurfaceReadinessBlocker(
+  surfaceId: keyof typeof SURFACE_EVIDENCE,
+  evidence: readonly Readonly<ProductRuntimeSurfaceDatum>[],
+): Readonly<ProductRuntimeSurfaceDatum> | null {
+  return evidence.find((datum) => (
+    !isOptionalSurfaceDatum(surfaceId, datum.fieldId)
+    && (datum.value === null || REQUIRED_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel))
+  )) ?? null;
+}
+
 function opsInterlockTruth(interlock: Readonly<CanonicalOpsIntakeInterlock>): ProductRuntimeTruthLabel {
   if (!interlock.blocksNewEntries) return 'WIRED';
   return interlock.reasonCodes.some((code) => (
@@ -836,14 +868,13 @@ function surfaces(
           : value === null ? 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED' : null,
       } satisfies ProductRuntimeSurfaceDatum);
     });
-    const requiredEvidenceBlocker = evidence.find((datum) => (
-      datum.value === null || REQUIRED_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)
-    ));
+    const requiredEvidence = evidence.filter((datum) => !isOptionalSurfaceDatum(surfaceId, datum.fieldId));
+    const requiredEvidenceBlocker = productRuntimeSurfaceReadinessBlocker(surfaceId, evidence);
     const truthLabel = weakestSurfaceTruth([
       ownerTruthLabel,
-      ...evidence.map((datum) => datum.truthLabel),
+      ...requiredEvidence.map((datum) => datum.truthLabel),
     ]);
-    const blocked = requiredEvidenceBlocker !== undefined
+    const blocked = requiredEvidenceBlocker !== null
       || REQUIRED_SURFACE_BLOCKING_TRUTH.has(truthLabel);
     const blockedSummary = requiredEvidenceBlocker
       ? `${SURFACE_LABELS[surfaceId]} required evidence ${requiredEvidenceBlocker.fieldId} is ${requiredEvidenceBlocker.truthLabel}.`

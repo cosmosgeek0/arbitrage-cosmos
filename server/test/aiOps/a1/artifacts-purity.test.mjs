@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, posix, relative, resolve, win32 } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -219,9 +219,22 @@ test('entry inventory binds current bytes and recognizes only ratified or extern
   assert.equal(Object.getPrototypeOf(currentHeadBlobs), Object.prototype);
   const donorIdentityMode = currentBranch === donorBranch;
   const rowsById = new Map(contracts.AI_OPS_ENTRY_INVENTORY.map((row) => [row.entryId, row]));
+  for (const row of contracts.AI_OPS_ENTRY_INVENTORY) {
+    assert.equal(posix.isAbsolute(row.path), false, `${row.entryId}:POSIX workstation path`);
+    assert.equal(win32.isAbsolute(row.path), false, `${row.entryId}:Windows workstation path`);
+    if (!row.resolvedAtPortBase) {
+      assert.match(row.path, /^external-provenance\/[a-z0-9][a-z0-9./_-]*$/u, `${row.entryId}:portable external provenance identifier`);
+    }
+  }
+  for (const resource of contracts.AI_OPS_CLASSIFICATION_INPUTS) {
+    assert.equal(posix.isAbsolute(resource.classifiedPath), false, `${resource.resourceId}:POSIX classified path`);
+    assert.equal(win32.isAbsolute(resource.classifiedPath), false, `${resource.resourceId}:Windows classified path`);
+    assert.equal(posix.isAbsolute(resource.evidencePath), false, `${resource.resourceId}:POSIX evidence path`);
+    assert.equal(win32.isAbsolute(resource.evidencePath), false, `${resource.resourceId}:Windows evidence path`);
+  }
   assert.equal(
     contracts.sha256Canonical(contracts.AI_OPS_ENTRY_INVENTORY),
-    '07d1d5f80ebb711b4a7b615788974df4acbeefb5f698406ddc7810db9b336e72',
+    'fbdc6d678a50296e708529b5ea25cf612280e5bf672f02f13286dbd129fc8076',
     'independent full-row digest locks every declared path, revision, digest, resolution flag, status, and owner seam',
   );
   const i00SealedOwnerEvidence = await readFile(resolve(repositoryRoot, 'I00_PRODUCT_BUILD_STATE.md'), 'utf8');

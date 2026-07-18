@@ -1,6 +1,6 @@
 {
   "artifactId": "aiops-entry-inventory",
-  "contentHash": "4b135bfe502b395816aca74b75e850898e10c249406c3d5452aef2f2e716aff2",
+  "contentHash": "e5f0e9b8b6cc6268ac6b2dd7e4303c770983c58bec7a5254a74639bcd3a99937",
   "createdAtMs": 1784160000000,
   "environment": "SHADOW",
   "owner": "AI_OPS_A1_CONTRACTS",
@@ -417,7 +417,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "I00 section 14 canonical Control Plane and machine-readable control-registry owner law",
       "owner": "OWNER",
-      "path": "/Users/cosmosgeek/Desktop/Main/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "path": "external-provenance/owner/i00-product-assembly-control-room-and-live-bringup.md",
       "resolvedAtPortBase": false,
       "revision": "owner-file-20260714",
       "testEntrypoints": [
@@ -434,7 +434,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "I00 section 20 external-action authorization protocol applied to diagnostic-provider activation",
       "owner": "OWNER",
-      "path": "/Users/cosmosgeek/Desktop/Main/I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md",
+      "path": "external-provenance/owner/i00-product-assembly-control-room-and-live-bringup.md",
       "resolvedAtPortBase": false,
       "revision": "owner-file-20260714",
       "testEntrypoints": [
@@ -1279,7 +1279,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "authority.activation-directive",
       "owner": "OWNER",
-      "path": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+      "path": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
       "resolvedAtPortBase": false,
       "revision": "owner-file-20260714",
       "testEntrypoints": [
@@ -1296,7 +1296,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "authority.command",
       "owner": "OWNER",
-      "path": "/Users/cosmosgeek/Desktop/command.txt",
+      "path": "external-provenance/owner/command.txt",
       "resolvedAtPortBase": false,
       "revision": "owner-file-20260714",
       "testEntrypoints": [
@@ -1313,7 +1313,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "authority.time-amendment",
       "owner": "OWNER",
-      "path": "/Users/cosmosgeek/Desktop/OWNER TIME-OPTIMIZATION AMENDMENT.txt",
+      "path": "external-provenance/owner/owner-time-optimization-amendment.txt",
       "resolvedAtPortBase": false,
       "revision": "owner-file-20260714",
       "testEntrypoints": [
@@ -1364,7 +1364,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "Read-only identity and provider-state owner-decision draft",
       "owner": "OWNER_SIGNATURE_REQUIRED",
-      "path": "/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_IDENTITY_MATRIX_DRAFT.md",
+      "path": "external-provenance/owner-draft/ai-ops-identity-matrix.md",
       "resolvedAtPortBase": false,
       "revision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
       "testEntrypoints": [
@@ -1381,7 +1381,7 @@
       "insertionRequestIds": [],
       "mappedRequirement": "Read-only numerical reliability-target owner-decision draft",
       "owner": "OWNER_SIGNATURE_REQUIRED",
-      "path": "/Users/cosmosgeek/Desktop/aiops-prestage/AI_OPS_RELIABILITY_TARGETS_DRAFT.md",
+      "path": "external-provenance/owner-draft/ai-ops-reliability-targets.md",
       "resolvedAtPortBase": false,
       "revision": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
       "testEntrypoints": [

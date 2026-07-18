@@ -103,7 +103,7 @@ These are measured results for the final merged staging tree; they do not alter 
 
 ## Real-gap campaign state
 
-This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.md` in exact order. Each row is independently committed with a focused hostile regression; full mounted denominators are remeasured only after the ranked list is complete.
+This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.md` in exact order. Each executable gap is closed by its owning commit and focused hostile regression; duplicate documentary rows cite that owning fix instead of receiving redundant code. Full mounted denominators are remeasured only after the ranked list is complete.
 
 | Rank | Item | State | Focused proof |
 | ---: | --- | --- | --- |
@@ -113,6 +113,9 @@ This branch is closing the ranked Bucket-D behaviors from `DIRECTIVE_GAP_TRIAGE.
 | 4 | `FIX-129` | `BUILT_AND_TESTED` | A first-evaluated bootstrap loads `.env`, binds one memoized process authority, and owns the canonical data directory plus icon, liquidation, profile, and news archive paths. FIX-031 now places the logical lease before directory creation, retains the original physical path across parent-symlink retarget, and pins every cache parent. The reviewed public-news GET keeps the same operation-site identity, `GET` semantics, owner, and disposition; its whole-file source digest and line pin are refreshed only for the adjacent cache-parent guard, without widening network authority. |
 | 5 | `FIX-171` | `BUILT_AND_TESTED` | All ten Foundation import-purity wrappers install one deterministic synchronous fetch denial instead of forwarding to ambient transport. A shared negative control performs an actual hostile fetch attempt and proves the exact fail-closed code before every import check. |
 | 6 | `FIX-170` | `BUILT_AND_TESTED` | Routine pull-request CI now has separate bounded canonical-full and local-ops jobs. The full job installs exact Node, Python 3.13.14, uv 0.11.28, all locked Quant groups/extras, then runs `test:all`; the ops job runs both fail-preserving local aggregates. The hostile workflow contract is 2/2, and staging/private/signed commands remain outside routine CI. |
+| 7 | `Q-116` | `BUILT_AND_TESTED` | The documented local bootstrap and stable root command install Python 3.13.14, then synchronize the exact Quant lock with every dependency group and extra. Its regression creates a temporary offline environment without touching the repository venv, imports pinned Optuna 4.9.0, scikit-learn 1.9.0 and XGBoost 3.3.0, executes all 41 Q10 model test functions (44 collected cases) with zero skips, and proves a bootstrap child failure retains its nonzero exit. The canonical Quant gate independently requires all-extras synchronization, 3,063 collected tests and no unexpected skips. |
+| 8 | `Q-134` | `COVERED_BY_FIX-170` | Documentary duplicate of Q-116's bootstrap plus continuous full-model enforcement. FIX-170 already makes routine pull-request CI install every locked Quant group/extra and run the canonical `test:all` gate; no duplicate implementation commit is warranted. |
+| 9 | `FIX-173` | `COVERED_BY_FIX-170` | Documentary duplicate of Q-116's clean locked dependency environment plus Ubuntu CI enforcement. FIX-170 already provisions pinned Python/uv, performs the all-groups/all-extras locked sync and runs `test:all`; no duplicate implementation commit is warranted. |
 
 ## Previous source evidence
 

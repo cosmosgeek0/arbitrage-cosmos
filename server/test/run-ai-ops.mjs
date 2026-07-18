@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnRunnerChild, superviseRunnerChild } from '../../test/runner-process-tree.mjs';
@@ -8,9 +8,137 @@ import { spawnRunnerChild, superviseRunnerChild } from '../../test/runner-proces
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const SANDBOX_POLICY = '(version 1)(allow default)(deny network*)';
+const UNSHARE = 'unshare';
+const TEST_NETWORK_DENY_BACKEND_ENV = 'AI_OPS_TEST_NETWORK_DENY_BACKEND';
+const NETWORK_DENY_PROBE_FLAG = '--network-deny-probe';
+const LINUX_NETWORK_DENY_PROBE_OK = 'AI_OPS_LINUX_NETWORK_DENY_PROBE_OK';
+const BACKEND_PROBE_TIMEOUT_MS = 5_000;
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 const LANE_TIMEOUT_MS = 120_000;
 const A1_IMPLEMENTATION_SHA = 'e9d028a9f5022dee1be80ee4f5e1f8ae6490f53c';
+
+function diagnosticToken(value) {
+  const firstLine = String(value ?? '').split(/\r?\n/u)[0].trim();
+  return (firstLine || 'unknown').replace(/[^A-Za-z0-9_.:-]+/gu, '_').slice(0, 160);
+}
+
+function requestedNetworkDenyBackend() {
+  const forced = process.env[TEST_NETWORK_DENY_BACKEND_ENV];
+  if (forced === undefined) return { name: process.platform, forced: false };
+  if (forced !== 'darwin' && forced !== 'linux') {
+    throw new TypeError(`${TEST_NETWORK_DENY_BACKEND_ENV} must be darwin or linux when set`);
+  }
+  return { name: forced, forced: true };
+}
+
+function probeLinuxNetworkDeny() {
+  let parentNetworkNamespace = 'UNAVAILABLE';
+  try {
+    parentNetworkNamespace = readlinkSync('/proc/self/ns/net');
+  } catch {
+    // The exact unshare probe below remains authoritative. A non-Linux host
+    // forced into this path will report an honest unavailable result.
+  }
+
+  const probeSource = [
+    "const { readlinkSync } = require('node:fs');",
+    "const net = require('node:net');",
+    'const parent = process.argv[1];',
+    "const current = readlinkSync('/proc/self/ns/net');",
+    "if (parent === 'UNAVAILABLE' || current === parent) process.exit(91);",
+    'let socket;',
+    'let timer;',
+    'let settled = false;',
+    `const finish = (code) => { if (settled) return; settled = true; clearTimeout(timer); socket.destroy(); if (code === 0) process.stdout.write('${LINUX_NETWORK_DENY_PROBE_OK}\\n'); else process.exitCode = code; };`,
+    'socket = new net.Socket();',
+    'timer = setTimeout(() => finish(92), 1_000);',
+    "socket.once('connect', () => finish(93));",
+    "socket.once('error', (error) => finish(error.code === 'ENETUNREACH' || error.code === 'EHOSTUNREACH' ? 0 : 94));",
+    "socket.connect({ host: '192.0.2.1', port: 9 });",
+  ].join('');
+  const result = spawnSync(
+    UNSHARE,
+    ['-r', '-n', '--', process.execPath, '-e', probeSource, parentNetworkNamespace],
+    {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024,
+      timeout: BACKEND_PROBE_TIMEOUT_MS,
+    },
+  );
+
+  if (result.error !== undefined) {
+    return {
+      available: false,
+      reason: `linux_unshare_spawn_${diagnosticToken(result.error.code ?? result.error.message)}`,
+    };
+  }
+  if (result.status !== 0 || result.signal !== null) {
+    return {
+      available: false,
+      reason: `linux_unshare_exit_${String(result.status)}_signal_${String(result.signal)}_${diagnosticToken(result.stderr)}`,
+    };
+  }
+  if (!result.stdout.includes(LINUX_NETWORK_DENY_PROBE_OK)) {
+    return { available: false, reason: 'linux_unshare_isolation_proof_missing' };
+  }
+  return { available: true, reason: 'distinct_network_namespace_tcp_denied' };
+}
+
+function resolveOsNetworkDeny() {
+  const requested = requestedNetworkDenyBackend();
+  if (requested.name === 'darwin') {
+    return existsSync(SANDBOX_EXEC)
+      ? { ...requested, available: true, mechanism: 'darwin-sandbox-exec', reason: 'path_present' }
+      : { ...requested, available: false, mechanism: 'unavailable', reason: 'darwin_sandbox_exec_missing' };
+  }
+  if (requested.name === 'linux') {
+    const probe = probeLinuxNetworkDeny();
+    return {
+      ...requested,
+      ...probe,
+      mechanism: probe.available ? 'linux-unshare-r-n' : 'unavailable',
+    };
+  }
+  return {
+    ...requested,
+    available: false,
+    mechanism: 'unavailable',
+    reason: `unsupported_platform_${diagnosticToken(requested.name)}`,
+  };
+}
+
+function osNetworkDenyCommand(backend, nodeArgs) {
+  if (backend.mechanism === 'darwin-sandbox-exec') {
+    return {
+      command: SANDBOX_EXEC,
+      args: ['-p', SANDBOX_POLICY, process.execPath, ...nodeArgs],
+    };
+  }
+  if (backend.mechanism === 'linux-unshare-r-n') {
+    return {
+      command: UNSHARE,
+      args: ['-r', '-n', '--', process.execPath, ...nodeArgs],
+    };
+  }
+  throw new TypeError(`unsupported OS network-deny mechanism: ${backend.mechanism}`);
+}
+
+const OS_NETWORK_DENY = resolveOsNetworkDeny();
+
+if (process.argv.includes(NETWORK_DENY_PROBE_FLAG)) {
+  process.stdout.write(
+    `AI_OPS_NETWORK_DENY_PROBE actual=${process.platform} requested=${OS_NETWORK_DENY.name} ` +
+    `forced=${String(OS_NETWORK_DENY.forced)} mechanism=${OS_NETWORK_DENY.mechanism} ` +
+    `reason=${OS_NETWORK_DENY.reason}\n`,
+  );
+  if (!OS_NETWORK_DENY.available) {
+    process.stderr.write(
+      `AI_OPS_NETWORK_DENY_PROBE_CANONICAL_FAILURE:${OS_NETWORK_DENY.name}:${OS_NETWORK_DENY.reason}\n`,
+    );
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 function gitText(args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
@@ -53,6 +181,35 @@ function relativeTestFiles(directory) {
   };
   visit(absolute);
   return found.sort();
+}
+
+function hasExactPreload(nodeArgs, specifier) {
+  return nodeArgs.includes(`--import=${specifier}`) || nodeArgs.some((argument, index) => (
+    argument === specifier && nodeArgs[index - 1] === '--import'
+  ));
+}
+
+function inspectInProcessNetworkDeny(lane) {
+  const declared = lane.inProcessNetworkDeny;
+  if (declared === undefined) return { available: false, mechanism: 'absent' };
+
+  if (declared.importedByEveryTest !== undefined) {
+    const importPattern = new RegExp(
+      `(?:from\\s*|import\\s*)['\"]${declared.importedByEveryTest.replaceAll('.', '\\.')}['\"]`,
+      'u',
+    );
+    const available = lane.files.length > 0 && lane.files.every((file) => {
+      const absoluteFile = path.join(ROOT, file);
+      const importedHelper = path.resolve(path.dirname(absoluteFile), declared.importedByEveryTest);
+      return existsSync(importedHelper) && importPattern.test(readFileSync(absoluteFile, 'utf8'));
+    });
+    return { available, mechanism: declared.mechanism };
+  }
+
+  const available = declared.preloads.length > 0 && declared.preloads.every((specifier) => (
+    hasExactPreload(lane.nodeArgs, specifier) && existsSync(path.resolve(ROOT, specifier))
+  ));
+  return { available, mechanism: declared.mechanism };
 }
 
 function boundedAppend(current, chunk) {
@@ -116,6 +273,10 @@ const lanes = [
     expectedFiles: 8,
     expectedTests: 63,
     osNetworkDeny: true,
+    inProcessNetworkDeny: {
+      mechanism: 'a1-egress-tripwire',
+      importedByEveryTest: './_network-denied-env.mjs',
+    },
     env: {
       AI_OPS_OS_NETWORK_DENY: '1',
       AI_OPS_REQUIRE_PORT_RECEIPT: '1',
@@ -161,6 +322,10 @@ const lanes = [
     expectedFiles: 11,
     expectedTests: 88,
     osNetworkDeny: true,
+    inProcessNetworkDeny: {
+      mechanism: 'a5-total-network-deny',
+      preloads: ['./test/aiOps/a5/network-deny.mjs'],
+    },
     env: { AI_OPS_OS_NETWORK_DENY: '1' },
     nodeArgs: [
       '--import', './test/aiOps/a5/network-deny.mjs',
@@ -174,6 +339,10 @@ const lanes = [
     expectedFiles: 5,
     expectedTests: 48,
     osNetworkDeny: true,
+    inProcessNetworkDeny: {
+      mechanism: 'a4-total-network-deny',
+      preloads: ['./web/test/aiOps/total-network-deny-preload.mjs'],
+    },
     env: { AI_OPS_OS_NETWORK_DENY: '1' },
     nodeArgs: [
       '--import', './server/test/private-egress-tripwire.mjs',
@@ -200,16 +369,37 @@ for (const lane of lanes) {
   const env = { ...process.env, ...lane.env };
   delete env.NODE_OPTIONS;
   delete env.I00_TEST_EGRESS_NEGATIVE_CONTROLS;
+  delete env[TEST_NETWORK_DENY_BACKEND_ENV];
 
   let command = process.execPath;
   let args = lane.nodeArgs;
   if (lane.osNetworkDeny) {
-    if (process.platform !== 'darwin' || !existsSync(SANDBOX_EXEC)) {
-      failures.push(`${lane.id}_OS_NETWORK_DENY_UNAVAILABLE:${process.platform}`);
+    const inProcessNetworkDeny = inspectInProcessNetworkDeny(lane);
+    let effectiveMechanism = inProcessNetworkDeny.mechanism;
+    if (OS_NETWORK_DENY.available) {
+      const wrapped = osNetworkDenyCommand(OS_NETWORK_DENY, lane.nodeArgs);
+      command = wrapped.command;
+      args = wrapped.args;
+      effectiveMechanism = inProcessNetworkDeny.available
+        ? `${OS_NETWORK_DENY.mechanism}+${inProcessNetworkDeny.mechanism}`
+        : OS_NETWORK_DENY.mechanism;
+    } else if (!inProcessNetworkDeny.available) {
+      process.stdout.write(
+        `AI_OPS_NETWORK_DENY lane=${lane.id} actual=${process.platform} requested=${OS_NETWORK_DENY.name} ` +
+        `os=unavailable reason=${OS_NETWORK_DENY.reason} in_process=absent effective=unavailable\n`,
+      );
+      failures.push(
+        `${lane.id}_OS_NETWORK_DENY_UNAVAILABLE:${OS_NETWORK_DENY.name}:IN_PROCESS_GUARD_ABSENT`,
+      );
       continue;
     }
-    command = SANDBOX_EXEC;
-    args = ['-p', SANDBOX_POLICY, process.execPath, ...lane.nodeArgs];
+    env.AI_OPS_NETWORK_DENY_MECHANISM = effectiveMechanism;
+    process.stdout.write(
+      `AI_OPS_NETWORK_DENY lane=${lane.id} actual=${process.platform} requested=${OS_NETWORK_DENY.name} ` +
+      `os=${OS_NETWORK_DENY.mechanism} reason=${OS_NETWORK_DENY.reason} ` +
+      `in_process=${inProcessNetworkDeny.available ? inProcessNetworkDeny.mechanism : 'absent'} ` +
+      `effective=${effectiveMechanism}\n`,
+    );
   }
 
   const result = await runProcess(command, args, env);

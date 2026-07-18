@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -46,6 +45,7 @@ import { SystemControlService } from '../../../dist/systemIntegration/controls/i
 import { A5_SYNTHETIC_HARD_DENIAL_CATEGORIES } from '../../../../fixtures/aiOps/a5/hard-denial-categories.mjs';
 import { SECTION16_SCENARIOS } from '../../../../fixtures/aiOps/a5/campaign-catalog.mjs';
 import { PERMANENTLY_FORBIDDEN_CAPABILITIES } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
+import { readAiOpsGitIdentity } from '../../../../test/aiOps/a5/git-identity.mjs';
 import { campaign } from '../../productAssurance/helpers.mjs';
 import {
   T0,
@@ -56,7 +56,6 @@ import {
 
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const HASH = /^[a-f0-9]{64}$/u;
-const A5_DONOR_BRANCH = 'port-a5-20260716';
 
 function digest(value) {
   return createHash('sha256').update(String(value)).digest('hex');
@@ -521,8 +520,8 @@ async function recursiveFiles(directory) {
 
 test('A5 creates no production owner, store, socket, executor, or reverse fixture dependency', async () => {
   const aiOpsRoot = path.join(ROOT, 'server/src/aiOps');
-  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (branch === A5_DONOR_BRANCH) {
+  const identity = readAiOpsGitIdentity(ROOT, 'A5');
+  if (identity.mode === 'DONOR') {
     await assert.rejects(access(aiOpsRoot), { code: 'ENOENT' });
   } else {
     await access(aiOpsRoot);

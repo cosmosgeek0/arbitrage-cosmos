@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { readAiOpsGitIdentity } from './git-identity.mjs';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const FIXTURE_ROOT = path.join(ROOT, 'fixtures/aiOps/a5');
@@ -11,7 +12,6 @@ const PORTABLE_TEST_ROOT = path.join(ROOT, 'test/aiOps/a5');
 const OWNER_TEST_ROOT = path.join(ROOT, 'server/test/aiOps/a5');
 const ARCHIVE_ROOT = path.join(ROOT, 'docs/archive/aiOps/a5');
 const BASE_SHA = '492e3f69b054c85686bcfc4c09dbff4ababeda3f';
-const DONOR_BRANCH = 'port-a5-20260716';
 const RATIFIED_ROOTS = [FIXTURE_ROOT, PORTABLE_TEST_ROOT, OWNER_TEST_ROOT, ARCHIVE_ROOT];
 const ALLOWED_PATH = /^(?:server\/test\/aiOps\/a5\/|test\/aiOps\/|fixtures\/aiOps\/a5\/|docs\/archive\/aiOps\/a5\/)/u;
 
@@ -32,8 +32,8 @@ test('all A5 artifact paths remain inside the four ratified exclusive namespaces
     assert.match(relative, ALLOWED_PATH);
   }
 
-  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (branch !== DONOR_BRANCH) {
+  const identity = readAiOpsGitIdentity(ROOT, 'A5');
+  if (identity.mode === 'INTEGRATED') {
     const currentPaths = files.map((file) => path.relative(ROOT, file)).sort();
     const trackedPaths = execFileSync('git', [
       'ls-files', '-z', '--', ...RATIFIED_ROOTS.map((root) => path.relative(ROOT, root)),
@@ -53,18 +53,15 @@ test('all A5 artifact paths remain inside the four ratified exclusive namespaces
   }
 });
 
-test('the assigned base remains an ancestor and the worker is on the assigned branch', () => {
-  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (branch === DONOR_BRANCH) {
-    assert.equal(branch, DONOR_BRANCH);
+test('donor history is exact while attached or detached integrated HEAD verifies current-tree identity', () => {
+  const identity = readAiOpsGitIdentity(ROOT, 'A5');
+  if (identity.mode === 'DONOR') {
     execFileSync('git', ['merge-base', '--is-ancestor', BASE_SHA, 'HEAD'], { cwd: ROOT, stdio: 'pipe' });
     return;
   }
-  assert.notEqual(branch, '');
-  assert.match(
-    execFileSync('git', ['rev-parse', '--verify', 'HEAD^{commit}'], { cwd: ROOT, encoding: 'utf8' }).trim(),
-    /^[0-9a-f]{40}$/u,
-  );
+  assert.match(identity.headCommit, /^[0-9a-f]{40}$/u);
+  assert.match(identity.headTree, /^[0-9a-f]{40}$/u);
+  assert.equal(identity.verificationTarget, 'CURRENT_HEAD_TREE');
 });
 
 test('pure fixture modules have no environment, filesystem, timer, random, process, or network dependency', async () => {

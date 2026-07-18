@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnRunnerChild, superviseRunnerChild } from '../../test/runner-process-tree.mjs';
+import { readAiOpsGitIdentity } from '../../test/aiOps/a5/git-identity.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
@@ -11,10 +12,10 @@ const SANDBOX_POLICY = '(version 1)(allow default)(deny network*)';
 const MAX_CAPTURE_BYTES = 8 * 1024 * 1024;
 const LANE_TIMEOUT_MS = 120_000;
 const A1_IMPLEMENTATION_SHA = 'e9d028a9f5022dee1be80ee4f5e1f8ae6490f53c';
-
-function gitText(args) {
-  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
-}
+const A1_FS_READ_ALLOWLIST = [...new Set([
+  ROOT,
+  realpathSync(path.join(ROOT, 'node_modules')),
+])];
 
 function a1CurrentHeadBlobs() {
   const fixture = JSON.parse(readFileSync(path.join(ROOT, 'fixtures/aiOps/a1/entry-inventory.v1.json'), 'utf8'));
@@ -36,7 +37,7 @@ function a1CurrentHeadBlobs() {
   return JSON.stringify(blobs);
 }
 
-const CURRENT_BRANCH = gitText(['branch', '--show-current']);
+const CURRENT_GIT_IDENTITY = readAiOpsGitIdentity(ROOT, 'A1');
 const A1_CURRENT_HEAD_BLOBS = a1CurrentHeadBlobs();
 
 function relativeTestFiles(directory) {
@@ -120,12 +121,14 @@ const lanes = [
       AI_OPS_OS_NETWORK_DENY: '1',
       AI_OPS_REQUIRE_PORT_RECEIPT: '1',
       AI_OPS_EXPECTED_IMPLEMENTATION_SHA: A1_IMPLEMENTATION_SHA,
-      AI_OPS_A1_CURRENT_BRANCH: CURRENT_BRANCH,
+      AI_OPS_A1_IDENTITY_MODE: CURRENT_GIT_IDENTITY.mode,
+      AI_OPS_HEAD_COMMIT: CURRENT_GIT_IDENTITY.headCommit,
+      AI_OPS_HEAD_TREE: CURRENT_GIT_IDENTITY.headTree,
       AI_OPS_A1_CURRENT_HEAD_BLOBS: A1_CURRENT_HEAD_BLOBS,
     },
     nodeArgs: [
       '--permission',
-      `--allow-fs-read=${ROOT}`,
+      ...A1_FS_READ_ALLOWLIST.map((allowedPath) => `--allow-fs-read=${allowedPath}`),
       '--experimental-test-isolation=none',
       '--test',
       '--test-concurrency=1',
@@ -158,8 +161,8 @@ const lanes = [
   {
     id: 'A5',
     files: a5,
-    expectedFiles: 11,
-    expectedTests: 88,
+    expectedFiles: 12,
+    expectedTests: 94,
     osNetworkDeny: true,
     env: { AI_OPS_OS_NETWORK_DENY: '1' },
     nodeArgs: [
@@ -189,7 +192,7 @@ const inventoryTotal = lanes.reduce((sum, lane) => sum + lane.files.length, 0);
 const failures = [];
 const totals = { tests: 0, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 0 };
 
-if (inventoryTotal !== 43) failures.push(`AI_OPS_TEST_FILE_TOTAL_DRIFT:${inventoryTotal}:EXPECTED_43`);
+if (inventoryTotal !== 44) failures.push(`AI_OPS_TEST_FILE_TOTAL_DRIFT:${inventoryTotal}:EXPECTED_44`);
 
 for (const lane of lanes) {
   process.stdout.write(`\nAI Ops ${lane.id}: ${lane.files.length} test files\n`);

@@ -104,6 +104,7 @@ import { createProductRuntimeSystemControlCommandOwner } from './productIntegrat
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from './capitalFoundation/contracts/index.js';
 
 // Source-catalog ownership is not operational egress authority. A normal
 // verifier-style boot stays local unless an effectful public-source campaign
@@ -287,6 +288,27 @@ systemIntegration = createSystemIntegrationApplication({
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
   strategySymbolPolicy: systemIntegrationProduction.strategySymbolPolicy,
+  sizeCeilings: Object.freeze({
+    SYSTEM: Object.freeze({
+      readCeiling: (): string | null => {
+        try { return normalizeNonNegativeExactDecimal(String(config.maxOrderNotionalUsd)); } catch { return null; }
+      },
+      setCeiling: (value: string): boolean => {
+        const canonical = normalizeNonNegativeExactDecimal(value);
+        const numeric = Number(canonical);
+        if (canonical !== value || !Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+          throw new RangeError('system size ceiling cannot cross the legacy numeric boundary exactly');
+        }
+        const current = normalizeNonNegativeExactDecimal(String(config.maxOrderNotionalUsd));
+        if (compareExactDecimals(canonical, current) > 0) throw new RangeError('system size ceiling is downward-only');
+        if (numeric === config.maxOrderNotionalUsd) return false;
+        config.maxOrderNotionalUsd = numeric;
+        return true;
+      },
+    }),
+    BASIS: systemIntegrationProduction.sizeCeilings.BASIS,
+    VOLUME: systemIntegrationProduction.sizeCeilings.VOLUME,
+  }),
   traces: canonicalOwnerEvidence,
   ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({

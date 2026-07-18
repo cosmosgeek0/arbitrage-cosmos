@@ -354,6 +354,13 @@ export interface PersistedStrategySymbolPolicy {
   readonly volumeBlocked: readonly string[];
 }
 
+/** Exact desired ceilings; null means no durable control value has been established. */
+export interface PersistedSizeCeilings {
+  readonly system: string | null;
+  readonly basis: string | null;
+  readonly volume: string | null;
+}
+
 /**
  * Opaque owner reference. Persistence preserves identity and revision but does
  * not infer proposal, mandate, configuration, or position policy semantics.
@@ -574,6 +581,7 @@ export interface SystemIntegrationCheckpointState {
   readonly control: Readonly<SystemControlState>;
   readonly strategyIntake: Readonly<PersistedStrategyIntakePosture>;
   readonly strategySymbolPolicy: Readonly<PersistedStrategySymbolPolicy>;
+  readonly sizeCeilings: Readonly<PersistedSizeCeilings>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];

@@ -40,6 +40,14 @@ export function isRecoveryOnlyMutation(
       return body.engaged === true;
     case 'SET_INTAKE_PAUSED':
       return body.paused === true;
+    case 'SET_BASIS_INTAKE':
+    case 'SET_VOLUME_INTAKE':
+      return body.paused === true;
+    case 'SET_BASIS_SYMBOL_POLICY':
+    case 'SET_VOLUME_SYMBOL_POLICY':
+      return body.action === 'BLOCK';
+    case 'REDUCE_SIZE_CEILING':
+      return typeof body.maximumNotionalUsd === 'string';
     case 'REVOKE_APPROVAL':
       return typeof body.approvalId === 'string';
     case 'REVOKE_RESERVATION':

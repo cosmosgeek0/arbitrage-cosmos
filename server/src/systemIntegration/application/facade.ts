@@ -8,6 +8,11 @@ import type {
   ComponentStepContext,
 } from '../../foundation/control/index.js';
 import {
+  compareExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  type NonNegativeDecimal,
+} from '../../capitalFoundation/contracts/index.js';
+import {
   SYSTEM_COMPONENT_IDS,
   type SystemComponentId,
 } from '../contracts/constants.js';
@@ -82,6 +87,7 @@ import type {
   SystemIntegrationApplicationOptions,
   StrategyIntakeControlReadback,
   StrategySymbolPolicyControlReadback,
+  SizeCeilingControlReadback,
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
@@ -118,6 +124,7 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   if (mutation.command === 'SET_VOLUME_SYMBOL_POLICY') return mutation.action === 'BLOCK';
+  if (mutation.command === 'REDUCE_SIZE_CEILING') return true;
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -628,6 +635,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreSizeCeilings(current.value.sizeCeilings)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'SIZE_CEILING_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -833,6 +856,16 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         return 'UNKNOWN';
       }
     }
+    if (request.mutation.command === 'REDUCE_SIZE_CEILING') {
+      const owner = this.options.sizeCeilings?.[request.mutation.scope];
+      if (!owner || typeof owner.readCeiling !== 'function') return 'UNKNOWN';
+      try {
+        const effective = owner.readCeiling();
+        return effective === request.mutation.maximumNotionalUsd ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     const effectId = this.runtimePublicationEffectId(request, receipt);
     const local = this.runtimePublicationEffects.get(effectId);
     if (local !== undefined) return local;
@@ -1012,6 +1045,45 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         !blocking,
       );
     }
+    if (mutation.command === 'REDUCE_SIZE_CEILING') {
+      const owner = this.options.sizeCeilings?.[mutation.scope];
+      if (!owner || typeof owner.readCeiling !== 'function' || typeof owner.setCeiling !== 'function') {
+        return this.decision(false, 'SIZE_CEILING_OWNER_NOT_WIRED', 'Canonical Capital/config size-ceiling owner is unavailable.', false);
+      }
+      let target: NonNegativeDecimal;
+      let effective: NonNegativeDecimal;
+      try {
+        target = normalizeNonNegativeExactDecimal(mutation.maximumNotionalUsd);
+        const read = owner.readCeiling();
+        if (read === null) throw new TypeError('size ceiling unavailable');
+        effective = normalizeNonNegativeExactDecimal(read);
+        if (effective !== read) throw new TypeError('size ceiling non-canonical');
+      } catch {
+        return this.decision(false, 'SIZE_CEILING_EFFECT_UNAVAILABLE', 'Canonical exact size-ceiling readback is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'SIZE_CEILING_DESIRED_STATE_UNAVAILABLE', 'Durable size-ceiling posture is unavailable.', false);
+      }
+      const field = mutation.scope === 'SYSTEM' ? 'system' : mutation.scope === 'BASIS' ? 'basis' : 'volume';
+      const desiredRaw = persisted.sizeCeilings[field];
+      let desired: NonNegativeDecimal | null = null;
+      try {
+        desired = desiredRaw === null ? null : normalizeNonNegativeExactDecimal(desiredRaw);
+      } catch {
+        return this.decision(false, 'SIZE_CEILING_DESIRED_STATE_UNAVAILABLE', 'Durable exact size-ceiling posture is invalid.', false);
+      }
+      if (compareExactDecimals(target, effective) > 0
+        || (desired !== null && compareExactDecimals(target, desired) > 0)) {
+        return this.decision(false, 'SIZE_CEILING_INCREASE_FORBIDDEN', 'This control permits downward-only exact size-ceiling changes.', false);
+      }
+      return this.decision(
+        true,
+        'SIZE_CEILING_REDUCTION_ACCEPTED',
+        '',
+        desired !== target || effective !== target,
+      );
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -1091,6 +1163,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         const owner = this.options.strategySymbolPolicy?.[strategy];
         if (!owner || typeof owner.setBlocked !== 'function') throw new Error('STRATEGY_SYMBOL_POLICY_OWNER_NOT_WIRED');
         owner.setBlocked(mutation.symbol, mutation.action === 'BLOCK');
+      } else if (mutation.command === 'REDUCE_SIZE_CEILING') {
+        const owner = this.options.sizeCeilings?.[mutation.scope];
+        if (!owner || typeof owner.setCeiling !== 'function') throw new Error('SIZE_CEILING_OWNER_NOT_WIRED');
+        owner.setCeiling(mutation.maximumNotionalUsd);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -1239,6 +1315,33 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
   }
 
+  sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback> {
+    const checkpoint = this.checkpoint();
+    const field = scope === 'SYSTEM' ? 'system' : scope === 'BASIS' ? 'basis' : 'volume';
+    const desiredMaximumNotionalUsd = checkpoint?.sizeCeilings[field] ?? null;
+    const owner = this.options.sizeCeilings?.[scope];
+    const base = { scope, desiredMaximumNotionalUsd, controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readCeiling !== 'function') {
+      return Object.freeze({ ...base, effectiveMaximumNotionalUsd: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const effectiveMaximumNotionalUsd = owner.readCeiling();
+      if (effectiveMaximumNotionalUsd === null
+        || normalizeNonNegativeExactDecimal(effectiveMaximumNotionalUsd) !== effectiveMaximumNotionalUsd) {
+        throw new TypeError('size ceiling readback unavailable');
+      }
+      return Object.freeze({
+        ...base,
+        effectiveMaximumNotionalUsd,
+        state: desiredMaximumNotionalUsd !== null && desiredMaximumNotionalUsd === effectiveMaximumNotionalUsd
+          && pending.ok && pending.value.length === 0 ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveMaximumNotionalUsd: null, state: 'UNAVAILABLE' });
+    }
+  }
+
   private restoreStrategyIntake(
     posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
   ): boolean {
@@ -1279,6 +1382,31 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         for (const symbol of desired) owner.setBlocked(symbol, true);
         const restored = owner.readBlockedSymbols();
         if (JSON.stringify([...restored].sort()) !== JSON.stringify([...desired].sort())) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreSizeCeilings(
+    ceilings: Readonly<{ system: string | null; basis: string | null; volume: string | null }>,
+  ): boolean {
+    for (const scope of ['SYSTEM', 'BASIS', 'VOLUME'] as const) {
+      const field = scope === 'SYSTEM' ? 'system' : scope === 'BASIS' ? 'basis' : 'volume';
+      const desired = ceilings[field];
+      const owner = this.options.sizeCeilings?.[scope];
+      if (desired === null) continue;
+      if (!owner || typeof owner.readCeiling !== 'function' || typeof owner.setCeiling !== 'function') return false;
+      try {
+        if (normalizeNonNegativeExactDecimal(desired) !== desired) return false;
+        const before = owner.readCeiling();
+        if (before === null || compareExactDecimals(
+          desired as NonNegativeDecimal,
+          normalizeNonNegativeExactDecimal(before),
+        ) > 0) return false;
+        owner.setCeiling(desired);
+        if (owner.readCeiling() !== desired) return false;
       } catch {
         return false;
       }

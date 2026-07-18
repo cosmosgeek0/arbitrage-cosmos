@@ -54,7 +54,8 @@ function requiresRuntimePublication(mutation: Readonly<SystemControlMutation>): 
     || mutation.command === 'SET_COMPONENT_STATE'
     || mutation.command === 'CLEAR_DEPLOYMENT_FREEZE'
     || mutation.command === 'SET_BASIS_SYMBOL_POLICY'
-    || mutation.command === 'SET_VOLUME_SYMBOL_POLICY';
+    || mutation.command === 'SET_VOLUME_SYMBOL_POLICY'
+    || mutation.command === 'REDUCE_SIZE_CEILING';
 }
 
 export function controlRequestDigest(request: Readonly<SystemControlMutationRequest>): string {

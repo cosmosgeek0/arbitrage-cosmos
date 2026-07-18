@@ -108,6 +108,7 @@ export const SYSTEM_CONTROL_COMMANDS = Object.freeze([
   'SET_PUBLIC_SOURCE_LIFECYCLE',
   'SET_BASIS_SYMBOL_POLICY',
   'SET_VOLUME_SYMBOL_POLICY',
+  'REDUCE_SIZE_CEILING',
 ] as const);
 
 export type SystemControlCommand = (typeof SYSTEM_CONTROL_COMMANDS)[number];

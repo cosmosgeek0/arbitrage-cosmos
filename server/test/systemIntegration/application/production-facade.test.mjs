@@ -214,6 +214,12 @@ function fixture(options = {}) {
   const strategyIntakeOrder = [];
   const strategySymbolPolicyState = { basis: new Set(), volume: new Set() };
   const strategySymbolPolicyOrder = [];
+  const sizeCeilingState = {
+    SYSTEM: options.initialSystemSizeCeiling ?? '12',
+    BASIS: options.initialBasisSizeCeiling ?? '10',
+    VOLUME: options.initialVolumeSizeCeiling ?? '10',
+  };
+  const sizeCeilingOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -276,6 +282,25 @@ function fixture(options = {}) {
         isAllowed: (symbol) => !strategySymbolPolicyState.volume.has(symbol),
       }),
     }),
+    sizeCeilings: Object.freeze(Object.fromEntries(
+      ['SYSTEM', 'BASIS', 'VOLUME'].map((scope) => [scope, Object.freeze({
+        readCeiling: () => {
+          if (options.sizeCeilingReadUnavailable === scope) return null;
+          if (options.sizeCeilingReadThrows === scope) throw new Error(`deterministic ${scope} size-ceiling read failure`);
+          return sizeCeilingState[scope];
+        },
+        setCeiling: (value) => {
+          sizeCeilingOrder.push(`${scope}:${value}`);
+          if (options.sizeCeilingRestoreThrows === scope) throw new Error(`deterministic ${scope} size-ceiling restore failure`);
+          const before = Number(sizeCeilingState[scope]);
+          const after = Number(value);
+          if (!Number.isFinite(before) || !Number.isFinite(after) || after > before) throw new Error('size ceiling increase forbidden');
+          const changed = sizeCeilingState[scope] !== value;
+          sizeCeilingState[scope] = value;
+          return changed;
+        },
+      })]),
+    )),
     ...(options.traces ? { traces: options.traces } : {}),
     lifecycleTruth: {
       ...(options.restartTruth !== undefined || options.restartTruthThrows === true
@@ -367,6 +392,8 @@ function fixture(options = {}) {
     strategyIntakeOrder,
     strategySymbolPolicyState,
     strategySymbolPolicyOrder,
+    sizeCeilingState,
+    sizeCeilingOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -573,6 +600,74 @@ test('MIS-075 persists versioned strategy symbol policy, blocks first, guards al
   assert.equal(failedStart.phase, 'FAILED');
   assert.equal(failed.states.market.starts, 0);
   assert.equal(failed.states.basis.starts, 0);
+});
+
+test('MIS-074 reduces exact Capital/config size ceilings only and reports unavailable truth honestly', async () => {
+  for (const maximumNotionalUsd of ['1e1', '08', '8.0', '0', '-1', ' 8', '8 ']) {
+    assert.equal(parseControlBody({
+      command: 'REDUCE_SIZE_CEILING', expectedRevision: 0, reason: 'hostile exact decimal',
+      scope: 'SYSTEM', maximumNotionalUsd,
+    }).ok, false, maximumNotionalUsd);
+  }
+  assert.equal(parseControlBody({
+    command: 'REDUCE_SIZE_CEILING', expectedRevision: 0, reason: 'canonical exact decimal',
+    scope: 'SYSTEM', maximumNotionalUsd: '8.5',
+  }).ok, true);
+
+  const first = fixture();
+  assert.equal(first.app.start().ok, true);
+  assert.deepEqual(first.app.sizeCeilingState('SYSTEM'), {
+    scope: 'SYSTEM', desiredMaximumNotionalUsd: null, effectiveMaximumNotionalUsd: '12',
+    controlRevision: 0, state: 'UNAVAILABLE',
+  }, 'no durable desired value must not be presented as applied');
+
+  const systemReduction = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '8.5',
+  }, 'system-size-reduce'), ACTOR);
+  assert.equal(systemReduction.ok, true);
+  assert.equal(first.sizeCeilingState.SYSTEM, '8.5');
+  assert.deepEqual(first.app.sizeCeilingState('SYSTEM'), {
+    scope: 'SYSTEM', desiredMaximumNotionalUsd: '8.5', effectiveMaximumNotionalUsd: '8.5',
+    controlRevision: 1, state: 'APPLIED',
+  });
+
+  const increase = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '9',
+  }, 'system-size-increase'), ACTOR);
+  assert.equal(increase.ok, false);
+  assert.equal(increase.failure.code, 'SIZE_CEILING_INCREASE_FORBIDDEN');
+  assert.equal(first.sizeCeilingState.SYSTEM, '8.5');
+
+  for (const [scope, value] of [['BASIS', '7'], ['VOLUME', '6.25']]) {
+    const reduced = await first.app.controls.mutate(validControlRequest(first, {
+      command: 'REDUCE_SIZE_CEILING', scope, maximumNotionalUsd: value,
+    }, `${scope.toLowerCase()}-size-reduce`), ACTOR);
+    assert.equal(reduced.ok, true);
+  }
+  assert.deepEqual(first.sizeCeilingState, { SYSTEM: '8.5', BASIS: '7', VOLUME: '6.25' });
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.sizeCeilings, { system: '8.5', basis: '7', volume: '6.25' });
+
+  const recovered = fixture({ ledger: first.ledger });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.sizeCeilingOrder, ['SYSTEM:8.5', 'BASIS:7', 'VOLUME:6.25']);
+  assert.deepEqual(recovered.sizeCeilingState, { SYSTEM: '8.5', BASIS: '7', VOLUME: '6.25' });
+
+  const unavailable = fixture({ sizeCeilingReadUnavailable: 'SYSTEM' });
+  assert.equal(unavailable.app.start().ok, true);
+  const refused = await unavailable.app.controls.mutate(validControlRequest(unavailable, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '8',
+  }, 'system-size-unavailable'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'SIZE_CEILING_EFFECT_UNAVAILABLE');
+  assert.equal(unavailable.app.sizeCeilingState('SYSTEM').state, 'UNAVAILABLE');
+
+  const widenedRuntime = fixture({ ledger: first.ledger, initialSystemSizeCeiling: '5' });
+  const failedStart = widenedRuntime.app.start();
+  assert.equal(failedStart.ok, false, 'restart restore cannot widen a stricter runtime owner');
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(widenedRuntime.states.market.starts, 0);
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {

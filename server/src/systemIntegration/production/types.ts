@@ -65,6 +65,8 @@ export interface ProductionBasisRuntimePort {
   operatorBlockedSymbols(): readonly string[];
   setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean;
   symbolAllowedByPolicy(symbol: string): boolean;
+  sizeCeiling(): string | null;
+  setSizeCeiling(value: string): boolean;
 }
 
 export interface ProductionVolumeConnectionStatus {
@@ -84,6 +86,8 @@ export interface ProductionVolumeRuntimePort {
   operatorBlockedSymbols(): readonly string[];
   setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean;
   symbolAllowedByPolicy(symbol: string): boolean;
+  sizeCeiling(): string | null;
+  setSizeCeiling(value: string): boolean;
 }
 
 export interface ProductionSystemIntegrationInput {
@@ -115,5 +119,9 @@ export interface ProductionSystemIntegrationPorts {
       setBlocked(symbol: string, blocked: boolean): boolean;
       isAllowed(symbol: string): boolean;
     }>;
+  }>;
+  readonly sizeCeilings: Readonly<{
+    BASIS: Readonly<{ readCeiling(): string | null; setCeiling(value: string): boolean }>;
+    VOLUME: Readonly<{ readCeiling(): string | null; setCeiling(value: string): boolean }>;
   }>;
 }

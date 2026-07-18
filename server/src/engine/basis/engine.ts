@@ -228,6 +228,11 @@ export class BasisEngine {
       && !this.operatorBlocked.has(symbol);
   }
 
+  setSuggestedNotionalUsd(value: number): boolean {
+    if (!Number.isFinite(value) || value <= 0) throw new RangeError('basis size ceiling must be positive and finite');
+    return this.updateConfig({ suggestedNotionalUsd: value });
+  }
+
   pin(symbol: string): void {
     if (!this.market.hasSymbol(symbol)) return;
     this.lifecycle.pin(symbol);

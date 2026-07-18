@@ -713,7 +713,13 @@ export class VolumeEvidenceRouter {
     this.#recordFailures(allFailures);
     return Object.freeze({
       correlationId: batch.correlationId,
-      state: routeState({ received: batch.evidence.length, routed: routed + duplicate, sampled: batchSampled, stale: batchStale, failures: allFailures }),
+      // Rows already accepted by the canonical sink remain immutable, but a
+      // partially reconciled bootstrap is not current source truth. Never
+      // describe that cut as FRESH/STALE/SAMPLED while its lifecycle remains
+      // MISSING and a fresh explicit bootstrap is still required.
+      state: lifecycleAdmission.pendingBootstrap && !canonicalBootstrapReconciliation
+        ? 'MISSING' as const
+        : routeState({ received: batch.evidence.length, routed: routed + duplicate, sampled: batchSampled, stale: batchStale, failures: allFailures }),
       received: batch.evidence.length,
       routed,
       duplicate,

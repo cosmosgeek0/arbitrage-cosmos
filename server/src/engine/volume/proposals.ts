@@ -14,7 +14,7 @@ import { boundedEvidence, makeEvent } from './events.js';
 
 export type IntentResult =
   | { ok: true; intent: OrderIntentStub }
-  | { ok: false; reason: 'kill_switch_on' | 'intake_paused' | 'proposal_not_open' | 'proposal_unknown' };
+  | { ok: false; reason: 'kill_switch_on' | 'intake_paused' | 'symbol_blocked' | 'proposal_not_open' | 'proposal_unknown' };
 
 interface StoredProposal extends VolumeProposal {
   rule: InvalidationRule;
@@ -67,6 +67,22 @@ export class ProposalStore {
         payload: { id: p.id, invalidatedBy: why },
       }));
     }
+  }
+
+  expireForSymbol(symbol: string, why: InvalidationReason): void {
+    const id = this.openBySymbol.get(symbol);
+    if (!id) return;
+    const proposal = this.proposals.get(id);
+    if (!proposal || (proposal.status !== 'open' && proposal.status !== 'updated')) return;
+    const now = this.clock.now();
+    proposal.status = 'expired';
+    proposal.updatedTs = now;
+    proposal.invalidatedBy = why;
+    this.openBySymbol.delete(symbol);
+    this.sink.emit(makeEvent('proposal_expired', now, proposal.correlationId, `proposal invalidated: ${why}`, {
+      symbol,
+      payload: { id, invalidatedBy: why },
+    }));
   }
 
   /** Create or refresh the open proposal for a symbol from a proposal decision. */

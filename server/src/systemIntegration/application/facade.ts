@@ -83,6 +83,7 @@ import type {
   SystemIntegrationApplicationFacade,
   SystemIntegrationApplicationOptions,
   StrategyIntakeControlReadback,
+  StrategySymbolPolicyControlReadback,
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
@@ -124,6 +125,8 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_INTAKE') return mutation.paused === true;
   if (mutation.command === 'SET_VOLUME_INTAKE') return mutation.paused === true;
+  if (mutation.command === 'SET_BASIS_SYMBOL_POLICY') return mutation.action === 'BLOCK';
+  if (mutation.command === 'SET_VOLUME_SYMBOL_POLICY') return mutation.action === 'BLOCK';
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -618,6 +621,22 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreStrategySymbolPolicy(current.value.strategySymbolPolicy)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_SYMBOL_POLICY_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -831,6 +850,20 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         return 'UNKNOWN';
       }
     }
+    if (request.mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+      || request.mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+      const strategy = request.mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      if (!owner || typeof owner.readBlockedSymbols !== 'function') return 'UNKNOWN';
+      try {
+        const blocked = owner.readBlockedSymbols();
+        if (!Array.isArray(blocked)) return 'UNKNOWN';
+        const expected = request.mutation.action === 'BLOCK';
+        return blocked.includes(request.mutation.symbol) === expected ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     const effectId = this.runtimePublicationEffectId(request, receipt);
     const local = this.runtimePublicationEffects.get(effectId);
     if (local !== undefined) return local;
@@ -968,6 +1001,50 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         !mutation.paused,
       );
     }
+    if (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+      || mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+      const strategy = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+      const strategyLabel = strategy === 'basis' ? 'BASIS' : 'VOLUME';
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      if (!owner || typeof owner.readBlockedSymbols !== 'function'
+        || typeof owner.setBlocked !== 'function' || typeof owner.isAllowed !== 'function') {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_OWNER_NOT_WIRED`, 'Canonical strategy symbol-policy owner is unavailable.', false);
+      }
+      let effective: readonly string[];
+      try {
+        effective = owner.readBlockedSymbols();
+      } catch {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_READBACK_UNAVAILABLE`, 'Canonical symbol-policy readback is unavailable.', false);
+      }
+      if (!Array.isArray(effective)
+        || effective.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_READBACK_INVALID`, 'Canonical symbol-policy readback is invalid.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_DESIRED_STATE_UNAVAILABLE`, 'Durable symbol-policy posture is unavailable.', false);
+      }
+      const desired = strategy === 'basis'
+        ? persisted.strategySymbolPolicy.basisBlocked
+        : persisted.strategySymbolPolicy.volumeBlocked;
+      const blocking = mutation.action === 'BLOCK';
+      if (blocking && !desired.includes(mutation.symbol) && desired.length >= 500) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_CAPACITY_REACHED`, 'Durable strategy symbol-policy capacity is exhausted.', false);
+      }
+      if (!blocking && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'A symbol cannot be allowed while a stricter global posture is active.', false);
+      }
+      if (!blocking && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'A symbol cannot be allowed until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        `${strategyLabel}_SYMBOL_POLICY_ACCEPTED`,
+        '',
+        desired.includes(mutation.symbol) !== blocking || effective.includes(mutation.symbol) !== blocking,
+        !blocking,
+      );
+    }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
     }
@@ -1059,6 +1136,12 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         const owner = this.options.strategyIntake?.volume;
         if (!owner || typeof owner.setPaused !== 'function') throw new Error('VOLUME_INTAKE_OWNER_NOT_WIRED');
         owner.setPaused(mutation.paused);
+      } else if (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+        || mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+        const strategy = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+        const owner = this.options.strategySymbolPolicy?.[strategy];
+        if (!owner || typeof owner.setBlocked !== 'function') throw new Error('STRATEGY_SYMBOL_POLICY_OWNER_NOT_WIRED');
+        owner.setBlocked(mutation.symbol, mutation.action === 'BLOCK');
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -1192,6 +1275,38 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     }
   }
 
+  strategySymbolPolicyState(
+    strategy: 'basis' | 'volume',
+    symbol: string,
+  ): Readonly<StrategySymbolPolicyControlReadback> {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('symbol must be canonical');
+    const checkpoint = this.checkpoint();
+    const desired = checkpoint === null
+      ? []
+      : strategy === 'basis'
+        ? checkpoint.strategySymbolPolicy.basisBlocked
+        : checkpoint.strategySymbolPolicy.volumeBlocked;
+    const owner = this.options.strategySymbolPolicy?.[strategy];
+    const base = { strategy, symbol, desiredBlocked: desired.includes(symbol), controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readBlockedSymbols !== 'function' || typeof owner.isAllowed !== 'function') {
+      return Object.freeze({ ...base, effectiveBlocked: null, effectiveAllowed: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const effectiveBlocked = owner.readBlockedSymbols().includes(symbol);
+      const effectiveAllowed = owner.isAllowed(symbol);
+      return Object.freeze({
+        ...base,
+        effectiveBlocked,
+        effectiveAllowed,
+        state: pending.ok && pending.value.length === 0 && checkpoint !== null
+          && effectiveBlocked === base.desiredBlocked ? 'APPLIED' : 'EFFECT_UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveBlocked: null, effectiveAllowed: null, state: 'EFFECT_UNAVAILABLE' });
+    }
+  }
+
   private restoreStrategyIntake(
     posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
   ): boolean {
@@ -1208,6 +1323,30 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       try {
         owner.setPaused(desiredPaused);
         if (owner.readPaused() !== desiredPaused) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreStrategySymbolPolicy(
+    posture: Readonly<{ basisBlocked: readonly string[]; volumeBlocked: readonly string[] }>,
+  ): boolean {
+    for (const strategy of ['basis', 'volume'] as const) {
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      const desired = strategy === 'basis' ? posture.basisBlocked : posture.volumeBlocked;
+      if (!owner || typeof owner.readBlockedSymbols !== 'function' || typeof owner.setBlocked !== 'function') {
+        if (desired.length > 0) return false;
+        continue;
+      }
+      try {
+        const current = owner.readBlockedSymbols();
+        if (!Array.isArray(current)) return false;
+        for (const symbol of current) if (!desired.includes(symbol)) owner.setBlocked(symbol, false);
+        for (const symbol of desired) owner.setBlocked(symbol, true);
+        const restored = owner.readBlockedSymbols();
+        if (JSON.stringify([...restored].sort()) !== JSON.stringify([...desired].sort())) return false;
       } catch {
         return false;
       }

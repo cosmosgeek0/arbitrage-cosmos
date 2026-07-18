@@ -348,6 +348,12 @@ export interface PersistedStrategyIntakePosture {
   readonly volumePaused: boolean;
 }
 
+/** Durable strategy-local deny overlays. Global AppConfig policy remains independent. */
+export interface PersistedStrategySymbolPolicy {
+  readonly basisBlocked: readonly string[];
+  readonly volumeBlocked: readonly string[];
+}
+
 /**
  * Opaque owner reference. Persistence preserves identity and revision but does
  * not infer proposal, mandate, configuration, or position policy semantics.
@@ -567,6 +573,7 @@ export interface SystemIntegrationCheckpointState {
   readonly generation: number;
   readonly control: Readonly<SystemControlState>;
   readonly strategyIntake: Readonly<PersistedStrategyIntakePosture>;
+  readonly strategySymbolPolicy: Readonly<PersistedStrategySymbolPolicy>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];

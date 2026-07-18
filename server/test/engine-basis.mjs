@@ -495,8 +495,18 @@ section('19. EXTRA: symbol blocklist ⇒ symbol_blocked');
 {
   const h = createReplayHarness(CFG, T0);
   h.engine.blockSymbol(SYM);
+  h.engine.replaceBlockedSymbols([]);
   const r = h.run([initStep(T0), ...gapSeries([0.78])]);
-  check('blocked symbol rejected symbol_blocked', r.decisions[0]?.rejectCode === 'symbol_blocked', r.decisions[0]?.humanReason);
+  check('operator block survives application-config refresh', r.decisions[0]?.rejectCode === 'symbol_blocked', r.decisions[0]?.humanReason);
+  check('operator block readback is canonical and sorted', JSON.stringify(h.engine.operatorBlockedSymbols()) === JSON.stringify([SYM]));
+  h.engine.replaceBlockedSymbols([SYM]);
+  h.engine.unblockSymbol(SYM);
+  check('ALLOW removes only the operator overlay, not global policy', h.engine.symbolAllowedByPolicy(SYM) === false);
+
+  const future = createReplayHarness(CFG, T0);
+  future.engine.blockSymbol('FUTUREUSDT');
+  future.run([initStep(T0, [meta('FUTUREUSDT')]), marketStep(T0 + 2_000, { symbol: 'FUTUREUSDT' })]);
+  check('BLOCK applies before a symbol enters the universe', future.engine.symbolAllowedByPolicy('FUTUREUSDT') === false);
 }
 
 // =====================================================================

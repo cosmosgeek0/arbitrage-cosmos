@@ -11,6 +11,7 @@ export const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export const OPAQUE_CONTROL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export const CONFIGURATION_REVISION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 export const PAYLOAD_DIGEST_PATTERN = /^(?:sha256:)?[a-f0-9]{64}$/;
+export const STRATEGY_SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/;
 const SENSITIVE_MATERIAL_PATTERN = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
 
 const DESIRED_STATES = new Set(['STOPPED', 'RUNNING', 'PAUSED']);
@@ -75,6 +76,15 @@ export function validateControlMutation(value: unknown): MutationValidation {
     case 'SET_VOLUME_INTAKE':
       if (!exactKeys(value, ['command', 'paused']) || typeof value.paused !== 'boolean') {
         return invalid('Volume intake mutation requires one boolean paused value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_BASIS_SYMBOL_POLICY':
+    case 'SET_VOLUME_SYMBOL_POLICY':
+      if (!exactKeys(value, ['command', 'action', 'symbol'])
+        || (value.action !== 'BLOCK' && value.action !== 'ALLOW')
+        || typeof value.symbol !== 'string'
+        || !STRATEGY_SYMBOL_PATTERN.test(value.symbol)) {
+        return invalid('Strategy symbol policy requires one canonical symbol and BLOCK or ALLOW.');
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     case 'SET_SAFE_MODE':

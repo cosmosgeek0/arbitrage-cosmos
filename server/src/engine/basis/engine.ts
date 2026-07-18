@@ -63,7 +63,11 @@ export class BasisEngine {
   private running = false;
   private killSwitchOn = false;
   private intakePausedValue = false;
-  private blocked = new Set<string>();
+  /** Dynamic application-config blocklist; refreshed by BasisRuntime. */
+  private policyBlocked = new Set<string>();
+  private policyAllowed: Set<string> | null = null;
+  /** Durable strategy-local operator overlay; never overwritten by config refresh. */
+  private operatorBlocked = new Set<string>();
   private lastTickTs: number | null = null;
   private lastHeartbeatTs: number | null = null;
   private tickCount = 0;
@@ -159,8 +163,11 @@ export class BasisEngine {
     this.decisionLog = [];
     this.lastTickTs = null;
     this.lastHeartbeatTs = null;
-    if (this.blocked.size > this.cfg.maxUniverseSize) {
-      this.blocked = new Set([...this.blocked].sort().slice(0, this.cfg.maxUniverseSize));
+    if (this.policyBlocked.size > this.cfg.maxUniverseSize) {
+      this.policyBlocked = new Set([...this.policyBlocked].sort().slice(0, this.cfg.maxUniverseSize));
+    }
+    if (this.operatorBlocked.size > this.cfg.maxUniverseSize) {
+      throw new RangeError(`basis operator symbol-policy capacity ${this.cfg.maxUniverseSize} exceeded`);
     }
     this.emitter.emit('heartbeat', newCorrelationId(this.clock, 'basis_sys'), 'basis config revised; signal state reset', {
       payload: { configChanged: true },
@@ -168,23 +175,58 @@ export class BasisEngine {
     return true;
   }
 
-  blockSymbol(symbol: string): void {
-    if (!/^[A-Z0-9]{2,32}$/.test(symbol)) return;
-    if (!this.blocked.has(symbol) && this.blocked.size >= this.cfg.maxUniverseSize) return;
-    this.blocked.add(symbol);
-    if (this.market.hasSymbol(symbol)) this.proposals.expireForSymbol(symbol, 'symbol_blocked');
-  }
-
-  unblockSymbol(symbol: string): void {
-    this.blocked.delete(symbol);
-  }
-
-  replaceBlockedSymbols(symbols: Iterable<string>): void {
-    const next = new Set([...symbols].filter((symbol) => this.market.hasSymbol(symbol)));
-    for (const symbol of this.blocked) {
-      if (!next.has(symbol)) this.blocked.delete(symbol);
+  blockSymbol(symbol: string): boolean {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) return false;
+    if (this.operatorBlocked.has(symbol)) return false;
+    if (this.operatorBlocked.size >= this.cfg.maxUniverseSize) {
+      throw new RangeError(`basis operator symbol-policy capacity ${this.cfg.maxUniverseSize} reached`);
     }
-    for (const symbol of next) this.blockSymbol(symbol);
+    this.operatorBlocked.add(symbol);
+    this.proposals.expireForSymbol(symbol, 'symbol_blocked');
+    return true;
+  }
+
+  unblockSymbol(symbol: string): boolean {
+    return this.operatorBlocked.delete(symbol);
+  }
+
+  /** Application-config policy is independent of the durable operator overlay. */
+  replaceBlockedSymbols(symbols: Iterable<string>): void {
+    const next = new Set(
+      [...symbols]
+        .filter((symbol) => /^[A-Z0-9]{4,20}$/.test(symbol))
+        .sort()
+        .slice(0, this.cfg.maxUniverseSize),
+    );
+    for (const proposal of this.proposals.open()) {
+      if (next.has(proposal.symbol) && !this.policyBlocked.has(proposal.symbol)) {
+        this.proposals.expireForSymbol(proposal.symbol, 'symbol_blocked');
+      }
+    }
+    this.policyBlocked = next;
+  }
+
+  replaceSymbolPolicy(allowedSymbols: readonly string[] | null, blockedSymbols: readonly string[]): void {
+    this.policyAllowed = allowedSymbols === null
+      ? null
+      : new Set(allowedSymbols.filter((symbol) => /^[A-Z0-9]{4,20}$/.test(symbol)).sort().slice(0, this.cfg.maxUniverseSize));
+    this.replaceBlockedSymbols(blockedSymbols);
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return Object.freeze([...this.operatorBlocked].sort());
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    if (typeof blocked !== 'boolean') throw new TypeError('basis symbol policy must be boolean');
+    return blocked ? this.blockSymbol(symbol) : this.unblockSymbol(symbol);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.market.meta(symbol)?.eligible === true
+      && (this.policyAllowed === null || this.policyAllowed.has(symbol))
+      && !this.policyBlocked.has(symbol)
+      && !this.operatorBlocked.has(symbol);
   }
 
   pin(symbol: string): void {
@@ -209,7 +251,6 @@ export class BasisEngine {
     }
     this.lifecycle.retainSymbols(known);
     for (const symbol of this.latestPriority.keys()) if (!known.has(symbol)) this.latestPriority.delete(symbol);
-    for (const symbol of this.blocked) if (!known.has(symbol)) this.blocked.delete(symbol);
     this.decisionLog = this.decisionLog.filter((decision) => known.has(decision.symbol));
     this.emitter.emit('universe_refreshed', newCorrelationId(this.clock, 'basis_sys'), `universe: ${accepted.length} symbols`, {
       payload: { size: accepted.length, eligible: eligible.size },
@@ -259,7 +300,10 @@ export class BasisEngine {
       if (!bf) continue;
 
       const meta = this.market.meta(symbol);
-      const symbolAllowed = !this.blocked.has(symbol) && (meta ? meta.eligible : true);
+      const symbolAllowed = !this.policyBlocked.has(symbol)
+        && !this.operatorBlocked.has(symbol)
+        && (this.policyAllowed === null || this.policyAllowed.has(symbol))
+        && (meta ? meta.eligible : true);
       const borrow = this.market.borrowForSymbol(symbol);
       const ctx: ScanContext = {
         killSwitch: this.killSwitchOn,
@@ -361,7 +405,9 @@ export class BasisEngine {
     const proposalValid =
       (p.direction === 'long_spot_short_perp' || p.direction === 'short_spot_long_perp') &&
       this.market.meta(p.symbol)?.eligible === true &&
-      !this.blocked.has(p.symbol) &&
+      (this.policyAllowed === null || this.policyAllowed.has(p.symbol)) &&
+      !this.policyBlocked.has(p.symbol) &&
+      !this.operatorBlocked.has(p.symbol) &&
       p.suggestedNotionalUsd !== null &&
       Number.isFinite(p.suggestedNotionalUsd) &&
       p.suggestedNotionalUsd > 0;

@@ -539,6 +539,8 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     SET_PUBLIC_SOURCE_LIFECYCLE: ['command', 'sourceId', 'action'],
     SET_BASIS_INTAKE: ['command', 'paused'],
     SET_VOLUME_INTAKE: ['command', 'paused'],
+    SET_BASIS_SYMBOL_POLICY: ['command', 'action', 'symbol'],
+    SET_VOLUME_SYMBOL_POLICY: ['command', 'action', 'symbol'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -549,6 +551,14 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     case 'SET_BASIS_INTAKE':
     case 'SET_VOLUME_INTAKE':
       if (typeof mutation.paused !== 'boolean') issues.push(issue('mutation.paused', 'BOOLEAN_REQUIRED', 'paused must be boolean'));
+      break;
+    case 'SET_BASIS_SYMBOL_POLICY':
+    case 'SET_VOLUME_SYMBOL_POLICY':
+      if ((mutation.action !== 'BLOCK' && mutation.action !== 'ALLOW')
+        || typeof mutation.symbol !== 'string'
+        || !/^[A-Z0-9]{4,20}$/.test(mutation.symbol)) {
+        issues.push(issue('mutation', 'STRATEGY_SYMBOL_POLICY_INVALID', 'symbol policy requires a canonical symbol and BLOCK or ALLOW'));
+      }
       break;
     case 'SET_SAFE_MODE':
       if (!isSystemSafeMode(mutation.safeMode)) issues.push(issue('mutation.safeMode', 'SAFE_MODE_INVALID', 'only safe convergence modes are accepted'));

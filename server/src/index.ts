@@ -287,6 +287,7 @@ systemIntegration = createSystemIntegrationApplication({
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
   strategyIntake: systemIntegrationProduction.strategyIntake,
+  strategySymbolPolicy: systemIntegrationProduction.strategySymbolPolicy,
   traces: canonicalOwnerEvidence,
   ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({

@@ -121,13 +121,31 @@ export class VolumeEngine {
     return this.intakePausedValue;
   }
 
-  blockSymbol(symbol: string, blocked = true): void {
-    if (!isCanonicalSymbol(symbol)) return;
+  blockSymbol(symbol: string, blocked = true): boolean {
+    if (!isCanonicalSymbol(symbol)) return false;
     if (blocked) {
-      if (!this.universeMap.has(symbol) || this.blocked.size >= MAX_ENGINE_SYMBOLS) return;
+      if (this.blocked.has(symbol)) return false;
+      if (this.blocked.size >= MAX_ENGINE_SYMBOLS) {
+        throw new RangeError(`volume operator symbol-policy capacity ${MAX_ENGINE_SYMBOLS} reached`);
+      }
       this.blocked.add(symbol);
+      this.proposalStore.expireForSymbol(symbol, 'symbol_blocked');
+      return true;
     }
-    else this.blocked.delete(symbol);
+    return this.blocked.delete(symbol);
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return Object.freeze([...this.blocked].sort());
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    if (typeof blocked !== 'boolean') throw new TypeError('volume symbol policy must be boolean');
+    return this.blockSymbol(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.symbolAllowed(symbol);
   }
 
   /** Apply the operator's current allow/block lists without rebuilding the engine. */
@@ -175,7 +193,6 @@ export class VolumeEngine {
     this.focusMgr.reconcileSymbols(eligible);
     this.features.reconcileSymbols(eligible);
     for (const symbol of eligible) this.features.observe(symbol);
-    for (const symbol of this.blocked) if (!next.has(symbol)) this.blocked.delete(symbol);
     for (const symbol of this.signalCorrelation.keys()) if (!eligible.has(symbol)) this.signalCorrelation.delete(symbol);
     for (const symbol of this.lastDecisionKey.keys()) if (!eligible.has(symbol)) this.lastDecisionKey.delete(symbol);
     for (const symbol of this.lastDecisionPersistedAt.keys()) {
@@ -215,6 +232,11 @@ export class VolumeEngine {
 
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----
   intentFor(proposalId: string): IntentResult {
+    const proposal = this.proposalStore.byId(proposalId);
+    if (proposal && !this.symbolAllowed(proposal.symbol)) {
+      this.proposalStore.expireForSymbol(proposal.symbol, 'symbol_blocked');
+      return { ok: false, reason: 'symbol_blocked' };
+    }
     return this.proposalStore.intentFor(proposalId, this.killSwitchOn, this.intakePausedValue);
   }
 

@@ -1252,5 +1252,18 @@ export function createProductionSystemIntegrationPorts(
     }),
   });
 
-  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake });
+  const strategySymbolPolicy = Object.freeze({
+    basis: Object.freeze({
+      readBlockedSymbols: () => input.basis.operatorBlockedSymbols(),
+      setBlocked: (symbol: string, blocked: boolean) => input.basis.setOperatorSymbolBlocked(symbol, blocked),
+      isAllowed: (symbol: string) => input.basis.symbolAllowedByPolicy(symbol),
+    }),
+    volume: Object.freeze({
+      readBlockedSymbols: () => input.volume.operatorBlockedSymbols(),
+      setBlocked: (symbol: string, blocked: boolean) => input.volume.setOperatorSymbolBlocked(symbol, blocked),
+      isAllowed: (symbol: string) => input.volume.symbolAllowedByPolicy(symbol),
+    }),
+  });
+
+  return Object.freeze({ sourceRegistry, runtimes, components, summaries, strategyIntake, strategySymbolPolicy });
 }

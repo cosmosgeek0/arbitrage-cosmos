@@ -154,7 +154,8 @@ export type InvalidationReason =
   | 'ttl_expired'
   | 'universe_removed'
   | 'capacity_pruned'
-  | 'intake_paused';
+  | 'intake_paused'
+  | 'symbol_blocked';
 
 export interface InvalidationRule {
   /** 60s volume multiple at/below this ⇒ volume_normalized */

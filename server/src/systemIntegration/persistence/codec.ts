@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'strategyIntake', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -291,6 +291,21 @@ export function validateCheckpointState(value: unknown): string[] {
     exactKeys(strategyIntake, ['basisPaused', 'volumePaused'], '$.strategyIntake', issues);
     if (typeof strategyIntake.basisPaused !== 'boolean') issues.push('$.strategyIntake.basisPaused:BOOLEAN_REQUIRED');
     if (typeof strategyIntake.volumePaused !== 'boolean') issues.push('$.strategyIntake.volumePaused:BOOLEAN_REQUIRED');
+  }
+
+  const strategySymbolPolicy = value.strategySymbolPolicy;
+  if (!plainObject(strategySymbolPolicy)) issues.push('$.strategySymbolPolicy:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategySymbolPolicy, ['basisBlocked', 'volumeBlocked'], '$.strategySymbolPolicy', issues);
+    for (const field of ['basisBlocked', 'volumeBlocked'] as const) {
+      const symbols = strategySymbolPolicy[field];
+      if (!Array.isArray(symbols) || symbols.length > 500
+        || symbols.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+        || new Set(symbols).size !== symbols.length
+        || symbols.some((symbol, index) => index > 0 && String(symbols[index - 1]).localeCompare(String(symbol), 'en') >= 0)) {
+        issues.push(`$.strategySymbolPolicy.${field}:SYMBOL_POLICY_INVALID`);
+      }
+    }
   }
 
   const desired = validateArray(
@@ -566,6 +581,11 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
       ...(Object.hasOwn(parsed.state, 'strategyIntake')
         ? {}
         : { strategyIntake: { basisPaused: true, volumePaused: true } }),
+      // This overlay did not exist historically, so an empty deny set is the
+      // only truthful migration; global allow/block owners remain stricter.
+      ...(Object.hasOwn(parsed.state, 'strategySymbolPolicy')
+        ? {}
+        : { strategySymbolPolicy: { basisBlocked: [], volumeBlocked: [] } }),
     };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };

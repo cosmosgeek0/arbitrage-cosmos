@@ -75,6 +75,10 @@ export function createInitialCheckpointState(
       basisPaused: false,
       volumePaused: false,
     },
+    strategySymbolPolicy: {
+      basisBlocked: [],
+      volumeBlocked: [],
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

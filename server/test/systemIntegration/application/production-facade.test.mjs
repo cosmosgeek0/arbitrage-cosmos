@@ -20,6 +20,7 @@ import {
 } from '../../../dist/systemIntegration/persistence/index.js';
 import {
   createSystemIntegrationRouter,
+  parseControlBody,
 } from '../../../dist/systemIntegration/routes/index.js';
 import { BoundedInMemoryLedger } from '../fixtures/memory-ledger.mjs';
 import { ManualClock, ManualScheduler } from '../fixtures/manual-clock.mjs';
@@ -211,6 +212,8 @@ function fixture(options = {}) {
   );
   const strategyIntakeState = { basis: false, volume: false };
   const strategyIntakeOrder = [];
+  const strategySymbolPolicyState = { basis: new Set(), volume: new Set() };
+  const strategySymbolPolicyOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -245,6 +248,32 @@ function fixture(options = {}) {
           strategyIntakeState.volume = paused;
           return changed;
         },
+      }),
+    }),
+    strategySymbolPolicy: Object.freeze({
+      basis: Object.freeze({
+        readBlockedSymbols: () => [...strategySymbolPolicyState.basis].sort(),
+        setBlocked: (symbol, blocked) => {
+          strategySymbolPolicyOrder.push(`basis:${blocked ? 'BLOCK' : 'ALLOW'}:${symbol}`);
+          if (options.strategySymbolPolicyRestoreThrows === 'basis') throw new Error('deterministic Basis symbol-policy restore failure');
+          const before = strategySymbolPolicyState.basis.has(symbol);
+          if (blocked) strategySymbolPolicyState.basis.add(symbol);
+          else strategySymbolPolicyState.basis.delete(symbol);
+          return before !== blocked;
+        },
+        isAllowed: (symbol) => !strategySymbolPolicyState.basis.has(symbol),
+      }),
+      volume: Object.freeze({
+        readBlockedSymbols: () => [...strategySymbolPolicyState.volume].sort(),
+        setBlocked: (symbol, blocked) => {
+          strategySymbolPolicyOrder.push(`volume:${blocked ? 'BLOCK' : 'ALLOW'}:${symbol}`);
+          if (options.strategySymbolPolicyRestoreThrows === 'volume') throw new Error('deterministic Volume symbol-policy restore failure');
+          const before = strategySymbolPolicyState.volume.has(symbol);
+          if (blocked) strategySymbolPolicyState.volume.add(symbol);
+          else strategySymbolPolicyState.volume.delete(symbol);
+          return before !== blocked;
+        },
+        isAllowed: (symbol) => !strategySymbolPolicyState.volume.has(symbol),
       }),
     }),
     ...(options.traces ? { traces: options.traces } : {}),
@@ -336,6 +365,8 @@ function fixture(options = {}) {
     setVolumeStopThrows(value) { volume.setStopThrows(value); },
     strategyIntakeState,
     strategyIntakeOrder,
+    strategySymbolPolicyState,
+    strategySymbolPolicyOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -461,6 +492,87 @@ test('MIS-072 restores each durable strategy intake posture before managed runti
   assert.equal(failed.states.market.starts, 0);
   assert.equal(failed.states.basis.starts, 0);
   assert.equal(failed.states.volume.starts, 0);
+});
+
+test('MIS-075 persists versioned strategy symbol policy, blocks first, guards allow, and restores before runtime admission', async () => {
+  assert.equal(parseControlBody({
+    command: 'SET_BASIS_SYMBOL_POLICY', expectedRevision: 0, reason: 'block canonical symbol',
+    action: 'BLOCK', symbol: 'BTCUSDT',
+  }).ok, true);
+  assert.equal(parseControlBody({
+    command: 'SET_BASIS_SYMBOL_POLICY', expectedRevision: 0, reason: 'reject normalization ambiguity',
+    action: 'BLOCK', symbol: 'btcusdt',
+  }).ok, false);
+  assert.equal(parseControlBody({
+    command: 'SET_VOLUME_SYMBOL_POLICY', expectedRevision: 0, reason: 'reject payload substitution',
+    action: 'ALLOW', symbol: 'ETHUSDT', unexpected: true,
+  }).ok, false);
+  const restartTruth = Object.freeze({
+    publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0,
+  });
+  const first = fixture({ externalKill: false, restartTruth });
+  assert.equal(first.app.start().ok, true);
+
+  const basisBlock = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'BLOCK', symbol: 'BTCUSDT',
+  }, 'basis-symbol-block'), ACTOR);
+  assert.equal(basisBlock.ok, true);
+  assert.deepEqual([...first.strategySymbolPolicyState.basis], ['BTCUSDT']);
+  assert.deepEqual([...first.strategySymbolPolicyState.volume], [], 'strategy policy owners must remain isolated');
+
+  const stale = validControlRequest(first, {
+    command: 'SET_VOLUME_SYMBOL_POLICY', action: 'BLOCK', symbol: 'ETHUSDT',
+  }, 'volume-symbol-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const volumeBlock = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_VOLUME_SYMBOL_POLICY', action: 'BLOCK', symbol: 'ETHUSDT',
+  }, 'volume-symbol-block'), ACTOR);
+  assert.equal(volumeBlock.ok, true);
+  const blockedCheckpoint = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(blockedCheckpoint.ok, true);
+  assert.deepEqual(blockedCheckpoint.value.strategySymbolPolicy, {
+    basisBlocked: ['BTCUSDT'], volumeBlocked: ['ETHUSDT'],
+  });
+
+  const guardedAllow = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'ALLOW', symbol: 'BTCUSDT',
+  }, 'basis-symbol-allow-guarded'), ACTOR);
+  assert.equal(guardedAllow.ok, false);
+  assert.equal(guardedAllow.failure.code, 'EFFECTIVE_INTAKE_PAUSED');
+  assert.equal(first.strategySymbolPolicyState.basis.has('BTCUSDT'), true);
+
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_KILL_SWITCH', engaged: false,
+  }, 'symbol-policy-release-kill'), ACTOR)).ok, true);
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_INTAKE_PAUSED', paused: false,
+  }, 'symbol-policy-release-intake'), ACTOR)).ok, true);
+  const allowed = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'ALLOW', symbol: 'BTCUSDT',
+  }, 'basis-symbol-allow'), ACTOR);
+  assert.equal(allowed.ok, true);
+  assert.deepEqual(first.app.strategySymbolPolicyState('basis', 'BTCUSDT'), {
+    strategy: 'basis', symbol: 'BTCUSDT', desiredBlocked: false, effectiveBlocked: false,
+    effectiveAllowed: true, controlRevision: 5, state: 'APPLIED',
+  });
+
+  const recovered = fixture({ ledger: first.ledger, externalKill: false });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.strategySymbolPolicyOrder, ['volume:BLOCK:ETHUSDT']);
+  assert.equal(recovered.strategySymbolPolicyState.volume.has('ETHUSDT'), true);
+  await drive(recovered, 4);
+  assert.equal(recovered.states.market.starts, 1);
+
+  const failed = fixture({ ledger: first.ledger, externalKill: false, strategySymbolPolicyRestoreThrows: 'volume' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+  assert.equal(failed.states.basis.starts, 0);
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {

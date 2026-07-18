@@ -3,10 +3,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -244,6 +247,164 @@ test('a second live process is rejected before it can share the canonical DATA_D
     assertNoLeaseDatabase(dataDir);
     assert.deepEqual(leaseArtifactNames(dataDir), []);
     rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('fresh bootstrap pins a parent-symlink DATA_DIR before lease, cache, and Ledger use', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cosmos-data-dir-physical-'));
+  const parentA = path.join(root, 'physical-a');
+  const parentB = path.join(root, 'physical-b');
+  const dataDirA = path.join(parentA, 'data');
+  const dataDirB = path.join(parentB, 'data');
+  const parentAlias = path.join(root, 'configured-parent');
+  mkdirSync(dataDirA, { recursive: true });
+  mkdirSync(dataDirB, { recursive: true });
+  symlinkSync(parentA, parentAlias, 'dir');
+
+  const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
+  const leaseUrl = new URL(
+    '../../../dist/systemIntegration/persistence/dataDirLease.js',
+    import.meta.url,
+  ).href;
+  const ledgerUrl = new URL('../../../dist/ledger.js', import.meta.url).href;
+  const cacheOwnerUrls = [
+    new URL('../../../dist/binance/icons.js', import.meta.url).href,
+    new URL('../../../dist/binance/liquidations.js', import.meta.url).href,
+    new URL('../../../dist/binance/profile.js', import.meta.url).href,
+    new URL('../../../dist/services/newsContext.js', import.meta.url).href,
+  ];
+  const probe = `
+    import { symlinkSync, unlinkSync } from 'node:fs';
+    for (const url of ${JSON.stringify(cacheOwnerUrls)}) await import(url);
+    const {
+      DATA_DIR_AUTHORITY,
+      assertDataDirAuthorityHeld,
+      resolveDataDirAuthority,
+    } = await import(
+      ${JSON.stringify(environmentUrl)}
+    );
+    const { DataDirLease } = await import(${JSON.stringify(leaseUrl)});
+    const { Ledger } = await import(${JSON.stringify(ledgerUrl)});
+    const lease = new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
+    try {
+      unlinkSync(process.argv[1]);
+      symlinkSync(process.argv[2], process.argv[1], 'dir');
+      assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
+      let secondWriter = 'UNSAFE_ACQUIRED';
+      try {
+        const second = new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
+        second.release();
+      } catch (error) {
+        secondWriter = String(error?.code ?? error?.message ?? error);
+      }
+      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir);
+      ledger.close();
+      process.stdout.write('RESULT=' + JSON.stringify({
+        authority: DATA_DIR_AUTHORITY,
+        sameProcessAuthority: resolveDataDirAuthority() === DATA_DIR_AUTHORITY,
+        secondWriter,
+      }));
+    } finally {
+      lease.release();
+    }
+  `;
+  const requestedDataDir = path.join(parentAlias, 'data');
+  const env = {
+    ...process.env,
+    SKIP_DOTENV: '1',
+    DATA_DIR: requestedDataDir,
+    ICON_CACHE: path.join(requestedDataDir, 'icon-cache.json'),
+    LIQ_CACHE: path.join(requestedDataDir, 'liquidations.json'),
+    PROFILE_CACHE: path.join(requestedDataDir, 'profile-cache.json'),
+  };
+
+  try {
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', probe, parentAlias, parentB],
+      { cwd: process.cwd(), env, encoding: 'utf8', timeout: 15_000 },
+    );
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    const marker = child.stdout.indexOf('RESULT=');
+    assert.notEqual(marker, -1, child.stdout);
+    const result = JSON.parse(child.stdout.slice(marker + 'RESULT='.length));
+    const physicalDataDir = realpathSync.native(dataDirA);
+    assert.deepEqual(result, {
+      authority: {
+        dataDir: physicalDataDir,
+        iconCache: path.join(physicalDataDir, 'icon-cache.json'),
+        liquidationCache: path.join(physicalDataDir, 'liquidations.json'),
+        profileCache: path.join(physicalDataDir, 'profile-cache.json'),
+        newsArchive: path.join(physicalDataDir, 'news-archive.json'),
+      },
+      sameProcessAuthority: true,
+      secondWriter: 'DATA_DIR_LEASE_HELD',
+    });
+    assert.equal(realpathSync.native(parentAlias), realpathSync.native(parentB));
+    assert.equal(existsSync(path.join(dataDirA, 'cosmos.db')), true);
+    assert.equal(existsSync(path.join(dataDirB, 'cosmos.db')), false);
+    assert.deepEqual(leaseArtifactNames(dataDirA), []);
+    assert.deepEqual(leaseArtifactNames(dataDirB), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('bootstrap identity replacement fails closed before Ledger or listener admission', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'cosmos-data-dir-identity-'));
+  const dataDir = path.join(root, 'data');
+  const retainedDir = path.join(root, 'retained-owner-directory');
+  mkdirSync(dataDir, { recursive: true });
+  const environmentUrl = new URL('../../../dist/bootstrap/environment.js', import.meta.url).href;
+  const leaseUrl = new URL(
+    '../../../dist/systemIntegration/persistence/dataDirLease.js',
+    import.meta.url,
+  ).href;
+  const ledgerUrl = new URL('../../../dist/ledger.js', import.meta.url).href;
+  const probe = `
+    import { mkdirSync, renameSync } from 'node:fs';
+    import { createServer } from 'node:net';
+    const { DATA_DIR_AUTHORITY, assertDataDirAuthorityHeld } = await import(
+      ${JSON.stringify(environmentUrl)}
+    );
+    const { DataDirLease } = await import(${JSON.stringify(leaseUrl)});
+    const { Ledger } = await import(${JSON.stringify(ledgerUrl)});
+    new DataDirLease(DATA_DIR_AUTHORITY.dataDir);
+    renameSync(DATA_DIR_AUTHORITY.dataDir, process.argv[1]);
+    mkdirSync(DATA_DIR_AUTHORITY.dataDir, { recursive: true });
+    try {
+      assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY);
+      const ledger = new Ledger(DATA_DIR_AUTHORITY.dataDir);
+      const listener = createServer();
+      listener.listen(0, '127.0.0.1');
+      ledger.close();
+      process.stdout.write('UNSAFE_LEDGER_OR_LISTENER_ADMITTED');
+    } catch (error) {
+      process.stdout.write(String(error?.code ?? error?.message ?? error));
+    }
+  `;
+
+  try {
+    const child = spawnSync(
+      process.execPath,
+      ['--input-type=module', '--eval', probe, retainedDir],
+      {
+        cwd: process.cwd(),
+        env: { ...process.env, SKIP_DOTENV: '1', DATA_DIR: dataDir },
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    );
+    assert.equal(child.error, undefined);
+    assert.equal(child.signal, null);
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    assert.equal(child.stdout, 'DATA_DIR_AUTHORITY_CHANGED');
+    assert.equal(existsSync(path.join(dataDir, 'cosmos.db')), false);
+    assert.equal(existsSync(path.join(retainedDir, 'cosmos.db')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
@@ -569,6 +730,9 @@ test('witness and successor-chain bounds fail closed without deleting ambiguous 
 test('application bootstrap acquires the lease before Ledger and releases it only after durable finalization', () => {
   const source = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
   const leaseAcquisition = source.indexOf('const dataDirLease = new DataDirLease');
+  const authorityRevalidation = source.indexOf(
+    'assertDataDirAuthorityHeld(DATA_DIR_AUTHORITY)',
+  );
   const ledgerOpen = source.indexOf('return new Ledger(canonicalDataDir)');
   const bootMutation = source.indexOf('const bootReleaseStart = bootReleasePersistence.start()');
   const listenerAdmission = source.indexOf('server.listen(PORT, HOST');
@@ -577,7 +741,8 @@ test('application bootstrap acquires the lease before Ledger and releases it onl
   );
   const leaseRelease = source.indexOf('dataDirLease.release()', durableFinalization);
   assert.ok(leaseAcquisition > 0);
-  assert.ok(ledgerOpen > leaseAcquisition);
+  assert.ok(authorityRevalidation > leaseAcquisition);
+  assert.ok(ledgerOpen > authorityRevalidation);
   assert.ok(bootMutation > ledgerOpen);
   assert.ok(listenerAdmission > bootMutation);
   assert.ok(durableFinalization > listenerAdmission);

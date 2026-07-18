@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -49,12 +49,13 @@ test('fresh static imports load .env before every durable cache captures DATA_DI
     const marker = child.stdout.indexOf('AUTHORITY=');
     assert.notEqual(marker, -1, child.stdout);
     const authority = JSON.parse(child.stdout.slice(marker + 'AUTHORITY='.length));
+    const physicalDataDir = realpathSync.native(dataDir);
     assert.deepEqual(authority, {
-      dataDir,
-      iconCache: path.join(dataDir, 'icon_cache.json'),
-      liquidationCache: path.join(dataDir, 'liquidations.json'),
-      profileCache: path.join(dataDir, 'profile_cache.json'),
-      newsArchive: path.join(dataDir, 'news-archive.json'),
+      dataDir: physicalDataDir,
+      iconCache: path.join(physicalDataDir, 'icon_cache.json'),
+      liquidationCache: path.join(physicalDataDir, 'liquidations.json'),
+      profileCache: path.join(physicalDataDir, 'profile_cache.json'),
+      newsArchive: path.join(physicalDataDir, 'news-archive.json'),
     });
   } finally {
     rmSync(cwd, { recursive: true, force: true });

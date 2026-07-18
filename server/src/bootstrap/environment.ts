@@ -11,6 +11,41 @@ export interface DataDirAuthority {
   readonly newsArchive: string;
 }
 
+interface DirectoryIdentity {
+  readonly device: number;
+  readonly inode: number;
+}
+
+const DATA_DIR_IDENTITIES = new WeakMap<DataDirAuthority, DirectoryIdentity>();
+let PROCESS_DATA_DIR_AUTHORITY: DataDirAuthority | undefined;
+
+function authorityError(code: string): Error & { readonly code: string } {
+  return Object.assign(new Error(code), { code });
+}
+
+function resolvePhysicalDirectory(requestedPath: string): Readonly<{
+  path: string;
+  identity: DirectoryIdentity;
+}> {
+  fs.mkdirSync(requestedPath, { recursive: true });
+  const physicalPath = fs.realpathSync.native(requestedPath);
+  const physicalStats = fs.lstatSync(physicalPath);
+  const requestedStats = fs.statSync(requestedPath);
+  if (!physicalStats.isDirectory() || physicalStats.isSymbolicLink()
+    || !requestedStats.isDirectory()
+    || physicalStats.dev !== requestedStats.dev
+    || physicalStats.ino !== requestedStats.ino) {
+    throw authorityError('DATA_DIR_AUTHORITY_CHANGED');
+  }
+  return Object.freeze({
+    path: physicalPath,
+    identity: Object.freeze({
+      device: physicalStats.dev,
+      inode: physicalStats.ino,
+    }),
+  });
+}
+
 /** Load local process configuration before any path-owning module evaluates. */
 export function loadDotEnv(
   cwd: string = process.cwd(),
@@ -34,19 +69,60 @@ export function resolveDataDirAuthority(
   cwd: string = process.cwd(),
   environment: Environment = process.env,
 ): DataDirAuthority {
-  const dataDir = environment.DATA_DIR
+  const isProcessAuthority = cwd === process.cwd() && environment === process.env;
+  if (isProcessAuthority && PROCESS_DATA_DIR_AUTHORITY !== undefined) {
+    return PROCESS_DATA_DIR_AUTHORITY;
+  }
+  const requestedDataDir = environment.DATA_DIR
     ? path.resolve(cwd, environment.DATA_DIR)
     : path.resolve(cwd, 'data');
-  const resolveCache = (configured: string | undefined, fallback: string): string => (
-    path.resolve(cwd, configured ?? path.join(dataDir, fallback))
-  );
-  return Object.freeze({
-    dataDir,
+  const resolvedDataDir = resolvePhysicalDirectory(requestedDataDir);
+  const resolvedDirectories = new Map<string, string>([
+    [requestedDataDir, resolvedDataDir.path],
+  ]);
+  const resolveDirectory = (requestedPath: string): string => {
+    const existing = resolvedDirectories.get(requestedPath);
+    if (existing !== undefined) return existing;
+    const resolved = resolvePhysicalDirectory(requestedPath).path;
+    resolvedDirectories.set(requestedPath, resolved);
+    return resolved;
+  };
+  const resolveCache = (configured: string | undefined, fallback: string): string => {
+    const requestedPath = path.resolve(
+      cwd,
+      configured ?? path.join(requestedDataDir, fallback),
+    );
+    const relativeToDataDir = path.relative(requestedDataDir, requestedPath);
+    if (relativeToDataDir === ''
+      || (!relativeToDataDir.startsWith(`..${path.sep}`)
+        && relativeToDataDir !== '..'
+        && !path.isAbsolute(relativeToDataDir))) {
+      return path.resolve(resolvedDataDir.path, relativeToDataDir);
+    }
+    const requestedParent = path.dirname(requestedPath);
+    return path.join(resolveDirectory(requestedParent), path.basename(requestedPath));
+  };
+  const authority: DataDirAuthority = Object.freeze({
+    dataDir: resolvedDataDir.path,
     iconCache: resolveCache(environment.ICON_CACHE, 'icon_cache.json'),
     liquidationCache: resolveCache(environment.LIQ_CACHE, 'liquidations.json'),
     profileCache: resolveCache(environment.PROFILE_CACHE, 'profile_cache.json'),
-    newsArchive: path.join(dataDir, 'news-archive.json'),
+    newsArchive: path.join(resolvedDataDir.path, 'news-archive.json'),
   });
+  DATA_DIR_IDENTITIES.set(authority, resolvedDataDir.identity);
+  if (isProcessAuthority) PROCESS_DATA_DIR_AUTHORITY = authority;
+  return authority;
+}
+
+/** Fail closed if the physical directory bound at process start was replaced. */
+export function assertDataDirAuthorityHeld(authority: DataDirAuthority): void {
+  const expected = DATA_DIR_IDENTITIES.get(authority);
+  if (expected === undefined) throw authorityError('DATA_DIR_AUTHORITY_UNKNOWN');
+  const current = fs.lstatSync(authority.dataDir);
+  if (!current.isDirectory() || current.isSymbolicLink()
+    || current.dev !== expected.device || current.ino !== expected.inode) {
+    throw authorityError('DATA_DIR_AUTHORITY_CHANGED');
+  }
 }
 
 loadDotEnv();

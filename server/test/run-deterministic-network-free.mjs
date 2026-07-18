@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  runnerChildFailed,
   spawnRunnerChild,
   superviseRunnerChild,
   terminateRunnerChild,
@@ -156,7 +157,7 @@ try {
       if (!Number.isSafeInteger(timeoutMs)) throw new Error(`TEST_RUNNER_TIMEOUT_MISSING:${script}`);
       const exit = await waitForChild(activeChild, timeoutMs);
       activeChild = null;
-      if (exit.code !== 0 || exit.signal !== null) {
+      if (runnerChildFailed(exit)) {
         failedChild = Object.freeze({ ...childRecord, ...exit });
         break;
       }

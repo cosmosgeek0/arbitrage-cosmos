@@ -90,6 +90,10 @@ export function superviseRunnerChild(child, timeoutMs) {
   };
 }
 
+export function runnerChildFailed({ code, signal, timedOut }) {
+  return timedOut === true || code !== 0 || signal !== null;
+}
+
 export function terminateRunnerChild(child) {
   signalChildTree(child, 'SIGTERM');
   setTimeout(() => signalChildTree(child, 'SIGKILL'), FORCE_KILL_GRACE_MS);

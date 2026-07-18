@@ -8,6 +8,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import {
+  runnerChildFailed,
+  spawnRunnerChild,
+  superviseRunnerChild,
+} from '../../test/runner-process-tree.mjs';
 
 await import('./private-egress-tripwire.mjs');
 const [{ default: WebSocket }, { default: guardedNet }] = await Promise.all([
@@ -339,6 +344,50 @@ function openWebSocket(options = {}) {
     ws.once('error', reject);
   });
 }
+
+test('runner deadlines reject a child that handles SIGTERM and exits zero', {
+  timeout: 5_000,
+}, async () => {
+  const child = spawnRunnerChild(process.execPath, [
+    '--input-type=module',
+    '--eval',
+    "process.once('SIGTERM', () => process.exit(0)); process.stdout.write('READY\\n'); setInterval(() => {}, 1_000);",
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env, NODE_OPTIONS: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+  try {
+    await new Promise((resolve, reject) => {
+      const startupTimer = setTimeout(() => reject(new Error('timeout child did not become ready')), 2_000);
+      child.once('error', reject);
+      child.once('close', (code, signal) => {
+        reject(new Error(`timeout child exited before readiness: code=${String(code)} signal=${String(signal)}`));
+      });
+      child.stdout.once('data', (chunk) => {
+        clearTimeout(startupTimer);
+        assert.match(chunk.toString(), /READY/u);
+        resolve();
+      });
+    });
+
+    const deadline = superviseRunnerChild(child, 25);
+    const [code, signal] = await new Promise((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', (...outcome) => resolve(outcome));
+    });
+    deadline.finish();
+
+    const result = Object.freeze({ code, signal, timedOut: deadline.timedOut });
+    assert.deepEqual(result, { code: 0, signal: null, timedOut: true }, stderr);
+    assert.equal(runnerChildFailed(result), true);
+  } finally {
+    if (!childFinished(child)) child.kill('SIGKILL');
+  }
+});
 
 test('loopback fetch refuses redirects before a second local dispatcher hop', async () => {
   let seedHits = 0;

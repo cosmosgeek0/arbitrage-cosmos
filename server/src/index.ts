@@ -82,6 +82,11 @@ import {
 import { createNodeDeploymentFreezeFileSystem } from './services/deploymentFreezeFileSystem.js';
 import { createDeploymentFreezeClearPersistence } from './services/deploymentFreezeClearPersistence.js';
 import {
+  createSourceIsolationOwner,
+  type SourceIsolationPhysicalPort,
+} from './intelligenceRuntime/lifecycle/index.js';
+import { createSourceIsolationPersistence } from './services/sourceIsolationPersistence.js';
+import {
   PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
   createProductIntegrationRuntime,
   createProductIntegrationRuntimeRouter,
@@ -353,6 +358,15 @@ const canonicalApplicationStartFailureCodes = Object.freeze([
     : !systemIntegrationStart.ok ? ['SYSTEM_INTEGRATION_START_FAILED'] : []),
   ...(!bootReleaseStart.ok ? [bootReleaseStart.code] : []),
 ]);
+const publicSourceIsolation = createSourceIsolationOwner({
+  clock: systemIntegrationClock,
+  persistence: createSourceIsolationPersistence(ledger),
+  physical: Object.freeze({
+    read: (sourceId) => engine.readPublicSourceControl(sourceId),
+    isolate: (sourceId) => engine.isolatePublicSource(sourceId),
+    restart: (sourceId) => engine.restartPublicSource(sourceId),
+  } satisfies SourceIsolationPhysicalPort),
+});
 const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   applicationStartOk: () => canonicalApplicationStartOk,
   applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
@@ -378,6 +392,7 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
   clock: systemIntegrationClock,
   commandOwner: createProductRuntimeSystemControlCommandOwner({
     controls: systemIntegration.controls,
+    sourceIsolation: publicSourceIsolation,
   }),
 });
 

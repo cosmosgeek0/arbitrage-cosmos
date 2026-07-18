@@ -38,6 +38,9 @@ function ownerBlocker(
     return 'COMMAND_OWNER_CAPABILITY_INVALID';
   }
   if (!capability.supportedBackendCommandIds.includes(command)) return 'BACKEND_COMMAND_NOT_SUPPORTED';
+  if (command === 'SET_PUBLIC_SOURCE_LIFECYCLE' && typeof owner.readSourceControlState !== 'function') {
+    return 'SOURCE_CONTROL_READBACK_NOT_PROVEN';
+  }
   if (command === 'RESTART_COMPONENT' && capability.managedRestartComponentId !== 'engine-supervisor') {
     return 'MANAGED_ROOT_RESTART_NOT_PROVEN';
   }
@@ -66,25 +69,71 @@ function entry(
     invariants: readonly string[];
     effectTelemetry: readonly string[];
     confirmationText: string;
+    currentStateRevision?: string;
+    forcedBlocker?: string;
   }>,
 ): Readonly<ProductRuntimeControlRegistryEntry> {
-  const blocker = ownerBlocker(owner, input.backendCommandId);
+  const blocker = input.forcedBlocker ?? ownerBlocker(owner, input.backendCommandId);
+  const { currentStateRevision, forcedBlocker: _forcedBlocker, ...publicInput } = input;
   return Object.freeze({
-    ...input,
+    ...publicInput,
     wiringState: blocker === null ? 'WIRED_LIVE' : `UNAVAILABLE:${blocker}`,
     owner: blocker === null ? owner!.capability.ownerId : 'systemIntegration canonical control owner',
-    group: input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
+    group: input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
+      ? 'Source Lifecycle'
+      : input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
     authority: blocker === null ? 'SERVER_DERIVED_OPERATOR' : 'NOT_CONFIGURED',
     requiredPosture: input.backendCommandId === 'RESTART_COMPONENT' ? 'NO_CAPITAL_EXPOSED' : 'PROCESS_ALIVE',
     expiryPolicy: 'Canonical owner preview expiry is authoritative.',
-    currentStateRevision: String(snapshot.control.revision),
+    currentStateRevision: currentStateRevision ?? String(snapshot.control.revision),
     disabledReason: blocker === null ? null : blocker,
     preview: null,
     latestResult: null,
   });
 }
 
-/** Four bounded non-money controls; fail-safe directions only. */
+type PublicSourceControlId = 'public-spot-source' | 'public-usdm-source';
+
+function sourceLifecycleEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  sourceId: PublicSourceControlId,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readSourceControlState']>> = null;
+  try { state = owner?.readSourceControlState?.(sourceId) ?? null; } catch { state = null; }
+  const action = state?.desiredLifecycle === 'ISOLATED' ? 'RESTART' : 'ISOLATE';
+  const sourceLabel = sourceId === 'public-spot-source' ? 'Spot' : 'USD-M';
+  const configured = ownerBlocker(owner, 'SET_PUBLIC_SOURCE_LIFECYCLE') === null;
+  return entry(snapshot, owner, {
+    controlId: `source.${sourceId}.lifecycle`,
+    backendCommandId: 'SET_PUBLIC_SOURCE_LIFECYCLE',
+    targetType: 'COMPONENT',
+    targetId: sourceId,
+    payload: Object.freeze({ sourceId, action }),
+    payloadSchema: '{ sourceId: public-spot-source | public-usdm-source, action: ISOLATE | RESTART }',
+    payloadEnumeration: Object.freeze(['ISOLATE', 'RESTART']),
+    defaultValue: action,
+    label: `${action === 'ISOLATE' ? 'Isolate' : 'Restart'} ${sourceLabel} Public Source`,
+    explanation: action === 'ISOLATE'
+      ? `Stops only the selected ${sourceLabel} public-source stream group; unrelated sources remain supervised.`
+      : `Restarts only the selected ${sourceLabel} public-source stream group from its durable isolated state.`,
+    safeBounds: `${sourceId} only; source-local revision required`,
+    currentDesiredValue: state?.desiredLifecycle ?? 'UNKNOWN',
+    currentEffectiveValue: state?.observedLifecycle ?? 'UNKNOWN',
+    effect: action === 'RESTART' ? 'RESTART' : 'IMMEDIATE',
+    reversibility: 'The inverse transition requires the next exact source revision.',
+    invariants: Object.freeze([
+      'No signed or private exchange capability.',
+      'No unrelated public-source stream is stopped or restarted.',
+    ]),
+    effectTelemetry: Object.freeze(['source revision', 'desired lifecycle', 'observed lifecycle', 'durable receipt']),
+    confirmationText: `Confirm ${action} for ${sourceId} at source revision ${state?.sourceRevision ?? 'UNKNOWN'}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.sourceRevision),
+    ...(configured && state === null ? { forcedBlocker: 'SOURCE_CONTROL_STATE_UNAVAILABLE' } : {}),
+  });
+}
+
+/** Six bounded non-money controls; fail-safe or source-local lifecycle directions only. */
 export function buildProductRuntimeControlRegistry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner?: Readonly<ProductRuntimeCommandOwnerPort>,
@@ -122,6 +171,8 @@ export function buildProductRuntimeControlRegistry(
       reversibility: 'Not reversible after canonical acceptance.', invariants: Object.freeze(['Managed root only.', 'No arbitrary process, path, URL, or command.']),
       effectTelemetry: Object.freeze(['runtime generation', 'component phase', 'durable receipt']), confirmationText: 'Confirm managed-root restart at the current canonical revision.',
     }),
+    sourceLifecycleEntry(snapshot, owner, 'public-spot-source'),
+    sourceLifecycleEntry(snapshot, owner, 'public-usdm-source'),
   ]);
 }
 

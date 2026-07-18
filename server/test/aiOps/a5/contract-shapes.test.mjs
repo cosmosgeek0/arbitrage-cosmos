@@ -440,10 +440,15 @@ test('landed remediation resource acquisition is atomic and conflict graph stays
   assert.equal(graph.length, 1);
 });
 
-test('Product exposes exactly four fail-safe controls beneath SystemControlService authority', () => {
+test('Product preserves four global fail-safe controls and registers two delegated source-local lifecycle controls', () => {
   const controls = buildProductRuntimeControlRegistry(makeSupervisor());
-  assert.deepEqual(controls.map(({ backendCommandId }) => backendCommandId), PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS);
-  assert.equal(controls.length, 4);
+  assert.deepEqual(controls.map(({ backendCommandId }) => backendCommandId), [
+    ...PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.slice(0, 4),
+    'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_PUBLIC_SOURCE_LIFECYCLE',
+  ]);
+  assert.equal(controls.length, 6);
+  assert.deepEqual([...new Set(controls.map(({ backendCommandId }) => backendCommandId))], PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS);
   assert.ok(controls.every(({ wiringState, authority }) => (
     wiringState.startsWith('UNAVAILABLE:') && authority === 'NOT_CONFIGURED'
   )));

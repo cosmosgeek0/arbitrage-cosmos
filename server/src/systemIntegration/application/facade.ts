@@ -886,6 +886,14 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         ? this.decision(true, 'MANAGED_RUNTIME_RESTART_ACCEPTED', '', true)
         : this.decision(false, blockers[0], 'Managed restart requires current canonical strong-zero truth and proven-absent local mutation authority.', false);
     }
+    if (mutation.command === 'SET_PUBLIC_SOURCE_LIFECYCLE') {
+      return this.decision(
+        false,
+        'SOURCE_LIFECYCLE_OWNER_REQUIRED',
+        'Per-source lifecycle state is owned by the injected Intelligence Runtime adapter.',
+        false,
+      );
+    }
     if (mutation.componentId !== 'market-universe') {
       return this.decision(false, 'INDIVIDUAL_COMPONENT_CONTROL_NOT_SUPPORTED', 'The managed graph has one dependency-root lifecycle command.', false);
     }

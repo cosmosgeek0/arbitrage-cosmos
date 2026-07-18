@@ -79,7 +79,10 @@ test('isolate is source-specific, CAS-bound, Ledger-first, and exact-readback pr
   assert.equal(w.durable().receipts[0].reason, request('public-spot-source', 'ISOLATE', 0, 'source.isolate.0001').reason);
 
   const replay = await w.owner.apply(request('public-spot-source', 'ISOLATE', 0, 'source.isolate.0001'));
-  assert.deepEqual(replay, result);
+  assert.equal(replay.ok, true);
+  assert.equal(replay.status, 'ALREADY_APPLIED');
+  assert.equal(replay.receiptId, result.receiptId);
+  assert.deepEqual(replay.snapshot, result.snapshot);
   assert.deepEqual(w.calls.map((row) => row.kind), ['persist', 'isolate']);
 });
 

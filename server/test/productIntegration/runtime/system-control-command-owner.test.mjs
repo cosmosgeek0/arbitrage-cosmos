@@ -6,6 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { Ledger } from '../../../dist/ledger.js';
+import { createSourceIsolationOwner } from '../../../dist/intelligenceRuntime/lifecycle/index.js';
 import {
   createProductIntegrationRuntime,
 } from '../../../dist/productIntegration/runtime/index.js';
@@ -14,6 +15,7 @@ import {
 } from '../../../dist/productIntegration/runtime/systemControlCommandOwner.js';
 import { SystemControlService } from '../../../dist/systemIntegration/controls/index.js';
 import { SystemLedgerPersistenceAdapter } from '../../../dist/systemIntegration/persistence/index.js';
+import { createSourceIsolationPersistence } from '../../../dist/services/sourceIsolationPersistence.js';
 import { makeRead, makeSupervisor } from './testSupport.mjs';
 
 const T0 = 1_900_000_000_000;
@@ -85,6 +87,19 @@ function commandRequest(intent, preview, idempotencyKey) {
   });
 }
 
+function sourceControlIntent(sourceId, action, expectedRevision, nowMs, operator = ACTOR) {
+  return Object.freeze({
+    controlId: `source.${sourceId}.lifecycle`,
+    backendCommandId: 'SET_PUBLIC_SOURCE_LIFECYCLE',
+    targetType: 'COMPONENT',
+    targetId: sourceId,
+    payload: Object.freeze({ sourceId, action }),
+    expectedRevision: String(expectedRevision),
+    nowMs,
+    operator,
+  });
+}
+
 function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
   const ledger = new Ledger(dataDir);
   const persistence = new SystemLedgerPersistenceAdapter(ledger);
@@ -126,8 +141,34 @@ function createWorld(dataDir = tempDataDir(), publicationEffect = 'APPLIED') {
     persistence,
     composition,
   });
-  const owner = createProductRuntimeSystemControlCommandOwner({ controls });
-  return { dataDir, ledger, persistence, composition, controls, owner, inspections, publications };
+  let sourcePhysical = {
+    'public-spot-source': { lifecycle: 'LIVE', generation: 7 },
+    'public-usdm-source': { lifecycle: 'LIVE', generation: 11 },
+  };
+  const sourceIsolation = createSourceIsolationOwner({
+    clock: { nowMs: () => T0 },
+    persistence: createSourceIsolationPersistence(ledger),
+    physical: {
+      read(sourceId) { return Object.freeze({ ...sourcePhysical[sourceId] }); },
+      isolate(sourceId) {
+        sourcePhysical = {
+          ...sourcePhysical,
+          [sourceId]: { lifecycle: 'ISOLATED', generation: sourcePhysical[sourceId].generation + 1 },
+        };
+      },
+      restart(sourceId) {
+        sourcePhysical = {
+          ...sourcePhysical,
+          [sourceId]: { lifecycle: 'WARMING', generation: sourcePhysical[sourceId].generation + 1 },
+        };
+      },
+    },
+  });
+  const owner = createProductRuntimeSystemControlCommandOwner({ controls, sourceIsolation });
+  return {
+    dataDir, ledger, persistence, composition, controls, owner, sourceIsolation,
+    sourcePhysical: () => structuredClone(sourcePhysical), inspections, publications,
+  };
 }
 
 function canonical(value) {
@@ -338,7 +379,57 @@ test('forged, actor-mismatched, expired, and stale previews cannot mutate canoni
   }
 });
 
-test('only the four fixed fail-safe directions exist and managed restart maps to the canonical dependency root', async () => {
+test('registered operator lifecycle control isolates and restarts one source without taking the healthy peer down', async () => {
+  const world = createWorld();
+  try {
+    const now = { value: T0 + 1_000 };
+    const service = runtime(world, now);
+    const isolateIntent = sourceControlIntent('public-spot-source', 'ISOLATE', 0, now.value);
+    const stalePreview = await service.previewCommand({
+      controlId: isolateIntent.controlId,
+      expectedRevision: '0',
+      operator: ACTOR,
+    });
+    const isolated = await service.submitCommand(
+      commandRequest(isolateIntent, stalePreview, 'product.source.spot.isolate.0001'),
+      ACTOR,
+    );
+    assert.equal(isolated.status, 'APPLIED');
+    assert.match(isolated.receiptId, /^source-control:sha256:[a-f0-9]{64}$/);
+    assert.equal(world.sourcePhysical()['public-spot-source'].lifecycle, 'ISOLATED');
+    assert.equal(world.sourcePhysical()['public-usdm-source'].lifecycle, 'LIVE');
+    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 1);
+
+    await assert.rejects(
+      service.submitCommand(
+        commandRequest(isolateIntent, stalePreview, 'product.source.spot.isolate.stale.0002'),
+        ACTOR,
+      ),
+      (error) => error?.code === 'REJECTED_STALE_REVISION',
+    );
+
+    now.value += 1;
+    const restartIntent = sourceControlIntent('public-spot-source', 'RESTART', 1, now.value);
+    const restartPreview = await service.previewCommand({
+      controlId: restartIntent.controlId,
+      expectedRevision: '1',
+      operator: ACTOR,
+    });
+    const restarted = await service.submitCommand(
+      commandRequest(restartIntent, restartPreview, 'product.source.spot.restart.0001'),
+      ACTOR,
+    );
+    assert.equal(restarted.status, 'APPLIED');
+    assert.equal(world.sourcePhysical()['public-spot-source'].lifecycle, 'WARMING');
+    assert.equal(world.sourcePhysical()['public-usdm-source'].lifecycle, 'LIVE');
+    assert.equal(world.ledger.recentEvents(10, 'intelligence_runtime.source_control').length, 2);
+  } finally {
+    world.ledger.close();
+    rmSync(world.dataDir, { recursive: true, force: true });
+  }
+});
+
+test('only bounded fail-safe and source-local directions exist and managed restart maps to the canonical dependency root', async () => {
   const world = createWorld();
   try {
     const unsafe = [

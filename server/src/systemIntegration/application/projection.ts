@@ -55,13 +55,13 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_PUBLIC_SOURCE_LIFECYCLE'),
   }),
   'public-usdm-source': Object.freeze({
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_PUBLIC_SOURCE_LIFECYCLE'),
   }),
   'market-universe': Object.freeze({
     owner: 'AUDITED_APP', ownerPath: 'server/src/engine/marketData.ts',

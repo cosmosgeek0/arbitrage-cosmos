@@ -3,6 +3,11 @@ import type {
   EngineProposal,
 } from '../../engine/v0/types.js';
 import type {
+  VolumeFoundationRiskAttachmentInput,
+  VolumeProposal,
+  VolumeProposalRiskCut,
+} from '../../engine/volume/types.js';
+import type {
   ApplicationComponentReadPorts,
   ApplicationSummaryReadPort,
 } from '../application/types.js';
@@ -21,6 +26,10 @@ import type {
   ProductionCanonicalEconomicsOwners,
   ProductionCapitalEligibilityPort,
 } from './capitalEconomics.js';
+import type {
+  ProductionVolumeRiskEvidenceOwner,
+  ProductionVolumeRiskPort,
+} from './volumeRisk.js';
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -166,6 +175,19 @@ export interface ProductionStrategySnapshot {
   }>;
 }
 
+export interface ProductionVolumeStrategySnapshot {
+  /** Capture time is intentionally present only to prove it is never used. */
+  readonly capturedAtMs?: number;
+  readonly lastTickTs: number | null;
+  readonly decisions: readonly Readonly<Decision>[];
+  readonly proposals: readonly Readonly<VolumeProposal>[];
+  readonly ownerSummary: Readonly<{
+    readonly candidateCount: number;
+    readonly opportunityCount: number;
+    readonly cooldownCount: number;
+  }>;
+}
+
 export interface ProductionBasisConnectionStatus {
   readonly running: boolean;
   readonly lastBookTs: number | null;
@@ -233,7 +255,9 @@ export interface ProductionVolumeRuntimePort {
   start(): Promise<void>;
   stop(): void;
   connectionStatus(): Readonly<ProductionVolumeConnectionStatus>;
-  integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  integrationSnapshot(): Readonly<ProductionVolumeStrategySnapshot>;
+  readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null;
+  recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean;
   /** Optional only for legacy/test doubles; production VolumeRuntime supplies the sole physical feed. */
   setEvidenceObserver?(observer: ProductionVolumeEvidenceObserver | null): void;
   setIntakePaused(paused: boolean): boolean;
@@ -294,6 +318,8 @@ export interface ProductionSystemIntegrationInput {
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** Exact cached owners; absent in today's server assembly and therefore fail-closed. */
   readonly capitalEconomicsOwners?: ProductionCanonicalEconomicsOwners | null;
+  /** Exact cached evidence owner; absent in today's real server assembly. */
+  readonly volumeRiskEvidenceOwner?: ProductionVolumeRiskEvidenceOwner | null;
   /** One freshness law for existing public market observations. */
   readonly sourceMaxAgeMs?: number;
   /**
@@ -365,4 +391,6 @@ export interface ProductionSystemIntegrationPorts {
   }>;
   /** Mounted Capital callsite; current real assembly reports NOT_CONFIGURED. */
   readonly capitalEligibility: Readonly<ProductionCapitalEligibilityPort>;
+  /** Foundation-owned Volume risk callsite; current real assembly is NOT_CONFIGURED. */
+  readonly volumeRisk: Readonly<ProductionVolumeRiskPort>;
 }

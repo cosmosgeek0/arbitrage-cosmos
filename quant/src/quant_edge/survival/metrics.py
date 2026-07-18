@@ -28,6 +28,7 @@ from quant_edge.survival.contracts import (
     MAX_DURATION_NS,
     SubjectV1,
     SurvivalCohortV1,
+    SurvivalTarget,
     TimeGridV1,
     event_time_table,
     fixed_point_to_fraction,
@@ -49,6 +50,8 @@ REASON_CONCORDANCE_UNAVAILABLE: Final = "CONCORDANCE_UNAVAILABLE"
 REASON_CONCORDANCE_BELOW_BUDGET: Final = "CONCORDANCE_BELOW_BUDGET"
 REASON_CALIBRATION_UNAVAILABLE: Final = "CALIBRATION_UNAVAILABLE"
 REASON_CALIBRATION_ERROR_EXCEEDS_BUDGET: Final = "CALIBRATION_ERROR_EXCEEDS_BUDGET"
+
+MetricEvaluationIdentity = tuple[str, str, SurvivalTarget, str, str, int | None]
 
 
 class MetricStatus(StrEnum):
@@ -107,12 +110,21 @@ class PredictionSetV1:
     """Predicted event-probability curves for a cohort, aligned to one grid."""
 
     prediction_id: str
+    cohort_id: str
+    model_id: str
+    target: SurvivalTarget
+    split_id: str
     grid: TimeGridV1
     cause_scope: str
     predictions: tuple[SubjectPredictionV1, ...]
 
     def __post_init__(self) -> None:
         require_contract_id(self.prediction_id, field="prediction_id")
+        require_contract_id(self.cohort_id, field="cohort_id")
+        require_contract_id(self.model_id, field="model_id")
+        if not isinstance(self.target, SurvivalTarget):
+            raise ContractValueError("target must be SurvivalTarget")
+        require_contract_id(self.split_id, field="split_id")
         if not isinstance(self.grid, TimeGridV1):
             raise ContractValueError("grid must be TimeGridV1")
         if self.cause_scope != ANY_CAUSE:
@@ -132,9 +144,13 @@ class PredictionSetV1:
     def as_mapping(self) -> dict[str, object]:
         return {
             "causeScope": self.cause_scope,
+            "cohortId": self.cohort_id,
             "gridId": self.grid.grid_id,
+            "modelId": self.model_id,
             "predictionId": self.prediction_id,
             "predictions": [prediction.as_mapping() for prediction in self.predictions],
+            "splitId": self.split_id,
+            "target": self.target.value,
         }
 
 
@@ -142,6 +158,8 @@ def _prediction_lookup(
     cohort: SurvivalCohortV1,
     prediction_set: PredictionSetV1,
 ) -> dict[str, SubjectPredictionV1]:
+    if prediction_set.cohort_id != cohort.cohort_id or prediction_set.target is not cohort.target:
+        raise ContractValueError("predictions must bind the exact cohort and target")
     lookup = {prediction.subject_id: prediction for prediction in prediction_set.predictions}
     cohort_ids = {subject.subject_id for subject in cohort.subjects}
     if set(lookup) != cohort_ids:
@@ -213,8 +231,12 @@ class BrierReportV1:
     """Per-time IPCW Brier scores plus the integrated score over the grid."""
 
     cohort_id: str
+    model_id: str
+    target: SurvivalTarget
+    split_id: str
     prediction_id: str
     cause_scope: str
+    horizon_ns: int
     points: tuple[BrierPointV1, ...]
     integrated_status: MetricStatus
     integrated: FixedPointV1 | None
@@ -222,9 +244,14 @@ class BrierReportV1:
 
     def __post_init__(self) -> None:
         require_contract_id(self.cohort_id, field="cohort_id")
+        require_contract_id(self.model_id, field="model_id")
+        if not isinstance(self.target, SurvivalTarget):
+            raise ContractValueError("target must be SurvivalTarget")
+        require_contract_id(self.split_id, field="split_id")
         require_contract_id(self.prediction_id, field="prediction_id")
         if self.cause_scope != ANY_CAUSE:
             require_contract_id(self.cause_scope, field="cause_scope")
+        require_strict_int(self.horizon_ns, field="horizon_ns", minimum=1, maximum=MAX_DURATION_NS)
         if not isinstance(self.points, tuple) or not self.points:
             raise ContractValueError("points must be a non-empty tuple")
         for index, point in enumerate(self.points):
@@ -242,12 +269,27 @@ class BrierReportV1:
         return {
             "causeScope": self.cause_scope,
             "cohortId": self.cohort_id,
+            "horizonNs": str(self.horizon_ns),
             "integrated": None if self.integrated is None else self.integrated.as_mapping(),
             "integratedReason": self.integrated_reason,
             "integratedStatus": self.integrated_status.value,
+            "modelId": self.model_id,
             "points": [point.as_mapping() for point in self.points],
             "predictionId": self.prediction_id,
+            "splitId": self.split_id,
+            "target": self.target.value,
         }
+
+    @property
+    def evaluation_identity(self) -> MetricEvaluationIdentity:
+        return (
+            self.cohort_id,
+            self.model_id,
+            self.target,
+            self.split_id,
+            self.cause_scope,
+            self.horizon_ns,
+        )
 
 
 def evaluate_brier(
@@ -327,8 +369,12 @@ def evaluate_brier(
         previous_time = time_ns
     return BrierReportV1(
         cohort_id=cohort.cohort_id,
+        model_id=prediction_set.model_id,
+        target=cohort.target,
+        split_id=prediction_set.split_id,
         prediction_id=prediction_set.prediction_id,
         cause_scope=prediction_set.cause_scope,
+        horizon_ns=grid.end_ns,
         points=tuple(points),
         integrated_status=MetricStatus.AVAILABLE,
         integrated=fraction_to_fixed_point(integral / grid.end_ns),
@@ -341,10 +387,19 @@ class RiskScoreSetV1:
     """One relative risk score per subject; higher means expected-earlier event."""
 
     score_id: str
+    cohort_id: str
+    model_id: str
+    target: SurvivalTarget
+    split_id: str
     scores: tuple[tuple[str, FixedPointV1], ...]
 
     def __post_init__(self) -> None:
         require_contract_id(self.score_id, field="score_id")
+        require_contract_id(self.cohort_id, field="cohort_id")
+        require_contract_id(self.model_id, field="model_id")
+        if not isinstance(self.target, SurvivalTarget):
+            raise ContractValueError("target must be SurvivalTarget")
+        require_contract_id(self.split_id, field="split_id")
         if not isinstance(self.scores, tuple) or not self.scores:
             raise ContractValueError("scores must be a non-empty tuple")
         seen: set[str] = set()
@@ -361,8 +416,12 @@ class RiskScoreSetV1:
 
     def as_mapping(self) -> dict[str, object]:
         return {
+            "cohortId": self.cohort_id,
+            "modelId": self.model_id,
             "scoreId": self.score_id,
             "scores": {subject_id: score.as_mapping() for subject_id, score in self.scores},
+            "splitId": self.split_id,
+            "target": self.target.value,
         }
 
 
@@ -371,6 +430,9 @@ class ConcordanceReportV1:
     """Harrell-law concordance with measured same-group and tie accounting."""
 
     cohort_id: str
+    model_id: str
+    target: SurvivalTarget
+    split_id: str
     score_id: str
     cause_scope: str
     horizon_ns: int | None
@@ -383,6 +445,10 @@ class ConcordanceReportV1:
 
     def __post_init__(self) -> None:
         require_contract_id(self.cohort_id, field="cohort_id")
+        require_contract_id(self.model_id, field="model_id")
+        if not isinstance(self.target, SurvivalTarget):
+            raise ContractValueError("target must be SurvivalTarget")
+        require_contract_id(self.split_id, field="split_id")
         require_contract_id(self.score_id, field="score_id")
         if self.cause_scope != ANY_CAUSE:
             require_contract_id(self.cause_scope, field="cause_scope")
@@ -415,10 +481,24 @@ class ConcordanceReportV1:
             "discordant": self.discordant,
             "excludedSameGroup": self.excluded_same_group,
             "horizonNs": None if self.horizon_ns is None else str(self.horizon_ns),
+            "modelId": self.model_id,
             "scoreId": self.score_id,
+            "splitId": self.split_id,
             "status": self.status.value,
+            "target": self.target.value,
             "tiedScores": self.tied_scores,
         }
+
+    @property
+    def evaluation_identity(self) -> MetricEvaluationIdentity:
+        return (
+            self.cohort_id,
+            self.model_id,
+            self.target,
+            self.split_id,
+            self.cause_scope,
+            self.horizon_ns,
+        )
 
 
 def evaluate_concordance(
@@ -440,6 +520,8 @@ def evaluate_concordance(
         raise ContractValueError("cohort must be SurvivalCohortV1")
     if not isinstance(score_set, RiskScoreSetV1):
         raise ContractValueError("score_set must be RiskScoreSetV1")
+    if score_set.cohort_id != cohort.cohort_id or score_set.target is not cohort.target:
+        raise ContractValueError("scores must bind the exact cohort and target")
     cause_index = _require_cause_scope(cause_scope, cohort=cohort)
     if horizon_ns is not None:
         require_strict_int(horizon_ns, field="horizon_ns", minimum=1, maximum=MAX_DURATION_NS)
@@ -478,6 +560,9 @@ def evaluate_concordance(
     if usable == 0:
         return ConcordanceReportV1(
             cohort_id=cohort.cohort_id,
+            model_id=score_set.model_id,
+            target=cohort.target,
+            split_id=score_set.split_id,
             score_id=score_set.score_id,
             cause_scope=cause_scope,
             horizon_ns=horizon_ns,
@@ -491,6 +576,9 @@ def evaluate_concordance(
     value = Fraction(2 * concordant + tied, 2 * usable)
     return ConcordanceReportV1(
         cohort_id=cohort.cohort_id,
+        model_id=score_set.model_id,
+        target=cohort.target,
+        split_id=score_set.split_id,
         score_id=score_set.score_id,
         cause_scope=cause_scope,
         horizon_ns=horizon_ns,
@@ -553,6 +641,9 @@ class CalibrationReportV1:
     """Reliability table whose ECE is available only at the minimum support."""
 
     cohort_id: str
+    model_id: str
+    target: SurvivalTarget
+    split_id: str
     prediction_id: str
     cause_scope: str
     horizon_ns: int
@@ -564,6 +655,10 @@ class CalibrationReportV1:
 
     def __post_init__(self) -> None:
         require_contract_id(self.cohort_id, field="cohort_id")
+        require_contract_id(self.model_id, field="model_id")
+        if not isinstance(self.target, SurvivalTarget):
+            raise ContractValueError("target must be SurvivalTarget")
+        require_contract_id(self.split_id, field="split_id")
         require_contract_id(self.prediction_id, field="prediction_id")
         if self.cause_scope != ANY_CAUSE:
             require_contract_id(self.cause_scope, field="cause_scope")
@@ -618,10 +713,24 @@ class CalibrationReportV1:
             if self.expected_calibration_error is None
             else self.expected_calibration_error.as_mapping(),
             "horizonNs": str(self.horizon_ns),
+            "modelId": self.model_id,
             "predictionId": self.prediction_id,
+            "splitId": self.split_id,
             "status": self.status.value,
+            "target": self.target.value,
             "unavailableSubjects": self.unavailable_subjects,
         }
+
+    @property
+    def evaluation_identity(self) -> MetricEvaluationIdentity:
+        return (
+            self.cohort_id,
+            self.model_id,
+            self.target,
+            self.split_id,
+            self.cause_scope,
+            self.horizon_ns,
+        )
 
 
 def _observed_event_fraction(
@@ -752,6 +861,9 @@ def evaluate_calibration(
         expected_error = fraction_to_fixed_point(error_total / evaluated)
     return CalibrationReportV1(
         cohort_id=cohort.cohort_id,
+        model_id=prediction_set.model_id,
+        target=cohort.target,
+        split_id=prediction_set.split_id,
         prediction_id=prediction_set.prediction_id,
         cause_scope=prediction_set.cause_scope,
         horizon_ns=horizon_ns,
@@ -834,6 +946,12 @@ def judge_survival(
         raise ContractValueError("concordance must be ConcordanceReportV1")
     if not isinstance(calibration, CalibrationReportV1):
         raise ContractValueError("calibration must be CalibrationReportV1")
+    if not (
+        brier.evaluation_identity
+        == concordance.evaluation_identity
+        == calibration.evaluation_identity
+    ):
+        raise ContractValueError("survival metric reports must share the exact evaluation identity")
     reasons: set[str] = set()
     if brier.integrated is None:
         reasons.add(REASON_INTEGRATED_BRIER_UNAVAILABLE)

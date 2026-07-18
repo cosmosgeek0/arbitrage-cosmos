@@ -17,11 +17,16 @@ import type {
 import type { BasisEngine } from './engine.js';
 import type { MemoryEventSink } from './events.js';
 import type { BasisFeatureSnapshot, BasisGapCausality, PriorityScore } from './types.js';
+import {
+  basisRejectVocabularySnapshot,
+  type BasisRejectVocabularySnapshot,
+} from './rejectVocabulary.js';
 
 export interface BasisSnapshots extends EngineSnapshots {
   priorities(): PriorityScore[];
   featureDetail(symbol: string): BasisFeatureSnapshot | null;
   gapCausality(symbol: string): { gapA: BasisGapCausality; gapB: BasisGapCausality } | null;
+  rejectVocabulary(): Readonly<BasisRejectVocabularySnapshot>;
 }
 
 /**
@@ -85,6 +90,10 @@ export function buildSnapshots(engine: BasisEngine, sink?: MemoryEventSink): Bas
         gapA: { ...feature.basis.gapA.causality },
         gapB: { ...feature.basis.gapB.causality },
       } : null;
+    },
+
+    rejectVocabulary(): Readonly<BasisRejectVocabularySnapshot> {
+      return basisRejectVocabularySnapshot();
     },
   };
 }

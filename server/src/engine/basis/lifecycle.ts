@@ -10,6 +10,7 @@ import { newCorrelationId } from '../v0/clock.js';
 import { EventEmitter } from './events.js';
 import type { BasisConfig } from './config.js';
 import type { PriorityScore, SymbolLifecycle } from './types.js';
+import { projectBasisRejectDisposition } from './rejectVocabulary.js';
 
 const FOCUS_HISTORY_KEEP = 200;
 
@@ -168,10 +169,10 @@ export class LifecycleManager {
         break;
       }
       case 'reject': {
+        const projection = projectBasisRejectDisposition(decision.rejectCode);
         const wasAdvanced = lc.state === 'FOCUS' || lc.state === 'PROPOSED';
         if (wasAdvanced) {
-          const exit: FocusExitReason = decision.rejectCode === 'risk_blocked' ? 'risk_rejected' : 'cooldown';
-          this.closeFocus(decision.symbol, exit);
+          this.closeFocus(decision.symbol, projection.focusExitReason);
         }
         this.dropCandidate(decision.symbol);
         this.toState(lc, 'REJECTED', now);

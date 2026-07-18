@@ -7,6 +7,8 @@
  */
 import {
   BASIS_DEFAULTS,
+  BASIS_HISTORICAL_REJECT_CODE_MAP,
+  BASIS_REJECT_CODES,
   EXECUTABLE_BASIS_RETURN_CONTRACT,
   buildFundingContext,
   buildSnapshots,
@@ -14,6 +16,7 @@ import {
   executableBasisReturnPct,
   estimateEdge,
   fundingCarryPctOverHold,
+  projectBasisRejectDisposition,
 } from '../dist/engine/basis/index.js';
 import { BasisRuntime } from '../dist/services/basisRuntime.js';
 
@@ -121,6 +124,66 @@ section('0. one versioned executable-return law owns both constructions');
   );
   check('equal prices have zero return', executableBasisReturnPct(100, 100) === 0);
   check('profitable reverse basis stays positive', executableBasisReturnPct(101, 100) === 1);
+}
+
+section('0b. stable Basis reject vocabulary classifies every historical spelling');
+{
+  check('borrow_required retires to borrow_unknown',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.borrow_required.successorCode === 'borrow_unknown');
+  check('risk_blocked moves to the canonical risk_rejected event',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorOutcome === 'risk_rejected'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorCode === null);
+  check('account_not_connected moves to Capital account-truth eligibility',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorOutcome === 'ACCOUNT_TRUTH_BLOCKED'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorCode === null);
+  check('retired spellings cannot appear in the emitted scanner vocabulary',
+    ['borrow_required', 'risk_blocked', 'account_not_connected'].every((code) => !BASIS_REJECT_CODES.includes(code)));
+  const borrowReplay = projectBasisRejectDisposition('borrow_required');
+  check('projection preserves raw borrow_required while routing to borrow_unknown',
+    borrowReplay.rawCode === 'borrow_required'
+      && borrowReplay.classification === 'HISTORICAL'
+      && borrowReplay.successorCode === 'borrow_unknown');
+  const riskReplay = projectBasisRejectDisposition('risk_blocked');
+  check('projection preserves raw risk_blocked and consumes the formal risk map',
+    riskReplay.rawCode === 'risk_blocked'
+      && riskReplay.owner === 'FOUNDATION_RISK'
+      && riskReplay.successorOutcome === 'risk_rejected'
+      && riskReplay.focusExitReason === 'risk_rejected');
+  const accountReplay = projectBasisRejectDisposition('account_not_connected');
+  check('projection preserves raw account spelling and canonical Capital owner',
+    accountReplay.rawCode === 'account_not_connected'
+      && accountReplay.owner === 'CAPITAL_ELIGIBILITY'
+      && accountReplay.successorOutcome === 'ACCOUNT_TRUTH_BLOCKED');
+  const h = createReplayHarness(CFG, T0);
+  const snapshot = buildSnapshots(h.engine, h.sink).rejectVocabulary();
+  check('snapshot exposes the exact canonical vocabulary and retirement map',
+    JSON.stringify(snapshot.emitted) === JSON.stringify(BASIS_REJECT_CODES)
+      && snapshot.historical.borrow_required.successorCode === 'borrow_unknown');
+
+  const replay = createReplayHarness(CFG, T0);
+  const replayResult = replay.run([initStep(T0), ...gapSeries([0.78])]);
+  const focused = replayResult.decisions[0];
+  replay.engine.lifecycle.applyDecision({
+    ...focused,
+    kind: 'reject',
+    rejectCode: 'risk_blocked',
+    humanReason: 'historical risk replay',
+  }, {
+    symbol: SYM,
+    direction: 'long_spot_short_perp',
+    score: 1,
+    components: {
+      netEdge: 1,
+      persistence: 1,
+      liquidity: 1,
+      fundingUsefulness: 1,
+      dataQuality: 1,
+      momentum: 1,
+    },
+  });
+  const replayExit = replay.engine.lifecycle.focusSessions().find((session) => session.symbol === SYM)?.exitReason;
+  check('historical risk_blocked replay closes focus as risk_rejected, never signal_expired',
+    focused?.kind === 'focus' && replayExit === 'risk_rejected');
 }
 
 // =====================================================================

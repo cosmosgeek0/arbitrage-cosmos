@@ -23,5 +23,17 @@ export { preflightBorrow } from './borrow.js';
 export { buildFundingContext, expectedHoldMs, fundingFlipRisk } from './funding.js';
 export { assessLiquidity, assessDataQuality } from './liquidity.js';
 export { estimateEdge } from './edge.js';
+export {
+  BASIS_HISTORICAL_REJECT_CODE_MAP,
+  BASIS_REJECT_CODES,
+  basisRejectVocabularySnapshot,
+  projectBasisRejectDisposition,
+  type BasisRejectProjection,
+  type BasisRejectProjectionClassification,
+  type BasisRejectCode,
+  type BasisRejectVocabularySnapshot,
+  type HistoricalBasisRejectCode,
+  type HistoricalBasisRejectDisposition,
+} from './rejectVocabulary.js';
 export * from './math.js';
 export type * from './types.js';

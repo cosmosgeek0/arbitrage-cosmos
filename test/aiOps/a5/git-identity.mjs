@@ -103,4 +103,15 @@ export const AI_OPS_IDENTITY_REGRESSION_MATRIX = Object.freeze([
       tree: '8072070f040adce612617f7ef69403b9005b0af4',
     }),
   }),
+  Object.freeze({
+    item: 'FIX-110',
+    environment: 'INTEGRATED_CURRENT_HEAD_TREE',
+    lane: 'A5',
+    head: Object.freeze({
+      commit: '99a3fa3e99e6fc44b474bcc6a7e045647223785d',
+      tree: '77929594ce3e3f8a71966e2e5c2961ae0f2b1656',
+    }),
+    expectedMode: 'INTEGRATED',
+    expectedTarget: 'CURRENT_HEAD_TREE',
+  }),
 ]);

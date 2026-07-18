@@ -52,3 +52,13 @@ test('FIX-109 donor-looking branch diagnostics cannot override integrated Git ob
   assert.equal(result.mode, 'INTEGRATED');
   assert.equal(result.verificationTarget, 'CURRENT_HEAD_TREE');
 });
+
+test('FIX-110 integrated repository mode binds assertions to the exact current HEAD tree', () => {
+  const scenario = AI_OPS_IDENTITY_REGRESSION_MATRIX.find((row) => row.item === 'FIX-110');
+  assert.ok(scenario);
+  const result = classifyAiOpsGitIdentity(scenario.head, AI_OPS_DONOR_IDENTITIES[scenario.lane]);
+  assert.equal(result.mode, 'INTEGRATED');
+  assert.equal(result.verificationTarget, 'CURRENT_HEAD_TREE');
+  assert.equal(result.headCommit, scenario.head.commit);
+  assert.equal(result.headTree, scenario.head.tree);
+});

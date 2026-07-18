@@ -162,7 +162,7 @@ const lanes = [
     id: 'A5',
     files: a5,
     expectedFiles: 12,
-    expectedTests: 93,
+    expectedTests: 94,
     osNetworkDeny: true,
     env: { AI_OPS_OS_NETWORK_DENY: '1' },
     nodeArgs: [

@@ -393,6 +393,52 @@ async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
   }
 }
 
+type WatchlistAcknowledgement = Readonly<Pick<AppConfig, 'watchlist'>>;
+
+export type SerializedWatchlistMutationQueue = Readonly<{
+  synchronize: (watchlist: readonly string[]) => void;
+  enqueue: (symbol: string) => Promise<WatchlistAcknowledgement | null>;
+}>;
+
+/**
+ * Serializes complete-watchlist writes and keeps an acknowledgement-backed
+ * shadow while a batch is pending. The config API does not expose a revision
+ * or compare-and-swap token, so sending the next mutation only after the
+ * preceding acknowledgement is the client-side ordering authority.
+ */
+export function createSerializedWatchlistMutationQueue(
+  initialWatchlist: readonly string[],
+  submit: (watchlist: readonly string[]) => Promise<WatchlistAcknowledgement | null>,
+): SerializedWatchlistMutationQueue {
+  let acknowledgedWatchlist = [...initialWatchlist];
+  let pendingCount = 0;
+  let tail: Promise<void> = Promise.resolve();
+
+  const synchronize = (watchlist: readonly string[]) => {
+    if (pendingCount === 0) acknowledgedWatchlist = [...watchlist];
+  };
+
+  const enqueue = (symbol: string): Promise<WatchlistAcknowledgement | null> => {
+    pendingCount += 1;
+    const operation = tail.then(async () => {
+      const current = acknowledgedWatchlist;
+      const next = current.includes(symbol)
+        ? current.filter((entry) => entry !== symbol)
+        : [...current, symbol];
+      const acknowledgement = await submit(Object.freeze([...next]));
+      if (acknowledgement) acknowledgedWatchlist = [...acknowledgement.watchlist];
+      return acknowledgement;
+    });
+    tail = operation.then(
+      () => { pendingCount -= 1; },
+      () => { pendingCount -= 1; },
+    );
+    return operation;
+  };
+
+  return Object.freeze({ synchronize, enqueue });
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
@@ -428,6 +474,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const fxPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
+  const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
   // rates remain diagnostic evidence after failure, but never current truth.
@@ -698,6 +745,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return config;
   }, []);
 
+  if (!watchlistMutationQueueRef.current) {
+    watchlistMutationQueueRef.current = createSerializedWatchlistMutationQueue(
+      state?.config.watchlist ?? [],
+      (watchlist) => saveConfig({ watchlist: [...watchlist] }),
+    );
+  }
+  const watchlistMutationQueue = watchlistMutationQueueRef.current;
+
+  useEffect(() => {
+    watchlistMutationQueue.synchronize(state?.config.watchlist ?? []);
+  }, [state?.config.watchlist, watchlistMutationQueue]);
+
+  const toggleWatch = useCallback(
+    async (symbol: string) => {
+      const saved = await watchlistMutationQueue.enqueue(symbol);
+      return saved ? null : acknowledgementFailure('The watchlist change was not acknowledged.');
+    },
+    [watchlistMutationQueue],
+  );
+
   // Read-only browser snapshot refresh retained for compatibility consumers.
   // It never calls the managed-runtime /api/refresh targets: those require the
   // canonical Product preview/digest/revision/receipt protocol.
@@ -784,15 +851,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, []),
     paletteOpen,
     setPaletteOpen,
-    toggleWatch: useCallback(
-      async (symbol: string) => {
-        const cur = state?.config.watchlist ?? [];
-        const next = cur.includes(symbol) ? cur.filter((s) => s !== symbol) : [...cur, symbol];
-        const saved = await saveConfig({ watchlist: next });
-        return saved ? null : acknowledgementFailure('The watchlist change was not acknowledged.');
-      },
-      [state, saveConfig]
-    ),
+    toggleWatch,
     saveConfig,
   };
 

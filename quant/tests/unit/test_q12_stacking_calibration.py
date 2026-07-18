@@ -318,7 +318,7 @@ def test_oof_validation_rejects_global_overlap_and_bundle_substitution() -> None
             *plan.folds[2:],
         ),
     )
-    with pytest.raises(ContractValueError, match="exactly once"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate_oof_bundles(
             samples=samples,
             plan=overlapping,
@@ -393,9 +393,9 @@ def test_oof_validation_rejects_membership_digest_lineage_and_forbidden_rows() -
                 ),
             )
         )
-    with pytest.raises(ContractValueError, match="specialist fitting"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate(bundle, replace(plan, holdout_sample_ids=(bundle.train_sample_ids[0],)))
-    with pytest.raises(ContractValueError, match="OOF predictions"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate(bundle, replace(plan, holdout_sample_ids=(prediction.sample_id,)))
 
 

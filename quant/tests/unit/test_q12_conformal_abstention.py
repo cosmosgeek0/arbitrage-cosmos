@@ -66,8 +66,6 @@ from quant_edge.regime.contracts import InputDisposition, disposition_from_quali
 from quant_edge.validation import (
     CostStressReportV1,
     CostStressScenarioV1,
-    FoldStatus,
-    FoldV1,
     OpportunityDecayV1,
     PredictionSetV1,
     PredictionV1,
@@ -75,13 +73,12 @@ from quant_edge.validation import (
     ScenarioOutcomeV1,
     StressSpecV1,
     ValidationSampleV1,
-    WalkForwardPlanV1,
     WalkForwardSpecV1,
     build_walk_forward_plan,
     run_cost_stress,
     subset_by_ids,
 )
-from quant_edge.validation.splits import PlanStatus, SplitScheme
+from quant_edge.validation.splits import SplitScheme
 
 BASE = 1_700_000_000_000_000_000
 ZERO_DIGEST = DigestV1("0" * 64)
@@ -136,35 +133,45 @@ def _research_environment(
     )
     assessment_time = evaluation[-1].outcome_time_ns + 100
     all_rows = (*calibration, *evaluation)
-    training_id = "training-0001"
-    meta_id = "meta-0001"
+    bootstrap_ids = tuple(f"bootstrap-{index:04d}" for index in range(count))
+    training_ids = tuple(f"training-{index:04d}" for index in range(count))
+    application_ids = (
+        "assessment-0001",
+        *(f"application-{index:04d}" for index in range(count - 1)),
+    )
     samples = SampleSetV1(
         "q12-conformal:v1",
         EvidencePosture.SYNTHETIC,
         (
-            ValidationSampleV1(
-                training_id,
-                "SYNTH",
-                "group-training",
-                calibration[0].prediction_time_ns - 100,
-                calibration[0].prediction_time_ns - 90,
-                (),
-                False,
-                None,
-                None,
-                QualityState.SYNTHETIC,
+            *(
+                ValidationSampleV1(
+                    sample_id,
+                    "SYNTH",
+                    f"group-{sample_id}",
+                    calibration[0].prediction_time_ns - (2 * count - index) * 100,
+                    calibration[0].prediction_time_ns - (2 * count - index) * 100 + 10,
+                    (),
+                    False,
+                    None,
+                    None,
+                    QualityState.SYNTHETIC,
+                )
+                for index, sample_id in enumerate(bootstrap_ids)
             ),
-            ValidationSampleV1(
-                meta_id,
-                "SYNTH",
-                "group-meta",
-                calibration[0].prediction_time_ns - 80,
-                calibration[0].prediction_time_ns - 70,
-                (),
-                False,
-                None,
-                None,
-                QualityState.SYNTHETIC,
+            *(
+                ValidationSampleV1(
+                    sample_id,
+                    "SYNTH",
+                    f"group-{sample_id}",
+                    calibration[0].prediction_time_ns - (count - index) * 100,
+                    calibration[0].prediction_time_ns - (count - index) * 100 + 10,
+                    (),
+                    False,
+                    None,
+                    None,
+                    QualityState.SYNTHETIC,
+                )
+                for index, sample_id in enumerate(training_ids)
             ),
             *(
                 ValidationSampleV1(
@@ -181,23 +188,26 @@ def _research_environment(
                 )
                 for index, row in enumerate(all_rows)
             ),
-            ValidationSampleV1(
-                "assessment-0001",
-                "SYNTH",
-                "group-assessment",
-                assessment_time,
-                assessment_time + 10,
-                (),
-                False,
-                None,
-                None,
-                QualityState.SYNTHETIC,
+            *(
+                ValidationSampleV1(
+                    sample_id,
+                    "SYNTH",
+                    f"group-{sample_id}",
+                    assessment_time + index * 100,
+                    assessment_time + index * 100 + 10,
+                    (),
+                    False,
+                    None,
+                    None,
+                    QualityState.SYNTHETIC,
+                )
+                for index, sample_id in enumerate(application_ids)
             ),
         ),
     )
     split_spec = WalkForwardSpecV1(
         SplitScheme.EXPANDING,
-        3,
+        4,
         10,
         0,
         10,
@@ -205,40 +215,8 @@ def _research_environment(
         make_ratio(0, 1),
         None,
     )
-    fold_rows = (
-        ("fold-00", (training_id,), (meta_id,)),
-        (
-            "fold-01",
-            (training_id, meta_id),
-            tuple(row.observation_id for row in calibration),
-        ),
-        (
-            "fold-02",
-            (training_id, meta_id, *(row.observation_id for row in calibration)),
-            tuple(row.observation_id for row in evaluation),
-        ),
-        (
-            "fold-03",
-            (training_id, meta_id, *(row.observation_id for row in all_rows)),
-            ("assessment-0001",),
-        ),
-    )
-    folds = tuple(
-        FoldV1(
-            fold_id,
-            FoldStatus.VALID,
-            train_ids,
-            ids,
-            samples.by_id(ids[0]).cutoff_ns,
-            samples.by_id(ids[-1]).cutoff_ns,
-            0,
-            0,
-            0,
-            0,
-        )
-        for fold_id, train_ids, ids in fold_rows
-    )
-    plan = WalkForwardPlanV1(split_spec, samples.digest(), folds, (), (), PlanStatus.VALID)
+    plan = build_walk_forward_plan(samples, split_spec)
+    folds = plan.folds
     specialist_ids = ("conformal-specialist-a:v1", "conformal-specialist-b:v1")
     bundles = tuple(
         OofFoldPredictionBundleV1(
@@ -271,7 +249,7 @@ def _research_environment(
     fitted = fit_oof_stacker(
         samples=samples,
         matrix=matrix,
-        spec=StackingSpecV1(("fold-00",), ("fold-01",), 4),
+        spec=StackingSpecV1(("fold-01",), ("fold-02",), 4),
         stack_id="conformal-stack:v1",
     )
     width = make_ratio(1, 4)
@@ -281,7 +259,7 @@ def _research_environment(
             samples,
             plan,
             "transition-binary:v1",
-            ("fold-01",),
+            ("fold-02",),
             matrix,
             fitted,
             width,
@@ -291,7 +269,7 @@ def _research_environment(
             samples,
             plan,
             "transition-binary:v1",
-            ("fold-02",),
+            ("fold-03",),
             matrix,
             fitted,
             width,
@@ -300,7 +278,7 @@ def _research_environment(
             samples,
             plan,
             "transition-binary:v1",
-            ("fold-03",),
+            ("fold-04",),
             matrix,
             fitted,
             width,
@@ -1192,7 +1170,7 @@ def test_coverage_monitor_unknown_collapsed_and_identity_failures() -> None:
         application_slice.samples,
         application_slice.plan,
         application_slice.target_id,
-        ("fold-02",),
+        ("fold-03",),
         application_slice.matrix,
         application_slice.fitted_stack,
         application_slice.base_half_width,
@@ -1714,7 +1692,7 @@ def test_conformal_research_slice_rejects_every_provenance_forgery(
     with monkeypatch.context() as scoped:
         scoped.setattr(conformal_module, "MAX_CONFORMAL_FOLDS", 0)
         with pytest.raises(ContractValueError, match="MAX_CONFORMAL_FOLDS"):
-            replace(fit_slice, fold_ids=("fold-01",))
+            replace(fit_slice, fold_ids=("fold-02",))
     with pytest.raises(ContractValueError, match="sorted and unique"):
         replace(fit_slice, fold_ids=("fold-02", "fold-01"))
     with pytest.raises(ContractValueError, match="valid Q14 folds"):
@@ -1746,7 +1724,7 @@ def test_conformal_research_slice_rejects_every_provenance_forgery(
             fit_slice.samples,
             duplicate_plan,
             fit_slice.target_id,
-            ("fold-01", "fold-02"),
+            ("fold-02", "fold-03"),
             duplicate_matrix,
             fit_slice.fitted_stack,
             fit_slice.base_half_width,
@@ -1798,7 +1776,7 @@ def test_conformal_research_slice_rejects_every_provenance_forgery(
     )
     with pytest.raises(ContractValueError, match="bind Q14 sample time"):
         conformal_module._validate_observation_for_slice(shifted, fit_slice)
-    assert evaluation_slice.fold_for(evaluation_slice.validation_sample_ids[0]) == "fold-02"
+    assert evaluation_slice.fold_for(evaluation_slice.validation_sample_ids[0]) == "fold-03"
 
 
 def test_conformal_models_intervals_and_entrypoints_reject_malformed_contracts() -> None:
@@ -1981,7 +1959,7 @@ def test_coverage_contract_and_monitor_reject_every_arithmetic_forgery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     observations, model_evidence, _, report, application_slice = _conformal()
-    evaluation_slice = replace(application_slice, fold_ids=("fold-02",))
+    evaluation_slice = replace(application_slice, fold_ids=("fold-03",))
     intervals = tuple(
         apply_conformal(
             model_evidence,

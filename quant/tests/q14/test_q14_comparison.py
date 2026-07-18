@@ -231,6 +231,27 @@ def test_invalid_plan_and_insufficient_folds() -> None:
     )
     assert invalid_report.verdict is ComparisonVerdict.INVALID_PLAN
 
+    canonical_plan = _plan(samples)
+    first = canonical_plan.folds[0]
+    forged_plan = replace(
+        canonical_plan,
+        folds=(
+            replace(
+                first,
+                train_sample_ids=(
+                    first.validation_sample_ids[0],
+                    *first.train_sample_ids[1:],
+                ),
+                purged_count=-1,
+            ),
+            *canonical_plan.folds[1:],
+        ),
+    )
+    forged_report = compare_models(
+        samples, forged_plan, baseline, challenger, _ledger(), _comparison_spec()
+    )
+    assert forged_report.verdict is ComparisonVerdict.INVALID_PLAN
+
     # k = 20 is measurable on the 64-sample research set (leakage passes) but no
     # 13-sample fold validation slice can support it, so every fold is skipped.
     plan = _plan(samples)

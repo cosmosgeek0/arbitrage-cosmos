@@ -49,6 +49,7 @@ from quant_edge.validation.splits import (
     HoldoutGrantV1,
     PlanStatus,
     WalkForwardPlanV1,
+    build_walk_forward_plan,
     open_holdout,
 )
 
@@ -267,10 +268,12 @@ def compare_models(
         raise ContractValueError("spec must be ComparisonSpecV1")
     if plan.dataset_digest != samples.digest():
         raise ContractValueError("plan is bound to a different sample set")
+    canonical_plan = build_walk_forward_plan(samples, plan.spec)
+    plan_is_canonical = plan == canonical_plan
 
     # Leakage is assessed strictly on research samples: holdout and quarantined
     # outcomes must not influence any pre-holdout decision, including this one.
-    excluded = set(plan.holdout_sample_ids) | set(plan.quarantined_sample_ids)
+    excluded = set(canonical_plan.holdout_sample_ids) | set(canonical_plan.quarantined_sample_ids)
     if excluded:
         research_ids = tuple(
             sample_id for sample_id in samples.sample_ids if sample_id not in excluded
@@ -317,7 +320,7 @@ def compare_models(
             spec=spec,
         )
 
-    if plan.status is not PlanStatus.VALID:
+    if not plan_is_canonical or plan.status is not PlanStatus.VALID:
         return report(ComparisonVerdict.INVALID_PLAN)
     if challenger_assessment.verdict is not LeakageVerdict.ACCEPTED_FOR_COMPARISON:
         return report(ComparisonVerdict.REJECTED_CHALLENGER_LEAKAGE)

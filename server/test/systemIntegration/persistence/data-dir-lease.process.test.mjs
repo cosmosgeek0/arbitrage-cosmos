@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,6 +18,12 @@ import Database from 'better-sqlite3';
 import { DataDirLease } from '../../../dist/systemIntegration/persistence/dataDirLease.js';
 
 const HOST = '127.0.0.1';
+const LEASE_ROOT = '.cosmos-data-dir.lease.v1';
+const LEASE_DATABASE_FILES = Object.freeze([
+  'cosmos.lease.db',
+  'cosmos.lease.db-wal',
+  'cosmos.lease.db-shm',
+]);
 
 function tempDataDir() {
   return mkdtempSync(path.join(tmpdir(), 'cosmos-data-dir-lease-'));
@@ -46,6 +59,49 @@ function waitForExit(child, timeoutMs = 10_000) {
       resolve({ code, signal });
     });
   });
+}
+
+function waitForLog(child, logs, pattern, timeoutMs = 10_000) {
+  if (pattern.test(logs())) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`DATA_DIR lease child log timeout: ${logs()}`)),
+      timeoutMs,
+    );
+    const inspect = () => {
+      if (pattern.test(logs())) {
+        clearTimeout(timer);
+        child.stdout.off('data', inspect);
+        child.stderr.off('data', inspect);
+        resolve();
+      } else if (finished(child)) {
+        clearTimeout(timer);
+        child.stdout.off('data', inspect);
+        child.stderr.off('data', inspect);
+        reject(new Error(`DATA_DIR lease child exited early: ${logs()}`));
+      }
+    };
+    child.stdout.on('data', inspect);
+    child.stderr.on('data', inspect);
+  });
+}
+
+function spawnEval(source, ...args) {
+  const child = spawn(
+    process.execPath,
+    ['--input-type=module', '--eval', source, ...args],
+    { cwd: process.cwd(), env: process.env, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  let output = '';
+  child.stdout.on('data', (chunk) => { output = `${output}${chunk}`.slice(-24_000); });
+  child.stderr.on('data', (chunk) => { output = `${output}${chunk}`.slice(-24_000); });
+  return { child, logs: () => output };
+}
+
+function assertNoLeaseDatabase(dataDir) {
+  for (const filename of LEASE_DATABASE_FILES) {
+    assert.equal(existsSync(path.join(dataDir, filename)), false, filename);
+  }
 }
 
 async function waitForServer(child, base, logs) {
@@ -132,6 +188,7 @@ test('a second live process is rejected before it can share the canonical DATA_D
     assert.equal(second.stdout, 'DATA_DIR_LEASE_HELD');
   } finally {
     first.release();
+    assertNoLeaseDatabase(dataDir);
     rmSync(dataDir, { recursive: true, force: true });
   }
 });
@@ -162,6 +219,9 @@ test(
       assert.equal(rejected.code, 1, second.logs());
       assert.equal(rejected.signal, null, second.logs());
       assert.match(second.logs(), /DATA_DIR_LEASE_HELD/u);
+      await assert.rejects(fetch(`http://${HOST}:${secondPort}/health/live`, {
+        signal: AbortSignal.timeout(500),
+      }));
 
       const ownerStillLive = await fetch(`http://${HOST}:${firstPort}/health/live`, {
         signal: AbortSignal.timeout(2_000),
@@ -182,6 +242,7 @@ test(
       assert.equal(ownerExit.code, 0, first.logs());
       assert.equal(existsSync(path.join(dataDir, 'network-egress.log')), false);
       assert.equal(existsSync(path.join(dataDir, 'private-egress.log')), false);
+      assertNoLeaseDatabase(dataDir);
     } finally {
       if (second !== null && !finished(second.child)) {
         second.child.kill('SIGKILL');
@@ -196,55 +257,152 @@ test(
   },
 );
 
-test('a stale lease from a dead same-host process is recovered atomically', () => {
-  const dataDir = tempDataDir();
-  const leasePath = path.join(dataDir, 'cosmos.lease.db');
-  const leaseDb = new Database(leasePath);
-  try {
-    leaseDb.exec(`
-      CREATE TABLE data_dir_lease (
-        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
-        owner_token TEXT NOT NULL,
-        pid INTEGER NOT NULL,
-        hostname TEXT NOT NULL,
-        acquired_at_ms INTEGER NOT NULL,
-        heartbeat_at_ms INTEGER NOT NULL
-      )
-    `);
-    leaseDb.prepare(`
-      INSERT INTO data_dir_lease
-        (singleton, owner_token, pid, hostname, acquired_at_ms, heartbeat_at_ms)
-      VALUES (1, ?, ?, ?, ?, ?)
-    `).run(
-      'dead-owner-token',
-      2_147_483_647,
-      hostname(),
-      Date.now() - 120_000,
-      Date.now() - 120_000,
-    );
-  } finally {
-    leaseDb.close();
-  }
-
-  const lease = new DataDirLease(dataDir);
-  try {
-    const readback = new Database(leasePath, { readonly: true });
+test(
+  'a killed owner admits exactly one synchronized takeover and later reacquisition',
+  { timeout: 30_000 },
+  async () => {
+    const dataDir = tempDataDir();
+    const gatePath = path.join(dataDir, 'takeover.gate');
+    const leaseUrl = new URL(
+      '../../../dist/systemIntegration/persistence/dataDirLease.js',
+      import.meta.url,
+    ).href;
+    const owner = spawnEval(`
+      import { DataDirLease } from ${JSON.stringify(leaseUrl)};
+      const lease = new DataDirLease(process.argv[1]);
+      process.stdout.write('OWNER_READY');
+      setInterval(() => lease.assertHeld(), 250);
+    `, dataDir);
     try {
-      const row = readback.prepare(`
-        SELECT owner_token, pid, hostname, acquired_at_ms, heartbeat_at_ms
-        FROM data_dir_lease WHERE singleton = 1
-      `).get();
-      assert.equal(row.pid, process.pid);
-      assert.equal(row.hostname, hostname());
-      assert.notEqual(row.owner_token, 'dead-owner-token');
-      assert.ok(row.acquired_at_ms > Date.now() - 10_000);
-      assert.ok(row.heartbeat_at_ms >= row.acquired_at_ms);
+      await waitForLog(owner.child, owner.logs, /OWNER_READY/u);
+      owner.child.kill('SIGKILL');
+      const killed = await waitForExit(owner.child);
+      assert.equal(killed.signal, 'SIGKILL', owner.logs());
+
+      const contenderSource = `
+        import { existsSync } from 'node:fs';
+        import { setTimeout as delay } from 'node:timers/promises';
+        import { DataDirLease } from ${JSON.stringify(leaseUrl)};
+        while (!existsSync(process.argv[2])) await delay(2);
+        try {
+          const lease = new DataDirLease(process.argv[1]);
+          process.stdout.write('TAKEOVER_ACQUIRED');
+          await delay(1_000);
+          lease.release();
+        } catch (error) {
+          process.stdout.write(String(error?.code ?? error?.message ?? error));
+          process.exitCode = 17;
+        }
+      `;
+      const contenders = Array.from({ length: 8 }, () => spawnEval(
+        contenderSource,
+        dataDir,
+        gatePath,
+      ));
+      writeFileSync(gatePath, 'go\n', { flag: 'wx', mode: 0o600 });
+      const outcomes = await Promise.all(contenders.map(async (contender) => ({
+        ...(await waitForExit(contender.child)),
+        output: contender.logs(),
+      })));
+      const winners = outcomes.filter((outcome) => outcome.code === 0);
+      const rejected = outcomes.filter((outcome) => outcome.code === 17);
+      assert.equal(winners.length, 1, JSON.stringify(outcomes));
+      assert.match(winners[0].output, /TAKEOVER_ACQUIRED/u);
+      assert.equal(rejected.length, 7, JSON.stringify(outcomes));
+      for (const outcome of rejected) {
+        assert.match(outcome.output, /DATA_DIR_LEASE_(?:BUSY|HELD)/u);
+      }
+
+      const later = new DataDirLease(dataDir);
+      later.release();
+      assertNoLeaseDatabase(dataDir);
     } finally {
-      readback.close();
+      if (!finished(owner.child)) {
+        owner.child.kill('SIGKILL');
+        await waitForExit(owner.child, 3_000).catch(() => undefined);
+      }
+      rmSync(dataDir, { recursive: true, force: true });
     }
-  } finally {
-    lease.release();
-    rmSync(dataDir, { recursive: true, force: true });
+  },
+);
+
+test(
+  'replacing the root inode triggers the fatal lease-loss callback',
+  { timeout: 10_000 },
+  async () => {
+    const dataDir = tempDataDir();
+    let resolveLost;
+    const lost = new Promise((resolve) => { resolveLost = resolve; });
+    const lease = new DataDirLease(dataDir, { onLost: resolveLost });
+    try {
+      const rootPath = path.join(dataDir, LEASE_ROOT);
+      const bytes = readFileSync(rootPath);
+      unlinkSync(rootPath);
+      writeFileSync(rootPath, bytes, { flag: 'wx', mode: 0o600 });
+      assert.equal(
+        await Promise.race([
+          lost,
+          new Promise((_, reject) => setTimeout(
+            () => reject(new Error('DATA_DIR lease replacement was not detected')),
+            7_000,
+          )),
+        ]),
+        'DATA_DIR_LEASE_LOST',
+      );
+      assert.throws(
+        () => lease.assertHeld(),
+        (error) => error?.code === 'DATA_DIR_LEASE_LOST',
+      );
+      assertNoLeaseDatabase(dataDir);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  },
+);
+
+test('remote, corrupt, and future-dated lease records all fail closed', () => {
+  const cases = [
+    {
+      expectedCode: 'DATA_DIR_LEASE_REMOTE_HOST',
+      record: {
+        schemaVersion: 1,
+        ownerToken: 'a'.repeat(36),
+        predecessorToken: null,
+        pid: process.pid,
+        hostname: `${hostname()}-remote`,
+        acquiredAtMs: Date.now(),
+      },
+    },
+    { expectedCode: 'DATA_DIR_LEASE_BUSY', record: '{not-json' },
+    {
+      expectedCode: 'DATA_DIR_LEASE_HELD',
+      record: {
+        schemaVersion: 1,
+        ownerToken: 'b'.repeat(36),
+        predecessorToken: null,
+        pid: 2_147_483_647,
+        hostname: hostname(),
+        acquiredAtMs: Date.now() + 60_000,
+      },
+    },
+  ];
+  for (const entry of cases) {
+    const dataDir = tempDataDir();
+    try {
+      writeFileSync(
+        path.join(dataDir, LEASE_ROOT),
+        typeof entry.record === 'string' ? entry.record : `${JSON.stringify(entry.record)}\n`,
+        { flag: 'wx', mode: 0o600 },
+      );
+      assert.throws(
+        () => new DataDirLease(dataDir),
+        (error) => error?.code === entry.expectedCode,
+        entry.expectedCode,
+      );
+      assertNoLeaseDatabase(dataDir);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
   }
 });
 

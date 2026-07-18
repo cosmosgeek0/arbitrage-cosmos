@@ -71,12 +71,6 @@ const PROFILE_SITE_IDS = Object.freeze([
   'OPSITE_5EA03340B3E6E86C7930',
 ].sort());
 
-const DATA_DIR_LEASE_PATH = 'server/src/systemIntegration/persistence/dataDirLease.ts';
-const DATA_DIR_LEASE_SOURCE_SHA256 = '98ade1626bc046c8236ae4421fe97e08fc8ee108c2427f80a2db8cb43a7fe68b';
-const DATA_DIR_LEASE_SITE_IDS = Object.freeze([
-  'OPSITE_3EA8C80748CDC730E1C8',
-].sort());
-
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
   operationId: 'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
@@ -117,21 +111,11 @@ const PROFILE_RULE = Object.freeze({
   symbolPattern: '^profileRequestQueue\\.shift$',
 });
 
-const DATA_DIR_LEASE_RULE = Object.freeze({
-  ruleId: 'system-integration-data-dir-writer-lease-v1',
-  operationId: 'OP_LEDGER_SQLITE',
-  pathExact: Object.freeze([DATA_DIR_LEASE_PATH]),
-  pathPrefixes: Object.freeze([]),
-  kinds: Object.freeze([OPERATION_KINDS.DATABASE_OPEN]),
-  symbolPattern: '^new:Database$',
-});
-
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
   NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
   PROFILE_RULE,
-  DATA_DIR_LEASE_RULE,
 ]);
 
 function exactMembers(actual, expected) {
@@ -179,7 +163,6 @@ function verifyBaseUncovered(report) {
     ...TWIN_SITE_IDS,
     ...ASSESSMENT_SITE_IDS,
     ...PROFILE_SITE_IDS,
-    ...DATA_DIR_LEASE_SITE_IDS,
   ].sort();
   if (!exactMembers(observed, expected)) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
@@ -218,13 +201,6 @@ function verifyBaseUncovered(report) {
     kindSet: new Set([OPERATION_KINDS.QUEUE_CONSUME]),
     symbolSet: new Set(['profileRequestQueue.shift']),
   })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_SOURCE_DRIFT');
-  if (!exactSites(report, {
-    path: DATA_DIR_LEASE_PATH,
-    sourceSha256: DATA_DIR_LEASE_SOURCE_SHA256,
-    siteIds: DATA_DIR_LEASE_SITE_IDS,
-    kindSet: new Set([OPERATION_KINDS.DATABASE_OPEN]),
-    symbolSet: new Set(['new:Database']),
-  })) throw new Error('I00_OPERATION_OVERLAY_DATA_DIR_LEASE_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
@@ -270,15 +246,6 @@ function verifyIntegratedMappings(report) {
     operationId: PROFILE_RULE.operationId,
     mappingRuleId: PROFILE_RULE.ruleId,
   })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_MAPPING_DRIFT');
-  if (!exactSites(report, {
-    path: DATA_DIR_LEASE_PATH,
-    sourceSha256: DATA_DIR_LEASE_SOURCE_SHA256,
-    siteIds: DATA_DIR_LEASE_SITE_IDS,
-    kindSet: new Set([OPERATION_KINDS.DATABASE_OPEN]),
-    symbolSet: new Set(['new:Database']),
-    operationId: DATA_DIR_LEASE_RULE.operationId,
-    mappingRuleId: DATA_DIR_LEASE_RULE.ruleId,
-  })) throw new Error('I00_OPERATION_OVERLAY_DATA_DIR_LEASE_MAPPING_DRIFT');
   if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
     throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
   }

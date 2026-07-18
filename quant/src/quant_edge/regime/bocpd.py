@@ -204,7 +204,7 @@ class BocpdDetector:
     def update(self, observation: ObservationV1) -> BocpdStepV1:
         if not isinstance(observation, ObservationV1):
             raise ContractValueError("observation must be ObservationV1")
-        self.__guard.check(observation.ordinal)
+        self.__guard.check(observation.ordinal, observation.event_time_ns)
         disposition = observation.disposition
         if disposition is InputDisposition.SUPPRESS:
             return self.__step(observation, status=StepStatus.SUPPRESSED)

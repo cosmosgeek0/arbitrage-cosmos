@@ -179,14 +179,16 @@ class TestObservationSeries:
 class TestOrdinalGuard:
     def test_accepts_increasing_and_rejects_replay(self) -> None:
         guard = OrdinalGuard()
-        guard.check(1)
-        guard.check(5)
+        guard.check(1, BASE_NS)
+        guard.check(5, BASE_NS)
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
-            guard.check(5)
+            guard.check(5, BASE_NS + SECOND_NS)
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            guard.check(6, BASE_NS - SECOND_NS)
 
     def test_rejects_invalid_ordinal(self) -> None:
         with pytest.raises(ContractValueError, match="ordinal"):
-            OrdinalGuard().check(-1)
+            OrdinalGuard().check(-1, BASE_NS)
 
 
 class TestNormalizeToScale:

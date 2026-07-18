@@ -24,9 +24,12 @@ def _observation(
     index: int,
     hundredths: int,
     quality: QualityState = QualityState.SYNTHETIC,
+    *,
+    event_time_index: int | None = None,
 ) -> ObservationV1:
     return ObservationV1(
-        event_time_ns=BASE_NS + index * SECOND_NS,
+        event_time_ns=BASE_NS
+        + (index if event_time_index is None else event_time_index) * SECOND_NS,
         ordinal=index,
         value=FixedPointV1(hundredths * HUNDREDTH),
         quality=quality,
@@ -373,6 +376,8 @@ class TestBocpdBehavior:
         detector.update(_observation(0, 1_000))
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
             detector.update(_observation(0, 1_000))
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            detector.update(_observation(1, 1_000, event_time_index=-1))
 
     def test_alphabet_warmup_reports_warmup_steps(self) -> None:
         detector = BocpdDetector(_bocpd_config(window=3))

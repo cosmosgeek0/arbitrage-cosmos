@@ -22,9 +22,12 @@ def _observation(
     index: int,
     hundredths: int,
     quality: QualityState = QualityState.SYNTHETIC,
+    *,
+    event_time_index: int | None = None,
 ) -> ObservationV1:
     return ObservationV1(
-        event_time_ns=BASE_NS + index * SECOND_NS,
+        event_time_ns=BASE_NS
+        + (index if event_time_index is None else event_time_index) * SECOND_NS,
         ordinal=index,
         value=FixedPointV1(hundredths * HUNDREDTH),
         quality=quality,
@@ -232,6 +235,8 @@ class TestCusumBehavior:
         detector.update(_observation(1, 1_000))
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
             detector.update(_observation(1, 1_000))
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            detector.update(_observation(2, 1_000, event_time_index=0))
 
     def test_in_control_series_never_alarms(self) -> None:
         detector = _cusum()
@@ -446,6 +451,8 @@ class TestPageHinkleyBehavior:
         detector.update(_observation(2, 1_000))
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
             detector.update(_observation(2, 1_000))
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            detector.update(_observation(3, 1_000, event_time_index=1))
 
     def test_warmup_suppresses_alarm_authority(self) -> None:
         detector = _page_hinkley(warmup=8)

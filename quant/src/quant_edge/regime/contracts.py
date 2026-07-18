@@ -149,18 +149,23 @@ class ObservationSeriesV1:
 
 
 class OrdinalGuard:
-    """Rejects out-of-order streaming input instead of silently reordering it."""
+    """Rejects ordinal replay and event-time reversal in streaming input."""
 
-    __slots__ = ("__last",)
+    __slots__ = ("__last_event_time_ns", "__last_ordinal")
 
     def __init__(self) -> None:
-        self.__last: int | None = None
+        self.__last_ordinal: int | None = None
+        self.__last_event_time_ns: int | None = None
 
-    def check(self, ordinal: int) -> None:
+    def check(self, ordinal: int, event_time_ns: int) -> None:
         require_strict_int(ordinal, field="ordinal", minimum=0)
-        if self.__last is not None and ordinal <= self.__last:
+        _require_ns(event_time_ns, field="event_time_ns")
+        if self.__last_ordinal is not None and ordinal <= self.__last_ordinal:
             raise ContractValueError("streaming observations must be ordinal-ordered")
-        self.__last = ordinal
+        if self.__last_event_time_ns is not None and event_time_ns < self.__last_event_time_ns:
+            raise ContractValueError("streaming observations must be event-time-ordered")
+        self.__last_ordinal = ordinal
+        self.__last_event_time_ns = event_time_ns
 
 
 def normalize_to_scale(

@@ -5,8 +5,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { CapitalPanel } from '../../src/features/systemDashboard/components/CapitalPanel.tsx';
 import { ExposureBanner } from '../../src/features/systemDashboard/components/PostureStrip.tsx';
+import { RiskExecutionPanel } from '../../src/features/systemDashboard/components/RiskExecutionPanel.tsx';
 import { fixtureById } from '../../src/features/systemDashboard/fixtures/index.ts';
-import { exposureVerdict } from '../../src/features/systemDashboard/lib/presentation.ts';
+import {
+  exposureVerdict,
+  reconciliationVerdict,
+} from '../../src/features/systemDashboard/lib/presentation.ts';
 
 globalThis.React = React;
 
@@ -40,4 +44,30 @@ test('unknown exposure never becomes no exposure, hidden truth, or a zero count'
   assert.match(activeMarkup, /Capital Exposed · 125.00/);
   assert.match(activeMarkup, /UNKNOWN active exposures/);
   assert.doesNotMatch(activeMarkup, /0 active exposures/);
+});
+
+test('reconciliation is clear only when current available evidence explicitly converged', () => {
+  const now = 1_800_000_000_000;
+  const warming = fixtureById('warming').build(now);
+  assert.equal(reconciliationVerdict(warming), 'UNKNOWN');
+  const warmingMarkup = renderToStaticMarkup(
+    React.createElement(RiskExecutionPanel, { snapshot: warming, nowMs: now, onTrace: () => {} }),
+  );
+  assert.match(warmingMarkup, /RECONCILIATION UNKNOWN/);
+  assert.doesNotMatch(warmingMarkup, />CLEAR</);
+
+  const healthy = fixtureById('healthy').build(now);
+  assert.equal(reconciliationVerdict(healthy), 'CLEAR');
+  const healthyMarkup = renderToStaticMarkup(
+    React.createElement(RiskExecutionPanel, { snapshot: healthy, nowMs: now, onTrace: () => {} }),
+  );
+  assert.match(healthyMarkup, />CLEAR</);
+
+  const stale = {
+    ...healthy,
+    components: healthy.components.map((component) => component.componentId === 'reconciliation'
+      ? { ...component, freshness: { state: 'STALE', ageMs: 120_000, evaluatedAt: now } }
+      : component),
+  };
+  assert.equal(reconciliationVerdict(stale), 'UNKNOWN');
 });

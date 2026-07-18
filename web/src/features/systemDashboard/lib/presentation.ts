@@ -143,6 +143,33 @@ export function freshnessText(verdict: FreshnessVerdict): string {
   return `${verdict.kind} · ${millisecondsText(verdict.ageMs)}`;
 }
 
+export type ReconciliationVerdict = 'BLOCKED' | 'CLEAR' | 'UNKNOWN';
+
+/** A false blocking flag is not proof of convergence. Green requires the
+ *  matching component to be current and complete plus an exact evaluated
+ *  CONVERGED summary on available truth. */
+export function reconciliationVerdict(
+  snapshot: SystemSupervisorSnapshot,
+): ReconciliationVerdict {
+  const reconciliation = snapshot.summaries.reconciliation;
+  if (reconciliation.blocksNewExposure) return 'BLOCKED';
+  const component = snapshot.components.find(({ componentId }) => componentId === 'reconciliation');
+  const evaluatedAtMs = reconciliation.evaluatedAtMs;
+  const evaluated = evaluatedAtMs !== null
+    && Number.isFinite(evaluatedAtMs)
+    && evaluatedAtMs > 0
+    && evaluatedAtMs <= snapshot.evaluatedAtMs;
+  const available = reconciliation.truthLabel !== 'UNAVAILABLE'
+    && reconciliation.truthLabel !== 'UNKNOWN';
+  const current = component !== undefined
+    && component.readiness === 'READY'
+    && component.completeness === 'COMPLETE'
+    && freshnessOf(component).kind === 'FRESH';
+  return reconciliation.status === 'CONVERGED' && evaluated && available && current
+    ? 'CLEAR'
+    : 'UNKNOWN';
+}
+
 // ---------------------------------------------------------------------------
 // Tones.
 // ---------------------------------------------------------------------------

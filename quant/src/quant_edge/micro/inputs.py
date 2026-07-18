@@ -42,7 +42,12 @@ def _require_posture(value: object) -> EvidencePosture:
 
 @dataclass(frozen=True, slots=True)
 class TopOfBookPointV1:
-    """One L1 observation with sizes (Binance bookTicker shape); never crossed."""
+    """One L1 observation with sizes (Binance bookTicker shape); never crossed.
+
+    ``ordinal`` is the global receive order shared with trade evidence whenever
+    quote and trade streams are joined. It breaks equal-event-time ties without
+    consulting future arrivals.
+    """
 
     event_time_ns: int
     ordinal: int
@@ -86,7 +91,11 @@ class TopOfBookPointV1:
 
 @dataclass(frozen=True, slots=True)
 class TradePointV1:
-    """One maker-flagged trade (aggTrades shape); taker buy means not buyer-maker."""
+    """One maker-flagged trade (aggTrades shape); taker buy means not buyer-maker.
+
+    ``ordinal`` is the global receive order shared with quote evidence whenever
+    quote and trade streams are joined.
+    """
 
     event_time_ns: int
     ordinal: int
@@ -273,7 +282,12 @@ def join_trades_with_quotes(
     trades: TradeSeriesV1,
     quotes: TopOfBookSeriesV1,
 ) -> tuple[JoinedTradeV1, ...]:
-    """Deterministic as-of join: each trade gets the last quote at or before it."""
+    """Join on ``(event_time_ns, global_receive_ordinal)`` without lookahead.
+
+    A quote must strictly precede a trade on that key. Exact cross-stream ties
+    are ambiguous and therefore fail closed by retaining the last strictly
+    preceding quote.
+    """
 
     if not isinstance(trades, TradeSeriesV1):
         raise ContractValueError("trades must be TradeSeriesV1")
@@ -285,9 +299,14 @@ def join_trades_with_quotes(
     quote_cursor = 0
     current: TopOfBookPointV1 | None = None
     for trade in trades.trades:
+        trade_key = (trade.event_time_ns, trade.ordinal)
         while (
             quote_cursor < len(quotes.points)
-            and quotes.points[quote_cursor].event_time_ns <= trade.event_time_ns
+            and (
+                quotes.points[quote_cursor].event_time_ns,
+                quotes.points[quote_cursor].ordinal,
+            )
+            < trade_key
         ):
             current = quotes.points[quote_cursor]
             quote_cursor += 1

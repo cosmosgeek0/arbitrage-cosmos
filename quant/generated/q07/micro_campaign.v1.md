@@ -51,7 +51,7 @@ valuable; cards are machinery contracts with streaming/batch equivalence law.
 ## Campaign evidence (synthetic only)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `d8308437461b8d6aebd3814ef91044208255f34290ff9d260b167b21723f4ce3`
+- Golden fixture SHA-256: `6b5ad2e2b43b3574240ae649eaede07962cb67963359b5df2ab685022acd580c`
 - Disposition table SHA-256: `a47b5212f68cf0b07c2374b5b041fac23582b3013ba164fa7237d0be9d78a892`
 - Seeded scenarios: 10, all equivalence reports passed
 - Max update ops by feature: `absorption_ratio:v1`=16, `amihud_illiquidity:v1`=16, `band_flow:v1`=5, `book_slope_imbalance:v1`=10, `cumulative_band_imbalance:v1`=5, `depth_resiliency:v1`=8, `effective_spread:v1`=1, `kyle_slope:v1`=16, `l1_queue_imbalance:v1`=1, `microprice_displacement:v1`=1, `ofi_l1:v1`=1, `signed_trade_imbalance:v1`=1, `size_concentration_hhi:v1`=1, `trade_dispersion:v1`=16, `trade_intensity:v1`=1, `vwap_spread_at_size:v1`=12

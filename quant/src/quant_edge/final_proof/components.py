@@ -38,12 +38,8 @@ _Q16_RB13_IMPLEMENTATION_STATE: Final = _POST_ACCEPTANCE_IMPLEMENTATION_STATE
 _Q16_HISTORICAL_SERVICE_SHA256: Final = (
     "9531d45a513d28c08945adffbb51f149dc3e27afbc897f09bf66d660bf43f59f"
 )
-_MONEY_TRUTH_DIRECTOR_INTEGRATION_COMMIT: Final = (
-    "5f887cf27ce246d80b7fc553eed470b015976963"
-)
-_MONEY_TRUTH_DIRECTOR_INTEGRATION_TREE: Final = (
-    "813a383df420e318dc97522c860d6b1e6b99aab4"
-)
+_MONEY_TRUTH_DIRECTOR_INTEGRATION_COMMIT: Final = "5f887cf27ce246d80b7fc553eed470b015976963"
+_MONEY_TRUTH_DIRECTOR_INTEGRATION_TREE: Final = "813a383df420e318dc97522c860d6b1e6b99aab4"
 _MONEY_TRUTH_FIX_TIP_COMMIT: Final = "039c3866619c3e3af9533c651284af32a7bc114d"
 _MONEY_TRUTH_FIX_TIP_TREE: Final = "6724c8fa53fb74df5ef840d37ca3de8364b7c64f"
 _F034_COMMIT: Final = "19f674a35944f1f3fdd4fdafd396fba9df6fd255"
@@ -1170,9 +1166,7 @@ def _phase_specs() -> tuple[_PhaseSpec, ...]:
         if phase == "Q15":
             limitations.append("MODEL_PAYLOAD_UNAVAILABLE_NONLOADABLE")
         if phase in _POST_ACCEPTANCE_CORRECTIONS:
-            limitations.append(
-                f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_{phase}_RECEIPTS"
-            )
+            limitations.append(f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_{phase}_RECEIPTS")
         if phase == "Q16":
             limitations.extend(
                 (

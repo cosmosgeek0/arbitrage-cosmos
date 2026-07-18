@@ -176,13 +176,12 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
         assert correction["historicalReceipts"] == "DOES_NOT_ATTEST_CORRECTED_BYTES"
         assert correction["implementationCommit"] == components.PENDING
         assert correction["implementationTree"] == components.PENDING
-        assert correction["verificationState"] == (
-            "PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION"
-        )
+        assert correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
         assert source_root["sha256"] == expected["historicalSourceSha256"]
         assert evidence_refs[2]["sha256"] == expected["historicalPrimarySha256"]
-        assert correction["historicalAcceptedPrimaryEvidenceSha256"] == (
-            expected["historicalPrimarySha256"]
+        assert (
+            correction["historicalAcceptedPrimaryEvidenceSha256"]
+            == (expected["historicalPrimarySha256"])
         )
         assert current_source["sha256"] == expected["currentSourceSha256"]
         assert current_primary["sha256"] == expected["currentPrimarySha256"]

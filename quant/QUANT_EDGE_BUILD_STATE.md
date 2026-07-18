@@ -81,18 +81,18 @@ uncertainty and advisory-only local inference.
   universe/watch-452 p50 `3,711,352,291 ns`, child peak RSS `58,949,632`
   bytes. These are fresh pending measurements, not historical A17 measurements.
 - Current combined-correction benchmark observation: warm-single p50
-  `135,971,209 ns`, focus-25 p50 `225,012,416 ns`, candidate-128 p50
-  `999,110,000 ns`, universe/watch-452 p50 `3,669,570,459 ns`, child peak RSS
-  `68,042,752` bytes. These are fresh pending measurements, not historical A17
+  `139,616,417 ns`, focus-25 p50 `231,062,000 ns`, candidate-128 p50
+  `1,021,433,167 ns`, universe/watch-452 p50 `3,742,542,708 ns`, child peak RSS
+  `67,387,392` bytes. These are fresh pending measurements, not historical A17
   measurements.
 - Current generated Q17 SHA-256 values: benchmark
-  `c69ab2d9e9ad19ff9a8404461bfdb8cca20f5203a8aaeb1a34879a93a61cd587`;
+  `e46b4363c887b6d932fdd82872608e52b5d5add8d688cb9d52c4d027152a956b`;
   component manifest
   `b773e8e7269c4bfb417f03c0fab84a82a39b643c031a633431525a84c9f30356`;
   security scope
-  `c4a126b4d3ccbdc8758d8182654935acb6105ab99506e43f6a977e0507c5f394`;
+  `46977f02aed24dc971f3318529b78d87dd31500cb669cdaa3fd92222dbb473e3`;
   self-excluding artifact manifest
-  `1bc912ac36193b17c803abf137cdbc692c366ece6cf1c9954ceeea97cfe9e4ce`.
+  `98faf051e3545991f93dcf608305a78baeb609f43a531333b53f09698ae7971f`.
   The last digest is mutable pending-correction evidence, not an acceptance seal.
 - Historical directive-input lock acceptance remains
   `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`

@@ -79,6 +79,9 @@ export interface MarketLiquidationProjectionPort {
   ingestPrint(print: Readonly<CanonicalMarketLiquidationPrint>): void;
 }
 
+export type MarketPublicSourceId = 'public-spot-source' | 'public-usdm-source';
+export type MarketPublicSourceLifecycle = 'LIVE' | 'WARMING' | 'DEGRADED' | 'ISOLATED' | 'FAILED' | 'STOPPED';
+
 const SPARK_CAP = 150; // sampled every 20s ≈ last 50 minutes
 const SPARK_MS = 20_000;
 const OI_SLICE_SIZE = 28;
@@ -122,7 +125,12 @@ export class MarketEngine {
   private spotUpdatedAt = new Map<string, number>();
   private markUpdatedAt = new Map<string, number>();
   private liquidationUpdatedAt = new Map<string, number>();
-  private streams: BinanceStream[] = [];
+  private streams = new Map<string, BinanceStream>();
+  private isolatedSources = new Set<MarketPublicSourceId>();
+  private sourceControlGenerations: Record<MarketPublicSourceId, number> = {
+    'public-spot-source': 0,
+    'public-usdm-source': 0,
+  };
   private sampler: NodeJS.Timeout | null = null;
   private oiTimer: NodeJS.Timeout | null = null;
   private oiCursor = 0;
@@ -241,14 +249,21 @@ export class MarketEngine {
       onStatus
     );
 
-    this.streams = [spotStream, markStream, liquidationStream];
+    this.streams = new Map([
+      [spotStream.name, spotStream],
+      [markStream.name, markStream],
+      [liquidationStream.name, liquidationStream],
+    ]);
     try {
       this.liquidationProjection?.start();
-      for (const stream of this.streams) stream.start();
+      for (const [name, stream] of this.streams) {
+        const sourceId = name === 'spot-miniticker' ? 'public-spot-source' : 'public-usdm-source';
+        if (!this.isolatedSources.has(sourceId)) stream.start();
+      }
     } catch (error) {
-      for (const stream of this.streams) stream.stop();
+      for (const stream of this.streams.values()) stream.stop();
       this.liquidationProjection?.stop();
-      this.streams = [];
+      this.streams.clear();
       this.running = false;
       ++this.generation;
       throw error;
@@ -291,14 +306,62 @@ export class MarketEngine {
     if (!this.running) return;
     this.running = false;
     ++this.generation;
-    for (const s of this.streams) s.stop();
-    this.streams = [];
+    for (const s of this.streams.values()) s.stop();
+    this.streams.clear();
     this.liquidationProjection?.stop();
     if (this.sampler) clearInterval(this.sampler);
     if (this.oiTimer) clearInterval(this.oiTimer);
     this.sampler = null;
     this.oiTimer = null;
     this.oiBusy = false;
+  }
+
+  private sourceStreamNames(sourceId: MarketPublicSourceId): readonly string[] {
+    return sourceId === 'public-spot-source'
+      ? Object.freeze(['spot-miniticker'])
+      : Object.freeze(['futures-markprice', 'futures-liquidations']);
+  }
+
+  readPublicSourceControl(sourceId: MarketPublicSourceId): Readonly<{
+    lifecycle: MarketPublicSourceLifecycle;
+    generation: number;
+  }> {
+    if (sourceId !== 'public-spot-source' && sourceId !== 'public-usdm-source') {
+      throw new TypeError('public source control target is invalid');
+    }
+    if (this.isolatedSources.has(sourceId)) {
+      return Object.freeze({ lifecycle: 'ISOLATED' as const, generation: this.sourceControlGenerations[sourceId] });
+    }
+    if (!this.running) return Object.freeze({ lifecycle: 'STOPPED' as const, generation: this.sourceControlGenerations[sourceId] });
+    const statuses = this.sourceStreamNames(sourceId).map((name) => this.feeds[name] ?? 'closed');
+    const lifecycle: MarketPublicSourceLifecycle = statuses.every((status) => status === 'open')
+      ? 'LIVE'
+      : statuses.some((status) => status === 'exhausted')
+        ? 'FAILED'
+        : statuses.some((status) => status === 'connecting')
+          ? 'WARMING'
+          : 'DEGRADED';
+    return Object.freeze({ lifecycle, generation: this.sourceControlGenerations[sourceId] });
+  }
+
+  isolatePublicSource(sourceId: MarketPublicSourceId): void {
+    if (!this.running) throw new Error('PUBLIC_SOURCE_RUNTIME_NOT_RUNNING');
+    if (this.isolatedSources.has(sourceId)) return;
+    const streams = this.sourceStreamNames(sourceId).map((name) => this.streams.get(name));
+    if (streams.some((stream) => stream === undefined)) throw new Error('PUBLIC_SOURCE_STREAM_NOT_CONFIGURED');
+    for (const stream of streams) stream?.stop();
+    this.isolatedSources.add(sourceId);
+    this.sourceControlGenerations[sourceId] += 1;
+  }
+
+  restartPublicSource(sourceId: MarketPublicSourceId): void {
+    if (!this.running) throw new Error('PUBLIC_SOURCE_RUNTIME_NOT_RUNNING');
+    if (!this.isolatedSources.has(sourceId)) throw new Error('PUBLIC_SOURCE_NOT_ISOLATED');
+    const streams = this.sourceStreamNames(sourceId).map((name) => this.streams.get(name));
+    if (streams.some((stream) => stream === undefined)) throw new Error('PUBLIC_SOURCE_STREAM_NOT_CONFIGURED');
+    this.isolatedSources.delete(sourceId);
+    this.sourceControlGenerations[sourceId] += 1;
+    for (const stream of streams) stream?.start();
   }
 
   private assertPublicSourceStartupEgressAdmitted(): void {

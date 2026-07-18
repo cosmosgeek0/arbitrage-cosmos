@@ -8,9 +8,9 @@ import { installEgressTripwire } from '../fixtures/egress-tripwire.mjs';
 
 const SOURCE_ROOT = path.resolve('server/src/systemIntegration');
 const DIST_ROOT = path.resolve('server/dist/systemIntegration');
-const CLIENT_CONVERGENCE_FILES = Object.freeze([
+const CLIENT_INTEGRATION_BOUNDARY_FILES = Object.freeze([
   path.resolve('web/src/lib/systemIntegration.ts'),
-  path.resolve('web/src/components/SystemIntegrationSurface.tsx'),
+  path.resolve('web/src/features/productControlRoom/components/SurfaceBindingPanel.tsx'),
 ]);
 
 const FORBIDDEN_NODE_MODULES = new Set([
@@ -490,9 +490,9 @@ test('blocked execution modes fail closed without reaching transport, venue subm
   }
 });
 
-test('client convergence boundary contains no credential fields or legacy live-execution endpoint', () => {
+test('client integration boundary contains no credential fields or legacy live-execution endpoint', () => {
   const violations = [];
-  for (const file of CLIENT_CONVERGENCE_FILES) {
+  for (const file of CLIENT_INTEGRATION_BOUNDARY_FILES) {
     const { tree } = parse(file);
     walk(tree, (node) => {
       if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) {

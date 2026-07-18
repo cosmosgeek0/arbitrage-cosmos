@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+
+// Header contains module-level JSX. Vite supplies the JSX runtime in
+// production; this shim lets Node import its pure liveness projection.
+globalThis.React = { createElement: (...args) => args };
+
+const { projectMarketConsumerTruth } = await import('../../src/components/Header.tsx');
+
+test('retained and unavailable market projections cannot present as current', () => {
+  assert.deepEqual(projectMarketConsumerTruth({
+    status: 'LOADING',
+    lastSuccessAtMs: null,
+    sourceUpdatedAtMs: null,
+    nowMs: 10_000,
+  }), {
+    label: 'LOADING',
+    evidenceAtMs: null,
+    evidenceAgeMs: null,
+    factsAvailable: false,
+    retained: false,
+  });
+
+  assert.deepEqual(projectMarketConsumerTruth({
+    status: 'CURRENT',
+    lastSuccessAtMs: 9_000,
+    sourceUpdatedAtMs: 8_000,
+    nowMs: 10_000,
+  }), {
+    label: 'CURRENT',
+    evidenceAtMs: 8_000,
+    evidenceAgeMs: 2_000,
+    factsAvailable: true,
+    retained: false,
+  });
+
+  assert.deepEqual(projectMarketConsumerTruth({
+    status: 'STALE',
+    lastSuccessAtMs: 9_000,
+    sourceUpdatedAtMs: 8_000,
+    nowMs: 10_000,
+  }), {
+    label: 'STALE LAST-KNOWN',
+    evidenceAtMs: 8_000,
+    evidenceAgeMs: 2_000,
+    factsAvailable: true,
+    retained: true,
+  });
+
+  assert.deepEqual(projectMarketConsumerTruth({
+    status: 'UNAVAILABLE',
+    lastSuccessAtMs: null,
+    sourceUpdatedAtMs: null,
+    nowMs: 10_000,
+  }), {
+    label: 'UNAVAILABLE',
+    evidenceAtMs: null,
+    evidenceAgeMs: null,
+    factsAvailable: false,
+    retained: false,
+  });
+
+  assert.equal(
+    projectMarketConsumerTruth({
+      status: 'CURRENT',
+      lastSuccessAtMs: null,
+      sourceUpdatedAtMs: 8_000,
+      nowMs: 10_000,
+    }).label,
+    'UNAVAILABLE',
+    'a contradictory current status without a successful read must fail closed',
+  );
+});
+
+test('Opportunities and global search consume the shared market liveness projection', async () => {
+  const opportunities = await readFile(new URL('../../src/pages/Opportunities.tsx', import.meta.url), 'utf8');
+  const header = await readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8');
+
+  assert.match(opportunities, /marketStatus/);
+  assert.match(opportunities, /marketsLastSuccessAtMs/);
+  assert.match(opportunities, /projectMarketConsumerTruth/);
+  assert.match(opportunities, /STALE LAST-KNOWN/);
+  assert.match(header, /marketTruth\.factsAvailable/);
+  assert.match(header, /STALE LAST-KNOWN/);
+});

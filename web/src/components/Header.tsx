@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { resolveFxRate, useStore, useResolvedTheme, type Page } from '../store';
+import {
+  resolveFxRate,
+  useStore,
+  useResolvedTheme,
+  type CompatibilityStateStatus,
+  type Page,
+} from '../store';
 import type { LedgerEvent, MarketRow } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
@@ -457,8 +463,66 @@ interface SearchEntry {
   fundingRate?: number | null;
   keywords: string;
   kind?: 'token' | 'perp' | 'page' | 'setting';
+  marketTruth?: MarketConsumerTruth;
 }
 type SearchTab = 'top' | 'crypto' | 'perps' | 'settings';
+
+export type MarketConsumerTruth = Readonly<{
+  label: 'CURRENT' | 'STALE LAST-KNOWN' | 'UNAVAILABLE' | 'LOADING';
+  evidenceAtMs: number | null;
+  evidenceAgeMs: number | null;
+  factsAvailable: boolean;
+  retained: boolean;
+}>;
+
+function validMarketTimestamp(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Translate canonical market-read liveness into the only presentation states
+ * consumers may assert. A source timestamp cannot make rows current without a
+ * successful read, and retained rows remain explicitly stale.
+ */
+export function projectMarketConsumerTruth(input: Readonly<{
+  status: CompatibilityStateStatus;
+  lastSuccessAtMs: number | null;
+  sourceUpdatedAtMs: number | null;
+  nowMs: number;
+}>): MarketConsumerTruth {
+  const lastSuccessAtMs = validMarketTimestamp(input.lastSuccessAtMs);
+  if (input.status === 'LOADING') {
+    return Object.freeze({
+      label: 'LOADING',
+      evidenceAtMs: null,
+      evidenceAgeMs: null,
+      factsAvailable: false,
+      retained: false,
+    });
+  }
+  if (input.status === 'UNAVAILABLE' || lastSuccessAtMs === null) {
+    return Object.freeze({
+      label: 'UNAVAILABLE',
+      evidenceAtMs: null,
+      evidenceAgeMs: null,
+      factsAvailable: false,
+      retained: false,
+    });
+  }
+
+  const evidenceAtMs = validMarketTimestamp(input.sourceUpdatedAtMs) ?? lastSuccessAtMs;
+  const evidenceAgeMs = Number.isFinite(input.nowMs) && input.nowMs >= evidenceAtMs
+    ? input.nowMs - evidenceAtMs
+    : null;
+  const retained = input.status === 'STALE';
+  return Object.freeze({
+    label: retained ? 'STALE LAST-KNOWN' : 'CURRENT',
+    evidenceAtMs,
+    evidenceAgeMs,
+    factsAvailable: true,
+    retained,
+  });
+}
 
 type PerpetualSearchMarket = Pick<
   MarketRow,
@@ -537,13 +601,27 @@ function buildIndex(): SearchEntry[] {
   return out;
 }
 function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }) {
-  const { setPage, setPaletteOpen, markets, openDetail } = useStore();
+  const {
+    setPage,
+    setPaletteOpen,
+    markets,
+    marketStatus,
+    marketsLastSuccessAtMs,
+    marketsUpdatedAt,
+    openDetail,
+  } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const [tab, setTab] = useState<SearchTab>('top');
   const [focused, setFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const isTopbar = placement === 'topbar';
+  const marketTruth = useMemo(() => projectMarketConsumerTruth({
+    status: marketStatus,
+    lastSuccessAtMs: marketsLastSuccessAtMs,
+    sourceUpdatedAtMs: marketsUpdatedAt,
+    nowMs: Date.now(),
+  }), [marketStatus, marketsLastSuccessAtMs, marketsUpdatedAt]);
   // Global index: nav/settings/actions PLUS every tradable token, so typing any
   // letter finds tokens across the whole app (not just the menu).
   const index = useMemo(() => {
@@ -553,14 +631,17 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
       hint: `${m.symbol} · Crypto`,
       symbol: m.symbol,
       base: m.base,
-      spot: m.spot,
-      volume: m.quoteVolume24h,
-      changePct: m.change24hPct,
+      spot: marketTruth.factsAvailable ? m.spot : null,
+      volume: marketTruth.factsAvailable ? m.quoteVolume24h : null,
+      changePct: marketTruth.factsAvailable ? m.change24hPct : null,
       kind: 'token' as const,
+      marketTruth,
       keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
     }));
     const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
-      const facts = projectPerpetualSearchFacts(m);
+      const facts = marketTruth.factsAvailable
+        ? projectPerpetualSearchFacts(m)
+        : { perpMark: null, volume: null, changePct: null, fundingRate: null };
       return {
         label: `${m.base} Perpetual`,
         hint: `${m.symbol} · Perpetual`,
@@ -568,11 +649,12 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
         base: m.base,
         ...facts,
         kind: 'perp' as const,
+        marketTruth,
         keywords: `${m.base} ${m.symbol} perp perpetual futures funding`.toLowerCase(),
       };
     });
     return [...pages, ...tokens, ...perps];
-  }, [markets]);
+  }, [markets, marketTruth]);
   // Close on outside click even when the query is empty. The panel opens on
   // focus, so tying outside-close only to `q` leaves an empty focused search
   // stuck open.
@@ -642,6 +724,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   }), [results]);
 
   const go = (e: SearchEntry) => {
+    if (e.symbol && e.marketTruth && !e.marketTruth.factsAvailable) return;
     if (e.symbol) openDetail(e.symbol);
     else if (e.overlay) openOverlay(e.overlay);
     else if (e.page) setPage(e.page);
@@ -652,14 +735,26 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   const renderRow = (r: SearchEntry, i: number) => {
     const isMarket = r.kind === 'token' || r.kind === 'perp';
     const change = r.changePct ?? null;
+    const marketTruthNote = r.marketTruth
+      ? `${r.marketTruth.label}${r.marketTruth.evidenceAtMs === null ? '' : ` · Updated ${timeAgo(r.marketTruth.evidenceAtMs)}`}`
+      : null;
     return (
-      <button key={`${r.kind}-${r.label}-${r.symbol ?? r.page ?? i}`} className={`ssr-row ${i === sel ? 'sel' : ''} ${isMarket ? 'market' : 'command'}`} onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); go(r); }}>
+      <button
+        key={`${r.kind}-${r.label}-${r.symbol ?? r.page ?? i}`}
+        className={`ssr-row ${i === sel ? 'sel' : ''} ${isMarket ? 'market' : 'command'}`}
+        disabled={Boolean(isMarket && r.marketTruth && !r.marketTruth.factsAvailable)}
+        onMouseEnter={() => setSel(i)}
+        onMouseDown={(e) => { e.preventDefault(); go(r); }}
+      >
         {isMarket ? (
           <>
             <TokenIcon symbol={r.symbol ?? r.base ?? r.label} size={34} />
             <span className="ssr-asset">
               <span className="ssr-label">{r.label}</span>
-              <span className="ssr-hint">{r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}</span>
+              <span className="ssr-hint">
+                {r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}
+                {marketTruthNote ? ` · ${marketTruthNote}` : ''}
+              </span>
             </span>
             <span className="ssr-mid">
               <b>{r.kind === 'perp' && r.volume == null ? 'UNKNOWN vol' : `${compactMoney(r.volume)} vol`}</b>

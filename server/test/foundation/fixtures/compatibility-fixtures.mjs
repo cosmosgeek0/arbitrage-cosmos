@@ -413,6 +413,7 @@ export function allowedRiskInput(plan, canonicalProposal, overrides = {}) {
   const intentDigest = deriveRiskIntentDigest(intent);
   const input = {
     nowMs,
+    correlationId: plan.correlationId,
     intent,
     proposal: {
       proposalId: intent.proposalRef,

@@ -153,9 +153,20 @@ export interface SystemSupervisorSummaries {
   };
   risk: {
     truthLabel: SystemTruthLabel;
-    latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE';
+    latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
     latestVerdictAtMs: number | null;
     latestVerdictId: string | null;
+    correlationId: string | null;
+    maxAllowedSize: string | null;
+    requiredConfirmation: boolean | null;
+    decisiveInputSnapshot: Array<{
+      code: string;
+      status: 'PASS' | 'FAIL' | 'UNKNOWN';
+      detail: string;
+      observed: string | null;
+      limit: string | null;
+      evidenceTimestamp: number | null;
+    }>;
     rejectionCount: number | null;
     reasonCodes: string[];
   };

@@ -46,6 +46,7 @@ const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
 const LEDGER_EVENT_KIND = /^[a-z0-9_.-]{1,64}$/;
 const SYSTEM_INTEGRATION_EVENT_KIND = 'system.integration.trace';
 const SYSTEM_INTEGRATION_AUDIT_SCHEMA = 'cosmos.system-integration.audit';
+const SYSTEM_RISK_DECISION_AUDIT_SCHEMA = 'cosmos.foundation.risk-verdict.audit.v1';
 const SYSTEM_INTEGRATION_AUDIT_KINDS = new Set([
   'STARTUP',
   'TRANSITION',
@@ -3424,6 +3425,7 @@ function prepareProductOperatorEvent(
   persistedAtMs: number,
 ): Readonly<PreparedProductOperatorEvent> | null {
   if (kind !== SYSTEM_INTEGRATION_EVENT_KIND || !plainLedgerRecord(data)) return null;
+  const hasRiskDecision = Object.hasOwn(data, 'riskDecision');
   if (!exactLedgerFields(data, [
     'schema',
     'version',
@@ -3433,6 +3435,7 @@ function prepareProductOperatorEvent(
     'checkpointRevision',
     'checkpointChecksum',
     'trace',
+    ...(hasRiskDecision ? ['riskDecision'] : []),
   ])) return null;
   if (data.schema !== SYSTEM_INTEGRATION_AUDIT_SCHEMA
     || data.version !== 1
@@ -3452,6 +3455,20 @@ function prepareProductOperatorEvent(
     || source.persistedAtMs !== null
     || data.correlationId !== source.correlationId
     || data.occurredAtMs !== source.occurredAtMs) return null;
+  if (hasRiskDecision) {
+    const riskDecision = data.riskDecision;
+    if (source.kind !== 'RISK'
+      || !plainLedgerRecord(riskDecision)
+      || !exactLedgerFields(riskDecision, ['schema', 'recordId', 'verdict'])
+      || riskDecision.schema !== SYSTEM_RISK_DECISION_AUDIT_SCHEMA
+      || typeof riskDecision.recordId !== 'string'
+      || !PRODUCT_IDENTIFIER.test(riskDecision.recordId)
+      || !plainLedgerRecord(riskDecision.verdict)
+      || riskDecision.verdict.correlationId !== source.correlationId) return null;
+    const serializedRiskDecision = JSON.stringify(riskDecision);
+    if (Buffer.byteLength(serializedRiskDecision, 'utf8') > PRODUCT_OPERATOR_EVENT_MAX_BYTES
+      || PRODUCT_SENSITIVE_TEXT.test(serializedRiskDecision)) return null;
+  }
 
   const event = frozenSystemTraceEvent({ ...source, persistedAtMs });
   if (validateSystemTraceEvent(event).length > 0

@@ -565,6 +565,59 @@
   white-space: nowrap;
 }
 
+.sdx-evidence-more {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 9.75px;
+  font-weight: 520;
+  white-space: nowrap;
+}
+
+.sdx-risk-evidence { border-top: 1px solid var(--line); }
+
+.sdx-risk-evidence > summary {
+  min-height: 34px;
+  padding: 9px 16px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 520;
+  letter-spacing: .025em;
+  cursor: pointer;
+}
+
+.sdx-risk-evidence-list {
+  display: grid;
+  max-height: 360px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
+.sdx-risk-evidence-item {
+  display: grid;
+  gap: 5px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.sdx-risk-evidence-item:first-child { border-top: 0; }
+.sdx-risk-evidence-item header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sdx-risk-evidence-item header code { color: var(--text); font-family: var(--mono); font-size: 10.5px; }
+.sdx-risk-evidence-item p { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 15px; overflow-wrap: anywhere; }
+.sdx-risk-evidence-item dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.sdx-risk-evidence-item dl div { min-width: 0; }
+.sdx-risk-evidence-item dt { color: var(--muted); font-size: 9px; font-weight: 560; letter-spacing: .05em; text-transform: uppercase; }
+.sdx-risk-evidence-item dd { margin: 1px 0 0; color: var(--text-2); font-family: var(--mono); font-size: 10px; overflow-wrap: anywhere; white-space: normal; }
+.sdx-risk-evidence-status { font-family: var(--mono); font-size: 9.5px; font-weight: 560; }
+.sdx-risk-evidence-status.pass { color: var(--up); }
+.sdx-risk-evidence-status.fail { color: var(--down); }
+.sdx-risk-evidence-status.unknown { color: #bd781b; }
+[data-theme="dark"] .sdx-risk-evidence-status.unknown { color: #eaa64a; }
+
+@media (max-width: 760px) {
+  .sdx-risk-evidence-item dl { grid-template-columns: 1fr; }
+}
+
 /* barrier strip — LIVE_EXECUTION_NOT_IMPLEMENTED must always be visible */
 
 .sdx-barrier {

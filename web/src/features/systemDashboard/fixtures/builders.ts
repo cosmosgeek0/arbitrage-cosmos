@@ -177,6 +177,13 @@ export function makeSummaries(now: number, overrides: DeepPartialSummaries = {})
       latestVerdict: 'APPROVE',
       latestVerdictAtMs: now - 52 * SECOND,
       latestVerdictId: 'verdict-01J9ZK',
+      correlationId: 'corr-01J9Z-BTC',
+      maxAllowedSize: '200',
+      requiredConfirmation: false,
+      decisiveInputSnapshot: [{
+        code: 'MAX_GROSS_NOTIONAL', status: 'PASS', detail: 'Exact evaluated gross size is inside the risk limit.',
+        observed: '200', limit: '400', evidenceTimestamp: now - 52 * SECOND,
+      }],
       rejectionCount: 2,
       reasonCodes: [],
     },

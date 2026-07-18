@@ -12,10 +12,10 @@ import {
 } from '../lib/presentation';
 import { Band, Chip, FactRow, TruthTag, Val } from './bits';
 
-function verdictTone(verdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE'): Tone {
+function verdictTone(verdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE'): Tone {
   if (verdict === 'APPROVE') return 'ok';
   if (verdict === 'REJECT') return 'bad';
-  if (verdict === 'CAP') return 'warn';
+  if (verdict === 'CAP' || verdict === 'NEEDS_REVIEW') return 'warn';
   return 'idle';
 }
 
@@ -42,6 +42,9 @@ function RiskSection({
   onTrace: (correlationId: string) => void;
 }) {
   const risk = snapshot.summaries.risk;
+  const decisive = risk.decisiveInputSnapshot;
+  const decisivePreview = decisive.slice(0, 3);
+  const decisiveOverflow = decisive.length - decisivePreview.length;
   return (
     <section className="sdx-section" aria-label="Multi-leg risk">
       <Band title="Multi-Leg Risk" meta={<TruthTag label={risk.truthLabel} />} />
@@ -51,9 +54,53 @@ function RiskSection({
           sub={`${textOrUnknown(risk.latestVerdictId)} · ${ageText(risk.latestVerdictAtMs, nowMs)}`}
           end={<>
             <Chip tone={verdictTone(risk.latestVerdict)}>{risk.latestVerdict}</Chip>
-            <TraceLink correlationId={correlationForReference(snapshot, risk.latestVerdictId)} onTrace={onTrace} />
+            <TraceLink correlationId={risk.correlationId} onTrace={onTrace} />
           </>}
         />
+        <FactRow
+          label="Verdict-Scoped Maximum"
+          sub="Gross USD authority for this exact evaluated plan; UNKNOWN is never treated as zero"
+          end={<Val text={risk.maxAllowedSize === null ? 'UNKNOWN' : `${risk.maxAllowedSize} USD`} tone={risk.maxAllowedSize === null ? 'warn' : undefined} />}
+        />
+        <FactRow
+          label="Required Confirmation"
+          sub={risk.requiredConfirmation === true
+            ? 'Operator review is required; confirmation does not override allowed=false'
+            : 'No review confirmation is attached to the latest verdict'}
+          end={<Val
+            text={risk.requiredConfirmation === null ? 'UNKNOWN' : risk.requiredConfirmation ? 'REQUIRED' : 'NOT REQUIRED'}
+            tone={risk.requiredConfirmation === null || risk.requiredConfirmation ? 'warn' : undefined}
+          />}
+        />
+        <FactRow
+          label="Decisive Inputs"
+          sub={decisive.length
+            ? `${decisive.slice(0, 2).map((item) => `${item.code}: ${item.detail}`).join(' · ')}${decisive.length > 2 ? ` · +${decisive.length - 2} more; inspect the full bounded snapshot below` : ''}`
+            : 'No decisive owner evidence is available'}
+          end={decisive.length
+            ? <span className="sdx-row-end">
+                {decisivePreview.map((item, index) => <span key={`${item.code}-${index}`} className="sdx-reason">{item.code} · {item.status}</span>)}
+                {decisiveOverflow > 0 && <span className="sdx-evidence-more">+{decisiveOverflow} MORE</span>}
+              </span>
+            : <Val text="UNKNOWN" tone="warn" />}
+        />
+        {decisive.length > 0 && <details className="sdx-risk-evidence">
+          <summary>Inspect full decisive snapshot · {decisive.length} input{decisive.length === 1 ? '' : 's'}</summary>
+          <div className="sdx-risk-evidence-list">
+            {decisive.map((item, index) => <article key={`${item.code}-${index}`} className="sdx-risk-evidence-item">
+              <header>
+                <code>{item.code}</code>
+                <span className={`sdx-risk-evidence-status ${item.status.toLowerCase()}`}>{item.status}</span>
+              </header>
+              <p>{item.detail}</p>
+              <dl>
+                <div><dt>Observed</dt><dd>{item.observed ?? 'UNKNOWN'}</dd></div>
+                <div><dt>Limit</dt><dd>{item.limit ?? 'UNKNOWN'}</dd></div>
+                <div><dt>Evidence</dt><dd>{ageText(item.evidenceTimestamp, nowMs)}</dd></div>
+              </dl>
+            </article>)}
+          </div>
+        </details>}
         <FactRow
           label="Blocking Codes"
           sub={risk.reasonCodes.length ? 'Verbatim from the risk owner' : 'No blocking code on the latest verdict'}

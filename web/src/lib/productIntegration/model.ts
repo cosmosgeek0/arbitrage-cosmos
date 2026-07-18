@@ -2624,10 +2624,61 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
     || !fieldsAreNullableNumbers(capital, ['eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount'])
     || !isStringArray(capital.blockerCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:capital');
   const risk = value.risk;
-  if (!isRecord(risk) || !isSystemTruthLabel(risk.truthLabel)
-    || !['APPROVE', 'REJECT', 'CAP', 'UNAVAILABLE'].includes(String(risk.latestVerdict))
-    || !fieldsAreNullableNumbers(risk, ['latestVerdictAtMs', 'rejectionCount'])
-    || !isStringOrNull(risk.latestVerdictId) || !isStringArray(risk.reasonCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:risk');
+  let riskValid = false;
+  if (isRecord(risk)) {
+    const expectedRiskKeys = [
+      'truthLabel', 'latestVerdict', 'latestVerdictAtMs', 'latestVerdictId', 'correlationId',
+      'maxAllowedSize', 'requiredConfirmation', 'decisiveInputSnapshot', 'rejectionCount', 'reasonCodes',
+    ].sort().join('|');
+    const decisive = Array.isArray(risk.decisiveInputSnapshot) ? risk.decisiveInputSnapshot : [];
+    const reasonCodes = Array.isArray(risk.reasonCodes) ? risk.reasonCodes : [];
+    const shapeValid = Object.keys(risk).sort().join('|') === expectedRiskKeys
+      && isSystemTruthLabel(risk.truthLabel)
+      && typeof risk.latestVerdict === 'string'
+      && ['APPROVE', 'REJECT', 'NEEDS_REVIEW', 'CAP', 'UNAVAILABLE'].includes(risk.latestVerdict)
+      && fieldsAreNullableNumbers(risk, ['latestVerdictAtMs', 'rejectionCount'])
+      && isStringOrNull(risk.latestVerdictId)
+      && isStringOrNull(risk.correlationId)
+      && isStringOrNull(risk.maxAllowedSize)
+      && (risk.maxAllowedSize === null || (risk.maxAllowedSize.length <= 80 && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(risk.maxAllowedSize)))
+      && (risk.requiredConfirmation === null || typeof risk.requiredConfirmation === 'boolean')
+      && decisive.length <= 512
+      && decisive.every((entry) => isRecord(entry)
+        && Object.keys(entry).sort().join('|') === ['code', 'status', 'detail', 'observed', 'limit', 'evidenceTimestamp'].sort().join('|')
+        && typeof entry.code === 'string'
+        && /^[A-Z][A-Z0-9_]{0,99}$/.test(entry.code)
+        && typeof entry.status === 'string'
+        && ['PASS', 'FAIL', 'UNKNOWN'].includes(entry.status)
+        && typeof entry.detail === 'string'
+        && entry.detail.trim().length >= 1
+        && entry.detail.length <= 1_000
+        && (entry.observed === null || (typeof entry.observed === 'string' && entry.observed.length >= 1 && entry.observed.length <= 300))
+        && (entry.limit === null || (typeof entry.limit === 'string' && entry.limit.length >= 1 && entry.limit.length <= 300))
+        && (entry.evidenceTimestamp === null || (typeof entry.evidenceTimestamp === 'number' && Number.isSafeInteger(entry.evidenceTimestamp) && entry.evidenceTimestamp >= 0)))
+      && reasonCodes.length <= 64
+      && reasonCodes.every((code) => typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(code));
+    const directDecision = typeof risk.latestVerdict === 'string'
+      && ['APPROVE', 'REJECT', 'NEEDS_REVIEW'].includes(risk.latestVerdict);
+    const directSemantics = !directDecision || (
+      typeof risk.correlationId === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(risk.correlationId)
+      && decisive.length > 0
+      && (risk.latestVerdict === 'APPROVE'
+        ? risk.maxAllowedSize !== null
+          && risk.requiredConfirmation === false
+          && reasonCodes.length === 0
+          && decisive.every((entry) => isRecord(entry) && entry.status === 'PASS')
+        : risk.requiredConfirmation === (risk.latestVerdict === 'NEEDS_REVIEW')
+          && decisive.every((entry) => isRecord(entry) && entry.status !== 'PASS')
+          && decisive.map((entry) => isRecord(entry) ? entry.code : null).join('|') === reasonCodes.join('|')
+          && (risk.latestVerdict === 'REJECT'
+            ? risk.maxAllowedSize === '0' && decisive.some((entry) => isRecord(entry) && entry.status === 'FAIL')
+            : risk.maxAllowedSize === null
+              && decisive.every((entry) => isRecord(entry) && entry.status === 'UNKNOWN')))
+    );
+    riskValid = shapeValid && directSemantics;
+  }
+  if (!riskValid) errors.push('DASHBOARD_SUMMARY_INVALID:risk');
   const execution = value.execution;
   if (!isRecord(execution) || !isSystemTruthLabel(execution.truthLabel)
     || !['VALIDATE_ONLY', 'UNAVAILABLE'].includes(String(execution.mode))

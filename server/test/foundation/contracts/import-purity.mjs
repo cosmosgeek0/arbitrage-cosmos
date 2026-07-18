@@ -187,9 +187,11 @@ const stamp = mod.createSourcedTimestamp({
 mod.evaluateFreshness(stamp, NOW);
 mod.deriveCommandId({ command: 'START', scope: 'runtime', revision: 1 });
 mod.deriveRiskVerdict({
+  correlationId: 'corr_contract_purity',
   checks: [{ code: 'KILL_SWITCH', status: 'PASS', blocking: true, detail: 'off', observed: null, limit: null, evidenceTimestamp: null }],
   evaluatedAt: NOW,
   ttlMs: 1_000,
+  maxAllowedSize: 1,
 });
 mod.checkRunModePermitted('EXECUTION_LIVE', { nowMs: NOW, correlationId: 'cor_x' });
 mod.createDiagnosticEnvelope(

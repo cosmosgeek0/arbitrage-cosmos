@@ -40,6 +40,19 @@ export function isActionRiskClass(value: unknown): value is ActionRiskClass {
   return typeof value === 'string' && (ACTION_RISK_CLASSES as readonly string[]).includes(value);
 }
 
+export const RISK_VERDICT_DECISIONS = ['APPROVED', 'REJECTED', 'NEEDS_REVIEW'] as const;
+export type RiskVerdictDecision = (typeof RISK_VERDICT_DECISIONS)[number];
+
+/**
+ * Immutable evidence that actually decided the verdict. For a rejection or
+ * review this is every non-PASS blocking check, in evaluator order. For an
+ * approval it is every blocking PASS check, also in evaluator order.
+ */
+export interface RiskDecisiveInputSnapshot {
+  readonly evaluatedAt: number;
+  readonly checks: readonly Readonly<RiskCheck>[];
+}
+
 // ---------- check / verdict shapes ----------
 
 export interface RiskCheck {
@@ -58,7 +71,17 @@ export interface RiskCheck {
 }
 
 export interface RiskVerdict {
+  /** Stable caller correlation, preserved through Ledger and UI projections. */
+  correlationId: string;
+  /** Explicit three-way outcome. NEEDS_REVIEW is never execution authority. */
+  decision: RiskVerdictDecision;
   allowed: boolean;
+  /** Maximum gross USD size established by the evaluator; null when unknown. */
+  maxAllowedSize: number | null;
+  /** True only for NEEDS_REVIEW; confirmation cannot override allowed=false. */
+  requiredConfirmation: boolean;
+  /** Ordered, frozen evidence that determined the explicit outcome. */
+  decisiveInputSnapshot: Readonly<RiskDecisiveInputSnapshot>;
   /** From the caller's injected clock. */
   evaluatedAt: number;
   /** evaluatedAt + ttl; a verdict is never valid forever. */
@@ -71,6 +94,27 @@ export interface RiskVerdict {
 // ---------- validation ----------
 
 const CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,99}$/;
+const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+/** Canonical owner bound inherited by every decisive-evidence projection. */
+export const MAX_RISK_VERDICT_CHECKS = 512;
+
+/** Stable plain-decimal projection for the verdict-scoped numeric authority. */
+export function riskMaximumExactDecimal(value: number | null): string | null {
+  if (value === null) return null;
+  if (!Number.isFinite(value) || value < 0) throw new TypeError('risk maximum must be finite and non-negative');
+  const rendered = String(value);
+  if (!/[eE]/.test(rendered)) return rendered;
+  const [coefficient, exponentText] = rendered.toLowerCase().split('e');
+  const exponent = Number(exponentText);
+  const digits = coefficient.replace('.', '');
+  const fractionalDigits = coefficient.includes('.') ? coefficient.length - coefficient.indexOf('.') - 1 : 0;
+  const decimalOffset = exponent - fractionalDigits;
+  if (decimalOffset >= 0) return `${digits}${'0'.repeat(decimalOffset)}`;
+  const decimalIndex = digits.length + decimalOffset;
+  return decimalIndex > 0
+    ? `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`
+    : `0.${'0'.repeat(-decimalIndex)}${digits}`;
+}
 
 /** Structural validation of one check. Empty array = valid. */
 export function validateRiskCheck(input: unknown): ValidationIssue[] {
@@ -110,11 +154,15 @@ export function validateRiskCheck(input: unknown): ValidationIssue[] {
 // ---------- deterministic verdict derivation ----------
 
 export interface RiskVerdictInput {
+  /** Stable caller correlation; never inferred from check evidence. */
+  correlationId: string;
   checks: readonly RiskCheck[];
   /** From the caller's injected clock. */
   evaluatedAt: number;
   /** Verdict validity window, ms (> 0). */
   ttlMs: number;
+  /** Evaluator-established maximum gross USD size; null/omitted = unknown. */
+  maxAllowedSize?: number | null;
 }
 
 /**
@@ -125,8 +173,14 @@ export interface RiskVerdictInput {
  * Throws TypeError on malformed input; check order is preserved.
  */
 export function deriveRiskVerdict(input: RiskVerdictInput): Readonly<RiskVerdict> {
+  if (typeof input.correlationId !== 'string' || !CORRELATION_ID_PATTERN.test(input.correlationId)) {
+    throw new TypeError('deriveRiskVerdict: correlationId is invalid');
+  }
   if (!Array.isArray(input.checks)) {
     throw new TypeError('deriveRiskVerdict: checks must be an array');
+  }
+  if (input.checks.length > MAX_RISK_VERDICT_CHECKS) {
+    throw new TypeError(`deriveRiskVerdict: checks must contain at most ${MAX_RISK_VERDICT_CHECKS} entries`);
   }
   input.checks.forEach((check, i) => {
     const issues = validateRiskCheck(check);
@@ -141,6 +195,16 @@ export function deriveRiskVerdict(input: RiskVerdictInput): Readonly<RiskVerdict
   }
   if (typeof input.ttlMs !== 'number' || !Number.isSafeInteger(input.ttlMs) || input.ttlMs <= 0) {
     throw new TypeError('deriveRiskVerdict: ttlMs must be a positive safe integer');
+  }
+  if (input.maxAllowedSize !== undefined && input.maxAllowedSize !== null
+      && (typeof input.maxAllowedSize !== 'number'
+        || !Number.isFinite(input.maxAllowedSize)
+        || input.maxAllowedSize < 0)) {
+    throw new TypeError('deriveRiskVerdict: maxAllowedSize must be null or a finite non-negative number');
+  }
+  if (input.maxAllowedSize !== undefined && input.maxAllowedSize !== null
+      && (riskMaximumExactDecimal(input.maxAllowedSize)?.length ?? 0) > 80) {
+    throw new TypeError('deriveRiskVerdict: maxAllowedSize exceeds the exact-decimal bound');
   }
 
   const frozenChecks = Object.freeze(
@@ -159,8 +223,38 @@ export function deriveRiskVerdict(input: RiskVerdictInput): Readonly<RiskVerdict
   const blockingCodes = Object.freeze(
     frozenChecks.filter((c) => c.blocking && c.status !== 'PASS').map((c) => c.code),
   );
+  const hasBlockingFailure = frozenChecks.some((c) => c.blocking && c.status === 'FAIL');
+  const hasBlockingUnknown = frozenChecks.some((c) => c.blocking && c.status === 'UNKNOWN');
+  const decision: RiskVerdictDecision = hasBlockingFailure
+    ? 'REJECTED'
+    : hasBlockingUnknown
+      ? 'NEEDS_REVIEW'
+      : 'APPROVED';
+  if (decision === 'APPROVED' && (input.maxAllowedSize === undefined || input.maxAllowedSize === null)) {
+    throw new TypeError('deriveRiskVerdict: an approval requires an exact maxAllowedSize');
+  }
+  if (decision === 'APPROVED' && !frozenChecks.some((check) => check.blocking)) {
+    throw new TypeError('deriveRiskVerdict: an approval requires decisive blocking evidence');
+  }
+  const decisiveChecks = Object.freeze(
+    frozenChecks.filter((c) => c.blocking && (decision === 'APPROVED' || c.status !== 'PASS')),
+  );
+  const decisiveInputSnapshot = Object.freeze({
+    evaluatedAt: input.evaluatedAt,
+    checks: decisiveChecks,
+  });
+  const maxAllowedSize = decision === 'APPROVED'
+    ? input.maxAllowedSize as number
+    : decision === 'REJECTED'
+      ? 0
+      : null;
   return Object.freeze({
-    allowed: blockingCodes.length === 0,
+    correlationId: input.correlationId,
+    decision,
+    allowed: decision === 'APPROVED',
+    maxAllowedSize,
+    requiredConfirmation: decision === 'NEEDS_REVIEW',
+    decisiveInputSnapshot,
     evaluatedAt: input.evaluatedAt,
     expiresAt: input.evaluatedAt + input.ttlMs,
     checks: frozenChecks,

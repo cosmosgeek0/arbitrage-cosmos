@@ -109,9 +109,21 @@ export interface SystemCapitalSummary {
 
 export interface SystemRiskSummary {
   readonly truthLabel: SystemTruthLabel;
-  readonly latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE';
+  readonly latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
   readonly latestVerdictAtMs: number | null;
   readonly latestVerdictId: string | null;
+  readonly correlationId: string | null;
+  /** Exact gross-USD authority for this verdict, encoded without binary float drift. */
+  readonly maxAllowedSize: string | null;
+  readonly requiredConfirmation: boolean | null;
+  readonly decisiveInputSnapshot: readonly Readonly<{
+    readonly code: string;
+    readonly status: 'PASS' | 'FAIL' | 'UNKNOWN';
+    readonly detail: string;
+    readonly observed: string | null;
+    readonly limit: string | null;
+    readonly evidenceTimestamp: number | null;
+  }>[];
   readonly rejectionCount: number | null;
   readonly reasonCodes: readonly string[];
 }

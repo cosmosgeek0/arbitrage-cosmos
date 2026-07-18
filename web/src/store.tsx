@@ -27,6 +27,11 @@ import {
   reduceWebSocketProtocolHealth,
   type WebSocketProtocolObservation,
 } from './lib/webSocketProtocolHealth';
+import {
+  INITIAL_RECONNECT_BACKOFF_STATE,
+  RECONNECT_BACKOFF_STABLE_OPEN_MS,
+  planReconnectBackoff,
+} from './lib/reconnectBackoff';
 import type {
   AppConfig,
   MarketRow,
@@ -662,6 +667,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let closed = false;
     let retry: number | null = null;
+    let stableOpenTimer: number | null = null;
+    let reconnectBackoff = INITIAL_RECONNECT_BACKOFF_STATE;
     let generation = 0;
     let stateRefreshInFlight = false;
     let stateRefreshQueued = false;
@@ -708,7 +715,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (retry !== null) window.clearTimeout(retry);
       retry = null;
     };
+    const clearStableOpenTimer = () => {
+      if (stableOpenTimer !== null) window.clearTimeout(stableOpenTimer);
+      stableOpenTimer = null;
+    };
     const closeCurrent = () => {
+      clearStableOpenTimer();
       const previous = wsRef.current;
       wsRef.current = null;
       if (liveWs === previous) liveWs = null;
@@ -738,6 +750,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
       const ws = new WebSocket(socketUrl.toString());
       let connectionEstablished = false;
+      let openedAtMonotonicMs: number | null = null;
       let protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
       const applyProtocolObservation = (observation: WebSocketProtocolObservation) => {
         protocolHealth = reduceWebSocketProtocolHealth(protocolHealth, observation);
@@ -750,9 +763,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ws.onopen = () => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         connectionEstablished = true;
+        openedAtMonotonicMs = performance.now();
         protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
+        clearStableOpenTimer();
+        stableOpenTimer = window.setTimeout(() => {
+          stableOpenTimer = null;
+          if (closed || socketGeneration !== generation || wsRef.current !== ws
+              || ws.readyState !== WebSocket.OPEN) return;
+          reconnectBackoff = INITIAL_RECONNECT_BACKOFF_STATE;
+        }, RECONNECT_BACKOFF_STABLE_OPEN_MS);
       };
       ws.onmessage = (msg) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
@@ -781,10 +802,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           socketGeneration,
           connectionEstablished,
         ));
+        clearStableOpenTimer();
         wsRef.current = null;
         if (liveWs === ws) liveWs = null;
         setConnected(false);
-        scheduleConnect(3_000);
+        const plan = planReconnectBackoff(reconnectBackoff, {
+          entropySample: Math.random(),
+          openDurationMs: openedAtMonotonicMs === null
+            ? null
+            : Math.max(0, performance.now() - openedAtMonotonicMs),
+        });
+        reconnectBackoff = plan.next;
+        scheduleConnect(plan.delayMs);
       };
       ws.onerror = () => {
         if (socketGeneration === generation && wsRef.current === ws) ws.close();

@@ -66,14 +66,17 @@ from quant_edge.registry_ops.passive_fill_receipts import (
 )
 from quant_edge.registry_ops.recorded_outcomes import (
     CalibrationAuthority,
+    RecordedCalibrationComparisonV1,
     RecordedCalibrationPolicyV1,
     RecordedCalibrationReportV1,
     RecordedCalibrationSnapshotV1,
+    RecordedComparisonVerdict,
     RecordedOutcomeAttestationV1,
     RecordedOutcomeCorpusV1,
     RecordedPredictionRegistrationV1,
     RecordedPredictionV1,
     _evaluate_recorded_calibration,
+    compare_recorded_calibrations,
     evaluate_recorded_calibration,
 )
 from quant_edge.survival.passive_fill import (
@@ -168,6 +171,101 @@ def _recorded_calibration_snapshot_from_mapping(
     except (KeyError, TypeError, ValueError) as error:
         raise RegistryIntegrityError(
             "persisted recorded-calibration snapshot is malformed"
+        ) from error
+
+
+def _recorded_calibration_comparison_from_mapping(
+    mapping: dict[str, object],
+) -> RecordedCalibrationComparisonV1:
+    expected_keys = {
+        "absoluteBiasDeltaMicros",
+        "absoluteBiasExactDeltaNumerator",
+        "baselineModelRevision",
+        "baselineReportRevision",
+        "brierDeltaMicros",
+        "brierExactDeltaNumerator",
+        "challengerModelRevision",
+        "challengerReportRevision",
+        "comparisonId",
+        "meanAbsoluteCostResidualDeltaMicros",
+        "meanAbsoluteCostResidualExactDeltaNumerator",
+        "meanAbsoluteResidualDeltaMicros",
+        "meanAbsoluteResidualExactDeltaNumerator",
+        "outcomeSha256",
+        "reasonCodes",
+        "schema",
+        "verdict",
+        "version",
+    }
+    if (
+        set(mapping) != expected_keys
+        or mapping.get("schema") != "Q15RecordedCalibrationComparisonV1"
+        or mapping.get("version") != 1
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison schema is malformed"
+        )
+
+    def required_text(key: str) -> str:
+        value = mapping[key]
+        if not isinstance(value, str):
+            raise RegistryIntegrityError(
+                f"persisted recorded-calibration comparison {key} is malformed"
+            )
+        return value
+
+    def optional_integer(key: str) -> int | None:
+        value = mapping[key]
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise RegistryIntegrityError(
+                f"persisted recorded-calibration comparison {key} is malformed"
+            )
+        return value
+
+    outcome_digests = mapping["outcomeSha256"]
+    reason_codes = mapping["reasonCodes"]
+    if not isinstance(outcome_digests, list) or any(
+        not isinstance(value, str) for value in outcome_digests
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison outcomes are malformed"
+        )
+    if not isinstance(reason_codes, list) or any(
+        not isinstance(value, str) for value in reason_codes
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison reasons are malformed"
+        )
+    try:
+        return RecordedCalibrationComparisonV1(
+            comparison_id=required_text("comparisonId"),
+            baseline_report_revision=required_text("baselineReportRevision"),
+            challenger_report_revision=required_text("challengerReportRevision"),
+            baseline_model_revision=required_text("baselineModelRevision"),
+            challenger_model_revision=required_text("challengerModelRevision"),
+            outcome_digests=tuple(DigestV1(value) for value in outcome_digests),
+            verdict=RecordedComparisonVerdict(required_text("verdict")),
+            reason_codes=tuple(reason_codes),
+            brier_delta_micros=optional_integer("brierDeltaMicros"),
+            absolute_bias_delta_micros=optional_integer("absoluteBiasDeltaMicros"),
+            mean_absolute_residual_delta_micros=optional_integer("meanAbsoluteResidualDeltaMicros"),
+            mean_absolute_cost_residual_delta_micros=optional_integer(
+                "meanAbsoluteCostResidualDeltaMicros"
+            ),
+            brier_exact_delta_numerator=optional_integer("brierExactDeltaNumerator"),
+            absolute_bias_exact_delta_numerator=optional_integer("absoluteBiasExactDeltaNumerator"),
+            mean_absolute_residual_exact_delta_numerator=optional_integer(
+                "meanAbsoluteResidualExactDeltaNumerator"
+            ),
+            mean_absolute_cost_residual_exact_delta_numerator=optional_integer(
+                "meanAbsoluteCostResidualExactDeltaNumerator"
+            ),
+        )
+    except (ContractValueError, ValueError) as error:
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison is malformed"
         ) from error
 
 
@@ -807,6 +905,19 @@ class ResearchRegistryStore:
                 FOREIGN KEY(report_revision)
                     REFERENCES recorded_calibration_reports(report_revision)
             ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_comparisons(
+                comparison_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL UNIQUE,
+                baseline_report_revision TEXT NOT NULL,
+                challenger_report_revision TEXT NOT NULL,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                verdict TEXT NOT NULL,
+                FOREIGN KEY(baseline_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision),
+                FOREIGN KEY(challenger_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
             CREATE TABLE IF NOT EXISTS recorded_calibration_transitions(
                 transition_id TEXT PRIMARY KEY,
                 slot_id TEXT NOT NULL,
@@ -817,6 +928,14 @@ class ResearchRegistryStore:
                 committed_at_ms INTEGER NOT NULL,
                 FOREIGN KEY(report_revision)
                     REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_transition_comparisons(
+                transition_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL,
+                FOREIGN KEY(transition_id)
+                    REFERENCES recorded_calibration_transitions(transition_id),
+                FOREIGN KEY(comparison_revision)
+                    REFERENCES recorded_calibration_comparisons(comparison_revision)
             ) STRICT;
             """
         )
@@ -3152,55 +3271,343 @@ class ResearchRegistryStore:
                 raise RegistryConflictError("passive-fill calibration receipt generation is stale")
         return receipt
 
+    @staticmethod
+    def _verified_recorded_calibration_transition(
+        row: sqlite3.Row,
+    ) -> RecordedCalibrationSnapshotV1:
+        try:
+            mapping = parse_canonical_object(bytes(row["snapshot"]))
+            snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError(
+                "recorded calibration transition snapshot is malformed"
+            ) from error
+        expected_generation = row["expected_generation"]
+        if (
+            isinstance(expected_generation, bool)
+            or not isinstance(expected_generation, int)
+            or snapshot.transition_id != row["transition_id"]
+            or snapshot.slot_id != row["slot_id"]
+            or snapshot.generation != expected_generation + 1
+            or snapshot.report_revision != row["report_revision"]
+            or snapshot.content_digest.hexdigest != row["snapshot_sha"]
+            or bytes(row["snapshot"]) != canonical_json_bytes(snapshot.as_mapping())
+            or snapshot.updated_at_ms != row["committed_at_ms"]
+        ):
+            raise RegistryIntegrityError("recorded calibration transition is corrupt")
+        return snapshot
+
+    def _require_recorded_calibration_transition(
+        self,
+        connection: sqlite3.Connection,
+        transition_id: str,
+    ) -> RecordedCalibrationSnapshotV1:
+        rows = connection.execute(
+            "SELECT transition_id,slot_id,expected_generation,report_revision,"
+            "snapshot_sha,snapshot,committed_at_ms FROM recorded_calibration_transitions "
+            "WHERE transition_id=? LIMIT 2",
+            (transition_id,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration transition must exist exactly once")
+        return self._verified_recorded_calibration_transition(rows[0])
+
+    def _require_previous_recorded_calibration_transition(
+        self,
+        connection: sqlite3.Connection,
+        snapshot: RecordedCalibrationSnapshotV1,
+    ) -> RecordedCalibrationSnapshotV1:
+        if snapshot.generation <= 1:
+            raise RegistryIntegrityError(
+                "recorded calibration comparison requires a prior transition"
+            )
+        rows = connection.execute(
+            "SELECT transition_id,slot_id,expected_generation,report_revision,"
+            "snapshot_sha,snapshot,committed_at_ms FROM recorded_calibration_transitions "
+            "WHERE slot_id=? AND expected_generation=? LIMIT 2",
+            (snapshot.slot_id, snapshot.generation - 2),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError(
+                "recorded calibration prior transition must exist exactly once"
+            )
+        previous = self._verified_recorded_calibration_transition(rows[0])
+        if previous.generation != snapshot.generation - 1:
+            raise RegistryIntegrityError(
+                "recorded calibration prior transition generation is corrupt"
+            )
+        return previous
+
+    @staticmethod
+    def _require_recorded_calibration_report_binding(
+        connection: sqlite3.Connection,
+        snapshot: RecordedCalibrationSnapshotV1,
+    ) -> dict[str, object]:
+        rows = connection.execute(
+            "SELECT report_revision,body_sha,body,authority,status FROM "
+            "recorded_calibration_reports WHERE report_revision=? LIMIT 2",
+            (snapshot.report_revision,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration report must exist exactly once")
+        report = rows[0]
+        try:
+            report_mapping = parse_canonical_object(bytes(report["body"]))
+            canonical_body = canonical_json_bytes(report_mapping)
+            body_digest = mapping_digest(report_mapping).hexdigest
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError("recorded calibration report body is malformed") from error
+        policy_mapping = report_mapping.get("policy")
+        if (
+            bytes(report["body"]) != canonical_body
+            or body_digest != report["body_sha"]
+            or report["report_revision"] != f"sha256:{body_digest}"
+            or snapshot.report_revision != report["report_revision"]
+            or report_mapping.get("reportId") != snapshot.report_id
+            or report_mapping.get("slotId") != snapshot.slot_id
+            or report_mapping.get("modelId") != snapshot.model_id
+            or report_mapping.get("modelRevision") != snapshot.model_revision
+            or report_mapping.get("status") != "PROMOTION_ELIGIBLE"
+            or not isinstance(policy_mapping, dict)
+            or policy_mapping.get("policyRevision") != snapshot.policy_revision
+            or policy_mapping.get("authority") != snapshot.authority.value
+            or report["authority"] != snapshot.authority.value
+            or report["status"] != report_mapping.get("status")
+        ):
+            raise RegistryIntegrityError("recorded calibration head and report binding is corrupt")
+        return report_mapping
+
+    @staticmethod
+    def _require_persisted_recorded_calibration_comparison(
+        connection: sqlite3.Connection,
+        comparison_revision: str,
+        *,
+        require_pass: bool = True,
+    ) -> RecordedCalibrationComparisonV1:
+        rows = connection.execute(
+            "SELECT comparison_id,comparison_revision,baseline_report_revision,"
+            "challenger_report_revision,body_sha,body,verdict FROM "
+            "recorded_calibration_comparisons WHERE comparison_revision=? LIMIT 2",
+            (comparison_revision,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration comparison must exist exactly once")
+        row = rows[0]
+        try:
+            mapping = parse_canonical_object(bytes(row["body"]))
+            comparison = _recorded_calibration_comparison_from_mapping(mapping)
+            canonical_body = canonical_json_bytes(comparison.as_mapping())
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError(
+                "recorded calibration comparison body is malformed"
+            ) from error
+        digest = comparison.content_digest.hexdigest
+        if (
+            bytes(row["body"]) != canonical_body
+            or row["body_sha"] != digest
+            or row["comparison_revision"] != f"sha256:{digest}"
+            or comparison_revision != row["comparison_revision"]
+            or row["comparison_id"] != comparison.comparison_id
+            or row["baseline_report_revision"] != comparison.baseline_report_revision
+            or row["challenger_report_revision"] != comparison.challenger_report_revision
+            or row["verdict"] != comparison.verdict.value
+            or (require_pass and comparison.verdict is not RecordedComparisonVerdict.PASS)
+        ):
+            raise RegistryIntegrityError("recorded calibration comparison evidence is corrupt")
+        return comparison
+
+    def _require_recorded_calibration_transition_comparison(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        snapshot: RecordedCalibrationSnapshotV1,
+        expected_comparison: RecordedCalibrationComparisonV1 | None,
+    ) -> RecordedCalibrationComparisonV1:
+        link_rows = connection.execute(
+            "SELECT transition_id,comparison_revision FROM "
+            "recorded_calibration_transition_comparisons WHERE transition_id=? LIMIT 2",
+            (snapshot.transition_id,),
+        ).fetchall()
+        if len(link_rows) != 1:
+            raise RegistryIntegrityError(
+                "recorded calibration transition comparison link must exist exactly once"
+            )
+        link = link_rows[0]
+        if link["transition_id"] != snapshot.transition_id:
+            raise RegistryIntegrityError(
+                "recorded calibration transition comparison link is corrupt"
+            )
+        comparison = self._require_persisted_recorded_calibration_comparison(
+            connection,
+            str(link["comparison_revision"]),
+        )
+        previous = self._require_previous_recorded_calibration_transition(
+            connection,
+            snapshot,
+        )
+        baseline_report = self._require_recorded_calibration_report_binding(
+            connection,
+            previous,
+        )
+        challenger_report = self._require_recorded_calibration_report_binding(
+            connection,
+            snapshot,
+        )
+        outcome_digests = [digest.hexdigest for digest in comparison.outcome_digests]
+        if (
+            comparison.baseline_report_revision != previous.report_revision
+            or comparison.challenger_report_revision != snapshot.report_revision
+            or comparison.baseline_model_revision != previous.model_revision
+            or comparison.challenger_model_revision != snapshot.model_revision
+            or baseline_report.get("outcomeSha256") != outcome_digests
+            or challenger_report.get("outcomeSha256") != outcome_digests
+        ):
+            raise RegistryIntegrityError(
+                "recorded calibration comparison report binding is corrupt"
+            )
+        if expected_comparison is not None and comparison != expected_comparison:
+            raise RegistryConflictError("recorded calibration transition idempotency key conflicts")
+        return comparison
+
     def current_recorded_calibration(self, slot_id: str) -> RecordedCalibrationSnapshotV1 | None:
         require_contract_id(slot_id, field="slot_id")
-        row = (
-            self._require_open()
-            .execute(
-                "SELECT generation,snapshot_sha,snapshot FROM recorded_calibration_heads "
-                "WHERE slot_id=?",
-                (slot_id,),
-            )
-            .fetchone()
-        )
-        if row is None:
+        connection = self._require_open()
+        rows = connection.execute(
+            "SELECT slot_id,generation,snapshot_sha,snapshot FROM "
+            "recorded_calibration_heads WHERE slot_id=? LIMIT 2",
+            (slot_id,),
+        ).fetchall()
+        if not rows:
             return None
-        mapping = parse_canonical_object(bytes(row["snapshot"]))
-        snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration head must exist exactly once")
+        row = rows[0]
+        try:
+            mapping = parse_canonical_object(bytes(row["snapshot"]))
+            snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError("recorded calibration head is malformed") from error
         if (
             snapshot.slot_id != slot_id
+            or row["slot_id"] != slot_id
             or snapshot.generation != row["generation"]
             or snapshot.content_digest.hexdigest != row["snapshot_sha"]
             or bytes(row["snapshot"]) != canonical_json_bytes(snapshot.as_mapping())
         ):
             raise RegistryIntegrityError("recorded calibration head is corrupt")
-        report = (
-            self._require_open()
-            .execute(
-                "SELECT body_sha,body,authority,status FROM recorded_calibration_reports "
-                "WHERE report_revision=?",
-                (snapshot.report_revision,),
-            )
-            .fetchone()
+        transition = self._require_recorded_calibration_transition(
+            connection,
+            snapshot.transition_id,
         )
-        if report is None:
-            raise RegistryIntegrityError("recorded calibration report is absent")
-        report_mapping = parse_canonical_object(bytes(report["body"]))
-        policy_mapping = report_mapping.get("policy")
-        if (
-            bytes(report["body"]) != canonical_json_bytes(report_mapping)
-            or mapping_digest(report_mapping).hexdigest != report["body_sha"]
-            or report_mapping.get("reportId") != snapshot.report_id
-            or report_mapping.get("modelId") != snapshot.model_id
-            or report_mapping.get("modelRevision") != snapshot.model_revision
-            or not isinstance(policy_mapping, dict)
-            or policy_mapping.get("policyRevision") != snapshot.policy_revision
-            or policy_mapping.get("authority") != snapshot.authority.value
-            or report["authority"] != snapshot.authority.value
-            or report["status"] != "PROMOTION_ELIGIBLE"
-        ):
-            raise RegistryIntegrityError("recorded calibration head and report binding is corrupt")
+        if transition != snapshot:
+            raise RegistryIntegrityError(
+                "recorded calibration head and transition binding is corrupt"
+            )
+        self._require_recorded_calibration_report_binding(connection, snapshot)
+        if snapshot.generation > 1:
+            self._require_recorded_calibration_transition_comparison(
+                connection,
+                snapshot=snapshot,
+                expected_comparison=None,
+            )
+        else:
+            link = connection.execute(
+                "SELECT 1 FROM recorded_calibration_transition_comparisons WHERE transition_id=?",
+                (snapshot.transition_id,),
+            ).fetchone()
+            if link is not None:
+                raise RegistryIntegrityError(
+                    "initial recorded calibration transition cannot have comparison evidence"
+                )
         return snapshot
+
+    def record_recorded_calibration_comparison(
+        self,
+        comparison: RecordedCalibrationComparisonV1,
+        *,
+        baseline: RecordedCalibrationReportV1,
+        challenger: RecordedCalibrationReportV1,
+    ) -> DigestV1:
+        if not isinstance(comparison, RecordedCalibrationComparisonV1):
+            raise ContractValueError("comparison must be RecordedCalibrationComparisonV1")
+        expected = compare_recorded_calibrations(
+            comparison_id=comparison.comparison_id,
+            baseline=baseline,
+            challenger=challenger,
+        )
+        if expected != comparison:
+            raise RegistryConflictError(
+                "recorded calibration comparison does not match exact reports"
+            )
+        body = canonical_json_bytes(comparison.as_mapping())
+        revision = f"sha256:{comparison.content_digest.hexdigest}"
+        connection = self._begin(None)
+        try:
+            for persisted_report in (baseline, challenger):
+                report_revision = persisted_report.report_revision
+                report = connection.execute(
+                    "SELECT body_sha,body FROM recorded_calibration_reports "
+                    "WHERE report_revision=?",
+                    (report_revision,),
+                ).fetchone()
+                if report is None:
+                    raise RegistryConflictError(
+                        "recorded calibration comparison requires both persisted reports"
+                    )
+                expected_report_body = canonical_json_bytes(persisted_report.as_mapping())
+                if (
+                    report["body_sha"] != persisted_report.content_digest.hexdigest
+                    or bytes(report["body"]) != expected_report_body
+                    or report_revision != f"sha256:{report['body_sha']}"
+                ):
+                    raise RegistryIntegrityError(
+                        "recorded calibration comparison requires exact persisted report bytes"
+                    )
+            existing_rows = connection.execute(
+                "SELECT comparison_revision FROM "
+                "recorded_calibration_comparisons WHERE comparison_id=? LIMIT 2",
+                (comparison.comparison_id,),
+            ).fetchall()
+            if len(existing_rows) > 1:
+                raise RegistryIntegrityError(
+                    "recorded calibration comparison identity is ambiguous"
+                )
+            if existing_rows:
+                existing = self._require_persisted_recorded_calibration_comparison(
+                    connection,
+                    str(existing_rows[0]["comparison_revision"]),
+                    require_pass=False,
+                )
+                if existing != comparison or existing_rows[0]["comparison_revision"] != revision:
+                    raise RegistryConflictError(
+                        "recorded calibration comparison identity already differs"
+                    )
+                self._finish(connection, None)
+                return comparison.content_digest
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_comparisons("
+                    "comparison_id,comparison_revision,baseline_report_revision,"
+                    "challenger_report_revision,body_sha,body,verdict) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        comparison.comparison_id,
+                        revision,
+                        comparison.baseline_report_revision,
+                        comparison.challenger_report_revision,
+                        comparison.content_digest.hexdigest,
+                        body,
+                        comparison.verdict.value,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded calibration comparison revision is already bound"
+                ) from error
+            self._finish(connection, None)
+            return comparison.content_digest
+        except BaseException:
+            self._rollback(connection)
+            raise
 
     def promote_recorded_calibration(
         self,
@@ -3209,6 +3616,7 @@ class ResearchRegistryStore:
         transition_id: str,
         expected_generation: int,
         now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
         hook: FaultHook | None = None,
     ) -> RecordedCalibrationSnapshotV1:
         if report.model_id == "passive-fill":
@@ -3220,6 +3628,7 @@ class ResearchRegistryStore:
             transition_id=transition_id,
             expected_generation=expected_generation,
             now_ms=now_ms,
+            comparison=comparison,
             hook=hook,
         )
 
@@ -3231,6 +3640,7 @@ class ResearchRegistryStore:
         training_observations: tuple[PassiveFillObservationV1, ...],
         report: RecordedCalibrationReportV1,
         corpus: RecordedOutcomeCorpusV1,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
         hook: FaultHook | None = None,
     ) -> RecordedCalibrationSnapshotV1:
         receipt = self.verify_passive_fill_promotion_authority(
@@ -3248,6 +3658,7 @@ class ResearchRegistryStore:
             transition_id=receipt.transition_id,
             expected_generation=receipt.expected_generation,
             now_ms=now_ms,
+            comparison=comparison,
             hook=hook,
             passive_fill_receipt=receipt,
         )
@@ -3259,6 +3670,7 @@ class ResearchRegistryStore:
         transition_id: str,
         expected_generation: int,
         now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
         hook: FaultHook | None = None,
         passive_fill_receipt: PassiveFillHeldOutCalibrationReceiptV1 | None = None,
     ) -> RecordedCalibrationSnapshotV1:
@@ -3299,24 +3711,58 @@ class ResearchRegistryStore:
                 raise RegistryConflictError(
                     "recorded calibration promotion requires its exact persisted report"
                 )
-            existing_transition = connection.execute(
-                "SELECT expected_generation,report_revision,snapshot_sha,snapshot "
-                "FROM recorded_calibration_transitions WHERE transition_id=?",
+            existing_rows = connection.execute(
+                "SELECT transition_id,slot_id,expected_generation,report_revision,"
+                "snapshot_sha,snapshot,committed_at_ms FROM "
+                "recorded_calibration_transitions WHERE transition_id=? LIMIT 2",
                 (transition_id,),
-            ).fetchone()
-            if existing_transition is not None:
-                mapping = parse_canonical_object(bytes(existing_transition["snapshot"]))
-                existing = _recorded_calibration_snapshot_from_mapping(mapping)
+            ).fetchall()
+            if len(existing_rows) > 1:
+                raise RegistryIntegrityError(
+                    "recorded calibration transition must exist at most once"
+                )
+            if existing_rows:
+                existing_transition = existing_rows[0]
+                existing = self._verified_recorded_calibration_transition(existing_transition)
                 if (
                     existing_transition["expected_generation"] != expected_generation
                     or existing_transition["report_revision"] != report.report_revision
-                    or existing.content_digest.hexdigest != existing_transition["snapshot_sha"]
-                    or bytes(existing_transition["snapshot"])
-                    != canonical_json_bytes(existing.as_mapping())
+                    or existing.slot_id != report.slot_id
+                    or existing.report_id != report.report_id
+                    or existing.model_id != report.model_id
+                    or existing.model_revision != report.model_revision
+                    or existing.policy_revision != report.policy.policy_revision
+                    or existing.authority is not report.policy.authority
                 ):
                     raise RegistryConflictError(
                         "recorded calibration transition idempotency key conflicts"
                     )
+                self._require_recorded_calibration_report_binding(connection, existing)
+                if existing.generation > 1:
+                    persisted_comparison = self._require_recorded_calibration_transition_comparison(
+                        connection,
+                        snapshot=existing,
+                        expected_comparison=None,
+                    )
+                    if not isinstance(comparison, RecordedCalibrationComparisonV1):
+                        raise RegistryConflictError(
+                            "recorded calibration transition retry requires comparison evidence"
+                        )
+                    if persisted_comparison != comparison:
+                        raise RegistryConflictError(
+                            "recorded calibration transition idempotency key conflicts"
+                        )
+                else:
+                    linked_comparisons = connection.execute(
+                        "SELECT comparison_revision FROM "
+                        "recorded_calibration_transition_comparisons "
+                        "WHERE transition_id=? LIMIT 1",
+                        (transition_id,),
+                    ).fetchall()
+                    if comparison is not None or linked_comparisons:
+                        raise RegistryConflictError(
+                            "recorded calibration transition idempotency key conflicts"
+                        )
                 self._finish(connection, hook)
                 return existing
             head = connection.execute(
@@ -3326,14 +3772,98 @@ class ResearchRegistryStore:
             ).fetchone()
             generation = 0 if head is None else int(head["generation"])
             if generation != expected_generation:
+                if head is not None:
+                    try:
+                        stale_mapping = parse_canonical_object(bytes(head["snapshot"]))
+                        stale_snapshot = _recorded_calibration_snapshot_from_mapping(stale_mapping)
+                    except (KeyError, TypeError, QuantEdgeError) as error:
+                        raise RegistryIntegrityError(
+                            "recorded calibration head is malformed"
+                        ) from error
+                    if stale_snapshot.transition_id == transition_id:
+                        raise RegistryIntegrityError(
+                            "recorded calibration head transition is absent"
+                        )
                 raise RegistryConflictError("recorded calibration generation is stale")
+            comparison_revision: str | None = None
             if head is not None:
                 head_mapping = parse_canonical_object(bytes(head["snapshot"]))
                 head_snapshot = _recorded_calibration_snapshot_from_mapping(head_mapping)
-                if head_snapshot.content_digest.hexdigest != head["snapshot_sha"] or bytes(
-                    head["snapshot"]
-                ) != canonical_json_bytes(head_snapshot.as_mapping()):
+                if (
+                    head_snapshot.slot_id != report.slot_id
+                    or head_snapshot.generation != head["generation"]
+                    or head_snapshot.content_digest.hexdigest != head["snapshot_sha"]
+                    or bytes(head["snapshot"]) != canonical_json_bytes(head_snapshot.as_mapping())
+                ):
                     raise RegistryIntegrityError("recorded calibration prior head is corrupt")
+                prior_transition = self._require_recorded_calibration_transition(
+                    connection,
+                    head_snapshot.transition_id,
+                )
+                if prior_transition != head_snapshot:
+                    raise RegistryIntegrityError(
+                        "recorded calibration prior head transition binding is corrupt"
+                    )
+                if now_ms <= head_snapshot.updated_at_ms:
+                    raise RegistryConflictError(
+                        "recorded calibration promotion time must strictly advance"
+                    )
+                try:
+                    prior_mapping = self._require_recorded_calibration_report_binding(
+                        connection,
+                        head_snapshot,
+                    )
+                except RegistryIntegrityError as error:
+                    raise RegistryIntegrityError(
+                        "recorded calibration prior report binding is corrupt"
+                    ) from error
+                if head_snapshot.generation > 1:
+                    self._require_recorded_calibration_transition_comparison(
+                        connection,
+                        snapshot=head_snapshot,
+                        expected_comparison=None,
+                    )
+                if not isinstance(comparison, RecordedCalibrationComparisonV1):
+                    raise RegistryConflictError(
+                        "subsequent recorded calibration promotion requires comparison evidence"
+                    )
+                comparison_revision = f"sha256:{comparison.content_digest.hexdigest}"
+                comparison_rows = connection.execute(
+                    "SELECT comparison_revision FROM "
+                    "recorded_calibration_comparisons WHERE comparison_revision=? LIMIT 2",
+                    (comparison_revision,),
+                ).fetchall()
+                if not comparison_rows:
+                    raise RegistryConflictError(
+                        "recorded calibration promotion comparison does not authorize revision"
+                    )
+                if len(comparison_rows) != 1:
+                    raise RegistryIntegrityError(
+                        "recorded calibration comparison must exist exactly once"
+                    )
+                persisted_comparison = self._require_persisted_recorded_calibration_comparison(
+                    connection,
+                    comparison_revision,
+                    require_pass=False,
+                )
+                outcome_digests = [digest.hexdigest for digest in comparison.outcome_digests]
+                if (
+                    comparison.verdict is not RecordedComparisonVerdict.PASS
+                    or persisted_comparison != comparison
+                    or comparison.baseline_report_revision != head_snapshot.report_revision
+                    or comparison.challenger_report_revision != report.report_revision
+                    or comparison.baseline_model_revision != head_snapshot.model_revision
+                    or comparison.challenger_model_revision != report.model_revision
+                    or prior_mapping.get("outcomeSha256") != outcome_digests
+                    or report.as_mapping().get("outcomeSha256") != outcome_digests
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration promotion comparison does not authorize revision"
+                    )
+            elif comparison is not None:
+                raise RegistryConflictError(
+                    "initial recorded calibration promotion cannot claim a prior comparison"
+                )
             snapshot = RecordedCalibrationSnapshotV1(
                 slot_id=report.slot_id,
                 generation=generation + 1,
@@ -3373,6 +3903,12 @@ class ResearchRegistryStore:
                     snapshot_body,
                 ),
             )
+            if comparison_revision is not None:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_transition_comparisons("
+                    "transition_id,comparison_revision) VALUES(?,?)",
+                    (transition_id, comparison_revision),
+                )
             self._finish(connection, hook)
             return snapshot
         except BaseException:

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from quant_edge.canonical import canonical_json_bytes
+from quant_edge.canonical import canonical_json_bytes, parse_canonical_object
 from quant_edge.errors import ContractValueError
 from quant_edge.lake.contracts import DigestV1, EvidencePosture, QualityState
 from quant_edge.registry_ops import recorded_outcomes as recorded_outcome_module
@@ -20,17 +21,22 @@ from quant_edge.registry_ops.passive_fill_receipts import (
 )
 from quant_edge.registry_ops.recorded_outcomes import (
     CalibrationAuthority,
+    RecordedCalibrationComparisonV1,
     RecordedCalibrationPolicyV1,
     RecordedCalibrationReportV1,
+    RecordedCalibrationSnapshotV1,
     RecordedCalibrationStatus,
+    RecordedComparisonVerdict,
     RecordedOutcomeAttestationV1,
     RecordedOutcomeCorpusV1,
     RecordedOutcomeV1,
     RecordedPredictionRegistrationV1,
+    compare_recorded_calibrations,
     evaluate_recorded_calibration,
 )
 from quant_edge.registry_ops.store import (
     RegistryConflictError,
+    RegistryIntegrityError,
     ResearchRegistryStore,
 )
 from quant_edge.survival.contracts import TimeGridV1
@@ -57,7 +63,7 @@ def policy(
         maximum_brier_micros=20_000,
         maximum_absolute_bias_micros=60_000,
         maximum_mean_absolute_residual_micros=100_000,
-        maximum_absolute_cost_residual_micros=100,
+        maximum_mean_absolute_cost_residual_micros=100,
         required_cost_unit="quote-notional-micros.v1",
         required_cost_valuation_asset="USDT",
     )
@@ -232,7 +238,7 @@ def test_replay_residuals_are_exact_and_promote_only_research_head(tmp_path: Pat
     assert result.brier_micros == 10_000
     assert result.bias_micros == 50_000
     assert result.mean_absolute_residual_micros == 100_000
-    assert result.mean_cost_residual_micros == 10
+    assert result.mean_absolute_cost_residual_micros == 10
     assert result.report_revision.startswith("sha256:")
 
     with ResearchRegistryStore(tmp_path) as store:
@@ -714,6 +720,647 @@ def test_store_owned_chronological_receipt_is_the_only_passive_fill_promotion_pa
             )
             == receipt
         )
+
+
+def test_generation_two_passive_fill_requires_exact_receipt_and_persisted_comparison(
+    tmp_path: Path,
+) -> None:
+    now = [NOW + 100]
+    training = passive_fill_training_observations()
+    baseline_challenger = passive_fill_challenger(training)
+    baseline_corpus = passive_fill_corpus()
+    baseline_report = passive_fill_report(baseline_corpus)
+    second_model_revision = "l065.passive-fill.v2"
+    second_challenger = fit_passive_fill_challenger(
+        training,
+        replace(
+            baseline_challenger.config,
+            model_revision=second_model_revision,
+            grid=TimeGridV1(
+                "l065.passive-fill.grid.v2",
+                baseline_challenger.config.grid.times_ns,
+            ),
+        ),
+    )
+    second_corpus = replace(
+        baseline_corpus,
+        corpus_id="l110.passive-fill-heldout.generation-two",
+        corpus_revision="l110.passive-fill-heldout.generation-two.v1",
+        records=tuple(
+            replace(
+                item,
+                prediction_id=f"{item.prediction_id}.generation-two",
+                model_revision=second_model_revision,
+                prediction_micros=item.outcome_micros,
+            )
+            for item in baseline_corpus.records
+        ),
+    )
+    second_report = evaluate_recorded_calibration(
+        report_id="l110.passive-fill-report.generation-two.v1",
+        slot_id=baseline_report.slot_id,
+        corpus=second_corpus,
+        policy=baseline_report.policy,
+    )
+    comparison = compare_recorded_calibrations(
+        comparison_id="l110.passive-fill-comparison.generation-two.v1",
+        baseline=baseline_report,
+        challenger=second_report,
+    )
+    assert comparison.verdict is RecordedComparisonVerdict.PASS
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as store:
+        store.record_recorded_calibration_report(baseline_report, corpus=baseline_corpus)
+        baseline_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.generation-one.v1",
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+            transition_id="l110.passive-fill-promote.generation-one.v1",
+            expected_generation=0,
+        )
+        first = store.promote_passive_fill_challenger(
+            receipt_revision=baseline_receipt.receipt_revision,
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+        )
+        assert first.generation == 1
+
+        now[0] = NOW + 101
+        store.record_recorded_calibration_report(second_report, corpus=second_corpus)
+        second_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.generation-two.v1",
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            transition_id="l110.passive-fill-promote.generation-two.v1",
+            expected_generation=first.generation,
+        )
+        foreign_report = evaluate_recorded_calibration(
+            report_id="l110.passive-fill-report.foreign-generation-two.v1",
+            slot_id=baseline_report.slot_id,
+            corpus=second_corpus,
+            policy=baseline_report.policy,
+        )
+        foreign_comparison = compare_recorded_calibrations(
+            comparison_id="l110.passive-fill-comparison.foreign-generation-two.v1",
+            baseline=baseline_report,
+            challenger=foreign_report,
+        )
+        assert foreign_comparison.verdict is RecordedComparisonVerdict.PASS
+        store.record_recorded_calibration_report(foreign_report, corpus=second_corpus)
+        store.record_recorded_calibration_comparison(
+            foreign_comparison,
+            baseline=baseline_report,
+            challenger=foreign_report,
+        )
+
+        with pytest.raises(RegistryConflictError, match="held-out calibration receipt"):
+            store.promote_recorded_calibration(
+                report=second_report,
+                transition_id=second_receipt.transition_id,
+                expected_generation=second_receipt.expected_generation,
+                now_ms=now[0],
+                comparison=comparison,
+            )
+        with pytest.raises(RegistryConflictError, match="does not bind the exact evidence"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=baseline_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+        with pytest.raises(RegistryConflictError, match="requires comparison evidence"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+            )
+        assert store.current_recorded_calibration(second_report.slot_id) == first
+        with pytest.raises(RegistryConflictError, match="does not authorize revision"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=foreign_comparison,
+            )
+        assert store.current_recorded_calibration(second_report.slot_id) == first
+        with pytest.raises(RegistryConflictError, match="does not authorize revision"):
+            store.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+        assert store.current_recorded_calibration(second_report.slot_id) == first
+
+        store.record_recorded_calibration_comparison(
+            comparison,
+            baseline=baseline_report,
+            challenger=second_report,
+        )
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as restarted:
+        second = restarted.promote_passive_fill_challenger(
+            receipt_revision=second_receipt.receipt_revision,
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            comparison=comparison,
+        )
+        assert second.generation == 2
+        assert second.report_revision == second_report.report_revision
+
+    with ResearchRegistryStore(
+        tmp_path,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as replayed:
+        assert (
+            replayed.promote_passive_fill_challenger(
+                receipt_revision=second_receipt.receipt_revision,
+                challenger=second_challenger,
+                training_observations=training,
+                report=second_report,
+                corpus=second_corpus,
+                comparison=comparison,
+            )
+            == second
+        )
+        links = (
+            replayed._require_open()
+            .execute(
+                "SELECT comparison_revision FROM "
+                "recorded_calibration_transition_comparisons WHERE transition_id=?",
+                (second_receipt.transition_id,),
+            )
+            .fetchall()
+        )
+        assert [row["comparison_revision"] for row in links] == [
+            f"sha256:{comparison.content_digest.hexdigest}"
+        ]
+
+
+def _persist_generation_two_passive_fill(
+    root: Path,
+) -> tuple[
+    int,
+    tuple[PassiveFillObservationV1, ...],
+    PassiveFillChallengerV1,
+    RecordedOutcomeCorpusV1,
+    RecordedCalibrationReportV1,
+    PassiveFillHeldOutCalibrationReceiptV1,
+    RecordedCalibrationComparisonV1,
+    RecordedCalibrationSnapshotV1,
+]:
+    now = [NOW + 100]
+    training = passive_fill_training_observations()
+    baseline_challenger = passive_fill_challenger(training)
+    baseline_corpus = passive_fill_corpus()
+    baseline_report = passive_fill_report(baseline_corpus)
+    second_model_revision = "l065.passive-fill.storage-v2"
+    second_challenger = fit_passive_fill_challenger(
+        training,
+        replace(
+            baseline_challenger.config,
+            model_revision=second_model_revision,
+            grid=TimeGridV1(
+                "l065.passive-fill.storage-grid.v2",
+                baseline_challenger.config.grid.times_ns,
+            ),
+        ),
+    )
+    second_corpus = replace(
+        baseline_corpus,
+        corpus_id="l110.passive-fill-heldout.storage-generation-two",
+        corpus_revision="l110.passive-fill-heldout.storage-generation-two.v1",
+        records=tuple(
+            replace(
+                item,
+                prediction_id=f"{item.prediction_id}.storage-generation-two",
+                model_revision=second_model_revision,
+                prediction_micros=item.outcome_micros,
+            )
+            for item in baseline_corpus.records
+        ),
+    )
+    second_report = evaluate_recorded_calibration(
+        report_id="l110.passive-fill-report.storage-generation-two.v1",
+        slot_id=baseline_report.slot_id,
+        corpus=second_corpus,
+        policy=baseline_report.policy,
+    )
+    comparison = compare_recorded_calibrations(
+        comparison_id="l110.passive-fill-comparison.storage-generation-two.v1",
+        baseline=baseline_report,
+        challenger=second_report,
+    )
+    assert comparison.verdict is RecordedComparisonVerdict.PASS
+
+    with ResearchRegistryStore(
+        root,
+        passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+        passive_fill_calibration_owner_revision=PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+        passive_fill_calibration_clock=lambda: now[0],
+        passive_fill_calibration_receipt_ttl_ms=10_000,
+    ) as store:
+        store.record_recorded_calibration_report(baseline_report, corpus=baseline_corpus)
+        baseline_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.storage-generation-one.v1",
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+            transition_id="l110.passive-fill-promote.storage-generation-one.v1",
+            expected_generation=0,
+        )
+        first = store.promote_passive_fill_challenger(
+            receipt_revision=baseline_receipt.receipt_revision,
+            challenger=baseline_challenger,
+            training_observations=training,
+            report=baseline_report,
+            corpus=baseline_corpus,
+        )
+        assert first.generation == 1
+        now[0] = NOW + 101
+        store.record_recorded_calibration_report(second_report, corpus=second_corpus)
+        second_receipt = store.record_passive_fill_held_out_calibration_receipt(
+            receipt_id="l110.passive-fill-receipt.storage-generation-two.v1",
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            transition_id="l110.passive-fill-promote.storage-generation-two.v1",
+            expected_generation=first.generation,
+        )
+        store.record_recorded_calibration_comparison(
+            comparison,
+            baseline=baseline_report,
+            challenger=second_report,
+        )
+        second = store.promote_passive_fill_challenger(
+            receipt_revision=second_receipt.receipt_revision,
+            challenger=second_challenger,
+            training_observations=training,
+            report=second_report,
+            corpus=second_corpus,
+            comparison=comparison,
+        )
+        assert second.generation == 2
+    return (
+        now[0],
+        training,
+        second_challenger,
+        second_corpus,
+        second_report,
+        second_receipt,
+        comparison,
+        second,
+    )
+
+
+def _persist_generation_two_generic(
+    root: Path,
+) -> tuple[
+    RecordedCalibrationReportV1,
+    RecordedCalibrationComparisonV1,
+    RecordedCalibrationSnapshotV1,
+]:
+    baseline_corpus = corpus()
+    baseline_report = report()
+    challenger_corpus = replace(
+        baseline_corpus,
+        corpus_id="l110.recorded-calibration.storage-generation-two",
+        corpus_revision="l110.recorded-calibration.storage-generation-two.v1",
+        records=tuple(
+            replace(
+                item,
+                prediction_id=f"{item.prediction_id}.storage-generation-two",
+                model_revision="l110.recorded-calibration-probe.storage-v2",
+                prediction_micros=item.outcome_micros,
+                predicted_cost_micros=item.realized_cost_micros,
+            )
+            for item in baseline_corpus.records
+        ),
+    )
+    challenger_report = evaluate_recorded_calibration(
+        report_id="l110.recorded-calibration-report.storage-generation-two.v1",
+        slot_id=baseline_report.slot_id,
+        corpus=challenger_corpus,
+        policy=baseline_report.policy,
+    )
+    comparison = compare_recorded_calibrations(
+        comparison_id="l110.recorded-calibration-comparison.storage-generation-two.v1",
+        baseline=baseline_report,
+        challenger=challenger_report,
+    )
+    assert comparison.verdict is RecordedComparisonVerdict.PASS
+    with ResearchRegistryStore(root) as store:
+        store.record_recorded_calibration_report(baseline_report, corpus=baseline_corpus)
+        first = store.promote_recorded_calibration(
+            report=baseline_report,
+            transition_id="l110.recorded-calibration-promote.storage-generation-one.v1",
+            expected_generation=0,
+            now_ms=NOW + 100,
+        )
+        assert first.generation == 1
+        store.record_recorded_calibration_report(
+            challenger_report,
+            corpus=challenger_corpus,
+        )
+        store.record_recorded_calibration_comparison(
+            comparison,
+            baseline=baseline_report,
+            challenger=challenger_report,
+        )
+        second = store.promote_recorded_calibration(
+            report=challenger_report,
+            transition_id="l110.recorded-calibration-promote.storage-generation-two.v1",
+            expected_generation=first.generation,
+            now_ms=NOW + 101,
+            comparison=comparison,
+        )
+        assert second.generation == 2
+    return challenger_report, comparison, second
+
+
+def _corrupt_generation_two_comparison(
+    root: Path,
+    *,
+    mutation: str,
+    baseline_report_revision: str,
+    challenger_report_revision: str,
+    transition_id: str,
+    comparison_revision: str,
+) -> None:
+    database = root / "q15-registry.sqlite3"
+    wrong_revision = f"sha256:{'f' * 64}"
+    with sqlite3.connect(database) as connection:
+        if mutation == "deleted-comparison":
+            connection.execute(
+                "DELETE FROM recorded_calibration_comparisons WHERE comparison_revision=?",
+                (comparison_revision,),
+            )
+        elif mutation == "corrupt-body":
+            connection.execute(
+                "UPDATE recorded_calibration_comparisons SET body=? WHERE comparison_revision=?",
+                (sqlite3.Binary(b"{ }"), comparison_revision),
+            )
+        elif mutation == "corrupt-body-sha":
+            connection.execute(
+                "UPDATE recorded_calibration_comparisons SET body_sha=? "
+                "WHERE comparison_revision=?",
+                ("0" * 64, comparison_revision),
+            )
+        elif mutation == "wrong-verdict":
+            connection.execute(
+                "UPDATE recorded_calibration_comparisons SET verdict='FAIL' "
+                "WHERE comparison_revision=?",
+                (comparison_revision,),
+            )
+        elif mutation in {"wrong-baseline-binding", "wrong-challenger-binding"}:
+            row = connection.execute(
+                "SELECT body FROM recorded_calibration_comparisons WHERE comparison_revision=?",
+                (comparison_revision,),
+            ).fetchone()
+            assert row is not None
+            mapping = parse_canonical_object(bytes(row[0]))
+            if mutation == "wrong-baseline-binding":
+                mapping["baselineReportRevision"] = challenger_report_revision
+                mapping["baselineModelRevision"] = mapping["challengerModelRevision"]
+            else:
+                mapping["challengerReportRevision"] = baseline_report_revision
+                mapping["challengerModelRevision"] = mapping["baselineModelRevision"]
+            resealed_body = canonical_json_bytes(mapping)
+            resealed_sha = hashlib.sha256(resealed_body).hexdigest()
+            resealed_revision = f"sha256:{resealed_sha}"
+            connection.execute(
+                "UPDATE recorded_calibration_comparisons SET comparison_revision=?,"
+                "baseline_report_revision=?,challenger_report_revision=?,body_sha=?,body=? "
+                "WHERE comparison_revision=?",
+                (
+                    resealed_revision,
+                    mapping["baselineReportRevision"],
+                    mapping["challengerReportRevision"],
+                    resealed_sha,
+                    sqlite3.Binary(resealed_body),
+                    comparison_revision,
+                ),
+            )
+            connection.execute(
+                "UPDATE recorded_calibration_transition_comparisons "
+                "SET comparison_revision=? WHERE transition_id=?",
+                (resealed_revision, transition_id),
+            )
+        elif mutation == "wrong-revision":
+            connection.execute(
+                "UPDATE recorded_calibration_comparisons SET comparison_revision=? "
+                "WHERE comparison_revision=?",
+                (wrong_revision, comparison_revision),
+            )
+            connection.execute(
+                "UPDATE recorded_calibration_transition_comparisons "
+                "SET comparison_revision=? WHERE transition_id=?",
+                (wrong_revision, transition_id),
+            )
+        elif mutation == "missing-link":
+            connection.execute(
+                "DELETE FROM recorded_calibration_transition_comparisons WHERE transition_id=?",
+                (transition_id,),
+            )
+        elif mutation == "duplicate-link":
+            connection.execute(
+                "ALTER TABLE recorded_calibration_transition_comparisons "
+                "RENAME TO recorded_calibration_transition_comparisons_original"
+            )
+            connection.execute(
+                "CREATE TABLE recorded_calibration_transition_comparisons("
+                "transition_id TEXT NOT NULL,comparison_revision TEXT NOT NULL) STRICT"
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_transition_comparisons "
+                "SELECT transition_id,comparison_revision FROM "
+                "recorded_calibration_transition_comparisons_original"
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_transition_comparisons("
+                "transition_id,comparison_revision) VALUES(?,?)",
+                (transition_id, comparison_revision),
+            )
+            connection.execute("DROP TABLE recorded_calibration_transition_comparisons_original")
+        elif mutation == "duplicate-comparison":
+            connection.execute(
+                "ALTER TABLE recorded_calibration_comparisons "
+                "RENAME TO recorded_calibration_comparisons_original"
+            )
+            connection.execute(
+                "CREATE TABLE recorded_calibration_comparisons("
+                "comparison_id TEXT NOT NULL,comparison_revision TEXT NOT NULL,"
+                "baseline_report_revision TEXT NOT NULL,"
+                "challenger_report_revision TEXT NOT NULL,body_sha TEXT NOT NULL,"
+                "body BLOB NOT NULL,verdict TEXT NOT NULL) STRICT"
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_comparisons SELECT * FROM "
+                "recorded_calibration_comparisons_original"
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_comparisons SELECT * FROM "
+                "recorded_calibration_comparisons_original "
+                "WHERE comparison_revision=?",
+                (comparison_revision,),
+            )
+            connection.execute("DROP TABLE recorded_calibration_comparisons_original")
+        elif mutation == "duplicate-prior-transition":
+            prior = connection.execute(
+                "SELECT slot_id,expected_generation,report_revision,snapshot_sha,"
+                "snapshot,committed_at_ms FROM recorded_calibration_transitions "
+                "WHERE slot_id=(SELECT slot_id FROM recorded_calibration_transitions "
+                "WHERE transition_id=?) AND expected_generation=0",
+                (transition_id,),
+            ).fetchone()
+            assert prior is not None
+            connection.execute(
+                "INSERT INTO recorded_calibration_transitions("
+                "transition_id,slot_id,expected_generation,report_revision,snapshot_sha,"
+                "snapshot,committed_at_ms) VALUES(?,?,?,?,?,?,?)",
+                ("l110.corrupt.duplicate-prior-transition", *prior),
+            )
+        elif mutation == "deleted-baseline-report":
+            connection.execute(
+                "DELETE FROM recorded_calibration_reports WHERE report_revision=?",
+                (baseline_report_revision,),
+            )
+        elif mutation == "corrupt-baseline-report":
+            connection.execute(
+                "UPDATE recorded_calibration_reports SET body=? WHERE report_revision=?",
+                (sqlite3.Binary(b"{ }"), baseline_report_revision),
+            )
+        elif mutation == "wrong-transition-report":
+            connection.execute(
+                "UPDATE recorded_calibration_transitions SET report_revision=? "
+                "WHERE transition_id=?",
+                (baseline_report_revision, transition_id),
+            )
+        elif mutation == "wrong-transition-committed-at":
+            connection.execute(
+                "UPDATE recorded_calibration_transitions "
+                "SET committed_at_ms=committed_at_ms+1 WHERE transition_id=?",
+                (transition_id,),
+            )
+        elif mutation == "missing-current-transition":
+            connection.execute(
+                "DELETE FROM recorded_calibration_transitions WHERE transition_id=?",
+                (transition_id,),
+            )
+        else:
+            raise AssertionError(f"unknown mutation: {mutation}")
+
+
+@pytest.mark.parametrize("read_path", ["current-read", "idempotent-retry"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "deleted-comparison",
+        "corrupt-body",
+        "corrupt-body-sha",
+        "wrong-verdict",
+        "wrong-baseline-binding",
+        "wrong-challenger-binding",
+        "wrong-revision",
+        "missing-link",
+        "duplicate-link",
+        "duplicate-comparison",
+        "duplicate-prior-transition",
+        "deleted-baseline-report",
+        "corrupt-baseline-report",
+        "wrong-transition-report",
+        "wrong-transition-committed-at",
+        "missing-current-transition",
+    ],
+)
+def test_generation_two_comparison_storage_mutations_fail_closed(
+    tmp_path: Path,
+    mutation: str,
+    read_path: str,
+) -> None:
+    root = tmp_path / f"{mutation}-{read_path}"
+    root.mkdir()
+    if read_path == "current-read":
+        (
+            now_ms,
+            _training,
+            _challenger,
+            _heldout,
+            report,
+            receipt,
+            comparison,
+            snapshot,
+        ) = _persist_generation_two_passive_fill(root)
+        transition_id = receipt.transition_id
+    else:
+        report, comparison, snapshot = _persist_generation_two_generic(root)
+        transition_id = snapshot.transition_id
+    _corrupt_generation_two_comparison(
+        root,
+        mutation=mutation,
+        baseline_report_revision=comparison.baseline_report_revision,
+        challenger_report_revision=comparison.challenger_report_revision,
+        transition_id=transition_id,
+        comparison_revision=f"sha256:{comparison.content_digest.hexdigest}",
+    )
+
+    if read_path == "current-read":
+        with (
+            ResearchRegistryStore(
+                root,
+                passive_fill_calibration_owner_id=PASSIVE_FILL_CALIBRATION_OWNER_ID,
+                passive_fill_calibration_owner_revision=(PASSIVE_FILL_CALIBRATION_OWNER_REVISION),
+                passive_fill_calibration_clock=lambda: now_ms,
+                passive_fill_calibration_receipt_ttl_ms=10_000,
+            ) as restarted,
+            pytest.raises(RegistryIntegrityError),
+        ):
+            restarted.current_recorded_calibration(report.slot_id)
+    else:
+        with (
+            ResearchRegistryStore(root) as restarted,
+            pytest.raises(RegistryIntegrityError),
+        ):
+            restarted.promote_recorded_calibration(
+                report=report,
+                transition_id=snapshot.transition_id,
+                expected_generation=snapshot.generation - 1,
+                now_ms=snapshot.updated_at_ms,
+                comparison=comparison,
+            )
 
 
 def test_passive_fill_receipt_rejects_foreign_partial_stale_and_overlapping_evidence(

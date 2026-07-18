@@ -38,6 +38,8 @@ export interface BasisConfig extends EngineConfig {
   gapWindowSize: number;
   /** minimum executable-gap change, in percentage points, eligible for causality */
   causalMoveThresholdPct: number;
+  /** max age of an initiating-market attribution before it expires */
+  causalExpiryMs: number;
 
   // --- funding model ---
   /** default expected hold when the gap slope gives no estimate, ms */
@@ -90,6 +92,7 @@ export const BASIS_DEFAULTS: BasisConfig = {
   maxGapCv: 0.6,
   gapWindowSize: 60,
   causalMoveThresholdPct: 0.005,
+  causalExpiryMs: 15_000,
 
   defaultHoldMs: 4 * 60 * 60_000,
   minHoldMs: 10 * 60_000,
@@ -171,6 +174,7 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     'maxHoldMs',
     'fundingPeriodMs',
     'borrowSafetyFactor',
+    'causalExpiryMs',
   ] as const) finite(name, Number.MIN_VALUE);
 
   for (const name of [

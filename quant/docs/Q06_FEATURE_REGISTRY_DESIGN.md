@@ -58,10 +58,17 @@ Implemented model-free: Pearson/Spearman signed r-squared as exact rationals (si
 square avoids irrational square roots; Spearman uses doubled midranks so ties stay
 integral), near-constant checks, missingness counts with longest-run detection and
 greedy single-link redundancy clustering above an explicit r-squared threshold.
-Deferred (recorded in `deferred_diagnostics()`): fold-based mutual information,
-permutation importance on chronological holdouts, SHAP attribution, adversarial family
-ablation, incremental value after engine features, and sign/monotonicity stability
-across folds — all require the model/validation phases (Q10/Q14).
+The model-dependent diagnostics formerly recorded by `deferred_diagnostics()` are now
+owned by Q14's authoritative walk-forward plan: training-fold mutual information,
+same-fit permutation importance on chronological validation folds, exact additive
+TreeSHAP/equivalent validation, sign/monotonicity stability, genuine family refits and
+incremental value after the existing engine-feature baseline. Q06 retains the bounded
+model-free diagnostics; `diagnostic_obligations()` records the complete ten-item law.
+Q14 matrices are built only from source cells that bind observation status/value,
+source as-of and last-event time, source owner/revision/artifact digest and evidence
+posture. Synthetic posture cannot publish available diagnostics. Chronological
+permutation selects each donor only from feature truth available by that receiver's
+cutoff and binds the donor cell plus recomputed output lineage.
 
 ## v1 primitive features
 

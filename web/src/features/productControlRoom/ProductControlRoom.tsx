@@ -35,7 +35,10 @@ export interface ProductControlRoomProps {
   readonly unavailableReason?: string | null;
   readonly bindingBlocker?: string | null;
   readonly allowFixtureControls?: boolean;
-  readonly onPreview: (control: Readonly<ProductControlRegistryEntry>) => Promise<ProductControlPreview>;
+  readonly onPreview: (
+    control: Readonly<ProductControlRegistryEntry>,
+    signal: AbortSignal,
+  ) => Promise<ProductControlPreview>;
   readonly onSubmit: (request: Readonly<ProductCommandRequest>) => Promise<ProductControlResult>;
   readonly onReadCommandResult?: (
     identity: Readonly<ProductCommandResultIdentity>,

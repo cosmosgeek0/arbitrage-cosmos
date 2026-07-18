@@ -73,6 +73,13 @@ export interface SystemIntegrationApplicationOptions {
   readonly components?: ApplicationComponentReadPorts;
   readonly summaries?: ApplicationSummaryReadPort;
   readonly traces?: ApplicationTraceReadPort;
+  /** Narrow command/readback seam; strategy engines remain the sole owners. */
+  readonly strategyIntake?: Readonly<{
+    basis?: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
+  }>;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;

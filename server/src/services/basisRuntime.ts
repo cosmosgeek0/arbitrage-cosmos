@@ -174,6 +174,14 @@ export class BasisRuntime {
     });
   }
 
+  setIntakePaused(paused: boolean): boolean {
+    return this.engine.setIntakePaused(paused);
+  }
+
+  intakePaused(): boolean {
+    return this.engine.intakePaused();
+  }
+
   private onEngineEvent(event: EngineEvent): void {
     const decisionKind = typeof event.payload.kind === 'string' ? event.payload.kind : null;
     if (event.kind === 'strategy_decision' && decisionKind === 'ignore') return;

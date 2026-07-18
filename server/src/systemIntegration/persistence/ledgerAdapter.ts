@@ -145,7 +145,9 @@ function sameJson(left: unknown, right: unknown): boolean {
 }
 
 function requiresRuntimePublication(command: unknown): boolean {
-  return command === 'RESTART_COMPONENT' || command === 'SET_COMPONENT_STATE';
+  return command === 'RESTART_COMPONENT'
+    || command === 'SET_COMPONENT_STATE'
+    || command === 'SET_BASIS_INTAKE';
 }
 
 function idempotencyEventKind(idempotencyKey: string): string {

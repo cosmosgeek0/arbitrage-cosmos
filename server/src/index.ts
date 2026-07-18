@@ -266,6 +266,7 @@ systemIntegration = createSystemIntegrationApplication({
   runtimes: systemIntegrationProduction.runtimes,
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
+  strategyIntake: systemIntegrationProduction.strategyIntake,
   traces: canonicalOwnerEvidence,
   lifecycleTruth: Object.freeze({
     readRestartTruth: (nowMs: number) => canonicalRestartTruth.readRestartTruth(nowMs),

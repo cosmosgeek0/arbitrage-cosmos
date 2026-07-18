@@ -62,6 +62,8 @@ export interface ProductionBasisRuntimePort {
   stop(): void;
   connectionStatus(): Readonly<ProductionBasisConnectionStatus>;
   integrationSnapshot(): Readonly<ProductionStrategySnapshot>;
+  setIntakePaused(paused: boolean): boolean;
+  intakePaused(): boolean;
 }
 
 export interface ProductionVolumeConnectionStatus {
@@ -98,4 +100,10 @@ export interface ProductionSystemIntegrationPorts {
   readonly components: ApplicationComponentReadPorts;
   /** Exact owner counts only; this adapter never computes strategy scores. */
   readonly summaries: ApplicationSummaryReadPort;
+  readonly strategyIntake: Readonly<{
+    basis: Readonly<{
+      readPaused(): boolean;
+      setPaused(paused: boolean): boolean;
+    }>;
+  }>;
 }

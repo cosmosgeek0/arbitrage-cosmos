@@ -11,14 +11,15 @@
  * Kill switch converts a would-be proposal into a named reject at the end —
  * the engine keeps seeing, it just cannot arm.
  */
-import type { Decision, DecisionKind, RejectCode, ScanContext, Scanner, StrategyId } from '../v0/types.js';
+import type { Decision, DecisionKind, ScanContext, Scanner, StrategyId } from '../v0/types.js';
 import type { BasisConfig } from './config.js';
 import type { BasisDirection, BasisFeatureSnapshot } from './types.js';
+import type { BasisRejectCode } from './rejectVocabulary.js';
 
 interface DirectionVerdict {
   direction: BasisDirection;
   kind: DecisionKind;
-  rejectCode: RejectCode | null;
+  rejectCode: BasisRejectCode | null;
   human: string;
   gapPct: number | null;
   netEdgePct: number | null;
@@ -101,7 +102,7 @@ export class BasisScanner implements Scanner {
     const funding = direction === 'long_spot_short_perp' ? s.funding.A : s.funding.B;
     const liq = direction === 'long_spot_short_perp' ? s.liquidity.A : s.liquidity.B;
     const edge = direction === 'long_spot_short_perp' ? s.edge.A : s.edge.B;
-    const v = (kind: DecisionKind, rejectCode: RejectCode | null, human: string): DirectionVerdict => ({
+    const v = (kind: DecisionKind, rejectCode: BasisRejectCode | null, human: string): DirectionVerdict => ({
       direction,
       kind,
       rejectCode,

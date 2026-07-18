@@ -7,6 +7,8 @@
  */
 import {
   BASIS_DEFAULTS,
+  BASIS_HISTORICAL_REJECT_CODE_MAP,
+  BASIS_REJECT_CODES,
   EXECUTABLE_BASIS_RETURN_CONTRACT,
   buildFundingContext,
   buildSnapshots,
@@ -121,6 +123,25 @@ section('0. one versioned executable-return law owns both constructions');
   );
   check('equal prices have zero return', executableBasisReturnPct(100, 100) === 0);
   check('profitable reverse basis stays positive', executableBasisReturnPct(101, 100) === 1);
+}
+
+section('0b. stable Basis reject vocabulary classifies every historical spelling');
+{
+  check('borrow_required retires to borrow_unknown',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.borrow_required.successorCode === 'borrow_unknown');
+  check('risk_blocked moves to the canonical risk_rejected event',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorOutcome === 'risk_rejected'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorCode === null);
+  check('account_not_connected moves to Capital account-truth eligibility',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorOutcome === 'ACCOUNT_TRUTH_BLOCKED'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorCode === null);
+  check('retired spellings cannot appear in the emitted scanner vocabulary',
+    ['borrow_required', 'risk_blocked', 'account_not_connected'].every((code) => !BASIS_REJECT_CODES.includes(code)));
+  const h = createReplayHarness(CFG, T0);
+  const snapshot = buildSnapshots(h.engine, h.sink).rejectVocabulary();
+  check('snapshot exposes the exact canonical vocabulary and retirement map',
+    JSON.stringify(snapshot.emitted) === JSON.stringify(BASIS_REJECT_CODES)
+      && snapshot.historical.borrow_required.successorCode === 'borrow_unknown');
 }
 
 // =====================================================================

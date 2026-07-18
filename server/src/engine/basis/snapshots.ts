@@ -17,10 +17,15 @@ import type {
 import type { BasisEngine } from './engine.js';
 import type { MemoryEventSink } from './events.js';
 import type { BasisFeatureSnapshot, PriorityScore } from './types.js';
+import {
+  basisRejectVocabularySnapshot,
+  type BasisRejectVocabularySnapshot,
+} from './rejectVocabulary.js';
 
 export interface BasisSnapshots extends EngineSnapshots {
   priorities(): PriorityScore[];
   featureDetail(symbol: string): BasisFeatureSnapshot | null;
+  rejectVocabulary(): Readonly<BasisRejectVocabularySnapshot>;
 }
 
 /**
@@ -76,6 +81,10 @@ export function buildSnapshots(engine: BasisEngine, sink?: MemoryEventSink): Bas
 
     featureDetail(symbol: string): BasisFeatureSnapshot | null {
       return engine.featureSnapshot(symbol);
+    },
+
+    rejectVocabulary(): Readonly<BasisRejectVocabularySnapshot> {
+      return basisRejectVocabularySnapshot();
     },
   };
 }

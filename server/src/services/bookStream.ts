@@ -39,6 +39,9 @@ type StreamFactory = (
 interface Feed {
   stream: StreamHandle;
   viewers: Set<WebSocket>;
+  status: FeedStatus;
+  lastMessageAtMs: number | null;
+  disposed: boolean;
   tradeBuf: { id: number; price: number; qty: number; time: number; isBuyerMaker: boolean }[];
   lastTradeId: number;
   flushTimer: NodeJS.Timeout;
@@ -192,6 +195,8 @@ export class BookStreamHub {
       }
     }
 
+    if (feed.disposed || this.feeds.get(symbol) !== feed) return;
+
     if (previousSymbol) this.leave(ws, previousSymbol);
     this.subOf.set(ws, symbol);
     feed.viewers.add(ws);
@@ -199,6 +204,7 @@ export class BookStreamHub {
       clearTimeout(feed.idleTimer);
       feed.idleTimer = null;
     }
+    this.publishFeedStatus(symbol, feed);
   }
 
   private ensureFeedCapacity(): boolean {
@@ -238,25 +244,34 @@ export class BookStreamHub {
   private openFeed(symbol: string): Feed {
     const lower = symbol.toLowerCase();
     const url = `wss://stream.binance.com:9443/stream?streams=${lower}@depth${BOOK_LEVELS}@100ms/${lower}@aggTrade`;
+    let feed: Feed | null = null;
     const stream = this.streamFactory(
       `book-${lower}`,
       url,
       (data) => this.onFrame(symbol, data),
-      () => undefined,
+      (_name, status) => {
+        if (feed) this.onFeedStatus(symbol, feed, status);
+      },
     );
     const flushTimer = setInterval(() => this.flushTrades(symbol), TRADE_FLUSH_MS);
     flushTimer.unref?.();
-    return {
+    feed = {
       viewers: new Set(),
+      status: 'connecting',
+      lastMessageAtMs: null,
+      disposed: false,
       tradeBuf: [],
       lastTradeId: -1,
       idleTimer: null,
       flushTimer,
       stream,
     };
+    return feed;
   }
 
   private disposeFeed(feed: Feed): void {
+    if (feed.disposed) return;
+    feed.disposed = true;
     clearInterval(feed.flushTimer);
     if (feed.idleTimer) clearTimeout(feed.idleTimer);
     feed.idleTimer = null;
@@ -268,11 +283,37 @@ export class BookStreamHub {
     }
   }
 
+  private onFeedStatus(symbol: string, feed: Feed, status: FeedStatus): void {
+    if (this.stopped || feed.disposed || this.feeds.get(symbol) !== feed) return;
+    feed.status = status;
+    const viewers = [...feed.viewers];
+    this.publishFeedStatus(symbol, feed);
+    if (status !== 'exhausted') return;
+
+    for (const viewer of viewers) {
+      if (this.subOf.get(viewer) === symbol) this.subOf.delete(viewer);
+    }
+    feed.viewers.clear();
+    this.feeds.delete(symbol);
+    this.disposeFeed(feed);
+  }
+
+  private publishFeedStatus(symbol: string, feed: Feed): void {
+    this.send(symbol, {
+      type: 'book-status',
+      symbol,
+      status: feed.status,
+      lastMessageAtMs: feed.lastMessageAtMs,
+    });
+  }
+
   private onFrame(symbol: string, data: unknown): void {
-    if (this.stopped || !this.feeds.has(symbol) || !isRecord(data)) return;
+    const feed = this.feeds.get(symbol);
+    if (this.stopped || !feed || feed.disposed || !isRecord(data)) return;
     const stream = typeof data.stream === 'string' ? data.stream : '';
     const expectedPrefix = `${symbol.toLowerCase()}@`;
     if (!stream.startsWith(expectedPrefix) || data.data === undefined) return;
+    feed.lastMessageAtMs = Date.now();
 
     if (stream === `${expectedPrefix}depth${BOOK_LEVELS}@100ms`) {
       if (!isRecord(data.data)) return;
@@ -298,8 +339,7 @@ export class BookStreamHub {
         !Number.isFinite(qty) || qty <= 0 ||
         !validEventTime(trade.T) || typeof trade.m !== 'boolean'
       ) return;
-      const feed = this.feeds.get(symbol);
-      if (!feed || trade.a <= feed.lastTradeId) return;
+      if (trade.a <= feed.lastTradeId) return;
       feed.lastTradeId = trade.a;
       feed.tradeBuf.push({ id: trade.a, price, qty, time: trade.T, isBuyerMaker: trade.m });
       if (feed.tradeBuf.length > MAX_TRADE_BUFFER) {

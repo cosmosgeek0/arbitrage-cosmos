@@ -20,6 +20,7 @@ LIBRARY_SOURCES = tuple(
         "competing.py",
         "hazard_model.py",
         "metrics.py",
+        "passive_fill.py",
         "targets.py",
     )
 )

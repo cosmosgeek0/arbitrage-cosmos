@@ -9,6 +9,10 @@ Description=Cosmos application-consistent state store backup
 
 [Service]
 Type=oneshot
+# Part 4 #11: a oneshot with no TimeoutStartSec inherits DefaultTimeoutStartSec
+# (90 s stock) and a long backup would be SIGTERMed mid-run. 30 min bounds a
+# large state store without letting a hung run live forever.
+TimeoutStartSec=1800
 User=cosmos
 Group=cosmos
 EnvironmentFile=/etc/cosmos/cosmos-backup.env

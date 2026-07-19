@@ -78,10 +78,10 @@ assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/public.
 cp "$TEST_TMP/runtime.env" "$TEST_TMP/secret.env"
 printf 'BINANCE_API_SECRET=FAKE_BUT_FORBIDDEN_HERE\n' >> "$TEST_TMP/secret.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/secret.env"
-grep -v '^DATA_DIR_LOGICAL_LEASE_ROOT=' "$TEST_TMP/runtime.env" > "$TEST_TMP/no-lease-root.env"
-assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/no-lease-root.env"
 sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=/var/lib/cosmos/data/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/nested-lease-root.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/nested-lease-root.env"
+sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=relative/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/relative-lease-root.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/relative-lease-root.env"
 
 note "receipt validators require hashed external evidence and reject forged proof states"
 EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'

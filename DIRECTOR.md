@@ -20,7 +20,7 @@ You are the sole director of the Cosmos Arbitrage Control Room (repo `~/Desktop/
 GitHub `origin/current-main` is the real product state. `Desktop/cosmos-merge` OWNS the current-main branch checkout (all merges and pushes happen there). `Desktop/Main` is a detached viewing window and may sit behind. Never trust a chat's claim over `git log` / `git ls-remote`.
 
 ## 3. Current state (2026-07-19)
-- BUILD PHASE CLOSED. `origin/current-main = 118ee3ea`. GitHub CI run 29680319880: SUCCESS on both jobs — first-ever green (the jobs were born with the final landing). Local battery at the same tip: `npm test` exit 0, `npm run test:all` exit 0 (quant 3,242 + 1 sanctioned macOS skip, AI-Ops 456/456, all gates PASS).
+- BUILD PHASE CLOSED. `origin/current-main = bd077f19` (docs consolidation atop the verified 118ee3ea build). GitHub CI run 29690027576 on bd077f19: SUCCESS on both jobs. First-ever green was run 29680319880 on 118ee3ea (the jobs were born with the final landing); local battery at that tip: `npm test` exit 0, `npm run test:all` exit 0 (quant 3,242 + 1 sanctioned macOS skip, AI-Ops 456/456, all gates PASS).
 - The tip contains: the independently verified product, five hardening waves, the final landing (71 real-gap + 64 verification fixes), and the CI-green campaign (receipted L15 ops amendment FIX-031-CS-06, q17 measurement-time provenance, Linux-canonical q10 goldens, clone-portable ops proofs).
 - STOP RULE IN FORCE: no new scans, hunts, or hardening. New work only from (a) a runtime incident after deploy, (b) an owner-visible mismatch, (c) a failed acceptance gate, (d) an explicit owner-authorized promotion.
 - Next phase: `Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md` — the deployment script (Command One: seal release; Command Two: EC2 bring-up, no open ports; Command Three: verify + observe). Starts on the owner saying "start transition".
@@ -33,7 +33,7 @@ GitHub `origin/current-main` is the real product state. `Desktop/cosmos-merge` O
 5. `test/i00/donor-equality.mjs` pins a post-landing topology allowlist: every NEW MERGE commit on current-main must be added to it or `test:i00:commands` fails. Non-merge commits don't need it.
 6. Any change under `ops/live/**` invalidates the sealed L15 operations contract. Repair = the amendment pattern (see commit 9d10563f and `docs/archive/i00-phase4/FIX-031-CS-06_CORRECTION_RECEIPT.md`): correction receipt + chained contract entry + allowed paths + mandatory regression test + re-pin the contract SHA in the four `ops/i00/bin` scripts.
 7. Never bulk-delete, never blind word-replace, never `git clean`/`reset --hard` on trees you don't own. Archive before removing (archive root: SSD `"/Volumes/Mac 4TB /cosmos-backup/"` — note the trailing space in the volume name).
-8. Several repo-root .md files (QL_DIRECTOR_STATE.md, QL_PARALLEL_DAG.md, WORKER_PROMPTS.md, …) are hash-pinned by tests. Do not edit them; they are history, not steering.
+8. Several repo-root .md files (QL_DIRECTOR_STATE.md, QL_PARALLEL_DAG.md, …) are hash-pinned by tests. Do not edit them; they are history, not steering. (WORKER_PROMPTS.md was consumed by bd077f19; its pin reads the historical commit, not the worktree.)
 9. Task blocks live in `Desktop/FIX_WAVES.md`, newest at top, unique task numbers never reused. After every commit, update the CHECKPOINT section at its top (tip SHA, what's done, exact next step) — this makes any chat death or context compaction lossless.
 10. Owner replies: minimal — what to run + next step, a few lines. Detail goes in files, never chat.
 
@@ -47,11 +47,11 @@ GitHub `origin/current-main` is the real product state. `Desktop/cosmos-merge` O
 
 ## 6. Recovery — restart ANY dead director in one line
 Open a fresh chat in `Desktop/Main` and paste:
-> You are the new director. Read `/Users/cosmosgeek/Desktop/DIRECTOR.md` fully, verify state from git (`git log --oneline -5`, `git status`, `git ls-remote origin current-main`), then give the owner a one-line status and continue from FIX_WAVES.md's CHECKPOINT.
+> You are the new director. Read `DIRECTOR.md` (repository root) fully, verify state from git (`git log --oneline -5`, `git status`, `git ls-remote origin current-main`), then give the owner a one-line status and continue from FIX_WAVES.md's CHECKPOINT.
 This procedure has already survived two director replacements and a mid-run model swap with zero loss.
 
 ## 7. Locations
-- Live command log + checkpoint: `Desktop/FIX_WAVES.md` · Deployment script: `Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md` · Owner manual: `Desktop/MANUAL.md`
+- Live command log + checkpoint: `Desktop/FIX_WAVES.md` · Deployment script: `Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md` · Owner manual: `MANUAL.md` (repository root; consumed from Desktop by bd077f19)
 - Archive + full-repo backup bundle + EC2 runbook (DEPLOY_READINESS.md) + future AI-console build order: SSD `"/Volumes/Mac 4TB /cosmos-backup/"`. Refresh the bundle (`git bundle create … --all` from cosmos-merge) after every push.
 - Owner memory auto-loads (`parallel-sprints-status.md` has compressed history).
 

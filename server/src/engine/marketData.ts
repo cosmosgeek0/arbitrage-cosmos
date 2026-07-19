@@ -159,6 +159,9 @@ const MAX_MARKET_SYMBOLS = 4_096;
 const MARKET_EVENT_MAX_AGE_MS = 30_000;
 const MAX_FUTURE_SKEW_MS = 5_000;
 const SYMBOL_PATTERN = /^[A-Z0-9]{1,32}$/;
+// Bounded per-feed recycle budget for exhausted retry campaigns; reset when a
+// feed proves recovery by reaching 'open'.
+const MAX_EXHAUSTED_STREAM_RECYCLES = 5;
 const SYSTEM_MARKET_CLOCK: MarketEngineClock = Object.freeze({ nowMs: () => Date.now() });
 
 function finite(value: unknown): value is number {
@@ -208,6 +211,7 @@ export class MarketEngine {
   private liquidationEvidenceRevision = 0;
   private liquidationEvidenceOpen = false;
   private streams = new Map<string, BinanceStream>();
+  private readonly streamRecycleBudget = new Map<string, number>();
   private isolatedSources = new Set<MarketPublicSourceId>();
   private sourceControlGenerations: Record<MarketPublicSourceId, number> = {
     'public-spot-source': 0,
@@ -405,6 +409,7 @@ export class MarketEngine {
     ++this.generation;
     for (const s of this.streams.values()) s.stop();
     this.streams.clear();
+    this.streamRecycleBudget.clear();
     this.liquidationProjection?.stop();
     if (this.sampler) clearInterval(this.sampler);
     if (this.oiTimer) clearInterval(this.oiTimer);
@@ -447,6 +452,28 @@ export class MarketEngine {
             ? 'ws.exhausted'
             : 'ws.closed';
       this.safeLog(event, null, { feed: name, status });
+    }
+    if (status === 'open') this.streamRecycleBudget.delete(name);
+    if (status === 'exhausted') {
+      const sourceId: MarketPublicSourceId = name === 'spot-miniticker'
+        ? 'public-spot-source'
+        : 'public-usdm-source';
+      if (!this.isolatedSources.has(sourceId)) {
+        const recycles = this.streamRecycleBudget.get(name) ?? 0;
+        if (recycles < MAX_EXHAUSTED_STREAM_RECYCLES) {
+          // A retry campaign that ends does not end the feed's obligation.
+          // Recycle the stream so a later network recovery is observed; the
+          // bounded budget (reset on 'open') keeps a genuinely dead endpoint
+          // from spinning, and stream-generation fencing makes late callbacks
+          // from the dead campaign inert.
+          this.streamRecycleBudget.set(name, recycles + 1);
+          const stream = this.streams.get(name);
+          if (stream) {
+            stream.stop();
+            stream.start();
+          }
+        }
+      }
     }
   }
 

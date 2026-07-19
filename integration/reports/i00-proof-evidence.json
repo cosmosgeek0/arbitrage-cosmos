@@ -676,7 +676,7 @@
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
-            "line": 338,
+            "line": 342,
             "ruleId": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL"
           }
         ],
@@ -760,22 +760,22 @@
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 324,
+        "line": 328,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 329,
+        "line": 333,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 332,
+        "line": 336,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 338,
+        "line": 342,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -1175,7 +1175,7 @@
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 515,
+        "line": 520,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -15122,5 +15122,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "90531cf95feedff893791801e34fefb520ba7f1755d9a9339d232060ce3f1311"
+  "evidenceSha256": "4a76de90c8361f709c342ca497e8f877aed0f69df4be29cb0cade26c9ecbc7a6"
 }

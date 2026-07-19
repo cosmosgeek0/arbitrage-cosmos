@@ -2,8 +2,8 @@
 
 ## Current release (authoritative overlay, 2026-07-19)
 
-- Verified baseline: `origin/current-main = 118ee3ea1774e06d111bed32a4c58a061cb474a1`. BUILD PHASE CLOSED.
-- GitHub CI run `29680319880` on that tip: SUCCESS — Canonical full matrix and Bounded local operations proofs both green.
+- Verified baseline: `origin/current-main = bd077f194c5a10d33c2d15cbd706421fe872bcce` (docs consolidation atop the verified `118ee3ea1774e06d111bed32a4c58a061cb474a1` build). BUILD PHASE CLOSED.
+- GitHub CI run `29690027576` on that tip: SUCCESS — Canonical full matrix and Bounded local operations proofs both green (first green was run `29680319880` on `118ee3ea`).
 - The C9 campaign narrative in the body below is sealed historical evidence, not the current next action; the campaign completed and landed. Next phase is the owner-gated validate-only deployment (`Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md`).
 
 This file owns current product state. `ARCHITECTURE.md` Part II owns code authority, `MISSION.md` owns purpose, and `verification/product-truth-20260716/STATE.md` alone owns campaign status and next action.

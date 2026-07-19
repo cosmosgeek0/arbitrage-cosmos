@@ -3836,14 +3836,23 @@ if (canonicalApplicationStartOk) {
     'control-room listener not admitted because durable boot failed:',
     canonicalApplicationStartFailureCodes.join(',') || 'APPLICATION_START_FAILED',
   );
+  // The supervisor reads the exit status, not stderr. A boot that refused to
+  // admit the listener must not be indistinguishable from a clean stop, or
+  // Restart=on-failure never fires. process.exitCode (not process.exit) lets
+  // the registered 'exit' lease-release hook run through normal teardown.
+  process.exitCode = 1;
 }
 server.on('error', (error) => {
   console.error('control-room listener failed:', error instanceof Error ? error.message : String(error));
   void gracefulShutdown('SIGTERM').then(
     (outcome) => {
       if (outcome === 'SHUTDOWN_REFUSED') {
-        console.error('listener failure shutdown refused; recovery supervision remains active');
-        return;
+        // Surviving here would hold the DATA_DIR lease with no listener bound,
+        // deadlocking the replacement process (EADDRINUSE restart deadlock).
+        // Exit deliberately so the 'exit' hook releases the lease and the
+        // supervisor can restart into a working listener.
+        console.error('listener failure shutdown refused; recovery supervision remains active; exiting 75');
+        process.exit(SHUTDOWN_REFUSED_EXIT_CODE);
       }
       process.exit(1);
     },
@@ -3972,12 +3981,24 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
   return current;
 }
 
+// EX_TEMPFAIL: the shutdown was refused because recovery supervision is still
+// active — retryable, and distinct from SHUTDOWN_FAILED (1).
+const SHUTDOWN_REFUSED_EXIT_CODE = 75;
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     void gracefulShutdown(signal)
       .then((outcome) => {
         if (outcome === 'SHUTDOWN_COMPLETE') process.exit(0);
         if (outcome === 'SHUTDOWN_FAILED') process.exit(1);
+        // SHUTDOWN_REFUSED means recovery supervision is still active.
+        // Absorbing the signal does not preserve that work — it converts the
+        // orchestrator's SIGTERM into an untrappable SIGKILL after the grace
+        // period, which skips the lease release and the clean-stop record
+        // entirely. Exit deliberately, with a status that says "refused",
+        // while the 'exit' hook can still run.
+        console.error(`${signal} refused: recovery supervision remains active; exiting ${SHUTDOWN_REFUSED_EXIT_CODE}`);
+        process.exit(SHUTDOWN_REFUSED_EXIT_CODE);
       })
       .catch((error) => {
         console.error('graceful shutdown failed:', error instanceof Error ? error.message : String(error));

@@ -11,6 +11,7 @@ import { UserStream } from '../src/binance/userStream.ts';
 import { CORE_OPERATION_POLICIES } from '../src/productAssurance/catalog/core.ts';
 import { BookStreamHub } from '../src/services/bookStream.ts';
 import { MarketEngine } from '../src/engine/marketData.ts';
+import { VolumeRuntime } from '../src/services/volumeRuntime.ts';
 import { projectMarketApiRow } from '../src/engine/marketApiProjection.ts';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -216,6 +217,48 @@ test('BinanceStream preserves exponential backoff until a connection is stable',
   sockets[2].remoteClose();
   await sleep(25);
   assert.equal(sockets.length, 4, 'a stable session resets the retry delay');
+  stream.stop();
+});
+
+test('BinanceStream with production timing defaults reconnects after a mid-life disconnect past the retry deadline', (t) => {
+  // Production construction sites pass no timing options. The regression this
+  // pins: DEFAULT_STABLE_CONNECTION_MS (60s) was larger than the 30s retry
+  // deadline, so healthy connected time was charged against the campaign and
+  // a drop in the 30-60s band exhausted the stream with zero attempts.
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  const sockets = [];
+  const statuses = [];
+  const stream = new BinanceStream(
+    'production-defaults-feed',
+    'wss://example.invalid/feed',
+    () => {},
+    (_name, status) => statuses.push(status),
+    {
+      socketFactory: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      random: () => 0.5,
+    },
+  );
+
+  stream.start();
+  sockets[0].open();
+  assert.deepEqual(statuses, ['connecting', 'open']);
+
+  t.mock.timers.tick(45_000);
+  sockets[0].remoteClose();
+  assert.equal(
+    statuses.includes('exhausted'),
+    false,
+    'a connection that held past the stability threshold must have cleared the retry campaign',
+  );
+  assert.equal(statuses.at(-1), 'cooldown');
+
+  t.mock.timers.tick(1_000);
+  assert.equal(sockets.length, 2, 'the stream opens a fresh socket after a routine mid-life disconnect');
+  assert.equal(statuses.at(-1), 'connecting');
   stream.stop();
 });
 
@@ -1287,4 +1330,76 @@ test('MarketEngine clears source-wide OI on one-symbol outage and requeues inval
   await invalidated;
   assert.equal(h.row('BBBUSDT').openInterest, 41, 'late invalidated slice cannot replace recovery truth');
   h.engine.stop();
+});
+
+test('MarketEngine recycles an exhausted public stream within a bounded budget', async () => {
+  const engine = new MarketEngine(
+    { logEvent() {} },
+    async () => marketUniverse(),
+    undefined,
+    { publicSourceStartupEgressAdmitted: true },
+  );
+  await engine.init();
+  engine.running = true;
+  engine.generation = 1;
+  const fake = {
+    stopCalls: 0,
+    startCalls: 0,
+    stop() { this.stopCalls += 1; },
+    start() { this.startCalls += 1; },
+  };
+  engine.streams = new Map([['futures-markprice', fake]]);
+
+  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
+  assert.equal(fake.stopCalls, 1, 'an exhausted feed is stopped for recycle');
+  assert.equal(fake.startCalls, 1, 'an exhausted feed is restarted so a later recovery is observed');
+
+  for (let index = 0; index < 10; index += 1) {
+    engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
+  }
+  assert.equal(fake.startCalls, 5, 'the recycle budget bounds a genuinely dead endpoint');
+
+  engine.observeFeedStatus('futures-markprice', 'open', 1);
+  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
+  assert.equal(fake.startCalls, 6, 'a proven recovery re-arms the recycle budget');
+
+  engine.isolatedSources.add('public-usdm-source');
+  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
+  assert.equal(fake.startCalls, 6, 'an operator-isolated source is never recycled behind the operator');
+
+  engine.observeFeedStatus('futures-markprice', 'exhausted', 2);
+  assert.equal(fake.startCalls, 6, 'a stale generation cannot trigger a recycle');
+});
+
+test('VolumeRuntime recycles an exhausted aggTrade stream within a bounded budget', () => {
+  const runtime = new VolumeRuntime({ logEvent() {} }, () => ({}), () => []);
+  runtime.running = true;
+  const generation = runtime.generation;
+  const epoch = runtime.streamEpoch;
+  const fake = {
+    name: 'volume-aggtrade-1',
+    stopCalls: 0,
+    startCalls: 0,
+    stop() { this.stopCalls += 1; },
+    start() { this.startCalls += 1; },
+  };
+  runtime.streams = [fake];
+
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  assert.equal(fake.stopCalls, 1, 'an exhausted stream is stopped for recycle');
+  assert.equal(fake.startCalls, 1, 'an exhausted stream is restarted so a later recovery is observed');
+
+  for (let index = 0; index < 10; index += 1) {
+    runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
+    runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  }
+  assert.equal(fake.startCalls, 5, 'the recycle budget bounds a genuinely dead endpoint');
+
+  runtime.onStreamStatus('volume-aggtrade-1', 'open', generation, epoch);
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  assert.equal(fake.startCalls, 6, 'a proven recovery re-arms the recycle budget');
+
+  runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch + 1);
+  assert.equal(fake.startCalls, 6, 'a stale stream epoch cannot trigger a recycle');
 });

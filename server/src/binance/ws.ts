@@ -33,7 +33,7 @@ export interface BinanceStreamOptions {
 
 const DEFAULT_RETRY_BASE_MS = PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.backoff.baseDelayMs;
 const DEFAULT_RETRY_MAX_MS = PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.backoff.maximumDelayMs;
-const DEFAULT_STABLE_CONNECTION_MS = 60_000;
+const DEFAULT_STABLE_CONNECTION_MS = 15_000;
 const DEFAULT_LIVENESS_CHECK_MS = 30_000;
 const DEFAULT_STALE_AFTER_MS = 90_000;
 const DEFAULT_MAX_LIFETIME_MS = 23 * 60 * 60_000;
@@ -116,9 +116,13 @@ export class BinanceStream {
       PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.backoff.totalRetryBudgetMs,
       PUBLIC_WEBSOCKET_STREAM_RETRY_POLICY.backoff.totalRetryBudgetMs,
     );
-    this.stableConnectionMs = positiveInt(
-      options.stableConnectionMs,
-      DEFAULT_STABLE_CONNECTION_MS,
+    // A connection must be able to prove stability strictly inside the retry
+    // deadline; otherwise time spent healthily connected is charged to the
+    // retry budget and a routine mid-life disconnect (after deadlineMs but
+    // before stableConnectionMs) exhausts the campaign with zero attempts.
+    this.stableConnectionMs = Math.min(
+      positiveInt(options.stableConnectionMs, DEFAULT_STABLE_CONNECTION_MS),
+      Math.floor(this.retryDeadlineMs / 2),
     );
     this.livenessCheckMs = positiveInt(options.livenessCheckMs, DEFAULT_LIVENESS_CHECK_MS);
     this.staleAfterMs = Math.max(

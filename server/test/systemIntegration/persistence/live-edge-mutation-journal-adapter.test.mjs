@@ -35,6 +35,24 @@ import {
 
 const T = 1_700_000_000_000;
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the read-time
+// validation these fixtures prove must hold even without them. Drop, mutate,
+// restore — the canonical schema stays intact for the rest of the test.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function tempDataDir(label = 'cosmos-live-edge-journal-') {
   return mkdtempSync(path.join(tmpdir(), label));
 }
@@ -906,7 +924,9 @@ test('missing interior journal and audit rows poison read and block every later 
     ));
     assert.ok(middleJournal);
     assert.ok(middleAudit);
-    ledger.db.prepare('DELETE FROM events WHERE id IN (?, ?)').run(middleJournal.id, middleAudit.id);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare('DELETE FROM events WHERE id IN (?, ?)').run(middleJournal.id, middleAudit.id);
+    });
     const countAfterDamage = ledger.countEvents();
 
     assert.throws(

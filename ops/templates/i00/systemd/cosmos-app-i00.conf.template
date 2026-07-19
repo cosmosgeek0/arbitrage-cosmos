@@ -7,5 +7,9 @@ After=cosmos-secrets-provider.service
 [Service]
 LoadCredential=app-secrets:/run/cosmos-secret-source/app-secrets.json
 ExecStart=
-ExecStart=/usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs
+# The base unit carries DATA_DIR_LOGICAL_LEASE_ROOT on its ExecStart because
+# EnvironmentFile= outranks Environment=. Resetting ExecStart drops that pin,
+# so it must be re-carried here or the app throws
+# DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED at module load under NODE_ENV=production.
+ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs
 EnvironmentFile=/etc/cosmos/cosmos-i00.env

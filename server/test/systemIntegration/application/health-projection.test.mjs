@@ -59,6 +59,11 @@ function recentAdvance(overrides = {}) {
 
 test('liveness is process-only and does not inherit readiness dependencies', () => {
   assert.equal(projectI00Health('LIVE', supervisor(), true, null).ok, true);
+  // LIVE `ok` is process-liveness only, and says so in-band; the readiness
+  // kinds carry no such label because their ok IS the product verdict.
+  assert.equal(projectI00Health('LIVE', supervisor(), true, null).okSemantics, 'PROCESS_LIVENESS_ONLY');
+  assert.equal('okSemantics' in projectI00Health('READY', supervisor(), true, null), false);
+  assert.equal('okSemantics' in projectI00Health('TRADE_READY', supervisor(), true, null), false);
   const degraded = projectI00Health(
     'LIVE',
     supervisor({ summaries: { ledger: { writable: null, schemaCompatibilityState: 'UNAVAILABLE' } }, overallPosture: 'FAILED' }),

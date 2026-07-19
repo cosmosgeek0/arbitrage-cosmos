@@ -9,3 +9,18 @@ data/
 TASK_*.md
 binance-signal-lab-public copy 2/
 hey/
+# credential file shapes — never tracked, even transiently
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+.npmrc
+kubeconfig
+*.kubeconfig
+.netrc

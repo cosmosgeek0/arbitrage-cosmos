@@ -249,6 +249,16 @@ check(
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
 );
 check(
+  'calendar and fx GET responses declare their own freshness state and TTL',
+  /items:\s*calCache\.items,\s*fetchedAt:\s*calCache\.at,\s*state:\s*Date\.now\(\)\s*-\s*calCache\.at\s*<\s*60_000\s*\?\s*'fresh'\s*:\s*'stale',\s*maxAgeMs:\s*60_000,/.test(serverIndex) &&
+    /rates:\s*fxCache\.rates,\s*fetchedAt:\s*fxCache\.at,\s*state:\s*Date\.now\(\)\s*-\s*fxCache\.at\s*<\s*30\s*\*\s*60_000\s*\?\s*'fresh'\s*:\s*'stale',\s*maxAgeMs:\s*30\s*\*\s*60_000,/.test(serverIndex)
+);
+check(
+  'a failed canonical supervisor health read records its cause instead of a bare catch',
+  /function\s+sendI00Health\([\s\S]*?\}\s*catch\s*\(error\)\s*\{\s*recordSupervisorReadFailure\(error\);/.test(serverIndex) &&
+    /function\s+recordSupervisorReadFailure\([\s\S]*?safeLogEvent\('error_event',\s*null,\s*\{\s*source:\s*'server\.i00_health',[\s\S]*?cause:\s*message,/.test(serverIndex)
+);
+check(
   'production route composition invokes no signed or money mutation method',
   !/\b(?:orders|loans)\.(?:send|testOrder|cancel|cancelAll|borrow|repay|adjustLtv|resolveOrderRecovery)\s*\(/.test(serverIndex) &&
     !/\baccount\.sync\s*\(/.test(serverIndex) &&
@@ -548,6 +558,27 @@ const processLive = await get('/health/live');
 check(
   'canonical liveness remains process-only while readiness evidence is unavailable',
   processLive.status === 200 && processLive.body?.ok === true
+    && processLive.body?.okSemantics === 'PROCESS_LIVENESS_ONLY'
+);
+// Conventional probe paths must never be answered by the SPA shell: a
+// misconfigured ALB/systemd/uptime probe must get a loud JSON 404, not a
+// blanket false green while the real readiness endpoint is red.
+const reservedProbePaths = ['/healthz', '/readyz', '/livez', '/ready', '/live', '/status', '/health'];
+let reservedProbesHonest = true;
+let reservedProbeDetail = '';
+for (const probePath of reservedProbePaths) {
+  const probe = await get(probePath);
+  const probeType = probe.headers.get('content-type') ?? '';
+  if (probe.status !== 404 || !probeType.startsWith('application/json') || probe.body?.code !== 'PROBE_PATH_NOT_REGISTERED') {
+    reservedProbesHonest = false;
+    reservedProbeDetail += `${probePath}=${probe.status} ${probeType}; `;
+  }
+}
+check('conventional probe paths refuse loudly instead of serving the SPA shell', reservedProbesHonest, reservedProbeDetail);
+const spaShell = await request('/positions');
+check(
+  'ordinary SPA routes still serve the shell after probe-path reservation',
+  spaShell.status === 200 && (spaShell.headers.get('content-type') ?? '').startsWith('text/html')
 );
 const dependencyReady = await get('/health/ready');
 const readinessSupervisor = (await get('/api/system-integration/supervisor')).body;

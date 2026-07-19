@@ -117,6 +117,14 @@ export class OperatorAccess {
     return { authorized: true, operator, code: 'OK', reason: '' };
   }
 
+  // Seam for tests only: the JWKS location is always derived from the
+  // already-validated team domain and must never come from any other input.
+  // Overriding this lets the forged-token matrix serve a loopback JWKS
+  // without weakening configuredTeamDomain().
+  protected jwksUrl(issuer: string): URL {
+    return new URL(`${issuer}/cdn-cgi/access/certs`);
+  }
+
   async verify(
     req: IncomingMessage,
     options: { websocket?: boolean; requireOrigin?: boolean } = {},
@@ -156,7 +164,7 @@ export class OperatorAccess {
 
     try {
       if (!this.jwks || this.jwksIssuer !== team.issuer) {
-        this.jwks = createRemoteJWKSet(new URL(`${team.issuer}/cdn-cgi/access/certs`), {
+        this.jwks = createRemoteJWKSet(this.jwksUrl(team.issuer), {
           cooldownDuration: 30_000,
           timeoutDuration: 5_000,
         });

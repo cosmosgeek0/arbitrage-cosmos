@@ -70,6 +70,42 @@ test('Trust Advisor uses canonical supervisor posture and feed readiness', async
   assert.doesNotMatch(advisorSource, /machineReady\s*===\s*['"]YES['"]/);
 });
 
+test('no rule may force-paint a bad advisor grade a healthy green', async () => {
+  const [styles, header] = await Promise.all([
+    readFile(new URL('../../src/styles.css', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
+  ]);
+  const GREEN = String.raw`#16a34a|#22c55e|#24c85a|#45bb30|#77d83e|#349a38|var\(--up\)|var\(--ops-green\)`;
+
+  // (1) targeted: no rule may enumerate a bad advisor grade and resolve green.
+  assert.doesNotMatch(
+    styles,
+    new RegExp(String.raw`\.advisor-premium-trigger\.grade-bad[^{}]*\{[^}]*color:[^;}]*(?:${GREEN})`),
+  );
+
+  // (2) systemic: the topbar spectrum block is decoration and may never
+  // enumerate an advisor grade class again — naming a state class there
+  // outranks the semantic grade rules on specificity as well as order.
+  // (The remaining state classes flattened by this block belong to the
+  // Execution Control owner ruling and are the director's call.)
+  const start = styles.indexOf('/* ==== TOPBAR SPECTRUM ORDER');
+  assert.notEqual(start, -1, 'topbar spectrum block was renamed; update this guard');
+  const block = styles.slice(start, styles.indexOf('.smenu-bar button.hdr-ic.notif-premium-trigger', start));
+  assert.doesNotMatch(block, /\.advisor-premium-trigger\.grade-(?:ok|warn|bad)\b/);
+
+  // (3) the semantic grade rule must remain the winning authority for
+  // grade-bad, resolving to a red tone.
+  const last = styles.lastIndexOf('.advisor-premium-trigger.grade-bad');
+  assert.notEqual(last, -1);
+  assert.match(styles.slice(last, styles.indexOf('}', last)), /var\(--ops-red\)|var\(--down\)/);
+
+  // (4) the glyph is 85% green pixels, so colour alone cannot carry state:
+  // the non-ok grades must render the real-state pip beside the shield.
+  assert.match(header, /advTone !== 'ok' && <i className="rail-state-pip" data-grade=\{advTone\}/);
+  assert.match(styles, /\.trust-advisor-trigger-core \.rail-state-pip\[data-grade="bad"\]\s*\{\s*background:\s*var\(--ops-red\);\s*\}/);
+  assert.match(styles, /\.trust-advisor-trigger-core \.rail-state-pip\[data-grade="warn"\]\s*\{\s*background:\s*var\(--ops-amber\);\s*\}/);
+});
+
 test('premium topbar keeps all six measured roles in empty, action, and preference states', async () => {
   const [source, styles] = await Promise.all([
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),

@@ -469,6 +469,39 @@ cat > "$TEST_TMP/supervisor.json" <<'JSON'
 JSON
 PREFLIGHT=(node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" --mode deploy --now 2026-07-13T00:01:00Z --max-host-age-sec 300 --max-supervisor-age-sec 120 --required-supervisor-window-sec 130)
 assert_success "${PREFLIGHT[@]}"
+
+note "deploy/rollback preflight verifies release integrity, not just shape"
+# A tampered payload must fail the operator-facing gate exactly as it fails
+# validate-release.mjs — before the fix both preflights exited 0 on it.
+cp -R "$RELEASE" "$TEST_TMP/preflight-tampered"
+printf '\n// tampered\n' >> "$TEST_TMP/preflight-tampered/server/dist/index.js"
+TAMPERED_PREFLIGHT=("${PREFLIGHT[@]}")
+TAMPERED_PREFLIGHT[3]="$TEST_TMP/preflight-tampered"
+assert_failure_contains 'artifact digest/mode mismatch' "${TAMPERED_PREFLIGHT[@]}"
+TAMPERED_PREFLIGHT[9]=rollback
+assert_failure_contains 'artifact digest/mode mismatch' "${TAMPERED_PREFLIGHT[@]}"
+# A stub directory containing only a hand-written release.json must fail —
+# before the fix a 192-byte stub with an invented key preflighted green.
+mkdir -p "$TEST_TMP/preflight-stub"
+cat > "$TEST_TMP/preflight-stub/release.json" <<'JSON'
+{"releaseId":"i00-stub","schemaVersion":1,"rollbackFloor":1,"rollbackBarrier":true,"invented":true}
+JSON
+STUB_PREFLIGHT=("${PREFLIGHT[@]}")
+STUB_PREFLIGHT[3]="$TEST_TMP/preflight-stub"
+assert_failure_contains 'release.json.gitSha is required' "${STUB_PREFLIGHT[@]}"
+STUB_PREFLIGHT[9]=rollback
+assert_failure_contains 'release.json.gitSha is required' "${STUB_PREFLIGHT[@]}"
+# An invented key on an otherwise complete release.json is also refused.
+cp -R "$RELEASE" "$TEST_TMP/preflight-invented"
+node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.invented=true;fs.writeFileSync(p,JSON.stringify(v,null,2));' "$TEST_TMP/preflight-invented/release.json"
+INVENTED_PREFLIGHT=("${PREFLIGHT[@]}")
+INVENTED_PREFLIGHT[3]="$TEST_TMP/preflight-invented"
+assert_failure_contains 'unexpected field set' "${INVENTED_PREFLIGHT[@]}"
+# The green receipt now states its integrity claim explicitly and is
+# cryptographically tied to the exact artifact manifest it verified.
+PREFLIGHT_RECEIPT="$("${PREFLIGHT[@]}")"
+assert_contains "$PREFLIGHT_RECEIPT" '"releaseIntegrity":"MANIFEST_VERIFIED"'
+assert_contains "$PREFLIGHT_RECEIPT" '"artifactManifestSha256"'
 node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.callerAssertion=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 assert_failure_contains 'unexpected field set' "${PREFLIGHT[@]}"
 cat > "$TEST_TMP/supervisor.json" <<'JSON'

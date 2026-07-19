@@ -10,6 +10,24 @@ import {
   createProductIncidentRouter,
 } from '../../../dist/productIntegration/incidents/index.js';
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the checkpoint
+// trigger chain probed below must hold even without them. Drop, mutate,
+// restore — the canonical schema stays intact for the rest of the test.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function tempDataDir() {
   return mkdtempSync(path.join(tmpdir(), 'cosmos-product-incident-router-'));
 }
@@ -171,13 +189,15 @@ test('I00-050 groups a flood into one durable episode, preserves ACK, proves rec
       state: 'PROVEN', sourceEventId: recovered.id, resolvedAtMs: recovered.data.observedAt,
     });
     const recoveredSourceBytes = ledger.db.prepare('SELECT data FROM events WHERE id = ?').get(recovered.id).data;
-    assert.throws(() => ledger.db.prepare(`
-      UPDATE events
-      SET data = json_set(data, '$.observedAt', json_extract(data, '$.observedAt') + 1)
-      WHERE id = ?
-    `).run(recovered.id), /checkpoint evidence is immutable/);
-    assert.throws(() => ledger.db.prepare('DELETE FROM events WHERE id = ?').run(recovered.id),
-      /checkpoint evidence is immutable/);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      assert.throws(() => ledger.db.prepare(`
+        UPDATE events
+        SET data = json_set(data, '$.observedAt', json_extract(data, '$.observedAt') + 1)
+        WHERE id = ?
+      `).run(recovered.id), /checkpoint evidence is immutable/);
+      assert.throws(() => ledger.db.prepare('DELETE FROM events WHERE id = ?').run(recovered.id),
+        /checkpoint evidence is immutable/);
+    });
     assert.equal(ledger.db.prepare('SELECT data FROM events WHERE id = ?').get(recovered.id).data,
       recoveredSourceBytes, 'checkpoint triggers preserve the exact recovery-source bytes');
     assert.equal(router.readProjection().availability.state, 'AVAILABLE');
@@ -522,10 +542,12 @@ test('I00-050 rotates only the oldest exact resolved episode at the 200-item bou
     assert.equal(router.readProjection().incidents.length, 200);
     const oldest = ledger.readProductIncident(oldestIncidentId);
     const opening = ledger.readProductIncidentOpeningRoutingByIncidentId(oldestIncidentId);
-    assert.throws(() => ledger.db.prepare(`
-      UPDATE events SET data = json_set(data, '$.eventCount', 999) WHERE id = ?
-    `).run(opening.id), /checkpoint evidence is immutable/,
-      'an opening route cannot be corrupted before rotation');
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      assert.throws(() => ledger.db.prepare(`
+        UPDATE events SET data = json_set(data, '$.eventCount', 999) WHERE id = ?
+      `).run(opening.id), /checkpoint evidence is immutable/,
+        'an opening route cannot be corrupted before rotation');
+    });
 
     ledger.db.prepare(`
       UPDATE product_incidents SET event_count = event_count + 1 WHERE incident_id = ?

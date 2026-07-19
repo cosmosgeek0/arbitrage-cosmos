@@ -608,7 +608,9 @@ const CREATE_EVENT_INDEXES_SQL = EVENT_INDEX_SPECS
     .replace(/^CREATE INDEX /, 'CREATE INDEX IF NOT EXISTS '))
   .join(';\n');
 
-const EVENT_TRIGGER_SPECS = Object.freeze([
+// The historical v3 trigger set. Frozen: it is the shape a pre-migration
+// database legitimately carries, and must never follow the canonical set.
+const LEGACY_EVENT_TRIGGER_SPECS = Object.freeze([
   Object.freeze({
     name: 'product_incident_checkpoint_events_no_update',
     sql: `
@@ -631,6 +633,42 @@ const EVENT_TRIGGER_SPECS = Object.freeze([
           WHERE source_event_id = OLD.id OR disposition_event_id = OLD.id
         )
         BEGIN SELECT RAISE(ABORT, 'product incident checkpoint evidence is immutable'); END
+    `,
+  }),
+] as const);
+
+// Canonical set: the two checkpoint triggers above (still wanted; their names
+// and messages are pinned by tests) plus the general append-only guarantee the
+// ledger has always claimed but never enforced. events_no_update is
+// unconditional — the only UPDATE in the product is the migration backfill,
+// which runs between DROP_EVENT_TRIGGERS_SQL and CREATE_EVENT_TRIGGERS_SQL
+// inside the migration transaction. events_no_delete_durable allowlists
+// exactly the six recomputable kinds pruneEphemeralEvents may delete; kind is
+// the right key (a trigger cannot know `now`), and this makes SQLite enforce
+// the retention policy the prune comment already documents. Financial,
+// operator, security, configuration, order, loan, fill, error, and connection
+// audit events are protected unconditionally.
+const EVENT_TRIGGER_SPECS = Object.freeze([
+  ...LEGACY_EVENT_TRIGGER_SPECS,
+  Object.freeze({
+    name: 'events_no_update',
+    sql: `
+      CREATE TRIGGER events_no_update
+        BEFORE UPDATE ON events
+        BEGIN SELECT RAISE(ABORT, 'ledger events are append-only'); END
+    `,
+  }),
+  Object.freeze({
+    name: 'events_no_delete_durable',
+    sql: `
+      CREATE TRIGGER events_no_delete_durable
+        BEFORE DELETE ON events
+        WHEN OLD.kind NOT IN (
+          'strategy_decision', 'basis.strategy_decision',
+          'heartbeat', 'basis.heartbeat',
+          'candidate_rejected', 'candidate_opened'
+        )
+        BEGIN SELECT RAISE(ABORT, 'ledger events are append-only'); END
     `,
   }),
 ] as const);
@@ -1145,18 +1183,34 @@ function eventTriggerRows(db: Database.Database): readonly SqliteMasterSqlRow[] 
   `).all() as SqliteMasterSqlRow[];
 }
 
-function exactCanonicalEventTriggers(rows: readonly SqliteMasterSqlRow[]): boolean {
-  return rows.length === EVENT_TRIGGER_SPECS.length
-    && EVENT_TRIGGER_SPECS.every((spec) => {
+function exactEventTriggers(
+  rows: readonly SqliteMasterSqlRow[],
+  specs: readonly { readonly name: string; readonly sql: string }[],
+): boolean {
+  return rows.length === specs.length
+    && specs.every((spec) => {
       const row = rows.find((candidate) => candidate.name === spec.name);
       return row?.tbl_name === 'events'
         && normalizeSql(row.sql) === normalizeSql(spec.sql);
     });
 }
 
+function exactCanonicalEventTriggers(rows: readonly SqliteMasterSqlRow[]): boolean {
+  return exactEventTriggers(rows, EVENT_TRIGGER_SPECS);
+}
+
+// A pre-migration (v1/v2-era) file legitimately carries one of exactly three
+// trigger shapes: none (never booted with triggers), the historical two-trigger
+// checkpoint set (booted by a pre-append-only build), or the full canonical
+// set (this build's base DDL ran but the version migration did not complete).
+// Asserting only the canonical set here would make every legitimate legacy
+// file permanently unmigratable; anything outside these three shapes is
+// corruption and fails closed.
 function assertMigratableEventTriggers(db: Database.Database): void {
   const rows = eventTriggerRows(db);
-  if (rows.length !== 0 && !exactCanonicalEventTriggers(rows)) {
+  if (rows.length !== 0
+      && !exactEventTriggers(rows, LEGACY_EVENT_TRIGGER_SPECS)
+      && !exactEventTriggers(rows, EVENT_TRIGGER_SPECS)) {
     throw new Error('LEDGER_EVENT_TRIGGER_SCHEMA_MALFORMED');
   }
 }
@@ -1296,6 +1350,9 @@ function migrateEventStorage(
     // Temporarily remove only those already-proven triggers inside this same
     // migration transaction so the deterministic created_at backfill can
     // cover protected historical rows; rollback restores the prior schema.
+    // By this point the constructor's base DDL has already installed the full
+    // canonical trigger set (CREATE TRIGGER IF NOT EXISTS), regardless of
+    // which legitimate shape the legacy file arrived with.
     assertCanonicalEventTriggers(db);
     db.exec(DROP_EVENT_TRIGGERS_SQL);
     db.exec(`

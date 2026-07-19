@@ -29,6 +29,24 @@ import { actions } from '../../liveEdge/controls/fixtures.mjs';
 
 const CONFIG_VERSION = 11;
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the read-time
+// validation these fixtures prove must hold even without them. Drop, mutate,
+// restore — the canonical schema stays intact for the rest of the test.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function tempDataDir() {
   return mkdtempSync(path.join(tmpdir(), 'cosmos-l14-control-persistence-'));
 }
@@ -677,12 +695,18 @@ test('lookup refuses a missing or checksum-mismatched atomic audit companion', a
     assert.equal(typeof auditRow.data, 'string');
     const mismatched = JSON.parse(auditRow.data);
     mismatched.checkpointChecksum = 'f'.repeat(64);
-    ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(JSON.stringify(mismatched), auditId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(JSON.stringify(mismatched), auditId);
+    });
     await assert.rejects(persistence.lookup(intent.commandId), /audit companion/);
 
-    ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(auditRow.data, auditId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(auditRow.data, auditId);
+    });
     assert.equal((await persistence.lookup(intent.commandId)).kind, 'COMPLETED');
-    ledger.db.prepare('DELETE FROM events WHERE id = ?').run(auditId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare('DELETE FROM events WHERE id = ?').run(auditId);
+    });
     await assert.rejects(persistence.lookup(intent.commandId), /audit companion/);
   } finally {
     ledger.close();

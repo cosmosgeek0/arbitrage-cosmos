@@ -28037,10 +28037,13 @@ body::after {
 .smenu-bar button.hdr-ic.data-pro.on {
   color: color-mix(in srgb, #eab308 70%, var(--muted)) !important;
 }
+/* The spectrum tint is decoration and must never enumerate a state class:
+   naming .grade-* here outranked two separately-authored "grade-bad => red"
+   rules on specificity (0,4,1) as well as order, force-painting a failing
+   advisor healthy green. Graded states are decided by the semantic grade
+   rules; only the ungraded identity, hover, and open states keep the
+   spectrum tone. */
 .smenu-bar button.hdr-ic.advisor-premium-trigger,
-.smenu-bar button.hdr-ic.advisor-premium-trigger.grade-ok,
-.smenu-bar button.hdr-ic.advisor-premium-trigger.grade-warn,
-.smenu-bar button.hdr-ic.advisor-premium-trigger.grade-bad,
 .smenu-bar button.hdr-ic.advisor-premium-trigger:hover,
 .smenu-bar button.hdr-ic.advisor-premium-trigger.on {
   color: color-mix(in srgb, #16a34a 68%, var(--muted)) !important;
@@ -43438,10 +43441,13 @@ body::after {
 }
 
 .topbar-suite-v3 .data-pro.grade-ok { color: var(--ops-green) !important; }
-.topbar-suite-v3 .data-pro.grade-warn,
-.topbar-suite-v3 .advisor-premium-trigger.grade-warn { color: var(--ops-amber) !important; }
-.topbar-suite-v3 .data-pro.grade-bad,
-.topbar-suite-v3 .advisor-premium-trigger.grade-bad { color: var(--ops-red) !important; }
+.topbar-suite-v3 .data-pro.grade-warn { color: var(--ops-amber) !important; }
+/* Advisor grade colours have exactly ONE authority: the semantic
+   .smenu-bar .hdr-ic.advisor-premium-trigger.grade-* rules. The v3-suite
+   duplicates that used to sit here disagreed with them in value and were
+   inert only by specificity accident — a third author must not re-create
+   that bug. */
+.topbar-suite-v3 .data-pro.grade-bad { color: var(--ops-red) !important; }
 .topbar-suite-v3 .notif-premium-trigger.hot,
 .topbar-suite-v3 .power-premium-trigger.m-halted { color: var(--ops-red) !important; }
 
@@ -45680,6 +45686,23 @@ body::after {
   height: 28px;
   object-fit: contain;
 }
+
+/* Real-state pip: the owner-supplied shield stays untouched; the advisor's
+   non-ok grade is carried by this mark, visually integrated with the glyph. */
+.trust-advisor-trigger-core {
+  position: relative;
+}
+.trust-advisor-trigger-core .rail-state-pip {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.trust-advisor-trigger-core .rail-state-pip[data-grade="bad"] { background: var(--ops-red); }
+.trust-advisor-trigger-core .rail-state-pip[data-grade="warn"] { background: var(--ops-amber); }
 
 .trust-advisor-source-image {
   display: block;

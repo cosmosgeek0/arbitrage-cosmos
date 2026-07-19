@@ -2,6 +2,7 @@ import {
   DATA_DIR_AUTHORITY,
   DATA_DIR_LEASE,
 } from './bootstrap/environment.js';
+import { resolveBindHost, resolveBindPort } from './bootstrap/bind.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
@@ -134,8 +135,12 @@ import { compareExactDecimals, normalizeNonNegativeExactDecimal } from './capita
 // supplies the one exact positive admission.
 const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
 
-const PORT = Number(process.env.PORT ?? 8080);
-const HOST = process.env.HOST ?? '127.0.0.1';
+// The origin is loopback-only and the bind address fails closed: see
+// bootstrap/bind.ts. `??` does not catch the empty string systemd's
+// EnvironmentFile= produces from a bare `HOST=` line, which Node would bind
+// as `::` on every interface — proven reachable from the LAN by V3.
+const PORT = resolveBindPort(process.env.PORT);
+const HOST = resolveBindHost(process.env.HOST);
 const CANONICAL_DELIVERY_MS = 2_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
 const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
@@ -779,6 +784,31 @@ app.use((req, res, next) => {
   });
 });
 
+// The single swallowed error that hid the burst's headline defect: the health
+// handlers' catch discarded the supervisor's precise contract-violation
+// message on every poll, so a dead control plane produced zero log evidence.
+// Record the cause, rate-bounded so a permanent failure writes one ledger row
+// a minute rather than one per health poll. The cause string is a contract
+// message, never a token, header, or URL.
+const SUPERVISOR_READ_FAILURE_REPEAT_MS = 60_000;
+let lastSupervisorReadFailure: { message: string; loggedAtMs: number } | null = null;
+
+function recordSupervisorReadFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const nowMs = Date.now();
+  if (lastSupervisorReadFailure !== null
+      && lastSupervisorReadFailure.message === message
+      && nowMs - lastSupervisorReadFailure.loggedAtMs < SUPERVISOR_READ_FAILURE_REPEAT_MS) {
+    return;
+  }
+  lastSupervisorReadFailure = { message, loggedAtMs: nowMs };
+  safeLogEvent('error_event', null, {
+    source: 'server.i00_health',
+    message: 'Canonical supervisor read failed.',
+    cause: message,
+  });
+}
+
 function sendI00Health(
   res: express.Response,
   kind: 'LIVE' | 'READY' | 'TRADE_READY',
@@ -794,7 +824,8 @@ function sendI00Health(
       canonicalApplicationStartFailureCodes,
     );
     res.status(projection.ok ? 200 : 503).json(projection);
-  } catch {
+  } catch (error) {
+    recordSupervisorReadFailure(error);
     const processResponsive = kind === 'LIVE';
     res.status(processResponsive ? 200 : 503).json({
       schemaVersion: 'i00.health.v1',
@@ -804,6 +835,7 @@ function sendI00Health(
       overallPosture: 'FAILED',
       rootBlockerComponentId: null,
       reasonCodes: [processResponsive ? 'SUPERVISOR_READ_UNAVAILABLE_LIVENESS_ONLY' : 'SUPERVISOR_READ_UNAVAILABLE'],
+      ...(processResponsive ? { okSemantics: 'PROCESS_LIVENESS_ONLY' } : {}),
       componentCount: 0,
       dependencyEdgeCount: 0,
       meaningfulAdvanceOwnerComponentId: null,
@@ -1634,7 +1666,17 @@ app.get('/api/calendar', (req, res) => {
     // Cached reads stay instant; only authenticated same-origin POST routes
     // may intentionally force upstream work.
     if (!calCache && calInFlight) await calInFlight.catch(() => undefined);
-    if (calCache) res.json({ items: calCache.items, fetchedAt: calCache.at });
+    // Label what is already computed: without a state field a consumer must
+    // know the 60s TTL to interpret fetchedAt, so a stale calendar read is
+    // indistinguishable from a fresh one.
+    if (calCache) {
+      res.json({
+        items: calCache.items,
+        fetchedAt: calCache.at,
+        state: Date.now() - calCache.at < 60_000 ? 'fresh' : 'stale',
+        maxAgeMs: 60_000,
+      });
+    }
     else res.status(503).json({ error: 'calendar unavailable', items: [] });
   });
 });
@@ -1675,7 +1717,17 @@ app.get('/api/fx', (_req, res) => {
         .finally(() => { fxInFlight = null; });
     }
     if (!fxCache && fxInFlight) await fxInFlight.catch(() => undefined);
-    if (fxCache) res.json({ base: 'USD', rates: fxCache.rates, fetchedAt: fxCache.at });
+    // Same freshness label as /api/calendar: the 30-minute TTL becomes part
+    // of the payload instead of tribal knowledge.
+    if (fxCache) {
+      res.json({
+        base: 'USD',
+        rates: fxCache.rates,
+        fetchedAt: fxCache.at,
+        state: Date.now() - fxCache.at < 30 * 60_000 ? 'fresh' : 'stale',
+        maxAgeMs: 30 * 60_000,
+      });
+    }
     else res.status(503).json({ error: 'fx unavailable', rates: {} });
   });
 });
@@ -3469,6 +3521,23 @@ app.post('/api/orders/recovery/resolve', (_req, res) => {
 
 app.post('/api/orders/cancel', (_req, res) => {
   sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL');
+});
+
+// Conventional probe paths — the defaults of ALB target groups, k8s probes,
+// Cloudflare health checks, and uptime monitors — are deliberately NOT routes.
+// Without this guard the SPA fallback below answered 200 text/html on every
+// one of them, handing any conventionally-configured probe a permanent false
+// green while the real readiness endpoint was red. A 404 with guidance is the
+// honest answer; silently aliasing these to the real endpoints would hide the
+// probe misconfiguration instead of surfacing it. The canonical targets are
+// /health/live, /health/ready, and /health/trade-ready.
+const RESERVED_PROBE_PATHS = ['/healthz', '/readyz', '/livez', '/ready', '/live', '/status', '/health'];
+app.get(RESERVED_PROBE_PATHS, (_req, res) => {
+  res.status(404).json({
+    ok: false,
+    code: 'PROBE_PATH_NOT_REGISTERED',
+    error: 'Use /health/live, /health/ready, or /health/trade-ready.',
+  });
 });
 
 // Serve the built dashboard (web/dist) with SPA fallback.

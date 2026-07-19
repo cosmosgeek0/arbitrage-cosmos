@@ -424,21 +424,24 @@ export class DataDirLease {
       let predecessorToken: string | null = null;
       if (chain !== null) {
         const current = chain.tail.record;
-        if (current.hostname !== this.ownerHostname
-            || current.hostIdentity !== this.ownerHostIdentity) {
-          throw leaseFailure(
-            'DATA_DIR_LEASE_REMOTE_HOST',
-            'canonical DATA_DIR is leased by an owner on another host',
-          );
-        }
+        // Same precedence as the witness scan above: liveness first, identity
+        // only escalates a LIVE conflict. A dead owner is succeeded regardless
+        // of whose NIC-derived identity it recorded.
         if (current.livenessNamespace !== this.ownerLivenessNamespace) {
           throw leaseFailure(
             'DATA_DIR_LEASE_LIVENESS_NAMESPACE_MISMATCH',
             'canonical DATA_DIR owner is outside this PID liveness namespace',
           );
         }
+        const foreignOwner = current.hostname !== this.ownerHostname
+          || current.hostIdentity !== this.ownerHostIdentity;
         if (processIsAlive(current.pid)) {
-          throw leaseFailure('DATA_DIR_LEASE_HELD', 'canonical DATA_DIR already has a live writer');
+          throw leaseFailure(
+            foreignOwner ? 'DATA_DIR_LEASE_REMOTE_HOST' : 'DATA_DIR_LEASE_HELD',
+            foreignOwner
+              ? 'canonical DATA_DIR is leased by a live owner on another host'
+              : 'canonical DATA_DIR already has a live writer',
+          );
         }
         predecessorToken = current.ownerToken;
       }
@@ -712,22 +715,33 @@ export class DataDirLease {
         throw leaseFailure('DATA_DIR_LEASE_BUSY', 'canonical DATA_DIR witness changed during scan');
       }
       this.validateTime(witness, nowMs);
-      if (witness.record.hostname !== this.ownerHostname
-          || witness.record.hostIdentity !== this.ownerHostIdentity) {
-        throw leaseFailure(
-          'DATA_DIR_LEASE_REMOTE_HOST',
-          'canonical DATA_DIR has a witness from another host identity',
-        );
-      }
+      // Liveness outranks identity: hostIdentity hashes a live, mutable input
+      // (the non-internal MAC set), while the lease semantics assume it is
+      // durable. Deciding identity first turned every NIC-set change — Docker
+      // bridge churn, ENI attach/detach, restore to a replacement instance —
+      // into a permanent brick guarded by a provably dead PID. The
+      // never-two-writers guarantee is carried by the PID liveness check plus
+      // the liveness-namespace check (a PID from another namespace is not
+      // interpretable here and still refuses); a live foreign-identity owner
+      // still refuses as REMOTE_HOST, which keeps the true cross-host case
+      // (one volume mounted on two machines) caught.
       if (witness.record.livenessNamespace !== this.ownerLivenessNamespace) {
         throw leaseFailure(
           'DATA_DIR_LEASE_LIVENESS_NAMESPACE_MISMATCH',
           'canonical DATA_DIR witness is outside this PID liveness namespace',
         );
       }
+      const foreignWitness = witness.record.hostname !== this.ownerHostname
+        || witness.record.hostIdentity !== this.ownerHostIdentity;
       if (processIsAlive(witness.record.pid)) {
-        throw leaseFailure('DATA_DIR_LEASE_HELD', 'canonical DATA_DIR already has a live writer witness');
+        throw leaseFailure(
+          foreignWitness ? 'DATA_DIR_LEASE_REMOTE_HOST' : 'DATA_DIR_LEASE_HELD',
+          foreignWitness
+            ? 'canonical DATA_DIR has a live witness from another host identity'
+            : 'canonical DATA_DIR already has a live writer witness',
+        );
       }
+      // Dead owner: scavenge it. A changed local NIC set must not outrank a dead PID.
       return witness;
     });
     for (const witness of witnesses) this.scavengeDeadWitness(witness);

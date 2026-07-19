@@ -316,6 +316,88 @@ test('BinanceStream latches visible exhaustion before canonical attempt nine and
   stream.stop();
 });
 
+test('MarketEngine self-heals an exhausted public feed after an outage longer than the retry deadline', async () => {
+  // Placed directly after the latch test above so the two invariants are read
+  // together: BinanceStream deliberately latches exhaustion and never
+  // self-rearms (unmodified above); recovery belongs to the stream's OWNER,
+  // which holds the lifecycle authority. V5 measured the real system reaching
+  // 'exhausted' at fault+26.4s and never leaving — still exhausted 150s after
+  // full upstream restore, with no transport event for the rest of the
+  // process lifetime.
+  const waitFor = async (predicate, timeoutMs) => {
+    const deadline = Date.now() + timeoutMs;
+    while (!predicate()) {
+      if (Date.now() > deadline) throw new Error('timed out waiting for supervisory rearm');
+      await sleep(2);
+    }
+  };
+  const handles = new Map();
+  const streamFactory = (name, url, onMessage, onStatus) => {
+    const handle = {
+      name,
+      url,
+      onStatus,
+      startCalls: 0,
+      stopCalls: 0,
+      start() { this.startCalls += 1; },
+      stop() { this.stopCalls += 1; },
+    };
+    handles.set(name, handle);
+    return handle;
+  };
+  const events = [];
+  const engine = new MarketEngine(
+    { logEvent(kind, _symbol, data) { events.push({ kind, data }); } },
+    async () => ({ pairs: [], filters: new Map() }),
+    { start() {}, stop() {}, observeSourceStatus() {}, ingestPrint() {} },
+    {
+      publicSourceStartupEgressAdmitted: true,
+      streamFactory,
+      sourceRecoveryBaseMs: 5, // compressed schedule, mirroring retryBaseMs injection above
+      random: () => 0.5,       // zero jitter: (0.5 * 2) - 1 === 0
+    },
+  );
+  engine.start();
+  try {
+    const spot = handles.get('spot-miniticker');
+    assert.equal(spot.startCalls, 1);
+
+    spot.onStatus('spot-miniticker', 'exhausted');
+    await waitFor(() => spot.startCalls >= 2, 1_000);
+    // The owner must issue stop() THEN start(): start() alone is a no-op
+    // while a stream is not stopped. Before the fix both counters stayed at
+    // their initial values forever.
+    assert.ok(spot.stopCalls >= 1, 'rearm must stop the latched stream first');
+    assert.ok(events.some((entry) => entry.kind === 'ws.rearm' && entry.data?.feed === 'spot-miniticker'),
+      'every supervisory rearm is ledgered as ws.rearm');
+
+    // Recovery clears the campaign: the box returns to green without a
+    // process restart, and a healthy feed is never rearmed again.
+    spot.onStatus('spot-miniticker', 'open');
+    assert.equal(engine.readPublicSourceControl('public-spot-source').lifecycle, 'LIVE');
+    const startsAfterRecovery = spot.startCalls;
+    await sleep(50);
+    assert.equal(spot.startCalls, startsAfterRecovery, 'a healthy feed is never rearmed');
+
+    // Guard (passes before and after): an isolated source is never
+    // auto-rearmed — the operator owns an isolated source.
+    engine.isolatePublicSource('public-spot-source');
+    const startsAfterIsolate = spot.startCalls;
+    spot.onStatus('spot-miniticker', 'exhausted');
+    await sleep(50);
+    assert.equal(spot.startCalls, startsAfterIsolate, 'operator isolation outranks supervisory recovery');
+  } finally {
+    engine.stop();
+  }
+
+  // Guard (passes before and after): a stopped engine never rearms.
+  const usdm = handles.get('futures-markprice');
+  const startsAfterStop = usdm.startCalls;
+  usdm.onStatus('futures-markprice', 'exhausted');
+  await sleep(50);
+  assert.equal(usdm.startCalls, startsAfterStop, 'a stopped engine never resurrects a stream');
+});
+
 test('BinanceStream rechecks elapsed policy after a scheduled cooldown and before socket dispatch', async () => {
   let nowMs = 10_000;
   let socketFactoryCalls = 0;
@@ -1330,45 +1412,6 @@ test('MarketEngine clears source-wide OI on one-symbol outage and requeues inval
   await invalidated;
   assert.equal(h.row('BBBUSDT').openInterest, 41, 'late invalidated slice cannot replace recovery truth');
   h.engine.stop();
-});
-
-test('MarketEngine recycles an exhausted public stream within a bounded budget', async () => {
-  const engine = new MarketEngine(
-    { logEvent() {} },
-    async () => marketUniverse(),
-    undefined,
-    { publicSourceStartupEgressAdmitted: true },
-  );
-  await engine.init();
-  engine.running = true;
-  engine.generation = 1;
-  const fake = {
-    stopCalls: 0,
-    startCalls: 0,
-    stop() { this.stopCalls += 1; },
-    start() { this.startCalls += 1; },
-  };
-  engine.streams = new Map([['futures-markprice', fake]]);
-
-  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
-  assert.equal(fake.stopCalls, 1, 'an exhausted feed is stopped for recycle');
-  assert.equal(fake.startCalls, 1, 'an exhausted feed is restarted so a later recovery is observed');
-
-  for (let index = 0; index < 10; index += 1) {
-    engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
-  }
-  assert.equal(fake.startCalls, 5, 'the recycle budget bounds a genuinely dead endpoint');
-
-  engine.observeFeedStatus('futures-markprice', 'open', 1);
-  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
-  assert.equal(fake.startCalls, 6, 'a proven recovery re-arms the recycle budget');
-
-  engine.isolatedSources.add('public-usdm-source');
-  engine.observeFeedStatus('futures-markprice', 'exhausted', 1);
-  assert.equal(fake.startCalls, 6, 'an operator-isolated source is never recycled behind the operator');
-
-  engine.observeFeedStatus('futures-markprice', 'exhausted', 2);
-  assert.equal(fake.startCalls, 6, 'a stale generation cannot trigger a recycle');
 });
 
 test('VolumeRuntime recycles an exhausted aggTrade stream within a bounded budget', () => {

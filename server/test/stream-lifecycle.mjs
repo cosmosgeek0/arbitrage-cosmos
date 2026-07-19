@@ -219,6 +219,48 @@ test('BinanceStream preserves exponential backoff until a connection is stable',
   stream.stop();
 });
 
+test('BinanceStream with production timing defaults reconnects after a mid-life disconnect past the retry deadline', (t) => {
+  // Production construction sites pass no timing options. The regression this
+  // pins: DEFAULT_STABLE_CONNECTION_MS (60s) was larger than the 30s retry
+  // deadline, so healthy connected time was charged against the campaign and
+  // a drop in the 30-60s band exhausted the stream with zero attempts.
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  const sockets = [];
+  const statuses = [];
+  const stream = new BinanceStream(
+    'production-defaults-feed',
+    'wss://example.invalid/feed',
+    () => {},
+    (_name, status) => statuses.push(status),
+    {
+      socketFactory: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+      random: () => 0.5,
+    },
+  );
+
+  stream.start();
+  sockets[0].open();
+  assert.deepEqual(statuses, ['connecting', 'open']);
+
+  t.mock.timers.tick(45_000);
+  sockets[0].remoteClose();
+  assert.equal(
+    statuses.includes('exhausted'),
+    false,
+    'a connection that held past the stability threshold must have cleared the retry campaign',
+  );
+  assert.equal(statuses.at(-1), 'cooldown');
+
+  t.mock.timers.tick(1_000);
+  assert.equal(sockets.length, 2, 'the stream opens a fresh socket after a routine mid-life disconnect');
+  assert.equal(statuses.at(-1), 'connecting');
+  stream.stop();
+});
+
 test('BinanceStream latches visible exhaustion before canonical attempt nine and re-arms only on explicit restart', async () => {
   let socketFactoryCalls = 0;
   const statuses = [];

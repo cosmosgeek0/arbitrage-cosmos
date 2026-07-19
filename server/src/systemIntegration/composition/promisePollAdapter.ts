@@ -22,6 +22,21 @@ interface StartAttempt {
   readonly key: string;
   state: Exclude<AdapterStartState, 'IDLE'>;
   activationComplete: boolean;
+  rejectionCode: string | null;
+}
+
+// A rejection's cause used to be discarded entirely, so the supervisor's
+// lastFailure could only say "the underlying runtime was quiesced" — hiding
+// which admission gate refused (e.g. PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED).
+// Only a CODE-shaped token is carried forward, preserving this file's
+// no-raw-adapter-error-text policy.
+const REJECTION_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/;
+
+function rejectionCode(cause: unknown): string | null {
+  const code = (cause as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && REJECTION_CODE_PATTERN.test(code)) return code;
+  const message = cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : '';
+  return REJECTION_CODE_PATTERN.test(message) ? message : null;
 }
 
 export interface PromisePollAdapterSpec {
@@ -144,6 +159,7 @@ export class PromisePollManagedComponent implements ManagedComponent {
         key,
         state: 'PENDING',
         activationComplete: this.spec.activate === undefined,
+        rejectionCode: null,
       };
       this.startAttempt = attempt;
       if (this.spec.ownsUnderlyingOnLaunch) this.ownsUnderlyingRuntime = true;
@@ -154,15 +170,19 @@ export class PromisePollManagedComponent implements ManagedComponent {
             () => {
               if (this.startAttempt === attempt) attempt.state = 'RESOLVED';
             },
-            () => {
-              if (this.startAttempt === attempt) attempt.state = 'REJECTED';
+            (cause) => {
+              if (this.startAttempt === attempt) {
+                attempt.state = 'REJECTED';
+                attempt.rejectionCode = rejectionCode(cause);
+              }
             },
           );
         } else {
           attempt.state = 'RESOLVED';
         }
-      } catch {
+      } catch (cause) {
         attempt.state = 'REJECTED';
+        attempt.rejectionCode = rejectionCode(cause);
       }
     }
 
@@ -192,7 +212,7 @@ export class PromisePollManagedComponent implements ManagedComponent {
           code,
           cleanupFailed
             ? `${this.name} start rejected and cleanup could not be proven`
-            : `${this.name} start rejected; the underlying runtime was quiesced`,
+            : `${this.name} start rejected${attempt.rejectionCode ? ` (${attempt.rejectionCode})` : ''}; the underlying runtime was quiesced`,
           ctx,
           true,
         ),

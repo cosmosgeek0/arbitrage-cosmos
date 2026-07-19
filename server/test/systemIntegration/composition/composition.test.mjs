@@ -95,6 +95,7 @@ function fixture(options = {}) {
         log.push(`start:${name}`);
         if (startMode === 'pending') return new Promise(() => {});
         if (startMode === 'rejected') return Promise.reject(new Error('hidden fake error'));
+        if (startMode === 'rejected-coded') return Promise.reject(new Error('PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED'));
         if (startMode === 'resolved-stopped') {
           state.running = false;
           return Promise.resolve();
@@ -295,6 +296,9 @@ test('required Market Intelligence startup failure blocks both strategy runtimes
   const snapshot = f.composition.read();
   assert.equal(snapshot.supervisor.phase, 'FAILED');
   assert.equal(snapshot.supervisor.lastError?.code, 'MARKET_INTELLIGENCE_START_REJECTED');
+  // The no-raw-adapter-error-text policy holds: an arbitrary rejection
+  // message is never echoed into the supervisor failure.
+  assert.doesNotMatch(snapshot.supervisor.lastError?.message ?? '', /hidden fake error/);
   assert.equal(
     snapshot.supervisor.components.find((row) => row.name === 'market-intelligence')?.phase,
     'FAILED',
@@ -307,6 +311,21 @@ test('required Market Intelligence startup failure blocks both strategy runtimes
   assert.equal(f.states.intelligenceRuntime.running, false);
   assert.equal(f.states.market.running, false);
   assert.deepEqual(snapshot.remainingOwnedComponentIds, []);
+});
+
+test('a start rejection carrying an admission-gate code surfaces that code in the supervisor failure', async () => {
+  // Before the fix the cause was discarded entirely and lastError.message read
+  // only "the underlying runtime was quiesced" — the operator could not see
+  // WHICH gate refused (the exact gap that hid the egress-admission blocker).
+  // Only CODE-shaped tokens ride through; raw text stays hidden (see above).
+  const f = fixture({ marketIntelligenceStartMode: 'rejected-coded' });
+  assert.equal(f.composition.start().ok, true);
+  await flushAndDrive(f, 8);
+
+  const snapshot = f.composition.read();
+  assert.equal(snapshot.supervisor.phase, 'FAILED');
+  assert.equal(snapshot.supervisor.lastError?.code, 'MARKET_INTELLIGENCE_START_REJECTED');
+  assert.match(snapshot.supervisor.lastError?.message ?? '', /PUBLIC_SOURCE_STARTUP_EGRESS_NOT_ADMITTED/);
 });
 
 test('configured Q advisory mount is attempted after Market Intelligence and before deterministic engines', async () => {

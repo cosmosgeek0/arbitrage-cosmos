@@ -168,25 +168,43 @@ if (args.integrated === true) {
     fail('integrated ops/live drift exceeds the exact finding-owned amendment path set');
   }
 
+  // Historical amendment trees may be unreachable on a fresh clone (they were
+  // intermediate correction states that never became main-line subtrees). The
+  // per-file blob chain below is always verified from reachable objects; the
+  // exact tree-transition walk additionally runs whenever both trees exist.
+  const blobChain = new Map();
   for (const amendment of loadedAmendment.contract.amendments) {
-    const expectedTransition = amendment.changedFiles
-      .map((file) => `M\t${file.path.slice('ops/live/'.length)}`)
-      .sort();
-    const actualTransition = git(
-      'diff', '--name-status', '--no-renames', amendment.baseLiveTree,
-      amendment.effectiveLiveTree, '--',
-    ).split('\n').filter(Boolean);
-    if (actualTransition.length !== expectedTransition.length
-        || actualTransition.some((line, index) => line !== expectedTransition[index])) {
-      fail(`L15 amendment transition exceeds its exact finding-owned path set: ${amendment.findingId}`);
+    const treesReachable = gitSucceeds('cat-file', '-e', amendment.baseLiveTree)
+      && gitSucceeds('cat-file', '-e', amendment.effectiveLiveTree);
+    if (treesReachable) {
+      const expectedTransition = amendment.changedFiles
+        .map((file) => `M\t${file.path.slice('ops/live/'.length)}`)
+        .sort();
+      const actualTransition = git(
+        'diff', '--name-status', '--no-renames', amendment.baseLiveTree,
+        amendment.effectiveLiveTree, '--',
+      ).split('\n').filter(Boolean);
+      if (actualTransition.length !== expectedTransition.length
+          || actualTransition.some((line, index) => line !== expectedTransition[index])) {
+        fail(`L15 amendment transition exceeds its exact finding-owned path set: ${amendment.findingId}`);
+      }
     }
     for (const file of amendment.changedFiles) {
       const relative = file.path.slice('ops/live/'.length);
-      const before = treeEntry(amendment.baseLiveTree, relative);
-      const after = treeEntry(amendment.effectiveLiveTree, relative);
-      if (before.path !== relative || before.mode !== file.mode || before.gitBlob !== file.beforeGitBlob
-          || after.path !== relative || after.mode !== file.mode || after.gitBlob !== file.afterGitBlob) {
-        fail(`L15 amendment before/after Git binding changed: ${file.path}`);
+      const chainExpected = blobChain.has(file.path)
+        ? blobChain.get(file.path)
+        : treeEntry(`${contract.acceptedCommit}:ops/live`, relative).gitBlob;
+      if (file.beforeGitBlob !== chainExpected) {
+        fail(`L15 amendment blob chain is discontinuous: ${file.path} (${amendment.findingId})`);
+      }
+      blobChain.set(file.path, file.afterGitBlob);
+      if (treesReachable) {
+        const before = treeEntry(amendment.baseLiveTree, relative);
+        const after = treeEntry(amendment.effectiveLiveTree, relative);
+        if (before.path !== relative || before.mode !== file.mode || before.gitBlob !== file.beforeGitBlob
+            || after.path !== relative || after.mode !== file.mode || after.gitBlob !== file.afterGitBlob) {
+          fail(`L15 amendment before/after Git binding changed: ${file.path}`);
+        }
       }
       assertBlobSha256(file.beforeGitBlob, file.beforeSha256, `${file.path} before`);
       assertBlobSha256(file.afterGitBlob, file.afterSha256, `${file.path} after`);

@@ -25,7 +25,7 @@ assert_contains "$OUT" SECRET_MATERIALIZED_WITHOUT_DISCLOSURE
 if cat "$TEST_TMP/provider.stdout" "$TEST_TMP/provider.stderr" | grep -F 'FAKE_SECRET_123456' >/dev/null; then fail_test 'provider disclosed the secret'; fi
 pass_assertion
 assert_file "$SIMULATION_ROOT/credentials/app-secrets.json"
-assert_eq "$(stat -f '%Lp' "$SIMULATION_ROOT/credentials/app-secrets.json" 2>/dev/null || stat -c '%a' "$SIMULATION_ROOT/credentials/app-secrets.json")" 600
+assert_eq "$(stat -c '%a' "$SIMULATION_ROOT/credentials/app-secrets.json" 2>/dev/null || stat -f '%Lp' "$SIMULATION_ROOT/credentials/app-secrets.json")" 600
 assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(Object.keys(v).length))' "$SIMULATION_ROOT/credentials/app-secrets.json")" 2
 
 note "missing provider, ambient credentials, and wildcard ARN fail closed"

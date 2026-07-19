@@ -378,11 +378,11 @@
     },
     {
       "path": "ARCHITECTURE.md",
-      "sha256": "0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac",
-      "anchoredSha256": "0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac",
+      "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
+      "anchoredSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
       "observedSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
       "evidenceMode": "COMMITTED_FILE",
-      "passed": false,
+      "passed": true,
       "acceptanceMode": "IMMUTABLE_FINAL_INPUT"
     },
     {
@@ -495,7 +495,7 @@
     },
     {
       "path": "ARCHITECTURE.md",
-      "sha256": "0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac",
+      "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
       "anchoredSha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
       "observedSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
       "evidenceMode": "COMMITTED_FILE",
@@ -15122,5 +15122,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "b0de374933b6362ad2b6bdbe9192fb8197f895d43831162b74553ce3632ee3c1"
+  "evidenceSha256": "88e9e4510fd5a1417769ce70d93452eda199a7a74532393cd7f36e4aa0d79c84"
 }

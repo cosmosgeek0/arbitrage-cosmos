@@ -52,7 +52,7 @@ bench/               benchmark targets template + harness docs
 /var/lib/cosmos/ops/                deploy log, locks, markers, watchdog state
 /var/backups/cosmos/                published backups + drills
 /etc/cosmos/*.env                   installed env files (root-owned, 0640)
-/usr/local/lib/cosmos-ops/bin/      these scripts, OUTSIDE the release path
+/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/  these scripts, OUTSIDE the release path
 ```
 
 ## DATA_DIR authority deployment precondition
@@ -107,7 +107,7 @@ A release source directory must contain `server/dist/index.js` and a
 schema deployed with `rollbackBarrier:true`). Rollback to any release whose
 `schemaVersion` is below the floor is refused absolutely — that is the
 explicit non-rollback barrier of §24.2. Ownership of this marker should
-move into the app/ledger at integration (see `OPS_INTEGRATION_NOTES.md`).
+move into the app/ledger at integration (see `docs/archive/i00-phase2/L15_OPS_INTEGRATION_NOTES.md`).
 
 ## Deploy failure policy (§24.2, exact)
 

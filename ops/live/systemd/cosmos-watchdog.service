@@ -12,8 +12,11 @@ After=network-online.target
 
 [Service]
 Type=oneshot
+# Part 4 #11: the watchdog shells out to backup.sh --verify-latest, so it is
+# not purely self-bounded; 5 min is generous for one check pass.
+TimeoutStartSec=300
 EnvironmentFile=/etc/cosmos/cosmos-watchdog.env
-ExecStart=/usr/local/lib/cosmos-ops/bin/watchdog.sh --env-file /etc/cosmos/cosmos-watchdog.env
+ExecStart=/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/watchdog.sh --env-file /etc/cosmos/cosmos-watchdog.env
 
 # --- hardening (still root, but confined) ---
 NoNewPrivileges=yes

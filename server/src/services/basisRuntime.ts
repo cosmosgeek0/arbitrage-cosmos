@@ -94,12 +94,30 @@ export class BasisRuntime {
   private eventLastLogged = new Map<string, { ts: number; symbol: string | null }>();
   private operatorMinNetBasisPct: number | null = null;
 
+  private lastObservedNowMs = 0;
+
+  /**
+   * Non-regressing UTC read (F-080): freshness ages (`now - lastBookTs`) were
+   * computed from the raw wall clock, so a backward NTP step made the age
+   * negative and stale data reported 'fresh'. Latching mirrors
+   * systemIntegration's createSystemUtcClock: a backward step freezes
+   * observed time instead of inverting it.
+   */
+  private latchedNowMs(): number {
+    const observed = this.nowSource();
+    if (Number.isFinite(observed)) {
+      this.lastObservedNowMs = Math.max(this.lastObservedNowMs, observed);
+    }
+    return this.lastObservedNowMs;
+  }
+
   constructor(
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
     fetchBookTickers: typeof fetchAllBookTickers = fetchAllBookTickers,
     private readonly strategyDecay: BasisStrategyDecayCadencePort | null = null,
+    private readonly nowSource: () => number = () => Date.now(),
   ) {
     this.fetchBookTickers = fetchBookTickers;
     const config = getConfig();
@@ -167,7 +185,7 @@ export class BasisRuntime {
     lastMarkTs: number | null;
     lastError: string | null;
   } {
-    const now = Date.now();
+    const now = this.latchedNowMs();
     return {
       running: this.running && this.engine.isRunning(),
       bookState: this.lastBookTs !== null && now - this.lastBookTs < 10_000 ? 'fresh' : 'stale',
@@ -186,7 +204,7 @@ export class BasisRuntime {
    */
   integrationSnapshot(): BasisRuntimeIntegrationSnapshot {
     return structuredClone({
-      capturedAtMs: Date.now(),
+      capturedAtMs: this.latchedNowMs(),
       lastTickTs: this.engine.lastTick(),
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
@@ -261,7 +279,7 @@ export class BasisRuntime {
     if (event.kind === 'strategy_decision' && decisionKind === 'ignore') return;
 
     const signature = [event.kind, event.symbol ?? '', event.rejectCode ?? '', decisionKind ?? ''].join('|');
-    const now = Date.now();
+    const now = this.latchedNowMs();
     const previous = this.eventLastLogged.get(signature)?.ts ?? 0;
     if (now - previous < LEDGER_REPEAT_MS) return;
     try {
@@ -333,7 +351,7 @@ export class BasisRuntime {
         this.lastBookTs = null;
         this.lastMarkTs = null;
       }
-      this.pruneEventDedupe(Date.now(), new Set(this.eligibleSymbols));
+      this.pruneEventDedupe(this.latchedNowMs(), new Set(this.eligibleSymbols));
     } catch (error) {
       this.noteError('basis-runtime.universe', error);
       this.engine.setKillSwitch(true);
@@ -391,7 +409,7 @@ export class BasisRuntime {
         throw new RangeError(`basis runtime universe exceeds ${this.engine.cfg.maxUniverseSize} rows`);
       }
       const source = new Map(universe.map((row) => [row.symbol, row]));
-      const receivedTs = Date.now();
+      const receivedTs = this.latchedNowMs();
       let booksSeen = 0;
       let marksSeen = 0;
       const active = new Set(this.eligibleSymbols);
@@ -515,7 +533,7 @@ export class BasisRuntime {
   }
 
   private safeLogError(source: string): void {
-    const now = Date.now();
+    const now = this.latchedNowMs();
     if (now - this.lastErrorLogAttemptTs < LEDGER_REPEAT_MS) return;
     this.lastErrorLogAttemptTs = now;
     try {
@@ -541,7 +559,7 @@ export class BasisRuntime {
   }
 
   snapshot(): Record<string, unknown> {
-    const now = Date.now();
+    const now = this.latchedNowMs();
     const lifecycleRows = this.engine.lifecycle.all();
     const latestDecision = new Map<string, Decision>();
     for (const lifecycle of lifecycleRows) {

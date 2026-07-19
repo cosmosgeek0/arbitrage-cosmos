@@ -10,10 +10,13 @@ Description=Cosmos periodic isolated restore drill
 
 [Service]
 Type=oneshot
+# Part 4 #11: restore + verify of a large backup can exceed the 90 s stock
+# default; 60 min bounds the drill without letting a hung run live forever.
+TimeoutStartSec=3600
 User=cosmos
 Group=cosmos
 EnvironmentFile=/etc/cosmos/cosmos-backup.env
-ExecStart=/usr/local/lib/cosmos-ops/bin/restore-drill.sh --env-file /etc/cosmos/cosmos-backup.env
+ExecStart=/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/restore-drill.sh --env-file /etc/cosmos/cosmos-backup.env
 
 # --- hardening ---
 NoNewPrivileges=yes

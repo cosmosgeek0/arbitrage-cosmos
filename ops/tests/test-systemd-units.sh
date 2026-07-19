@@ -56,6 +56,14 @@ for private_pids in yes true on 1; do
 done
 assert_grep '^StartLimitIntervalSec=' "$APP" "restart storm bounded"
 assert_grep '^StartLimitBurst=' "$APP" "restart storm bounded (burst)"
+# F-017: TimeoutStopSec must cover the app's 45 s drain + 8 s HTTP deadline
+# with margin, so the two budgets can never silently diverge again.
+APP_TIMEOUT_STOP="$(unit_get "$APP" TimeoutStopSec)"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$APP_TIMEOUT_STOP" in
+  (*[!0-9]*|"") fail "cosmos-app.service TimeoutStopSec is not a plain integer" ;;
+  (*) [ "$APP_TIMEOUT_STOP" -ge 75 ] || fail "cosmos-app.service TimeoutStopSec=$APP_TIMEOUT_STOP is below the 45s drain + 8s close + margin budget (>=75)" ;;
+esac
 assert_grep '^LogRateLimitIntervalSec=' "$APP" "journal rate bounded"
 assert_grep '^ReadWritePaths=.*/var/lib/cosmos' "$APP" "state dir writable"
 assert_grep '^ReadWritePaths=.*/run/cosmos-app' "$APP" "logical lease runtime writable"
@@ -71,7 +79,11 @@ note "watchdog/backup/drill: oneshot units OUTSIDE the release path"
 for pair in "cosmos-watchdog.service:watchdog.sh" "cosmos-backup.service:backup.sh" "cosmos-restore-drill.service:restore-drill.sh"; do
   u="$SYSD/${pair%%:*}"; script="${pair##*:}"
   assert_eq "$(unit_get "$u" Type)" oneshot "$(basename "$u") oneshot"
-  assert_grep "^ExecStart=/usr/local/lib/cosmos-ops/bin/$script" "$u" "$(basename "$u") external to releases"
+  # Part 4 #11: every oneshot must declare an explicit start budget.
+  assert_grep '^TimeoutStartSec=' "$u" "$(basename "$u") declares TimeoutStartSec"
+  # F-040: the units must point at the path install-ops-bundle.sh actually
+  # creates (<dest>/accepted-ops-live/bin), still outside the release path.
+  assert_grep "^ExecStart=/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/$script" "$u" "$(basename "$u") external to releases"
   # directives (non-comment lines) must not reference the release path
   ASSERTIONS=$((ASSERTIONS + 1))
   ! grep -v '^#' "$u" | grep -q '/opt/cosmos/current' \

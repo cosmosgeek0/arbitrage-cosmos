@@ -676,7 +676,7 @@
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
-            "line": 386,
+            "line": 338,
             "ruleId": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL"
           }
         ],
@@ -760,32 +760,32 @@
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 372,
+        "line": 324,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 377,
+        "line": 329,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 380,
+        "line": 332,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/engine/marketData.ts",
-        "line": 386,
+        "line": 338,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "server/src/index.ts",
-        "line": 11,
+        "line": 10,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
         "file": "server/src/index.ts",
-        "line": 3604,
+        "line": 3562,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1175,7 +1175,7 @@
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 515,
+        "line": 533,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -1298,7 +1298,7 @@
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
         "file": "server/src/binance/liquidations.ts",
-        "line": 281
+        "line": 285
       },
       {
         "concept": "semantic-source",
@@ -1316,25 +1316,25 @@
         "concept": "exchange-hand",
         "declaration": "interface SpotExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 153
+        "line": 186
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface FuturesExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 164
+        "line": 197
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface ExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 178
+        "line": 211
       },
       {
         "concept": "exchange-hand",
         "declaration": "function fetchExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 189
+        "line": 222
       },
       {
         "concept": "semantic-source",
@@ -1370,7 +1370,7 @@
         "concept": "capital-authority",
         "declaration": "function assertCacheReservations",
         "file": "server/src/bootstrap/environment.ts",
-        "line": 477
+        "line": 485
       },
       {
         "concept": "capital-authority",
@@ -2862,18 +2862,6 @@
       },
       {
         "concept": "semantic-source",
-        "declaration": "interface MarketStreamHandle",
-        "file": "server/src/engine/marketData.ts",
-        "line": 147
-      },
-      {
-        "concept": "semantic-source",
-        "declaration": "type MarketStreamFactory",
-        "file": "server/src/engine/marketData.ts",
-        "line": 153
-      },
-      {
-        "concept": "semantic-source",
         "declaration": "class Scanner",
         "file": "server/src/engine/scanner.ts",
         "line": 38
@@ -3512,85 +3500,79 @@
         "concept": "ledger-authority",
         "declaration": "type LedgerEvent",
         "file": "server/src/index.ts",
-        "line": 17
+        "line": 16
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryReadPort",
         "file": "server/src/index.ts",
-        "line": 95
+        "line": 94
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 103
+        "line": 102
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 109
+        "line": 108
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 150
+        "line": 145
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 201
+        "line": 196
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 602
-      },
-      {
-        "concept": "control-authority",
-        "declaration": "function recordSupervisorReadFailure",
-        "file": "server/src/index.ts",
-        "line": 796
+        "line": 597
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 879
+        "line": 871
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2059
+        "line": 2034
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2068
+        "line": 2043
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2448
+        "line": 2423
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2460
+        "line": 2435
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2470
+        "line": 2445
       },
       {
         "concept": "semantic-source",
@@ -4496,79 +4478,79 @@
         "concept": "ledger-authority",
         "declaration": "interface PreparedLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 693
+        "line": 655
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventText",
         "file": "server/src/ledger.ts",
-        "line": 719
+        "line": 681
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventCreatedAt",
         "file": "server/src/ledger.ts",
-        "line": 749
+        "line": 711
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 760
+        "line": 722
       },
       {
         "concept": "ledger-authority",
         "declaration": "function snapshotLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 775
+        "line": 737
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface PreparedLedgerEventData",
         "file": "server/src/ledger.ts",
-        "line": 790
+        "line": 752
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventData",
         "file": "server/src/ledger.ts",
-        "line": 795
+        "line": 757
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface StoredLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 806
+        "line": 768
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareStoredLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 817
+        "line": 779
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerOptions",
         "file": "server/src/ledger.ts",
-        "line": 1621
+        "line": 1564
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 1626
+        "line": 1569
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 4950
+        "line": 4920
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 4956
+        "line": 4926
       },
       {
         "concept": "semantic-source",
@@ -7016,7 +6998,7 @@
         "concept": "control-authority",
         "declaration": "function validateSystemControlMutationRequest",
         "file": "server/src/systemIntegration/contracts/validation.ts",
-        "line": 576
+        "line": 567
       },
       {
         "concept": "control-authority",
@@ -8221,17 +8203,17 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 17,
+        "line": 16,
         "target": "./ledger.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 110,
+        "line": 109,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 131,
+        "line": 130,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -15140,5 +15122,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "eff784cb75dd49ea456084ad5e8e206b8ba4e5a8fd18e88e028eff483b365bba"
+  "evidenceSha256": "05f20fd452309adba0d8ee63c0c3a278ebfdfaf87498b109a2faab852a163007"
 }

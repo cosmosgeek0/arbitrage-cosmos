@@ -423,6 +423,14 @@ function acquireLogicalLease(
 }
 
 function requestedDataDir(cwd: string, environment: Environment): string {
+  if (environment.NODE_ENV === 'production' && !environment.DATA_DIR) {
+    // The `<cwd>/data` convenience default is for local development only. In
+    // production the working directory is the immutable release
+    // (`/opt/cosmos/current`), which deploy freezing and ProtectSystem=strict
+    // both make read-only — a default that writes into the release is never
+    // right, so refuse loudly exactly as the lease root is refused (F-051).
+    throw authorityError('DATA_DIR_REQUIRED');
+  }
   return environment.DATA_DIR
     ? path.resolve(cwd, environment.DATA_DIR)
     : path.resolve(cwd, 'data');
@@ -641,8 +649,12 @@ export function loadDotEnv(
         environment[match[1]] = match[2].replace(/^["']|["']$/gu, '');
       }
     }
-  } catch {
-    // An absent local file is a valid keyless/default configuration.
+  } catch (error) {
+    // An absent local file is a valid keyless/default configuration, but an
+    // unreadable one (EACCES, EISDIR, …) must not be silently identical to an
+    // absent one — that hides a real misconfiguration (F-050).
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    if (code !== 'ENOENT') throw error;
   }
 }
 

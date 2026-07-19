@@ -33,10 +33,18 @@ RuntimeDirectoryPreserve=restart
 ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js
 Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
+# F-017: the stop budget must exceed the application's own drain budget
+# (DEFAULT_DRAIN_TIMEOUT_MS = 45 s) plus its 8 s internal HTTP close deadline,
+# with margin — otherwise systemd SIGKILLs mid-drain and leaves an
+# untruncated WAL. 75 = 45 + 8 + margin.
+TimeoutStopSec=75
 KillSignal=SIGTERM
 
 # --- filesystem/privilege hardening ---
+# Do NOT add PrivatePIDs= here (F-111): the DATA_DIR lease classifies owners
+# via kill(pid,0) and /proc/<pid>/stat and requires a shared PID namespace
+# (see ops/live/bin/common.sh lock-owner classifier). Its absence is enforced
+# by ops/tests/test-systemd-units.sh and test/opsShadow/contract.mjs.
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

@@ -48,7 +48,7 @@ cosmos_layout_defaults
 : "${WATCHDOG_STATE_DIR:=$OPS_STATE_DIR/watchdog}"
 : "${BACKUP_DIR:=}"
 : "${BACKUP_MAX_AGE_HOURS:=26}"
-require_cmd "$NODE"
+require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
 mkdir -p "$WATCHDOG_STATE_DIR"
 
 STREAK_FILE="$WATCHDOG_STATE_DIR/live-fail-streak"
@@ -80,8 +80,22 @@ write_status() { # live ready tunnel skipped frozen backupFresh streak lockState
 }
 
 # --- deploy ownership: skip only a proven owner or bounded publication race -------
-LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
-case "$LOCK_STREAK" in (*[!0-9]*|"") LOCK_STREAK=0 ;; esac
+# Part 4 #7: an ABSENT streak file is a legitimate first run (0). A PRESENT
+# but unreadable/malformed one previously also became 0, silently disarming
+# the restart threshold forever. Fail toward acting instead: assume the
+# threshold is reached and say so.
+if [ ! -e "$STREAK_FILE" ]; then
+  LOCK_STREAK=0
+else
+  LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo UNREADABLE)"
+  case "$LOCK_STREAK" in
+    (*[!0-9]*|"")
+      wd_alert critical WATCHDOG_STATE_UNREADABLE \
+        "streak file $STREAK_FILE is present but unreadable or malformed; assuming the live-fail threshold is reached"
+      LOCK_STREAK="$LIVE_FAIL_THRESHOLD"
+      ;;
+  esac
+fi
 classify_lock_family "$DEPLOY_LOCK"
 DEPLOY_LOCK_STATE="$LOCK_STATE"
 DEPLOY_LOCK_REASON="$LOCK_REASON"
@@ -120,9 +134,17 @@ else
     RECENT="$(count_recent "$APP_RESTARTS" "$RESTART_WINDOW_SEC")"
     if [ "$RECENT" -lt "$MAX_RESTARTS_PER_WINDOW" ]; then
       wd_alert critical APP_RESTARTED "live gate failed ${STREAK}x; restarting $APP_UNIT (restart $((RECENT + 1))/$MAX_RESTARTS_PER_WINDOW in window)"
-      "$SYSTEMCTL" restart "$APP_UNIT" || wd_alert critical APP_RESTART_FAILED "systemctl restart $APP_UNIT failed"
-      now_epoch >> "$APP_RESTARTS"
-      STREAK=0
+      # Part 4 #5: once StartLimitBurst latches, every systemctl restart fails
+      # until reset-failed clears the latch; and a FAILED restart must not
+      # consume restart budget or clear the streak - that would credit the
+      # watchdog with a recovery it did not achieve.
+      "$SYSTEMCTL" reset-failed "$APP_UNIT" >/dev/null 2>&1 || true
+      if "$SYSTEMCTL" restart "$APP_UNIT"; then
+        now_epoch >> "$APP_RESTARTS"
+        STREAK=0
+      else
+        wd_alert critical APP_RESTART_FAILED "systemctl restart $APP_UNIT failed"
+      fi
     else
       wd_alert critical RESTART_BUDGET_EXHAUSTED "live gate still failing but $RECENT restarts already made in ${RESTART_WINDOW_SEC}s window; operator required"
     fi

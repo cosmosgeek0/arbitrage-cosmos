@@ -124,6 +124,9 @@ try {
   const endpoint = exactEndpoint(process.env.I00_OPS_READBACK_URL ?? DEFAULT_URL);
   const body = await readBody(endpoint, timeoutMs());
   process.stdout.write(`${exactReadback(body, Date.now())}\n`);
-} catch {
+} catch (error) {
+  // F-028: UNKNOWN silently disables auto-rollback, so the reason must be
+  // visible. stdout stays contract-exact; the reason goes to stderr.
+  process.stderr.write(`exposure probe failed: ${error instanceof Error ? error.message : String(error)}\n`);
   unknown();
 }

@@ -1,4 +1,9 @@
-/var/lib/cosmos/ops/*.jsonl {
+# Part 4 #1: the watchdog writes alerts.jsonl one directory down
+# (/var/lib/cosmos/ops/watchdog/), which the single-level glob missed - an
+# unrotated alert log growing one line per minute forever.
+# Install as /etc/logrotate.d/cosmos-ops (no installer places this file;
+# copy it during host bootstrap).
+/var/lib/cosmos/ops/*.jsonl /var/lib/cosmos/ops/*/*.jsonl {
     daily
     maxsize 10M
     rotate 14

@@ -13,8 +13,33 @@ const LARGE_JSON_LIMIT_BYTES = 24 * 1024 * 1024;
 const NEGATIVE_CACHE_MS = 2_500;
 const MAX_CACHE_ENTRIES = 1_024;
 const MAX_ACTIVE_JSON_REQUESTS = 32;
+// Host-scoped rate-limit breaker (Part 4 #2): Binance answers 429 with a
+// Retry-After and escalates continued traffic to a whole-IP 418 ban. The
+// per-URL negative cache alone records the failure against one URL while
+// requests to other URLs on the same host keep escalating the ban, so a
+// 429/418 must gate the HOST, not the URL.
+const HOST_BAN_BASE_MS_429 = 60_000;
+const HOST_BAN_BASE_MS_418 = 300_000;
+const HOST_BAN_MAX_MS = 3_600_000;
 const jsonInFlight = new Map<string, Promise<unknown>>();
 const jsonFailures = new Map<string, { until: number; message: string }>();
+const hostRateLimitBans = new Map<string, { until: number; strikes: number }>();
+
+function retryAfterMs(res: Response): number | null {
+  const header = res.headers.get('retry-after');
+  if (header === null) return null;
+  const seconds = Number(header);
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+  return Math.min(seconds * 1_000, HOST_BAN_MAX_MS);
+}
+
+function recordHostRateLimit(hostname: string, status: number, advertisedMs: number | null): void {
+  const strikes = (hostRateLimitBans.get(hostname)?.strikes ?? 0) + 1;
+  const base = status === 418 ? HOST_BAN_BASE_MS_418 : HOST_BAN_BASE_MS_429;
+  const escalated = Math.min(base * 2 ** Math.min(strikes - 1, 5), HOST_BAN_MAX_MS);
+  const banMs = advertisedMs !== null ? Math.max(advertisedMs, base) : escalated;
+  hostRateLimitBans.set(hostname, { until: Date.now() + banMs, strikes });
+}
 
 function boundedInteger(value: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback;
@@ -80,6 +105,10 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || !BINANCE_HOSTS.has(url.hostname)) throw new Error(`${label} unavailable`);
   const key = url.toString();
+  const hostBan = hostRateLimitBans.get(url.hostname);
+  if (hostBan && hostBan.until > Date.now()) {
+    throw new Error(`${label} unavailable (upstream rate limit cooldown)`);
+  }
   const failed = jsonFailures.get(key);
   if (failed && failed.until > Date.now()) throw new Error(failed.message);
   if (failed) jsonFailures.delete(key);
@@ -100,9 +129,13 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
         signal: ctrl.signal,
       });
       if (!res.ok) {
+        if (res.status === 429 || res.status === 418) {
+          recordHostRateLimit(url.hostname, res.status, retryAfterMs(res));
+        }
         await res.body?.cancel().catch(() => undefined);
         throw new Error(`${label} HTTP ${res.status}`);
       }
+      hostRateLimitBans.delete(url.hostname);
       const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
       if (!contentType.includes('application/json') && !contentType.includes('+json')) {
         await res.body?.cancel().catch(() => undefined);
@@ -303,11 +336,20 @@ export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<M
   const raw = await requestJson<RawBookTicker[]>(url, `${market} bookTicker`, LARGE_JSON_LIMIT_BYTES);
   if (!Array.isArray(raw)) throw new Error(`${market} bookTicker invalid JSON`);
   const data = new Map<string, BookTicker>();
-  for (const row of raw.slice(0, 20_000)) {
+  const rows = raw.slice(0, 20_000);
+  let skipped = 0;
+  for (const row of rows) {
     try {
       const parsed = parseBookTicker(row);
       data.set(parsed.symbol, parsed);
-    } catch { /* skip malformed upstream rows */ }
+    } catch { skipped += 1; /* skip malformed upstream rows */ }
+  }
+  // Per-row tolerance is for genuine one-off malformations. A majority of
+  // rows failing the shape check means the upstream schema changed; caching
+  // the near-empty map would silently present it as the real market for the
+  // cache window. Throw so the honest-unavailable path takes over (Part 4 #13).
+  if (rows.length > 0 && skipped > rows.length / 2) {
+    throw new Error(`${market} bookTicker schema mismatch: ${skipped} of ${rows.length} rows malformed`);
   }
   allBookCache.set(market, { fetchedAt: Date.now(), data });
   return data;

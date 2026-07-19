@@ -34,6 +34,29 @@ const paths = ['DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR'].map((key) 
 if (paths.some((path) => !isAbsolute(path)) || new Set(paths).size !== paths.length) {
   fail('durable data/evidence/model/backup paths must be distinct absolute paths');
 }
+// F-033 (scoped): DATA_DIR_LOGICAL_LEASE_ROOT is a hard production boot
+// requirement (environment.ts throws DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED).
+// Shape rules are enforced whenever the key is present, mirroring the
+// runtime (absolute; never nested with DATA_DIR in either direction, which
+// environment.ts rejects as DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID).
+// PRESENCE cannot be required here yet: the CS-03 amendment regression test
+// (ops/tests/i00/test-cs-03-public-source-admission.sh) feeds this validator
+// a fixture env without the key, and that test's bytes are immutably bound
+// by l15-amendment-contract regressionTests - evolving it needs a
+// director-ratified amendment mechanism. Recorded in EV_REHEARSAL_IMPL.md.
+if ('DATA_DIR_LOGICAL_LEASE_ROOT' in values) {
+  if (!values.DATA_DIR_LOGICAL_LEASE_ROOT || hasPlaceholder(values.DATA_DIR_LOGICAL_LEASE_ROOT)) {
+    fail('DATA_DIR_LOGICAL_LEASE_ROOT is present but unresolved');
+  }
+  if (!isAbsolute(values.DATA_DIR_LOGICAL_LEASE_ROOT)) {
+    fail('DATA_DIR_LOGICAL_LEASE_ROOT must be an absolute path');
+  }
+  if (values.DATA_DIR_LOGICAL_LEASE_ROOT === values.DATA_DIR
+      || values.DATA_DIR_LOGICAL_LEASE_ROOT.startsWith(`${values.DATA_DIR}/`)
+      || values.DATA_DIR.startsWith(`${values.DATA_DIR_LOGICAL_LEASE_ROOT}/`)) {
+    fail('DATA_DIR_LOGICAL_LEASE_ROOT and DATA_DIR must not nest');
+  }
+}
 if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.CONTROL_ROOM_OPERATOR_EMAIL)) fail('operator email is invalid');
 if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(values.CF_ACCESS_TEAM_DOMAIN)) fail('Cloudflare Access team domain is invalid');
 if (!/^[A-Za-z0-9_-]{8,256}$/.test(values.CF_ACCESS_AUD)) fail('Cloudflare Access audience is invalid');

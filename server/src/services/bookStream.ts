@@ -243,7 +243,7 @@ export class BookStreamHub {
 
   private openFeed(symbol: string): Feed {
     const lower = symbol.toLowerCase();
-    const url = `wss://stream.binance.com:9443/stream?streams=${lower}@depth${BOOK_LEVELS}@100ms/${lower}@aggTrade`;
+    const url = `wss://stream.binance.com:443/stream?streams=${lower}@depth${BOOK_LEVELS}@100ms/${lower}@aggTrade`;
     let feed: Feed | null = null;
     const stream = this.streamFactory(
       `book-${lower}`,

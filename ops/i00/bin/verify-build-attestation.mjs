@@ -81,6 +81,10 @@ export function expectedBuildAttestation({
     runtimeDepsDigestSha256,
     serverDistDigestSha256,
     webDistDigestSha256,
+    // F-116: requiredCommands is signed but built from this local constant -
+    // it records what SHOULD have run, not what did. The artifact that
+    // actually proves command execution is the tested receipt
+    // (testedReceiptSha256 above), which binds the recorded test run.
     requiredCommands: REQUIRED_BUILD_COMMANDS.map((entry) => ({ ...entry })),
     testsCompletedAtUtc,
     buildCompletedAtUtc,

@@ -754,12 +754,20 @@ sha256_file() {
   fi
 }
 
-# json_get FILE DOTTED.KEY — prints the scalar value; exits 3 when missing.
+# json_get FILE DOTTED.KEY — prints the scalar value; exits 3 when the key is
+# missing, 4 when the file is unreadable or not valid JSON (Part 4 #6: the two
+# conditions must be distinguishable at the call site - "key absent" may have
+# a safe default, "journal unreadable" never does).
 json_get() {
   "$NODE" -e '
     const fs = require("fs");
     const [file, key] = process.argv.slice(1);
-    let v = JSON.parse(fs.readFileSync(file, "utf8"));
+    let v;
+    try {
+      v = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch {
+      process.exit(4);
+    }
     for (const part of key.split(".")) { v = v == null ? undefined : v[part]; }
     if (v === undefined || v === null) process.exit(3);
     process.stdout.write(typeof v === "object" ? JSON.stringify(v) : String(v));
@@ -848,6 +856,10 @@ http_ok() { "$CURL" -fsS -m "$HTTP_TIMEOUT_SEC" -o /dev/null "$1" 2>/dev/null; }
 # fail fast instead of polling a corpse until timeout.
 gate_wait() {
   local base="$1" paths="$2" timeout="$3" guard="${4:-}"
+  # F-026: an empty path list would iterate zero times and return success,
+  # silently passing every gate. Refuse it - an empty gate is a
+  # misconfiguration, never a pass.
+  [ -n "$paths" ] || { ops_log "gate: refusing an empty gate path list"; return 1; }
   local deadline=$(( $(now_epoch) + timeout )) p
   for p in $paths; do
     while ! http_ok "${base}${p}"; do
@@ -873,7 +885,10 @@ gate_wait() {
 get_exposure() {
   local out
   if [ -z "${EXPOSURE_CMD:-}" ]; then echo UNKNOWN; return 0; fi
-  if out="$($EXPOSURE_CMD 2>/dev/null)"; then
+  # F-028: do not discard the exposure command's stderr - when the probe is
+  # misconfigured the reason must reach the journal, because UNKNOWN silently
+  # disables auto-rollback.
+  if out="$($EXPOSURE_CMD)"; then
     case "$out" in
       NONE|ACTIVE|AMBIGUOUS|RECOVERY_REQUIRED|UNKNOWN) echo "$out" ;;
       *) echo UNKNOWN ;;

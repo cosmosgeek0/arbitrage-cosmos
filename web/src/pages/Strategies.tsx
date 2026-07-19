@@ -197,7 +197,7 @@ export function Strategies() {
           <div className="volx-summary-cell">
             <span>Open Proposals</span>
             <strong>{snapshot?.status.openProposals ?? '—'}</strong>
-            <small>{snapshot?.status.openProposals ? 'Passed every executable gate' : 'No setup has cleared every gate'}</small>
+            <small>{snapshot == null ? 'Runtime truth unavailable' : snapshot.status.openProposals ? 'Passed every executable gate' : 'No setup has cleared every gate'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Borrow Verified</span>

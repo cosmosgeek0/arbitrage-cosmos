@@ -55,7 +55,14 @@ assert_client() {
   set -e
   assert_eq "$rc" 0
   assert_eq "$output" "$expected"
-  assert_eq "$(cat "$stderr")" ''
+  # F-028: stdout stays contract-exact (only the closed enum), but on failure
+  # the client may write one 'exposure probe failed: <reason>' line to stderr,
+  # because UNKNOWN silently disables auto-rollback and the operator needs
+  # the reason in the journal. Any OTHER stderr output remains a failure.
+  ASSERTIONS=$((ASSERTIONS + 1))
+  if [ -s "$stderr" ] && grep -vE '^exposure probe failed: ' "$stderr" | grep -q .; then
+    fail_test "unexpected stderr from readback client: $(cat "$stderr")"
+  fi
 }
 
 note "exact current loopback readback emits only the closed exposure enum"

@@ -133,3 +133,27 @@ recovery, Access failure, tunnel failure, stale backup, or watchdog exhaustion:
 freeze deployment, halt new risk through the canonical Control Plane, preserve
 reconciliation/recovery, capture one incident receipt, and do not clear the
 incident until readback proves recovery.
+
+## Replacing the installed ops bundle (F-041)
+
+`install-ops-bundle.sh` correctly refuses an existing destination and installs
+the bundle read-only (`chmod -R a-w`); this section is the reviewed reversal
+that refusal message points at. Replacement is an owner-authorized host step:
+
+1. Verify the outgoing installation before touching it:
+   `cat <dest>/install-receipt.json` and record its `testedSha` in the
+   incident/change log. If the receipt is missing or unreadable, treat the
+   installation as unverified and preserve a copy
+   (`cp -R <dest> <dest>.quarantine-$(date -u +%Y%m%dT%H%M%SZ)`) before removal.
+2. Stop consumers first: `systemctl stop cosmos-watchdog.timer
+   cosmos-backup.timer cosmos-restore-drill.timer` (units under
+   `/etc/systemd/system` keep their files; only the scripts are replaced).
+3. Make the tree writable and remove it: `chmod -R u+w <dest> && rm -rf <dest>`.
+4. Re-run `install-ops-bundle.sh` from the NEW validated release with its full
+   authorization arguments (same procedure as first install).
+5. Compare the new `<dest>/install-receipt.json` against the outgoing record:
+   the `testedSha` must be the new release's, and the receipt must validate.
+6. Restart the timers stopped in step 2 and confirm one green watchdog pass.
+
+The destination is `/usr/local/lib/cosmos-ops/i00`; the effective donor
+scripts live under `<dest>/accepted-ops-live/bin/` (see F-040).

@@ -599,18 +599,42 @@ console.log(
 
 let eventRetentionTimer: NodeJS.Timeout | null = null;
 
-function pruneEphemeralLedgerEvents(maxBatches = 1): void {
+function pruneEphemeralLedgerEvents(maxBatches = 1): number {
   try {
     const now = Date.now();
     const batches = Math.max(1, Math.min(5, Math.trunc(maxBatches)));
+    let totalDeleted = 0;
+    let saturated = true;
     for (let batch = 0; batch < batches; batch += 1) {
-      if (ledger.pruneEphemeralEvents(now, 10_000) < 10_000) break;
+      const deleted = ledger.pruneEphemeralEvents(now, 10_000);
+      totalDeleted += deleted;
+      if (deleted < 10_000) {
+        saturated = false;
+        break;
+      }
     }
+    // Deletion pinned at the per-tick ceiling means the producers are
+    // outrunning retention — that is a saturation signal, not a normal tick,
+    // and it must be visible before the disk fills (F-102).
+    if (saturated) {
+      console.error(
+        `ledger retention saturated: deleted ${totalDeleted} rows and hit the per-tick ceiling; producers may be outrunning retention`,
+      );
+    }
+    return totalDeleted;
   } catch (error) {
+    // A retention failure is a ledger failure: reporting it only through
+    // safeLogEvent writes the error into the thing that just failed, so a
+    // broken ledger silences its own alarm. Mirror it to stderr (F-104).
+    console.error(
+      'ledger retention failed:',
+      error instanceof Error ? error.message : String(error),
+    );
     safeLogEvent('error_event', null, {
       source: 'ledger.retention',
       message: error instanceof Error ? error.message : String(error),
     });
+    return 0;
   }
 }
 function mode(): string {
@@ -986,14 +1010,17 @@ function notificationRoutingSnapshot() {
   };
 }
 
+// Every mounted API route shares one operator admission boundary.
+app.use('/api', operatorAccess.middleware());
+
 // Ambient bearer material cannot widen Phase 2 authority. This route remains
-// present only as an explicit owner-gated boundary and performs no persistence.
+// present only as an explicit owner-gated boundary and performs no
+// persistence. Registered BELOW the admission boundary (F-070) so it shares
+// the same operator authentication as every other /api route instead of
+// bypassing it by registration order.
 app.post('/api/notifications/ingest/aws', (_req, res) => {
   sendOwnerGated(res, 'AWS_NOTIFICATION_INGEST');
 });
-
-// Every mounted API route shares one operator admission boundary.
-app.use('/api', operatorAccess.middleware());
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,
@@ -3678,6 +3705,7 @@ server.on('upgrade', (request, socket, head) => {
         return;
       }
       if (!verification.authorized) {
+        console.error('websocket upgrade refused: operator verification denied');
         rejectUpgrade(socket, 401, 'WebSocket operator verification failed.');
         return;
       }
@@ -3699,7 +3727,17 @@ server.on('upgrade', (request, socket, head) => {
         wss.emit('connection', ws, request);
       });
     })
-    .catch(() => rejectUpgrade(socket, 401, 'WebSocket operator verification failed.'))
+    .catch((error) => {
+      // An infrastructure failure (e.g. a JWKS fetch timeout during a
+      // Cloudflare incident) is not an authorization verdict. Mirror the HTTP
+      // middleware's 503 OPERATOR_CHECK_UNAVAILABLE instead of telling the
+      // operator "you are not authorized" (F-072 / Part 4 #12).
+      console.error(
+        'websocket upgrade refused: operator verification unavailable:',
+        error instanceof Error ? error.message : String(error),
+      );
+      rejectUpgrade(socket, 503, 'Operator verification is unavailable (OPERATOR_CHECK_UNAVAILABLE).');
+    })
     .finally(() => {
       pendingWsUpgradeSockets.delete(socket);
       pendingWsUpgrades = Math.max(0, pendingWsUpgrades - 1);
@@ -3877,7 +3915,13 @@ function startServerTimers(): void {
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
   pruneEphemeralLedgerEvents(5);
-  eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
+  eventRetentionTimer = setInterval(() => {
+    pruneEphemeralLedgerEvents(5);
+    // Reclaim WAL frames on the same cadence as retention so the -wal file
+    // stays bounded even when the process never reaches a clean shutdown
+    // checkpoint (Part 4 #10).
+    ledger.checkpointWalPeriodic();
+  }, 10 * 60_000);
   websocketHeartbeatTimer = setInterval(() => {
     for (const client of wss.clients) {
       if (wsAlive.get(client) === false) {
@@ -3905,10 +3949,12 @@ if (canonicalApplicationStartOk) {
     'control-room listener not admitted because durable boot failed:',
     canonicalApplicationStartFailureCodes.join(',') || 'APPLICATION_START_FAILED',
   );
-  // The supervisor reads the exit status, not stderr. A boot that refused to
+// The supervisor reads the exit status, not stderr. A boot that refused to
   // admit the listener must not be indistinguishable from a clean stop, or
-  // Restart=on-failure never fires. process.exitCode (not process.exit) lets
-  // the registered 'exit' lease-release hook run through normal teardown.
+  // Restart=on-failure never fires: every runtime timer is unref()'d, so the
+  // event loop drains and Node would exit 0 (F-053). process.exitCode (not
+  // process.exit) lets the registered 'exit' lease-release hook run through
+  // normal teardown.
   process.exitCode = 1;
 }
 server.on('error', (error) => {
@@ -4075,3 +4121,29 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       });
   });
 }
+
+// Last-resort attribution (Part 4 #9): since Node 15 an unhandled rejection
+// terminates the process. Keep the crash — the value added here is one
+// structured line naming the origin before a deliberate non-zero exit.
+process.on('unhandledRejection', (reason) => {
+  console.error(
+    JSON.stringify({
+      event: 'PROCESS_UNHANDLED_REJECTION',
+      reason: reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason),
+      stack: reason instanceof Error ? reason.stack ?? null : null,
+    }),
+  );
+  process.exitCode = 1;
+  process.exit(1);
+});
+process.on('uncaughtException', (error) => {
+  console.error(
+    JSON.stringify({
+      event: 'PROCESS_UNCAUGHT_EXCEPTION',
+      reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      stack: error instanceof Error ? error.stack ?? null : null,
+    }),
+  );
+  process.exitCode = 1;
+  process.exit(1);
+});

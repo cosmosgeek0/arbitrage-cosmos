@@ -103,6 +103,13 @@ export class SystemControlService {
   private stateValue: Readonly<SystemControlState>;
   private readonly persistence: SystemControlServiceOptions['persistence'];
   private readonly composition: SystemControlServiceOptions['composition'];
+  /** Part 4 #16: best-effort post-commit notifications that failed. */
+  private swallowedPostCommitNotifications = 0;
+
+  /** Observable count of swallowed best-effort post-commit notifications. */
+  swallowedPostCommitNotificationCount(): number {
+    return this.swallowedPostCommitNotifications;
+  }
 
   constructor(options: SystemControlServiceOptions) {
     if (!options || !validControlState(options.initialState)) {
@@ -535,6 +542,12 @@ export class SystemControlService {
     } catch {
       // Persistence is authoritative. A failed notification cannot turn a
       // committed mutation into a retry that would duplicate its ledger row.
+      // SAFETY ARGUMENT (Part 4 #16): mutations that REQUIRE runtime
+      // publication never reach this catch — requiresRuntimePublication()
+      // routes them to publishPendingRuntimeEffect above, which reports
+      // publication failure explicitly. This swallow therefore only covers
+      // best-effort notifications; the counter keeps it observable.
+      this.swallowedPostCommitNotifications += 1;
     }
     return ok(persisted.receipt);
   }

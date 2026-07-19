@@ -46,9 +46,13 @@ const STAGE_LABELS: Record<string, string> = {
   order_response: 'Order Response',
 };
 
-function configNumber(config: AppConfig, key: LimitKey): number {
+// F-060: an unknown limit must never coerce to 0 — on a money surface a
+// fabricated $0.00 is indistinguishable from a real zero limit, and it also
+// flips gate conditions. null means "could not determine"; consumers render
+// the literal 'UNKNOWN' (the established pattern in Opportunities.tsx).
+function configNumber(config: AppConfig, key: LimitKey): number | null {
   const value = config[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function sentenceCase(value: string): string {
@@ -94,8 +98,8 @@ function statusLabel(condition: GateCondition): string {
   return condition.pass ? 'Advisory Pass' : 'Unavailable';
 }
 
-function utilization(value: number | null, limit: number): number {
-  if (value === null) return 0;
+function utilization(value: number | null, limit: number | null): number {
+  if (value === null || limit === null) return 0;
   if (limit <= 0) return 100;
   return Math.max(0, Math.min(100, (value / limit) * 100));
 }
@@ -125,13 +129,15 @@ export function Risk() {
   const dailyLimit = configNumber(config, 'maxDailyNotionalUsd');
   const dailyUsedKnown = Number.isFinite(state.risk.dailyNotionalUsedUsd) && state.risk.dailyNotionalUsedUsd >= 0;
   const dailyUsed = dailyUsedKnown ? state.risk.dailyNotionalUsedUsd : null;
-  const dailyRemaining = dailyUsed !== null && dailyLimit > 0 ? Math.max(0, dailyLimit - dailyUsed) : null;
+  const dailyRemaining = dailyUsed !== null && dailyLimit !== null && dailyLimit > 0 ? Math.max(0, dailyLimit - dailyUsed) : null;
   const dailyLossLimit = configNumber(config, 'maxDailyLossUsd');
   const realizedToday: number | null = null;
   const openOrderLimit = configNumber(config, 'maxOpenOrders');
   const openOrdersCount: number | null = null;
-  const cooldownLeft =
-    state.risk.lastOrderTs && config.cooldownSec > 0
+  const cooldownSecKnown = typeof config.cooldownSec === 'number' && Number.isFinite(config.cooldownSec);
+  const cooldownLeft: number | null = !cooldownSecKnown
+    ? null
+    : state.risk.lastOrderTs && config.cooldownSec > 0
       ? Math.max(0, Math.ceil((state.risk.lastOrderTs + config.cooldownSec * 1000 - Date.now()) / 1000))
       : 0;
 
@@ -190,18 +196,22 @@ export function Risk() {
     {
       id: 'order-limit',
       label: 'Per-Order Limit',
-      pass: perOrderLimit > 0,
-      value: fmtMoney(perOrderLimit),
-      detail: perOrderLimit > 0 ? 'Hypothetical notional is checked against this advisory cap.' : 'Set a positive validate-only cap.',
+      pass: perOrderLimit !== null && perOrderLimit > 0,
+      value: perOrderLimit === null ? 'UNKNOWN' : fmtMoney(perOrderLimit),
+      detail: perOrderLimit === null
+        ? 'Cannot evaluate: the advisory cap is unknown, which is not the same as zero.'
+        : perOrderLimit > 0 ? 'Hypothetical notional is checked against this advisory cap.' : 'Set a positive validate-only cap.',
     },
     {
       id: 'daily-notional',
       label: 'Daily Notional',
-      pass: dailyUsed !== null && dailyLimit > 0 && dailyUsed < dailyLimit,
+      pass: dailyUsed !== null && dailyLimit !== null && dailyLimit > 0 && dailyUsed < dailyLimit,
       value: dailyRemaining !== null ? fmtMoney(dailyRemaining) + ' Left' : 'UNKNOWN',
-      detail: dailyUsed !== null
-        ? fmtMoney(dailyUsed) + ' observed against the ' + fmtMoney(dailyLimit) + ' validate-only UTC-day cap.'
-        : 'The server did not return a valid daily-notional total.',
+      detail: dailyLimit === null
+        ? 'Cannot evaluate: the daily cap is unknown, which is not the same as zero.'
+        : dailyUsed !== null
+          ? fmtMoney(dailyUsed) + ' observed against the ' + fmtMoney(dailyLimit) + ' validate-only UTC-day cap.'
+          : 'The server did not return a valid daily-notional total.',
     },
     {
       id: 'daily-loss',
@@ -221,8 +231,10 @@ export function Risk() {
       id: 'cooldown',
       label: 'Cooldown',
       pass: cooldownLeft === 0,
-      value: cooldownLeft > 0 ? String(cooldownLeft) + 's' : 'Ready',
-      detail: cooldownLeft > 0 ? 'The validate-only interval has not elapsed.' : 'The local advisory interval has elapsed.',
+      value: cooldownLeft === null ? 'UNKNOWN' : cooldownLeft > 0 ? String(cooldownLeft) + 's' : 'Ready',
+      detail: cooldownLeft === null
+        ? 'Cannot evaluate: the cooldown interval is unknown.'
+        : cooldownLeft > 0 ? 'The validate-only interval has not elapsed.' : 'The local advisory interval has elapsed.',
     },
   ];
 
@@ -265,19 +277,19 @@ export function Risk() {
         <div className="riskx-summary" aria-label="Risk Summary">
           <div className="riskx-summary-cell">
             <span>Daily Notional</span>
-            <strong>{dailyUsed === null ? 'UNKNOWN' : fmtMoney(dailyUsed)} <em>/ {fmtMoney(dailyLimit)}</em></strong>
-            {dailyUsed !== null ? <div className="riskx-meter"><i style={{ width: String(utilization(dailyUsed, dailyLimit)) + '%' }} /></div> : null}
+            <strong>{dailyUsed === null ? 'UNKNOWN' : fmtMoney(dailyUsed)} <em>/ {dailyLimit === null ? 'UNKNOWN' : fmtMoney(dailyLimit)}</em></strong>
+            {dailyUsed !== null && dailyLimit !== null ? <div className="riskx-meter"><i style={{ width: String(utilization(dailyUsed, dailyLimit)) + '%' }} /></div> : null}
           </div>
           <div className="riskx-summary-cell">
             <span>Realized Today</span>
             <strong className={realizedToday !== null && realizedToday < 0 ? 'negative' : ''}>
               {realizedToday === null ? 'UNKNOWN' : fmtMoney(realizedToday)}
             </strong>
-            <small>NOT_CONFIGURED · advisory threshold -{fmtMoney(dailyLossLimit)}</small>
+            <small>NOT_CONFIGURED · advisory threshold {dailyLossLimit === null ? 'UNKNOWN' : '-' + fmtMoney(dailyLossLimit)}</small>
           </div>
           <div className="riskx-summary-cell">
             <span>Open Orders</span>
-            <strong>UNKNOWN <em>/ {openOrderLimit}</em></strong>
+            <strong>UNKNOWN <em>/ {openOrderLimit === null ? 'UNKNOWN' : openOrderLimit}</em></strong>
             <small>Private order truth is NOT_CONFIGURED</small>
           </div>
           <div className="riskx-summary-cell">
@@ -384,7 +396,8 @@ export function Risk() {
                       type="number"
                       min={field.min}
                       step={field.step}
-                      value={String(configNumber(config, field.key))}
+                      value={configNumber(config, field.key) === null ? '' : String(configNumber(config, field.key))}
+                      placeholder="UNKNOWN"
                       readOnly
                       disabled
                       title="OWNER_GATED · CONTROL_PREVIEW_REQUIRED"

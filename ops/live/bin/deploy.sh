@@ -50,6 +50,15 @@ done
 load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 
+# F-107: two deployment paths exist with materially different safety
+# properties. Only the I00 wrapper (ops/i00/bin/release-switch.sh), which
+# sanitizes and force-locks the donor env, is authorized against the
+# production root; it sets the marker below. Direct deploy.sh use stays
+# available for staging roots.
+if [ "$COSMOS_ROOT" = /opt/cosmos ] && [ "${COSMOS_DEPLOY_VIA_I00_WRAPPER:-}" != 1 ]; then
+  die_code 1 "direct deploy.sh against the production root /opt/cosmos is refused: use ops/i00/bin/release-switch.sh (the authorized production path)"
+fi
+
 if [ "${I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES+x}" = x ]; then
   die_code 1 "I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES is forbidden for deployment"
 fi
@@ -66,7 +75,7 @@ fi
 : "${PROBE_BASE:=http://127.0.0.1:$PROBE_PORT}"
 : "${PROBE_CMD:=}"
 
-require_cmd "$NODE"
+require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
 
 RELEASE_ID="unknown"
 log_event() { # RESULT DETAIL
@@ -103,11 +112,13 @@ acquire_lock "$DEPLOY_LOCK" \
 LOCK_HELD=1
 PROBE_PID=""
 PROBE_DATA_TMP=""
+PROBE_LEASES_TMP=""
 cleanup() {
   # If the deploy is interrupted mid-probe, the candidate process and its
   # throwaway data dir must not outlive us.
   if [ -n "${PROBE_PID:-}" ]; then kill "$PROBE_PID" 2>/dev/null || true; fi
   if [ -n "${PROBE_DATA_TMP:-}" ]; then rm -rf "$PROBE_DATA_TMP"; fi
+  if [ -n "${PROBE_LEASES_TMP:-}" ]; then rm -rf "$PROBE_LEASES_TMP"; fi
   if [ "${LOCK_HELD:-0}" = 1 ]; then release_lock "$DEPLOY_LOCK"; fi
 }
 trap cleanup EXIT
@@ -118,7 +129,15 @@ assert_link_sane "$PREVIOUS_LINK"
 
 ROLLBACK_FLOOR=0
 if [ -f "$JOURNAL_FILE" ]; then
-  ROLLBACK_FLOOR="$(json_get "$JOURNAL_FILE" rollbackFloor || echo 0)"
+  # Part 4 #6: a corrupt journal must never default a SAFETY BARRIER to its
+  # most permissive value. Key absent (rc 3) legitimately means floor 0; an
+  # unreadable journal (any other failure) refuses the deploy.
+  set +e; FLOOR_VALUE="$(json_get "$JOURNAL_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
+  case "$FLOOR_RC" in
+    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
+    3) ROLLBACK_FLOOR=0 ;;
+    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+  esac
 fi
 if [ "$SCHEMA_VERSION" -lt "$ROLLBACK_FLOOR" ]; then
   log_event REFUSED_SCHEMA "candidate schema $SCHEMA_VERSION is behind the non-rollback barrier $ROLLBACK_FLOOR"
@@ -157,33 +176,59 @@ run_probe_gate() {
     return 0
   fi
   if [ "$SKIP_PROBE" = 1 ]; then
+    # F-108: on a first deploy no previous release exists, so auto-rollback
+    # cannot undo a bad candidate - skipping the only remaining gate would
+    # make the failure unrecoverable. Refuse the flag when there is nothing
+    # to fall back to.
+    [ -L "$CURRENT_LINK" ] \
+      || die_code 1 "--skip-probe is refused on a first deploy: no previous release exists to roll back to"
     ops_log "probe gate SKIPPED by --skip-probe (emergency use only; recorded)"
     log_event PROBE_SKIPPED "operator passed --skip-probe"
     return 0
   fi
-  local probe_data probe_pid ok=0
+  local probe_data probe_leases probe_pid ok=0
   probe_data="$(mktemp -d "${TMPDIR:-/tmp}/cosmos-probe.XXXXXX")"
   PROBE_DATA_TMP="$probe_data"
+  # F-023: the lease namespace must be a SIBLING of the data dir - either
+  # nesting direction throws DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID.
+  probe_leases="$probe_data.leases"
+  mkdir -p "$probe_leases"
+  PROBE_LEASES_TMP="$probe_leases"
   if [ -n "$PROBE_CMD" ]; then
     env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
       RELEASE_DIR="$RELEASE_DIR" PROBE_PORT="$PROBE_PORT" PROBE_DATA_DIR="$probe_data" \
       I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 bash -c "$PROBE_CMD" &
   else
+    # F-023: the gate exists to prove the candidate boots in PRODUCTION
+    # configuration. env -i closes the environment (no ambient variable can
+    # leak in), and NODE_ENV=production plus the lease root make the probe
+    # exercise the same code path production takes.
     ( cd "$RELEASE_DIR" \
-      && exec env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
+      && exec env -i PATH=/usr/local/bin:/usr/bin:/bin \
          PORT="$PROBE_PORT" HOST=127.0.0.1 DATA_DIR="$probe_data" SKIP_DOTENV=1 \
+         NODE_ENV=production DATA_DIR_LOGICAL_LEASE_ROOT="$probe_leases" \
          I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 "$NODE" server/dist/index.js ) &
   fi
   probe_pid=$!
   PROBE_PID="$probe_pid"
   if gate_wait "$PROBE_BASE" "$READINESS_GATE_PATHS" "$GATE_TIMEOUT_SEC" "$probe_pid"; then
     ok=1
+  else
+    # F-108(b): capture each gate path's body while the candidate is still
+    # up - the readiness reasonCodes array is the difference between a
+    # five-minute and a five-hour diagnosis.
+    local diag_path
+    for diag_path in $READINESS_GATE_PATHS; do
+      ops_log "probe diagnostic ${PROBE_BASE}${diag_path}: $("$CURL" -sS -m "$HTTP_TIMEOUT_SEC" "${PROBE_BASE}${diag_path}" 2>&1 | head -c 2000 || true)"
+    done
   fi
   kill "$probe_pid" 2>/dev/null || true
   wait "$probe_pid" 2>/dev/null || true
   PROBE_PID=""
   rm -rf "$probe_data"
   PROBE_DATA_TMP=""
+  rm -rf "$probe_leases"
+  PROBE_LEASES_TMP=""
   if [ "$ok" != 1 ]; then
     log_event REJECTED_BY_PROBE "readiness gate failed before switch; current release untouched"
     die_code 1 "readiness probe failed for $RELEASE_ID; aborted before switch — running release untouched"
@@ -233,7 +278,13 @@ fi
 # --- 8. success: record journal compatibility ---------------------------------
 DATA_SCHEMA=0
 if [ -f "$JOURNAL_FILE" ]; then
-  DATA_SCHEMA="$(json_get "$JOURNAL_FILE" dataSchema || echo 0)"
+  # Part 4 #6: an unreadable journal must not be rewritten from defaults.
+  set +e; SCHEMA_VALUE="$(json_get "$JOURNAL_FILE" dataSchema)"; SCHEMA_RC=$?; set -e
+  case "$SCHEMA_RC" in
+    0) DATA_SCHEMA="$SCHEMA_VALUE" ;;
+    3) DATA_SCHEMA=0 ;;
+    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to rewrite it from defaults after the switch" ;;
+  esac
 fi
 NEW_SCHEMA="$DATA_SCHEMA"
 [ "$SCHEMA_VERSION" -gt "$NEW_SCHEMA" ] && NEW_SCHEMA="$SCHEMA_VERSION"

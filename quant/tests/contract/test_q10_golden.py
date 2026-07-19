@@ -129,7 +129,8 @@ def test_campaign_json_binds_fixture_and_studies() -> None:
 
 
 def test_campaign_artifacts_regenerate_byte_identically() -> None:
-    if sys.platform != "linux":
+    on_canonical_platform = sys.platform.startswith("linux")
+    if not on_canonical_platform:
         pytest.skip("Q10 golden bytes are canonical on the Linux deployment platform")
     sys.path.insert(0, str(QUANT_ROOT / "scripts"))
     try:
@@ -165,7 +166,8 @@ def test_campaign_script_is_process_deterministic(
         timeout=300,
     )
     assert result.returncode == 0, result.stderr
-    if sys.platform == "linux":
+    on_canonical_platform = sys.platform.startswith("linux")
+    if on_canonical_platform:
         reference_fixture = FIXTURE_PATH.read_bytes()
         reference_campaign = CAMPAIGN_JSON_PATH.read_bytes()
         reference_markdown = CAMPAIGN_MD_PATH.read_bytes()
@@ -179,9 +181,7 @@ def test_campaign_script_is_process_deterministic(
         finally:
             sys.path.pop(0)
         reference_fixture, reference_campaign, reference_markdown = build_artifacts()
-    assert (
-        output_root / "fixtures" / "q10_model_golden_v1.json"
-    ).read_bytes() == reference_fixture
+    assert (output_root / "fixtures" / "q10_model_golden_v1.json").read_bytes() == reference_fixture
     assert (
         output_root / "generated" / "q10" / "model_campaign.v1.json"
     ).read_bytes() == reference_campaign

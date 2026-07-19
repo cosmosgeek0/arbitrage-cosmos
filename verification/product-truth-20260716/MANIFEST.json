@@ -72,10 +72,10 @@
     "human-evidence-renderer.mjs",
     "verify-exact-candidate-evidence.mjs"
   ],
-  "tooling_bundle_sha256": "551d902be8c9f2ec5154d255dc1c51f365d1457ffa4e5f3bef0660ede7f4998e",
+  "tooling_bundle_sha256": "0623ada53ab6995d98b5fe401cc6b852f8f535a803938e1403e4da6b3b53cf41",
   "sealed_git_object_payload_bundle_sha256": "d84ea2ef90c9634c8a62fc42036b71990c9edcb5bdb8d3eb01cb5b61a4c16d08",
   "entry_count": 61,
-  "inventory_sha256": "552d8de40a656af0a538566a3db0431e497aab8dbb0c6dc4b774a22c7e447eb9",
+  "inventory_sha256": "8916cd94185cecee2ebe89ece07243df991f129a527cebd7659ea3ba0d867afc",
   "entries": [
     {
       "path": "AI_OPS_C2_DISPOSITION.json",
@@ -133,9 +133,9 @@
     },
     {
       "path": "EVIDENCE_SELECTION.json",
-      "sha256": "807a3ed1f66ae93b156e28a31a263afb2e2a4a1b9110b6290ddedc383fe36b7a",
+      "sha256": "462285bdeef221c1fb4544ca16aca467080b07e62af25a133329054362154526",
       "byte_length": 21902,
-      "git_blob": "b67f4b4a1ee9e551428e23279823cb43f132ae1a"
+      "git_blob": "2c94584ce19cfe0cd39d3e8be8f7c0efc70b32d7"
     },
     {
       "path": "FINAL_VERDICT.md",
@@ -223,9 +223,9 @@
     },
     {
       "path": "generate-exact-candidate-evidence.mjs",
-      "sha256": "50111b2b5574ebf8f4d907be27d3534beef2dae0c5dcbd56935c52ee1398630f",
-      "byte_length": 58930,
-      "git_blob": "4fb008e045854128a9e10d604d5809997af06162"
+      "sha256": "1470042f736b9c21d475f13ef24277adf914551e11bad88626213c3462ade749",
+      "byte_length": 59087,
+      "git_blob": "41a32547985d9bebc84db3ea523d925102940549"
     },
     {
       "path": "generate-final-evidence.mjs",
@@ -247,9 +247,9 @@
     },
     {
       "path": "generate-worktree-census.mjs",
-      "sha256": "7e847d912ada71de54faeea5c68052c1eb58ad36e78a167fc1bd211a096bcb8b",
-      "byte_length": 53881,
-      "git_blob": "d928a8a166dc2f2fcca23c2eb86d71b6e3c48c41"
+      "sha256": "3c24a5bb81d474484887274c123752b851e96cb22e5670eb3d9d8bd80fa11f5a",
+      "byte_length": 55071,
+      "git_blob": "a86242ce44a5d2de326135dfda2adfb828068c44"
     },
     {
       "path": "human-evidence-renderer.mjs",

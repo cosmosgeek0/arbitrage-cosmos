@@ -143,6 +143,10 @@
       ],
       "productionConsumers": [
         {
+          "path": "web/src/lib/notificationFeed.tsx",
+          "occurrences": 3
+        },
+        {
           "path": "web/src/pages/LedgerPage.tsx",
           "occurrences": 1
         }

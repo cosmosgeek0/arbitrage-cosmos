@@ -95,9 +95,9 @@
     },
     {
       "path": "generate-exact-candidate-evidence.mjs",
-      "sha256": "50111b2b5574ebf8f4d907be27d3534beef2dae0c5dcbd56935c52ee1398630f",
-      "git_blob": "4fb008e045854128a9e10d604d5809997af06162",
-      "byte_length": 58930
+      "sha256": "1470042f736b9c21d475f13ef24277adf914551e11bad88626213c3462ade749",
+      "git_blob": "41a32547985d9bebc84db3ea523d925102940549",
+      "byte_length": 59087
     },
     {
       "path": "generate-manifest.mjs",
@@ -118,7 +118,7 @@
       "byte_length": 87332
     }
   ],
-  "tooling_bundle_sha256": "551d902be8c9f2ec5154d255dc1c51f365d1457ffa4e5f3bef0660ede7f4998e",
+  "tooling_bundle_sha256": "0623ada53ab6995d98b5fe401cc6b852f8f535a803938e1403e4da6b3b53cf41",
   "required_binding": "product-truth-manifest.v5 plus MANIFEST.sha256 plus exact tooling bundle plus tracked sealed-object payload digest",
   "final_verifier_handoff": "PENDING_FRESH_VERIFIER",
   "proof_references": [

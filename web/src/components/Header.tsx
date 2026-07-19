@@ -2237,8 +2237,14 @@ function SharedTopBar() {
         <span className="rail-icon-core api-key-trigger-core s-missing"><ApiKeyIdentityMark size={24} /></span>
       </>, { title: 'Private exchange adapter — OWNER GATED · NOT CONFIGURED' })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
-        <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}><img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" /></span>
-      </>, { title: 'Trust Advisor — canonical safety checks' })}
+        <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}>
+          <img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" />
+          {/* The shield glyph is a locked owner identity mark (85% green
+              pixels), so colour alone can never carry the advisor's state;
+              a bad/warn grade shows the DESIGN.md-permitted status pip. */}
+          {advTone !== 'ok' && <i className="rail-state-pip" data-grade={advTone} aria-hidden="true" />}
+        </span>
+      </>, { title: `Trust Advisor — ${advTone === 'bad' ? 'action required' : advTone === 'warn' ? 'review' : 'clear'} · canonical safety checks` })}
       <span className="topbar-suite-divider" aria-hidden="true" />
       {trig('notif', `hdr-ic notif-trigger notif-ghost notif-premium-trigger ${notifTone}`, <>
         <span className={`rail-icon-core notification-trigger-core ${notifTone}`}>

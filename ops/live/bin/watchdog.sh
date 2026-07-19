@@ -120,9 +120,17 @@ else
     RECENT="$(count_recent "$APP_RESTARTS" "$RESTART_WINDOW_SEC")"
     if [ "$RECENT" -lt "$MAX_RESTARTS_PER_WINDOW" ]; then
       wd_alert critical APP_RESTARTED "live gate failed ${STREAK}x; restarting $APP_UNIT (restart $((RECENT + 1))/$MAX_RESTARTS_PER_WINDOW in window)"
-      "$SYSTEMCTL" restart "$APP_UNIT" || wd_alert critical APP_RESTART_FAILED "systemctl restart $APP_UNIT failed"
-      now_epoch >> "$APP_RESTARTS"
-      STREAK=0
+      # Part 4 #5: once StartLimitBurst latches, every systemctl restart fails
+      # until reset-failed clears the latch; and a FAILED restart must not
+      # consume restart budget or clear the streak - that would credit the
+      # watchdog with a recovery it did not achieve.
+      "$SYSTEMCTL" reset-failed "$APP_UNIT" >/dev/null 2>&1 || true
+      if "$SYSTEMCTL" restart "$APP_UNIT"; then
+        now_epoch >> "$APP_RESTARTS"
+        STREAK=0
+      else
+        wd_alert critical APP_RESTART_FAILED "systemctl restart $APP_UNIT failed"
+      fi
     else
       wd_alert critical RESTART_BUDGET_EXHAUSTED "live gate still failing but $RECENT restarts already made in ${RESTART_WINDOW_SEC}s window; operator required"
     fi

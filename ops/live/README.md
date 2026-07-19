@@ -107,7 +107,7 @@ A release source directory must contain `server/dist/index.js` and a
 schema deployed with `rollbackBarrier:true`). Rollback to any release whose
 `schemaVersion` is below the floor is refused absolutely — that is the
 explicit non-rollback barrier of §24.2. Ownership of this marker should
-move into the app/ledger at integration (see `OPS_INTEGRATION_NOTES.md`).
+move into the app/ledger at integration (see `docs/archive/i00-phase2/L15_OPS_INTEGRATION_NOTES.md`).
 
 ## Deploy failure policy (§24.2, exact)
 

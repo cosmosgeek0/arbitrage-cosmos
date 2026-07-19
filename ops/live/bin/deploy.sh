@@ -66,7 +66,7 @@ fi
 : "${PROBE_BASE:=http://127.0.0.1:$PROBE_PORT}"
 : "${PROBE_CMD:=}"
 
-require_cmd "$NODE"
+require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
 
 RELEASE_ID="unknown"
 log_event() { # RESULT DETAIL

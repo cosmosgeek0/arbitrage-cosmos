@@ -48,7 +48,7 @@ cosmos_layout_defaults
 : "${WATCHDOG_STATE_DIR:=$OPS_STATE_DIR/watchdog}"
 : "${BACKUP_DIR:=}"
 : "${BACKUP_MAX_AGE_HOURS:=26}"
-require_cmd "$NODE"
+require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
 mkdir -p "$WATCHDOG_STATE_DIR"
 
 STREAK_FILE="$WATCHDOG_STATE_DIR/live-fail-streak"

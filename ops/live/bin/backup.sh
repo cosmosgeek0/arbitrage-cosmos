@@ -41,7 +41,7 @@ cosmos_layout_defaults
 : "${EVIDENCE_PATHS:=}"
 : "${EVIDENCE_MISSING_POLICY:=fail}"
 : "${BACKUP_LOCK:=$BACKUP_DIR/.lock}"
-require_cmd "$NODE" "$SQLITE"
+require_cmd "$NODE" "$SQLITE" tar
 
 # Completed backups are directories named by UTC stamp; anything starting
 # with "." (.partial-*, .lock) is never a completed backup.

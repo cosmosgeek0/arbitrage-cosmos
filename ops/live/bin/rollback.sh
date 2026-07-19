@@ -46,7 +46,7 @@ load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 : "${POST_SWITCH_GATE_PATHS:=/health/live /health/ready}"
 : "${GATE_TIMEOUT_SEC:=60}"
-require_cmd "$NODE"
+require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
 
 TARGET_ID="unknown"
 log_event() { # RESULT DETAIL

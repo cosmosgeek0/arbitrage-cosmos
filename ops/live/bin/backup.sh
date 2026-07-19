@@ -81,11 +81,23 @@ cleanup() { rm -rf "$WORK"; release_lock "$BACKUP_LOCK"; }
 trap cleanup EXIT
 mkdir -p "$WORK"
 
+# F-106: $WORK is embedded inside a single-quoted SQL literal below; a quote,
+# backslash, or newline in BACKUP_DIR would silently corrupt the .backup
+# command. Refuse such paths loudly.
+BACKUP_DIR_NL="$(printf '\nx')"; BACKUP_DIR_NL="${BACKUP_DIR_NL%x}"
+case "$BACKUP_DIR" in
+  (*"'"*|*"\\"*|*"$BACKUP_DIR_NL"*) die_code 1 "BACKUP_DIR must not contain quotes, backslashes, or newlines: $BACKUP_DIR" ;;
+esac
+
 # SQLite online backup API: consistent snapshot even with a live WAL writer.
 "$SQLITE" "$DB" ".backup '$WORK/cosmos.db'"
 INTEGRITY="$("$SQLITE" "$WORK/cosmos.db" 'PRAGMA integrity_check;')"
 [ "$INTEGRITY" = "ok" ] || die_code 1 "integrity_check failed on fresh backup: $INTEGRITY"
 EVENTS_COUNT="$("$SQLITE" "$WORK/cosmos.db" 'SELECT COUNT(*) FROM events;' 2>/dev/null || echo -1)"
+# F-105: an unreadable events count means the fresh backup cannot be verified
+# against expectations; publishing it as result=SUCCESS with eventsCount=-1
+# buried the failure. Fail loudly instead.
+[ "$EVENTS_COUNT" != "-1" ] || die_code 1 "events count unreadable on fresh backup; refusing to publish an unverifiable backup"
 
 # Evidence/model paths (colon-separated). Policy decides whether a missing
 # path fails the backup (default) or is recorded and skipped.

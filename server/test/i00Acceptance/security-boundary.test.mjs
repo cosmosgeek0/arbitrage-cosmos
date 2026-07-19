@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import {
@@ -97,4 +100,20 @@ test('all IP-owned executable and machine evidence files are egress-free secret-
   const scan = scanOwnedFiles();
   assert.deepEqual(scan.executableFindings, []);
   assert.deepEqual(scan.secretFindings, []);
+});
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+
+test('credential file shapes are gitignored at repository root', () => {
+  // The shapes an operator physically handles during EC2 + Cloudflare
+  // bring-up (SSH keys, origin certs, kubeconfig, .npmrc, .netrc) must never
+  // be trackable, even transiently.
+  const shapes = ['id_rsa', 'id_ed25519', 'server.pem', 'origin.key', 'key.p12',
+    'bundle.pfx', '.npmrc', 'kubeconfig', 'cluster.kubeconfig', '.netrc'];
+  for (const shape of shapes) {
+    const result = spawnSync('git', ['check-ignore', '-q', shape], { cwd: ROOT });
+    assert.equal(result.status, 0, `${shape} must be gitignored`);
+  }
+  // Pin the existing negation so the credential shapes cannot over-reach.
+  assert.equal(spawnSync('git', ['check-ignore', '-q', '.env.example'], { cwd: ROOT }).status, 1);
 });

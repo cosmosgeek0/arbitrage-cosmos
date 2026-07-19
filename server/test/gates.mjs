@@ -554,6 +554,26 @@ check(
   'canonical liveness remains process-only while readiness evidence is unavailable',
   processLive.status === 200 && processLive.body?.ok === true
 );
+// Conventional probe paths must never be answered by the SPA shell: a
+// misconfigured ALB/systemd/uptime probe must get a loud JSON 404, not a
+// blanket false green while the real readiness endpoint is red.
+const reservedProbePaths = ['/healthz', '/readyz', '/livez', '/ready', '/live', '/status', '/health'];
+let reservedProbesHonest = true;
+let reservedProbeDetail = '';
+for (const probePath of reservedProbePaths) {
+  const probe = await get(probePath);
+  const probeType = probe.headers.get('content-type') ?? '';
+  if (probe.status !== 404 || !probeType.startsWith('application/json') || probe.body?.code !== 'PROBE_PATH_NOT_REGISTERED') {
+    reservedProbesHonest = false;
+    reservedProbeDetail += `${probePath}=${probe.status} ${probeType}; `;
+  }
+}
+check('conventional probe paths refuse loudly instead of serving the SPA shell', reservedProbesHonest, reservedProbeDetail);
+const spaShell = await request('/positions');
+check(
+  'ordinary SPA routes still serve the shell after probe-path reservation',
+  spaShell.status === 200 && (spaShell.headers.get('content-type') ?? '').startsWith('text/html')
+);
 const dependencyReady = await get('/health/ready');
 const readinessSupervisor = (await get('/api/system-integration/supervisor')).body;
 const canonicalAdvanceOwnerIds = new Set(['public-usdm-source', 'market-universe']);

@@ -3497,6 +3497,23 @@ app.post('/api/orders/cancel', (_req, res) => {
   sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL');
 });
 
+// Conventional probe paths — the defaults of ALB target groups, k8s probes,
+// Cloudflare health checks, and uptime monitors — are deliberately NOT routes.
+// Without this guard the SPA fallback below answered 200 text/html on every
+// one of them, handing any conventionally-configured probe a permanent false
+// green while the real readiness endpoint was red. A 404 with guidance is the
+// honest answer; silently aliasing these to the real endpoints would hide the
+// probe misconfiguration instead of surfacing it. The canonical targets are
+// /health/live, /health/ready, and /health/trade-ready.
+const RESERVED_PROBE_PATHS = ['/healthz', '/readyz', '/livez', '/ready', '/live', '/status', '/health'];
+app.get(RESERVED_PROBE_PATHS, (_req, res) => {
+  res.status(404).json({
+    ok: false,
+    code: 'PROBE_PATH_NOT_REGISTERED',
+    error: 'Use /health/live, /health/ready, or /health/trade-ready.',
+  });
+});
+
 // Serve the built dashboard (web/dist) with SPA fallback.
 //
 // Cache policy matters here: index.html must NEVER be served stale, or a rebuild

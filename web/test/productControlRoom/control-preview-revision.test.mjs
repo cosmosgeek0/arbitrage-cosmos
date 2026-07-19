@@ -52,5 +52,5 @@ test('production preview wiring carries AbortSignal and invalidates revision-bou
   assert.match(panel, /previewAbortRef\.current\?\.abort\(\)/);
   assert.match(panel, /controlPreviewMatchesCurrentRevision\(pending, controls\)/);
   assert.match(panel, /isCurrentControlPreviewRequest\(/);
-  assert.match(route, /client\.previewCommand\(control\.controlId, control\.currentStateRevision, signal\)/);
+  assert.match(route, /client\.previewCommand\(control\.controlId, control\.currentStateRevision, undefined, signal\)/);
 });

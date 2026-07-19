@@ -48,7 +48,7 @@ function truth(sourceId, authority = 'DERIVED_LIVE', now = NOW) {
   });
 }
 
-function borrowTruth(scope = BORROW_SCOPE, authority = 'LIVE_PRIVATE', now = NOW) {
+function borrowTruth(scope = BORROW_SCOPE, authority = 'LIVE_PRIVATE', now = NOW, sourceSuffix = '') {
   const sourceTimeMs = Math.max(0, now - 100);
   const receivedAtMs = Math.max(sourceTimeMs, now - 90);
   const observedAt = (sourceId) => ({
@@ -57,7 +57,7 @@ function borrowTruth(scope = BORROW_SCOPE, authority = 'LIVE_PRIVATE', now = NOW
     maxAgeMs: 1_000,
     authority,
     completeness: 'COMPLETE',
-    sourceId,
+    sourceId: `${sourceId}${sourceSuffix}`,
   });
   const base = (sourceId) => ({ ...scope, status: 'OK', observedAt: observedAt(sourceId) });
   return deriveBorrowTruth({
@@ -346,8 +346,25 @@ test('factory-owned production call reads every canonical owner once then calls 
   assert.equal(result.batch.considerations[0].status, 'ELIGIBLE');
   assert.equal(result.admissions[0].economics.fundingFact.scope.proposalId, PROPOSAL);
   assert.equal(result.admissions[0].economics.borrowFact.borrowScope.accountId, BORROW_SCOPE.accountId);
+  assert.ok(result.admissions[0].economics.borrowFact.evidenceIds.includes(borrowTruth().contentDigest));
   assert.ok(result.admissions[0].economics.exactSourceIds.includes('capital.base.fees-e1'));
   assert.equal(result.admissions[0].economics.exactSourceIds.includes('caller-asserted-only'), false);
+});
+
+test('borrow economic fact identity is bound to the complete Foundation owner cut digest', () => {
+  const firstTruth = borrowTruth();
+  const secondTruth = borrowTruth(BORROW_SCOPE, 'LIVE_PRIVATE', NOW, '.alternate-cut');
+  assert.notEqual(firstTruth.contentDigest, secondTruth.contentDigest);
+
+  const first = evaluate(createPorts(owners({ borrowTruth: firstTruth }).value));
+  const second = evaluate(createPorts(owners({ borrowTruth: secondTruth }).value));
+  const firstFact = first.admissions[0].economics.borrowFact;
+  const secondFact = second.admissions[0].economics.borrowFact;
+  assert.equal(first.admissions[0].state, 'AVAILABLE');
+  assert.equal(second.admissions[0].state, 'AVAILABLE');
+  assert.ok(firstFact.evidenceIds.includes(firstTruth.contentDigest));
+  assert.ok(secondFact.evidenceIds.includes(secondTruth.contentDigest));
+  assert.notEqual(firstFact.bindingDigest, secondFact.bindingDigest);
 });
 
 test('production rejects unknown admission states before Capital eligibility', () => {

@@ -584,6 +584,10 @@ function deriveBorrow(
     const left = expected.truth;
     const right = reference.truth;
     const samePoolFacts = left.accountId === right.accountId
+      // The Foundation digest binds every published fact plus all six
+      // provenance/freshness cuts, so a pool cannot silently coalesce equal
+      // displayed values that came from divergent owner cuts.
+      && left.contentDigest === right.contentDigest
       && left.mode === right.mode
       && left.asset === right.asset
       && left.permissionId === right.permissionId

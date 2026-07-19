@@ -50,16 +50,15 @@ function borrowTruth(overrides = {}, options = {}) {
   const sourceTimeMs = options.sourceTimeMs ?? NOW - 10;
   const receivedAtMs = options.receivedAtMs ?? sourceTimeMs;
   const maxAgeMs = options.maxAgeMs ?? 1_010;
-  const observedAt = (sourceId) => ({
+  const observedAt = (sourceId, evidenceMaxAgeMs = maxAgeMs) => ({
     sourceTimeMs,
     receivedAtMs,
-    maxAgeMs,
+    maxAgeMs: evidenceMaxAgeMs,
     authority: 'SYNTHETIC_TEST',
     completeness: 'COMPLETE',
-    sourceId,
+    sourceId: `${sourceId}${options.sourceIdSuffix ?? ''}`,
   });
-  return structuredClone({
-    ...deriveBorrowTruth({
+  return structuredClone(deriveBorrowTruth({
       scope: identity,
       nowMs: derivedAtMs,
       account: {
@@ -82,8 +81,8 @@ function borrowTruth(overrides = {}, options = {}) {
         ...identity,
         status: 'OK',
         observedAt: observedAt('capital.test.margin.maxBorrowable'),
-        amount: '0.1',
-        borrowLimit: '0.2',
+        amount: overrides.maxBorrowableAsset ?? '0.1',
+        borrowLimit: overrides.borrowLimitAsset ?? '0.2',
       },
       rate: {
         ...identity,
@@ -94,22 +93,30 @@ function borrowTruth(overrides = {}, options = {}) {
       liability: {
         ...identity,
         status: 'OK',
-        observedAt: observedAt('capital.test.margin.liability'),
-        currentBorrowedAsset: '0.01',
-        accruedInterestAsset: '0.0002',
+        observedAt: observedAt(
+          'capital.test.margin.liability',
+          options.liabilityMaxAgeMs ?? maxAgeMs,
+        ),
+        currentBorrowedAsset: Object.hasOwn(overrides, 'currentBorrowedAsset')
+          ? overrides.currentBorrowedAsset
+          : '0.01',
+        accruedInterestAsset: Object.hasOwn(overrides, 'accruedInterestAsset')
+          ? overrides.accruedInterestAsset
+          : '0.0002',
       },
       collateral: {
         ...identity,
         status: 'OK',
-        observedAt: observedAt('capital.test.margin.collateral'),
+        observedAt: observedAt(
+          'capital.test.margin.collateral',
+          options.collateralMaxAgeMs ?? maxAgeMs,
+        ),
         product: 'MARGIN_ACCOUNT',
-        collateralAmount: '1000',
-        collateralAsset: 'USDT',
-        currentLtv: '0.25',
+        collateralAmount: Object.hasOwn(overrides, 'collateralAmount') ? overrides.collateralAmount : '1000',
+        collateralAsset: Object.hasOwn(overrides, 'collateralAsset') ? overrides.collateralAsset : 'USDT',
+        currentLtv: Object.hasOwn(overrides, 'currentLtv') ? overrides.currentLtv : '0.25',
       },
-    }),
-    ...overrides,
-  });
+    }));
 }
 
 function completeInput(overrides = {}) {
@@ -308,8 +315,8 @@ for (const [name, mutate, expectedReasonFragment] of [
   });
 }
 
-test('mutating Proxy cannot replay the prior three-read null-liability false green', () => {
-  const target = borrowTruth({ currentBorrowedAsset: null });
+test('mutating Proxy is rejected at trap zero before Capital can replay a changing liability', () => {
+  const target = borrowTruth();
   let liabilityReads = 0;
   let liabilityDescriptorReads = 0;
   const hostileTruth = new Proxy(target, {
@@ -328,32 +335,24 @@ test('mutating Proxy cannot replay the prior three-read null-liability false gre
       return Reflect.getOwnPropertyDescriptor(current, property);
     },
   });
-  const result = deriveAccountCapitalProjection(completeInput({
-    borrowTruthReferences: [{
-      referenceId: 'borrow-mutating-proxy',
-      capacityPoolId: 'margin-cross-acct-1-btc',
-      requiredForNewAllocation: false,
-      truth: hostileTruth,
-    }],
-  }));
+  assert.throws(
+    () => deriveAccountCapitalProjection(completeInput({
+      borrowTruthReferences: [{
+        referenceId: 'borrow-mutating-proxy',
+        capacityPoolId: 'margin-cross-acct-1-btc',
+        requiredForNewAllocation: false,
+        truth: hostileTruth,
+      }],
+    })),
+    TypeError,
+  );
 
-  assert.equal(liabilityReads, 0, 'descriptor capture must not invoke caller get traps');
-  assert.equal(liabilityDescriptorReads, 1, 'each truth field must be captured exactly once');
-  assert.equal(result.borrowTruthReferences[0].truth.currentBorrowedAsset, null);
-  assert.equal(result.borrowTruthReferences[0].usableForNewAllocation, false);
-  assert.deepEqual(result.borrowCapacityByAsset, []);
-  assert.equal(result.allocatable.status, 'UNAVAILABLE');
-  assert.ok(result.allocatable.unavailableReasons.includes(
-    'BORROW_TRUTH_borrow-mutating-proxy_AVAILABLE_CURRENT_BORROW_MISSING',
-  ));
-  assert.equal(Object.isFrozen(result.borrowTruthReferences[0].truth), true);
-  assert.equal(Object.isFrozen(result.borrowTruthReferences[0].truth.provenance), true);
+  assert.equal(liabilityReads, 0, 'Proxy detection must precede every caller get trap');
+  assert.equal(liabilityDescriptorReads, 0, 'Proxy detection must precede every caller descriptor trap');
 });
 
 test('Capital requires liability evidence to remain fresh at its injected consumption clock', () => {
-  const truth = borrowTruth();
-  truth.provenance.liability.maxAgeMs = 5;
-  truth.expiresAtMs = NOW - 5;
+  const truth = borrowTruth({}, { liabilityMaxAgeMs: 5 });
   const result = deriveAccountCapitalProjection(completeInput({
     borrowTruthReferences: [{
       referenceId: 'borrow-stale-liability',
@@ -368,8 +367,7 @@ test('Capital requires liability evidence to remain fresh at its injected consum
 });
 
 test('later collateral expiry stays optional and cannot erase a fresh authorized liability cut', () => {
-  const truth = borrowTruth();
-  truth.provenance.collateral.maxAgeMs = 5;
+  const truth = borrowTruth({}, { collateralMaxAgeMs: 5 });
   const result = deriveAccountCapitalProjection(completeInput({
     borrowTruthReferences: [{
       referenceId: 'borrow-collateral-aged',
@@ -659,6 +657,33 @@ test('different liability or collateral cuts for one capacity pool are divergent
     assert.deepEqual(result.borrowCapacityByAsset, []);
     assert.ok(result.allocatable.unavailableReasons.includes('BORROW_CAPACITY_POOL_DIVERGENT_margin-cross-acct-1-btc'));
   }
+});
+
+test('equal displayed borrow values from divergent owner cuts cannot share one capacity pool', () => {
+  const first = borrowTruth();
+  const second = borrowTruth({}, { sourceIdSuffix: '.alternate-cut' });
+  assert.notEqual(first.contentDigest, second.contentDigest);
+  const result = deriveAccountCapitalProjection(completeInput({
+    borrowTruthReferences: [
+      {
+        referenceId: 'borrow-cut-a',
+        capacityPoolId: 'margin-cross-acct-1-btc',
+        requiredForNewAllocation: false,
+        truth: first,
+      },
+      {
+        referenceId: 'borrow-cut-b',
+        capacityPoolId: 'margin-cross-acct-1-btc',
+        requiredForNewAllocation: false,
+        truth: second,
+      },
+    ],
+  }));
+  assert.equal(result.allocatable.status, 'UNAVAILABLE');
+  assert.deepEqual(result.borrowCapacityByAsset, []);
+  assert.ok(result.allocatable.unavailableReasons.includes(
+    'BORROW_CAPACITY_POOL_DIVERGENT_margin-cross-acct-1-btc',
+  ));
 });
 
 test('sanitized BorrowTruth snapshot is deeply frozen so caller mutation cannot rewrite projected evidence', () => {

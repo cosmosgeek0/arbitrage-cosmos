@@ -176,6 +176,8 @@ export interface BorrowFreshnessEvidence {
 
 /** Immutable, deterministic truth projection. Decimal values remain exact strings. */
 export interface BorrowTruth extends BorrowScopeIdentity {
+  /** Stable owner-derived identity over every published fact and evidence cut. */
+  contentDigest: string;
   state: BorrowTruthState;
   reason: BorrowTruthReason;
   positionBucket: 'MARGIN_CROSS' | 'MARGIN_ISOLATED';

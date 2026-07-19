@@ -46,7 +46,15 @@ for (const [name, pattern] of forbidden) {
 }
 for (const [file, source] of sources) {
   const imports = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((match) => match[1]);
-  check(`${file} imports only local/frozen foundation contracts`, imports.every((specifier) => specifier.startsWith('./') || specifier === '../contracts/index.js'), imports.join(','));
+  check(
+    `${file} imports only local/frozen foundation contracts or trap-free Proxy detection`,
+    imports.every(
+      (specifier) => specifier.startsWith('./')
+        || specifier === '../contracts/index.js'
+        || specifier === 'node:util/types',
+    ),
+    imports.join(','),
+  );
 }
 
 section('2. import performs no I/O, clock, environment or scheduling work');
@@ -85,6 +93,7 @@ const keys = module ? Object.keys(module).sort() : [];
 check('single derivation export present', keys.includes('deriveBorrowTruth'));
 check('bounded batch derivation export present', keys.includes('deriveBorrowTruthBatch'));
 check('exact consumer validation export present', keys.includes('validateBorrowTruthForConsumption'));
+check('no public digest or truth-minting helper exists', !keys.some((key) => /(?:digest|mint)/i.test(key)), keys.join(','));
 for (const forbiddenName of ['borrow', 'repay', 'transfer', 'createOrder', 'placeOrder', 'cancelOrder', 'execute']) {
   check(`no ${forbiddenName} export`, !keys.includes(forbiddenName));
 }

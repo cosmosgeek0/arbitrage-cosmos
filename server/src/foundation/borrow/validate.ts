@@ -6,11 +6,14 @@
  * capital. This prevents a hand-shaped AVAILABLE object from bypassing the
  * private-account evidence law.
  */
+import { isProxy } from 'node:util/types';
 import {
+  canonicalJson,
   evaluateFreshness,
   isDataAuthority,
   isFreshnessState,
   isValidUtcMillis,
+  stableHash128Hex,
   validateSourcedTimestamp,
   type DataAuthority,
   type FreshnessReport,
@@ -42,6 +45,7 @@ export const BORROW_TRUTH_KEYS = [
   'asset',
   'mode',
   'permissionId',
+  'contentDigest',
   'state',
   'reason',
   'positionBucket',
@@ -68,11 +72,13 @@ const TIMESTAMP_KEYS = [
   'sourceId',
 ] as const;
 const FRESHNESS_KEYS = ['state', 'ageMs', 'basis', 'effectiveAuthority', 'evaluatedAt'] as const;
+const POLICY_KEYS = ['evaluatedAtMs', 'acceptedAuthorities', 'requireRate'] as const;
 const REQUIRED_EVIDENCE_KEYS = ['account', 'permission', 'maxBorrow', 'liability'] as const;
 const ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SYMBOL = /^[A-Z0-9]{2,30}$/;
 const ASSET = /^[A-Z0-9]{1,20}$/;
 const PERMISSION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const CONTENT_DIGEST = /^borrow_truth_[0-9a-f]{32}$/;
 
 export interface BorrowTruthConsumptionPolicy {
   /** Injected live, replay-virtual, or test clock at the consuming boundary. */
@@ -103,7 +109,14 @@ function captureExactDataRecord(
   expectedKeys: readonly string[],
 ): Readonly<Record<string, unknown>> | null {
   try {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+    // `isProxy` is trap-free and must run before every reflective/Array
+    // operation so even revoked or stateful Proxies are rejected at trap 0.
+    if (
+      (typeof value !== 'object' && typeof value !== 'function')
+      || value === null
+      || isProxy(value)
+    ) return null;
+    if (Array.isArray(value)) return null;
     const prototype = Reflect.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return null;
     const expected = new Set(expectedKeys);
@@ -140,6 +153,131 @@ function captureExactDataRecord(
   }
 }
 
+function captureDenseAuthorityArray(value: unknown): readonly BorrowEvidenceAuthority[] | null {
+  try {
+    if (
+      (typeof value !== 'object' && typeof value !== 'function')
+      || value === null
+      || isProxy(value)
+    ) return null;
+    if (!Array.isArray(value) || Reflect.getPrototypeOf(value) !== Array.prototype) return null;
+
+    // Bound from the exact own length descriptor before enumerating keys or
+    // materializing values. The admitted authority universe is itself bounded.
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, 'length');
+    if (
+      !lengthDescriptor
+      || !('value' in lengthDescriptor)
+      || lengthDescriptor.get
+      || lengthDescriptor.set
+      || typeof lengthDescriptor.value !== 'number'
+      || !Number.isSafeInteger(lengthDescriptor.value)
+      || lengthDescriptor.value < 1
+      || lengthDescriptor.value > BORROW_EVIDENCE_AUTHORITIES.length
+    ) return null;
+    const length = lengthDescriptor.value;
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.length !== length + 1
+      || keys.some((key) => (
+        typeof key !== 'string'
+        || (key !== 'length' && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= length))
+      ))
+    ) return null;
+
+    const captured: BorrowEvidenceAuthority[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (
+        !descriptor
+        || !('value' in descriptor)
+        || descriptor.get
+        || descriptor.set
+        || !descriptor.enumerable
+        || typeof descriptor.value !== 'string'
+        || !(BORROW_EVIDENCE_AUTHORITIES as readonly string[]).includes(descriptor.value)
+      ) return null;
+      captured.push(descriptor.value as BorrowEvidenceAuthority);
+    }
+    if (new Set(captured).size !== captured.length) return null;
+    return Object.freeze(captured);
+  } catch {
+    return null;
+  }
+}
+
+function isStrictUtcMillis(value: unknown): value is number {
+  return isValidUtcMillis(value) && !Object.is(value, -0);
+}
+
+function isStrictSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && !Object.is(value, -0);
+}
+
+function canonicalTimestamp(value: Readonly<SourcedTimestamp> | null): unknown {
+  return value === null ? null : {
+    sourceTimeMs: value.sourceTimeMs,
+    receivedAtMs: value.receivedAtMs,
+    maxAgeMs: value.maxAgeMs,
+    authority: value.authority,
+    completeness: value.completeness,
+    sourceId: value.sourceId,
+  };
+}
+
+function canonicalFreshness(value: Readonly<FreshnessReport> | null): unknown {
+  return value === null ? null : {
+    state: value.state,
+    ageMs: value.ageMs,
+    basis: value.basis,
+    effectiveAuthority: value.effectiveAuthority,
+    evaluatedAt: value.evaluatedAt,
+  };
+}
+
+/** Internal owner identity helper; deliberately not exported by the borrow barrel. */
+export function deriveBorrowTruthContentDigest(
+  truth: Readonly<Omit<BorrowTruth, 'contentDigest'>>,
+): string {
+  const material = {
+    accountId: truth.accountId,
+    symbol: truth.symbol,
+    asset: truth.asset,
+    mode: truth.mode,
+    permissionId: truth.permissionId,
+    state: truth.state,
+    reason: truth.reason,
+    positionBucket: truth.positionBucket,
+    maxBorrowableAsset: truth.maxBorrowableAsset,
+    borrowLimitAsset: truth.borrowLimitAsset,
+    hourlyRate: truth.hourlyRate,
+    currentBorrowedAsset: truth.currentBorrowedAsset,
+    accruedInterestAsset: truth.accruedInterestAsset,
+    collateralAmount: truth.collateralAmount,
+    collateralAsset: truth.collateralAsset,
+    currentLtv: truth.currentLtv,
+    evaluatedAtMs: truth.evaluatedAtMs,
+    expiresAtMs: truth.expiresAtMs,
+    provenance: {
+      account: canonicalTimestamp(truth.provenance.account),
+      permission: canonicalTimestamp(truth.provenance.permission),
+      maxBorrow: canonicalTimestamp(truth.provenance.maxBorrow),
+      rate: canonicalTimestamp(truth.provenance.rate),
+      liability: canonicalTimestamp(truth.provenance.liability),
+      collateral: canonicalTimestamp(truth.provenance.collateral),
+    },
+    freshness: {
+      account: canonicalFreshness(truth.freshness.account),
+      permission: canonicalFreshness(truth.freshness.permission),
+      maxBorrow: canonicalFreshness(truth.freshness.maxBorrow),
+      rate: canonicalFreshness(truth.freshness.rate),
+      liability: canonicalFreshness(truth.freshness.liability),
+      collateral: canonicalFreshness(truth.freshness.collateral),
+    },
+  };
+  return `borrow_truth_${stableHash128Hex(`borrowTruthContent.v1|${canonicalJson(material)}`)}`;
+}
+
 function canonicalNullableDecimal(value: unknown): boolean {
   if (value === null) return true;
   if (typeof value !== 'string') return false;
@@ -160,10 +298,10 @@ function sameFreshness(left: Readonly<Record<string, unknown>>, right: Readonly<
 
 function validFreshnessRecord(value: Readonly<Record<string, unknown>>): boolean {
   return isFreshnessState(value.state)
-    && (value.ageMs === null || (typeof value.ageMs === 'number' && Number.isSafeInteger(value.ageMs)))
+    && (value.ageMs === null || isStrictSafeInteger(value.ageMs))
     && (value.basis === 'SOURCE_TIME' || value.basis === 'RECEIPT_TIME' || value.basis === 'NONE')
     && isDataAuthority(value.effectiveAuthority)
-    && isValidUtcMillis(value.evaluatedAt)
+    && isStrictUtcMillis(value.evaluatedAt)
     && ((value.basis === 'NONE') === (value.ageMs === null));
 }
 
@@ -175,24 +313,26 @@ function finish(
   return Object.freeze({ issues: stableIssues, truth });
 }
 
-function validatePolicy(policy: BorrowTruthConsumptionPolicy): void {
-  if (!isValidUtcMillis(policy.evaluatedAtMs)) {
+function validatePolicy(policy: BorrowTruthConsumptionPolicy): Readonly<BorrowTruthConsumptionPolicy> {
+  const record = captureExactDataRecord(policy, POLICY_KEYS);
+  if (record === null) {
+    throw new TypeError('BorrowTruth consumption policy must be an exact plain data record');
+  }
+  if (!isStrictUtcMillis(record.evaluatedAtMs)) {
     throw new TypeError('BorrowTruth consumption policy evaluatedAtMs must be injected valid UTC milliseconds');
   }
-  if (!Array.isArray(policy.acceptedAuthorities) || policy.acceptedAuthorities.length === 0) {
+  const acceptedAuthorities = captureDenseAuthorityArray(record.acceptedAuthorities);
+  if (acceptedAuthorities === null) {
     throw new TypeError('BorrowTruth consumption policy must admit at least one explicit evidence authority');
   }
-  if (
-    policy.acceptedAuthorities.some(
-      (authority) => !(BORROW_EVIDENCE_AUTHORITIES as readonly string[]).includes(authority),
-    )
-    || new Set(policy.acceptedAuthorities).size !== policy.acceptedAuthorities.length
-  ) {
-    throw new TypeError('BorrowTruth consumption policy authorities must be unique private/replay/test authorities');
-  }
-  if (typeof policy.requireRate !== 'boolean') {
+  if (typeof record.requireRate !== 'boolean') {
     throw new TypeError('BorrowTruth consumption policy requireRate must be boolean');
   }
+  return Object.freeze({
+    evaluatedAtMs: record.evaluatedAtMs,
+    acceptedAuthorities,
+    requireRate: record.requireRate,
+  });
 }
 
 /**
@@ -205,7 +345,7 @@ export function validateBorrowTruthForConsumption(
   value: unknown,
   policy: BorrowTruthConsumptionPolicy,
 ): Readonly<BorrowTruthConsumptionResult> {
-  validatePolicy(policy);
+  const safePolicy = validatePolicy(policy);
   const issues: string[] = [];
   let structurallySafe = true;
   const structuralIssue = (issue: string): void => {
@@ -239,6 +379,9 @@ export function validateBorrowTruthForConsumption(
   if (typeof record.permissionId !== 'string' || !PERMISSION_ID.test(record.permissionId)) {
     structuralIssue('BORROW_TRUTH_PERMISSION_ID_INVALID');
   }
+  if (typeof record.contentDigest !== 'string' || !CONTENT_DIGEST.test(record.contentDigest)) {
+    structuralIssue('BORROW_TRUTH_CONTENT_DIGEST_INVALID');
+  }
   if (
     typeof record.state !== 'string'
     || !(BORROW_TRUTH_STATES as readonly string[]).includes(record.state)
@@ -271,8 +414,8 @@ export function validateBorrowTruthForConsumption(
   ) {
     structuralIssue('BORROW_TRUTH_COLLATERAL_ASSET_INVALID');
   }
-  if (!isValidUtcMillis(record.evaluatedAtMs)) structuralIssue('BORROW_TRUTH_EVALUATED_AT_INVALID');
-  if (record.expiresAtMs !== null && !isValidUtcMillis(record.expiresAtMs)) {
+  if (!isStrictUtcMillis(record.evaluatedAtMs)) structuralIssue('BORROW_TRUTH_EVALUATED_AT_INVALID');
+  if (record.expiresAtMs !== null && !isStrictUtcMillis(record.expiresAtMs)) {
     structuralIssue('BORROW_TRUTH_EXPIRES_AT_INVALID');
   }
 
@@ -302,7 +445,14 @@ export function validateBorrowTruthForConsumption(
     }
     if (sourceValue !== null) {
       const sourceRecord = captureExactDataRecord(sourceValue, TIMESTAMP_KEYS);
-      if (sourceRecord === null || validateSourcedTimestamp(sourceRecord).length > 0) {
+      if (
+        sourceRecord === null
+        || validateSourcedTimestamp(sourceRecord).length > 0
+        || (sourceRecord.sourceTimeMs !== null && !isStrictUtcMillis(sourceRecord.sourceTimeMs))
+        || !isStrictUtcMillis(sourceRecord.receivedAtMs)
+        || !isStrictSafeInteger(sourceRecord.maxAgeMs)
+        || (sourceRecord.maxAgeMs as number) <= 0
+      ) {
         structuralIssue(`BORROW_TRUTH_${key.toUpperCase()}_SOURCE_SCHEMA_INVALID`);
       } else {
         const source = sourceRecord as unknown as Readonly<SourcedTimestamp>;
@@ -322,7 +472,7 @@ export function validateBorrowTruthForConsumption(
     }
     const source = sources.get(key);
     const report = reports.get(key);
-    if (source !== undefined && report !== undefined && isValidUtcMillis(record.evaluatedAtMs)) {
+    if (source !== undefined && report !== undefined && isStrictUtcMillis(record.evaluatedAtMs)) {
       const expected = evaluateFreshness(source, record.evaluatedAtMs);
       if (!sameFreshness(report as unknown as Readonly<Record<string, unknown>>, expected)) {
         issues.push(`BORROW_TRUTH_${key.toUpperCase()}_FRESHNESS_MISMATCH`);
@@ -339,6 +489,7 @@ export function validateBorrowTruthForConsumption(
     asset: record.asset as string,
     mode: record.mode as BorrowTruth['mode'],
     permissionId: record.permissionId as string,
+    contentDigest: record.contentDigest as string,
     state: record.state as BorrowTruth['state'],
     reason: record.reason as BorrowTruth['reason'],
     positionBucket: record.positionBucket as BorrowTruth['positionBucket'],
@@ -355,6 +506,12 @@ export function validateBorrowTruthForConsumption(
     provenance,
     freshness,
   }) satisfies Readonly<BorrowTruth>;
+
+  const { contentDigest: _contentDigest, ...digestInput } = truth;
+  void _contentDigest;
+  if (truth.contentDigest !== deriveBorrowTruthContentDigest(digestInput)) {
+    issues.push('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH');
+  }
 
   if ((truth.collateralAmount === null) !== (truth.collateralAsset === null)) {
     issues.push('BORROW_TRUTH_COLLATERAL_PAIR_INVALID');
@@ -383,19 +540,19 @@ export function validateBorrowTruthForConsumption(
   if (truth.accruedInterestAsset === null) {
     issues.push('BORROW_TRUTH_AVAILABLE_ACCRUED_INTEREST_MISSING');
   }
-  if (policy.requireRate && truth.hourlyRate === null) {
+  if (safePolicy.requireRate && truth.hourlyRate === null) {
     issues.push('BORROW_TRUTH_AVAILABLE_RATE_MISSING');
   }
   if (
-    truth.evaluatedAtMs > policy.evaluatedAtMs
+    truth.evaluatedAtMs > safePolicy.evaluatedAtMs
     || truth.expiresAtMs === null
-    || policy.evaluatedAtMs > truth.expiresAtMs
+    || safePolicy.evaluatedAtMs > truth.expiresAtMs
   ) {
     issues.push('BORROW_TRUTH_NOT_CURRENT');
   }
 
   const requiredKeys = new Set<BorrowEvidenceKey>(REQUIRED_EVIDENCE_KEYS);
-  if (sources.has('rate') || policy.requireRate) requiredKeys.add('rate');
+  if (sources.has('rate') || safePolicy.requireRate) requiredKeys.add('rate');
   const collateralPublished = truth.collateralAmount !== null
     || truth.collateralAsset !== null
     || truth.currentLtv !== null;
@@ -407,7 +564,7 @@ export function validateBorrowTruthForConsumption(
       cutAuthorities.push(source.authority);
       if (!(BORROW_EVIDENCE_AUTHORITIES as readonly string[]).includes(source.authority)) {
         issues.push(`BORROW_TRUTH_${key.toUpperCase()}_PRIVATE_AUTHORITY_REQUIRED`);
-      } else if (!(policy.acceptedAuthorities as readonly string[]).includes(source.authority)) {
+      } else if (!(safePolicy.acceptedAuthorities as readonly string[]).includes(source.authority)) {
         issues.push(`BORROW_TRUTH_${key.toUpperCase()}_AUTHORITY_NOT_ACCEPTED`);
       }
     }
@@ -424,7 +581,7 @@ export function validateBorrowTruthForConsumption(
     if (source.completeness !== 'COMPLETE') {
       issues.push(`BORROW_TRUTH_${key.toUpperCase()}_EVIDENCE_INCOMPLETE`);
     }
-    if (!(policy.acceptedAuthorities as readonly string[]).includes(source.authority)) {
+    if (!(safePolicy.acceptedAuthorities as readonly string[]).includes(source.authority)) {
       issues.push(`BORROW_TRUTH_${key.toUpperCase()}_AUTHORITY_NOT_ACCEPTED`);
     }
     if (report.state !== 'FRESH') {
@@ -432,7 +589,7 @@ export function validateBorrowTruthForConsumption(
     }
     // Optional collateral/LTV is a historical fact on the BorrowTruth cut,
     // not part of the required preflight lifetime.
-    if (key !== 'collateral' && evaluateFreshness(source, policy.evaluatedAtMs).state !== 'FRESH') {
+    if (key !== 'collateral' && evaluateFreshness(source, safePolicy.evaluatedAtMs).state !== 'FRESH') {
       issues.push(`BORROW_TRUTH_${key.toUpperCase()}_EVIDENCE_EXPIRED`);
     }
   }

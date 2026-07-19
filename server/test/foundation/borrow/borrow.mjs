@@ -143,6 +143,34 @@ function clone(value) {
   return structuredClone(value);
 }
 
+function trappedProxy(target) {
+  const calls = [];
+  const record = (name, operation) => (...args) => {
+    calls.push(name);
+    return operation(...args);
+  };
+  return {
+    calls,
+    proxy: new Proxy(target, {
+      get: record('get', Reflect.get),
+      getOwnPropertyDescriptor: record('getOwnPropertyDescriptor', Reflect.getOwnPropertyDescriptor),
+      getPrototypeOf: record('getPrototypeOf', Reflect.getPrototypeOf),
+      has: record('has', Reflect.has),
+      ownKeys: record('ownKeys', Reflect.ownKeys),
+    }),
+  };
+}
+
+function zeroTimeInput() {
+  const input = completeInput();
+  input.nowMs = 0;
+  for (const key of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    input[key].observedAt.sourceTimeMs = 0;
+    input[key].observedAt.receivedAtMs = 0;
+  }
+  return input;
+}
+
 // ---------------------------------------------------------------------
 section('1. exact public vocabulary and a fully evidenced AVAILABLE truth');
 {
@@ -157,6 +185,7 @@ section('1. exact public vocabulary and a fully evidenced AVAILABLE truth');
   check('positive exact amount is AVAILABLE', truth.state === 'AVAILABLE' && truth.reason === 'BORROW_AMOUNT_POSITIVE');
   check('scope identity is preserved', truth.accountId === input.scope.accountId && truth.symbol === 'BTCUSDT' && truth.asset === 'USDT');
   check('permission snapshot identity is preserved', truth.permissionId === input.scope.permissionId);
+  check('owner content digest is canonical and deterministic', /^borrow_truth_[0-9a-f]{32}$/.test(truth.contentDigest) && truth.contentDigest === deriveBorrowTruth(completeInput()).contentDigest);
   check('cross modes map to the cross risk bucket', truth.positionBucket === 'MARGIN_CROSS');
   check('amount is canonical without binary conversion', truth.maxBorrowableAsset === '5.25');
   check('account limit is independently retained', truth.borrowLimitAsset === '10');
@@ -293,6 +322,77 @@ section('1b. private/replay/test authority is explicit and mixed cuts fail close
       acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
       requireRate: false,
     }).issues.length === 0,
+  );
+}
+
+// ---------------------------------------------------------------------
+section('1c. retained-digest forgeries cannot preserve owner identity');
+{
+  const canonical = deriveBorrowTruth(completeInput());
+  const policy = {
+    evaluatedAtMs: T0,
+    acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+    requireRate: false,
+  };
+  const publishedFactMutations = [
+    ['accountId', (truth) => { truth.accountId = 'acct-other'; }],
+    ['symbol', (truth) => { truth.symbol = 'ETHUSDT'; }],
+    ['asset', (truth) => { truth.asset = 'BTC'; }],
+    ['mode', (truth) => { truth.mode = 'CROSS_PRO'; }],
+    ['permissionId', (truth) => { truth.permissionId = 'key-read-margin-02'; }],
+    ['state', (truth) => { truth.state = 'UNKNOWN'; }],
+    ['reason', (truth) => { truth.reason = 'BORROW_AMOUNT_ZERO'; }],
+    ['maxBorrowableAsset', (truth) => { truth.maxBorrowableAsset = '5'; }],
+    ['borrowLimitAsset', (truth) => { truth.borrowLimitAsset = '11'; }],
+    ['hourlyRate', (truth) => { truth.hourlyRate = '0.00013'; }],
+    ['currentBorrowedAsset', (truth) => { truth.currentBorrowedAsset = '1.6'; }],
+    ['accruedInterestAsset', (truth) => { truth.accruedInterestAsset = '0.0126'; }],
+    ['collateralAmount', (truth) => { truth.collateralAmount = '2501'; }],
+    ['collateralAsset', (truth) => { truth.collateralAsset = 'USDC'; }],
+    ['currentLtv', (truth) => { truth.currentLtv = '0.26'; }],
+    ['evaluatedAtMs', (truth) => { truth.evaluatedAtMs = T0 - 1; }],
+    ['expiresAtMs', (truth) => { truth.expiresAtMs = T0 + 899; }],
+  ];
+  for (const [field, mutate] of publishedFactMutations) {
+    const forged = clone(canonical);
+    mutate(forged);
+    const result = validateBorrowTruthForConsumption(forged, policy);
+    check(
+      `retaining a digest while changing ${field} is rejected`,
+      result.issues.includes('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH'),
+    );
+  }
+
+  const isolated = deriveBorrowTruth(completeInput({ mode: 'ISOLATED' }));
+  const forgedBucket = clone(isolated);
+  forgedBucket.mode = 'CROSS_CLASSIC';
+  forgedBucket.positionBucket = 'MARGIN_CROSS';
+  check(
+    'retaining a digest across a structurally valid position-bucket change is rejected',
+    validateBorrowTruthForConsumption(forgedBucket, policy).issues.includes('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH'),
+  );
+
+  for (const key of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    const forgedProvenance = clone(canonical);
+    forgedProvenance.provenance[key].sourceId += '.forged';
+    check(
+      `retaining a digest while changing ${key} provenance is rejected`,
+      validateBorrowTruthForConsumption(forgedProvenance, policy).issues.includes('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH'),
+    );
+
+    const forgedFreshness = clone(canonical);
+    forgedFreshness.freshness[key].ageMs += 1;
+    check(
+      `retaining a digest while changing ${key} freshness is rejected`,
+      validateBorrowTruthForConsumption(forgedFreshness, policy).issues.includes('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH'),
+    );
+  }
+
+  const forgedDigest = clone(canonical);
+  forgedDigest.contentDigest = 'borrow_truth_00000000000000000000000000000000';
+  check(
+    'a shape-valid invented digest cannot mint a BorrowTruth',
+    validateBorrowTruthForConsumption(forgedDigest, policy).issues.includes('BORROW_TRUTH_CONTENT_DIGEST_MISMATCH'),
   );
 }
 
@@ -630,6 +730,76 @@ section('6. malformed and contradictory evidence fails consistently with TypeErr
     const input = completeInput(); input.nowMs = badNow;
     check(`invalid nowMs ${String(badNow)} rejected`, throwsTypeError(() => deriveBorrowTruth(input)));
   }
+  const plusZeroTruth = deriveBorrowTruth(zeroTimeInput());
+  check(
+    'positive zero is a valid injected clock and remains positive in every derived time cut',
+    Object.is(plusZeroTruth.evaluatedAtMs, 0)
+      && Object.values(plusZeroTruth.provenance).every((value) => Object.is(value.sourceTimeMs, 0) && Object.is(value.receivedAtMs, 0))
+      && Object.values(plusZeroTruth.freshness).every((value) => Object.is(value.ageMs, 0) && Object.is(value.evaluatedAt, 0))
+      && validateBorrowTruthForConsumption(plusZeroTruth, {
+        evaluatedAtMs: 0,
+        acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+        requireRate: false,
+      }).issues.length === 0,
+  );
+  const negativeZeroNow = zeroTimeInput(); negativeZeroNow.nowMs = -0;
+  check('negative-zero nowMs is rejected before digest derivation', throwsTypeError(() => deriveBorrowTruth(negativeZeroNow)));
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    for (const field of ['sourceTimeMs', 'receivedAtMs', 'maxAgeMs']) {
+      const input = zeroTimeInput(); input[evidenceName].observedAt[field] = -0;
+      check(
+        `negative-zero ${evidenceName}.${field} is rejected before freshness/digest derivation`,
+        throwsTypeError(() => deriveBorrowTruth(input)),
+      );
+    }
+  }
+
+  check(
+    'negative-zero consumer policy time is rejected before truth capture',
+    throwsTypeError(() => validateBorrowTruthForConsumption(plusZeroTruth, {
+      evaluatedAtMs: -0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    })),
+  );
+  for (const [field, issue] of [
+    ['evaluatedAtMs', 'BORROW_TRUTH_EVALUATED_AT_INVALID'],
+    ['expiresAtMs', 'BORROW_TRUTH_EXPIRES_AT_INVALID'],
+  ]) {
+    const truth = clone(plusZeroTruth); truth[field] = -0;
+    const result = validateBorrowTruthForConsumption(truth, {
+      evaluatedAtMs: 0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    });
+    check(`negative-zero truth ${field} fails structurally before digest comparison`, result.truth === null && result.issues.includes(issue));
+  }
+  for (const key of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    for (const field of ['sourceTimeMs', 'receivedAtMs', 'maxAgeMs']) {
+      const truth = clone(plusZeroTruth); truth.provenance[key][field] = -0;
+      const result = validateBorrowTruthForConsumption(truth, {
+        evaluatedAtMs: 0,
+        acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+        requireRate: false,
+      });
+      check(
+        `negative-zero ${key} provenance ${field} fails structurally before digest comparison`,
+        result.truth === null && result.issues.includes(`BORROW_TRUTH_${key.toUpperCase()}_SOURCE_SCHEMA_INVALID`),
+      );
+    }
+    for (const field of ['ageMs', 'evaluatedAt']) {
+      const truth = clone(plusZeroTruth); truth.freshness[key][field] = -0;
+      const result = validateBorrowTruthForConsumption(truth, {
+        evaluatedAtMs: 0,
+        acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+        requireRate: false,
+      });
+      check(
+        `negative-zero ${key} freshness ${field} fails structurally before digest comparison`,
+        result.truth === null && result.issues.includes(`BORROW_TRUTH_${key.toUpperCase()}_FRESHNESS_SCHEMA_INVALID`),
+      );
+    }
+  }
 
   for (const [field, bad] of [
     ['accountId', ''], ['accountId', 'with space'], ['symbol', 'btcusdt'], ['symbol', 'B/USDT'],
@@ -728,6 +898,140 @@ section('6. malformed and contradictory evidence fails consistently with TypeErr
   const symbolEvidence = completeInput();
   symbolEvidence.permission[Symbol('apiKey')] = 'forbidden-fixture';
   check('symbol evidence fields are rejected', throwsTypeError(() => deriveBorrowTruth(symbolEvidence)));
+}
+
+// ---------------------------------------------------------------------
+section('6b. every caller-controlled Proxy is rejected at trap zero');
+{
+  const root = trappedProxy(completeInput());
+  check(
+    'root input Proxy is rejected before any trap',
+    throwsTypeError(() => deriveBorrowTruth(root.proxy)) && root.calls.length === 0,
+    root.calls.join(','),
+  );
+
+  const nestedScopeInput = completeInput();
+  const nestedScope = trappedProxy(nestedScopeInput.scope);
+  nestedScopeInput.scope = nestedScope.proxy;
+  check(
+    'nested scope Proxy is rejected before any trap',
+    throwsTypeError(() => deriveBorrowTruth(nestedScopeInput)) && nestedScope.calls.length === 0,
+    nestedScope.calls.join(','),
+  );
+
+  for (const evidenceName of ['account', 'permission', 'maxBorrow', 'rate', 'liability', 'collateral']) {
+    const evidenceInput = completeInput();
+    const evidence = trappedProxy(evidenceInput[evidenceName]);
+    evidenceInput[evidenceName] = evidence.proxy;
+    check(
+      `${evidenceName} evidence Proxy is rejected before any trap`,
+      throwsTypeError(() => deriveBorrowTruth(evidenceInput)) && evidence.calls.length === 0,
+      evidence.calls.join(','),
+    );
+
+    const timestampInput = completeInput();
+    const timestamp = trappedProxy(timestampInput[evidenceName].observedAt);
+    timestampInput[evidenceName].observedAt = timestamp.proxy;
+    check(
+      `${evidenceName} timestamp Proxy is rejected before any trap`,
+      throwsTypeError(() => deriveBorrowTruth(timestampInput)) && timestamp.calls.length === 0,
+      timestamp.calls.join(','),
+    );
+  }
+
+  const revokedRoot = Proxy.revocable(completeInput(), {});
+  revokedRoot.revoke();
+  check('revoked root Proxy is rejected without touching revoked state', throwsTypeError(() => deriveBorrowTruth(revokedRoot.proxy)));
+  const revokedTimestampInput = completeInput();
+  const revokedTimestamp = Proxy.revocable(revokedTimestampInput.account.observedAt, {});
+  revokedTimestamp.revoke();
+  revokedTimestampInput.account.observedAt = revokedTimestamp.proxy;
+  check('revoked nested timestamp Proxy is rejected without touching revoked state', throwsTypeError(() => deriveBorrowTruth(revokedTimestampInput)));
+
+  const canonical = deriveBorrowTruth(completeInput());
+  const hostileTruth = trappedProxy(clone(canonical));
+  const consumerResult = validateBorrowTruthForConsumption(hostileTruth.proxy, {
+    evaluatedAtMs: T0,
+    acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+    requireRate: false,
+  });
+  check(
+    'consumer root Proxy fails closed at trap zero',
+    consumerResult.truth === null
+      && consumerResult.issues.includes('BORROW_TRUTH_SCHEMA_INVALID')
+      && hostileTruth.calls.length === 0,
+    hostileTruth.calls.join(','),
+  );
+  for (const [label, install] of [
+    ['provenance record', (truth, proxy) => { truth.provenance = proxy; }],
+    ['freshness record', (truth, proxy) => { truth.freshness = proxy; }],
+    ['provenance timestamp', (truth, proxy) => { truth.provenance.account = proxy; }],
+    ['freshness report', (truth, proxy) => { truth.freshness.account = proxy; }],
+  ]) {
+    const truth = clone(canonical);
+    const target = label === 'provenance record'
+      ? truth.provenance
+      : label === 'freshness record'
+        ? truth.freshness
+        : label === 'provenance timestamp'
+          ? truth.provenance.account
+          : truth.freshness.account;
+    const hostile = trappedProxy(target);
+    install(truth, hostile.proxy);
+    const result = validateBorrowTruthForConsumption(truth, {
+      evaluatedAtMs: T0,
+      acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+      requireRate: false,
+    });
+    check(
+      `consumer nested ${label} Proxy fails closed at trap zero`,
+      result.truth === null && hostile.calls.length === 0,
+      hostile.calls.join(','),
+    );
+  }
+
+  const hostilePolicy = trappedProxy({
+    evaluatedAtMs: T0,
+    acceptedAuthorities: BORROW_EVIDENCE_AUTHORITIES,
+    requireRate: false,
+  });
+  check(
+    'consumer policy Proxy is rejected before any trap',
+    throwsTypeError(() => validateBorrowTruthForConsumption(canonical, hostilePolicy.proxy))
+      && hostilePolicy.calls.length === 0,
+    hostilePolicy.calls.join(','),
+  );
+  const authorityArray = trappedProxy([...BORROW_EVIDENCE_AUTHORITIES]);
+  check(
+    'consumer authority-array Proxy is rejected before any trap',
+    throwsTypeError(() => validateBorrowTruthForConsumption(canonical, {
+      evaluatedAtMs: T0,
+      acceptedAuthorities: authorityArray.proxy,
+      requireRate: false,
+    })) && authorityArray.calls.length === 0,
+    authorityArray.calls.join(','),
+  );
+
+  const batch = trappedProxy([completeInput()]);
+  check(
+    'batch Proxy is rejected before length, ownKeys, or materialization traps',
+    throwsTypeError(() => deriveBorrowTruthBatch(batch.proxy)) && batch.calls.length === 0,
+    batch.calls.join(','),
+  );
+  const revokedBatch = Proxy.revocable([completeInput()], {});
+  revokedBatch.revoke();
+  check('revoked batch Proxy is rejected without touching revoked state', throwsTypeError(() => deriveBorrowTruthBatch(revokedBatch.proxy)));
+  let batchAccessorCalls = 0;
+  const accessorBatch = [completeInput()];
+  Object.defineProperty(accessorBatch, '0', {
+    enumerable: true,
+    configurable: true,
+    get() { batchAccessorCalls += 1; return completeInput(); },
+  });
+  check(
+    'batch accessors are rejected without materialization',
+    throwsTypeError(() => deriveBorrowTruthBatch(accessorBatch)) && batchAccessorCalls === 0,
+  );
 }
 
 // ---------------------------------------------------------------------

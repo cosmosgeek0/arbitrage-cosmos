@@ -156,7 +156,6 @@ interface OwnerCutSnapshotState {
   nodes: number;
   readonly seen: WeakSet<object>;
 }
-
 function boundedText(value: unknown, maximum = 256): value is string {
   return typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= maximum;
 }
@@ -432,7 +431,8 @@ function validatedBorrowTruth(
       || borrow.asset !== expected.asset
       || borrow.mode !== expected.mode
       || borrow.permissionId !== expected.permissionId
-      || borrow.state !== 'AVAILABLE') return null;
+      || borrow.state !== 'AVAILABLE'
+    ) return null;
     return borrow;
   } catch {
     return null;
@@ -660,7 +660,13 @@ export function projectCanonicalConservativeEconomics(
       const source = borrowTruth.provenance[key];
       return source === null ? [] : [source.sourceId];
     });
-    const borrowEvidence = sortedUnique([...borrow.component.sourceIds, ...provenanceIds]);
+    // Bind the Capital fact identity to the complete Foundation owner cut, not
+    // only human-readable source IDs that can stay constant while facts move.
+    const borrowEvidence = sortedUnique([
+      ...borrow.component.sourceIds,
+      ...provenanceIds,
+      borrowTruth.contentDigest,
+    ]);
     const borrowScope: ConservativeBorrowFactScope = Object.freeze({
       ...input.borrowScope,
       truthEvaluatedAtMs: borrowTruth.evaluatedAtMs,

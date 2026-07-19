@@ -5,6 +5,7 @@
  * capital-action surface. Adapters provide already-read evidence; this module
  * validates its identity and derives one expiring truth state against `nowMs`.
  */
+import { isProxy } from 'node:util/types';
 import {
   createSourcedTimestamp,
   evaluateFreshness,
@@ -35,6 +36,7 @@ import {
   type DeriveBorrowTruthInput,
   type MaxBorrowEvidence,
 } from './types.js';
+import { deriveBorrowTruthContentDigest } from './validate.js';
 
 const ACCOUNT_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SYMBOL = /^[A-Z0-9]{2,30}$/;
@@ -116,54 +118,111 @@ interface NormalizedEvidence {
   collateral: BorrowCollateralEvidence | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function assertRecord(value: unknown, path: string): asserts value is Record<string, unknown> {
-  if (!isRecord(value)) throw new TypeError(`${path} must be a plain object`);
-}
-
-/** Exact enumerable data records only; never invokes caller accessors. */
-function assertExactDataRecord(
+/**
+ * Capture one exact caller record from data descriptors. Proxy detection is
+ * deliberately the first object operation: root, nested, revoked, and
+ * stateful Proxies all fail before any caller trap can run.
+ */
+function captureExactDataRecord(
   value: unknown,
   expectedKeys: readonly string[],
   path: string,
-): asserts value is Record<string, unknown> {
-  assertRecord(value, path);
-  const ownKeys = Reflect.ownKeys(value);
-  const expected = new Set(expectedKeys);
-  if (
-    ownKeys.length !== expectedKeys.length ||
-    ownKeys.some((key) => typeof key !== 'string' || !expected.has(key))
-  ) {
-    throw new TypeError(`${path} must contain exactly the documented fields`);
-  }
-  for (const key of expectedKeys) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor || descriptor.get || descriptor.set || !descriptor.enumerable) {
-      throw new TypeError(`${path}.${key} must be an enumerable data field`);
+): Readonly<Record<string, unknown>> {
+  try {
+    if (
+      (typeof value !== 'object' && typeof value !== 'function')
+      || value === null
+      || isProxy(value)
+    ) throw new TypeError(`${path} must be a plain data object`);
+    if (Array.isArray(value)) throw new TypeError(`${path} must be a plain data object`);
+    const prototype = Reflect.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError(`${path} must be a plain data object`);
     }
+    const ownKeys = Reflect.ownKeys(value);
+    const expected = new Set(expectedKeys);
+    if (
+      ownKeys.length !== expectedKeys.length
+      || ownKeys.some((key) => typeof key !== 'string' || !expected.has(key))
+    ) throw new TypeError(`${path} must contain exactly the documented fields`);
+
+    const captured: Record<string, unknown> = {};
+    for (const key of expectedKeys) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (
+        !descriptor
+        || !('value' in descriptor)
+        || descriptor.get
+        || descriptor.set
+        || !descriptor.enumerable
+      ) throw new TypeError(`${path}.${key} must be an enumerable data field`);
+      Object.defineProperty(captured, key, {
+        value: descriptor.value,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+      });
+    }
+    return Object.freeze(captured);
+  } catch (error) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError(`${path} must be a plain data object`);
   }
 }
 
-function assertDenseInputArray(value: unknown): asserts value is readonly DeriveBorrowTruthInput[] {
-  if (!Array.isArray(value)) throw new TypeError('inputs must be an array');
-  for (const key of Reflect.ownKeys(value)) {
-    if (typeof key !== 'string') throw new TypeError('inputs must not carry symbol properties');
-    if (key === 'length') continue;
-    if (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length) {
-      throw new TypeError('inputs must not carry named side-properties');
+function captureDenseInputArray(value: unknown): readonly DeriveBorrowTruthInput[] {
+  try {
+    if (
+      (typeof value !== 'object' && typeof value !== 'function')
+      || value === null
+      || isProxy(value)
+    ) throw new TypeError('inputs must be an exact array');
+    if (!Array.isArray(value) || Reflect.getPrototypeOf(value) !== Array.prototype) {
+      throw new TypeError('inputs must be an exact array');
     }
-  }
-  for (let index = 0; index < value.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-    if (!descriptor || descriptor.get || descriptor.set || !descriptor.enumerable) {
-      throw new TypeError('inputs must be dense enumerable data values');
+    // Read and enforce the exact own bound before ownKeys or materialization.
+    const lengthDescriptor = Reflect.getOwnPropertyDescriptor(value, 'length');
+    if (
+      !lengthDescriptor
+      || !('value' in lengthDescriptor)
+      || lengthDescriptor.get
+      || lengthDescriptor.set
+      || typeof lengthDescriptor.value !== 'number'
+      || !Number.isSafeInteger(lengthDescriptor.value)
+      || lengthDescriptor.value < 0
+      || lengthDescriptor.value > 1_000
+    ) throw new TypeError('inputs must contain at most 1000 decisions');
+    const length = lengthDescriptor.value;
+    const ownKeys = Reflect.ownKeys(value);
+    if (
+      ownKeys.length !== length + 1
+      || ownKeys.some((key) => (
+        typeof key !== 'string'
+        || (key !== 'length' && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= length))
+      ))
+    ) throw new TypeError('inputs must be dense and carry no side-properties');
+
+    const captured: DeriveBorrowTruthInput[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, String(index));
+      if (
+        !descriptor
+        || !('value' in descriptor)
+        || descriptor.get
+        || descriptor.set
+        || !descriptor.enumerable
+      ) throw new TypeError('inputs must be dense enumerable data values');
+      captured.push(descriptor.value as DeriveBorrowTruthInput);
     }
+    return Object.freeze(captured);
+  } catch (error) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError('inputs must be an exact bounded data array');
   }
+}
+
+function isStrictUtcMillis(value: unknown): value is number {
+  return isValidUtcMillis(value) && !Object.is(value, -0);
 }
 
 function assertNullableBoolean(value: unknown, path: string): asserts value is boolean | null {
@@ -174,8 +233,7 @@ function assertExplicitNullable(value: unknown, path: string): void {
   if (value === undefined) throw new TypeError(`${path} must be supplied; use explicit null when unknown`);
 }
 
-function validateScope(value: unknown, path: string): BorrowScopeIdentity {
-  assertRecord(value, path);
+function validateScopeRecord(value: Readonly<Record<string, unknown>>, path: string): BorrowScopeIdentity {
   if (typeof value.accountId !== 'string' || !ACCOUNT_ID.test(value.accountId)) {
     throw new TypeError(`${path}.accountId is invalid`);
   }
@@ -200,25 +258,36 @@ function validateScope(value: unknown, path: string): BorrowScopeIdentity {
   });
 }
 
+function validateScope(value: unknown, path: string): BorrowScopeIdentity {
+  return validateScopeRecord(captureExactDataRecord(value, SCOPE_KEYS, path), path);
+}
+
 function cloneTimestamp(value: unknown, path: string): Readonly<SourcedTimestamp> {
-  assertExactDataRecord(value, TIMESTAMP_KEYS, path);
-  const issues = validateSourcedTimestamp(value);
-  if (issues.length > 0) {
+  const record = captureExactDataRecord(value, TIMESTAMP_KEYS, path);
+  const issues = validateSourcedTimestamp(record);
+  if (
+    issues.length > 0
+    || (record.sourceTimeMs !== null && !isStrictUtcMillis(record.sourceTimeMs))
+    || !isStrictUtcMillis(record.receivedAtMs)
+    || typeof record.maxAgeMs !== 'number'
+    || !Number.isSafeInteger(record.maxAgeMs)
+    || Object.is(record.maxAgeMs, -0)
+    || record.maxAgeMs <= 0
+  ) {
     throw new TypeError(`${path} is invalid: ${issues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);
   }
-  const timestamp = value as unknown as SourcedTimestamp;
   return createSourcedTimestamp({
-    sourceTimeMs: timestamp.sourceTimeMs,
-    receivedAtMs: timestamp.receivedAtMs,
-    maxAgeMs: timestamp.maxAgeMs,
-    authority: timestamp.authority,
-    completeness: timestamp.completeness,
-    sourceId: timestamp.sourceId,
+    sourceTimeMs: record.sourceTimeMs as number | null,
+    receivedAtMs: record.receivedAtMs as number,
+    maxAgeMs: record.maxAgeMs,
+    authority: record.authority as SourcedTimestamp['authority'],
+    completeness: record.completeness as SourcedTimestamp['completeness'],
+    sourceId: record.sourceId as string,
   });
 }
 
-function validateBase(value: Record<string, unknown>, path: string): BorrowReadEvidenceBase {
-  const scope = validateScope(value, path);
+function validateBase(value: Readonly<Record<string, unknown>>, path: string): BorrowReadEvidenceBase {
+  const scope = validateScopeRecord(value, path);
   if (typeof value.status !== 'string' || !(BORROW_READ_STATUSES as readonly string[]).includes(value.status)) {
     throw new TypeError(`${path}.status is invalid`);
   }
@@ -242,38 +311,42 @@ function ensureNoPayloadOnFailedRead(
 function validateAccount(value: unknown): BorrowAccountEvidence | null {
   assertExplicitNullable(value, 'account');
   if (value === null) return null;
-  assertExactDataRecord(value, ACCOUNT_KEYS, 'account');
-  const base = validateBase(value, 'account');
-  assertNullableBoolean(value.accountCreated, 'account.accountCreated');
-  assertNullableBoolean(value.modeEnabled, 'account.modeEnabled');
-  assertNullableBoolean(value.borrowEnabled, 'account.borrowEnabled');
-  ensureNoPayloadOnFailedRead(base.status, [value.accountCreated, value.modeEnabled, value.borrowEnabled], 'account');
+  const record = captureExactDataRecord(value, ACCOUNT_KEYS, 'account');
+  const base = validateBase(record, 'account');
+  assertNullableBoolean(record.accountCreated, 'account.accountCreated');
+  assertNullableBoolean(record.modeEnabled, 'account.modeEnabled');
+  assertNullableBoolean(record.borrowEnabled, 'account.borrowEnabled');
+  ensureNoPayloadOnFailedRead(
+    base.status,
+    [record.accountCreated, record.modeEnabled, record.borrowEnabled],
+    'account',
+  );
   return Object.freeze({
     ...base,
-    accountCreated: value.accountCreated,
-    modeEnabled: value.modeEnabled,
-    borrowEnabled: value.borrowEnabled,
+    accountCreated: record.accountCreated,
+    modeEnabled: record.modeEnabled,
+    borrowEnabled: record.borrowEnabled,
   });
 }
 
 function validatePermission(value: unknown): BorrowPermissionEvidence | null {
   assertExplicitNullable(value, 'permission');
   if (value === null) return null;
-  assertExactDataRecord(value, PERMISSION_KEYS, 'permission');
-  const base = validateBase(value, 'permission');
-  assertNullableBoolean(value.enableReading, 'permission.enableReading');
-  assertNullableBoolean(value.enableMargin, 'permission.enableMargin');
-  assertNullableBoolean(value.enableSpotAndMarginTrading, 'permission.enableSpotAndMarginTrading');
+  const record = captureExactDataRecord(value, PERMISSION_KEYS, 'permission');
+  const base = validateBase(record, 'permission');
+  assertNullableBoolean(record.enableReading, 'permission.enableReading');
+  assertNullableBoolean(record.enableMargin, 'permission.enableMargin');
+  assertNullableBoolean(record.enableSpotAndMarginTrading, 'permission.enableSpotAndMarginTrading');
   ensureNoPayloadOnFailedRead(
     base.status,
-    [value.enableReading, value.enableMargin, value.enableSpotAndMarginTrading],
+    [record.enableReading, record.enableMargin, record.enableSpotAndMarginTrading],
     'permission',
   );
   return Object.freeze({
     ...base,
-    enableReading: value.enableReading,
-    enableMargin: value.enableMargin,
-    enableSpotAndMarginTrading: value.enableSpotAndMarginTrading,
+    enableReading: record.enableReading,
+    enableMargin: record.enableMargin,
+    enableSpotAndMarginTrading: record.enableSpotAndMarginTrading,
   });
 }
 
@@ -286,10 +359,10 @@ function normalizeNullableDecimal(value: unknown, path: string): string | null {
 function validateMaxBorrow(value: unknown): MaxBorrowEvidence | null {
   assertExplicitNullable(value, 'maxBorrow');
   if (value === null) return null;
-  assertExactDataRecord(value, MAX_BORROW_KEYS, 'maxBorrow');
-  const base = validateBase(value, 'maxBorrow');
-  const amount = normalizeNullableDecimal(value.amount, 'maxBorrow.amount');
-  const borrowLimit = normalizeNullableDecimal(value.borrowLimit, 'maxBorrow.borrowLimit');
+  const record = captureExactDataRecord(value, MAX_BORROW_KEYS, 'maxBorrow');
+  const base = validateBase(record, 'maxBorrow');
+  const amount = normalizeNullableDecimal(record.amount, 'maxBorrow.amount');
+  const borrowLimit = normalizeNullableDecimal(record.borrowLimit, 'maxBorrow.borrowLimit');
   ensureNoPayloadOnFailedRead(base.status, [amount, borrowLimit], 'maxBorrow');
   if (amount !== null && borrowLimit !== null && compareNonNegativeDecimals(amount, borrowLimit) > 0) {
     throw new TypeError('maxBorrow.amount cannot exceed maxBorrow.borrowLimit');
@@ -300,9 +373,9 @@ function validateMaxBorrow(value: unknown): MaxBorrowEvidence | null {
 function validateRate(value: unknown): BorrowRateEvidence | null {
   assertExplicitNullable(value, 'rate');
   if (value === null) return null;
-  assertExactDataRecord(value, RATE_KEYS, 'rate');
-  const base = validateBase(value, 'rate');
-  const hourlyRate = normalizeNullableDecimal(value.hourlyRate, 'rate.hourlyRate');
+  const record = captureExactDataRecord(value, RATE_KEYS, 'rate');
+  const base = validateBase(record, 'rate');
+  const hourlyRate = normalizeNullableDecimal(record.hourlyRate, 'rate.hourlyRate');
   ensureNoPayloadOnFailedRead(base.status, [hourlyRate], 'rate');
   return Object.freeze({ ...base, hourlyRate });
 }
@@ -310,14 +383,14 @@ function validateRate(value: unknown): BorrowRateEvidence | null {
 function validateLiability(value: unknown): BorrowLiabilityEvidence | null {
   assertExplicitNullable(value, 'liability');
   if (value === null) return null;
-  assertExactDataRecord(value, LIABILITY_KEYS, 'liability');
-  const base = validateBase(value, 'liability');
+  const record = captureExactDataRecord(value, LIABILITY_KEYS, 'liability');
+  const base = validateBase(record, 'liability');
   const currentBorrowedAsset = normalizeNullableDecimal(
-    value.currentBorrowedAsset,
+    record.currentBorrowedAsset,
     'liability.currentBorrowedAsset',
   );
   const accruedInterestAsset = normalizeNullableDecimal(
-    value.accruedInterestAsset,
+    record.accruedInterestAsset,
     'liability.accruedInterestAsset',
   );
   ensureNoPayloadOnFailedRead(
@@ -331,17 +404,17 @@ function validateLiability(value: unknown): BorrowLiabilityEvidence | null {
 function validateCollateral(value: unknown): BorrowCollateralEvidence | null {
   assertExplicitNullable(value, 'collateral');
   if (value === null) return null;
-  assertExactDataRecord(value, COLLATERAL_KEYS, 'collateral');
-  const base = validateBase(value, 'collateral');
+  const record = captureExactDataRecord(value, COLLATERAL_KEYS, 'collateral');
+  const base = validateBase(record, 'collateral');
   if (
-    typeof value.product !== 'string'
-    || !(BORROW_COLLATERAL_PRODUCTS as readonly string[]).includes(value.product)
+    typeof record.product !== 'string'
+    || !(BORROW_COLLATERAL_PRODUCTS as readonly string[]).includes(record.product)
   ) {
     throw new TypeError('collateral.product must be MARGIN_ACCOUNT; flexible-loan evidence requires a separate owner');
   }
-  const collateralAmount = normalizeNullableDecimal(value.collateralAmount, 'collateral.collateralAmount');
-  const currentLtv = normalizeNullableDecimal(value.currentLtv, 'collateral.currentLtv');
-  const collateralAsset = value.collateralAsset;
+  const collateralAmount = normalizeNullableDecimal(record.collateralAmount, 'collateral.collateralAmount');
+  const currentLtv = normalizeNullableDecimal(record.currentLtv, 'collateral.currentLtv');
+  const collateralAsset = record.collateralAsset;
   if (collateralAsset !== null && (typeof collateralAsset !== 'string' || !ASSET.test(collateralAsset))) {
     throw new TypeError('collateral.collateralAsset must be an uppercase venue asset or explicit null');
   }
@@ -358,7 +431,7 @@ function validateCollateral(value: unknown): BorrowCollateralEvidence | null {
   );
   return Object.freeze({
     ...base,
-    product: value.product as BorrowCollateralEvidence['product'],
+    product: record.product as BorrowCollateralEvidence['product'],
     collateralAmount,
     collateralAsset,
     currentLtv,
@@ -502,7 +575,7 @@ function buildTruth(
     && freshness.collateral?.state === 'FRESH'
     ? evidence.collateral
     : null;
-  return Object.freeze({
+  const truthWithoutDigest = Object.freeze({
     ...scope,
     state,
     reason,
@@ -546,6 +619,10 @@ function buildTruth(
     expiresAtMs: computeExpiry(requiredSupplied),
     provenance,
     freshness,
+  }) satisfies Readonly<Omit<BorrowTruth, 'contentDigest'>>;
+  return Object.freeze({
+    ...truthWithoutDigest,
+    contentDigest: deriveBorrowTruthContentDigest(truthWithoutDigest),
   });
 }
 
@@ -595,21 +672,21 @@ function authorityOutcome(evidence: NormalizedEvidence): { state: BorrowTruthSta
 
 /** Derive one immutable borrow truth from explicit, already-read evidence. */
 export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<BorrowTruth> {
-  assertExactDataRecord(input, INPUT_KEYS, 'input');
-  assertExactDataRecord(input.scope, SCOPE_KEYS, 'scope');
-  const scope = validateScope(input.scope, 'scope');
-  if (!isValidUtcMillis(input.nowMs)) throw new TypeError('nowMs must be injected valid UTC milliseconds');
+  const record = captureExactDataRecord(input, INPUT_KEYS, 'input');
+  const scope = validateScope(record.scope, 'scope');
+  if (!isStrictUtcMillis(record.nowMs)) throw new TypeError('nowMs must be injected valid UTC milliseconds');
+  const nowMs = record.nowMs;
   const evidence: NormalizedEvidence = Object.freeze({
-    account: validateAccount(input.account),
-    permission: validatePermission(input.permission),
-    maxBorrow: validateMaxBorrow(input.maxBorrow),
-    rate: validateRate(input.rate),
-    liability: validateLiability(input.liability),
-    collateral: validateCollateral(input.collateral),
+    account: validateAccount(record.account),
+    permission: validatePermission(record.permission),
+    maxBorrow: validateMaxBorrow(record.maxBorrow),
+    rate: validateRate(record.rate),
+    liability: validateLiability(record.liability),
+    collateral: validateCollateral(record.collateral),
   });
-  const snapshots = cloneReports(evidence, input.nowMs);
+  const snapshots = cloneReports(evidence, nowMs);
   const finish = (state: BorrowTruthState, reason: BorrowTruthReason): Readonly<BorrowTruth> =>
-    buildTruth(scope, evidence, input.nowMs, state, reason, snapshots.provenance, snapshots.freshness);
+    buildTruth(scope, evidence, nowMs, state, reason, snapshots.provenance, snapshots.freshness);
 
   const identity = identityOutcome(scope, evidence);
   if (identity !== null) return finish(identity.state, identity.reason);
@@ -690,12 +767,11 @@ export function deriveBorrowTruth(input: DeriveBorrowTruthInput): Readonly<Borro
 export function deriveBorrowTruthBatch(
   inputs: readonly DeriveBorrowTruthInput[],
 ): readonly Readonly<BorrowTruth>[] {
-  assertDenseInputArray(inputs);
-  if (inputs.length > 1_000) throw new TypeError('inputs must contain at most 1000 decisions');
+  const capturedInputs = captureDenseInputArray(inputs);
   const seen = new Set<string>();
   const results: Readonly<BorrowTruth>[] = [];
-  for (let index = 0; index < inputs.length; index += 1) {
-    const result = deriveBorrowTruth(inputs[index] as DeriveBorrowTruthInput);
+  for (let index = 0; index < capturedInputs.length; index += 1) {
+    const result = deriveBorrowTruth(capturedInputs[index] as DeriveBorrowTruthInput);
     const key = scopeKey(result);
     if (seen.has(key)) throw new TypeError('inputs contain a duplicate borrow scope');
     seen.add(key);

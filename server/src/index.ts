@@ -978,14 +978,17 @@ function notificationRoutingSnapshot() {
   };
 }
 
+// Every mounted API route shares one operator admission boundary.
+app.use('/api', operatorAccess.middleware());
+
 // Ambient bearer material cannot widen Phase 2 authority. This route remains
-// present only as an explicit owner-gated boundary and performs no persistence.
+// present only as an explicit owner-gated boundary and performs no
+// persistence. Registered BELOW the admission boundary (F-070) so it shares
+// the same operator authentication as every other /api route instead of
+// bypassing it by registration order.
 app.post('/api/notifications/ingest/aws', (_req, res) => {
   sendOwnerGated(res, 'AWS_NOTIFICATION_INGEST');
 });
-
-// Every mounted API route shares one operator admission boundary.
-app.use('/api', operatorAccess.middleware());
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,
   controls: systemIntegration.controls,

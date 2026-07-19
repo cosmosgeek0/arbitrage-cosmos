@@ -3616,6 +3616,7 @@ server.on('upgrade', (request, socket, head) => {
         return;
       }
       if (!verification.authorized) {
+        console.error('websocket upgrade refused: operator verification denied');
         rejectUpgrade(socket, 401, 'WebSocket operator verification failed.');
         return;
       }
@@ -3637,7 +3638,17 @@ server.on('upgrade', (request, socket, head) => {
         wss.emit('connection', ws, request);
       });
     })
-    .catch(() => rejectUpgrade(socket, 401, 'WebSocket operator verification failed.'))
+    .catch((error) => {
+      // An infrastructure failure (e.g. a JWKS fetch timeout during a
+      // Cloudflare incident) is not an authorization verdict. Mirror the HTTP
+      // middleware's 503 OPERATOR_CHECK_UNAVAILABLE instead of telling the
+      // operator "you are not authorized" (F-072 / Part 4 #12).
+      console.error(
+        'websocket upgrade refused: operator verification unavailable:',
+        error instanceof Error ? error.message : String(error),
+      );
+      rejectUpgrade(socket, 503, 'Operator verification is unavailable (OPERATOR_CHECK_UNAVAILABLE).');
+    })
     .finally(() => {
       pendingWsUpgradeSockets.delete(socket);
       pendingWsUpgrades = Math.max(0, pendingWsUpgrades - 1);

@@ -22,6 +22,7 @@ Q_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-q.service.template")"
 assert_contains "$APP_DROPIN" 'Requires=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'After=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'LoadCredential=app-secrets:/run/cosmos-secret-source/app-secrets.json'
+assert_contains "$APP_DROPIN" 'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
 assert_contains "$PROVIDER_UNIT" 'Before=cosmos-app.service'
 assert_contains "$PROVIDER_UNIT" 'NoNewPrivileges=yes'
 assert_contains "$Q_UNIT" 'ConditionPathExists=/opt/cosmos/current/REPLACE_ME_Q_ENTRYPOINT'

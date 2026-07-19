@@ -252,7 +252,11 @@ export function Markets() {
   const losers = withChange.filter((market) => (market.change24hPct ?? 0) < 0).length;
   const pairedCount = markets.filter((market) => market.hasSpot && market.hasPerp).length;
   const executableCount = markets.filter(hasExecutableBooks).length;
-  const totalVolume = markets.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
+  // F-064: unknown per-row volumes must not be summed as zeros into a
+  // headline tile. Sum only known rows and disclose the coverage.
+  const volumeKnownRows = markets.filter((market) => finite(market.quoteVolume24h));
+  const totalVolume = volumeKnownRows.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
+  const volumeCoverageComplete = volumeKnownRows.length === markets.length;
   const byVolume = useMemo(
     () => [...markets].filter((market) => (market.quoteVolume24h ?? 0) > 0).sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0)),
     [markets],
@@ -395,7 +399,7 @@ export function Markets() {
         <div className="mkx-summary" aria-label="Market Summary">
           <article><span>Tracked Markets</span><strong>{marketReadSucceeded ? markets.length.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'USDT Universe' : 'Awaiting source read'}</small></article>
           <article><span>Spot + Perp</span><strong>{marketReadSucceeded ? pairedCount.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? `${executableCount.toLocaleString('en-US')} Executable Books` : 'Awaiting source read'}</small></article>
-          <article><span>24h Volume</span><strong>{marketReadSucceeded ? fmtMoney(totalVolume) : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'Binance Spot Quote' : 'Awaiting source read'}</small></article>
+          <article><span>24h Volume</span><strong>{marketReadSucceeded ? fmtMoney(totalVolume) : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? (volumeCoverageComplete ? 'Binance Spot Quote' : `Binance Spot Quote · ${volumeKnownRows.length} of ${markets.length} rows known`) : 'Awaiting source read'}</small></article>
           <article><span>Market Breadth</span><strong>{marketReadSucceeded ? `${gainers.toLocaleString('en-US')} / ${losers.toLocaleString('en-US')}` : 'UNKNOWN'}</strong><small className={!marketReadSucceeded || top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{!marketReadSucceeded ? 'Awaiting source read' : top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
         </div>
 

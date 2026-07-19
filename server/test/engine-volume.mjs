@@ -2006,6 +2006,137 @@ section('30. focus readbacks are frozen copies, never mutable owner state');
       && closedAgain?.correlationId !== 'forged-history');
 }
 
+// ================================================================
+section('28. observed-order focus is owner-bound, bounded, retained, expiring, and restartable');
+{
+  const observed = (overrides = {}) => ({
+    sourceOwner: OBSERVED_ORDER_FOCUS_SOURCE_OWNER,
+    sourceId: 'foundation.reconciliation.synthetic-open-orders',
+    authority: 'SYNTHETIC_TEST',
+    state: 'AVAILABLE',
+    observedAtMs: 0,
+    validUntilMs: 5_000,
+    openSymbols: ['E1USDT'],
+    reasonCodes: [],
+    ...overrides,
+  });
+  const unavailable = (overrides = {}) => ({
+    sourceOwner: OBSERVED_ORDER_FOCUS_SOURCE_OWNER,
+    sourceId: 'foundation.reconciliation.synthetic-open-orders',
+    authority: 'UNAVAILABLE',
+    state: 'UNAVAILABLE',
+    observedAtMs: 100,
+    validUntilMs: null,
+    openSymbols: null,
+    reasonCodes: ['OPEN_ORDER_TRUTH_UNAVAILABLE'],
+    ...overrides,
+  });
+
+  const { clock, engine } = mkWorld({ focusSoftCap: 1, focusHardCap: 2, focusMaxAgeMs: 1_000 });
+  const applied = engine.applyObservedOrderFocus(observed());
+  const session = engine.focusMgr.focusSessions().find((focus) => focus.symbol === 'E1USDT');
+  check('complete owner cut emits open_order focus with no transport call',
+    applied.status === 'APPLIED' && session?.reason === 'open_order'
+      && engine.memSink.byKind('focus_opened').some((event) => event.symbol === 'E1USDT'));
+
+  engine.focusMgr.promote('AAAUSDT', 'volume_activation', 10_000, 'score-high', clock.now());
+  check('protected open-order focus cannot be score-evicted beyond the soft cap',
+    engine.focusMgr.isFocused('E1USDT') && !engine.focusMgr.isFocused('AAAUSDT'));
+
+  clock.set(1_500);
+  engine.tick();
+  const retained = engine.applyObservedOrderFocus(unavailable());
+  check('unavailable truth retains the last current owner cut, never fabricates zero',
+    retained.status === 'UNAVAILABLE_RETAINED' && engine.focusMgr.isFocused('E1USDT'));
+
+  const advanced = engine.applyObservedOrderFocus(observed({ observedAtMs: 1_000 }));
+  const staleResurrection = engine.applyObservedOrderFocus(observed());
+  const conflictingCut = engine.applyObservedOrderFocus(observed({
+    observedAtMs: 1_000,
+    openSymbols: ['E2USDT'],
+  }));
+  check('older and same-time conflicting cuts cannot resurrect or replace owner truth',
+    advanced.status === 'APPLIED'
+      && staleResurrection.status === 'REJECTED_NON_MONOTONIC'
+      && conflictingCut.status === 'REJECTED_CONFLICT'
+      && engine.focusMgr.observedOpenOrderSymbols().join(',') === 'E1USDT');
+
+  const hostile = engine.applyObservedOrderFocus({ ...observed(), sourceOwner: 'LEGACY_ORDER_SERVICE' });
+  check('non-owner snapshots fail closed', hostile.status === 'REJECTED_INVALID'
+    && hostile.reasonCodes.includes('OBSERVED_ORDER_FOCUS_OWNER_INVALID'));
+  const overlong = engine.applyObservedOrderFocus(observed({ validUntilMs: 400_001 }));
+  check('unbounded source leases fail closed', overlong.status === 'REJECTED_INVALID'
+    && overlong.reasonCodes.includes('OBSERVED_ORDER_FOCUS_VALID_UNTIL_INVALID'));
+  const future = engine.applyObservedOrderFocus(observed({ observedAtMs: 7_000, validUntilMs: 8_000 }));
+  check('future-skewed owner cuts fail closed', future.status === 'REJECTED_INVALID'
+    && future.reasonCodes.includes('OBSERVED_ORDER_FOCUS_TIME_INVALID'));
+
+  const threeOrders = mkWorld({ focusSoftCap: 1, focusHardCap: 2, focusMaxAgeMs: 1_000 });
+  const bounded = threeOrders.engine.applyObservedOrderFocus(observed({
+    openSymbols: ['E1USDT', 'E2USDT', 'E3USDT'],
+  }));
+  check('hard cap stays absolute and overflow is explicit',
+    bounded.focusedOpenSymbols.length === 2
+      && bounded.unfocusedOpenSymbols.length === 1
+      && bounded.unfocusedOpenSymbols[0] === 'E3USDT');
+
+  const scoreWorld = mkWorld({ focusSoftCap: 4, focusHardCap: 4 });
+  scoreWorld.engine.focusMgr.promote('AAAUSDT', 'volume_activation', 5, 'score-a', 0);
+  scoreWorld.engine.focusMgr.promote('BBBUSDT', 'volume_activation', 15, 'score-b', 0);
+  scoreWorld.engine.focusMgr.promote('CCCUSDT', 'volume_activation', 10, 'score-c', 0);
+  check('focus score order is deterministic and descending',
+    scoreWorld.engine.focusMgr.focusSessions().slice(0, 3).map((focus) => focus.score).join(',') === '15,10,5');
+
+  const restartClock = new ManualClock(2_000);
+  const restarted = new VolumeEngine(restartClock, {
+    ...TEST_CFG,
+    focusSoftCap: 1,
+    focusHardCap: 2,
+    focusMaxAgeMs: 1_000,
+  });
+  restarted.start();
+  restarted.setUniverse(TEST_SYMBOLS.map(symbolMeta));
+  const restored = restarted.applyObservedOrderFocus(observed());
+  check('restart reapplication restores current open-order protection',
+    restored.status === 'APPLIED' && restarted.focusMgr.isFocused('E1USDT'));
+
+  restartClock.set(3_000);
+  const cleared = restarted.applyObservedOrderFocus(observed({
+    observedAtMs: 3_000,
+    validUntilMs: 8_000,
+    openSymbols: [],
+  }));
+  restartClock.set(3_001);
+  restarted.tick();
+  check('newer known-empty cut clears protection and permits max-age expiry',
+    cleared.status === 'APPLIED'
+      && restarted.focusMgr.observedOpenOrderSymbols().length === 0
+      && !restarted.focusMgr.isFocused('E1USDT')
+      && restarted.focusMgr.closedFocusSessions().some((focus) =>
+        focus.symbol === 'E1USDT' && ['volume_normalized', 'max_focus_time'].includes(focus.exitReason)));
+
+  clock.set(5_001);
+  engine.tick();
+  check('source validity expiry releases protection and closes over-age focus',
+    engine.focusMgr.observedOpenOrderSymbols().length === 0
+      && !engine.focusMgr.isFocused('E1USDT'));
+}
+
+// ================================================================
+section('29. historical focus exit labels map explicitly to stable successors');
+{
+  check('all seven ENGINE.md exit labels have exact successor spellings',
+    JSON.stringify(FOCUS_HISTORICAL_EXIT_REASON_MAP) === JSON.stringify({
+      'signal expired': 'signal_expired',
+      'gap closed': 'gap_closed',
+      'volume returned to baseline': 'volume_normalized',
+      'spread/depth invalid': 'spread_depth_invalid',
+      'risk rejected': 'risk_rejected',
+      'max focus time': 'max_focus_time',
+      'cooldown started': 'cooldown',
+    }));
+}
+
 // ---------- summary ----------
 console.log(`\n${passCount} passed, ${failCount} failed`);
 if (failCount > 0) process.exit(1);

@@ -7,6 +7,7 @@ import {
   buildProductRuntimeSupervisorEnvelope,
   createProductIntegrationRuntime,
   productIncidentAcknowledgementControlId,
+  productRuntimeSurfaceReadinessBlocker,
   projectProductCorrelationTrace,
   projectProductMaterialEventPage,
 } from '../../../dist/productIntegration/runtime/index.js';
@@ -129,10 +130,59 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.equal(envelope.surfaces.account.bindingState, 'BLOCKED_BACKEND');
   assert.equal(envelope.surfaces.account.truthLabel, 'MISSING');
   assert.equal(envelope.surfaces.borrow.truthLabel, 'MISSING');
+  assert.deepEqual(
+    envelope.surfaces.borrow.evidence.map((datum) => datum.fieldId),
+    [
+      'mode-eligibility',
+      'borrow-eligibility',
+      'maximum-borrowable',
+      'borrow-limit',
+      'hourly-borrow-rate',
+      'current-borrowed',
+      'accrued-interest',
+      'collateral-amount',
+      'collateral-asset',
+      'current-ltv',
+      'liability-source-freshness',
+      'collateral-source-freshness',
+      'blocker',
+    ],
+  );
+  for (const datum of envelope.surfaces.borrow.evidence) {
+    assert.equal(datum.value, null, `${datum.fieldId} must stay null without canonical private owner evidence`);
+    assert.equal(datum.truthLabel, 'MISSING');
+    assert.equal(datum.canonicalSource, `systemIntegration:borrow:${datum.fieldId}`);
+    assert.equal(datum.unavailableReason, 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED');
+  }
+  const optionalBorrowFields = new Set([
+    'collateral-amount',
+    'collateral-asset',
+    'current-ltv',
+    'collateral-source-freshness',
+  ]);
+  const borrowWithOptionalUnknown = envelope.surfaces.borrow.evidence.map((datum) => Object.freeze({
+    ...datum,
+    value: optionalBorrowFields.has(datum.fieldId) ? null : 'OWNER_EVIDENCED',
+    truthLabel: optionalBorrowFields.has(datum.fieldId) ? 'MISSING' : 'WIRED',
+    unavailableReason: optionalBorrowFields.has(datum.fieldId) ? 'OPTIONAL_OWNER_NOT_AVAILABLE' : null,
+  }));
+  assert.equal(
+    productRuntimeSurfaceReadinessBlocker('borrow', borrowWithOptionalUnknown),
+    null,
+    'ENGINE section 11 optional collateral/LTV must not block an otherwise evidenced Borrow surface',
+  );
+  const missingBorrowed = borrowWithOptionalUnknown.map((datum) => datum.fieldId === 'current-borrowed'
+    ? Object.freeze({ ...datum, value: null, truthLabel: 'MISSING' })
+    : datum);
+  assert.equal(
+    productRuntimeSurfaceReadinessBlocker('borrow', missingBorrowed)?.fieldId,
+    'current-borrowed',
+    'required current liability remains fail-closed',
+  );
   assert.equal(envelope.surfaces.notifications.truthLabel, 'MISSING');
   assert.equal(envelope.surfaces.notifications.bindingState, 'BLOCKED_BACKEND');
   for (const surface of Object.values(envelope.surfaces)) {
-    const blocker = requiredSurfaceBlocker(surface);
+    const blocker = productRuntimeSurfaceReadinessBlocker(surface.surfaceId, surface.evidence);
     if (blocker === null) continue;
     assert.equal(surface.bindingState, 'BLOCKED_BACKEND', `${surface.surfaceId} cannot bind with ${blocker.fieldId} missing`);
     assert.ok(SURFACE_BLOCKING_TRUTH.has(surface.truthLabel), `${surface.surfaceId} cannot stay green with ${blocker.fieldId} missing`);

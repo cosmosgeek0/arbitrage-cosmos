@@ -98,13 +98,13 @@ uncertainty and advisory-only local inference.
   `67,698,688` bytes. These are fresh pending measurements, not historical A17
   measurements.
 - Current generated Q17 SHA-256 values: benchmark
-  `0b0f50ac60b544f314ca01e32a9e2e99c6676aea309fca1e9d6c50ce6b0814da`;
+  `749d91602761ec621157febb8fe1a911ee3fb7cdce1dcfafdec76eb088dabfc4`;
   component manifest
-  `3d13e00cc3bc37996f7ba125660f737178424bec0ffb7f5b54d551e6f2963f3d`;
+  `212e8021faf9f5ca28892a9b0bc118944a12f25a7875d807ae4469ef9d71f516`;
   security scope
-  `82ae11b1251b310e4e45e0769cce4a467ab75c3459169a24e39f58f1647c4942`;
+  `8cd9c47130203fd229ad5c0f5440884c10c49554de1693a35c0bfed536f4cebf`;
   self-excluding artifact manifest
-  `55e96c823185b9508a277a2ae9fbbf92aa1eaf55d6a705274e5e11824119cf32`.
+  `4cc48e87dd3339e1d9143a6974d95dcfc089758982cd8c5e21eddcee70c9ba67`.
   The last digest is mutable pending-correction evidence, not an acceptance seal.
 - Historical directive-input lock acceptance remains
   `410010ef635a5e44b205e56c6b38f2d06e5b8e72312f5d63edcb24a5086355e1`

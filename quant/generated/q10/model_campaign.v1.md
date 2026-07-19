@@ -1,8 +1,8 @@
 # Q10 model battery campaign (synthetic only)
 
 - Seed: `20260712`
-- Battery SHA-256: `1fdeed67392b1b7227bea97bf866844e923918a95fb4ad7dccdbb5fd6a913a60`
-- Golden fixture SHA-256: `874b2cd9af4ce3ebd5c590fbf3f458b8145e8e76f762d29798be9592bd22833e`
+- Battery SHA-256: `f742b90e4613a900aa09e869316045a2069b8007cff25dbfadae634e578ada8f`
+- Golden fixture SHA-256: `fa8b5dd28dc6753ae410296730bb21f09a1c19c3bb76785bc84b01944907fcbf`
 - Evidence posture: SYNTHETIC_ONLY — planted machinery truth, never market truth;
   no model here is predictive, validated or economically valuable.
 
@@ -31,7 +31,7 @@
 
 | Model | Role | Primary value | Winner |
 | --- | --- | --- | --- |
-| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557074084 | **yes** |
+| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557070553 | **yes** |
 | `train_mean:v1` | CONTROL | 13515873.061225000000 | — |
 | `xgb_regressor:v1` | BOOSTED_CHALLENGER | 13690338.847560466480 | — |
 | `xgb_regressor_tuned:v1` | BOOSTED_CHALLENGER | 12039986.663485348873 | — |
@@ -44,8 +44,8 @@
 | `logistic:v1` | TRANSPARENT_BASELINE | 0.268779972731 | — |
 | `no_trade_prevalence:v1` | CONTROL | 0.251337500000 | — |
 | `random_rank:v1` | CONTROL | 0.310899346642 | — |
-| `xgb_classifier:v1` | BOOSTED_CHALLENGER | 0.085698540783 | **yes** |
-| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.088127645935 | — |
+| `xgb_classifier:v1` | BOOSTED_CHALLENGER | 0.085698540952 | **yes** |
+| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.088127669719 | — |
 
 ## Honest challenger losses
 

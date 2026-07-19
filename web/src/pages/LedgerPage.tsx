@@ -372,8 +372,10 @@ export function LedgerPage() {
   const [showDebug, setShowDebug] = useState(false);
   const [pageSize, setPageSize] = useState<number>(25);
   const [pageIndex, setPageIndex] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  // F-065: an unknown count is null and renders as unknown, never a real 0.
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [dayTotals, setDayTotals] = useState<Record<string, number>>({});
+  const [dayTotalsError, setDayTotalsError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -414,7 +416,7 @@ export function LedgerPage() {
       },
       onSuccess: ([payload, countPayload]) => {
         setApiEvents(Array.isArray(payload) ? payload : []);
-        setTotalCount(Number(countPayload.count) || 0);
+        setTotalCount(Number.isFinite(Number(countPayload.count)) ? Number(countPayload.count) : null);
         setLoadError(null);
         setLastLoaded(Date.now());
         setLoading(false);
@@ -444,7 +446,15 @@ export function LedgerPage() {
         }));
         return Object.fromEntries(pairs);
       },
-      onSuccess: setDayTotals,
+      onSuccess: (totals) => {
+        setDayTotals(totals);
+        setDayTotalsError(null);
+      },
+      // F-065: this poll previously had no error handler at all, so a failing
+      // count endpoint was silently indistinguishable from empty days.
+      onError: (error) => {
+        setDayTotalsError(apiErrorMessage(error, 'Failed to load day counts'));
+      },
     });
     poll.start();
     return poll.stop;
@@ -552,7 +562,8 @@ export function LedgerPage() {
           <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
         </section>
 
-        <section className="calx-week logx-week" aria-label="Log Days">
+        <section className="calx-week logx-week" aria-label="Log Days" title={dayTotalsError ?? undefined}>
+          {dayTotalsError && <div className="lix-empty" role="status">Day counts unavailable: {dayTotalsError}</div>}
           {dayKeys.map((key) => {
             const rows = itemsByDay.get(key) ?? [];
             const counts = severityCounts(rows);
@@ -692,7 +703,7 @@ export function LedgerPage() {
                 </div>}
               </div>;
             })}
-            {totalCount > pageSize && <div className="logx-load-more">
+            {totalCount !== null && totalCount > pageSize && <div className="logx-load-more">
               <span>Showing {(pageIndex * pageSize + 1).toLocaleString('en-US')}–{Math.min((pageIndex + 1) * pageSize, totalCount).toLocaleString('en-US')} Of {totalCount.toLocaleString('en-US')} Logs</span>
               <span className="logx-page-actions">
                 <button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex((current) => Math.max(0, current - 1))}>Newer</button>

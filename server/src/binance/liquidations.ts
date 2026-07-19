@@ -8,6 +8,7 @@ import {
   assertDataDirCachePathHeld,
   resolveDataDirAuthority,
 } from '../bootstrap/environment.js';
+import { noteCachePersistFailure } from './cachePersistence.js';
 import type { FeedStatus } from './ws.js';
 
 const DATA_DIR_AUTHORITY = resolveDataDirAuthority();
@@ -173,7 +174,10 @@ function enqueueLiquidationPersist(): Promise<void> {
         await fs.promises.unlink(temp).catch(() => undefined);
       }
     })
-    .catch(() => undefined);
+    .catch((error) => {
+      noteCachePersistFailure('liquidations', error);
+      return undefined;
+    });
   return persistTail;
 }
 

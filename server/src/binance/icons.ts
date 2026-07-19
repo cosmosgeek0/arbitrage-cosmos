@@ -4,6 +4,7 @@ import {
   assertDataDirCachePathHeld,
   resolveDataDirAuthority,
 } from '../bootstrap/environment.js';
+import { noteCachePersistFailure } from './cachePersistence.js';
 import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 /**
@@ -158,8 +159,9 @@ function saveDisk(): void {
     writeFileSync(temp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
     renameSync(temp, DISK);
-  } catch {
-    // non-fatal
+  } catch (error) {
+    // Non-fatal by design; the count makes the failure class visible (Part 4 #14).
+    noteCachePersistFailure('icons', error);
   } finally {
     try { unlinkSync(temp); } catch { /* promoted or never created */ }
   }

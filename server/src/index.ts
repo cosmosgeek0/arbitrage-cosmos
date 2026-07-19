@@ -3990,3 +3990,29 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       });
   });
 }
+
+// Last-resort attribution (Part 4 #9): since Node 15 an unhandled rejection
+// terminates the process. Keep the crash — the value added here is one
+// structured line naming the origin before a deliberate non-zero exit.
+process.on('unhandledRejection', (reason) => {
+  console.error(
+    JSON.stringify({
+      event: 'PROCESS_UNHANDLED_REJECTION',
+      reason: reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason),
+      stack: reason instanceof Error ? reason.stack ?? null : null,
+    }),
+  );
+  process.exitCode = 1;
+  process.exit(1);
+});
+process.on('uncaughtException', (error) => {
+  console.error(
+    JSON.stringify({
+      event: 'PROCESS_UNCAUGHT_EXCEPTION',
+      reason: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      stack: error instanceof Error ? error.stack ?? null : null,
+    }),
+  );
+  process.exitCode = 1;
+  process.exit(1);
+});

@@ -64,6 +64,7 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
     '5f887cf27ce246d80b7fc553eed470b015976963',
     '4dbb0f11f032cd5d10058b18c193d844508dc92a',
     '90947e7e094751b4baa9a6ae4969150822ad39d6',
+    'b024ac1ac0ea952e528eaaa59b270929fa82b16c',
     '14f1b13b012164d7b89daed03f62107b33590301',
     'd850c9dea9ae526e4f328ddc024c07c896142308',
     'e14147ab5660d1643c6aa975d4014a780c93ac13',
@@ -79,6 +80,8 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
     '7f70ac731e8b8199dabe2439b0de0061753846a4',
     'ce1deea26c8fd604e3116e73febc890ed1cbe6cd',
     '155106d318e956cd4feb85a6c0f3e64eb2978207',
+    '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
+    'dbeb161a68fe19db83297111c152ac36e2d5fd07',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -345,21 +348,21 @@ export const RECEIPT_BOUND_AUTHORITY = deepFreeze({
 });
 
 export const POST_L_TOPOLOGY_AUTHORITY = deepFreeze({
-  sourceCommit: '28bcfd755816cd3047d814b4129e125b7180e956',
-  sourceTree: '7c65d795097130fb7353f1621aeaf06de692914d',
-  sourceParents: deepFreeze(['155106d318e956cd4feb85a6c0f3e64eb2978207']),
-  path: 'docs/archive/i00-phase4/REAL_GAPS_POST_L_TOPOLOGY_RECEIPT.v1.json',
-  blobSha: '674120d86bf0a7a20b9d8ed995c52d97f507ecf4',
-  sha256: '94bf03d48e400f79bdcd2c781efba0d8f46300dd85b5963be2da67e00b9b05db',
+  sourceCommit: 'ce4051fc845c6d078c288610c9e773db8b2cc665',
+  sourceTree: 'cf46186da7d3e2807401aaeb3f5cb2dcf490102b',
+  sourceParents: deepFreeze(['dbeb161a68fe19db83297111c152ac36e2d5fd07']),
+  path: 'docs/archive/i00-phase4/DIRECTOR_FINAL_LANDING_POST_L_TOPOLOGY_RECEIPT.v1.json',
+  blobSha: '023af80def70562a81733f947fa2c29b2d477f3c',
+  sha256: 'c0f6a0d02af12c7064cf71a042c90746a436092e29641ad3fb372a6dbf31022b',
   receiptSchemaVersion: 'i00.post-l-topology-receipt.v1',
   receiptStatus: 'AUTHORIZED_POST_L_TOPOLOGY',
   receiptScope: 'RECEIPT_BOUND_DONOR_EQUALITY_ONLY',
   landing: deepFreeze({
-    commit: '155106d318e956cd4feb85a6c0f3e64eb2978207',
-    tree: '994afbd8088e953486b45fa83fe0dfeb17399832',
+    commit: 'dbeb161a68fe19db83297111c152ac36e2d5fd07',
+    tree: '9fcb15d00fcde0fd54ea45e578f36bd82c62c421',
     parents: deepFreeze([
-      'ce1deea26c8fd604e3116e73febc890ed1cbe6cd',
-      '1d089ec9199c073a48619f0931cb5d7b66167a61',
+      '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
+      '875d20921f98d2bbeb4bd80aa91401feb3144094',
     ]),
   }),
   correction: deepFreeze({
@@ -660,6 +663,7 @@ function validateManifest() {
     '5f887cf27ce246d80b7fc553eed470b015976963',
     '4dbb0f11f032cd5d10058b18c193d844508dc92a',
     '90947e7e094751b4baa9a6ae4969150822ad39d6',
+    'b024ac1ac0ea952e528eaaa59b270929fa82b16c',
     '14f1b13b012164d7b89daed03f62107b33590301',
     'd850c9dea9ae526e4f328ddc024c07c896142308',
     'e14147ab5660d1643c6aa975d4014a780c93ac13',
@@ -675,6 +679,8 @@ function validateManifest() {
     '7f70ac731e8b8199dabe2439b0de0061753846a4',
     'ce1deea26c8fd604e3116e73febc890ed1cbe6cd',
     '155106d318e956cd4feb85a6c0f3e64eb2978207',
+    '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
+    'dbeb161a68fe19db83297111c152ac36e2d5fd07',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }

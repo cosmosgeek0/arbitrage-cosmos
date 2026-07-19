@@ -5,6 +5,7 @@ import { createSettledPoll } from '../lib/polling';
 import { TokenIcon } from '../components/TokenIcon';
 import { IconSearch } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { fmtBasis, fmtMoney, timeAgo } from '../format';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './Markets.css';
@@ -27,6 +28,7 @@ function decisionLabel(row: BasisRow): string {
 
 export function Loans() {
   const { openDetail, setPage } = useStore();
+  const { binding: productBinding } = useProductControlRoomContext();
   const [basis, setBasis] = useState<BasisSnapshot | null>(null);
   const [basisError, setBasisError] = useState<string | null>(null);
   const [view, setView] = useState<LoanView>('overview');
@@ -56,14 +58,24 @@ export function Loans() {
 
   const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
   const basisLive = !!basis && !basisRuntimeError;
-  const sourceTone = view === 'preflight' ? (basisLive ? 'on' : basis ? 'partial' : '') : '';
+  const borrowSurface = productBinding.snapshot?.surfaces.borrow ?? null;
+  const borrowDatum = (fieldId: string) => borrowSurface?.evidence.find((datum) => datum.fieldId === fieldId) ?? null;
+  const currentBorrowed = borrowDatum('current-borrowed');
+  const accruedInterest = borrowDatum('accrued-interest');
+  const collateralAmount = borrowDatum('collateral-amount');
+  const currentLtv = borrowDatum('current-ltv');
+  const privateState = productBinding.continuity !== 'PROVEN'
+    ? 'UNAVAILABLE'
+    : borrowSurface?.truthLabel ?? 'UNAVAILABLE';
+  const privateSource = borrowSurface?.canonicalSource ?? 'systemIntegration supervisor:borrow';
+  const sourceTone = view === 'preflight' ? (basisLive ? 'on' : basis ? 'partial' : '') : borrowSurface ? 'partial' : '';
   const sourceText = view === 'preflight'
     ? basisRuntimeError
       ? `Public Source Error · ${basis ? 'Cached' : 'No Data'}`
       : basis
         ? `Public Basis · ${timeAgo(basis.updatedAt)}`
         : 'Loading Public Basis'
-    : 'Private Truth · NOT_CONFIGURED';
+    : `${privateSource.replace(/_/g, ' ')} · ${privateState}`;
   const viewCounts: Record<LoanView, string> = {
     overview: '—',
     assets: '—',
@@ -89,10 +101,10 @@ export function Loans() {
         </header>
 
         <div className="borrowx-summary" aria-label="Borrow Summary">
-          <article><span>Total Debt</span><strong>—</strong><small>Private liability truth NOT_CONFIGURED</small></article>
-          <article><span>Posted Collateral</span><strong>—</strong><small>Private collateral truth UNKNOWN</small></article>
-          <article><span>Highest LTV</span><strong>—</strong><small>No flat or no-exposure claim</small></article>
-          <article><span>Effective State</span><strong className="bad">Not Configured</strong><small>Private loan owner gated</small></article>
+          <article><span>Current Borrowed</span><strong>{currentBorrowed?.value ?? '—'}</strong><small>{currentBorrowed?.canonicalSource ?? 'Liability source unavailable'} · {currentBorrowed?.truthLabel ?? privateState}</small></article>
+          <article><span>Accrued Interest</span><strong>{accruedInterest?.value ?? '—'}</strong><small>{accruedInterest?.canonicalSource ?? 'Liability freshness unavailable'} · {accruedInterest?.truthLabel ?? privateState}</small></article>
+          <article><span>Posted Collateral</span><strong>{collateralAmount?.value ?? '—'}</strong><small>{collateralAmount?.canonicalSource ?? 'Collateral source unavailable'} · {collateralAmount?.truthLabel ?? privateState}</small></article>
+          <article><span>Current LTV</span><strong>{currentLtv?.value ?? '—'}</strong><small>{currentLtv?.canonicalSource ?? 'Venue LTV freshness unavailable'} · {currentLtv?.truthLabel ?? privateState}</small></article>
         </div>
 
         <ProductSurfaceAdapter surfaceId="borrow" />
@@ -110,7 +122,7 @@ export function Loans() {
               </button>
             ))}
           </div>
-          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : 'No accepted private loan owner is mounted'}><i />{sourceText}</span>
+          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : productBinding.error ?? borrowSurface?.blocker ?? 'No authorized private BorrowTruth adapter is mounted'}><i />{sourceText}</span>
         </nav>
 
         <div className="borrowx-workspace">
@@ -119,7 +131,7 @@ export function Loans() {
               <section className="borrowx-section" aria-labelledby="borrow-active-title">
                 <header className="borrowx-section-head">
                   <span><strong id="borrow-active-title">Active Positions</strong><small>Flexible Loan + Cross Margin</small></span>
-                  <span>Unknown · Owner Gated</span>
+                  <span>{privateState} · Owner Gated</span>
                 </header>
                 <div className="borrowx-empty compact"><span><b>Private Borrow Positions Not Configured</b><small>Unavailable account truth is not reported as zero positions.</small></span></div>
               </section>
@@ -164,7 +176,7 @@ export function Loans() {
         </div>
 
         <footer className="borrowx-footer">
-          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : 'Flexible NOT_CONFIGURED · Margin NOT_CONFIGURED · Earn NOT_CONFIGURED'}</span>
+          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Foundation BorrowTruth: ${privateState} · Liability/Collateral Sources Unavailable`}</span>
           <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : 'Private Counts Unknown'}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
         </footer>

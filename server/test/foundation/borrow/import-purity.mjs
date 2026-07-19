@@ -20,7 +20,7 @@ const sourceFiles = (await readdir(sourceDir)).filter((name) => name.endsWith('.
 const sources = await Promise.all(sourceFiles.map(async (name) => [name, await readFile(join(sourceDir, name), 'utf8')]));
 
 section('1. static source boundary');
-check('expected pure source set exists', sourceFiles.join('|') === 'decimal.ts|derive.ts|index.ts|types.ts', sourceFiles.join('|'));
+check('expected pure source set exists', sourceFiles.join('|') === 'decimal.ts|derive.ts|index.ts|types.ts|validate.ts', sourceFiles.join('|'));
 const forbidden = [
   ['environment reads', /process\s*\.\s*env/],
   ['wall clock', /Date\s*\.\s*now\s*\(/],
@@ -36,6 +36,9 @@ const forbidden = [
   ['capital-action function', /\bfunction\s+(?:borrow|repay|transfer)\s*\(/],
   ['capital-action method', /\b(?:borrow|repay|transfer)\s*\([^)]*\)\s*\{/],
   ['capital-action endpoint', /\/sapi\/v1\/margin\/(?:borrow-repay|transfer)/],
+  ['synthetic collateral source wiring', /fixture\.margin/],
+  ['flexible-loan source or endpoint', /binance\.loan|\/sapi\/v2\/loan/],
+  ['collateral margin-level relabelling', /collateralMarginLevel/],
 ];
 for (const [name, pattern] of forbidden) {
   const hits = sources.filter(([, source]) => pattern.test(source)).map(([file]) => file);
@@ -43,7 +46,15 @@ for (const [name, pattern] of forbidden) {
 }
 for (const [file, source] of sources) {
   const imports = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((match) => match[1]);
-  check(`${file} imports only local/frozen foundation contracts`, imports.every((specifier) => specifier.startsWith('./') || specifier === '../contracts/index.js'), imports.join(','));
+  check(
+    `${file} imports only local/frozen foundation contracts or trap-free Proxy detection`,
+    imports.every(
+      (specifier) => specifier.startsWith('./')
+        || specifier === '../contracts/index.js'
+        || specifier === 'node:util/types',
+    ),
+    imports.join(','),
+  );
 }
 
 section('2. import performs no I/O, clock, environment or scheduling work');
@@ -81,6 +92,8 @@ section('3. export surface contains derivation only, never capital actions');
 const keys = module ? Object.keys(module).sort() : [];
 check('single derivation export present', keys.includes('deriveBorrowTruth'));
 check('bounded batch derivation export present', keys.includes('deriveBorrowTruthBatch'));
+check('exact consumer validation export present', keys.includes('validateBorrowTruthForConsumption'));
+check('no public digest or truth-minting helper exists', !keys.some((key) => /(?:digest|mint)/i.test(key)), keys.join(','));
 for (const forbiddenName of ['borrow', 'repay', 'transfer', 'createOrder', 'placeOrder', 'cancelOrder', 'execute']) {
   check(`no ${forbiddenName} export`, !keys.includes(forbiddenName));
 }

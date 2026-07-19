@@ -2081,7 +2081,33 @@ app.get('/api/market/detail', (req, res) => {
 });
 
 app.get('/api/loans', (_req, res) => {
-  sendNotConfigured(res, 'PRIVATE_LOAN_STATE');
+  // Foundation BorrowTruth is the canonical owner. This compatibility route
+  // publishes an explicit unavailable read contract until a separately
+  // authorized private adapter is mounted; it never invokes the legacy signed
+  // LoanService or turns missing private facts into zero exposure.
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'NOT_CONFIGURED',
+    state: 'NOT_CONFIGURED',
+    truthState: 'UNAVAILABLE',
+    owner: 'FOUNDATION_BORROW_TRUTH',
+    scope: null,
+    currentBorrowedAsset: null,
+    accruedInterestAsset: null,
+    collateralAmount: null,
+    collateralAsset: null,
+    currentLtv: null,
+    liabilitySource: null,
+    collateralSource: null,
+    liabilityFreshness: null,
+    collateralFreshness: null,
+    evaluatedAtMs: null,
+    expiresAtMs: null,
+    value: null,
+    error: 'Private exchange access is not configured in this runtime.',
+    capability: 'PRIVATE_LOAN_STATE',
+  });
 });
 
 app.post('/api/loans/refresh', (_req, res) => {

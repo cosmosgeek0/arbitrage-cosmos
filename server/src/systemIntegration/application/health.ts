@@ -34,8 +34,8 @@ export interface I00HealthProjection {
   // LIVE only: `ok` here is pure process-liveness truth and disagrees with
   // overallPosture by design. The label prevents the first field a consumer
   // reaches for from being read as product health, mirroring the existing
-  // okSemantics: 'TRANSPORT_ONLY' (/api/system) and readinessSemantics
-  // (/api/health) conventions.
+  // TRANSPORT_ONLY okSemantics convention on the legacy system surface and
+  // the readinessSemantics convention on the legacy health surface.
   readonly okSemantics?: 'PROCESS_LIVENESS_ONLY';
 }
 

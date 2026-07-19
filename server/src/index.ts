@@ -779,6 +779,31 @@ app.use((req, res, next) => {
   });
 });
 
+// The single swallowed error that hid the burst's headline defect: the health
+// handlers' catch discarded the supervisor's precise contract-violation
+// message on every poll, so a dead control plane produced zero log evidence.
+// Record the cause, rate-bounded so a permanent failure writes one ledger row
+// a minute rather than one per health poll. The cause string is a contract
+// message, never a token, header, or URL.
+const SUPERVISOR_READ_FAILURE_REPEAT_MS = 60_000;
+let lastSupervisorReadFailure: { message: string; loggedAtMs: number } | null = null;
+
+function recordSupervisorReadFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const nowMs = Date.now();
+  if (lastSupervisorReadFailure !== null
+      && lastSupervisorReadFailure.message === message
+      && nowMs - lastSupervisorReadFailure.loggedAtMs < SUPERVISOR_READ_FAILURE_REPEAT_MS) {
+    return;
+  }
+  lastSupervisorReadFailure = { message, loggedAtMs: nowMs };
+  safeLogEvent('error_event', null, {
+    source: 'server.i00_health',
+    message: 'Canonical supervisor read failed.',
+    cause: message,
+  });
+}
+
 function sendI00Health(
   res: express.Response,
   kind: 'LIVE' | 'READY' | 'TRADE_READY',
@@ -794,7 +819,8 @@ function sendI00Health(
       canonicalApplicationStartFailureCodes,
     );
     res.status(projection.ok ? 200 : 503).json(projection);
-  } catch {
+  } catch (error) {
+    recordSupervisorReadFailure(error);
     const processResponsive = kind === 'LIVE';
     res.status(processResponsive ? 200 : 503).json({
       schemaVersion: 'i00.health.v1',

@@ -249,6 +249,11 @@ check(
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
 );
 check(
+  'a failed canonical supervisor health read records its cause instead of a bare catch',
+  /function\s+sendI00Health\([\s\S]*?\}\s*catch\s*\(error\)\s*\{\s*recordSupervisorReadFailure\(error\);/.test(serverIndex) &&
+    /function\s+recordSupervisorReadFailure\([\s\S]*?safeLogEvent\('error_event',\s*null,\s*\{\s*source:\s*'server\.i00_health',[\s\S]*?cause:\s*message,/.test(serverIndex)
+);
+check(
   'production route composition invokes no signed or money mutation method',
   !/\b(?:orders|loans)\.(?:send|testOrder|cancel|cancelAll|borrow|repay|adjustLtv|resolveOrderRecovery)\s*\(/.test(serverIndex) &&
     !/\baccount\.sync\s*\(/.test(serverIndex) &&

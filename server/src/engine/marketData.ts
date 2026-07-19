@@ -140,11 +140,34 @@ export interface MarketEngineClock {
 
 export type MarketOpenInterestFetcher = (symbol: string) => Promise<OpenInterest>;
 
+// Minimal transport handle the engine owns. BinanceStream satisfies it; the
+// factory seam mirrors BookStreamHub's established streamFactory pattern so
+// lifecycle tests can drive statuses without sockets. The factory is a
+// code-level composition option — no env var can reach it.
+export interface MarketStreamHandle {
+  readonly name: string;
+  start(): void;
+  stop(): void;
+}
+
+export type MarketStreamFactory = (
+  name: string,
+  url: string,
+  onMessage: (data: unknown) => void,
+  onStatus: (name: string, status: FeedStatus) => void,
+) => MarketStreamHandle;
+
 export interface MarketEngineOptions {
   readonly publicSourceStartupEgressAdmitted: boolean;
   readonly clock?: MarketEngineClock;
   readonly fetchOpenInterest?: MarketOpenInterestFetcher;
   readonly openInterestTtlMs?: number;
+  readonly streamFactory?: MarketStreamFactory;
+  // Test-time compression of the supervisory recovery schedule, mirroring
+  // BinanceStream's injectable retryBaseMs. Bounded; production uses the
+  // default.
+  readonly sourceRecoveryBaseMs?: number;
+  readonly random?: () => number;
 }
 
 const SPARK_CAP = 150; // sampled every 20s ≈ last 50 minutes
@@ -157,6 +180,18 @@ const MAX_OI_TTL_MS = 5 * 60_000;
 const LIQUIDATION_WINDOW_MS = 15 * 60_000;
 const MAX_MARKET_SYMBOLS = 4_096;
 const MARKET_EVENT_MAX_AGE_MS = 30_000;
+// Supervisory source recovery: BinanceStream deliberately latches exhaustion
+// after its bounded ~30s campaign and never self-rearms (pinned by
+// stream-lifecycle tests) — so any outage longer than the deadline was silent
+// permanent degradation needing a process restart. The engine, which owns the
+// stream lifecycle (stop() then start(); start() alone is a no-op while a
+// stream is not stopped), re-arms exhausted feeds on an exponential schedule:
+// first at 2x the stream deadline, escalating to a 15-minute ceiling, so a
+// genuinely dead upstream costs four connection attempts an hour, not a hot
+// loop. Jitter de-synchronises the feeds.
+const SOURCE_RECOVERY_BASE_MS = 60_000;
+const SOURCE_RECOVERY_MAX_MS = 15 * 60_000;
+const SOURCE_RECOVERY_JITTER_RATIO = 0.2;
 const MAX_FUTURE_SKEW_MS = 5_000;
 const SYMBOL_PATTERN = /^[A-Z0-9]{1,32}$/;
 const SYSTEM_MARKET_CLOCK: MarketEngineClock = Object.freeze({ nowMs: () => Date.now() });
@@ -207,7 +242,9 @@ export class MarketEngine {
   private liquidationEvidenceGeneration = 0;
   private liquidationEvidenceRevision = 0;
   private liquidationEvidenceOpen = false;
-  private streams = new Map<string, BinanceStream>();
+  private streams = new Map<string, MarketStreamHandle>();
+  private readonly recoveryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly recoveryAttempts = new Map<string, number>();
   private isolatedSources = new Set<MarketPublicSourceId>();
   private sourceControlGenerations: Record<MarketPublicSourceId, number> = {
     'public-spot-source': 0,
@@ -229,6 +266,9 @@ export class MarketEngine {
   private readonly clock: MarketEngineClock;
   private readonly openInterestFetcher: MarketOpenInterestFetcher;
   private readonly openInterestTtlMs: number;
+  private readonly streamFactory: MarketStreamFactory;
+  private readonly sourceRecoveryBaseMs: number;
+  private readonly random: () => number;
 
   constructor(
     private readonly ledger: Ledger,
@@ -243,6 +283,14 @@ export class MarketEngine {
     this.clock = startupOptions.clock ?? SYSTEM_MARKET_CLOCK;
     this.openInterestFetcher = startupOptions.fetchOpenInterest ?? fetchBinanceOpenInterest;
     this.openInterestTtlMs = ttlMs;
+    this.streamFactory = startupOptions.streamFactory
+      ?? ((name, url, onMessage, onStatus) => new BinanceStream(name, url, onMessage, onStatus));
+    const recoveryBaseMs = startupOptions.sourceRecoveryBaseMs ?? SOURCE_RECOVERY_BASE_MS;
+    if (!Number.isSafeInteger(recoveryBaseMs) || recoveryBaseMs < 1 || recoveryBaseMs > SOURCE_RECOVERY_MAX_MS) {
+      throw new RangeError(`SOURCE_RECOVERY_BASE_OUT_OF_BOUNDS:${String(recoveryBaseMs)}`);
+    }
+    this.sourceRecoveryBaseMs = recoveryBaseMs;
+    this.random = startupOptions.random ?? Math.random;
   }
 
   get pairCount(): number {
@@ -319,7 +367,7 @@ export class MarketEngine {
       this.observeFeedStatus(name, status, generation);
     };
 
-    const spotStream = new BinanceStream(
+    const spotStream = this.streamFactory(
       'spot-miniticker',
       'wss://stream.binance.com:9443/ws/!miniTicker@arr',
       (data) => this.onSpotMiniTickers(data, generation),
@@ -327,13 +375,13 @@ export class MarketEngine {
     );
     // NOTE: futures WS moved to tiered hosts in 2026 (/public, /market, /private).
     // Legacy wss://fstream.binance.com/ws/... opens but sends NO data since 2026-04-23.
-    const markStream = new BinanceStream(
+    const markStream = this.streamFactory(
       'futures-markprice',
       'wss://fstream.binance.com/market/ws/!markPrice@arr@1s',
       (data) => this.onMarkPrices(data, generation),
       onStatus
     );
-    const liquidationStream = new BinanceStream(
+    const liquidationStream = this.streamFactory(
       'futures-liquidations',
       'wss://fstream.binance.com/market/ws/!forceOrder@arr',
       (data) => this.onLiquidationFrame(data, generation),
@@ -410,6 +458,9 @@ export class MarketEngine {
     if (this.oiTimer) clearInterval(this.oiTimer);
     this.sampler = null;
     this.oiTimer = null;
+    for (const timer of this.recoveryTimers.values()) clearTimeout(timer);
+    this.recoveryTimers.clear();
+    this.recoveryAttempts.clear();
     this.clearAllOpenInterest();
   }
 
@@ -448,6 +499,47 @@ export class MarketEngine {
             : 'ws.closed';
       this.safeLog(event, null, { feed: name, status });
     }
+    if (status === 'exhausted') this.scheduleSourceRecovery(name, generation);
+    if (status === 'open') this.clearSourceRecovery(name); // a healthy feed resets the escalation
+  }
+
+  private streamSourceId(name: string): MarketPublicSourceId {
+    return name === 'spot-miniticker' ? 'public-spot-source' : 'public-usdm-source';
+  }
+
+  // One bounded supervisory campaign per exhausted feed. Safety properties:
+  // never resurrects a stopped engine (isActive + running), never fights the
+  // operator (isolated sources are skipped, preserving the
+  // restartPublicSource contract), never stacks campaigns (one timer per
+  // feed), and self-limits (exponential to the 15-minute ceiling). Every
+  // rearm is ledgered as ws.rearm so recovery attempts stay attributable.
+  private scheduleSourceRecovery(name: string, generation: number): void {
+    if (this.recoveryTimers.has(name)) return;
+    const attempt = (this.recoveryAttempts.get(name) ?? 0) + 1;
+    this.recoveryAttempts.set(name, attempt);
+    const base = Math.min(this.sourceRecoveryBaseMs * 2 ** (attempt - 1), SOURCE_RECOVERY_MAX_MS);
+    const delay = Math.max(1, Math.round(base * (1 + ((this.random() * 2) - 1) * SOURCE_RECOVERY_JITTER_RATIO)));
+    const timer = setTimeout(() => {
+      this.recoveryTimers.delete(name);
+      if (!this.isActive(generation) || !this.running) return;
+      if (this.isolatedSources.has(this.streamSourceId(name))) return;
+      if (this.feeds[name] !== 'exhausted') return;
+      const stream = this.streams.get(name);
+      if (!stream) return;
+      this.safeLog('ws.rearm', null, { feed: name, attempt, delayMs: delay });
+      stream.stop();  // required: BinanceStream.start() no-ops while not stopped
+      stream.start(); // one fresh bounded campaign
+      this.scheduleSourceRecovery(name, generation); // keep escalating until 'open' clears it
+    }, delay);
+    timer.unref?.();
+    this.recoveryTimers.set(name, timer);
+  }
+
+  private clearSourceRecovery(name: string): void {
+    const timer = this.recoveryTimers.get(name);
+    if (timer !== undefined) clearTimeout(timer);
+    this.recoveryTimers.delete(name);
+    this.recoveryAttempts.delete(name);
   }
 
   readPublicSourceControl(sourceId: MarketPublicSourceId): Readonly<{

@@ -1445,10 +1445,12 @@ export function TokenDetail({ symbol }: { symbol: string }) {
 
   const points = useMemo(() => {
     if (candles.length) return candles.map((c) => ({ t: c.t, v: c.c }));
-    const spark = live?.spark ?? [];
-    const now = Date.now();
-    return spark.map((v, index) => ({ t: now - (spark.length - 1 - index) * 5 * 60_000, v }));
-  }, [candles, live?.spark]);
+    // F-068: never synthesise a time axis. The spark array carries no
+    // timestamps; fabricating a 5-minute grid anchored at Date.now() rendered
+    // invented times on a real chart. With no candles the chart stays empty
+    // and the candle error at the chart footer tells the truth.
+    return [] as { t: number; v: number }[];
+  }, [candles]);
   const price = live?.spot ?? lastOf(points)?.v ?? null;
   const first = points[0]?.v ?? null;
   const rangeAbs = price !== null && first !== null ? price - first : null;

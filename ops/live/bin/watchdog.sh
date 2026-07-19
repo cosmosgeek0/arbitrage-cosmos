@@ -80,8 +80,22 @@ write_status() { # live ready tunnel skipped frozen backupFresh streak lockState
 }
 
 # --- deploy ownership: skip only a proven owner or bounded publication race -------
-LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo 0)"
-case "$LOCK_STREAK" in (*[!0-9]*|"") LOCK_STREAK=0 ;; esac
+# Part 4 #7: an ABSENT streak file is a legitimate first run (0). A PRESENT
+# but unreadable/malformed one previously also became 0, silently disarming
+# the restart threshold forever. Fail toward acting instead: assume the
+# threshold is reached and say so.
+if [ ! -e "$STREAK_FILE" ]; then
+  LOCK_STREAK=0
+else
+  LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo UNREADABLE)"
+  case "$LOCK_STREAK" in
+    (*[!0-9]*|"")
+      wd_alert critical WATCHDOG_STATE_UNREADABLE \
+        "streak file $STREAK_FILE is present but unreadable or malformed; assuming the live-fail threshold is reached"
+      LOCK_STREAK="$LIVE_FAIL_THRESHOLD"
+      ;;
+  esac
+fi
 classify_lock_family "$DEPLOY_LOCK"
 DEPLOY_LOCK_STATE="$LOCK_STATE"
 DEPLOY_LOCK_REASON="$LOCK_REASON"

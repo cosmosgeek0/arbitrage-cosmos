@@ -740,12 +740,12 @@
       },
       {
         "file": "server/src/binance/userStream.ts",
-        "line": 39,
+        "line": 41,
         "classification": "PRIVATE_TRUTH_LEGACY_REVIEW"
       },
       {
         "file": "server/src/binance/userStream.ts",
-        "line": 203,
+        "line": 208,
         "classification": "PRIVATE_TRUTH_LEGACY_REVIEW"
       },
       {
@@ -1170,7 +1170,7 @@
       },
       {
         "file": "server/src/services/bookStream.ts",
-        "line": 240,
+        "line": 246,
         "classification": "UI_LOCAL_EXCEPTION_REVIEW"
       },
       {
@@ -1180,7 +1180,7 @@
       },
       {
         "file": "web/src/store.tsx",
-        "line": 371,
+        "line": 751,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -1352,7 +1352,7 @@
         "concept": "semantic-source",
         "declaration": "class UserStream",
         "file": "server/src/binance/userStream.ts",
-        "line": 171
+        "line": 174
       },
       {
         "concept": "semantic-source",
@@ -6494,13 +6494,13 @@
         "concept": "semantic-source",
         "declaration": "interface BookStreamHubOptions",
         "file": "server/src/services/bookStream.ts",
-        "line": 48
+        "line": 51
       },
       {
         "concept": "semantic-source",
         "declaration": "class BookStreamHub",
         "file": "server/src/services/bookStream.ts",
-        "line": 104
+        "line": 107
       },
       {
         "concept": "risk-authority",
@@ -15122,5 +15122,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "88e9e4510fd5a1417769ce70d93452eda199a7a74532393cd7f36e4aa0d79c84"
+  "evidenceSha256": "90531cf95feedff893791801e34fefb520ba7f1755d9a9339d232060ce3f1311"
 }

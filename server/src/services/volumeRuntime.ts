@@ -71,6 +71,9 @@ export interface VolumeStrategyDecayCadencePort {
 const STREAM_CHUNK = 140;
 const UNIVERSE_REFRESH_MS = 15 * 60_000;
 const BOOK_REFRESH_MS = 2_750;
+// Bounded per-stream recycle budget for exhausted retry campaigns; reset when
+// a stream proves recovery by reaching 'open'.
+const MAX_EXHAUSTED_STREAM_RECYCLES = 5;
 
 function chunks<T>(rows: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -83,6 +86,7 @@ export class VolumeRuntime {
   private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
   private streams: BinanceStream[] = [];
   private streamStatus = new Map<string, FeedStatus>();
+  private readonly streamRecycleBudget = new Map<string, number>();
   private eligibleSymbols: string[] = [];
   private eligibleSymbolSet = new Set<string>();
   private eligibleBaseBySymbol = new Map<string, string>();
@@ -506,6 +510,7 @@ export class VolumeRuntime {
     for (const stream of this.streams) stream.stop();
     this.streams = [];
     this.streamStatus.clear();
+    this.streamRecycleBudget.clear();
     const nextStreams: BinanceStream[] = [];
     for (const [index, group] of chunks(symbols, STREAM_CHUNK).entries()) {
       if (!group.length) continue;
@@ -636,6 +641,22 @@ export class VolumeRuntime {
       source: 'volume-runtime',
       status,
     });
+    if (status === 'open') this.streamRecycleBudget.delete(name);
+    if (status === 'exhausted') {
+      const recycles = this.streamRecycleBudget.get(name) ?? 0;
+      if (recycles < MAX_EXHAUSTED_STREAM_RECYCLES) {
+        // A retry campaign that ends does not end the stream's obligation.
+        // Recycle it so a later network recovery is observed; the bounded
+        // budget (reset on 'open') keeps a genuinely dead endpoint from
+        // spinning, and the epoch guard above fences late callbacks.
+        this.streamRecycleBudget.set(name, recycles + 1);
+        const stream = this.streams.find((candidate) => candidate.name === name);
+        if (stream) {
+          stream.stop();
+          stream.start();
+        }
+      }
+    }
   }
 
   private async refreshBooks(generation: number): Promise<void> {

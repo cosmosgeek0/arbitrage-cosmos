@@ -149,7 +149,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8"
             ),
             "currentSourceSha256": (
-                "6eee726b5cd40f20d83b1c7ef164f75a9f0bd2183fb8621ce140f9d4688adcf9"
+                "7182fa0098e8c96ac6e03de47e01d89d3932fcd3479f1e2b1d596e08252c4c03"
             ),
             "fixCommits": [
                 "19f674a35944f1f3fdd4fdafd396fba9df6fd255",

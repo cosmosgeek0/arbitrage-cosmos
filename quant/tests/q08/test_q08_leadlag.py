@@ -249,14 +249,17 @@ class TestCrossMarketResearch:
         assert original.transfers == revised.transfers == redigested.transfers
         assert original.granger == revised.granger == redigested.granger
         assert original.transfer_entropy == revised.transfer_entropy == redigested.transfer_entropy
-        assert len(
-            {
-                original.report_revision,
-                revised.report_revision,
-                redigested.report_revision,
-                changed_content.report_revision,
-            }
-        ) == 4
+        assert (
+            len(
+                {
+                    original.report_revision,
+                    revised.report_revision,
+                    redigested.report_revision,
+                    changed_content.report_revision,
+                }
+            )
+            == 4
+        )
         assert revised.provenance.series_a.source_revision == "revision-v2"
         assert redigested.provenance.series_a.source_sha256 == DigestV1("c" * 64)
         assert (
@@ -304,14 +307,17 @@ class TestCrossMarketResearch:
         assert original.transfers == shifted_window.transfers
         assert original.granger == shifted_window.granger
         assert original.transfer_entropy == shifted_window.transfer_entropy
-        assert len(
-            {
-                original.report_revision,
-                shifted_window.report_revision,
-                repartitioned.report_revision,
-                respecified.report_revision,
-            }
-        ) == 4
+        assert (
+            len(
+                {
+                    original.report_revision,
+                    shifted_window.report_revision,
+                    repartitioned.report_revision,
+                    respecified.report_revision,
+                }
+            )
+            == 4
+        )
         assert shifted_window.provenance.series_a.window_start_ns == BASE_NS + shift_ns
         assert repartitioned.provenance.partition.selection_start == 105
         assert respecified.provenance.spec.familywise_alpha_per_myriad == 501

@@ -611,9 +611,7 @@ class CrossMarketProvenanceV1:
             raise ContractValueError("report provenance requires CrossMarketSpecV1")
         if not isinstance(self.input_sha256, DigestV1):
             raise ContractValueError("input_sha256 must be DigestV1")
-        expected = DigestV1(
-            hashlib.sha256(canonical_json_bytes(self.core_mapping())).hexdigest()
-        )
+        expected = DigestV1(hashlib.sha256(canonical_json_bytes(self.core_mapping())).hexdigest())
         if self.input_sha256 != expected:
             raise ContractValueError("input_sha256 must bind both series, partition, and spec")
 
@@ -1216,9 +1214,7 @@ def evaluate_cross_market_research(
         source, target = _direction_series(direction, series_a, series_b)
         for lag in range(1, spec.max_lag + 1):
             if pair_reason is None:
-                transfers.append(
-                    _lagged_ofi_report(direction, lag, source, target, partition)
-                )
+                transfers.append(_lagged_ofi_report(direction, lag, source, target, partition))
                 granger.append(_granger(direction, lag, source, target, partition))
                 entropy.append(_transfer_entropy(direction, lag, source, target, partition))
                 continue
@@ -1328,9 +1324,7 @@ def evaluate_cross_market_research(
     )
     return CrossMarketResearchReportV1(
         provenance=provenance,
-        report_revision=(
-            f"{CROSS_MARKET_ALGORITHM_REVISION}:{provenance.input_sha256.hexdigest}"
-        ),
+        report_revision=(f"{CROSS_MARKET_ALGORITHM_REVISION}:{provenance.input_sha256.hexdigest}"),
         status=(ResearchStatus.AVAILABLE_RESEARCH_ONLY if available else ResearchStatus.UNKNOWN),
         reason=None if available else pair_reason or "DATA_INSUFFICIENT",
         posture=_combined_posture(series_a, series_b),

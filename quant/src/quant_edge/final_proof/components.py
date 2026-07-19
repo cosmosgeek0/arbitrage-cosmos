@@ -458,7 +458,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "quant/src/quant_edge/derivatives",
             "src/quant_edge/derivatives",
             16,
-            "6eee726b5cd40f20d83b1c7ef164f75a9f0bd2183fb8621ce140f9d4688adcf9",
+            "7182fa0098e8c96ac6e03de47e01d89d3932fcd3479f1e2b1d596e08252c4c03",
         ),
         _ArtifactSpec(
             "q08.money-truth-derivatives-campaign.v1",

@@ -60,6 +60,7 @@ cat > "$TEST_TMP/runtime.env" <<'ENV'
 HOST=127.0.0.1
 PORT=8080
 DATA_DIR=/var/lib/cosmos/data
+DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases
 EVIDENCE_DIR=/var/lib/cosmos/evidence
 MODEL_DIR=/var/lib/cosmos/models
 BACKUP_DIR=/var/backups/cosmos
@@ -77,6 +78,10 @@ assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/public.
 cp "$TEST_TMP/runtime.env" "$TEST_TMP/secret.env"
 printf 'BINANCE_API_SECRET=FAKE_BUT_FORBIDDEN_HERE\n' >> "$TEST_TMP/secret.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/secret.env"
+grep -v '^DATA_DIR_LOGICAL_LEASE_ROOT=' "$TEST_TMP/runtime.env" > "$TEST_TMP/no-lease-root.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/no-lease-root.env"
+sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=/var/lib/cosmos/data/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/nested-lease-root.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/nested-lease-root.env"
 
 note "receipt validators require hashed external evidence and reject forged proof states"
 EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'

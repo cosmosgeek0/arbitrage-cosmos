@@ -24,6 +24,11 @@ const required = [
   'CONTROL_ROOM_OPERATOR_EMAIL', 'CF_ACCESS_TEAM_DOMAIN', 'CF_ACCESS_AUD',
   'I00_TESTED_SHA', 'I00_CONFIG_REVISION', 'I00_MODEL_REVISION',
   'I00_PUBLIC_SOURCE_STARTUP_EGRESS',
+  // F-033: a hard boot requirement (environment.ts throws
+  // DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED in production) that the validator
+  // previously did not know about, so CONFIG_VALID_NO_SECRETS could be
+  // returned for a config that cannot boot.
+  'DATA_DIR_LOGICAL_LEASE_ROOT',
 ];
 for (const key of required) {
   if (!values[key] || hasPlaceholder(values[key])) fail(`required config ${key} is missing or unresolved`);
@@ -33,6 +38,18 @@ if (!/^\d+$/.test(values.PORT) || Number(values.PORT) < 1024 || Number(values.PO
 const paths = ['DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR'].map((key) => values[key]);
 if (paths.some((path) => !isAbsolute(path)) || new Set(paths).size !== paths.length) {
   fail('durable data/evidence/model/backup paths must be distinct absolute paths');
+}
+// F-033: mirror the runtime's shape rules (absolute; never nested with
+// DATA_DIR in either direction - environment.ts rejects nesting with
+// DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID) so the validator catches at
+// configuration time what the app would refuse at boot.
+if (!isAbsolute(values.DATA_DIR_LOGICAL_LEASE_ROOT)) {
+  fail('DATA_DIR_LOGICAL_LEASE_ROOT must be an absolute path');
+}
+if (values.DATA_DIR_LOGICAL_LEASE_ROOT === values.DATA_DIR
+    || values.DATA_DIR_LOGICAL_LEASE_ROOT.startsWith(`${values.DATA_DIR}/`)
+    || values.DATA_DIR.startsWith(`${values.DATA_DIR_LOGICAL_LEASE_ROOT}/`)) {
+  fail('DATA_DIR_LOGICAL_LEASE_ROOT and DATA_DIR must not nest');
 }
 if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.CONTROL_ROOM_OPERATOR_EMAIL)) fail('operator email is invalid');
 if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(values.CF_ACCESS_TEAM_DOMAIN)) fail('Cloudflare Access team domain is invalid');

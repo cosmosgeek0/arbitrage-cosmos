@@ -21,6 +21,7 @@ cat > "$SANDBOX/runtime.env" <<'ENV'
 HOST=127.0.0.1
 PORT=8080
 DATA_DIR=/var/lib/cosmos/data
+DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases
 EVIDENCE_DIR=/var/lib/cosmos/evidence
 MODEL_DIR=/var/lib/cosmos/models
 BACKUP_DIR=/var/backups/cosmos

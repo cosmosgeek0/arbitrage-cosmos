@@ -296,7 +296,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
 
           {view === 'fills' && (
             <section className="accountx-table-view" aria-label="Recent Fills">
-              <header className="accountx-data-view-head"><span><b>Recent Fills</b><small>Ledgered Binance executions with price, size, value, and fee evidence</small></span><em>{visibleFills.length} Fills</em></header>
+              <header className="accountx-data-view-head"><span><b>Recent Fills</b><small>Ledgered Binance executions with price, size, value, and fee evidence</small></span><em>{fillsError ? 'UNKNOWN' : `${visibleFills.length} Fills`}</em></header>
               <div className="accountx-table-scroll"><table className="accountx-table fills">
                 <thead><tr><th className="l">Fill</th><th>Price</th><th>Quantity</th><th>Value</th><th>Fee</th><th>Time</th></tr></thead>
                 <tbody>{visibleFills.map((fill) => (
@@ -310,7 +310,11 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
                   </tr>
                 ))}</tbody>
               </table>
-              {visibleFills.length === 0 && <div className="accountx-empty"><b>No Ledgered Fill Evidence</b><span>The local ledger currently contains no fill evidence; private streams are not consulted.</span></div>}
+              {/* F-063: a failed /api/fills request must not render the positive
+                  claim that the ledger contains no fills (same gate pattern as
+                  LedgerPage's empty state). */}
+              {fillsError && visibleFills.length === 0 && <div className="accountx-empty"><b>Fill Evidence Unavailable</b><span>{fillsError}</span></div>}
+              {!fillsError && visibleFills.length === 0 && <div className="accountx-empty"><b>No Ledgered Fill Evidence</b><span>The local ledger currently contains no fill evidence; private streams are not consulted.</span></div>}
               </div>
             </section>
           )}

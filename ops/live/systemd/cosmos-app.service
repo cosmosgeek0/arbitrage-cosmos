@@ -41,6 +41,10 @@ TimeoutStopSec=75
 KillSignal=SIGTERM
 
 # --- filesystem/privilege hardening ---
+# Do NOT add PrivatePIDs= here (F-111): the DATA_DIR lease classifies owners
+# via kill(pid,0) and /proc/<pid>/stat and requires a shared PID namespace
+# (see ops/live/bin/common.sh lock-owner classifier). Its absence is enforced
+# by ops/tests/test-systemd-units.sh and test/opsShadow/contract.mjs.
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

@@ -9,6 +9,24 @@ import { createProductIncidentOwner } from '../../../dist/productIntegration/inc
 
 const T0 = 1_800_000_000_000;
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the read-time
+// validation these fixtures prove must hold even without them. Drop, mutate,
+// restore — the canonical schema stays intact for the rest of the test.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function tempDataDir() {
   return mkdtempSync(path.join(tmpdir(), 'cosmos-product-incident-owner-'));
 }
@@ -283,13 +301,17 @@ test('I00-044A rejects invalid durable incident vocabulary, lifecycle, capital, 
 
     const auditId = acknowledgement.incident.ledgerEventId;
     const auditBytes = ledger.db.prepare('SELECT data FROM events WHERE id = ?').get(auditId).data;
-    ledger.db.prepare(`
-      UPDATE events
-      SET data = json_set(data, '$.after.rootComponentId', 'volume-engine')
-      WHERE id = ?
-    `).run(auditId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare(`
+        UPDATE events
+        SET data = json_set(data, '$.after.rootComponentId', 'volume-engine')
+        WHERE id = ?
+      `).run(auditId);
+    });
     assert.throws(() => ledger.readProductIncident(incidentId), /audit relationship is invalid/);
-    ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(auditBytes, auditId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare('UPDATE events SET data = ? WHERE id = ?').run(auditBytes, auditId);
+    });
 
     const repaired = ledger.readProductIncident(incidentId);
     assert.equal(repaired.rootComponentId, 'basis-engine');

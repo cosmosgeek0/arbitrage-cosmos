@@ -26,6 +26,25 @@ const EVENT_COLUMNS = Object.freeze([
   'created_at',
 ]);
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the layer
+// each fixture below actually proves (read-time validation, the checkpoint
+// trigger chain) must hold even without them. Drop, mutate, restore — the
+// canonical schema stays intact for any subsequent reopen.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 function tempDataDir(label) {
   return mkdtempSync(path.join(tmpdir(), `cosmos-ledger-v3-${label}-`));
 }
@@ -329,13 +348,24 @@ test('rank42 incident event indexes and immutable triggers survive the exact v2-
         ORDER BY name
       `).all().map((row) => row.name),
       [
+        'events_no_delete_durable',
+        'events_no_update',
         'product_incident_checkpoint_events_no_delete',
         'product_incident_checkpoint_events_no_update',
       ],
     );
+    // Prove the checkpoint trigger chain independently of the general
+    // append-only layer: even with the unconditional triggers removed, the
+    // Rank-42 checkpoint trigger must still refuse.
+    withoutAppendOnlyTriggers(migrated.db, () => {
+      assert.throws(
+        () => migrated.db.prepare("UPDATE events SET message = 'mutated' WHERE id = 1").run(),
+        /product incident checkpoint evidence is immutable/,
+      );
+    });
     assert.throws(
       () => migrated.db.prepare("UPDATE events SET message = 'mutated' WHERE id = 1").run(),
-      /product incident checkpoint evidence is immutable/,
+      /ledger events are append-only/,
     );
   } finally {
     migrated.close();
@@ -632,8 +662,10 @@ test('completed v3 storage reapplies every event-metadata write bound on read an
       const ledger = new Ledger(dataDir);
       try {
         ledger.logEvent(kind, null, null, fullMetadata(corruption.field));
-        ledger.db.prepare(`UPDATE events SET ${corruption.field} = ? WHERE kind = ?`)
-          .run(corruption.value, kind);
+        withoutAppendOnlyTriggers(ledger.db, () => {
+          ledger.db.prepare(`UPDATE events SET ${corruption.field} = ? WHERE kind = ?`)
+            .run(corruption.value, kind);
+        });
         assert.throws(
           () => ledger.recentEvents(1, kind),
           (error) => error instanceof Error && error.message === corruption.code,
@@ -666,7 +698,9 @@ test('count queries validate every matching metadata row instead of hiding corru
   const ledger = new Ledger(dataDir);
   try {
     ledger.logEvent('v3.count-needle', null, null, fullMetadata('count'));
-    ledger.db.prepare("UPDATE events SET severity = '' WHERE kind = 'v3.count-needle'").run();
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare("UPDATE events SET severity = '' WHERE kind = 'v3.count-needle'").run();
+    });
     for (const query of [
       () => ledger.countEvents(),
       () => ledger.countEvents(undefined, undefined, 'needle'),
@@ -1042,6 +1076,51 @@ test('log, atomic batch, config audit and CAS preserve the full v3 envelope thro
     assertMetadata(reopened.lastEvent('v3.cas.audit'), fullMetadata('cas', RECEIPT_TS - 400));
   } finally {
     reopened.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('events are append-only at the storage layer for every durable kind', () => {
+  const dataDir = tempDataDir('append-only-durable');
+  const ledger = new Ledger(dataDir);
+  try {
+    const ins = ledger.db.prepare('INSERT INTO events (ts, kind, data, created_at) VALUES (?, ?, ?, ?)');
+    ins.run(RECEIPT_TS, 'order_response', '{}', RECEIPT_TS);
+
+    // (a) durable events cannot be rewritten — before the fix this ran with
+    // exit 0 and the mutation stuck (V2-T1), because the only UPDATE trigger
+    // was conditional on a checkpoint row and `checkpoints` never converges.
+    assert.throws(
+      () => ledger.db.prepare("UPDATE events SET message = 'mutated' WHERE kind = 'order_response'").run(),
+      /ledger events are append-only/,
+    );
+
+    // (b) durable events cannot be destroyed — before the fix this ran with
+    // exit 0 and the row disappeared (V2-T2).
+    assert.throws(
+      () => ledger.db.prepare("DELETE FROM events WHERE kind = 'order_response'").run(),
+      /ledger events are append-only/,
+    );
+
+    // full-table destruction is blocked too: before the fix `DELETE FROM events;`
+    // emptied all rows with integrity_check still ok.
+    assert.throws(
+      () => ledger.db.prepare('DELETE FROM events').run(),
+      /ledger events are append-only/,
+    );
+    assert.equal(
+      ledger.db.prepare("SELECT COUNT(*) AS count FROM events WHERE kind = 'order_response'").get().count,
+      1,
+    );
+
+    // (c) retention must still work — this is the assertion that distinguishes
+    // the correct fix from a naive unconditional BEFORE DELETE trigger, which
+    // would silently break pruneEphemeralEvents (its failure is swallowed
+    // into a log line by the caller).
+    ins.run(RECEIPT_TS - (25 * 60 * 60 * 1_000), 'heartbeat', '{}', RECEIPT_TS - (25 * 60 * 60 * 1_000));
+    assert.equal(ledger.pruneEphemeralEvents(RECEIPT_TS, 10), 1);
+  } finally {
+    ledger.close();
     rmSync(dataDir, { recursive: true, force: true });
   }
 });

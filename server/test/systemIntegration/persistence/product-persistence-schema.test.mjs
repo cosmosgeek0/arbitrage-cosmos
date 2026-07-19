@@ -196,6 +196,25 @@ const EXPECTED_COLUMNS = Object.freeze({
   ],
 });
 
+// The unconditional append-only triggers block every SQL writer; a hostile
+// writer with direct file access can simply drop them first, so the layer
+// each fixture below actually proves (read-time validation, the checkpoint
+// trigger chain) must hold even without them. Drop, mutate, restore — the
+// canonical schema stays intact for any subsequent reopen.
+function withoutAppendOnlyTriggers(db, mutate) {
+  const triggers = db.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  for (const trigger of triggers) db.exec(`DROP TRIGGER ${trigger.name}`);
+  try {
+    return mutate();
+  } finally {
+    for (const trigger of triggers) db.exec(trigger.sql);
+  }
+}
+
 const INCIDENT_CHECKPOINT_TRIGGER_NAMES = Object.freeze([
   'product_incident_checkpoint_events_no_delete',
   'product_incident_checkpoint_events_no_update',
@@ -271,6 +290,28 @@ function assertProductIncidentCheckpointSchema(database) {
   }
   assert.ok(new Set(database.prepare('PRAGMA index_list(events)').all().map((index) => index.name))
     .has('idx_events_product_incident_source'));
+
+  // Sibling guarantee: the general append-only triggers protect every durable
+  // event kind, not just the checkpoint chain. events_no_update is
+  // unconditional; events_no_delete_durable allowlists exactly the six
+  // recomputable kinds pruneEphemeralEvents may delete.
+  const appendOnlyTriggers = database.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name IN ('events_no_update', 'events_no_delete_durable')
+    ORDER BY name ASC
+  `).all();
+  assert.deepEqual(appendOnlyTriggers.map((trigger) => trigger.name), ['events_no_delete_durable', 'events_no_update']);
+  for (const trigger of appendOnlyTriggers) {
+    assert.match(trigger.sql, /ON\s+events/i);
+    assert.match(trigger.sql, /RAISE\s*\(\s*ABORT\s*,\s*'ledger events are append-only'\s*\)/i);
+  }
+  const noUpdate = appendOnlyTriggers.find((trigger) => trigger.name === 'events_no_update');
+  assert.doesNotMatch(noUpdate.sql, /WHEN/i, 'events_no_update must be unconditional');
+  const noDeleteDurable = appendOnlyTriggers.find((trigger) => trigger.name === 'events_no_delete_durable');
+  assert.match(noDeleteDurable.sql, /OLD\.kind\s+NOT\s+IN\s*\(/i);
+  for (const ephemeralKind of ['strategy_decision', 'basis.strategy_decision', 'heartbeat', 'basis.heartbeat', 'candidate_rejected', 'candidate_opened']) {
+    assert.ok(noDeleteDurable.sql.includes(`'${ephemeralKind}'`), `${ephemeralKind} must stay prunable`);
+  }
 }
 
 test('migration creates the exact seven canonical tables, foreign keys, constraints, and requested indexes', () => {
@@ -599,7 +640,9 @@ test('System Integration adapter exposes optional seams only after load and fail
     });
 
     const identityLedgerEventId = ledger.db.prepare('SELECT ledger_event_id FROM product_identity_references').get().ledger_event_id;
-    ledger.db.prepare("UPDATE events SET data = '{\"corrupt\":true}' WHERE id = ?").run(identityLedgerEventId);
+    withoutAppendOnlyTriggers(ledger.db, () => {
+      ledger.db.prepare("UPDATE events SET data = '{\"corrupt\":true}' WHERE id = ?").run(identityLedgerEventId);
+    });
     const corruptReplay = adapter.compareAndUpsertProductIdentityReference(identityInput);
     assert.equal(corruptReplay.ok, false);
     assert.equal(corruptReplay.code, 'PERSISTENCE_WRITE_FAILED');

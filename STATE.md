@@ -1,5 +1,11 @@
 # STATE.md — current product state
 
+## Current release (authoritative overlay, 2026-07-19)
+
+- Verified baseline: `origin/current-main = 118ee3ea1774e06d111bed32a4c58a061cb474a1`. BUILD PHASE CLOSED.
+- GitHub CI run `29680319880` on that tip: SUCCESS — Canonical full matrix and Bounded local operations proofs both green.
+- The C9 campaign narrative in the body below is sealed historical evidence, not the current next action; the campaign completed and landed. Next phase is the owner-gated validate-only deployment (`Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md`).
+
 This file owns current product state. `ARCHITECTURE.md` Part II owns code authority, `MISSION.md` owns purpose, and `verification/product-truth-20260716/STATE.md` alone owns campaign status and next action.
 
 ## Source scope
@@ -74,7 +80,7 @@ Cosmos Arbitrage Control Room remains one local validate-only product. Basis and
 - Matrix rows `AIO-008`, `DEP-003`, and `FRT-000` now cite the executable exact generator/verifier rather than the retired throw-only generator. CAMP-091 deterministically refreshes the 21 generated output bytes from immutable exact-C9 plus registry-digest-bound tracked historical Git-object payloads while preserving every rejected-candidate disposition; committing the sole self-contained 21-output + five-tooling evidence descendant and issuing a fresh verdict remain separate custody actions.
 - The acceptance-contract denominator is `48`: the focused CAMP-091 contract is `4/4`, and the full focused acceptance contract is `48/48` after canonical machine-report regeneration. Two consecutive `test/i00/render-reports.mjs --write` passes are byte-identical; CAMP-091 remains separate and does not conceal or rewrite generated-report state.
 - The historical D-LAUNCH-1 Q-lock supersession no longer requires a moving `current-main` ref or an ambient raw owner blob for sealed acceptance. Exact candidate-reachable commit/lock bytes and the director attestation are authoritative; ref/blob availability is diagnostic, with absent raw bytes reported as `DIRECTOR_COMMIT_ATTESTED_NOT_REHASHED`.
-- `WORKTREE_LEDGER.md` records the immutable pre-freeze registry of 96 live worktrees, including `truth-a` and `truth-b`, plus five D-LAUNCH-65-authorized `REMOVED_SAFE` tombstones for 101 durable entries.
+- The immutable pre-freeze registry of 96 live worktrees (including `truth-a` and `truth-b`) plus five D-LAUNCH-65-authorized `REMOVED_SAFE` tombstones for 101 durable entries is machine evidence in `verification/product-truth-20260716/WORKTREE_CENSUS.json`; the historical `WORKTREE_LEDGER.md` bytes remain readable at the frozen candidate Git object.
 - Exact-C9 evidence generation is registry-pinned to candidate `d8a86f722689ed82ad40f9ec44bbbc19c2347646`, tree `1da28eb2dcc03a0545fc2bc51e2a735e88826014`, sole parent `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`, and sealed machine source `5fd74604082420fbe46d98e408ef4ca0d1b57711`. It performs no mutable live-worktree census: the six human Markdown artifacts are deterministically rendered from verified Git-object path/blob/SHA-256/length/symbol references, and the sole descendant allowlist is exactly 26 paths (21 generated artifacts + five bound executable tooling files). The already-allowlisted locked-payload output carries raw rehash-only proof bytes for the sealed source, seven parked Frontier tips, and the same-tree non-candidate landing; selection and manifest bind its registry-pinned digest. A no-local single-branch clone explicitly lacks all nine ambient objects, then regenerates twice and verifies from only its committed descendant tooling and tracked payload; outer-checkout tooling, stale/unbound substitutions, and payload tampering fail closed.
 - Exact payload metadata carries separately named source-preparation lineage and a recomputed current inventory checksum; the verifier also recomputes the payload-set checksum from all 25 candidate-tracked files.
 - Provenance v3 derives every lane match/mismatch count and all landed-core adaptation blobs from exact candidate Git trees; stale seed counts or nested candidate blobs are verifier failures.

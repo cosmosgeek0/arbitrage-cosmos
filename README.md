@@ -4,17 +4,43 @@ Keyless Binance public-market surveillance and arbitrage/intelligence control ro
 
 **Current posture:** one composed validate-only system. Live execution is mechanically blocked (`LIVE_EXECUTION_NOT_IMPLEMENTED`); there are no withdrawal or transfer-out routes anywhere.
 
-## Documentation (one file, one purpose)
+## Documentation
+
+Governing / read first:
 
 | File | Purpose |
 | --- | --- |
+| `README.md` | Entry point; this inventory; verified commands |
 | `STATE.md` | What is true right now — start here |
 | `MISSION.md` | Why this exists; the edge hypotheses |
 | `ARCHITECTURE.md` | Code families, decision chain, canonical authority map |
 | `AGENTS.md` | Rules for any coding agent |
-| `DIRECTOR.md` | How sprints are directed, verified, and landed |
+| `DIRECTOR.md` | Director boot file: laws, environment, recovery |
 | `DESIGN.md` | UI design system, ship gate, locked surface baselines |
-| `docs/archive/` | All history: receipts, superseded blueprints, sprint directives |
+| `MANUAL.md` | Owner's operating manual |
+
+Live protocol / authorization contracts: `EDGE_PROTOCOL_V1.md`, `IP_ASSURANCE.md`,
+`IP_OPS_ACTIVATION_REQUEST.md`.
+
+Immutable machine-read evidence (byte-pinned by tests; history, not steering):
+`AI_OPS_AUTHORITY_RESOLUTION_RECEIPT.md`, `F_BRIDGE_RECEIPT.md`, `SI_RECON_RECEIPT.md`,
+`I00_CLOSURE_PRESTAGE_RECEIPT.md`, `I00_PRESTAGE_VERIFICATION_RECEIPT.md`,
+`I00_PRODUCT_BUILD_STATE.md`, `I00_VERIFY_RECEIPT.md`, `LIVE_EDGE_RECEIPT.md`,
+`IP_CONTROL_RECEIPT.md`, `IP_CONTROL_STATE.md`, `IP_OPS_RECEIPT.md`, `IP_OPS_STATE.md`,
+`IP_PROOF_RECEIPT.md`, `IP_PROOF_STATE.md`, `IP_RUNTIME_RECEIPT.md`, `IP_RUNTIME_STATE.md`,
+`QL_DIRECTOR_STATE.md`, `QL_PARALLEL_DAG.md`.
+
+Generated assurance reports (owned by `test/i00/render-reports.mjs --write`; never hand-edit):
+`AUTONOMY_CLOSURE_REPORT.md`, `MISSION_COVERAGE_MATRIX.md`, `NO_TERMINAL_DEPENDENCY_REPORT.md`,
+`OFFICIAL_INTERFACE_MATRIX.md`, `RESOURCE_AND_BACKPRESSURE_REPORT.md`.
+
+All other history lives in `docs/archive/` and in Git objects.
+
+Test batteries: `npm test` and `npm run test:all`, plus the separate operations
+proofs `bash ops/tests/run-all.sh` and `bash ops/tests/i00/run-all.sh` (CI runs
+both jobs). Temporary external control files until deployment completes:
+`Desktop/FIX_WAVES.md` (live checkpoint) and
+`Desktop/FRESH_DIRECTOR_FINAL_TRANSITION.md` (the active deployment script).
 
 ## Commands (verified)
 

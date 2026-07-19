@@ -100,6 +100,8 @@ export function intelligenceTruth(overrides = {}) {
 }
 
 export function exactEconomics(overrides = {}, scopeOverrides = {}) {
+  const evaluatedAtMs = scopeOverrides.evaluatedAtMs ?? NOW;
+  const factObservedAtMs = scopeOverrides.proposalUpdatedAtMs ?? evaluatedAtMs - 100;
   const values = {
     valuationAsset: 'USDT',
     requestedCapital: '100',
@@ -140,14 +142,14 @@ export function exactEconomics(overrides = {}, scopeOverrides = {}) {
     },
     borrowScope: kind === 'BORROW' ? {
       ...values.expectedBorrowScope,
-      truthEvaluatedAtMs: scopeOverrides.proposalUpdatedAtMs ?? NOW - 100,
-      truthExpiresAtMs: NOW + 900,
+      truthEvaluatedAtMs: factObservedAtMs,
+      truthExpiresAtMs: evaluatedAtMs + 900,
     } : null,
     value,
     unit: values.valuationAsset,
     source: {
-      sourceTimeMs: NOW - 100,
-      receivedAtMs: NOW - 90,
+      sourceTimeMs: factObservedAtMs,
+      receivedAtMs: factObservedAtMs + 10,
       maxAgeMs: 1_000_000,
       authority: 'SYNTHETIC_TEST',
       completeness: 'COMPLETE',
@@ -220,6 +222,7 @@ export function proposalSeed(strategy = 'BASIS', overrides = {}) {
     truth: truth(`${key}.metadata`),
     ...(overrides.metadata ?? {}),
   };
+  const evaluatedAtMs = overrides.evaluatedAtMs ?? NOW;
   const common = {
     canonical,
     metadata,
@@ -239,14 +242,15 @@ export function proposalSeed(strategy = 'BASIS', overrides = {}) {
       proposalId: sourceId,
       proposalUpdatedAtMs: updatedAtMs,
       proposalConfigRevision: configRevision,
-      correlationId: `${key}:correlation`,
+      correlationId: metadata.correlationId,
       strategy,
       symbol,
+      evaluatedAtMs,
       instrumentIds: basis
         ? [`BINANCE:SPOT:${symbol}`, `BINANCE:USD_M_PERPETUAL:${symbol}`]
         : [`BINANCE:SPOT:${symbol}`],
     }),
-    evaluatedAtMs: overrides.evaluatedAtMs ?? NOW,
+    evaluatedAtMs,
   };
   if (basis) {
     const instruments = {

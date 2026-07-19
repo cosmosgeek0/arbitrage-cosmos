@@ -165,6 +165,12 @@ run_probe_gate() {
     return 0
   fi
   if [ "$SKIP_PROBE" = 1 ]; then
+    # F-108: on a first deploy no previous release exists, so auto-rollback
+    # cannot undo a bad candidate - skipping the only remaining gate would
+    # make the failure unrecoverable. Refuse the flag when there is nothing
+    # to fall back to.
+    [ -L "$CURRENT_LINK" ] \
+      || die_code 1 "--skip-probe is refused on a first deploy: no previous release exists to roll back to"
     ops_log "probe gate SKIPPED by --skip-probe (emergency use only; recorded)"
     log_event PROBE_SKIPPED "operator passed --skip-probe"
     return 0
@@ -186,6 +192,14 @@ run_probe_gate() {
   PROBE_PID="$probe_pid"
   if gate_wait "$PROBE_BASE" "$READINESS_GATE_PATHS" "$GATE_TIMEOUT_SEC" "$probe_pid"; then
     ok=1
+  else
+    # F-108(b): capture each gate path's body while the candidate is still
+    # up - the readiness reasonCodes array is the difference between a
+    # five-minute and a five-hour diagnosis.
+    local diag_path
+    for diag_path in $READINESS_GATE_PATHS; do
+      ops_log "probe diagnostic ${PROBE_BASE}${diag_path}: $("$CURL" -sS -m "$HTTP_TIMEOUT_SEC" "${PROBE_BASE}${diag_path}" 2>&1 | head -c 2000 || true)"
+    done
   fi
   kill "$probe_pid" 2>/dev/null || true
   wait "$probe_pid" 2>/dev/null || true

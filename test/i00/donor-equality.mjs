@@ -82,6 +82,9 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
     '155106d318e956cd4feb85a6c0f3e64eb2978207',
     '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
     'dbeb161a68fe19db83297111c152ac36e2d5fd07',
+    '1ccfe5a7ea53eab1cc503d828b59c606eaaefe23',
+    '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
+    '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -348,21 +351,21 @@ export const RECEIPT_BOUND_AUTHORITY = deepFreeze({
 });
 
 export const POST_L_TOPOLOGY_AUTHORITY = deepFreeze({
-  sourceCommit: 'ce4051fc845c6d078c288610c9e773db8b2cc665',
-  sourceTree: 'cf46186da7d3e2807401aaeb3f5cb2dcf490102b',
-  sourceParents: deepFreeze(['dbeb161a68fe19db83297111c152ac36e2d5fd07']),
-  path: 'docs/archive/i00-phase4/DIRECTOR_FINAL_LANDING_POST_L_TOPOLOGY_RECEIPT.v1.json',
-  blobSha: '023af80def70562a81733f947fa2c29b2d477f3c',
-  sha256: 'c0f6a0d02af12c7064cf71a042c90746a436092e29641ad3fb372a6dbf31022b',
+  sourceCommit: '583de5024c54919b0e678618ac62aed23d3e61bb',
+  sourceTree: 'ae01db0db3f73b74434d0be39d9dd6009554689e',
+  sourceParents: deepFreeze(['cc187e07cb82700bb8e1851b2ced1dd6e7954948']),
+  path: 'docs/archive/i00-phase4/EVIDENCE_WAVE_POST_L_TOPOLOGY_RECEIPT.v1.json',
+  blobSha: 'baf9bfa8cd9ac1713f983579adc8be0182917663',
+  sha256: '5b4ceec47648bc4243e9f8f7d4c3325f280006d759eade0725086b5c53a99abc',
   receiptSchemaVersion: 'i00.post-l-topology-receipt.v1',
   receiptStatus: 'AUTHORIZED_POST_L_TOPOLOGY',
   receiptScope: 'RECEIPT_BOUND_DONOR_EQUALITY_ONLY',
   landing: deepFreeze({
-    commit: 'dbeb161a68fe19db83297111c152ac36e2d5fd07',
-    tree: '9fcb15d00fcde0fd54ea45e578f36bd82c62c421',
+    commit: '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
+    tree: '861e9d3820628deb906a54fb5a2d3e956a9cf133',
     parents: deepFreeze([
-      '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
-      '875d20921f98d2bbeb4bd80aa91401feb3144094',
+      '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
+      'ce0376a0c0f6f1d41b55099d9efb4aa4c9bf6150',
     ]),
   }),
   correction: deepFreeze({
@@ -681,6 +684,9 @@ function validateManifest() {
     '155106d318e956cd4feb85a6c0f3e64eb2978207',
     '38902fba763efd8c58daf3d39e3b58de9f8fa4ba',
     'dbeb161a68fe19db83297111c152ac36e2d5fd07',
+    '1ccfe5a7ea53eab1cc503d828b59c606eaaefe23',
+    '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
+    '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }

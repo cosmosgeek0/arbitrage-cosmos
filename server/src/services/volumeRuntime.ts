@@ -116,11 +116,29 @@ export class VolumeRuntime {
   private persistedEventOrder: string[] = [];
   private ledgerFailureCount = 0;
 
+  private lastObservedNowMs = 0;
+
+  /**
+   * Non-regressing UTC read (F-080): freshness ages (`now - lastBookTs`) were
+   * computed from the raw wall clock, so a backward NTP step made the age
+   * negative and stale data reported 'fresh'. Latching mirrors
+   * systemIntegration's createSystemUtcClock: a backward step freezes
+   * observed time instead of inverting it.
+   */
+  private latchedNowMs(): number {
+    const observed = this.nowSource();
+    if (Number.isFinite(observed)) {
+      this.lastObservedNowMs = Math.max(this.lastObservedNowMs, observed);
+    }
+    return this.lastObservedNowMs;
+  }
+
   constructor(
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
     private readonly strategyDecay: VolumeStrategyDecayCadencePort | null = null,
+    private readonly nowSource: () => number = () => Date.now(),
   ) {
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
@@ -166,7 +184,7 @@ export class VolumeRuntime {
   stop(): void {
     if (!this.running && !this.startPromise && !this.engine.isRunning()) return;
     const closingGeneration = this.generation;
-    const observedAtMs = Date.now();
+    const observedAtMs = this.latchedNowMs();
     this.publishEvidence(Object.freeze({
       kind: 'SOURCE_CLOSED' as const,
       generation: closingGeneration,
@@ -289,7 +307,7 @@ export class VolumeRuntime {
     lastBookTs: number | null;
     lastTradeTs: number | null;
   } {
-    const now = Date.now();
+    const now = this.latchedNowMs();
     const openConnections = [...this.streamStatus.values()].filter((status) => status === 'open').length;
     const streamState = this.streams.length === 0
       ? 'starting'
@@ -316,7 +334,7 @@ export class VolumeRuntime {
    */
   integrationSnapshot(): VolumeRuntimeIntegrationSnapshot {
     return structuredClone({
-      capturedAtMs: Date.now(),
+      capturedAtMs: this.latchedNowMs(),
       lastTickTs: this.engine.lastTick(),
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
@@ -592,7 +610,7 @@ export class VolumeRuntime {
         kind: 'SPOT_AGG_TRADE' as const,
         generation,
         revision: this.nextEvidenceRevision(),
-        receivedAtMs: Date.now(),
+        receivedAtMs: this.latchedNowMs(),
         continuity,
         baseAsset,
         raw: Object.freeze({ ...(raw as RawAggTrade) }),
@@ -648,7 +666,7 @@ export class VolumeRuntime {
       }
       const books = await fetchAllBookTickers('spot');
       if (!this.isActive(generation)) return;
-      const receivedTs = Date.now();
+      const receivedTs = this.latchedNowMs();
       let accepted = 0;
       for (const symbol of this.eligibleSymbols) {
         const book = books.get(symbol);
@@ -689,7 +707,7 @@ export class VolumeRuntime {
         if (index >= pending.length) return;
         const symbol = pending[index];
         try {
-          const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
+          const currentMinute = Math.floor(this.latchedNowMs() / 60_000) * 60_000;
           const candles = (await fetchKlineCandles(symbol, '1m', 61, 'spot'))
             .filter((candle) => candle.t < currentMinute)
             .slice(-60);
@@ -827,7 +845,7 @@ export class VolumeRuntime {
   }
 
   snapshot(): Record<string, unknown> {
-    const now = Date.now();
+    const now = this.latchedNowMs();
     const decisions = this.engine.decisions(2_000);
     const latestDecision = new Map<string, (typeof decisions)[number]>();
     for (const decision of decisions) latestDecision.set(decision.symbol, decision);

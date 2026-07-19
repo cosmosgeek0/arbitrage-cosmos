@@ -95,7 +95,7 @@ section('3. all compiled foundation modules are free of implicit I/O primitives'
     }
   };
   visit(root);
-  check('all 70 compiled foundation modules are present', files.length === 70, `${files.length} modules`);
+  check('all 71 compiled foundation modules are present', files.length === 71, `${files.length} modules`);
   const codeOnly = (source) => source
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');

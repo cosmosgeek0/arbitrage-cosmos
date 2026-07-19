@@ -49,9 +49,6 @@ const FILTERS: { id: NotificationFilter; label: string; configured?: boolean }[]
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
 
-export { NOTIFICATION_ARCHIVE_LIMIT, retainNotificationArchive };
-export type { NotificationArchiveState };
-
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
     bot: { available: true, label: 'Bot Runtime', detail: 'Engine and control transitions' },
@@ -127,7 +124,6 @@ function statusLabel(item: CuratedNotification): string {
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
-  const notificationFeed = useNotificationFeed();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
   const [query, setQuery] = useState('');

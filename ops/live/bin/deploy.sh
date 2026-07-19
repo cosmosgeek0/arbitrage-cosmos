@@ -103,11 +103,13 @@ acquire_lock "$DEPLOY_LOCK" \
 LOCK_HELD=1
 PROBE_PID=""
 PROBE_DATA_TMP=""
+PROBE_LEASES_TMP=""
 cleanup() {
   # If the deploy is interrupted mid-probe, the candidate process and its
   # throwaway data dir must not outlive us.
   if [ -n "${PROBE_PID:-}" ]; then kill "$PROBE_PID" 2>/dev/null || true; fi
   if [ -n "${PROBE_DATA_TMP:-}" ]; then rm -rf "$PROBE_DATA_TMP"; fi
+  if [ -n "${PROBE_LEASES_TMP:-}" ]; then rm -rf "$PROBE_LEASES_TMP"; fi
   if [ "${LOCK_HELD:-0}" = 1 ]; then release_lock "$DEPLOY_LOCK"; fi
 }
 trap cleanup EXIT
@@ -175,17 +177,27 @@ run_probe_gate() {
     log_event PROBE_SKIPPED "operator passed --skip-probe"
     return 0
   fi
-  local probe_data probe_pid ok=0
+  local probe_data probe_leases probe_pid ok=0
   probe_data="$(mktemp -d "${TMPDIR:-/tmp}/cosmos-probe.XXXXXX")"
   PROBE_DATA_TMP="$probe_data"
+  # F-023: the lease namespace must be a SIBLING of the data dir - either
+  # nesting direction throws DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID.
+  probe_leases="$probe_data.leases"
+  mkdir -p "$probe_leases"
+  PROBE_LEASES_TMP="$probe_leases"
   if [ -n "$PROBE_CMD" ]; then
     env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
       RELEASE_DIR="$RELEASE_DIR" PROBE_PORT="$PROBE_PORT" PROBE_DATA_DIR="$probe_data" \
       I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 bash -c "$PROBE_CMD" &
   else
+    # F-023: the gate exists to prove the candidate boots in PRODUCTION
+    # configuration. env -i closes the environment (no ambient variable can
+    # leak in), and NODE_ENV=production plus the lease root make the probe
+    # exercise the same code path production takes.
     ( cd "$RELEASE_DIR" \
-      && exec env -u I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES \
+      && exec env -i PATH=/usr/local/bin:/usr/bin:/bin \
          PORT="$PROBE_PORT" HOST=127.0.0.1 DATA_DIR="$probe_data" SKIP_DOTENV=1 \
+         NODE_ENV=production DATA_DIR_LOGICAL_LEASE_ROOT="$probe_leases" \
          I00_PUBLIC_SOURCE_STARTUP_EGRESS=1 "$NODE" server/dist/index.js ) &
   fi
   probe_pid=$!
@@ -206,6 +218,8 @@ run_probe_gate() {
   PROBE_PID=""
   rm -rf "$probe_data"
   PROBE_DATA_TMP=""
+  rm -rf "$probe_leases"
+  PROBE_LEASES_TMP=""
   if [ "$ok" != 1 ]; then
     log_event REJECTED_BY_PROBE "readiness gate failed before switch; current release untouched"
     die_code 1 "readiness probe failed for $RELEASE_ID; aborted before switch — running release untouched"

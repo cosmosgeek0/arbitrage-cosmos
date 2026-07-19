@@ -3836,6 +3836,11 @@ if (canonicalApplicationStartOk) {
     'control-room listener not admitted because durable boot failed:',
     canonicalApplicationStartFailureCodes.join(',') || 'APPLICATION_START_FAILED',
   );
+  // The supervisor reads the exit status, not stderr. A boot that refused to
+  // admit the listener must not be indistinguishable from a clean stop, or
+  // Restart=on-failure never fires. process.exitCode (not process.exit) lets
+  // the registered 'exit' lease-release hook run through normal teardown.
+  process.exitCode = 1;
 }
 server.on('error', (error) => {
   console.error('control-room listener failed:', error instanceof Error ? error.message : String(error));

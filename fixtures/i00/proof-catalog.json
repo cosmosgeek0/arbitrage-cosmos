@@ -43,7 +43,7 @@
     { "path": "packages/edge-protocol/fixtures/fixtures-v1.json", "sha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4" },
     { "path": "packages/edge-protocol-tests/protocol.test.mjs", "sha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9" },
     { "path": "EDGE_PROTOCOL_V1.md", "sha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1" },
-    { "path": "ARCHITECTURE.md", "sha256": "0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac" },
+    { "path": "ARCHITECTURE.md", "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c" },
     { "path": "docs/DASHBOARD_TRUTH.md", "sha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7" },
     { "path": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "sha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162" }
   ],

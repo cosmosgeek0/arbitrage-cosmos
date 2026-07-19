@@ -318,7 +318,7 @@ export const EXPECTED_PROTOCOL_AND_CONFIG_HASHES = Object.freeze([
   Object.freeze({ id: 'QL-EDGE-PROTOCOL-DOCUMENT', kind: 'SHA256', hash: '951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1' }),
   Object.freeze({ id: 'EDGE-PROTOCOL-SCHEMA', kind: 'SHA256', hash: '229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c' }),
   Object.freeze({ id: 'EDGE-PROTOCOL-FIXTURES', kind: 'SHA256', hash: 'c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4' }),
-  Object.freeze({ id: 'ARCHITECTURE-AUTHORITY-MAP', kind: 'SHA256', hash: '0338147192913ffe705ae32a5a00ffff7ba784d63534d7048886f1e7b995bbac' }),
+  Object.freeze({ id: 'ARCHITECTURE-AUTHORITY-MAP', kind: 'SHA256', hash: '14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c' }),
   Object.freeze({ id: 'Q-DIRECTIVE-LOCK', kind: 'SHA256', hash: 'd4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24' }),
   Object.freeze({ id: 'QL-DIRECTOR-STATE', kind: 'SHA256', hash: '77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc' }),
   Object.freeze({ id: 'QL-PARALLEL-DAG', kind: 'SHA256', hash: 'cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec' }),

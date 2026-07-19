@@ -387,7 +387,7 @@
       "sourceFacts": [
         {
           "path": "server/src/index.ts",
-          "needle": "sendNotConfigured(res, 'PRIVATE_LOAN_STATE')",
+          "needle": "owner: 'FOUNDATION_BORROW_TRUTH'",
           "expectedOccurrences": 1
         },
         {

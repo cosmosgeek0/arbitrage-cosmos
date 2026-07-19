@@ -45673,6 +45673,14 @@ body::after {
   --pane-tone: #24c85a;
 }
 
+/* The v4 rail applies `color: var(--rail-tone)` at higher specificity than
+   the semantic grade rules, so the tone variable itself must carry the true
+   grade: a warn/bad advisor re-tones the whole rail mechanism (icon colour,
+   hover tint, underlight) instead of shouting identity green over a failing
+   state. Same hue authorities as the state pip. */
+.topbar-suite-v4 > button[data-topbar-key="advisor"].grade-warn { --rail-tone: var(--ops-amber); }
+.topbar-suite-v4 > button[data-topbar-key="advisor"].grade-bad { --rail-tone: var(--ops-red); }
+
 .trust-advisor-trigger-core {
   display: grid;
   place-items: center;

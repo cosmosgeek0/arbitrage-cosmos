@@ -104,6 +104,20 @@ test('no rule may force-paint a bad advisor grade a healthy green', async () => 
   assert.match(header, /advTone !== 'ok' && <i className="rail-state-pip" data-grade=\{advTone\}/);
   assert.match(styles, /\.trust-advisor-trigger-core \.rail-state-pip\[data-grade="bad"\]\s*\{\s*background:\s*var\(--ops-red\);\s*\}/);
   assert.match(styles, /\.trust-advisor-trigger-core \.rail-state-pip\[data-grade="warn"\]\s*\{\s*background:\s*var\(--ops-amber\);\s*\}/);
+
+  // (5) the v4 rail paints every rail button `color: var(--rail-tone)` at
+  // HIGHER specificity than the semantic grade rules — measured live by the
+  // ship-gate reload: a grade-bad advisor rendered the decorative green rail
+  // tone in all three grades. The tone variable itself must therefore carry
+  // the true grade under v4, with the same hue authorities as the pip.
+  assert.match(
+    styles,
+    /\.topbar-suite-v4 > button\[data-topbar-key="advisor"\]\.grade-warn \{ --rail-tone: var\(--ops-amber\); \}/,
+  );
+  assert.match(
+    styles,
+    /\.topbar-suite-v4 > button\[data-topbar-key="advisor"\]\.grade-bad \{ --rail-tone: var\(--ops-red\); \}/,
+  );
 });
 
 test('premium topbar keeps all six measured roles in empty, action, and preference states', async () => {

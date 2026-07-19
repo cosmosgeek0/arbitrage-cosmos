@@ -877,7 +877,10 @@ gate_wait() {
 get_exposure() {
   local out
   if [ -z "${EXPOSURE_CMD:-}" ]; then echo UNKNOWN; return 0; fi
-  if out="$($EXPOSURE_CMD 2>/dev/null)"; then
+  # F-028: do not discard the exposure command's stderr - when the probe is
+  # misconfigured the reason must reach the journal, because UNKNOWN silently
+  # disables auto-rollback.
+  if out="$($EXPOSURE_CMD)"; then
     case "$out" in
       NONE|ACTIVE|AMBIGUOUS|RECOVERY_REQUIRED|UNKNOWN) echo "$out" ;;
       *) echo UNKNOWN ;;

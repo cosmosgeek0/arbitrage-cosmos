@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import {
   evaluateFreshness,
   isValidUtcMillis,
@@ -11,7 +12,12 @@ import {
 } from '../../intelligenceFoundation/contracts/index.js';
 import {
   BINANCE_SOURCE_FACTS,
+  normalizeFunding,
+  normalizeLiquidation,
   normalizeMarkPrice,
+  normalizeOpenInterest,
+  normalizeTrade,
+  type BinanceSourceFact,
 } from '../../intelligenceFoundation/evidence/index.js';
 import {
   buildUniverseGraph,
@@ -25,6 +31,10 @@ import {
 import {
   IntelligenceRuntimeBridge,
 } from '../../intelligenceRuntime/bridge/index.js';
+import {
+  VolumeEvidenceRouter,
+  type RegisteredEvidenceRouteReceipt,
+} from '../../intelligenceRuntime/routing/index.js';
 import {
   runtimeUniverseTruth,
   unavailableUniverseTruth,
@@ -44,6 +54,8 @@ import type {
   RuntimeHealthEvidence,
 } from '../composition/types.js';
 import type {
+  SystemCapitalSummary,
+  SystemIntelligenceSummary,
   SystemStrategyRuntimeSummary,
   SystemSupervisorSummaries,
 } from '../supervisor/types.js';
@@ -55,16 +67,25 @@ import {
   weakestTemporalFact,
 } from './temporal.js';
 import { admitProductionSourceRegistry } from './sourceAdmission.js';
+import { createProductionCapitalEligibilityPort } from './capitalEconomics.js';
+import { createProductionVolumeRiskPort } from './volumeRisk.js';
+import { createProductionObservedOrderFocusPort } from './observedOrderFocus.js';
 import type {
   ProductionBasisConnectionStatus,
   ProductionBasisRuntimePort,
   ProductionMarketEnginePort,
   ProductionMarketRow,
+  ProductionLiquidationEvidenceCut,
+  ProductionLiquidationSourceClosedCut,
+  ProductionTokenEvidenceFact,
+  ProductionTokenEvidenceState,
+  ProductionTokenIntelligenceReadModel,
   ProductionFeedStatus,
   ProductionStrategySnapshot,
   ProductionSystemIntegrationInput,
   ProductionSystemIntegrationPorts,
   ProductionVolumeConnectionStatus,
+  ProductionVolumeEvidenceCut,
   ProductionVolumeRuntimePort,
 } from './types.js';
 
@@ -128,6 +149,14 @@ function invalidMarketFactsCut(): Readonly<MarketFactsCut> {
 function validateFactoryInput(input: Readonly<ProductionSystemIntegrationInput>): void {
   if (!input || typeof input !== 'object') throw new TypeError('production integration input is required');
   if (typeof input.clock?.nowMs !== 'function') throw new TypeError('clock.nowMs is required');
+  if (input.intelligenceEvidenceMaximumBytes !== undefined
+      && (!Number.isSafeInteger(input.intelligenceEvidenceMaximumBytes)
+        || input.intelligenceEvidenceMaximumBytes < 512
+        || input.intelligenceEvidenceMaximumBytes > MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES)) {
+    throw new RangeError(
+      `intelligenceEvidenceMaximumBytes must be an integer in [512, ${MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES}]`,
+    );
+  }
   for (const [name, value, methods] of [
     ['market', input.market, ['init', 'start', 'stop', 'allRows', 'priceUpdatedAt', 'markEventTimestamp']],
     ['basis', input.basis, ['start', 'stop', 'connectionStatus', 'integrationSnapshot']],
@@ -146,6 +175,75 @@ function latest(left: number | null, right: number | null): number | null {
   if (left === null) return right;
   if (right === null) return left;
   return Math.max(left, right);
+}
+
+function validFiniteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function validNonNegativeOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && candidate >= 0 ? candidate : null;
+}
+
+function validPositiveOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && candidate > 0 ? candidate : null;
+}
+
+function validFundingOrNull(value: unknown): number | null {
+  const candidate = validFiniteOrNull(value);
+  return candidate !== null && Math.abs(candidate) <= 1 ? candidate : null;
+}
+
+function validObservedAtOrNull(value: unknown, nowMs: number): number | null {
+  const candidate = validUtcOrNull(value);
+  return candidate !== null && candidate <= nowMs ? candidate : null;
+}
+
+const TOKEN_MARKET_FIELDS = Object.freeze([
+  'symbol', 'base', 'hasSpot', 'hasPerp', 'perpMark', 'perpIndexPrice',
+  'fundingRate', 'nextFundingTime', 'openInterest', 'openInterestUsd',
+  'openInterestChangePct', 'openInterestUpdatedAt', 'liquidations15mUsd',
+  'longLiquidations15mUsd', 'shortLiquidations15mUsd',
+] as const);
+
+function safeTokenMarketRow(
+  market: ProductionMarketEnginePort,
+  symbol: string,
+): Readonly<ProductionMarketRow> | null {
+  try {
+    const rows = market.allRows();
+    if (!Array.isArray(rows) || utilTypes.isProxy(rows) || rows.length > MAX_MARKET_ROWS) return null;
+    for (const raw of rows) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw) || utilTypes.isProxy(raw)
+          || Object.getPrototypeOf(raw) !== Object.prototype
+          || Object.getOwnPropertySymbols(raw).length > 0) continue;
+      const descriptors = Object.getOwnPropertyDescriptors(raw);
+      const symbolDescriptor = descriptors.symbol;
+      if (!symbolDescriptor || !Object.hasOwn(symbolDescriptor, 'value')
+          || !symbolDescriptor.enumerable || symbolDescriptor.value !== symbol) continue;
+      const captured: Record<string, unknown> = {};
+      let valid = true;
+      for (const field of TOKEN_MARKET_FIELDS) {
+        const descriptor = descriptors[field];
+        if (descriptor === undefined) {
+          captured[field] = undefined;
+          continue;
+        }
+        if (!Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) {
+          valid = false;
+          break;
+        }
+        captured[field] = descriptor.value;
+      }
+      if (!valid || typeof captured.hasSpot !== 'boolean' || typeof captured.hasPerp !== 'boolean') return null;
+      return Object.freeze(captured as unknown as ProductionMarketRow);
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function frozenHealth(
@@ -192,6 +290,220 @@ function safeStrategySnapshot(runtime: {
   } catch {
     return null;
   }
+}
+
+function safeStrategyOwnerSummary(
+  snapshot: Readonly<ProductionStrategySnapshot>,
+): Readonly<ProductionStrategySnapshot['ownerSummary']> | null {
+  try {
+    if (!snapshot || typeof snapshot !== 'object' || utilTypes.isProxy(snapshot)) return null;
+    const snapshotDescriptor = Object.getOwnPropertyDescriptor(snapshot, 'ownerSummary');
+    if (!snapshotDescriptor || !Object.hasOwn(snapshotDescriptor, 'value')) return null;
+    const summary = snapshotDescriptor.value as unknown;
+    if (!summary || typeof summary !== 'object' || Array.isArray(summary)
+        || utilTypes.isProxy(summary)
+        || Object.getPrototypeOf(summary) !== Object.prototype
+        || Object.getOwnPropertySymbols(summary).length !== 0) return null;
+    const expected = ['candidateCount', 'cooldownCount', 'opportunityCount'];
+    const descriptors = Object.getOwnPropertyDescriptors(summary);
+    const keys = Object.keys(descriptors).sort();
+    if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) return null;
+    const values: Record<string, number> = {};
+    for (const key of expected) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')
+          || !descriptor.enumerable) return null;
+      const value = descriptor.value;
+      if (!Number.isSafeInteger(value) || value < 0 || value > MAX_MARKET_ROWS) return null;
+      values[key] = value as number;
+    }
+    return Object.freeze({
+      candidateCount: values.candidateCount as number,
+      opportunityCount: values.opportunityCount as number,
+      cooldownCount: values.cooldownCount as number,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function exactDataRecord(
+  value: unknown,
+  expected: readonly string[],
+): Readonly<Record<string, unknown>> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) return null;
+  try {
+    if (Object.getPrototypeOf(value) !== Object.prototype
+        || Object.getOwnPropertySymbols(value).length !== 0) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const keys = Object.keys(descriptors).sort();
+    const wanted = [...expected].sort();
+    if (keys.length !== wanted.length || keys.some((key, index) => key !== wanted[index])) return null;
+    const snapshot: Record<string, unknown> = {};
+    for (const key of wanted) {
+      const descriptor = descriptors[key];
+      if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) return null;
+      snapshot[key] = descriptor.value;
+    }
+    return Object.freeze(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+function boundedUniqueStrings(value: unknown, maximum: number, maximumLength: number): readonly string[] | null {
+  if (!Array.isArray(value) || utilTypes.isProxy(value) || value.length > maximum
+      || Object.getPrototypeOf(value) !== Array.prototype
+      || Object.getOwnPropertySymbols(value).length !== 0) return null;
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = Object.keys(descriptors).filter((key) => key !== 'length');
+  if (keys.length !== value.length) return null;
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!descriptor || !Object.hasOwn(descriptor, 'value') || !descriptor.enumerable) return null;
+    const entry = descriptor.value;
+    if (typeof entry !== 'string' || entry.length === 0 || entry.length > maximumLength
+        || entry.trim() !== entry || seen.has(entry)) return null;
+    seen.add(entry);
+    result.push(entry);
+  }
+  return Object.freeze(result);
+}
+
+type CapitalSummaryReadResult = Readonly<{
+  kind: 'AVAILABLE' | 'UNAVAILABLE' | 'MALFORMED';
+  summary: Readonly<SystemCapitalSummary> | null;
+}>;
+
+interface CapitalReadGuard {
+  active: boolean;
+  reentered: boolean;
+}
+
+function safeCapitalSummary(
+  owner: ProductionSystemIntegrationInput['capitalSummary'],
+  guard: CapitalReadGuard,
+): CapitalSummaryReadResult {
+  if (!owner) return Object.freeze({ kind: 'UNAVAILABLE', summary: null });
+  if (guard.active) {
+    guard.reentered = true;
+    return Object.freeze({ kind: 'MALFORMED', summary: null });
+  }
+  guard.active = true;
+  guard.reentered = false;
+  try {
+    const port = exactDataRecord(owner, ['readCapitalSummary']);
+    const read = port?.readCapitalSummary;
+    if (typeof read !== 'function') return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const raw = Reflect.apply(read, owner, []) as unknown;
+    if (guard.reentered) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    if (raw === null) return Object.freeze({ kind: 'UNAVAILABLE', summary: null });
+    if (typeof raw !== 'object' || utilTypes.isProxy(raw)) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const availability = Object.getOwnPropertyDescriptor(raw, 'availability');
+    const cut = exactDataRecord(raw, availability && Object.hasOwn(availability, 'value')
+      && availability.value === 'UNAVAILABLE'
+      ? ['availability', 'accountTruthState', 'reasonCodes']
+      : ['availability', 'checkpoint', 'safety']);
+    if (!cut) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    if (cut.availability === 'UNAVAILABLE') {
+      const blockers = boundedUniqueStrings(cut.reasonCodes, 256, 256);
+      if (!['OWNER_GATED', 'UNAVAILABLE', 'UNKNOWN'].includes(String(cut.accountTruthState))
+          || blockers === null || blockers.length === 0) {
+        return Object.freeze({ kind: 'MALFORMED', summary: null });
+      }
+      return Object.freeze({
+        kind: 'UNAVAILABLE',
+        summary: Object.freeze({
+          truthLabel: 'UNAVAILABLE',
+          accountTruthState: cut.accountTruthState as string,
+          allocatableAmount: null,
+          reservedAmount: null,
+          activeExposureAmount: null,
+          eligibleCount: null,
+          reservationCount: null,
+          stagedMandateCount: null,
+          activeExposureCount: null,
+          recoveryCount: null,
+          checkpointRevision: null,
+          blockerCodes: blockers,
+        }),
+      });
+    }
+    if (cut.availability !== 'AVAILABLE') return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const checkpoint = exactDataRecord(cut.checkpoint, ['id', 'revision']);
+    const safety = exactDataRecord(cut.safety, [
+      'canOpenOrIncrease', 'supervisionContinues', 'visiblePositionIds',
+      'recoveryRequiredPositionIds', 'effectiveActiveReservationIds', 'reasonCodes',
+    ]);
+    if (!checkpoint || !safety) return Object.freeze({ kind: 'MALFORMED', summary: null });
+    const checkpointId = checkpoint.id;
+    const revision = checkpoint.revision;
+    if (typeof checkpointId !== 'string' || checkpointId.length === 0 || checkpointId.length > 256
+        || checkpointId.trim() !== checkpointId
+        || !Number.isSafeInteger(revision) || (revision as number) < 0
+        || typeof safety.canOpenOrIncrease !== 'boolean'
+        || typeof safety.supervisionContinues !== 'boolean') {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const visible = boundedUniqueStrings(safety.visiblePositionIds, MAX_MARKET_ROWS, 256);
+    const recovery = boundedUniqueStrings(safety.recoveryRequiredPositionIds, MAX_MARKET_ROWS, 256);
+    const activeReservations = boundedUniqueStrings(safety.effectiveActiveReservationIds, MAX_MARKET_ROWS, 256);
+    const blockers = boundedUniqueStrings(safety.reasonCodes, 256, 256);
+    if (visible === null || recovery === null || activeReservations === null || blockers === null) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    const visibleIds = new Set(visible);
+    if (recovery.some((id) => !visibleIds.has(id))) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    if ((safety.canOpenOrIncrease && blockers.length > 0)
+        || (!safety.canOpenOrIncrease && blockers.length === 0)
+        || (safety.supervisionContinues !== (visible.length > 0))) {
+      return Object.freeze({ kind: 'MALFORMED', summary: null });
+    }
+    return Object.freeze({
+      kind: 'AVAILABLE',
+      summary: Object.freeze({
+        truthLabel: 'RECORDED_REPLAY',
+        accountTruthState: safety.canOpenOrIncrease ? 'RESTART_TRUTH_READY' : 'RESTART_TRUTH_BLOCKED',
+        allocatableAmount: null,
+        reservedAmount: null,
+        activeExposureAmount: null,
+        eligibleCount: null,
+        reservationCount: activeReservations.length,
+        stagedMandateCount: null,
+        activeExposureCount: visible.length,
+        recoveryCount: recovery.length,
+        checkpointRevision: String(revision),
+        blockerCodes: blockers,
+      }),
+    });
+  } catch {
+    return Object.freeze({ kind: 'MALFORMED', summary: null });
+  } finally {
+    guard.active = false;
+  }
+}
+
+function unavailableCapitalRestartSummary(reason: string): Readonly<SystemCapitalSummary> {
+  return Object.freeze({
+    truthLabel: 'UNAVAILABLE',
+    accountTruthState: 'UNAVAILABLE',
+    allocatableAmount: null,
+    reservedAmount: null,
+    activeExposureAmount: null,
+    eligibleCount: null,
+    reservationCount: null,
+    stagedMandateCount: null,
+    activeExposureCount: null,
+    recoveryCount: null,
+    checkpointRevision: null,
+    blockerCodes: Object.freeze([reason]),
+  });
 }
 
 class MarketEvidenceReader {
@@ -421,6 +733,20 @@ const PUBLIC_UNIVERSE_CONFIGURATION = 'i00-public-universe-v1';
 const MAX_PUBLIC_INTELLIGENCE_PROJECTION_INTERVAL_MS = 5_000;
 const MAX_PROJECTED_UNIVERSE_ROWS = 640;
 const MAX_PROJECTED_MARK_EVIDENCE = 256;
+const MAX_PROJECTED_OPEN_INTEREST_EVIDENCE = 256;
+const MAX_PRODUCTION_INTELLIGENCE_EVIDENCE_BYTES = 2 * 1024 * 1024;
+
+function unknownRateBudget() {
+  return Object.freeze({
+    state: 'UNKNOWN' as const,
+    usedWeight: null,
+    limit: null,
+    intervalMs: null,
+    resetsAtMs: null,
+    retryAfterMs: null,
+    observedAtMs: null,
+  });
+}
 
 interface IntelligenceRefresh {
   readonly universeReady: boolean;
@@ -661,6 +987,7 @@ function coverageSlice(
  */
 class PublicIntelligenceLifecycle {
   private readonly bridge: IntelligenceRuntimeBridge;
+  private readonly router: VolumeEvidenceRouter;
   private readonly projectionIntervalMs: number;
   private runtimeActive = false;
   private intelligenceActive = false;
@@ -671,14 +998,26 @@ class PublicIntelligenceLifecycle {
   private lastUniverseReady = false;
   private lastEvidenceReady = false;
   private siblingRefreshHandoff: Readonly<IntelligenceRefreshHandoff> | null = null;
+  private publicationGeneration = 0;
+  private readonly sourceRevisions = new Map<string, number>();
 
   constructor(
     private readonly clock: ProductionSystemIntegrationInput['clock'],
     private readonly market: ProductionMarketEnginePort,
     private readonly evidence: MarketEvidenceReader,
+    private readonly volume: ProductionVolumeRuntimePort,
     private readonly maxAgeMs: number,
+    maximumEvidenceBytes?: number,
   ) {
-    this.bridge = new IntelligenceRuntimeBridge({ clock });
+    this.bridge = new IntelligenceRuntimeBridge({
+      clock,
+      ...(maximumEvidenceBytes === undefined
+        ? {}
+        : { config: { maximumEvidenceBytes } }),
+    });
+    this.router = new VolumeEvidenceRouter({ clock, sink: this.bridge });
+    this.volume.setEvidenceObserver?.((cut) => this.onVolumeEvidence(cut));
+    this.market.setLiquidationEvidenceObserver?.((cut) => this.onLiquidationEvidence(cut));
     // Sampling may reduce allocation churn, but it must never outlive the
     // source contract. Re-project at least twice inside the configured
     // freshness window and immediately fail closed on the source reads below.
@@ -688,7 +1027,229 @@ class PublicIntelligenceLifecycle {
     );
   }
 
+  readPinnedSymbols(): readonly string[] {
+    return this.bridge.operatorFocusPins();
+  }
+
+  readSummary(nowMs: number): Readonly<SystemIntelligenceSummary> {
+    const summary = this.focusTruthCurrent(nowMs) ? this.bridge.attentionFocusSummary() : null;
+    return Object.freeze({
+      truthLabel: summary === null ? 'UNAVAILABLE' : 'LIVE_PUBLIC',
+      evidenceCount: null,
+      attentionCount: null,
+      focusRequestedCount: summary?.focusRequestedCount ?? null,
+      focusActiveCount: summary?.focusActiveCount ?? null,
+      thesisCount: null,
+      insufficientEvidenceCount: null,
+      lastUpdateAtMs: summary?.observedAtMs ?? null,
+    });
+  }
+
+  readEvidenceRoutingSnapshot() {
+    return this.router.snapshot();
+  }
+
+  readSymbol(symbol: string): Readonly<ProductionTokenIntelligenceReadModel> {
+    if (!SYMBOL.test(symbol)) throw new TypeError('symbol must be a canonical bounded market symbol');
+    const observedAtMs = this.clock.nowMs();
+    if (!isValidUtcMillis(observedAtMs)) throw new TypeError('clock.nowMs returned invalid UTC ms');
+    const row = safeTokenMarketRow(this.market, symbol);
+    const routing = this.router.snapshotForSymbol(symbol);
+    const capability = (name: string) => routing.capabilities.find((entry) => entry.capability === name) ?? null;
+    const projectionRunning = this.runtimeActive && this.intelligenceActive;
+    const projectionCurrent = projectionRunning && this.focusTruthCurrent(observedAtMs);
+    let usdmSource: Pick<SourceProjectionEvidence, 'connected' | 'feedState'> = {
+      connected: false,
+      feedState: 'missing',
+    };
+    try {
+      const source = this.evidence.readSource('USDM', observedAtMs);
+      usdmSource = Object.freeze({ connected: source.connected, feedState: source.feedState });
+    } catch { /* fail closed below */ }
+    const rawLiquidationFeed = this.market.feeds['futures-liquidations'];
+    const liquidationFeedState: ProductionFeedStatus | 'missing' = (
+      rawLiquidationFeed === 'open' || rawLiquidationFeed === 'connecting'
+      || rawLiquidationFeed === 'closed' || rawLiquidationFeed === 'cooldown'
+      || rawLiquidationFeed === 'exhausted'
+    ) ? rawLiquidationFeed : 'missing';
+    const usdmAvailable = projectionCurrent && usdmSource.connected && usdmSource.feedState === 'open';
+    const liquidationAvailable = projectionCurrent && liquidationFeedState === 'open';
+
+    let markObservedAtMs: number | null = null;
+    let liquidationObservedAtMs: number | null = null;
+    try { markObservedAtMs = validObservedAtOrNull(this.market.markEventTimestamp(symbol), observedAtMs); } catch { /* unavailable */ }
+    try {
+      liquidationObservedAtMs = validObservedAtOrNull(
+        this.market.liquidationEventTimestamp?.(symbol) ?? null,
+        observedAtMs,
+      );
+    } catch { /* unavailable */ }
+
+    const markCandidate = row?.hasPerp === true ? Object.freeze({
+      markPrice: validPositiveOrNull(row.perpMark),
+      indexPrice: validPositiveOrNull(row.perpIndexPrice),
+      fundingRate: validFundingOrNull(row.fundingRate),
+      nextFundingTimeMs: validUtcOrNull(row.nextFundingTime),
+    }) : null;
+    const markState: ProductionTokenEvidenceState = !usdmAvailable
+      ? 'UNAVAILABLE'
+      : markObservedAtMs === null || markCandidate === null
+        ? 'MISSING'
+        : observedAtMs - markObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+          : [markCandidate.markPrice, markCandidate.indexPrice, markCandidate.fundingRate]
+              .some((value) => value !== null)
+            ? 'FRESH'
+            : 'MISSING';
+
+    const openInterestCapability = capability('OPEN_INTEREST');
+    const openInterestObservedAtMs = validObservedAtOrNull(row?.openInterestUpdatedAt, observedAtMs);
+    const openInterestCandidate = row?.hasPerp === true ? Object.freeze({
+      base: validNonNegativeOrNull(row.openInterest),
+      quoteUsd: validNonNegativeOrNull(row.openInterestUsd),
+      changePct: validFiniteOrNull(row.openInterestChangePct),
+    }) : null;
+    const openInterestState: ProductionTokenEvidenceState = !usdmAvailable
+      ? 'UNAVAILABLE'
+      : openInterestCapability?.freshness === 'STALE'
+        ? 'STALE'
+        : openInterestObservedAtMs !== null && observedAtMs - openInterestObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+        : openInterestCapability?.freshness === 'FRESH'
+          && openInterestObservedAtMs !== null
+          && openInterestCandidate !== null
+          && Object.values(openInterestCandidate).some((value) => value !== null)
+          ? 'FRESH'
+          : 'MISSING';
+
+    const liquidationCapability = capability('LIQUIDATION');
+    const liquidationCandidate = row?.hasPerp === true
+      && validPositiveOrNull(row.liquidations15mUsd) !== null
+      ? Object.freeze({
+          total15mUsd: validPositiveOrNull(row.liquidations15mUsd),
+          long15mUsd: validNonNegativeOrNull(row.longLiquidations15mUsd),
+          short15mUsd: validNonNegativeOrNull(row.shortLiquidations15mUsd),
+          sampling: 'LATEST_PER_SYMBOL_LOWER_BOUND' as const,
+        })
+      : null;
+    const liquidationState: ProductionTokenEvidenceState = !liquidationAvailable
+      ? 'UNAVAILABLE'
+      : liquidationCapability?.freshness === 'STALE'
+        ? 'STALE'
+        : liquidationObservedAtMs !== null && observedAtMs - liquidationObservedAtMs > this.maxAgeMs
+          ? 'STALE'
+        : liquidationCapability?.freshness === 'FRESH'
+          && liquidationObservedAtMs !== null
+          && liquidationCandidate !== null
+          ? 'FRESH'
+          : 'MISSING';
+
+    const fact = <TValue>(input: {
+      state: ProductionTokenEvidenceState;
+      sourceId: string;
+      dataset: string;
+      observedAtMs: number | null;
+      value: Readonly<TValue> | null;
+      reasonCodes: readonly string[];
+    }): Readonly<ProductionTokenEvidenceFact<TValue>> => Object.freeze({
+      ...input,
+      value: input.state === 'FRESH' ? input.value : null,
+      reasonCodes: Object.freeze([...input.reasonCodes]),
+    });
+
+    const rawBridge = this.bridge.readSymbol(symbol);
+    // The response observation time is an upper bound for every nested owner
+    // evaluation. Bridge/router clocks may tick after the freshness cut used
+    // above, so publish the maximum instead of exposing an apparently future
+    // nested record to strict browser consumers.
+    const readObservedAtMs = Math.max(observedAtMs, routing.observedAtMs, rawBridge.evaluatedAtMs);
+    const bridge = Object.freeze({
+      ...rawBridge,
+      currentState: projectionCurrent ? 'CURRENT' as const : 'HISTORICAL_ONLY' as const,
+      featureSnapshot: projectionCurrent ? rawBridge.featureSnapshot : null,
+      attention: projectionCurrent ? rawBridge.attention : null,
+      artifact: projectionCurrent ? rawBridge.artifact : null,
+      reasonCodes: Object.freeze([
+        ...rawBridge.reasonCodes,
+        ...(projectionCurrent ? [] : ['CURRENT_PROJECTION_UNAVAILABLE']),
+      ]),
+    });
+    const anyCurrentEvidence = projectionCurrent && (
+      [markState, openInterestState, liquidationState].includes('FRESH')
+      || routing.capabilities.some((entry) => entry.freshness === 'FRESH')
+    );
+    return Object.freeze({
+      schemaVersion: 'token-intelligence-owner-read.v1' as const,
+      symbol,
+      observedAtMs: readObservedAtMs,
+      projection: Object.freeze({
+        state: !projectionRunning ? 'NOT_RUNNING' as const : anyCurrentEvidence ? 'ACTIVE' as const : 'DEGRADED' as const,
+        usdm: Object.freeze({ connected: usdmSource.connected, feedState: usdmSource.feedState }),
+        liquidation: Object.freeze({ connected: liquidationFeedState === 'open', feedState: liquidationFeedState }),
+      }),
+      markFunding: fact({
+        state: markState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE.dataset,
+        observedAtMs: markObservedAtMs,
+        value: markCandidate,
+        reasonCodes: markState === 'FRESH' ? [] : [`MARK_FUNDING_${markState}`],
+      }),
+      openInterest: fact({
+        state: openInterestState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST.dataset,
+        observedAtMs: openInterestObservedAtMs,
+        value: openInterestCandidate,
+        reasonCodes: openInterestCapability?.reasonCodes ?? [`OPEN_INTEREST_${openInterestState}`],
+      }),
+      liquidation: fact({
+        state: liquidationState,
+        sourceId: BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.sourceId,
+        dataset: BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION.dataset,
+        observedAtMs: liquidationObservedAtMs,
+        value: liquidationCandidate,
+        reasonCodes: liquidationCapability?.reasonCodes ?? [`LIQUIDATION_${liquidationState}`],
+      }),
+      routing,
+      bridge,
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
+    });
+  }
+
+  readFocusState(symbol: string): ReturnType<IntelligenceRuntimeBridge['focusPinState']> {
+    const readback = this.bridge.focusPinState(symbol);
+    if (this.focusTruthCurrent()) return readback;
+    return Object.freeze({
+      ...readback,
+      eligible: null,
+      canPin: false,
+      // Absence of the desired operator pin is current owner truth even when
+      // broader market eligibility/tier truth is unavailable. This does not
+      // claim that strategy or protected-capital focus has been released.
+      effectivePinned: readback.pinned ? null : false,
+      effectiveTier: null,
+      attentionPlanId: null,
+      attentionPlanAtMs: null,
+    });
+  }
+
+  setPinned(symbol: string, pinned: boolean): boolean {
+    if (pinned && !this.readFocusState(symbol).canPin) {
+      throw new RangeError('focus pin requires an eligible symbol and available FOCUS capacity');
+    }
+    return this.bridge.setOperatorFocusPinned(symbol, pinned);
+  }
+
+  restorePinnedSymbols(symbols: readonly string[]): boolean {
+    return this.bridge.restoreOperatorFocusPins(symbols);
+  }
+
   startRuntime(): Promise<void> {
+    if (this.runtimeActive) return Promise.resolve();
+    this.publicationGeneration += 1;
+    this.sourceRevisions.clear();
     this.runtimeActive = true;
     return Promise.resolve();
   }
@@ -696,11 +1257,13 @@ class PublicIntelligenceLifecycle {
   stopRuntime(): void {
     this.runtimeActive = false;
     this.intelligenceActive = false;
+    this.router.invalidate('INTELLIGENCE_RUNTIME_STOPPED');
     this.resetGenerationProjection();
   }
 
   startIntelligence(): Promise<void> {
     if (!this.runtimeActive) throw new TypeError('market intelligence requires the intelligence runtime');
+    if (this.intelligenceActive) return Promise.resolve();
     this.siblingRefreshHandoff = null;
     this.intelligenceActive = true;
     return Promise.resolve();
@@ -762,6 +1325,253 @@ class PublicIntelligenceLifecycle {
     this.lastEvidenceReady = false;
   }
 
+  private focusTruthCurrent(evaluatedAtMs?: number): boolean {
+    if (!this.runtimeActive || !this.intelligenceActive
+        || !this.lastUniverseReady || !this.lastEvidenceReady
+        || this.lastProjectedSpotTimestamp === null || this.lastProjectedUsdmTimestamp === null) return false;
+    try {
+      const nowMs = evaluatedAtMs ?? this.clock.nowMs();
+      return isValidUtcMillis(nowMs)
+        && this.market.feeds['spot-miniticker'] === 'open'
+        && this.market.feeds['futures-markprice'] === 'open'
+        && evaluateFreshness(this.lastProjectedSpotTimestamp, nowMs).state === 'FRESH'
+        && evaluateFreshness(this.lastProjectedUsdmTimestamp, nowMs).state === 'FRESH';
+    } catch {
+      return false;
+    }
+  }
+
+  private nextSourceRevision(sourceId: string, dataset: string): number {
+    const key = `${this.publicationGeneration}\u0000${sourceId}\u0000${dataset}`;
+    const prior = this.sourceRevisions.get(key) ?? 0;
+    if (prior >= Number.MAX_SAFE_INTEGER) throw new RangeError('public evidence source revision exhausted');
+    const next = prior + 1;
+    this.sourceRevisions.set(key, next);
+    return next;
+  }
+
+  private marketEvidenceCurrent(
+    fact: BinanceSourceFact,
+    revision: number,
+    receipt: Readonly<RegisteredEvidenceRouteReceipt>,
+    fundingProjected: boolean,
+  ): boolean {
+    if (receipt.state !== 'FRESH'
+        || receipt.received < 1
+        || receipt.rejected !== 0
+        || receipt.routed + receipt.duplicate !== receipt.received) return false;
+    try {
+      const snapshot = this.router.snapshot();
+      const exactSource = snapshot.sources.find((source) => (
+        source.sourceId === fact.sourceId
+        && source.dataset === fact.dataset
+        && source.lifecycle === 'LIVE'
+        && source.generation === this.publicationGeneration
+        && source.revision === revision
+      ));
+      if (exactSource?.closed !== false || exactSource.bootstrapped !== true) return false;
+      if (!fundingProjected) return true;
+      return snapshot.capabilities.find((capability) => (
+        capability.capability === 'FUNDING'
+      ))?.freshness === 'FRESH';
+    } catch {
+      return false;
+    }
+  }
+
+  private onVolumeEvidence(cut: Readonly<ProductionVolumeEvidenceCut>): void {
+    const fact = BINANCE_SOURCE_FACTS.SPOT_AGG_TRADE;
+    const nowMs = this.clock.nowMs();
+    if (!isValidUtcMillis(nowMs)) {
+      this.router.invalidate('PUBLICATION_CLOCK_INVALID');
+      return;
+    }
+    if (cut.kind === 'SOURCE_CLOSED') {
+      if (!Number.isSafeInteger(cut.observedAtMs) || cut.observedAtMs < 0 || cut.observedAtMs > nowMs) {
+        this.router.invalidate('SOURCE_CLOSE_TIME_INVALID');
+        return;
+      }
+      this.router.route({
+        correlationId: stableId('existing-volume-source-close', {
+          generation: cut.generation,
+          revision: cut.revision,
+          observedAtMs: cut.observedAtMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'STOPPED' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: cut.generation,
+          revision: cut.revision,
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: cut.observedAtMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+      return;
+    }
+    if (!this.runtimeActive
+        || !Number.isSafeInteger(cut.receivedAtMs) || cut.receivedAtMs < 0 || cut.receivedAtMs > nowMs) return;
+    const result = normalizeTrade(cut.raw, {
+      sourceKey: 'SPOT_AGG_TRADE',
+      sourceId: fact.sourceId,
+      endpointClass: fact.endpointClass,
+      instrument: {
+        venue: 'BINANCE',
+        productFamily: 'SPOT',
+        symbol: cut.raw.s,
+        pair: cut.raw.s,
+        baseAsset: cut.baseAsset,
+        quoteAsset: 'USDT',
+        contractType: null,
+      },
+      receivedTimeMs: cut.receivedAtMs,
+      evaluatedAtMs: nowMs,
+      maxAgeMs: this.maxAgeMs,
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+    });
+    this.router.route({
+      correlationId: stableId('existing-volume-trade-ingest', {
+        generation: cut.generation,
+        revision: cut.revision,
+        aggregateTradeId: cut.raw.a,
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: cut.continuity,
+        generation: cut.generation,
+        revision: cut.revision,
+        bootstrap: cut.continuity === 'CONTIGUOUS' ? 'CONTIGUOUS_OWNER' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: cut.receivedAtMs,
+      }),
+      evidence: result.ok ? Object.freeze([result.value]) : Object.freeze([]),
+      qualityFailures: result.ok ? result.qualityFailures : result.failures,
+    });
+  }
+
+  private onLiquidationEvidence(
+    cut: Readonly<ProductionLiquidationEvidenceCut | ProductionLiquidationSourceClosedCut>,
+  ): void {
+    const fact = BINANCE_SOURCE_FACTS.USD_M_LIQUIDATION;
+    const nowMs = this.clock.nowMs();
+    if (!isValidUtcMillis(nowMs)) {
+      this.router.invalidate('PUBLICATION_CLOCK_INVALID');
+      return;
+    }
+    if (cut.kind === 'SOURCE_CLOSED') {
+      if (!Number.isSafeInteger(cut.observedAtMs) || cut.observedAtMs < 0 || cut.observedAtMs > nowMs) {
+        this.router.invalidate('SOURCE_CLOSE_TIME_INVALID');
+        return;
+      }
+      this.router.route({
+        correlationId: stableId('existing-liquidation-source-close', {
+          generation: cut.generation,
+          revision: cut.revision,
+          observedAtMs: cut.observedAtMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'STOPPED' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: cut.generation,
+          revision: cut.revision,
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: cut.observedAtMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+      return;
+    }
+    if (!this.runtimeActive
+        || !Number.isSafeInteger(cut.receivedAtMs) || cut.receivedAtMs < 0 || cut.receivedAtMs > nowMs) return;
+    const result = normalizeLiquidation(cut.raw, {
+      sourceKey: 'USD_M_LIQUIDATION',
+      sourceId: fact.sourceId,
+      endpointClass: fact.endpointClass,
+      instrument: {
+        venue: 'BINANCE',
+        productFamily: 'USD_M_PERPETUAL',
+        symbol: cut.raw.o.s,
+        pair: cut.raw.o.s,
+        baseAsset: cut.baseAsset,
+        quoteAsset: 'USDT',
+        contractType: 'PERPETUAL',
+      },
+      receivedTimeMs: cut.receivedAtMs,
+      evaluatedAtMs: nowMs,
+      maxAgeMs: this.maxAgeMs,
+      configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+    });
+    this.router.route({
+      correlationId: stableId('existing-liquidation-ingest', {
+        generation: cut.generation,
+        revision: cut.revision,
+        symbol: cut.raw.o.s,
+        transactionTimeMs: cut.raw.o.T,
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'SAMPLED' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: cut.generation,
+        revision: cut.revision,
+        bootstrap: cut.bootstrap,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: cut.receivedAtMs,
+      }),
+      evidence: result.ok ? Object.freeze([result.value]) : Object.freeze([]),
+      qualityFailures: result.ok ? result.qualityFailures : result.failures,
+    });
+  }
+
+  private markUsdMEvidenceUnavailable(nowMs: number): void {
+    for (const fact of [BINANCE_SOURCE_FACTS.USD_M_MARK_PRICE, BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST]) {
+      this.router.route({
+        correlationId: stableId('existing-market-source-unavailable', {
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          generation: this.publicationGeneration,
+          observedAtMs: nowMs,
+        }),
+        scope: 'BROAD',
+        source: Object.freeze({
+          sourceId: fact.sourceId,
+          dataset: fact.dataset,
+          endpointClass: fact.endpointClass,
+          lifecycle: 'WARMING' as const,
+          authority: 'UNAVAILABLE' as const,
+          continuity: 'UNKNOWN' as const,
+          generation: this.publicationGeneration,
+          revision: this.nextSourceRevision(fact.sourceId, fact.dataset),
+          bootstrap: 'NONE' as const,
+          rateBudget: unknownRateBudget(),
+          observedAtMs: nowMs,
+        }),
+        evidence: Object.freeze([]),
+      });
+    }
+  }
+
   private refresh(ctx: ComponentStepContext): Readonly<IntelligenceRefresh> {
     // Receipt time and evaluation time belong to the same deterministic
     // supervisor step. Taking a second clock sample here can place a newly
@@ -772,6 +1582,7 @@ class PublicIntelligenceLifecycle {
     const usdmFresh = usdm.connected
       && usdm.timestamp !== null
       && evaluateFreshness(usdm.timestamp, ctx.nowMs).state === 'FRESH';
+    if (!usdmFresh) this.markUsdMEvidenceUnavailable(ctx.nowMs);
     if (!spot.connected || !spotFresh) {
       this.lastUniverseReady = false;
       this.lastEvidenceReady = false;
@@ -782,6 +1593,7 @@ class PublicIntelligenceLifecycle {
         usdmTimestamp: usdm.timestamp,
       });
     }
+    if (!usdmFresh) this.lastEvidenceReady = false;
 
     const key = `${spot.timestamp?.sourceTimeMs ?? 'receive'}:${usdmFresh ? usdm.timestamp?.sourceTimeMs ?? 'receive' : 'unavailable'}`;
     const projectionDue = this.lastProjectionAtMs === null
@@ -856,6 +1668,7 @@ class PublicIntelligenceLifecycle {
     const universeReceipt = this.bridge.updateUniverse(graph);
     const universeReady = universeReceipt.accepted && universeReceipt.nodeCount > 0;
     if (!universeReady || usdmTimestamp === null) {
+      if (universeReady) this.bridge.evaluate();
       return Object.freeze({ universeReady, evidenceReady: false });
     }
 
@@ -868,7 +1681,7 @@ class PublicIntelligenceLifecycle {
       const sourceTimeMs = marketCut.usdmSourceTimes.get(row.symbol) ?? null;
       if (sourceTimeMs === null || sourceTimeMs !== usdmTimestamp.sourceTimeMs
           || sourceTimeMs > usdmTimestamp.receivedAtMs) continue;
-      const result = normalizeMarkPrice({
+      const rawMark = {
         e: 'markPriceUpdate',
         E: sourceTimeMs,
         s: row.symbol,
@@ -878,7 +1691,12 @@ class PublicIntelligenceLifecycle {
         ...(typeof row.perpIndexPrice === 'number' && Number.isFinite(row.perpIndexPrice) && row.perpIndexPrice > 0
           ? { i: String(row.perpIndexPrice) }
           : {}),
-      }, {
+        ...(typeof row.fundingRate === 'number' && Number.isFinite(row.fundingRate) && Math.abs(row.fundingRate) <= 1
+          ? { r: String(row.fundingRate) }
+          : {}),
+        ...(validUtcOrNull(row.nextFundingTime) !== null ? { T: row.nextFundingTime } : {}),
+      };
+      const context = {
         sourceKey: 'USD_M_MARK_PRICE',
         sourceId: fact.sourceId,
         endpointClass: fact.endpointClass,
@@ -895,27 +1713,112 @@ class PublicIntelligenceLifecycle {
         evaluatedAtMs: nowMs,
         maxAgeMs: this.maxAgeMs,
         configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
-      });
-      if (result.ok) {
-        normalized.push(result.value);
-        qualityFailures.push(...result.qualityFailures);
+      } as const;
+      const mark = normalizeMarkPrice(rawMark, context);
+      if (mark.ok) {
+        normalized.push(mark.value);
+        qualityFailures.push(...mark.qualityFailures);
       } else {
-        qualityFailures.push(...result.failures);
+        qualityFailures.push(...mark.failures);
+      }
+      if (rawMark.r !== undefined && normalized.length < MAX_PROJECTED_MARK_EVIDENCE) {
+        const funding = normalizeFunding(rawMark, context);
+        if (funding.ok) {
+          normalized.push(funding.value);
+          qualityFailures.push(...funding.qualityFailures);
+        } else {
+          qualityFailures.push(...funding.failures);
+        }
       }
     }
-    if (normalized.length === 0) return Object.freeze({ universeReady, evidenceReady: false });
-    const receipt = this.bridge.ingest({
+    const markSourceRevision = this.nextSourceRevision(fact.sourceId, fact.dataset);
+    const fundingProjected = normalized.some((record) => record.kind === 'FUNDING');
+    const receipt = this.router.route({
       correlationId: stableId('existing-market-intelligence-ingest', {
         sourceTimeMs: usdmTimestamp.sourceTimeMs,
         evidenceIds: normalized.map((record) => record.id),
       }),
       scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: fact.sourceId,
+        dataset: fact.dataset,
+        endpointClass: fact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: this.publicationGeneration,
+        revision: markSourceRevision,
+        bootstrap: normalized.length > 0 ? 'CURRENT_SNAPSHOT' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: nowMs,
+      }),
       evidence: normalized,
       qualityFailures,
     });
+
+    const openInterest: NormalizedEvidence[] = [];
+    const openInterestQualityFailures = [];
+    const openInterestFact = BINANCE_SOURCE_FACTS.USD_M_OPEN_INTEREST;
+    for (const row of boundedRows) {
+      if (openInterest.length >= MAX_PROJECTED_OPEN_INTEREST_EVIDENCE || !row.hasPerp
+          || typeof row.openInterest !== 'number' || !Number.isFinite(row.openInterest) || row.openInterest < 0) continue;
+      const sourceTimeMs = validUtcOrNull(row.openInterestUpdatedAt);
+      if (sourceTimeMs === null || sourceTimeMs > nowMs) continue;
+      const result = normalizeOpenInterest({
+        symbol: row.symbol,
+        openInterest: String(row.openInterest),
+        time: sourceTimeMs,
+      }, {
+        sourceKey: 'USD_M_OPEN_INTEREST',
+        sourceId: openInterestFact.sourceId,
+        endpointClass: openInterestFact.endpointClass,
+        instrument: {
+          venue: 'BINANCE',
+          productFamily: 'USD_M_PERPETUAL',
+          symbol: row.symbol,
+          pair: row.symbol,
+          baseAsset: row.base,
+          quoteAsset: 'USDT',
+          contractType: 'PERPETUAL',
+        },
+        receivedTimeMs: nowMs,
+        evaluatedAtMs: nowMs,
+        maxAgeMs: this.maxAgeMs,
+        configurationVersion: PUBLIC_UNIVERSE_CONFIGURATION,
+      });
+      if (result.ok) {
+        openInterest.push(result.value);
+        openInterestQualityFailures.push(...result.qualityFailures);
+      } else {
+        openInterestQualityFailures.push(...result.failures);
+      }
+    }
+    this.router.route({
+      correlationId: stableId('existing-market-open-interest-ingest', {
+        evidenceIds: openInterest.map((record) => record.id),
+      }),
+      scope: 'BROAD',
+      source: Object.freeze({
+        sourceId: openInterestFact.sourceId,
+        dataset: openInterestFact.dataset,
+        endpointClass: openInterestFact.endpointClass,
+        lifecycle: 'LIVE' as const,
+        authority: 'COMPLETE' as const,
+        continuity: 'UNKNOWN' as const,
+        generation: this.publicationGeneration,
+        revision: this.nextSourceRevision(openInterestFact.sourceId, openInterestFact.dataset),
+        bootstrap: openInterest.length > 0 ? 'CURRENT_SNAPSHOT' as const : 'NONE' as const,
+        rateBudget: unknownRateBudget(),
+        observedAtMs: nowMs,
+      }),
+      evidence: openInterest,
+      qualityFailures: openInterestQualityFailures,
+    });
+    const evaluation = this.bridge.evaluate();
     return Object.freeze({
       universeReady,
-      evidenceReady: receipt.accepted + receipt.duplicate > 0,
+      evidenceReady: evaluation.attentionPlan !== null
+        && this.marketEvidenceCurrent(fact, markSourceRevision, receipt, fundingProjected),
     });
   }
 }
@@ -1104,6 +2007,7 @@ function strategySummary(
       heartbeatAtMs: null,
       candidateCount: null,
       proposalCount: null,
+      cooldownCount: null,
       rejectionCount: null,
       acceptedCount: null,
       lastDecisionAtMs: null,
@@ -1115,11 +2019,13 @@ function strategySummary(
     .filter((value): value is number => value !== null);
   const freshness = health.timestamp ? evaluateFreshness(health.timestamp, nowMs) : null;
   const live = health.running && freshness?.state === 'FRESH';
+  const ownerSummary = safeStrategyOwnerSummary(snapshot);
   return Object.freeze({
     truthLabel: live ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
     heartbeatAtMs: validUtcOrNull(snapshot.lastTickTs),
-    candidateCount: snapshot.decisions.filter((decision) => decision.kind === 'watch' || decision.kind === 'focus').length,
-    proposalCount: snapshot.proposals.length,
+    candidateCount: ownerSummary?.candidateCount ?? null,
+    proposalCount: ownerSummary?.opportunityCount ?? null,
+    cooldownCount: ownerSummary?.cooldownCount ?? null,
     rejectionCount: snapshot.decisions.filter((decision) => decision.kind === 'reject').length,
     acceptedCount: snapshot.decisions.filter((decision) => decision.kind === 'proposal').length,
     lastDecisionAtMs: timestamps.length > 0 ? Math.max(...timestamps) : null,
@@ -1146,7 +2052,9 @@ export function createProductionSystemIntegrationPorts(
     input.clock,
     input.market,
     evidence,
+    input.volume,
     maxAgeMs,
+    input.intelligenceEvidenceMaximumBytes,
   );
   const basisLifecycle = new BasisLifecyclePort(input.basis, maxAgeMs);
   const volumeLifecycle = new VolumeLifecyclePort(input.volume, maxAgeMs);
@@ -1156,6 +2064,7 @@ export function createProductionSystemIntegrationPorts(
       ? createAcceptedQAbstentionBinding()
       : input.qAdvisory,
   });
+  const capitalReadGuard: CapitalReadGuard = { active: false, reentered: false };
 
   const runtimes = Object.freeze({
     market: Object.freeze({
@@ -1221,7 +2130,12 @@ export function createProductionSystemIntegrationPorts(
       });
       const basisHealth = basisLifecycle.health(ctx);
       const volumeHealth = volumeLifecycle.health(ctx);
-      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies'>> = {
+      const capitalRead = safeCapitalSummary(input.capitalSummary, capitalReadGuard);
+      const capital = capitalRead.summary
+        ?? unavailableCapitalRestartSummary(capitalRead.kind === 'MALFORMED'
+          ? 'CAPITAL_SUMMARY_OWNER_MALFORMED'
+          : 'CAPITAL_SUMMARY_OWNER_UNAVAILABLE');
+      const result: Partial<Pick<SystemSupervisorSummaries, 'sourceCoverage' | 'strategies' | 'intelligence' | 'capital'>> = {
         sourceCoverage: Object.freeze({
           truthLabel: marketLive ? 'LIVE_PUBLIC' : 'UNAVAILABLE',
           universeSymbols: facts.universeSymbols,
@@ -1236,10 +2150,91 @@ export function createProductionSystemIntegrationPorts(
           basis: strategySummary(safeStrategySnapshot(input.basis), basisHealth, nowMs),
           volume: strategySummary(safeStrategySnapshot(input.volume), volumeHealth, nowMs),
         }),
+        intelligence: publicIntelligence.readSummary(nowMs),
+        capital,
       };
       return Object.freeze(result);
     },
   });
 
-  return Object.freeze({ sourceRegistry, runtimes, components, summaries });
+  const intelligenceEvidence = Object.freeze({
+    readRoutingSnapshot: () => publicIntelligence.readEvidenceRoutingSnapshot(),
+    readSymbol: (symbol: string) => publicIntelligence.readSymbol(symbol),
+  });
+
+  const strategyIntake = Object.freeze({
+    basis: Object.freeze({
+      readPaused: () => input.basis.intakePaused(),
+      setPaused: (paused: boolean) => input.basis.setIntakePaused(paused),
+    }),
+    volume: Object.freeze({
+      readPaused: () => input.volume.intakePaused(),
+      setPaused: (paused: boolean) => input.volume.setIntakePaused(paused),
+    }),
+  });
+
+  const strategySymbolPolicy = Object.freeze({
+    basis: Object.freeze({
+      readBlockedSymbols: () => input.basis.operatorBlockedSymbols(),
+      setBlocked: (symbol: string, blocked: boolean) => input.basis.setOperatorSymbolBlocked(symbol, blocked),
+      isAllowed: (symbol: string) => input.basis.symbolAllowedByPolicy(symbol),
+    }),
+    volume: Object.freeze({
+      readBlockedSymbols: () => input.volume.operatorBlockedSymbols(),
+      setBlocked: (symbol: string, blocked: boolean) => input.volume.setOperatorSymbolBlocked(symbol, blocked),
+      isAllowed: (symbol: string) => input.volume.symbolAllowedByPolicy(symbol),
+    }),
+  });
+
+  const sizeCeilings = Object.freeze({
+    BASIS: Object.freeze({
+      readCeiling: () => input.basis.sizeCeiling(),
+      setCeiling: (value: string) => input.basis.setSizeCeiling(value),
+    }),
+    VOLUME: Object.freeze({
+      readCeiling: () => input.volume.sizeCeiling(),
+      setCeiling: (value: string) => input.volume.setSizeCeiling(value),
+    }),
+  });
+
+  const strategyThresholds = Object.freeze({
+    BASIS: Object.freeze({
+      readThreshold: () => input.basis.strategyThreshold(),
+      setThreshold: (value: string) => input.basis.setStrategyThreshold(value),
+    }),
+    VOLUME: Object.freeze({
+      readThreshold: () => input.volume.strategyThreshold(),
+      setThreshold: (value: string) => input.volume.setStrategyThreshold(value),
+    }),
+  });
+
+  const attentionFocus = Object.freeze({
+    readPinnedSymbols: () => publicIntelligence.readPinnedSymbols(),
+    readFocusState: (symbol: string) => publicIntelligence.readFocusState(symbol),
+    setPinned: (symbol: string, pinned: boolean) => publicIntelligence.setPinned(symbol, pinned),
+    restorePinnedSymbols: (symbols: readonly string[]) => publicIntelligence.restorePinnedSymbols(symbols),
+  });
+
+  const capitalEligibility = createProductionCapitalEligibilityPort({
+    clock: input.clock,
+    owners: input.capitalEconomicsOwners ?? null,
+  });
+  const volumeRisk = createProductionVolumeRiskPort({
+    clock: input.clock,
+    runtime: input.volume,
+    owner: input.volumeRiskEvidenceOwner ?? null,
+  });
+  const observedOrderFocus = createProductionObservedOrderFocusPort({
+    clock: input.clock,
+    runtime: input.volume,
+    owner: input.observedOrderFocusEvidenceOwner ?? null,
+  });
+
+  return Object.freeze({
+    sourceRegistry, runtimes, components, summaries, intelligenceEvidence,
+    strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
+    capitalEligibility,
+    volumeRisk,
+    observedOrderFocus,
+  });
 }

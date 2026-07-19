@@ -28,6 +28,8 @@ export interface AttentionSourceQuality {
 export interface AttentionInstrument {
   instrumentId: string;
   symbol: string;
+  /** Operator intent only; the planner still owns eligibility and capacity. */
+  operatorPinned?: boolean;
   protectedCapital: boolean;
   releaseRequested: boolean;
   releaseReasonCodes: string[];

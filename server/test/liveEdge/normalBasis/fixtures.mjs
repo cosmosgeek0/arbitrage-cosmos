@@ -285,6 +285,8 @@ function buildNormalBasisOwnerChain(suffix) {
     `${record.correlationId}|${record.symbol}|${record.ts}|${record.kind}`
   );
   const capture = captureEngineSnapshot({
+    nowMs: VENUE_ARRIVAL_MS,
+    safeCurrentState: 'ADVISORY',
     family: 'BASIS',
     sourceId: `basis.engine.replay.${sourceProposal.id}`,
     snapshotTimeMs: harness.clock.now(),

@@ -118,6 +118,8 @@ export interface ProductRuntimeReadPorts {
     | Readonly<SystemTraceSnapshot>
     | null
     | Promise<Readonly<SystemTraceSnapshot> | null>;
+  incidents?(): Readonly<ProductRuntimeIncidentSnapshot>
+    | Promise<Readonly<ProductRuntimeIncidentSnapshot>>;
 }
 
 export interface ProductRuntimeClock {
@@ -135,6 +137,11 @@ export const PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS = Object.freeze([
   'SET_KILL_SWITCH',
   'SET_INTAKE_PAUSED',
   'RESTART_COMPONENT',
+  'SET_PUBLIC_SOURCE_LIFECYCLE',
+  'SET_BASIS_INTAKE',
+  'SET_VOLUME_INTAKE',
+  'PIN_FOCUS',
+  'ACK_INCIDENT',
 ] as const);
 export type ProductRuntimeSafeBackendCommand = (typeof PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS)[number];
 
@@ -221,7 +228,7 @@ export type ProductRuntimeCommandResultReadback =
 export interface ProductRuntimeCommandIntent {
   readonly controlId: string;
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
-  readonly targetType: 'SYSTEM' | 'COMPONENT';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly expectedRevision: string;
@@ -232,6 +239,54 @@ export interface ProductRuntimeCommandIntent {
 /** Optional canonical owner. Presence alone never wires a control. */
 export interface ProductRuntimeCommandOwnerPort {
   readonly capability: Readonly<ProductRuntimeCommandOwnerCapability>;
+  readSourceControlState?(sourceId: 'public-spot-source' | 'public-usdm-source'): Readonly<{
+    readonly sourceRevision: number;
+    readonly desiredLifecycle: 'LIVE' | 'ISOLATED';
+    readonly observedLifecycle: string;
+    readonly pendingAction: 'ISOLATE' | 'RESTART' | null;
+  }> | null;
+  readStrategyIntakeControlState?(strategy: 'basis' | 'volume'): Readonly<{
+    readonly controlRevision: number;
+    readonly desiredPaused: boolean;
+    readonly effectivePaused: boolean | null;
+    readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+  }> | null;
+  readFocusControlState?(symbol: string): Readonly<{
+    readonly symbol: string;
+    readonly desiredPinned: boolean;
+    readonly ownerPinned: boolean | null;
+    readonly eligible: boolean | null;
+    readonly canPin: boolean | null;
+    readonly effectivePinned: boolean | null;
+    readonly effectiveTier: string | null;
+    readonly attentionPlanId: string | null;
+    readonly attentionPlanAtMs: number | null;
+    readonly pinCount: number | null;
+    readonly pinCapacity: number | null;
+    readonly controlRevision: number;
+    readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+  }> | null;
+  readFocusPinnedSymbols?(): readonly string[];
+  /**
+   * Authorizes only an exact command whose desired mutation is already durable
+   * and whose runtime publication is still pending. This recovery seam may
+   * bypass a now-unavailable registry projection or an expired preview, but it
+   * must never admit a new mutation.
+   */
+  authorizePendingReplay?(input: Readonly<{
+    request: Readonly<ProductRuntimeCommandRequest>;
+    intent: Readonly<ProductRuntimeCommandIntent>;
+  }>): Promise<boolean>;
+  readIncidentControlState?(incidentId: string): Readonly<{
+    readonly incidentId: string;
+    readonly ledgerEventId: number;
+    readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+    readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    readonly rootComponentId: string;
+    readonly eventCount: number;
+    readonly acknowledgedAtMs: number | null;
+    readonly resolvedAtMs: number | null;
+  }> | null;
   preview(intent: Readonly<ProductRuntimeCommandIntent>): Promise<Readonly<ProductRuntimeControlPreview>>;
   submit(input: Readonly<{
     request: Readonly<ProductRuntimeCommandRequest>;
@@ -301,6 +356,48 @@ export interface ProductRuntimeIncidentAvailability {
   readonly blocker: string | null;
 }
 
+export interface ProductRuntimeIncidentProjection {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly ledgerEventId: number;
+  readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  readonly rootComponentId: string;
+  readonly sourceGroup: string;
+  readonly capitalRelevant: boolean;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly count: number;
+  readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
+  readonly reasonCode: 'CONNECTION_UNHEALTHY';
+  readonly operatorAction: string;
+  readonly correlationId: string;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly acknowledgementControlId: string;
+  readonly routing: Readonly<{
+    readonly inApp: Readonly<{
+      readonly state: 'WIRED_LOCAL';
+      readonly receiptId: string;
+    }>;
+    readonly externalPaging: Readonly<{
+      readonly state: 'NOT_CONFIGURED';
+      readonly receiptId: null;
+      readonly blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED';
+    }>;
+  }>;
+  readonly recoveryProof: Readonly<{
+    readonly state: 'PENDING' | 'PROVEN';
+    readonly sourceEventId: number | null;
+    readonly resolvedAtMs: number | null;
+  }>;
+}
+
+export interface ProductRuntimeIncidentSnapshot {
+  readonly availability: Readonly<ProductRuntimeIncidentAvailability>;
+  readonly incidents: readonly Readonly<ProductRuntimeIncidentProjection>[];
+}
+
 export type ProductRuntimeControlWiringState =
   | 'WIRED_LIVE' | `UNAVAILABLE:${string}` | `PENDING_BACKEND:${string}` | 'OWNER_GATED';
 
@@ -309,7 +406,7 @@ export interface ProductRuntimeControlRegistryEntry {
   readonly backendCommandId: ProductRuntimeSafeBackendCommand;
   readonly wiringState: ProductRuntimeControlWiringState;
   readonly owner: string;
-  readonly targetType: 'SYSTEM' | 'COMPONENT';
+  readonly targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
   readonly targetId: string;
   readonly payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
   readonly payloadSchema: string;
@@ -343,12 +440,33 @@ export interface ProductRuntimeComponentProjection {
   readonly capability: ProductRuntimeCapability;
   readonly heartbeatAtMs: number | null;
   readonly lastAdvanceAtMs: number | null;
+  readonly freshnessState: 'FRESH' | 'STALE' | 'CLOCK_SKEWED' | 'UNAVAILABLE';
   readonly sourceAgeMs: number | null;
   readonly eventAgeMs: number | null;
   readonly processingAgeMs: number | null;
+  readonly processingLagMs: number | null;
   readonly queueDepth: number | null;
   readonly queueCapacity: number | null;
   readonly droppedCount: number | null;
+  readonly dataQualityState: 'GOOD' | 'DEGRADED' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly dataQualityInvalidCount: number | null;
+  readonly dataQualityDuplicateCount: number | null;
+  readonly dataQualityOutOfOrderCount: number | null;
+  readonly dataQualitySequenceGapCount: number | null;
+  readonly dataQualityObservedAtMs: number | null;
+  readonly retryState: 'IDLE' | 'RETRYING' | 'BACKING_OFF' | 'COOLDOWN' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly retryAttempt: number | null;
+  readonly retryCeiling: number | null;
+  readonly backoffMs: number | null;
+  readonly retryAtMs: number | null;
+  readonly cooldownUntilMs: number | null;
+  readonly dependencyIds: readonly string[];
+  readonly checkpointState: 'CURRENT' | 'DIRTY' | 'STALE' | 'MISSING' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly checkpointRevision: string | null;
+  readonly checkpointPersistedAtMs: number | null;
+  readonly restartState: 'NEVER_RESTARTED' | 'RESTARTED' | 'RESTART_REQUIRED' | 'UNKNOWN';
+  readonly generation: number;
+  readonly restartCount: number;
   readonly blockerCode: string | null;
   readonly rootCauseComponentId: string | null;
   readonly capitalRelevance: 'NONE' | 'POTENTIAL' | 'EXPOSED' | 'RECOVERY';
@@ -361,11 +479,21 @@ export interface ProductRuntimeComponentProjection {
 export type ProductRuntimeManagedInventoryState =
   | 'EVIDENCE_PRESENT' | 'OWNER_GATED' | 'NOT_CONFIGURED' | 'MISSING';
 
-export interface ProductRuntimeManagedInventoryEvidenceRef {
+export interface ProductRuntimeManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
 }
+
+export interface ProductRuntimeManagedInventoryOwnerEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_OWNER_PROJECTION';
+  readonly ownerId: 'productIntegration.incident-router';
+  readonly truthLabel: 'BUILT_AND_TESTED';
+}
+
+export type ProductRuntimeManagedInventoryEvidenceRef =
+  | ProductRuntimeManagedInventoryComponentEvidenceRef
+  | ProductRuntimeManagedInventoryOwnerEvidenceRef;
 
 /**
  * A role-to-owner reference. `evidence` reuses canonical Product component
@@ -532,7 +660,7 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly controls: readonly Readonly<ProductRuntimeControlRegistryEntry>[];
   readonly traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
   readonly incidentAvailability: Readonly<ProductRuntimeIncidentAvailability>;
-  readonly incidents: readonly never[];
+  readonly incidents: readonly Readonly<ProductRuntimeIncidentProjection>[];
   readonly materialEvents: Readonly<ProductRuntimeMaterialEventPage>;
   readonly surfaces: Readonly<Record<string, Readonly<ProductRuntimeSurfaceProjection>>>;
 }

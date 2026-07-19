@@ -4,10 +4,14 @@
  * force order closes a LONG position; BUY closes a SHORT. */
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  assertDataDirCachePathHeld,
+  resolveDataDirAuthority,
+} from '../bootstrap/environment.js';
 import type { FeedStatus } from './ws.js';
 
-const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
-const DISK = path.resolve(process.cwd(), process.env.LIQ_CACHE ?? path.join(DATA_ROOT, 'liquidations.json'));
+const DATA_DIR_AUTHORITY = resolveDataDirAuthority();
+const { liquidationCache: DISK } = DATA_DIR_AUTHORITY;
 const FIVE_MIN = 5 * 60_000;
 const HOUR = 60 * 60_000;
 const KEEP_5M_MS = 48 * HOUR;
@@ -159,8 +163,11 @@ function enqueueLiquidationPersist(): Promise<void> {
     .then(async () => {
       const temp = `${DISK}.${process.pid}.${Date.now()}.${++persistSequence}.tmp`;
       try {
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.mkdir(path.dirname(DISK), { recursive: true });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.writeFile(temp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx', flush: true });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
         await fs.promises.rename(temp, DISK);
       } finally {
         await fs.promises.unlink(temp).catch(() => undefined);

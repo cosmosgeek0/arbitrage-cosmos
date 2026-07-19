@@ -7,6 +7,7 @@ import {
   addExactDecimals,
   assessCapitalTruth,
   capitalDigest,
+  createSyntheticConservativeEconomicFactBinding,
   deriveActivePositionId,
   derivePositionThesisId,
 } from '../../../dist/capitalFoundation/contracts/index.js';
@@ -98,8 +99,10 @@ export function intelligenceTruth(overrides = {}) {
   };
 }
 
-export function exactEconomics(overrides = {}) {
-  return {
+export function exactEconomics(overrides = {}, scopeOverrides = {}) {
+  const evaluatedAtMs = scopeOverrides.evaluatedAtMs ?? NOW;
+  const factObservedAtMs = scopeOverrides.proposalUpdatedAtMs ?? evaluatedAtMs - 100;
+  const values = {
     valuationAsset: 'USDT',
     requestedCapital: '100',
     expectedGrossEdge: '12',
@@ -109,10 +112,64 @@ export function exactEconomics(overrides = {}) {
     estimatedBorrowCost: '0',
     estimatedSpreadCost: '1',
     estimatedSlippage: '1',
+    estimatedLatencyCost: '0.25',
+    estimatedAdverseSelectionCost: '0.5',
+    estimatedRecoveryCost: '0.75',
+    estimatedCapitalOpportunityCost: '1.5',
     liquidityCapacity: '1000',
+    expectedBorrowScope: {
+      accountId: 'synthetic-account', symbol: scopeOverrides.symbol ?? 'BTCUSDT',
+      asset: (scopeOverrides.symbol ?? 'BTCUSDT').replace('USDT', ''),
+      mode: 'CROSS_CLASSIC', permissionId: 'synthetic-permission',
+    },
     exactSourceIds: ['scenario-exact-economics'],
     missingFields: [],
     ...overrides,
+  };
+  const fact = (kind, value, sourceId) => value === null ? null : createSyntheticConservativeEconomicFactBinding({
+    kind,
+    scope: {
+      proposalId: scopeOverrides.proposalId ?? 'basis-proposal-basis-1',
+      proposalRevision: null,
+      proposalUpdatedAtMs: scopeOverrides.proposalUpdatedAtMs ?? NOW - 100,
+      proposalConfigRevision: scopeOverrides.proposalConfigRevision ?? 'basis-config-1',
+      correlationId: scopeOverrides.correlationId ?? 'basis-1:correlation',
+      strategy: scopeOverrides.strategy ?? 'BASIS',
+      symbol: scopeOverrides.symbol ?? 'BTCUSDT',
+      instrumentIds: scopeOverrides.instrumentIds ?? ['BINANCE:SPOT:BTCUSDT', 'BINANCE:USD_M_PERPETUAL:BTCUSDT'],
+      ownerRecordId: `${sourceId}-record`,
+      ownerConfigRevision: scopeOverrides.proposalConfigRevision ?? 'basis-config-1',
+    },
+    borrowScope: kind === 'BORROW' ? {
+      ...values.expectedBorrowScope,
+      truthEvaluatedAtMs: factObservedAtMs,
+      truthExpiresAtMs: evaluatedAtMs + 900,
+    } : null,
+    value,
+    unit: values.valuationAsset,
+    source: {
+      sourceTimeMs: factObservedAtMs,
+      receivedAtMs: factObservedAtMs + 10,
+      maxAgeMs: 1_000_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}-r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}-e1`],
+  });
+  return {
+    ...values,
+    fundingFact: Object.hasOwn(overrides, 'fundingFact')
+      ? overrides.fundingFact
+      : fact('FUNDING', values.estimatedFunding, 'scenario-funding-fact'),
+    borrowFact: Object.hasOwn(overrides, 'borrowFact')
+      ? overrides.borrowFact
+      : fact('BORROW', values.estimatedBorrowCost, 'scenario-borrow-fact'),
+    capitalOpportunityFact: Object.hasOwn(overrides, 'capitalOpportunityFact')
+      ? overrides.capitalOpportunityFact
+      : fact('CAPITAL_OPPORTUNITY', values.estimatedCapitalOpportunityCost, 'scenario-capital-opportunity-fact'),
   };
 }
 
@@ -165,6 +222,7 @@ export function proposalSeed(strategy = 'BASIS', overrides = {}) {
     truth: truth(`${key}.metadata`),
     ...(overrides.metadata ?? {}),
   };
+  const evaluatedAtMs = overrides.evaluatedAtMs ?? NOW;
   const common = {
     canonical,
     metadata,
@@ -180,8 +238,19 @@ export function proposalSeed(strategy = 'BASIS', overrides = {}) {
       truth: truth(`${key}.expiration`),
       ...(overrides.expiration ?? {}),
     },
-    economics: exactEconomics(overrides.economics),
-    evaluatedAtMs: overrides.evaluatedAtMs ?? NOW,
+    economics: exactEconomics(overrides.economics, {
+      proposalId: sourceId,
+      proposalUpdatedAtMs: updatedAtMs,
+      proposalConfigRevision: configRevision,
+      correlationId: metadata.correlationId,
+      strategy,
+      symbol,
+      evaluatedAtMs,
+      instrumentIds: basis
+        ? [`BINANCE:SPOT:${symbol}`, `BINANCE:USD_M_PERPETUAL:${symbol}`]
+        : [`BINANCE:SPOT:${symbol}`],
+    }),
+    evaluatedAtMs,
   };
   if (basis) {
     const instruments = {

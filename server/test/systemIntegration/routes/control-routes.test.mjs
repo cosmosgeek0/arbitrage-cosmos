@@ -129,7 +129,7 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
   const persistence = new Persistence(state);
   const composition = new Composition();
   const controls = new SystemControlService({ initialState: state, persistence, composition });
-  const calls = { supervisor: 0, graph: 0, events: 0, controls: 0, trace: 0, ops: 0 };
+  const calls = { supervisor: 0, graph: 0, events: 0, controls: 0, focusPin: 0, trace: 0, ops: 0 };
   let eventQuery = null;
   const read = {
     supervisor() {
@@ -147,6 +147,24 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
       return { items: [], nextBeforeId: null, nextAfterId: null };
     },
     controls() { calls.controls++; return controls.snapshot(); },
+    focusPin(symbol) {
+      calls.focusPin++;
+      return {
+        symbol,
+        desiredPinned: false,
+        ownerPinned: false,
+        eligible: true,
+        canPin: true,
+        effectivePinned: false,
+        effectiveTier: 'UNIVERSE',
+        attentionPlanId: 'attention-plan:route-fixture',
+        attentionPlanAtMs: T0,
+        pinCount: 0,
+        pinCapacity: 25,
+        controlRevision: controls.snapshot().revision,
+        state: 'APPLIED',
+      };
+    },
     trace(correlationId) {
       calls.trace++;
       return correlationId === 'cor_present'
@@ -237,6 +255,33 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     assert.equal(opsQuery.status, 400);
     assert.equal((await json(opsQuery)).code, 'REFRESH_REQUIRES_POST');
     assert.equal(calls.ops, 2);
+
+    const focus = await fetchLocal('/api/system-integration/attention/focus/BTCUSDT');
+    assert.equal(focus.status, 200);
+    assert.deepEqual(await json(focus), {
+      symbol: 'BTCUSDT',
+      desiredPinned: false,
+      ownerPinned: false,
+      eligible: true,
+      canPin: true,
+      effectivePinned: false,
+      effectiveTier: 'UNIVERSE',
+      attentionPlanId: 'attention-plan:route-fixture',
+      attentionPlanAtMs: T0,
+      pinCount: 0,
+      pinCapacity: 25,
+      controlRevision: 0,
+      state: 'APPLIED',
+    });
+    assert.equal(calls.focusPin, 1);
+    const invalidFocus = await fetchLocal('/api/system-integration/attention/focus/btcusdt');
+    assert.equal(invalidFocus.status, 400);
+    assert.equal((await json(invalidFocus)).code, 'INVALID_FOCUS_SYMBOL');
+    assert.equal(calls.focusPin, 1);
+    const focusRefresh = await fetchLocal('/api/system-integration/attention/focus/BTCUSDT?refresh=1');
+    assert.equal(focusRefresh.status, 400);
+    assert.equal((await json(focusRefresh)).code, 'REFRESH_REQUIRES_POST');
+    assert.equal(calls.focusPin, 1);
 
     const forgedEdge = await fetchLocal('/api/system-integration/supervisor', {
       headers: { 'x-forwarded-for': '127.0.0.1' },

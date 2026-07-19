@@ -10,7 +10,6 @@
  * when the kill switch is on.
  */
 import type {
-  BookTicker,
   Clock,
   Decision,
   MarkFunding,
@@ -31,6 +30,7 @@ import { priorityFor } from './priority.js';
 import { basisConfig, type BasisConfig } from './config.js';
 import type { EventSink } from '../v0/types.js';
 import type {
+  BasisBookObservation,
   BasisDirection,
   BasisFeatureSnapshot,
   BasisProposal,
@@ -62,7 +62,12 @@ export class BasisEngine {
   private latestPriority = new Map<string, PriorityScore>();
   private running = false;
   private killSwitchOn = false;
-  private blocked = new Set<string>();
+  private intakePausedValue = false;
+  /** Dynamic application-config blocklist; refreshed by BasisRuntime. */
+  private policyBlocked = new Set<string>();
+  private policyAllowed: Set<string> | null = null;
+  /** Durable strategy-local operator overlay; never overwritten by config refresh. */
+  private operatorBlocked = new Set<string>();
   private lastTickTs: number | null = null;
   private lastHeartbeatTs: number | null = null;
   private tickCount = 0;
@@ -120,6 +125,25 @@ export class BasisEngine {
     return this.killSwitchOn;
   }
 
+  /** Pause proposal formation only; market observation and supervision continue. */
+  setIntakePaused(paused: boolean): boolean {
+    if (typeof paused !== 'boolean') throw new TypeError('basis intake posture must be boolean');
+    if (paused === this.intakePausedValue) return false;
+    this.intakePausedValue = paused;
+    if (paused) this.proposals.expireAll('intake_paused');
+    this.emitter.emit(
+      'heartbeat',
+      newCorrelationId(this.clock, 'basis_sys'),
+      `basis proposal intake ${paused ? 'paused' : 'resumed'}`,
+      { payload: { intakePaused: paused } },
+    );
+    return true;
+  }
+
+  intakePaused(): boolean {
+    return this.intakePausedValue;
+  }
+
   /** Apply a validated config revision and invalidate state derived under old thresholds. */
   updateConfig(partial: Partial<BasisConfig>): boolean {
     const merged = { ...this.cfg, ...partial };
@@ -139,8 +163,11 @@ export class BasisEngine {
     this.decisionLog = [];
     this.lastTickTs = null;
     this.lastHeartbeatTs = null;
-    if (this.blocked.size > this.cfg.maxUniverseSize) {
-      this.blocked = new Set([...this.blocked].sort().slice(0, this.cfg.maxUniverseSize));
+    if (this.policyBlocked.size > this.cfg.maxUniverseSize) {
+      this.policyBlocked = new Set([...this.policyBlocked].sort().slice(0, this.cfg.maxUniverseSize));
+    }
+    if (this.operatorBlocked.size > this.cfg.maxUniverseSize) {
+      throw new RangeError(`basis operator symbol-policy capacity ${this.cfg.maxUniverseSize} exceeded`);
     }
     this.emitter.emit('heartbeat', newCorrelationId(this.clock, 'basis_sys'), 'basis config revised; signal state reset', {
       payload: { configChanged: true },
@@ -148,23 +175,63 @@ export class BasisEngine {
     return true;
   }
 
-  blockSymbol(symbol: string): void {
-    if (!/^[A-Z0-9]{2,32}$/.test(symbol)) return;
-    if (!this.blocked.has(symbol) && this.blocked.size >= this.cfg.maxUniverseSize) return;
-    this.blocked.add(symbol);
-    if (this.market.hasSymbol(symbol)) this.proposals.expireForSymbol(symbol, 'symbol_blocked');
-  }
-
-  unblockSymbol(symbol: string): void {
-    this.blocked.delete(symbol);
-  }
-
-  replaceBlockedSymbols(symbols: Iterable<string>): void {
-    const next = new Set([...symbols].filter((symbol) => this.market.hasSymbol(symbol)));
-    for (const symbol of this.blocked) {
-      if (!next.has(symbol)) this.blocked.delete(symbol);
+  blockSymbol(symbol: string): boolean {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) return false;
+    if (this.operatorBlocked.has(symbol)) return false;
+    if (this.operatorBlocked.size >= this.cfg.maxUniverseSize) {
+      throw new RangeError(`basis operator symbol-policy capacity ${this.cfg.maxUniverseSize} reached`);
     }
-    for (const symbol of next) this.blockSymbol(symbol);
+    this.operatorBlocked.add(symbol);
+    this.proposals.expireForSymbol(symbol, 'symbol_blocked');
+    return true;
+  }
+
+  unblockSymbol(symbol: string): boolean {
+    return this.operatorBlocked.delete(symbol);
+  }
+
+  /** Application-config policy is independent of the durable operator overlay. */
+  replaceBlockedSymbols(symbols: Iterable<string>): void {
+    const next = new Set(
+      [...symbols]
+        .filter((symbol) => /^[A-Z0-9]{4,20}$/.test(symbol))
+        .sort()
+        .slice(0, this.cfg.maxUniverseSize),
+    );
+    for (const proposal of this.proposals.open()) {
+      if (next.has(proposal.symbol) && !this.policyBlocked.has(proposal.symbol)) {
+        this.proposals.expireForSymbol(proposal.symbol, 'symbol_blocked');
+      }
+    }
+    this.policyBlocked = next;
+  }
+
+  replaceSymbolPolicy(allowedSymbols: readonly string[] | null, blockedSymbols: readonly string[]): void {
+    this.policyAllowed = allowedSymbols === null
+      ? null
+      : new Set(allowedSymbols.filter((symbol) => /^[A-Z0-9]{4,20}$/.test(symbol)).sort().slice(0, this.cfg.maxUniverseSize));
+    this.replaceBlockedSymbols(blockedSymbols);
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return Object.freeze([...this.operatorBlocked].sort());
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    if (typeof blocked !== 'boolean') throw new TypeError('basis symbol policy must be boolean');
+    return blocked ? this.blockSymbol(symbol) : this.unblockSymbol(symbol);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.market.meta(symbol)?.eligible === true
+      && (this.policyAllowed === null || this.policyAllowed.has(symbol))
+      && !this.policyBlocked.has(symbol)
+      && !this.operatorBlocked.has(symbol);
+  }
+
+  setSuggestedNotionalUsd(value: number): boolean {
+    if (!Number.isFinite(value) || value <= 0) throw new RangeError('basis size ceiling must be positive and finite');
+    return this.updateConfig({ suggestedNotionalUsd: value });
   }
 
   pin(symbol: string): void {
@@ -189,19 +256,28 @@ export class BasisEngine {
     }
     this.lifecycle.retainSymbols(known);
     for (const symbol of this.latestPriority.keys()) if (!known.has(symbol)) this.latestPriority.delete(symbol);
-    for (const symbol of this.blocked) if (!known.has(symbol)) this.blocked.delete(symbol);
     this.decisionLog = this.decisionLog.filter((decision) => known.has(decision.symbol));
     this.emitter.emit('universe_refreshed', newCorrelationId(this.clock, 'basis_sys'), `universe: ${accepted.length} symbols`, {
       payload: { size: accepted.length, eligible: eligible.size },
     });
   }
 
-  onSpotBook(t: BookTicker): void {
-    this.market.onSpotBook(t);
+  onSpotBook(t: BasisBookObservation): void {
+    this.gaps.onBookIngest(this.market.onSpotBook(t));
   }
 
-  onPerpBook(t: BookTicker): void {
-    this.market.onPerpBook(t);
+  onPerpBook(t: BasisBookObservation): void {
+    this.gaps.onBookIngest(this.market.onPerpBook(t));
+  }
+
+  onBookPair(symbol: string, spot: BasisBookObservation | null, perpetual: BasisBookObservation | null): void {
+    this.gaps.onBookIngest(this.market.onBookPair(symbol, spot, perpetual));
+  }
+
+  /** Stop/restart fence: no causal move may bridge an observation outage. */
+  resetBookContinuity(): void {
+    this.market.resetBookContinuity();
+    this.gaps.clear();
   }
 
   onMarkFunding(t: MarkFunding): void {
@@ -239,7 +315,10 @@ export class BasisEngine {
       if (!bf) continue;
 
       const meta = this.market.meta(symbol);
-      const symbolAllowed = !this.blocked.has(symbol) && (meta ? meta.eligible : true);
+      const symbolAllowed = !this.policyBlocked.has(symbol)
+        && !this.operatorBlocked.has(symbol)
+        && (this.policyAllowed === null || this.policyAllowed.has(symbol))
+        && (meta ? meta.eligible : true);
       const borrow = this.market.borrowForSymbol(symbol);
       const ctx: ScanContext = {
         killSwitch: this.killSwitchOn,
@@ -248,7 +327,17 @@ export class BasisEngine {
         nowTs: now,
       };
 
-      const raw = this.scanner.evaluate(bf, ctx);
+      const evaluated = this.scanner.evaluate(bf, ctx);
+      const raw: Decision = this.intakePausedValue && evaluated.kind === 'proposal'
+        ? {
+            ...evaluated,
+            kind: 'reject',
+            rejectCode: 'intake_paused',
+            humanReason: 'basis proposal intake is paused; observation remains active',
+            evidence: { ...evaluated.evidence, intakePaused: true },
+            correlationId: evaluated.correlationId,
+          }
+        : evaluated;
       const corr =
         raw.kind === 'ignore'
           ? (this.lifecycle.get(symbol).correlationId ?? newCorrelationId(this.clock, 'basis_idle'))
@@ -309,6 +398,16 @@ export class BasisEngine {
     for (const item of expired) this.lifecycle.onProposalExpired(item.symbol, item.why);
     const p = this.proposals.get(proposalId);
 
+    if (this.intakePausedValue) {
+      if (p && (p.status === 'open' || p.status === 'updated')) this.proposals.expire(p.id, 'intake_paused');
+      const corr = p?.correlationId ?? newCorrelationId(this.clock, 'basis_sys');
+      return {
+        blocked: true,
+        verdict: { allowed: false, reasons: ['intake_paused'], correlationId: corr, ts: now },
+        intents: [],
+      };
+    }
+
     if (!p || (p.status !== 'open' && p.status !== 'updated')) {
       const corr = p?.correlationId ?? newCorrelationId(this.clock, 'basis_sys');
       return {
@@ -321,7 +420,9 @@ export class BasisEngine {
     const proposalValid =
       (p.direction === 'long_spot_short_perp' || p.direction === 'short_spot_long_perp') &&
       this.market.meta(p.symbol)?.eligible === true &&
-      !this.blocked.has(p.symbol) &&
+      (this.policyAllowed === null || this.policyAllowed.has(p.symbol)) &&
+      !this.policyBlocked.has(p.symbol) &&
+      !this.operatorBlocked.has(p.symbol) &&
       p.suggestedNotionalUsd !== null &&
       Number.isFinite(p.suggestedNotionalUsd) &&
       p.suggestedNotionalUsd > 0;

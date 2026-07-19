@@ -71,6 +71,26 @@ export function createInitialCheckpointState(
     revision: 0,
     generation: 0,
     control,
+    strategyIntake: {
+      basisPaused: false,
+      volumePaused: false,
+    },
+    strategySymbolPolicy: {
+      basisBlocked: [],
+      volumeBlocked: [],
+    },
+    sizeCeilings: {
+      system: null,
+      basis: null,
+      volume: null,
+    },
+    strategyThresholds: {
+      basisMinNetPct: null,
+      volume1sMultiple: null,
+    },
+    focusPins: {
+      symbols: [],
+    },
     desiredComponents: [],
     authorityReferences: [],
     reservations: [],

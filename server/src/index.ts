@@ -1,11 +1,19 @@
+import {
+  DATA_DIR_AUTHORITY,
+  DATA_DIR_LEASE,
+} from './bootstrap/environment.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import WebSocket, { WebSocketServer } from 'ws';
-import { MarketEngine, type MarketLiquidationProjectionPort } from './engine/marketData.js';
-import { Ledger } from './ledger.js';
+import {
+  MarketEngine,
+  type MarketLiquidationProjectionPort,
+} from './engine/marketData.js';
+import { projectMarketApiRow } from './engine/marketApiProjection.js';
+import { Ledger, type LedgerEvent } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
   fetchBinanceServerTime,
@@ -47,11 +55,19 @@ import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
+  StrategyDecayCoordinator,
+  StrategyDecayLedgerAdapter,
+  UnavailableStrategyDecayPerformanceMeasurementPort,
+} from './engine/decay/index.js';
+import {
   createSystemIntegrationApplication,
   OrdinaryShutdownAdmission,
   type SystemIntegrationApplicationFacade,
 } from './systemIntegration/application/index.js';
-import { createCanonicalOwnerEvidenceReadPort } from './systemIntegration/adapters/index.js';
+import {
+  createCanonicalOwnerEvidenceReadPort,
+  type CanonicalOwnerEvidenceReadPort,
+} from './systemIntegration/adapters/index.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
 import {
   deriveI00MeaningfulAdvanceEvidence,
@@ -69,16 +85,29 @@ import {
   createLiveEdgeControlProductionBinding,
   finalizeSystemBootReleaseCleanShutdown,
   LiveEdgeMutationJournalPersistenceAdapter,
+  type ProductIncidentPersistenceInput,
+  type ProductIncidentRotationInput,
+  type ProductPersistenceAuditRecord,
 } from './systemIntegration/persistence/index.js';
-import { createProductionSystemIntegrationPorts } from './systemIntegration/production/index.js';
+import {
+  createProductionSystemIntegrationPorts,
+  type ProductionCapitalSummaryReadPort,
+} from './systemIntegration/production/index.js';
 import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
 import {
   createCanonicalSupervisorOpsReadback,
   createCanonicalRestartTruthCoordinator,
   createDeploymentFreezeReader,
+  createDeploymentFreezeClearOwner,
   type CanonicalSupervisorOpsReadPort,
 } from './systemIntegration/ops/index.js';
 import { createNodeDeploymentFreezeFileSystem } from './services/deploymentFreezeFileSystem.js';
+import { createDeploymentFreezeClearPersistence } from './services/deploymentFreezeClearPersistence.js';
+import {
+  createSourceIsolationOwner,
+  type SourceIsolationPhysicalPort,
+} from './intelligenceRuntime/lifecycle/index.js';
+import { createSourceIsolationPersistence } from './services/sourceIsolationPersistence.js';
 import {
   PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
   createProductIntegrationRuntime,
@@ -90,28 +119,15 @@ import {
   type ProductRuntimeReadPorts,
 } from './productIntegration/runtime/index.js';
 import { createProductRuntimeSystemControlCommandOwner } from './productIntegration/runtime/systemControlCommandOwner.js';
+import {
+  createProductIncidentOwner,
+  createProductIncidentRouter,
+} from './productIntegration/incidents/index.js';
 import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import { disambiguateNewsItemIds } from './services/newsIdentity.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
-
-// Minimal .env loader (no dependency). Never logs values.
-// SKIP_DOTENV lets the gates harness boot deterministically keyless, ignoring
-// any developer .env on disk so the disconnected-state gates stay valid.
-function loadDotEnv(): void {
-  if (process.env.SKIP_DOTENV) return;
-  try {
-    const txt = fs.readFileSync(path.resolve(process.cwd(), '.env'), 'utf8');
-    for (const line of txt.split('\n')) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-      if (m && process.env[m[1]] === undefined) {
-        process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-      }
-    }
-  } catch {
-    // no .env — fine
-  }
-}
-loadDotEnv();
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from './capitalFoundation/contracts/index.js';
 
 // Source-catalog ownership is not operational egress authority. A normal
 // verifier-style boot stays local unless an effectful public-source campaign
@@ -133,9 +149,22 @@ const sourceLogoCache = new Map<string, SourceLogoEntry>();
 const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
 const sourceLogoFailures = new Map<string, number>();
 
-const ledger = new Ledger(
-  process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : undefined
-);
+const { dataDir: canonicalDataDir } = DATA_DIR_AUTHORITY;
+// Environment bootstrap acquired both the normalized logical-path lease and
+// the physical-directory lease before DATA_DIR was created or resolved. Both
+// remain held through final durable shutdown.
+const dataDirLease = DATA_DIR_LEASE;
+const ledger = (() => {
+  try {
+    dataDirLease.assertHeld();
+    return new Ledger(canonicalDataDir, Object.freeze({
+      beforeMutation: () => dataDirLease.assertHeld(),
+    }));
+  } catch (error) {
+    try { dataDirLease.release(); } catch { /* Preserve the Ledger startup failure. */ }
+    throw error;
+  }
+})();
 const config = loadConfig(ledger);
 Object.assign(config, {
   liveTradingEnabled: false,
@@ -176,11 +205,15 @@ function legacyScannerSnapshot() {
     grossThresholdPct: null,
   });
 }
+const strategyDecayCoordinator = new StrategyDecayCoordinator(
+  new StrategyDecayLedgerAdapter(ledger),
+  new UnavailableStrategyDecayPerformanceMeasurementPort(),
+);
 const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows().map((row) => ({
   ...row,
   markUpdatedAt: engine.markEventTimestamp(row.symbol),
-})));
-const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
+})), fetchAllBookTickers, strategyDecayCoordinator);
+const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows(), strategyDecayCoordinator);
 let shuttingDown = false;
 const ordinaryShutdownAdmission = new OrdinaryShutdownAdmission();
 const systemIntegrationClock = createSystemUtcClock();
@@ -194,16 +227,30 @@ const bootReleasePersistence = createSystemBootReleasePersistenceAdapter({
     modelRevision: process.env.I00_MODEL_REVISION,
   }),
 });
+dataDirLease.assertHeld();
 const bootReleaseStart = bootReleasePersistence.start();
 if (!bootReleaseStart.ok) {
   console.error('boot/release persistence started fail-closed:', bootReleaseStart.code);
 }
 const systemIntegrationScheduler = createNodeRepeatingScheduler();
+let canonicalOwnerEvidence: CanonicalOwnerEvidenceReadPort | null = null;
+const capitalSummaryReadPort: ProductionCapitalSummaryReadPort = Object.freeze({
+  readCapitalSummary: () => {
+    const l12 = canonicalOwnerEvidence?.readCanonicalOwnerEvidence().l12;
+    if (l12 === undefined) return null;
+    return Object.freeze({
+      availability: 'UNAVAILABLE' as const,
+      accountTruthState: l12.privateTruthState,
+      reasonCodes: Object.freeze([...l12.reasonCodes]),
+    });
+  },
+});
 const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   clock: systemIntegrationClock,
   market: engine,
   basis: basisRuntime,
   volume: volumeRuntime,
+  capitalSummary: capitalSummaryReadPort,
 });
 const liveEdgeMutationJournal = new LiveEdgeMutationJournalPersistenceAdapter(
   ledger,
@@ -218,7 +265,7 @@ const liveEdgeControlBinding = createLiveEdgeControlProductionBinding({
   ledger,
   clock: systemIntegrationClock,
 });
-const canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
+canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({
   clock: systemIntegrationClock,
   components: systemIntegrationProduction.components,
   mutationJournal: liveEdgeMutationJournal,
@@ -232,6 +279,40 @@ function readCanonicalOps(supervisorCut?: Readonly<SystemSupervisorReadModel>) {
 const canonicalOpsReadPort: CanonicalSupervisorOpsReadPort = Object.freeze({
   read: readCanonicalOps,
 });
+function configuredDeploymentFreezeMarkerPath(): string | null {
+  const stateDirectory = String(process.env.I00_OPS_STATE_DIR ?? '');
+  const markerPath = String(process.env.I00_DEPLOY_FROZEN_MARKER ?? '');
+  if (
+    !stateDirectory
+    || !markerPath
+    || stateDirectory.trim() !== stateDirectory
+    || markerPath.trim() !== markerPath
+    || !path.isAbsolute(stateDirectory)
+    || !path.isAbsolute(markerPath)
+    || path.normalize(stateDirectory) !== stateDirectory
+    || path.normalize(markerPath) !== markerPath
+    || stateDirectory === path.parse(stateDirectory).root
+    || markerPath !== path.join(stateDirectory, 'deploy-frozen.json')
+  ) return null;
+  return markerPath;
+}
+const configuredFreezeMarkerPath = configuredDeploymentFreezeMarkerPath();
+const deploymentFreezeFileSystem = createNodeDeploymentFreezeFileSystem();
+const deploymentFreezeReadback = createDeploymentFreezeReader({
+  markerPath: configuredFreezeMarkerPath,
+  clock: systemIntegrationClock,
+  fileSystem: deploymentFreezeFileSystem,
+});
+const deploymentFreezeClear = configuredFreezeMarkerPath === null
+  ? undefined
+  : createDeploymentFreezeClearOwner({
+      markerPath: configuredFreezeMarkerPath,
+      clock: systemIntegrationClock,
+      readCanonicalOps: () => readCanonicalOps(),
+      readFreeze: () => deploymentFreezeReadback.read(),
+      persistence: createDeploymentFreezeClearPersistence(ledger),
+      fileSystem: deploymentFreezeFileSystem,
+    });
 let readManagedRuntimeForControlEffect: (() => Readonly<ManagedCompositionReadSnapshot>) | null = null;
 let systemIntegration: SystemIntegrationApplicationFacade;
 const canonicalRestartTruth = createCanonicalRestartTruthCoordinator({
@@ -246,7 +327,33 @@ systemIntegration = createSystemIntegrationApplication({
   runtimes: systemIntegrationProduction.runtimes,
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
+  strategyIntake: systemIntegrationProduction.strategyIntake,
+  strategySymbolPolicy: systemIntegrationProduction.strategySymbolPolicy,
+  sizeCeilings: Object.freeze({
+    SYSTEM: Object.freeze({
+      readCeiling: (): string | null => {
+        try { return normalizeNonNegativeExactDecimal(String(config.maxOrderNotionalUsd)); } catch { return null; }
+      },
+      setCeiling: (value: string): boolean => {
+        const canonical = normalizeNonNegativeExactDecimal(value);
+        const numeric = Number(canonical);
+        if (canonical !== value || !Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+          throw new RangeError('system size ceiling cannot cross the legacy numeric boundary exactly');
+        }
+        const current = normalizeNonNegativeExactDecimal(String(config.maxOrderNotionalUsd));
+        if (compareExactDecimals(canonical, current) > 0) throw new RangeError('system size ceiling is downward-only');
+        if (numeric === config.maxOrderNotionalUsd) return false;
+        config.maxOrderNotionalUsd = numeric;
+        return true;
+      },
+    }),
+    BASIS: systemIntegrationProduction.sizeCeilings.BASIS,
+    VOLUME: systemIntegrationProduction.sizeCeilings.VOLUME,
+  }),
+  strategyThresholds: systemIntegrationProduction.strategyThresholds,
+  attentionFocus: systemIntegrationProduction.attentionFocus,
   traces: canonicalOwnerEvidence,
+  ...(deploymentFreezeClear === undefined ? {} : { deploymentFreezeClear }),
   lifecycleTruth: Object.freeze({
     readRestartTruth: (nowMs: number) => canonicalRestartTruth.readRestartTruth(nowMs),
     readLocalMutationAuthority,
@@ -273,35 +380,16 @@ systemIntegration = createSystemIntegrationApplication({
   }),
 });
 readManagedRuntimeForControlEffect = () => systemIntegration.managedRuntime();
-function configuredDeploymentFreezeMarkerPath(): string | null {
-  const stateDirectory = String(process.env.I00_OPS_STATE_DIR ?? '');
-  const markerPath = String(process.env.I00_DEPLOY_FROZEN_MARKER ?? '');
-  if (
-    !stateDirectory
-    || !markerPath
-    || stateDirectory.trim() !== stateDirectory
-    || markerPath.trim() !== markerPath
-    || !path.isAbsolute(stateDirectory)
-    || !path.isAbsolute(markerPath)
-    || path.normalize(stateDirectory) !== stateDirectory
-    || path.normalize(markerPath) !== markerPath
-    || stateDirectory === path.parse(stateDirectory).root
-    || markerPath !== path.join(stateDirectory, 'deploy-frozen.json')
-  ) return null;
-  return markerPath;
-}
-const deploymentFreezeReadback = createDeploymentFreezeReader({
-  markerPath: configuredDeploymentFreezeMarkerPath(),
-  clock: systemIntegrationClock,
-  fileSystem: createNodeDeploymentFreezeFileSystem(),
-});
 canonicalOpsReadback = createCanonicalSupervisorOpsReadback({
   clock: systemIntegrationClock,
   readSupervisor: () => systemIntegration.supervisor(),
   readBlockingIdentityReferences: (limit) => ledger.readProductBlockingIdentityReferences(limit),
   deploymentFreeze: deploymentFreezeReadback,
 });
-const systemIntegrationStart = bootReleaseStart.ok ? systemIntegration.start() : null;
+const systemIntegrationStart = bootReleaseStart.ok ? (() => {
+  dataDirLease.assertHeld();
+  return systemIntegration.start();
+})() : null;
 if (systemIntegrationStart !== null && !systemIntegrationStart.ok) {
   console.error(
     'system integration started fail-closed:',
@@ -318,12 +406,103 @@ const canonicalApplicationStartFailureCodes = Object.freeze([
     : !systemIntegrationStart.ok ? ['SYSTEM_INTEGRATION_START_FAILED'] : []),
   ...(!bootReleaseStart.ok ? [bootReleaseStart.code] : []),
 ]);
+const publicSourceIsolation = createSourceIsolationOwner({
+  clock: systemIntegrationClock,
+  persistence: createSourceIsolationPersistence(ledger),
+  physical: Object.freeze({
+    read: (sourceId) => engine.readPublicSourceControl(sourceId),
+    isolate: (sourceId) => engine.isolatePublicSource(sourceId),
+    restart: (sourceId) => engine.restartPublicSource(sourceId),
+  } satisfies SourceIsolationPhysicalPort),
+});
+const productIncidentRouter = createProductIncidentRouter(Object.freeze({
+  readProductIncident: (incidentId: string) => ledger.readProductIncident(incidentId),
+  readProductIncidentSourceEvent: (sourceEventId: number) => (
+    ledger.readProductIncidentSourceEvent(sourceEventId)
+  ),
+  readProductIncidentsByFingerprintPrefix: (fingerprintPrefix: string, limit: number) => (
+    ledger.readProductIncidentsByFingerprintPrefix(fingerprintPrefix, limit)
+  ),
+  countProductIncidentsByFingerprintPrefix: (fingerprintPrefix: string) => (
+    ledger.countProductIncidentsByFingerprintPrefix(fingerprintPrefix)
+  ),
+  readProductIncidentRoutingBySourceEventId: (sourceEventId: number) => (
+    ledger.readProductIncidentRoutingBySourceEventId(sourceEventId)
+  ),
+  readProductIncidentRoutingByReceiptEventId: (receiptEventId: number) => (
+    ledger.readProductIncidentRoutingByReceiptEventId(receiptEventId)
+  ),
+  readLatestProductIncidentSourceDisposition: (componentId: string, sourceGroup: string) => (
+    ledger.readLatestProductIncidentSourceDisposition(componentId, sourceGroup)
+  ),
+  readPreviousProductIncidentSourceDisposition: (
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ) => ledger.readPreviousProductIncidentSourceDisposition(
+    componentId,
+    sourceGroup,
+    beforeSourceEventId,
+  ),
+  readPreviousProductIncidentRoutedDisposition: (
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ) => ledger.readPreviousProductIncidentRoutedDisposition(
+    componentId,
+    sourceGroup,
+    beforeSourceEventId,
+  ),
+  readProductIncidentAcknowledgementByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentAcknowledgementByIncidentId(incidentId)
+  ),
+  readProductIncidentOpeningRoutingByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentOpeningRoutingByIncidentId(incidentId)
+  ),
+  readProductIncidentRotationByIncidentId: (incidentId: string) => (
+    ledger.readProductIncidentRotationByIncidentId(incidentId)
+  ),
+  readOldestResolvedProductIncidentByFingerprintPrefix: (fingerprintPrefix: string) => (
+    ledger.readOldestResolvedProductIncidentByFingerprintPrefix(fingerprintPrefix)
+  ),
+  compareAndTransitionProductIncident: (input: Readonly<ProductIncidentPersistenceInput>) => (
+    ledger.compareAndTransitionProductIncident(input)
+  ),
+  compareAndRotateResolvedProductIncident: (input: Readonly<ProductIncidentRotationInput>) => (
+    ledger.compareAndRotateResolvedProductIncident(input)
+  ),
+  recordProductIncidentSourceDisposition: (audit: Readonly<ProductPersistenceAuditRecord>) => (
+    ledger.recordProductIncidentSourceDisposition(audit)
+  ),
+  advanceProductIncidentRouterCheckpoint: (sourceEventId: number) => (
+    ledger.advanceProductIncidentRouterCheckpoint(sourceEventId)
+  ),
+}));
+ledger.on('event', (event: LedgerEvent) => {
+  try {
+    productIncidentRouter.ingest(event);
+  } catch {
+    productIncidentRouter.failClosed('INCIDENT_ROUTER_LIVE_INGEST_FAILED');
+  }
+});
+productIncidentRouter.beginBootstrap();
+try {
+  while (true) {
+    const page = ledger.readProductIncidentRouterBootstrapPage(500);
+    if (!productIncidentRouter.bootstrapPage(page)) break;
+    if (page.length < 500) break;
+  }
+  productIncidentRouter.completeBootstrap();
+} catch {
+  productIncidentRouter.failClosed('INCIDENT_ROUTER_LIVE_INGEST_FAILED');
+}
 const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   applicationStartOk: () => canonicalApplicationStartOk,
   applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
   supervisor: () => systemIntegration.supervisor(),
   opsReadback: (supervisor: Readonly<SystemSupervisorReadModel>) => readCanonicalOps(supervisor),
   bootReleaseReadback: () => bootReleasePersistence.readback(),
+  incidents: () => productIncidentRouter.readProjection(),
   events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
     ledger.readProductOperatorEventPage(afterCursor, limit)
   ),
@@ -338,11 +517,32 @@ const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
     });
   },
 });
+const productIncidentOwner = createProductIncidentOwner(Object.freeze({
+  readProductIncident: (incidentId: string) => ledger.readProductIncident(incidentId),
+  readProductIncidentAcknowledgement: (incidentId: string, idempotencyKey: string) => (
+    ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey)
+  ),
+  readProductIncidentCommandAcknowledgement: (idempotencyKey: string, controlId: string) => (
+    ledger.readProductIncidentCommandAcknowledgement(idempotencyKey, controlId)
+  ),
+  compareAndTransitionProductIncident: (input: Readonly<ProductIncidentPersistenceInput>) => (
+    ledger.compareAndTransitionProductIncident(input)
+  ),
+}));
 const productIntegrationRuntime = createProductIntegrationRuntime({
   read: productIntegrationRead,
   clock: systemIntegrationClock,
   commandOwner: createProductRuntimeSystemControlCommandOwner({
     controls: systemIntegration.controls,
+    sourceIsolation: publicSourceIsolation,
+    strategyIntake: Object.freeze({
+      readState: (strategy: 'basis' | 'volume') => systemIntegration.strategyIntakeState(strategy),
+    }),
+    attentionFocus: Object.freeze({
+      readState: (symbol: string) => systemIntegration.focusPinState(symbol),
+      readPinnedSymbols: () => systemIntegrationProduction.attentionFocus.readPinnedSymbols(),
+    }),
+    incidents: productIncidentOwner,
   }),
 });
 
@@ -715,6 +915,8 @@ function safeLogEvent(kind: string, symbol: string | null, data: unknown): void 
 }
 
 function notificationRoutingSnapshot() {
+  const incidentRouting = productIncidentRouter.readProjection().availability;
+  const localAvailable = incidentRouting.state === 'AVAILABLE';
   return {
     sources: {
       bot: { available: true, label: 'Bot Runtime', detail: 'Engine, controls, and dependency state changes' },
@@ -731,11 +933,18 @@ function notificationRoutingSnapshot() {
       },
     },
     destinations: {
-      inApp: { available: true, label: 'In-App', detail: 'Active in this control room' },
-      email: { available: false, label: 'Email', detail: 'Delivery provider is not connected' },
-      telegram: { available: false, label: 'Telegram', detail: 'Bot token and chat routing are not connected' },
-      whatsapp: { available: false, label: 'WhatsApp', detail: 'WhatsApp Cloud API is not connected' },
-      awsSns: { available: false, label: 'AWS SNS', detail: 'SNS topic and publish role are not connected' },
+      inApp: {
+        available: localAvailable,
+        state: localAvailable ? 'WIRED_LOCAL' : incidentRouting.state,
+        label: 'In-App',
+        detail: localAvailable
+          ? 'Canonical Product incident router is active in this control room'
+          : `Canonical Product incident router is ${incidentRouting.state}: ${incidentRouting.blocker}`,
+      },
+      email: { available: false, state: 'NOT_CONFIGURED', label: 'Email', detail: 'Delivery provider is not connected' },
+      telegram: { available: false, state: 'NOT_CONFIGURED', label: 'Telegram', detail: 'Bot token and chat routing are not connected' },
+      whatsapp: { available: false, state: 'NOT_CONFIGURED', label: 'WhatsApp', detail: 'WhatsApp Cloud API is not connected' },
+      awsSns: { available: false, state: 'NOT_CONFIGURED', label: 'AWS SNS', detail: 'SNS topic and publish role are not connected' },
     },
     policy: {
       transitionsOnly: true,
@@ -1250,6 +1459,10 @@ function currentNewsContextStatus(): ReturnType<typeof newsContextStatus> {
   };
 }
 
+function canonicalNewsContextRead(payload: Awaited<ReturnType<typeof getNewsContext>>) {
+  return { ...payload, items: disambiguateNewsItemIds(payload.items) };
+}
+
 app.get('/api/news-context', (req, res) => {
   runAsync(res, async () => {
     try {
@@ -1264,7 +1477,8 @@ app.get('/api/news-context', (req, res) => {
         return;
       }
       const payload = await getNewsContext(false);
-      res.json({ ...payload, items: payload.items.slice(0, limit) });
+      const canonical = canonicalNewsContextRead(payload);
+      res.json({ ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
       safeLogEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
       res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
@@ -1285,7 +1499,8 @@ app.post('/api/news-context/refresh', (req, res) => {
     }
     try {
       const payload = await refreshNewsContextNow();
-      res.json({ ok: true, ...payload, items: payload.items.slice(0, limit) });
+      const canonical = canonicalNewsContextRead(payload);
+      res.json({ ok: true, ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
       safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
       res.status(503).json({ ok: false, error: 'news context unavailable', items: [], sources: [] });
@@ -1321,7 +1536,8 @@ app.get('/api/news-stream', (req, res) => {
 
   const send = (payload: Awaited<ReturnType<typeof getNewsContext>>) => {
     if (closed) return;
-    const accepted = res.write(`event: news\ndata: ${JSON.stringify({ ...payload, items: payload.items.slice(0, limit) })}\n\n`);
+    const canonical = canonicalNewsContextRead(payload);
+    const accepted = res.write(`event: news\ndata: ${JSON.stringify({ ...canonical, items: canonical.items.slice(0, limit) })}\n\n`);
     slowWrites = accepted ? 0 : slowWrites + 1;
     if (slowWrites >= 3) res.end();
   };
@@ -1471,30 +1687,6 @@ app.get('/api/fills', (_req, res) => {
 app.post('/api/fills/import', (_req, res) => {
   sendNotConfigured(res, 'SIGNED_FILL_IMPORT');
 });
-
-function usableBook(b: BookTicker | undefined): BookTicker | null {
-  if (!b || !(b.bidPrice > 0) || !(b.askPrice > 0) || b.askPrice < b.bidPrice) return null;
-  return b;
-}
-
-function spreadPct(b: BookTicker | null): number | null {
-  if (!b) return null;
-  const mid = (b.bidPrice + b.askPrice) / 2;
-  return mid > 0 ? ((b.askPrice - b.bidPrice) / mid) * 100 : null;
-}
-
-function topQuoteUsd(b: BookTicker | null): number | null {
-  if (!b) return null;
-  const bidQuote = b.bidPrice * b.bidQty;
-  const askQuote = b.askPrice * b.askQty;
-  const usable = Math.min(bidQuote, askQuote);
-  return Number.isFinite(usable) && usable > 0 ? usable : null;
-}
-
-function gapPct(a: number | null, b: number | null, den: number | null): number | null {
-  if (a === null || b === null || den === null || den <= 0) return null;
-  return ((a - b) / den) * 100;
-}
 
 // Full market list for the Markets page: all exact spot+perp pairs plus
 // spot-only Binance USDT symbols. The account WS payload stays light while
@@ -1848,57 +2040,13 @@ app.get('/api/markets', (_req, res) => {
 
     const rows = engine
       .allRows()
-      .map((r) => {
-        const spotBook = usableBook(spotBooks.get(r.symbol));
-        const perpBook = r.hasPerp ? usableBook(perpBooks.get(r.symbol)) : null;
-        const perpTicker = r.hasPerp ? perp24h.get(r.symbol) : undefined;
-        const perpVolume24h = perpTicker?.quoteVolume ?? null;
-        const executableBasisLongSpotPct = gapPct(perpBook?.bidPrice ?? null, spotBook?.askPrice ?? null, spotBook?.askPrice ?? null);
-        const executableBasisShortSpotPct = gapPct(spotBook?.bidPrice ?? null, perpBook?.askPrice ?? null, perpBook?.askPrice ?? null);
-        const executableBasisBestPct =
-          executableBasisLongSpotPct === null
-            ? executableBasisShortSpotPct
-            : executableBasisShortSpotPct === null
-              ? executableBasisLongSpotPct
-              : Math.max(executableBasisLongSpotPct, executableBasisShortSpotPct);
-        const executableBasisSide =
-          executableBasisBestPct === null
-            ? null
-            : executableBasisBestPct === executableBasisLongSpotPct
-              ? ('LONG_SPOT_SHORT_PERP' as const)
-              : ('SHORT_SPOT_LONG_PERP' as const);
-        return {
-          ...r,
-          status: 'idle' as const,
-          spark: engine.sparkOf(r.symbol, 36),
-          spotBid: spotBook?.bidPrice ?? null,
-          spotAsk: spotBook?.askPrice ?? null,
-          spotBidQty: spotBook?.bidQty ?? null,
-          spotAskQty: spotBook?.askQty ?? null,
-          spotSpreadPct: spreadPct(spotBook),
-          spotTopQuoteUsd: topQuoteUsd(spotBook),
-          perpBid: perpBook?.bidPrice ?? null,
-          perpAsk: perpBook?.askPrice ?? null,
-          perpBidQty: perpBook?.bidQty ?? null,
-          perpAskQty: perpBook?.askQty ?? null,
-          perpSpreadPct: spreadPct(perpBook),
-          perpTopQuoteUsd: topQuoteUsd(perpBook),
-          perpLast: perpTicker?.lastPrice ?? null,
-          perpChange24hPct: perpTicker?.priceChangePct ?? null,
-          perpVolume24h,
-          perpHigh24h: perpTicker?.highPrice ?? null,
-          perpLow24h: perpTicker?.lowPrice ?? null,
-          oiToPerpVolume24h:
-            r.openInterestUsd !== null && r.openInterestUsd !== undefined && perpVolume24h !== null && perpVolume24h > 0
-              ? r.openInterestUsd / perpVolume24h
-              : null,
-          executableBasisLongSpotPct,
-          executableBasisShortSpotPct,
-          executableBasisBestPct,
-          executableBasisSide,
-          fundingAnnualPct: r.fundingRate === null ? null : r.fundingRate * 3 * 365 * 100,
-        };
-      })
+      .map((row) => projectMarketApiRow({
+        row,
+        spotBook: spotBooks.get(row.symbol),
+        perpBook: perpBooks.get(row.symbol),
+        perpTicker: perp24h.get(row.symbol),
+        spark: engine.sparkOf(row.symbol, 36),
+      }))
       .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
     res.json({
       updatedAt: Date.now(),
@@ -1942,7 +2090,33 @@ app.get('/api/market/detail', (req, res) => {
 });
 
 app.get('/api/loans', (_req, res) => {
-  sendNotConfigured(res, 'PRIVATE_LOAN_STATE');
+  // Foundation BorrowTruth is the canonical owner. This compatibility route
+  // publishes an explicit unavailable read contract until a separately
+  // authorized private adapter is mounted; it never invokes the legacy signed
+  // LoanService or turns missing private facts into zero exposure.
+  res.status(503).json({
+    ok: false,
+    available: false,
+    code: 'NOT_CONFIGURED',
+    state: 'NOT_CONFIGURED',
+    truthState: 'UNAVAILABLE',
+    owner: 'FOUNDATION_BORROW_TRUTH',
+    scope: null,
+    currentBorrowedAsset: null,
+    accruedInterestAsset: null,
+    collateralAmount: null,
+    collateralAsset: null,
+    currentLtv: null,
+    liabilitySource: null,
+    collateralSource: null,
+    liabilityFreshness: null,
+    collateralFreshness: null,
+    evaluatedAtMs: null,
+    expiresAtMs: null,
+    value: null,
+    error: 'Private exchange access is not configured in this runtime.',
+    capability: 'PRIVATE_LOAN_STATE',
+  });
 });
 
 app.post('/api/loans/refresh', (_req, res) => {
@@ -2452,6 +2626,26 @@ app.get('/api/funding/extremes', (_req, res) => {
   });
 });
 
+// Exact-symbol, evidence-only owner readback for the Token workspace. This is
+// passive composition over existing MarketEngine, router, and Bridge truth.
+app.get('/api/intelligence/token', (req, res) => {
+  const symbol = String(req.query.symbol ?? '');
+  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+    res.status(400).json({ error: 'bad symbol' });
+    return;
+  }
+  try {
+    res.json(systemIntegrationProduction.intelligenceEvidence.readSymbol(symbol));
+  } catch {
+    res.status(503).json({
+      error: 'token intelligence unavailable',
+      symbol,
+      authority: 'EVIDENCE_ONLY',
+      liveMoneyAuthority: 'NONE',
+    });
+  }
+});
+
 // Everything the app knows about ONE symbol (for the token detail page).
 app.get('/api/symbol/context', (req, res) => {
   const symbol = String(req.query.symbol ?? '');
@@ -2466,6 +2660,10 @@ app.get('/api/symbol/context', (req, res) => {
   const baseBal = eq?.entries.find((e) => e.asset === base);
   res.json({
     orderTruthState,
+    // Private borrow truth has no mounted owner in this validate-only build.
+    // Publish that boundary with the existing exact-symbol account context so
+    // browser consumers never query a retired loan capability.
+    borrowTruthState: 'NOT_CONFIGURED',
     openOrders: orderTruthState === 'AVAILABLE'
       ? orders.openOrdersCache.filter((o) => o.symbol === symbol)
       : null,
@@ -2650,9 +2848,15 @@ function connectionWatchmanSnapshot(
       value: cloudflarePresent ? 'Present' : 'Localhost', required: cloudflarePresent, updatedAt: now,
     },
     {
-      id: 'alert-routing', label: 'Failure Notification Route', group: 'infrastructure', status: 'operational',
-      detail: `${Object.values(notificationRouting.destinations).filter((destination) => destination.available).length} active route · transition-only policy`,
-      value: 'In-App Live', required: true, updatedAt: now,
+      id: 'alert-routing', label: 'Failure Notification Route', group: 'infrastructure',
+      status: notificationRouting.destinations.inApp.available ? 'operational' : 'outage',
+      detail: notificationRouting.destinations.inApp.available
+        ? `${Object.values(notificationRouting.destinations).filter((destination) => destination.available).length} active local route · transition-only policy`
+        : `Canonical in-app incident route unavailable · ${notificationRouting.destinations.inApp.detail}`,
+      value: notificationRouting.destinations.inApp.available
+        ? 'WIRED_LOCAL'
+        : notificationRouting.destinations.inApp.state,
+      required: true, updatedAt: now,
     },
   ];
 
@@ -3622,6 +3826,7 @@ function startServerTimers(): void {
 }
 
 if (canonicalApplicationStartOk) {
+  dataDirLease.assertHeld();
   server.listen(PORT, HOST, () => {
     startServerTimers();
     console.log(`cosmos control room listening on http://${HOST}:${PORT}`);
@@ -3741,6 +3946,15 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     const finalization = finalizeSystemBootReleaseCleanShutdown(bootReleasePersistence, ledger);
     if (!finalization.ok) {
       console.error('control-room shutdown failed after listener closure:', finalization.code);
+      return 'SHUTDOWN_FAILED' as const;
+    }
+    try {
+      dataDirLease.release();
+    } catch (error) {
+      console.error(
+        'control-room shutdown failed to release DATA_DIR lease:',
+        error instanceof Error ? error.message : String(error),
+      );
       return 'SHUTDOWN_FAILED' as const;
     }
     console.log('control-room shutdown complete');

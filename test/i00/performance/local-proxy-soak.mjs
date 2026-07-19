@@ -6,8 +6,8 @@ import {
   mkdirSync,
   lstatSync,
   readFileSync,
-  realpathSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
 } from 'node:fs';
@@ -416,6 +416,10 @@ async function startBuiltApp(dataDir, port, sampleIntervalMs, testedSha) {
       HOST,
       PORT: String(port),
       DATA_DIR: dataDir,
+      DATA_DIR_LOGICAL_LEASE_ROOT: path.join(
+        realpathSync.native(path.dirname(dataDir)),
+        `${path.basename(dataDir)}-logical-lease-runtime`,
+      ),
       PROFILE_CACHE: path.join(dataDir, 'profile-cache.json'),
       ICON_CACHE: path.join(dataDir, 'icon-cache.json'),
       LIQ_CACHE: path.join(dataDir, 'liquidations.json'),
@@ -1998,6 +2002,10 @@ export async function runLocalProxySoak(options) {
     return Object.freeze({ report, destination });
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
+    rmSync(path.join(
+      realpathSync.native(path.dirname(dataDir)),
+      `${path.basename(dataDir)}-logical-lease-runtime`,
+    ), { recursive: true, force: true });
   }
 }
 

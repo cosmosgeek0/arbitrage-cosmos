@@ -12,14 +12,19 @@ MAX_COLUMNS: Final = 512
 MAX_ROWS: Final = 100_000
 MIN_PAIRWISE_ROWS: Final = 3
 
-DEFERRED_DIAGNOSTICS: Final = (
+DIAGNOSTIC_OBLIGATIONS: Final = (
+    "REGIME_PEARSON_RANK_DISTANCE_CORRELATION",
+    "HIERARCHICAL_REDUNDANCY_CLUSTERING",
+    "VARIANCE_AND_NEAR_CONSTANT_CHECKS",
     "MUTUAL_INFORMATION_IN_TRAINING_FOLDS",
     "PERMUTATION_IMPORTANCE_ON_CHRONOLOGICAL_HOLDOUTS",
-    "SHAP_ATTRIBUTION_FOR_TREE_CHALLENGERS",
+    "SHAP_OR_EQUIVALENT_ATTRIBUTION",
+    "SIGN_AND_MONOTONICITY_STABILITY_ACROSS_FOLDS_REGIMES",
+    "MISSINGNESS_AS_SIGNAL_DETECTION",
     "ADVERSARIAL_FAMILY_ABLATION",
     "INCREMENTAL_VALUE_AFTER_ENGINE_FEATURES",
-    "SIGN_AND_MONOTONICITY_STABILITY_ACROSS_FOLDS",
 )
+DEFERRED_DIAGNOSTICS: Final[tuple[str, ...]] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +288,12 @@ def missingness_signals(
 
 
 def deferred_diagnostics() -> tuple[str, ...]:
-    """§12.3 diagnostics that require models/folds; deferred, not silently skipped."""
+    """All §12.3 obligations now have an owner; none remains silently deferred."""
 
     return DEFERRED_DIAGNOSTICS
+
+
+def diagnostic_obligations() -> tuple[str, ...]:
+    """The exact ten §12.3 obligations closed by Q06 plus Q14 diagnostics."""
+
+    return DIAGNOSTIC_OBLIGATIONS

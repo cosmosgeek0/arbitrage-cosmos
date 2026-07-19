@@ -666,6 +666,35 @@ export function validateOwnerArtifacts(artifacts) {
   }
   requireText(issues, artifacts.appService, 'User=cosmos', 'APP_NON_ROOT_USER_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'EnvironmentFile=/etc/cosmos/cosmos-app.env', 'APP_ENV_FILE_FAIL_CLOSED_MISSING', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectory=cosmos-app', 'APP_LEASE_RUNTIME_MISSING', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectoryMode=0700', 'APP_LEASE_RUNTIME_MODE_INVALID', 'appService');
+  requireText(issues, artifacts.appService, 'RuntimeDirectoryPreserve=restart', 'APP_LEASE_RUNTIME_RESTART_PRESERVE_MISSING', 'appService');
+  const expectedAppExecStart = 'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js';
+  const appExecStarts = artifacts.appService.match(/^ExecStart=.*$/gmu) ?? [];
+  if (appExecStarts.length !== 1 || appExecStarts[0] !== expectedAppExecStart) {
+    issue(
+      issues,
+      'APP_LOGICAL_LEASE_ROOT_EXEC_PIN_MISSING',
+      'appService',
+      'one exact ExecStart must pin the logical lease root after EnvironmentFile precedence',
+    );
+  }
+  if (/^Environment=DATA_DIR_LOGICAL_LEASE_ROOT=/mu.test(artifacts.appService)) {
+    issue(
+      issues,
+      'APP_LOGICAL_LEASE_ROOT_OVERRIDEABLE',
+      'appService',
+      'EnvironmentFile overrides Environment; pin the lease root in ExecStart argv',
+    );
+  }
+  if (/^\s*PrivatePIDs\s*=/mu.test(artifacts.appService)) {
+    issue(
+      issues,
+      'APP_PID_LIVENESS_NAMESPACE_UNSUPPORTED',
+      'appService',
+      'PrivatePIDs is unsupported; cooperating lease processes must share one PID liveness namespace',
+    );
+  }
   requireText(issues, artifacts.appService, 'Restart=on-failure', 'APP_RESTART_POLICY_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'StartLimitIntervalSec=', 'APP_RESTART_LIMIT_MISSING', 'appService');
   requireText(issues, artifacts.tunnelService, '--no-autoupdate', 'TUNNEL_AUTOUPDATE_NOT_DISABLED', 'tunnelService');

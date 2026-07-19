@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
 import {
   PRODUCT_RUNTIME_COMMAND_SCHEMA,
@@ -38,8 +40,21 @@ function ownerBlocker(
     return 'COMMAND_OWNER_CAPABILITY_INVALID';
   }
   if (!capability.supportedBackendCommandIds.includes(command)) return 'BACKEND_COMMAND_NOT_SUPPORTED';
+  if (command === 'SET_PUBLIC_SOURCE_LIFECYCLE' && typeof owner.readSourceControlState !== 'function') {
+    return 'SOURCE_CONTROL_READBACK_NOT_PROVEN';
+  }
+  if ((command === 'SET_BASIS_INTAKE' || command === 'SET_VOLUME_INTAKE')
+      && typeof owner.readStrategyIntakeControlState !== 'function') {
+    return 'STRATEGY_INTAKE_READBACK_NOT_PROVEN';
+  }
+  if (command === 'PIN_FOCUS' && typeof owner.readFocusControlState !== 'function') {
+    return 'FOCUS_CONTROL_READBACK_NOT_PROVEN';
+  }
   if (command === 'RESTART_COMPONENT' && capability.managedRestartComponentId !== 'engine-supervisor') {
     return 'MANAGED_ROOT_RESTART_NOT_PROVEN';
+  }
+  if (command === 'ACK_INCIDENT' && typeof owner.readIncidentControlState !== 'function') {
+    return 'INCIDENT_ACK_READBACK_NOT_PROVEN';
   }
   return null;
 }
@@ -50,7 +65,7 @@ function entry(
   input: Readonly<{
     controlId: string;
     backendCommandId: ProductRuntimeSafeBackendCommand;
-    targetType: 'SYSTEM' | 'COMPONENT';
+    targetType: 'SYSTEM' | 'COMPONENT' | 'SYMBOL' | 'INCIDENT';
     targetId: string;
     payload: Readonly<Record<string, ProductRuntimeCommandScalar>>;
     payloadSchema: string;
@@ -66,30 +81,243 @@ function entry(
     invariants: readonly string[];
     effectTelemetry: readonly string[];
     confirmationText: string;
+    currentStateRevision?: string;
+    forcedBlocker?: string;
   }>,
 ): Readonly<ProductRuntimeControlRegistryEntry> {
-  const blocker = ownerBlocker(owner, input.backendCommandId);
+  const blocker = input.forcedBlocker ?? ownerBlocker(owner, input.backendCommandId);
+  const { currentStateRevision, forcedBlocker: _forcedBlocker, ...publicInput } = input;
   return Object.freeze({
-    ...input,
+    ...publicInput,
     wiringState: blocker === null ? 'WIRED_LIVE' : `UNAVAILABLE:${blocker}`,
-    owner: blocker === null ? owner!.capability.ownerId : 'systemIntegration canonical control owner',
-    group: input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
+    owner: blocker === null
+      ? input.backendCommandId === 'ACK_INCIDENT'
+        ? 'productIntegration.incident-owner'
+        : owner!.capability.ownerId
+      : 'systemIntegration canonical control owner',
+    group: input.backendCommandId === 'ACK_INCIDENT'
+      ? 'Incident Response'
+      : input.backendCommandId === 'SET_PUBLIC_SOURCE_LIFECYCLE'
+      ? 'Source Lifecycle'
+      : input.backendCommandId === 'PIN_FOCUS'
+        ? 'Universe Attention'
+      : input.backendCommandId === 'SET_BASIS_INTAKE' || input.backendCommandId === 'SET_VOLUME_INTAKE'
+        ? 'Strategy Intake'
+      : input.backendCommandId === 'RESTART_COMPONENT' ? 'Component Lifecycle' : 'Global Posture',
     authority: blocker === null ? 'SERVER_DERIVED_OPERATOR' : 'NOT_CONFIGURED',
-    requiredPosture: input.backendCommandId === 'RESTART_COMPONENT' ? 'NO_CAPITAL_EXPOSED' : 'PROCESS_ALIVE',
+    requiredPosture: input.backendCommandId === 'ACK_INCIDENT'
+      ? 'INCIDENT_OPEN_OR_EXACT_REPLAY'
+      : input.backendCommandId === 'RESTART_COMPONENT'
+        ? 'NO_CAPITAL_EXPOSED'
+        : input.backendCommandId === 'PIN_FOCUS' ? 'ACCEPTED_RUNTIME_ADAPTER' : 'PROCESS_ALIVE',
     expiryPolicy: 'Canonical owner preview expiry is authoritative.',
-    currentStateRevision: String(snapshot.control.revision),
+    currentStateRevision: currentStateRevision ?? String(snapshot.control.revision),
     disabledReason: blocker === null ? null : blocker,
     preview: null,
     latestResult: null,
   });
 }
 
-/** Four bounded non-money controls; fail-safe directions only. */
+export function productIncidentAcknowledgementControlId(incidentId: string): string {
+  const digest = createHash('sha256')
+    .update('product-incident-ack-control.v1\0', 'utf8')
+    .update(incidentId, 'utf8')
+    .digest('hex');
+  return `incident.ack.${digest}`;
+}
+
+function incidentAcknowledgementEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  incidentId: string,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readIncidentControlState']>> = null;
+  try { state = owner?.readIncidentControlState?.(incidentId) ?? null; } catch { state = null; }
+  const configured = ownerBlocker(owner, 'ACK_INCIDENT') === null;
+  return entry(snapshot, owner, {
+    controlId: productIncidentAcknowledgementControlId(incidentId),
+    backendCommandId: 'ACK_INCIDENT',
+    targetType: 'INCIDENT',
+    targetId: incidentId,
+    payload: Object.freeze({ incidentId }),
+    payloadSchema: '{ incidentId: canonical Product incident identity }',
+    payloadEnumeration: Object.freeze([incidentId]),
+    defaultValue: incidentId,
+    label: 'Acknowledge Incident',
+    explanation: 'Records operator acknowledgement without clearing root cause, severity, health, or source evidence.',
+    safeBounds: 'One exact durable incident revision; no health, routing, or external-action authority.',
+    currentDesiredValue: state?.state ?? 'UNKNOWN',
+    currentEffectiveValue: state?.state ?? 'UNKNOWN',
+    effect: 'IMMEDIATE',
+    reversibility: 'Acknowledgement is immutable; recovery remains a separate owner-proven transition.',
+    invariants: Object.freeze([
+      'Root cause, severity, capital relevance, chronology, event count, and health truth are preserved.',
+      'No SystemControlMutation or external paging action is authorized.',
+    ]),
+    effectTelemetry: Object.freeze(['incident Ledger revision', 'operator identity', 'acknowledgement time', 'immutable receipt']),
+    confirmationText: `Confirm acknowledgement of incident ${incidentId} at Ledger revision ${state?.ledgerEventId ?? 'UNKNOWN'}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.ledgerEventId),
+    ...(configured && state === null ? { forcedBlocker: 'INCIDENT_CONTROL_STATE_UNAVAILABLE' } : {}),
+  });
+}
+
+function strategyIntakeEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  strategy: 'basis' | 'volume',
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readStrategyIntakeControlState']>> = null;
+  try { state = owner?.readStrategyIntakeControlState?.(strategy) ?? null; } catch { state = null; }
+  const command = strategy === 'basis' ? 'SET_BASIS_INTAKE' : 'SET_VOLUME_INTAKE';
+  const paused = state?.desiredPaused !== true;
+  const strategyLabel = strategy === 'basis' ? 'Basis' : 'Volume';
+  const configured = ownerBlocker(owner, command) === null;
+  return entry(snapshot, owner, {
+    controlId: `strategy.${strategy}.intake`,
+    backendCommandId: command,
+    targetType: 'COMPONENT',
+    targetId: `${strategy}-engine`,
+    payload: Object.freeze({ paused }),
+    payloadSchema: '{ paused: boolean }',
+    payloadEnumeration: Object.freeze([true, false]),
+    defaultValue: true,
+    label: `${paused ? 'Pause' : 'Resume'} ${strategyLabel} Intake`,
+    explanation: paused
+      ? `Stops only new ${strategyLabel} proposals while observation, supervision, reconciliation, and risk reduction continue.`
+      : `Resumes only ${strategyLabel} proposal intake after every stricter global and restart gate passes.`,
+    safeBounds: `${strategyLabel} proposal intake only`,
+    currentDesiredValue: state === null ? 'UNKNOWN' : state.desiredPaused ? 'PAUSED' : 'OPEN',
+    currentEffectiveValue: state?.effectivePaused === null || state === null
+      ? 'UNKNOWN'
+      : state.effectivePaused ? 'PAUSED' : 'OPEN',
+    effect: 'IMMEDIATE',
+    reversibility: 'The inverse transition requires the next exact canonical control revision.',
+    invariants: Object.freeze([
+      'The other strategy is unchanged.',
+      'Observation, supervision, reconciliation, and risk-reducing activity remain available.',
+      'Resume never bypasses global kill, global intake, or restart admission.',
+    ]),
+    effectTelemetry: Object.freeze(['desired intake posture', 'effective owner readback', 'control revision', 'durable receipt']),
+    confirmationText: `Confirm ${paused ? 'pause' : 'resume'} for ${strategyLabel} proposal intake.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.controlRevision),
+    ...(configured && (state === null || state.state !== 'APPLIED')
+      ? { forcedBlocker: state?.state ?? 'STRATEGY_INTAKE_STATE_UNAVAILABLE' }
+      : {}),
+  });
+}
+
+type PublicSourceControlId = 'public-spot-source' | 'public-usdm-source';
+
+const FOCUS_CONTROL_ID = /^attention\.focus\.([a-z0-9]{4,20})\.(pin|unpin)$/;
+
+function focusControlSpec(controlId: string): Readonly<{ symbol: string; pinned: boolean }> | null {
+  const matched = controlId.match(FOCUS_CONTROL_ID);
+  if (!matched) return null;
+  const symbol = matched[1].toUpperCase();
+  return /^[A-Z0-9]{4,20}$/.test(symbol)
+    ? Object.freeze({ symbol, pinned: matched[2] === 'pin' })
+    : null;
+}
+
+function focusControlId(symbol: string, pinned: boolean): string {
+  return `attention.focus.${symbol.toLowerCase()}.${pinned ? 'pin' : 'unpin'}`;
+}
+
+function focusEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  symbol: string,
+  pinned: boolean,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readFocusControlState']>> = null;
+  try { state = owner?.readFocusControlState?.(symbol) ?? null; } catch { state = null; }
+  const configured = ownerBlocker(owner, 'PIN_FOCUS') === null;
+  const blocker = state === null
+    ? 'FOCUS_CONTROL_STATE_UNAVAILABLE'
+    : pinned && state.state !== 'APPLIED'
+      ? state.state
+      : pinned && state.eligible !== true
+        ? 'FOCUS_SYMBOL_INELIGIBLE'
+        : pinned && state.canPin !== true ? 'FOCUS_CAPACITY_UNAVAILABLE' : null;
+  return entry(snapshot, owner, {
+    controlId: focusControlId(symbol, pinned),
+    backendCommandId: 'PIN_FOCUS',
+    targetType: 'SYMBOL',
+    targetId: symbol,
+    payload: Object.freeze({ symbol, pinned }),
+    payloadSchema: '{ symbol: canonical symbol, pinned: boolean }',
+    payloadEnumeration: Object.freeze([true, false]),
+    defaultValue: false,
+    label: `${pinned ? 'Pin' : 'Unpin'} ${symbol} Focus`,
+    explanation: pinned
+      ? 'Requests bounded enrichment attention from the canonical Intelligence Runtime owner.'
+      : 'Releases only the operator pin; strategy and protected-capital attention truth remain authoritative.',
+    safeBounds: 'eligible canonical symbol and cumulative FOCUS cap',
+    currentDesiredValue: state === null ? 'UNKNOWN' : state.desiredPinned ? 'PINNED' : 'UNPINNED',
+    currentEffectiveValue: state?.effectivePinned === null || state === null
+      ? 'UNKNOWN'
+      : state.effectivePinned ? state.effectiveTier ?? 'FOCUS' : 'UNPINNED',
+    effect: 'IMMEDIATE',
+    reversibility: 'The inverse transition requires a fresh 30-second preview and exact canonical revision.',
+    invariants: Object.freeze([
+      'The canonical attention planner retains eligibility and hard-cap authority.',
+      'No strategy, proposal, risk, capital, or execution authority is created.',
+    ]),
+    effectTelemetry: Object.freeze(['desired pin set', 'effective attention tier', 'attention plan identity', 'durable receipt']),
+    confirmationText: `Confirm focus ${pinned ? 'pin' : 'unpin'} for ${symbol}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.controlRevision),
+    ...(configured && blocker !== null ? { forcedBlocker: blocker } : {}),
+  });
+}
+
+function sourceLifecycleEntry(
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  owner: Readonly<ProductRuntimeCommandOwnerPort> | undefined,
+  sourceId: PublicSourceControlId,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  let state: ReturnType<NonNullable<ProductRuntimeCommandOwnerPort['readSourceControlState']>> = null;
+  try { state = owner?.readSourceControlState?.(sourceId) ?? null; } catch { state = null; }
+  const action = state?.pendingAction
+    ?? (state?.desiredLifecycle === 'ISOLATED' ? 'RESTART' : 'ISOLATE');
+  const sourceLabel = sourceId === 'public-spot-source' ? 'Spot' : 'USD-M';
+  const configured = ownerBlocker(owner, 'SET_PUBLIC_SOURCE_LIFECYCLE') === null;
+  return entry(snapshot, owner, {
+    controlId: `source.${sourceId}.lifecycle`,
+    backendCommandId: 'SET_PUBLIC_SOURCE_LIFECYCLE',
+    targetType: 'COMPONENT',
+    targetId: sourceId,
+    payload: Object.freeze({ sourceId, action }),
+    payloadSchema: '{ sourceId: public-spot-source | public-usdm-source, action: ISOLATE | RESTART }',
+    payloadEnumeration: Object.freeze(['ISOLATE', 'RESTART']),
+    defaultValue: action,
+    label: `${action === 'ISOLATE' ? 'Isolate' : 'Restart'} ${sourceLabel} Public Source`,
+    explanation: action === 'ISOLATE'
+      ? `Stops only the selected ${sourceLabel} public-source stream group; unrelated sources remain supervised.`
+      : `Restarts only the selected ${sourceLabel} public-source stream group from its durable isolated state.`,
+    safeBounds: `${sourceId} only; source-local revision required`,
+    currentDesiredValue: state?.desiredLifecycle ?? 'UNKNOWN',
+    currentEffectiveValue: state?.observedLifecycle ?? 'UNKNOWN',
+    effect: action === 'RESTART' ? 'RESTART' : 'IMMEDIATE',
+    reversibility: 'The inverse transition requires the next exact source revision.',
+    invariants: Object.freeze([
+      'No signed or private exchange capability.',
+      'No unrelated public-source stream is stopped or restarted.',
+    ]),
+    effectTelemetry: Object.freeze(['source revision', 'desired lifecycle', 'observed lifecycle', 'durable receipt']),
+    confirmationText: `Confirm ${action} for ${sourceId} at source revision ${state?.sourceRevision ?? 'UNKNOWN'}.`,
+    currentStateRevision: state === null ? 'UNKNOWN' : String(state.sourceRevision),
+    ...(configured && state === null ? { forcedBlocker: 'SOURCE_CONTROL_STATE_UNAVAILABLE' } : {}),
+  });
+}
+
+/** Bounded non-money controls; focus entries are symbol-scoped and capped at 25. */
 export function buildProductRuntimeControlRegistry(
   snapshot: Readonly<SystemSupervisorReadModel>,
   owner?: Readonly<ProductRuntimeCommandOwnerPort>,
+  requestedControlId?: string,
+  incidentId?: string,
 ): readonly Readonly<ProductRuntimeControlRegistryEntry>[] {
-  return Object.freeze([
+  const controls: Readonly<ProductRuntimeControlRegistryEntry>[] = [
     entry(snapshot, owner, {
       controlId: 'global.safe-mode.read-only', backendCommandId: 'SET_SAFE_MODE', targetType: 'SYSTEM', targetId: 'machine',
       payload: Object.freeze({ safeMode: 'READ_ONLY' }), payloadSchema: '{ safeMode: READ_ONLY }', payloadEnumeration: Object.freeze(['READ_ONLY']), defaultValue: 'READ_ONLY',
@@ -122,18 +350,49 @@ export function buildProductRuntimeControlRegistry(
       reversibility: 'Not reversible after canonical acceptance.', invariants: Object.freeze(['Managed root only.', 'No arbitrary process, path, URL, or command.']),
       effectTelemetry: Object.freeze(['runtime generation', 'component phase', 'durable receipt']), confirmationText: 'Confirm managed-root restart at the current canonical revision.',
     }),
-  ]);
+    sourceLifecycleEntry(snapshot, owner, 'public-spot-source'),
+    sourceLifecycleEntry(snapshot, owner, 'public-usdm-source'),
+    strategyIntakeEntry(snapshot, owner, 'basis'),
+    strategyIntakeEntry(snapshot, owner, 'volume'),
+    ...(incidentId === undefined ? [] : [incidentAcknowledgementEntry(snapshot, owner, incidentId)]),
+  ];
+  const focusControls = new Map<string, Readonly<{ symbol: string; pinned: boolean }>>();
+  const requested = requestedControlId === undefined ? null : focusControlSpec(requestedControlId);
+  if (requested !== null) focusControls.set(focusControlId(requested.symbol, requested.pinned), requested);
+  try {
+    const pinned = owner?.readFocusPinnedSymbols?.() ?? [];
+    if (Array.isArray(pinned) && pinned.length <= 25) {
+      for (const symbol of pinned) {
+        if (typeof symbol === 'string' && /^[A-Z0-9]{4,20}$/.test(symbol)) {
+          focusControls.set(focusControlId(symbol, false), Object.freeze({ symbol, pinned: false }));
+        }
+      }
+    }
+  } catch { /* Absence is represented by the owner blocker, never a synthetic entry. */ }
+  for (const spec of [...focusControls.values()]
+    .sort((left, right) => focusControlId(left.symbol, left.pinned).localeCompare(focusControlId(right.symbol, right.pinned), 'en'))) {
+    controls.push(focusEntry(snapshot, owner, spec.symbol, spec.pinned));
+  }
+  return Object.freeze(controls);
 }
 
 function findWiredControl(
   registry: readonly Readonly<ProductRuntimeControlRegistryEntry>[],
   controlId: string,
 ): Readonly<ProductRuntimeControlRegistryEntry> {
-  const control = registry.find((candidate) => candidate.controlId === controlId);
-  if (!control) throw new ProductRuntimeError('CONTROL_NOT_FOUND', 'The requested control is not registered.', 404);
+  const control = findControl(registry, controlId);
   if (control.wiringState !== 'WIRED_LIVE') {
     throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', control.disabledReason ?? 'The control owner is not configured.', 409);
   }
+  return control;
+}
+
+function findControl(
+  registry: readonly Readonly<ProductRuntimeControlRegistryEntry>[],
+  controlId: string,
+): Readonly<ProductRuntimeControlRegistryEntry> {
+  const control = registry.find((candidate) => candidate.controlId === controlId);
+  if (!control) throw new ProductRuntimeError('CONTROL_NOT_FOUND', 'The requested control is not registered.', 404);
   return control;
 }
 
@@ -150,6 +409,25 @@ function intent(
     targetId: control.targetId,
     payload: control.payload,
     expectedRevision,
+    nowMs,
+    operator,
+  });
+}
+
+function requestBoundIntent(
+  request: Readonly<ProductRuntimeCommandRequest>,
+  nowMs: number,
+  operator: Readonly<ProductRuntimeOperator>,
+): Readonly<ProductRuntimeCommandIntent> | null {
+  if (!PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.includes(request.backendCommandId as ProductRuntimeSafeBackendCommand)
+      || !['SYSTEM', 'COMPONENT', 'SYMBOL'].includes(request.targetType)) return null;
+  return Object.freeze({
+    controlId: request.controlId,
+    backendCommandId: request.backendCommandId as ProductRuntimeSafeBackendCommand,
+    targetType: request.targetType as ProductRuntimeCommandIntent['targetType'],
+    targetId: request.targetId,
+    payload: request.payload,
+    expectedRevision: request.expectedRevision,
     nowMs,
     operator,
   });
@@ -239,16 +517,40 @@ export async function submitProductRuntimeControl(input: Readonly<{
   nowMs: number;
   operator: Readonly<ProductRuntimeOperator>;
 }>): Promise<Readonly<ProductRuntimeControlResult>> {
-  const control = findWiredControl(input.registry, input.request.controlId);
+  const control = findControl(input.registry, input.request.controlId);
   if (!input.owner) throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', 'The canonical command owner is not configured.', 409);
-  if (input.request.expiresAtMs <= input.nowMs) throw new ProductRuntimeError('EXPIRED', 'Command preview has expired.', 409);
-  if (input.request.backendCommandId !== control.backendCommandId
+  const expired = input.request.expiresAtMs <= input.nowMs;
+  const currentControlMismatch = input.request.backendCommandId !== control.backendCommandId
       || input.request.targetType !== control.targetType || input.request.targetId !== control.targetId
       || input.request.currentRevision !== input.request.expectedRevision
-      || !samePayload(input.request.payload, control.payload)) {
+      || !samePayload(input.request.payload, control.payload);
+  const currentControlAccepted = control.wiringState === 'WIRED_LIVE'
+    && !expired
+    && !currentControlMismatch;
+  let ownerIntent = currentControlAccepted
+    ? intent(control, input.request.expectedRevision, input.nowMs, input.operator)
+    : requestBoundIntent(input.request, input.nowMs, input.operator);
+  let pendingReplay = false;
+  if (!currentControlAccepted && ownerIntent !== null && typeof input.owner.authorizePendingReplay === 'function') {
+    try {
+      pendingReplay = await input.owner.authorizePendingReplay(Object.freeze({
+        request: input.request,
+        intent: ownerIntent,
+      }));
+    } catch {
+      pendingReplay = false;
+    }
+  }
+  if (!currentControlAccepted && !pendingReplay) {
+    if (control.wiringState !== 'WIRED_LIVE') {
+      throw new ProductRuntimeError('CONTROL_NOT_CONFIGURED', control.disabledReason ?? 'The control owner is not configured.', 409);
+    }
+    if (expired) throw new ProductRuntimeError('EXPIRED', 'Command preview has expired.', 409);
     throw new ProductRuntimeError('REJECTED_STALE_REVISION', 'Command is not bound to the current registered control.', 409);
   }
-  const ownerIntent = intent(control, input.request.expectedRevision, input.nowMs, input.operator);
+  if (ownerIntent === null) {
+    throw new ProductRuntimeError('REJECTED_SCHEMA', 'Command is not a bounded Product control intent.', 400);
+  }
   let result: Readonly<ProductRuntimeControlResult>;
   try {
     result = await input.owner.submit(Object.freeze({ request: input.request, intent: ownerIntent }));

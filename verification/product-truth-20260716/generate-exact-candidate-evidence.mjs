@@ -2,14 +2,23 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   CAMPAIGN_BRANCH,
   C9_CORRECTION_GRANTS,
   D_LAUNCH_65_AUTHORITY,
+  EXACT_C9_CANDIDATE,
+  EXACT_C9_TREE,
+  EXACT_EVIDENCE_DESCENDANT_FILES,
   EXACT_EVIDENCE_OUTPUTS,
+  EXACT_EVIDENCE_PROOF_REFERENCES,
+  EXACT_EVIDENCE_TOOLING_FILES,
   EXTERNAL_INPUT_SPECS,
+  FRONTIER_REFERENCE_COMMITS,
+  HISTORICAL_PAYLOAD_COMMIT_SPECS,
+  HUMAN_EVIDENCE_ARTIFACT_SPECS,
   LOCK_INVENTORY_MATRIX_REQUIREMENT_ID,
   PREDECESSOR_CANDIDATE,
   PREDECESSOR_TREE,
@@ -19,11 +28,19 @@ import {
   REJECTED_SELECTION_HISTORY,
   REQUIRED_C2_PARENT,
   REQUIRED_MATRIX_COUNTS,
+  SAME_TREE_LANDING_COMMIT,
+  SEALED_C9_SOURCE_PATHS,
+  SEALED_C9_EVIDENCE_COMMIT,
+  SEALED_C9_EVIDENCE_PARENTS,
+  SEALED_C9_EVIDENCE_TREE,
+  SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
   VFINAL5_AUTHORITY,
   WAVE_ARCHIVE_ORIGINS,
 } from './campaign-input-registry.mjs';
+import { renderCanonicalHumanArtifact } from './human-evidence-renderer.mjs';
 
 const repo = process.cwd();
+const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const rootRelative = 'verification/product-truth-20260716';
 const root = resolve(repo, rootRelative);
 const candidateArg = process.argv.indexOf('--candidate');
@@ -33,58 +50,24 @@ const requiredParent = requiredParentArg >= 0
   ? process.argv[requiredParentArg + 1]
   : REQUIRED_C2_PARENT;
 const selfTest = process.argv.includes('--self-test');
+const packageHistoricalPayloads = process.argv.includes('--package-historical-proof-payloads');
 
 const ABSENT_CANDIDATE_PATH_PREFIXES = Object.freeze([
   'ops/aiOps/sentinel/',
   'server/src/aiOps/verifier/',
   'frontier/',
 ]);
-const FRONTIER_REFERENCE_COMMITS = Object.freeze([
-  Object.freeze({
-    sha: 'f0168cb37bd04d21bc90591ab2256770de3b75bc',
-    role: 'ACCEPTED_PRE_FRONTIER_BASE_WITH_ZERO_FRONTIER_PATHS',
-    expected_ancestor_of_candidate: true,
-  }),
-  Object.freeze({
-    sha: '887221418345ad54d7b98881b359fab85a6188e6',
-    role: 'PARKED_FRONTIER_COORDINATOR_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: 'e0ace68de5d56bdfe51bb30cf74e44c6f109dfd5',
-    role: 'PARKED_FRONTIER_F0_DOCK_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: 'e435c1f0c6850b2c53501d3410dd5ce92b64b286',
-    role: 'PARKED_FRONTIER_F1_VENUE_MESH_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '56a08f4efb3f1b82205c4265c1dd18bbd1a70209',
-    role: 'PARKED_FRONTIER_F2_PORTFOLIO_LAB_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '3c9c794e88513bee340f336c5fc4d2dd8eebf47e',
-    role: 'PARKED_FRONTIER_F3_STRATEGY_ARENA_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '7a658b9850f743b944c35253568ae4a231a768b0',
-    role: 'PARKED_FRONTIER_F8_EDGE_METER_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-  Object.freeze({
-    sha: '2c29de4e4d01e8087c00e79f180b731790943baa',
-    role: 'PARKED_FRONTIER_F13_DECISION_LAB_BLOCKED_TIP',
-    expected_ancestor_of_candidate: false,
-  }),
-]);
-
 function fail(message) { throw new Error(message); }
 function assert(condition, message) { if (!condition) fail(message); }
+assert(resolve(scriptRoot) === root, 'GENERATOR_MUST_RUN_FROM_TARGET_REPOSITORY_TOOLING');
 function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
+function gitObjectOid(type, bytes) {
+  return createHash('sha1')
+    .update(Buffer.from(`${type} ${bytes.length}\0`, 'utf8'))
+    .update(bytes)
+    .digest('hex');
+}
+function gitBlobOid(bytes) { return gitObjectOid('blob', bytes); }
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
@@ -115,11 +98,267 @@ function candidateBytes(path) { return gitBytes('show', `${candidate}:${path}`);
 function candidateText(path) { return candidateBytes(path).toString('utf8'); }
 function candidateJson(path) { return JSON.parse(candidateText(path)); }
 function candidateBlob(path) { return gitText('rev-parse', `${candidate}:${path}`); }
+let sealedEvidencePayloadByPath = null;
+function sealedEvidenceBytes(path) {
+  assert(sealedEvidencePayloadByPath instanceof Map, 'SEALED_EVIDENCE_PAYLOAD_NOT_VERIFIED');
+  const bytes = sealedEvidencePayloadByPath.get(campaignPath(path));
+  assert(bytes, `SEALED_EVIDENCE_PAYLOAD_PATH_MISSING:${path}`);
+  return Buffer.from(bytes);
+}
+function sealedEvidenceText(path) { return sealedEvidenceBytes(path).toString('utf8'); }
+function sealedEvidenceJson(path) { return JSON.parse(sealedEvidenceText(path)); }
 function writeJson(name, value) {
   writeFileSync(resolve(root, name), `${JSON.stringify(value, null, 2)}\n`);
 }
 function readJson(name) { return JSON.parse(readFileSync(resolve(root, name), 'utf8')); }
 function campaignPath(name) { return `${rootRelative}/${name}`; }
+
+function toolingBinding(name) {
+  const bytes = readFileSync(resolve(root, name));
+  return {
+    path: name,
+    sha256: sha256(bytes),
+    git_blob: gitBlobOid(bytes),
+    byte_length: bytes.length,
+  };
+}
+
+function verifiedProofReference(reference) {
+  assert(/^[A-Z0-9_]+$/u.test(reference.proof_reference_id), `PROOF_REFERENCE_ID_INVALID:${reference.proof_reference_id}`);
+  const payloadBacked = reference.commit === SEALED_C9_EVIDENCE_COMMIT;
+  if (!payloadBacked) {
+    assert(gitText('rev-parse', `${reference.commit}^{commit}`) === reference.commit, `PROOF_REFERENCE_COMMIT:${reference.proof_reference_id}`);
+  }
+  const bytes = payloadBacked
+    ? sealedEvidencePayloadByPath.get(reference.path)
+    : gitBytes('show', `${reference.commit}:${reference.path}`);
+  assert(bytes, `PROOF_REFERENCE_PATH:${reference.proof_reference_id}`);
+  const observedBlob = payloadBacked ? gitBlobOid(bytes) : candidateBlobFor(reference.commit, reference.path);
+  assert(observedBlob === reference.git_blob, `PROOF_REFERENCE_BLOB:${reference.proof_reference_id}`);
+  assert(sha256(bytes) === reference.sha256, `PROOF_REFERENCE_SHA256:${reference.proof_reference_id}`);
+  assert(bytes.length === reference.byte_length, `PROOF_REFERENCE_LENGTH:${reference.proof_reference_id}`);
+  const text = bytes.toString('utf8');
+  for (const symbol of reference.required_symbols) {
+    assert(text.includes(symbol), `PROOF_REFERENCE_SYMBOL:${reference.proof_reference_id}:${symbol}`);
+  }
+  return {
+    proof_reference_id: reference.proof_reference_id,
+    source_commit: reference.commit,
+    source_path: reference.path,
+    source_git_blob: reference.git_blob,
+    source_sha256: reference.sha256,
+    source_byte_length: reference.byte_length,
+    required_symbols: [...reference.required_symbols],
+    validation: 'GIT_OBJECT_PATH_BLOB_SHA256_LENGTH_AND_SYMBOLS_VERIFIED',
+  };
+}
+
+function candidateBlobFor(ref, relativePath) {
+  return gitText('rev-parse', `${ref}:${relativePath}`);
+}
+
+function decodeCanonicalBase64(value, label) {
+  assert(typeof value === 'string' && value.length > 0, `${label}_BASE64_MISSING`);
+  const bytes = Buffer.from(value, 'base64');
+  assert(bytes.toString('base64') === value, `${label}_BASE64_NON_CANONICAL`);
+  return bytes;
+}
+
+function parseCommitObject(bytes, label) {
+  const headerText = bytes.toString('utf8').split('\n\n', 1)[0];
+  const tree = headerText.match(/^tree ([a-f0-9]{40})$/mu)?.[1] ?? null;
+  const parents = [...headerText.matchAll(/^parent ([a-f0-9]{40})$/gmu)].map((match) => match[1]);
+  assert(tree !== null, `${label}_TREE_HEADER_MISSING`);
+  return { tree, parents };
+}
+
+function parseTreeObject(bytes, label) {
+  const entries = [];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const space = bytes.indexOf(0x20, offset);
+    const nul = bytes.indexOf(0x00, space + 1);
+    assert(space > offset && nul > space, `${label}_TREE_RECORD_INVALID`);
+    const mode = bytes.subarray(offset, space).toString('ascii');
+    const name = bytes.subarray(space + 1, nul).toString('utf8');
+    const oidStart = nul + 1;
+    const oidEnd = oidStart + 20;
+    assert(oidEnd <= bytes.length, `${label}_TREE_OID_TRUNCATED`);
+    entries.push({ mode, name, oid: bytes.subarray(oidStart, oidEnd).toString('hex') });
+    offset = oidEnd;
+  }
+  return entries;
+}
+
+function treeBlobForPath(treeObjectByOid, rootTree, relativePath, label) {
+  const components = relativePath.split('/');
+  let treeOid = rootTree;
+  for (let index = 0; index < components.length; index += 1) {
+    const entries = treeObjectByOid.get(treeOid);
+    assert(entries, `${label}_TREE_OBJECT_MISSING:${treeOid}`);
+    const entry = entries.find((row) => row.name === components[index]);
+    assert(entry, `${label}_TREE_PATH_MISSING:${components.slice(0, index + 1).join('/')}`);
+    if (index === components.length - 1) {
+      assert(entry.mode !== '40000', `${label}_PATH_IS_TREE:${relativePath}`);
+      return entry.oid;
+    }
+    assert(entry.mode === '40000', `${label}_PATH_COMPONENT_NOT_TREE:${components[index]}`);
+    treeOid = entry.oid;
+  }
+  fail(`${label}_EMPTY_PATH`);
+}
+
+function rawCommitRecord(sha, role) {
+  const bytes = gitBytes('cat-file', 'commit', sha);
+  const parsed = parseCommitObject(bytes, `PACKAGE_COMMIT:${sha}`);
+  assert(gitObjectOid('commit', bytes) === sha, `PACKAGE_COMMIT_OID:${sha}`);
+  return {
+    sha,
+    role,
+    tree: parsed.tree,
+    parents: parsed.parents,
+    byte_length: bytes.length,
+    sha256: sha256(bytes),
+    object_base64: bytes.toString('base64'),
+  };
+}
+
+function packageHistoricalProofPayloadBundle() {
+  assert(gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}^{commit}`) === SEALED_C9_EVIDENCE_COMMIT, 'PACKAGE_SEALED_COMMIT_MISSING');
+  assert(gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}^{tree}`) === SEALED_C9_EVIDENCE_TREE, 'PACKAGE_SEALED_TREE_MISMATCH');
+  const treeOids = [
+    SEALED_C9_EVIDENCE_TREE,
+    gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}:verification`),
+    gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}:${rootRelative}`),
+  ];
+  const treeObjects = treeOids.map((oid) => {
+    const bytes = gitBytes('cat-file', 'tree', oid);
+    assert(gitObjectOid('tree', bytes) === oid, `PACKAGE_TREE_OID:${oid}`);
+    return {
+      oid,
+      byte_length: bytes.length,
+      sha256: sha256(bytes),
+      object_base64: bytes.toString('base64'),
+    };
+  });
+  const files = SEALED_C9_SOURCE_PATHS.map((name) => {
+    const sourcePath = campaignPath(name);
+    const oid = gitText('rev-parse', `${SEALED_C9_EVIDENCE_COMMIT}:${sourcePath}`);
+    const bytes = gitBytes('cat-file', 'blob', oid);
+    assert(gitBlobOid(bytes) === oid, `PACKAGE_BLOB_OID:${sourcePath}`);
+    return {
+      path: sourcePath,
+      git_blob: oid,
+      byte_length: bytes.length,
+      sha256: sha256(bytes),
+      object_base64: bytes.toString('base64'),
+    };
+  });
+  const bundle = {
+    schema: 'sealed-git-object-payload-bundle.v1',
+    truth_class: 'TRACKED_REHASH_ONLY_NO_ANCESTRY_OR_AUTHORITY',
+    sealed_machine_evidence: {
+      ...rawCommitRecord(SEALED_C9_EVIDENCE_COMMIT, 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE'),
+      tree_objects: treeObjects,
+      files,
+    },
+    historical_commits: HISTORICAL_PAYLOAD_COMMIT_SPECS.map((spec) =>
+      rawCommitRecord(spec.sha, spec.role)),
+  };
+  const digest = sha256(Buffer.from(canonicalJson(bundle), 'utf8'));
+  const metadata = readJson('LOCKED_INPUT_PAYLOADS.json');
+  metadata.sealed_git_object_payload_bundle_sha256 = digest;
+  metadata.sealed_git_object_payload_bundle = bundle;
+  writeJson('LOCKED_INPUT_PAYLOADS.json', metadata);
+  process.stdout.write(`${JSON.stringify({
+    result: 'SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_PACKAGED',
+    sha256: digest,
+    sealed_files: files.length,
+    historical_commits: bundle.historical_commits.length,
+  })}\n`);
+}
+
+function verifyHistoricalProofPayloadBundle(metadata, candidateReachable) {
+  const bundle = metadata?.sealed_git_object_payload_bundle;
+  assert(bundle && typeof bundle === 'object', 'SEALED_PAYLOAD_BUNDLE_MISSING');
+  const digest = sha256(Buffer.from(canonicalJson(bundle), 'utf8'));
+  assert(metadata.sealed_git_object_payload_bundle_sha256 === digest, 'SEALED_PAYLOAD_BUNDLE_DECLARED_SHA256');
+  assert(digest === SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256, 'SEALED_PAYLOAD_BUNDLE_REGISTRY_SHA256');
+  assert(bundle.schema === 'sealed-git-object-payload-bundle.v1', 'SEALED_PAYLOAD_BUNDLE_SCHEMA');
+  assert(bundle.truth_class === 'TRACKED_REHASH_ONLY_NO_ANCESTRY_OR_AUTHORITY', 'SEALED_PAYLOAD_BUNDLE_TRUTH_CLASS');
+
+  const sealed = bundle.sealed_machine_evidence;
+  assert(sealed?.sha === SEALED_C9_EVIDENCE_COMMIT, 'SEALED_PAYLOAD_COMMIT');
+  assert(sealed.role === 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE', 'SEALED_PAYLOAD_ROLE');
+  const sealedCommitBytes = decodeCanonicalBase64(sealed.object_base64, 'SEALED_PAYLOAD_COMMIT');
+  assert(sealed.byte_length === sealedCommitBytes.length, 'SEALED_PAYLOAD_COMMIT_LENGTH');
+  assert(sealed.sha256 === sha256(sealedCommitBytes), 'SEALED_PAYLOAD_COMMIT_SHA256');
+  assert(gitObjectOid('commit', sealedCommitBytes) === SEALED_C9_EVIDENCE_COMMIT, 'SEALED_PAYLOAD_COMMIT_OID');
+  const sealedHeaders = parseCommitObject(sealedCommitBytes, 'SEALED_PAYLOAD_COMMIT');
+  assert(sealed.tree === SEALED_C9_EVIDENCE_TREE && sealedHeaders.tree === SEALED_C9_EVIDENCE_TREE, 'SEALED_PAYLOAD_TREE');
+  assert(canonicalJson(sealed.parents) === canonicalJson(SEALED_C9_EVIDENCE_PARENTS), 'SEALED_PAYLOAD_PARENTS');
+  assert(canonicalJson(sealedHeaders.parents) === canonicalJson(sealed.parents), 'SEALED_PAYLOAD_COMMIT_PARENT_HEADERS');
+  assert(!candidateReachable.has(SEALED_C9_EVIDENCE_COMMIT), 'SEALED_PAYLOAD_COMMIT_IN_CANDIDATE_ANCESTRY');
+
+  assert(Array.isArray(sealed.tree_objects) && sealed.tree_objects.length === 3, 'SEALED_PAYLOAD_TREE_OBJECT_COUNT');
+  const treeObjectByOid = new Map();
+  for (const row of sealed.tree_objects) {
+    assert(!treeObjectByOid.has(row.oid), `SEALED_PAYLOAD_TREE_DUPLICATE:${row.oid}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `SEALED_PAYLOAD_TREE:${row.oid}`);
+    assert(row.byte_length === bytes.length, `SEALED_PAYLOAD_TREE_LENGTH:${row.oid}`);
+    assert(row.sha256 === sha256(bytes), `SEALED_PAYLOAD_TREE_SHA256:${row.oid}`);
+    assert(row.oid === gitObjectOid('tree', bytes), `SEALED_PAYLOAD_TREE_OID:${row.oid}`);
+    treeObjectByOid.set(row.oid, parseTreeObject(bytes, `SEALED_PAYLOAD_TREE:${row.oid}`));
+  }
+  assert(treeObjectByOid.has(SEALED_C9_EVIDENCE_TREE), 'SEALED_PAYLOAD_ROOT_TREE_MISSING');
+
+  assert(Array.isArray(sealed.files), 'SEALED_PAYLOAD_FILES_MISSING');
+  assert(canonicalJson(sealed.files.map((row) => row.path).sort())
+    === canonicalJson(SEALED_C9_SOURCE_PATHS.map(campaignPath).sort()), 'SEALED_PAYLOAD_FILE_PATH_SET');
+  const fileByPath = new Map();
+  for (const row of sealed.files) {
+    assert(!fileByPath.has(row.path), `SEALED_PAYLOAD_FILE_DUPLICATE:${row.path}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `SEALED_PAYLOAD_FILE:${row.path}`);
+    assert(row.byte_length === bytes.length, `SEALED_PAYLOAD_FILE_LENGTH:${row.path}`);
+    assert(row.sha256 === sha256(bytes), `SEALED_PAYLOAD_FILE_SHA256:${row.path}`);
+    assert(row.git_blob === gitBlobOid(bytes), `SEALED_PAYLOAD_FILE_BLOB:${row.path}`);
+    assert(treeBlobForPath(treeObjectByOid, SEALED_C9_EVIDENCE_TREE, row.path, 'SEALED_PAYLOAD')
+      === row.git_blob, `SEALED_PAYLOAD_TREE_PATH_BLOB:${row.path}`);
+    fileByPath.set(row.path, bytes);
+  }
+  for (const reference of EXACT_EVIDENCE_PROOF_REFERENCES.filter(
+    (row) => row.commit === SEALED_C9_EVIDENCE_COMMIT,
+  )) {
+    const bytes = fileByPath.get(reference.path);
+    assert(bytes, `SEALED_PAYLOAD_PROOF_PATH:${reference.proof_reference_id}`);
+    assert(gitBlobOid(bytes) === reference.git_blob, `SEALED_PAYLOAD_PROOF_BLOB:${reference.proof_reference_id}`);
+    assert(sha256(bytes) === reference.sha256, `SEALED_PAYLOAD_PROOF_SHA256:${reference.proof_reference_id}`);
+    assert(bytes.length === reference.byte_length, `SEALED_PAYLOAD_PROOF_LENGTH:${reference.proof_reference_id}`);
+    const text = bytes.toString('utf8');
+    for (const symbol of reference.required_symbols) {
+      assert(text.includes(symbol), `SEALED_PAYLOAD_PROOF_SYMBOL:${reference.proof_reference_id}:${symbol}`);
+    }
+  }
+
+  assert(Array.isArray(bundle.historical_commits), 'HISTORICAL_PAYLOAD_COMMITS_MISSING');
+  assert(canonicalJson(bundle.historical_commits.map((row) => ({ sha: row.sha, role: row.role })))
+    === canonicalJson(HISTORICAL_PAYLOAD_COMMIT_SPECS), 'HISTORICAL_PAYLOAD_COMMIT_SET');
+  const historicalCommitBySha = new Map();
+  for (const row of bundle.historical_commits) {
+    assert(!historicalCommitBySha.has(row.sha), `HISTORICAL_PAYLOAD_COMMIT_DUPLICATE:${row.sha}`);
+    const bytes = decodeCanonicalBase64(row.object_base64, `HISTORICAL_PAYLOAD_COMMIT:${row.sha}`);
+    assert(row.byte_length === bytes.length, `HISTORICAL_PAYLOAD_COMMIT_LENGTH:${row.sha}`);
+    assert(row.sha256 === sha256(bytes), `HISTORICAL_PAYLOAD_COMMIT_SHA256:${row.sha}`);
+    assert(row.sha === gitObjectOid('commit', bytes), `HISTORICAL_PAYLOAD_COMMIT_OID:${row.sha}`);
+    const headers = parseCommitObject(bytes, `HISTORICAL_PAYLOAD_COMMIT:${row.sha}`);
+    assert(row.tree === headers.tree, `HISTORICAL_PAYLOAD_COMMIT_TREE:${row.sha}`);
+    assert(canonicalJson(row.parents) === canonicalJson(headers.parents), `HISTORICAL_PAYLOAD_COMMIT_PARENTS:${row.sha}`);
+    assert(!candidateReachable.has(row.sha), `HISTORICAL_PAYLOAD_COMMIT_IN_CANDIDATE_ANCESTRY:${row.sha}`);
+    historicalCommitBySha.set(row.sha, row);
+  }
+  assert(historicalCommitBySha.get(SAME_TREE_LANDING_COMMIT)?.tree === EXACT_C9_TREE, 'SAME_TREE_LANDING_PAYLOAD_TREE');
+  return { bundle, digest, fileByPath, historicalCommitBySha };
+}
 
 function treeBlobMap(ref) {
   const records = gitBytes('ls-tree', '-r', '-z', ref).toString('utf8').split('\0').filter(Boolean);
@@ -242,7 +481,7 @@ function normalizeExactMatrixText(value) {
 }
 
 function generateMatrix(name, expectedCount, candidateColumn, idColumns, allInputIds, rowOverrides = new Map()) {
-  const rows = parseCsv(candidateText(campaignPath(name)));
+  const rows = parseCsv(sealedEvidenceText(name));
   assert(rows.length === expectedCount + 1, `${name}_ROW_COUNT:${rows.length - 1}`);
   const header = rows[0];
   const candidateIndex = header.indexOf(candidateColumn);
@@ -291,11 +530,27 @@ function generateMatrix(name, expectedCount, candidateColumn, idColumns, allInpu
 
 function registrySelfTest() {
   assert(REQUIRED_C2_PARENT === requiredParent, 'SELF_TEST_PARENT_DRIFT');
+  assert(EXACT_C9_CANDIDATE.length === 40 && EXACT_C9_TREE.length === 40, 'SELF_TEST_C9_IDENTITY');
+  assert(EXACT_EVIDENCE_OUTPUTS.length === 21, 'SELF_TEST_OUTPUT_COUNT');
+  assert(EXACT_EVIDENCE_TOOLING_FILES.length === 5, 'SELF_TEST_TOOLING_COUNT');
+  assert(EXACT_EVIDENCE_DESCENDANT_FILES.length === 26, 'SELF_TEST_DESCENDANT_PATH_COUNT');
+  assert(new Set(EXACT_EVIDENCE_DESCENDANT_FILES).size === 26, 'SELF_TEST_DESCENDANT_PATH_DUPLICATE');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.length === 6, 'SELF_TEST_HUMAN_ARTIFACT_COUNT');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => /^[a-f0-9]{64}$/u.test(row.sha256)), 'SELF_TEST_HUMAN_ARTIFACT_SHA256');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => /^[a-f0-9]{40}$/u.test(row.git_blob)), 'SELF_TEST_HUMAN_ARTIFACT_GIT_BLOB');
+  assert(HUMAN_EVIDENCE_ARTIFACT_SPECS.every((row) => Number.isSafeInteger(row.byte_length) && row.byte_length > 0), 'SELF_TEST_HUMAN_ARTIFACT_LENGTH');
+  assert(new Set(EXACT_EVIDENCE_PROOF_REFERENCES.map((row) => row.proof_reference_id)).size
+    === EXACT_EVIDENCE_PROOF_REFERENCES.length, 'SELF_TEST_PROOF_REFERENCE_IDS');
   assert(EXTERNAL_INPUT_SPECS.length === 23, 'SELF_TEST_EXTERNAL_COUNT');
   assert(new Set(EXTERNAL_INPUT_SPECS.map((row) => row.inputId)).size === 23, 'SELF_TEST_EXTERNAL_IDS');
   assert(Object.values(REQUIRED_MATRIX_COUNTS).slice(0, 3).reduce((sum, count) => sum + count, 0) === 354, 'SELF_TEST_MATRIX_TOTAL');
   assert(D_LAUNCH_65_AUTHORITY.commit.length === 40, 'SELF_TEST_D65');
-  process.stdout.write(`${JSON.stringify({ self_test: true, external_inputs: 23, locked_inputs: 61, matrix_cells: 354 })}\n`);
+  process.stdout.write(`${JSON.stringify({ self_test: true, external_inputs: 23, locked_inputs: 61, matrix_cells: 354, generated_outputs: 21, bound_tooling_files: 5, exact_descendant_paths: 26, human_artifacts: 6 })}\n`);
+}
+
+if (packageHistoricalPayloads) {
+  packageHistoricalProofPayloadBundle();
+  process.exit(0);
 }
 
 if (selfTest) {
@@ -306,19 +561,40 @@ if (selfTest) {
 assert(/^[a-f0-9]{40}$/u.test(candidate ?? ''), 'EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(requiredParent ?? ''), 'EXACT_FULL_REQUIRED_PARENT_SHA_REQUIRED');
 assert(requiredParent === REQUIRED_C2_PARENT, 'IMMUTABLE_C2_PARENT_MISMATCH');
+assert(candidate === EXACT_C9_CANDIDATE, `EXACT_C9_CANDIDATE_REQUIRED:${candidate}`);
 assert(!REJECTED_CANDIDATE_SHAS.includes(candidate), `REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidate}`);
 assert(gitText('rev-parse', `${candidate}^{commit}`) === candidate, 'CANDIDATE_COMMIT_MISSING');
 const parents = gitText('show', '-s', '--format=%P', candidate).split(/\s+/u).filter(Boolean);
 assert(parents.length === 1, `CANDIDATE_PARENT_COUNT:${parents.length}`);
 assert(parents[0] === requiredParent, `CANDIDATE_DIRECT_PARENT:${parents[0]}`);
 const candidateTree = gitText('rev-parse', `${candidate}^{tree}`);
+assert(candidateTree === EXACT_C9_TREE, `EXACT_C9_TREE_MISMATCH:${candidateTree}`);
+const candidateReachable = new Set(gitText('rev-list', candidate).split('\n').filter(Boolean));
+const bundledPayloadMetadata = readJson('LOCKED_INPUT_PAYLOADS.json');
+const historicalPayload = verifyHistoricalProofPayloadBundle(
+  bundledPayloadMetadata,
+  candidateReachable,
+);
+sealedEvidencePayloadByPath = historicalPayload.fileByPath;
 const candidateTreeBlobs = treeBlobMap(candidate);
 const candidateRootState = candidateText('STATE.md');
 assert(candidateRootState.includes('| Account A correction candidate C9 |'), 'C9_SOURCE_STATE_MARKER_MISSING');
+const exactProofReferences = EXACT_EVIDENCE_PROOF_REFERENCES.map(verifiedProofReference);
+assert(new Set(exactProofReferences.map((row) => row.proof_reference_id)).size === exactProofReferences.length, 'PROOF_REFERENCE_ID_DUPLICATE');
+const exactToolingBindings = EXACT_EVIDENCE_TOOLING_FILES.map(toolingBinding);
+assert(new Set(exactToolingBindings.map((row) => row.path)).size === EXACT_EVIDENCE_TOOLING_FILES.length, 'TOOLING_BINDING_PATH_DUPLICATE');
+const exactToolingBundleSha256 = sha256(Buffer.from(canonicalJson(exactToolingBindings), 'utf8'));
 
-// The census must observe a clean custody bridge before any other evidence file is changed.
-run(process.execPath, [resolve(root, 'generate-worktree-census.mjs'), candidate]);
-const exactCensus = readJson('WORKTREE_CENSUS.json');
+// C9 is historical and immutable. Refresh only from the sealed C9 machine artifacts;
+// never recensus the mutable live workstation while rebuilding this evidence package.
+const exactCensus = sealedEvidenceJson('WORKTREE_CENSUS.json');
+assert(exactCensus.candidate_sha === candidate, 'SEALED_CENSUS_CANDIDATE');
+assert(exactCensus.candidate_tree_sha === candidateTree, 'SEALED_CENSUS_TREE');
+const exactCensusTruthA = exactCensus.rows.find((row) => row.worktree_name === 'truth-a');
+assert(exactCensusTruthA, 'SEALED_CENSUS_TRUTH_A_MISSING');
+exactCensusTruthA.exact_candidate_custody_normalization =
+  'SEALED_HEAD_WAS_EXACT_CANDIDATE_OR_EXACT_15_PATH_EVIDENCE_DESCENDANT; V5_DESCENDANT_ALLOWLIST_IS_EXACT_21_GENERATED_PLUS_5_BOUND_TOOLING_WITH_TRACKED_SEALED_OBJECT_PAYLOAD_WITHOUT_LIVE_RECENSUS';
+writeJson('WORKTREE_CENSUS.json', exactCensus);
 
 const seedLock = candidateJson(campaignPath('INPUTS.lock'));
 const sourcePayloadMetadata = candidateJson(campaignPath('LOCKED_INPUT_PAYLOADS.json'));
@@ -456,11 +732,15 @@ const exactPayloadMetadata = {
     external_input_members: exactPayloadMembers.length,
     authority_members: exactAuthorityMembers.length,
     payload_files: exactPayloadMembers.length + exactAuthorityMembers.length,
+    sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+    historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
     byte_length: [...exactPayloadMembers, ...exactAuthorityMembers]
       .reduce((sum, member) => sum + member.byte_length, 0),
   },
   inventory_sha256: sha256(Buffer.from(canonicalJson(exactPayloadInventory), 'utf8')),
   payload_set_sha256: sourcePayloadMetadata.payload_set_sha256,
+  sealed_git_object_payload_bundle_sha256: historicalPayload.digest,
+  sealed_git_object_payload_bundle: historicalPayload.bundle,
   ...exactPayloadInventory,
 };
 writeJson('LOCKED_INPUT_PAYLOADS.json', exactPayloadMetadata);
@@ -472,6 +752,13 @@ const inputLock = {
   candidate_tree: candidateTree,
   candidate_parent: requiredParent,
   candidate_branch: CAMPAIGN_BRANCH,
+  sealed_historical_proof_payload: {
+    path: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+    bundle_sha256: historicalPayload.digest,
+    sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+    raw_historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
+    authority_granted: false,
+  },
   inventory_counts: {
     controlling_external: controlling.length,
     candidate_tracked_law_and_locks: candidateTracked.length,
@@ -514,29 +801,27 @@ const candidateAbsenceAndExclusionProofs = {
     };
   }),
   frontier_reference_ancestry: FRONTIER_REFERENCE_COMMITS.map((reference) => {
+    const ancestorOfCandidate = candidateReachable.has(reference.sha);
+    if (reference.expected_ancestor_of_candidate) {
+      assert(gitText('rev-parse', `${reference.sha}^{commit}`) === reference.sha, `FRONTIER_REFERENCE_COMMIT_MISSING:${reference.sha}`);
+    } else {
+      assert(historicalPayload.historicalCommitBySha.has(reference.sha), `FRONTIER_REFERENCE_PAYLOAD_MISSING:${reference.sha}`);
+    }
     assert(
-      gitText('rev-parse', `${reference.sha}^{commit}`) === reference.sha,
-      `FRONTIER_REFERENCE_COMMIT_MISSING:${reference.sha}`,
-    );
-    const status = run(
-      'git',
-      ['merge-base', '--is-ancestor', reference.sha, candidate],
-      { allowFailure: true },
-    ).status;
-    const ancestorOfCandidate = status === 0;
-    assert(
-      status === (reference.expected_ancestor_of_candidate ? 0 : 1),
-      `FRONTIER_REFERENCE_ANCESTRY:${reference.sha}:expected=${reference.expected_ancestor_of_candidate}:status=${status}`,
+      ancestorOfCandidate === reference.expected_ancestor_of_candidate,
+      `FRONTIER_REFERENCE_ANCESTRY:${reference.sha}:expected=${reference.expected_ancestor_of_candidate}:actual=${ancestorOfCandidate}`,
     );
     return {
       ...reference,
       ancestor_of_candidate: ancestorOfCandidate,
-      proof_source: 'git merge-base --is-ancestor reference exact-candidate',
+      proof_source: reference.expected_ancestor_of_candidate
+        ? 'git rev-list exact-candidate includes accepted reference commit'
+        : 'tracked raw commit payload OID plus git rev-list exact-candidate exclusion',
     };
   }),
 };
 
-const proofSeed = candidateJson(campaignPath('C2_PROOF_BINDING.json'));
+const proofSeed = sealedEvidenceJson('C2_PROOF_BINDING.json');
 const proof = {
   ...proofSeed,
   schema: 'product-truth-c9-proof-binding.v2',
@@ -564,31 +849,7 @@ const proof = {
 };
 writeJson('C2_PROOF_BINDING.json', proof);
 
-writeJson('EVIDENCE_SELECTION.json', {
-  schema: 'product-truth-c9-evidence-selection.v2',
-  source_candidate: candidate,
-  source_candidate_tree: candidateTree,
-  source_candidate_parent: requiredParent,
-  source_candidate_branch: CAMPAIGN_BRANCH,
-  candidate_embedded_package: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
-  selection_rule: 'Select only this exact C9 candidate and an evidence descendant whose post-C9 diff equals the exact generated-output allowlist and whose manifest verifies byte-for-byte.',
-  valid_chain: 'C2 -> C9; custody bridge/evidence descendants may follow but cannot alter C9',
-  post_candidate_path_allowlist: EXACT_EVIDENCE_OUTPUTS.map((name) => campaignPath(name)),
-  required_binding: 'MANIFEST.json plus MANIFEST.sha256',
-  final_verifier_handoff: 'READY_FOR_FRESH_FINAL_VERIFIER_AFTER_BASELINE_GATE',
-  rejected_candidate_history: REJECTED_SELECTION_HISTORY,
-  prior_candidate_sha: REJECTED_C8_CANDIDATE,
-  prior_candidate_tree: REJECTED_C8_TREE,
-  prior_candidate_disposition: 'C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT',
-  c7_candidate_sha: 'a283eb859ec1142aadecbd64e0b84959535f6216',
-  c7_candidate_disposition: 'C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT',
-  c6_candidate_sha: '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
-  c6_candidate_disposition: 'C6_REJECTED_BY_CANONICAL_SECURITY_GATE',
-  vfinal5_candidate_sha: VFINAL5_AUTHORITY.candidate,
-  vfinal5_candidate_disposition: 'C5_REJECTED_BY_VFINAL5',
-});
-
-const provenanceSeed = candidateJson(campaignPath('MERGE_PROVENANCE.json'));
+const provenanceSeed = sealedEvidenceJson('MERGE_PROVENANCE.json');
 const provenance = replaceExact(provenanceSeed);
 provenance.schema = 'product-truth-merge-provenance.v3';
 provenance.candidate_sha = candidate;
@@ -730,7 +991,7 @@ const directiveOverrides = new Map([
     disposition: 'Exact C9 census is candidate-bound; no historical census is relabeled',
   }],
   ['CAMP-07-PASS0', {
-    runtime_evidence: 'C9 correction source frozen directly on immutable C2; exact output-only evidence regenerated',
+    runtime_evidence: 'C9 correction source frozen directly on immutable C2; exact self-contained evidence descendant regenerated from committed tooling plus its registry-bound tracked sealed-object payload',
     status: 'INTEGRATED',
     blocker: 'NONE',
     disposition: 'C9 is immutable; any later source correction is C10',
@@ -797,14 +1058,15 @@ provenance.receipt = {
 writeJson('MERGE_PROVENANCE.json', provenance);
 
 for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', 'PRODUCT_ASSURANCE_C2_DISPOSITION.json']) {
-  const value = replaceExact(candidateJson(campaignPath(name)));
+  const value = replaceExact(sealedEvidenceJson(name));
   value.candidate_sha = candidate;
   value.candidate_tree = candidateTree;
   value.candidate_parent = requiredParent;
   value.binding = 'EXACT_CANDIDATE';
   if (name === 'AI_OPS_C2_DISPOSITION.json') {
     value.schema = 'ai-ops-c9-acceptance-disposition.v2';
-    value.c9_baseline_acceptance = value.c2_baseline_acceptance?.replaceAll('C2', 'C9');
+    value.c9_baseline_acceptance = value.c9_baseline_acceptance
+      ?? value.c2_baseline_acceptance?.replaceAll('C2', 'C9');
     delete value.c2_baseline_acceptance;
   } else if (name === 'INDEPENDENT_FINDINGS.json') {
     value.schema = 'product-truth-c9-independent-findings.v3';
@@ -819,7 +1081,7 @@ for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', '
     value.schema = 'product-assurance-c9-disposition.v2';
     for (const artifact of value.artifacts ?? []) {
       artifact.prior_generator_artifact = String(artifact.prior_generator_artifact).replaceAll('C2', 'C9');
-      artifact.c9_disposition = artifact.c2_disposition;
+      artifact.c9_disposition = artifact.c9_disposition ?? artifact.c2_disposition;
       delete artifact.c2_disposition;
       artifact.reason = 'FRESH_FINAL_VERIFIER_PENDING_EXACT_C9_PRODUCT_ASSURANCE_CLOSURE_NOT_CLAIMED';
     }
@@ -827,9 +1089,117 @@ for (const name of ['AI_OPS_C2_DISPOSITION.json', 'INDEPENDENT_FINDINGS.json', '
   writeJson(name, value);
 }
 
-writeFileSync(resolve(root, 'STATE.md'), `# Product-truth campaign state\n\n- Exact frozen candidate: \`${candidate}\`\n- Candidate tree: \`${candidateTree}\`\n- Sole direct parent: \`${requiredParent}\`\n- Candidate topology: **PASS** (C9^ == immutable C2; parent count 1)\n- Locked inputs: **61/61** have explicit source, disposition, and matrix linkage.\n- External inputs: **23/23** have candidate-tracked payload bytes that a single-branch clone can independently rehash.\n- Matrix binding: **354/354** candidate cells (153 directive + 23 capability + 178 cockpit) name exact C9.\n- Payload metadata: exact-bound inventory checksum and payload-set checksum independently reverify.\n- Provenance: all lane match counts, candidate blobs, aggregate mismatches, and landed-core adaptation rows are remeasured from exact C9.\n- Census contract: **96 live + 5 REMOVED_SAFE tombstones = 101 durable entries**.\n- D-LAUNCH-65 is byte-bound in \`INPUTS.lock\`; ambient \`current-main\` is not evidence.\n- WATCHMAN law: local refresh action state cannot supersede canonical health.\n- Execution authority: none; \`LIVE_EXECUTION_NOT_IMPLEMENTED\` remains enforced.\n- Final independent verdict: pending fresh verifier.\n`);
+const humanArtifacts = HUMAN_EVIDENCE_ARTIFACT_SPECS.map((spec) => {
+  const rendered = renderCanonicalHumanArtifact({
+    spec,
+    proofReferences: exactProofReferences,
+    candidateSha: candidate,
+    candidateTree,
+    candidateParent: requiredParent,
+    candidateCommitTime,
+  });
+  const bytes = Buffer.from(rendered, 'utf8');
+  assert(sha256(bytes) === spec.sha256, `HUMAN_ARTIFACT_CANONICAL_SHA256:${spec.path}`);
+  assert(gitBlobOid(bytes) === spec.git_blob, `HUMAN_ARTIFACT_CANONICAL_GIT_BLOB:${spec.path}`);
+  assert(bytes.length === spec.byte_length, `HUMAN_ARTIFACT_CANONICAL_LENGTH:${spec.path}`);
+  writeFileSync(resolve(root, spec.path), bytes);
+  return {
+    schema: 'product-truth-human-evidence-artifact.v1',
+    selection_id: spec.selection_id,
+    path: spec.path,
+    candidate_sha: candidate,
+    candidate_tree: candidateTree,
+    candidate_parent: requiredParent,
+    state: spec.state,
+    actor: spec.actor,
+    candidate_write_authority: spec.candidate_write_authority,
+    proof_reference_ids: [...spec.proof_reference_ids],
+    sha256: spec.sha256,
+    git_blob: spec.git_blob,
+    byte_length: spec.byte_length,
+    receipt: {
+      command_or_operator_action: 'DETERMINISTIC_OUTPUT_ONLY_RENDER_FROM_VERIFIED_GIT_OBJECTS',
+      start_time_utc: candidateCommitTime,
+      end_time_utc: candidateCommitTime,
+      timestamp_basis: 'EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC',
+      artifact_generation_state: spec.state,
+      candidate_source_write_authority: false,
+      live_worktree_census_performed: false,
+    },
+  };
+});
 
-run(process.execPath, [resolve(root, 'generate-manifest.mjs'), '--candidate', candidate]);
+writeJson('EVIDENCE_SELECTION.json', {
+  schema: 'product-truth-c9-evidence-selection.v5',
+  binding: 'EXACT_CANDIDATE_GENERATED_ARTIFACTS_SELF_CONTAINED_TOOLING_AND_TRACKED_SEALED_OBJECT_PAYLOAD',
+  source_candidate: candidate,
+  source_candidate_tree: candidateTree,
+  source_candidate_parent: requiredParent,
+  source_candidate_branch: CAMPAIGN_BRANCH,
+  sealed_machine_evidence_source: {
+    commit: SEALED_C9_EVIDENCE_COMMIT,
+    tree: SEALED_C9_EVIDENCE_TREE,
+    state: 'HISTORICAL_EXACT_C9_MACHINE_EVIDENCE_SOURCE',
+  },
+  same_tree_landing: {
+    commit: SAME_TREE_LANDING_COMMIT,
+    tree: EXACT_C9_TREE,
+    disposition: 'NOT_CANDIDATE_TRUTH_SAME_TREE_COMMIT_IDENTITY_IS_INSUFFICIENT',
+  },
+  candidate_embedded_package: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+  sealed_git_object_payload_bundle: {
+    path: campaignPath('LOCKED_INPUT_PAYLOADS.json'),
+    sha256: historicalPayload.digest,
+    sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+    raw_historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
+    authority_granted: false,
+  },
+  selection_rule: 'Select only the registry-bound exact C9 commit and a sole evidence descendant whose post-C9 diff equals 21 generated artifacts plus the exact five-file executable tooling package; generation and verification must run from that descendant tooling and its registry-digest-bound tracked sealed-object payload.',
+  valid_chain: 'C2 -> exact C9 -> sole self-contained evidence descendant with tracked rehash-only historical payload; candidate source stays immutable',
+  post_candidate_path_allowlist: EXACT_EVIDENCE_DESCENDANT_FILES.map((name) => campaignPath(name)),
+  exact_generated_output_count: EXACT_EVIDENCE_OUTPUTS.length,
+  exact_generated_outputs: [...EXACT_EVIDENCE_OUTPUTS],
+  exact_tooling_file_count: EXACT_EVIDENCE_TOOLING_FILES.length,
+  exact_tooling_files: [...EXACT_EVIDENCE_TOOLING_FILES],
+  exact_descendant_path_count: EXACT_EVIDENCE_DESCENDANT_FILES.length,
+  tooling_bindings: exactToolingBindings,
+  tooling_bundle_sha256: exactToolingBundleSha256,
+  required_binding: 'product-truth-manifest.v5 plus MANIFEST.sha256 plus exact tooling bundle plus tracked sealed-object payload digest',
+  final_verifier_handoff: 'PENDING_FRESH_VERIFIER',
+  proof_references: exactProofReferences,
+  human_artifacts: humanArtifacts,
+  rejected_candidate_history: REJECTED_SELECTION_HISTORY,
+  prior_candidate_sha: REJECTED_C8_CANDIDATE,
+  prior_candidate_tree: REJECTED_C8_TREE,
+  prior_candidate_disposition: 'C8_REJECTED_BY_EXACT_CENSUS_NON_IDEMPOTENCE_AUDIT',
+  c7_candidate_sha: 'a283eb859ec1142aadecbd64e0b84959535f6216',
+  c7_candidate_disposition: 'C7_REJECTED_BY_EXACT_EVIDENCE_INTEGRITY_AUDIT',
+  c6_candidate_sha: '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
+  c6_candidate_disposition: 'C6_REJECTED_BY_CANONICAL_SECURITY_GATE',
+  vfinal5_candidate_sha: VFINAL5_AUTHORITY.candidate,
+  vfinal5_candidate_disposition: 'C5_REJECTED_BY_VFINAL5',
+});
+
+writeFileSync(resolve(root, 'STATE.md'), `# Product-truth campaign state
+
+- Exact frozen candidate: \`${candidate}\`
+- Candidate tree: \`${candidateTree}\`
+- Sole direct parent: \`${requiredParent}\`
+- Candidate topology: **PASS** (C9^ == immutable C2; parent count 1)
+- Locked inputs: **61/61** have explicit source, disposition, and matrix linkage.
+- External inputs: **23/23** have candidate-tracked payload bytes that a single-branch clone can independently rehash.
+- Matrix binding: **354/354** candidate cells (153 directive + 23 capability + 178 cockpit) name exact C9.
+- Evidence descendant: **21 generated artifacts + 5 executable tooling files = 26 exact paths**; generation and verification run only from the descendant's committed tooling and registry-bound tracked sealed-object payload.
+- Payload metadata: exact-bound inventory checksum, payload-set checksum, raw Git object OIDs, tree/path/blob bindings, and sealed-object bundle digest independently reverify.
+- Provenance: all lane match counts, candidate blobs, aggregate mismatches, and landed-core adaptation rows are remeasured from exact C9.
+- Census contract: **96 live + 5 REMOVED_SAFE tombstones = 101 durable entries**.
+- D-LAUNCH-65 is byte-bound in \`INPUTS.lock\`; ambient \`current-main\` is not evidence.
+- WATCHMAN law: local refresh action state cannot supersede canonical health.
+- Execution authority: none; \`LIVE_EXECUTION_NOT_IMPLEMENTED\` remains enforced.
+- Final independent verdict: pending fresh verifier.
+`);
+
+run(process.execPath, [resolve(scriptRoot, 'generate-manifest.mjs'), '--candidate', candidate]);
 
 process.stdout.write(`${JSON.stringify({
   generated: true,
@@ -839,4 +1209,8 @@ process.stdout.write(`${JSON.stringify({
   locked_inputs: inputs.length,
   external_payloads: externalInputs.length,
   matrix_candidate_cells: REQUIRED_MATRIX_COUNTS.total,
+  generated_outputs: EXACT_EVIDENCE_OUTPUTS.length,
+  bound_tooling_files: EXACT_EVIDENCE_TOOLING_FILES.length,
+  exact_descendant_paths: EXACT_EVIDENCE_DESCENDANT_FILES.length,
+  human_artifacts: humanArtifacts.length,
 })}\n`);

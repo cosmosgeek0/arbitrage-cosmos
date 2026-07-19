@@ -7,10 +7,12 @@ import {
 import {
   createDeterministicSupervisor,
   type CommandResult,
+  type ComponentStepContext,
   type DeterministicSupervisor,
 } from '../../foundation/control/index.js';
 import type { SystemComponentId } from '../contracts/constants.js';
 import { createCoreManagedGraph, type CoreManagedGraph } from './graph.js';
+import type { PromisePollManagedComponent } from './promisePollAdapter.js';
 import type {
   ManagedCompositionControl,
   ManagedCompositionOptions,
@@ -19,6 +21,8 @@ import type {
   ManagedRestartCommandIdentity,
   ManagedRestartCompletionReadback,
   ScheduledTask,
+  ManagedSubsystemRestartIdentity,
+  ManagedSubsystemRestartResult,
 } from './types.js';
 
 const DEFAULT_TICK_INTERVAL_MS = 250;
@@ -26,6 +30,14 @@ const DEFAULT_GATE_TIMEOUT_MS = 5_000;
 const DEFAULT_COMPONENT_TIMEOUT_MS = 30_000;
 const DEFAULT_DRAIN_TIMEOUT_MS = 45_000;
 const TERMINAL_UNOWNED_PHASES = new Set<RuntimePhase>(['STOPPED', 'BLOCKED', 'FAILED']);
+
+interface ActiveSubsystemRestart {
+  readonly identity: Readonly<ManagedSubsystemRestartIdentity>;
+  readonly closure: readonly PromisePollManagedComponent[];
+  stage: 'STOPPING' | 'STARTING';
+  index: number;
+  deadlineAtMs: number | null;
+}
 
 function positiveSafeInteger(name: string, value: number): number {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -44,6 +56,7 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
   private readonly supervisor: DeterministicSupervisor;
   private readonly tickIntervalMs: number;
   private readonly drainTimeoutMs: number;
+  private readonly componentTimeoutMs: number;
 
   private driverTask: ScheduledTask | null = null;
   private acceptingCommands = true;
@@ -59,6 +72,12 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
   private lastDriveAtMs: number | null = null;
   private driverFailureCode: string | null = null;
   private pauseAfterStart = false;
+  private subsystemRestartRevision = 0;
+  private activeSubsystemRestart: ActiveSubsystemRestart | null = null;
+  private latestSubsystemRestart: Readonly<{
+    identity: Readonly<ManagedSubsystemRestartIdentity>;
+    state: Exclude<ManagedRestartCompletionReadback, 'UNKNOWN'>;
+  }> | null = null;
 
   constructor(private readonly options: ManagedCompositionOptions) {
     if (!options || typeof options.clock?.nowMs !== 'function') {
@@ -82,6 +101,7 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
       'defaultComponentTimeoutMs',
       options.defaultComponentTimeoutMs ?? DEFAULT_COMPONENT_TIMEOUT_MS,
     );
+    this.componentTimeoutMs = componentTimeoutMs;
     this.drainTimeoutMs = positiveSafeInteger(
       'drainTimeoutMs',
       options.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS,
@@ -124,8 +144,61 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
     return this.issue('RESTART');
   }
 
+  restartComponent(componentId: SystemComponentId): ManagedSubsystemRestartResult {
+    const nowMs = this.options.clock.nowMs();
+    const supervisor = this.supervisor.snapshot();
+    if (!this.acceptingCommands || this.draining || this.activeSubsystemRestart !== null
+      || supervisor.commandCorrelationId !== null
+      || (supervisor.phase !== 'RUNNING' && supervisor.phase !== 'DEGRADED')) {
+      return Object.freeze({ ok: false, code: 'SUBSYSTEM_RESTART_NOT_READY' });
+    }
+    if (componentId === 'market-universe') {
+      return Object.freeze({ ok: false, code: 'SUBSYSTEM_RESTART_ROOT_REQUIRES_MANAGED_RESTART' });
+    }
+    const closure = this.dependentClosure(componentId);
+    if (closure.length === 0) return Object.freeze({ ok: false, code: 'SUBSYSTEM_RESTART_TARGET_NOT_MANAGED' });
+    if (!Number.isSafeInteger(this.subsystemRestartRevision)
+      || this.subsystemRestartRevision >= Number.MAX_SAFE_INTEGER) {
+      return Object.freeze({ ok: false, code: 'SUBSYSTEM_RESTART_REVISION_EXHAUSTED' });
+    }
+    this.subsystemRestartRevision += 1;
+    const identity: Readonly<ManagedSubsystemRestartIdentity> = Object.freeze({
+      correlationId: `subsystem-restart-${this.subsystemRestartRevision}-${nowMs}`,
+      revision: this.subsystemRestartRevision,
+      targetComponentId: componentId,
+      closureComponentIds: Object.freeze(closure.map((component) => component.name)),
+    });
+    this.activeSubsystemRestart = {
+      identity,
+      closure,
+      stage: 'STOPPING',
+      index: closure.length - 1,
+      deadlineAtMs: null,
+    };
+    this.latestSubsystemRestart = Object.freeze({ identity, state: 'PENDING' });
+    this.ensureDriver();
+    return Object.freeze({ ok: true, identity });
+  }
+
   issue(command: ControlCommand): CommandResult {
     const nowMs = this.options.clock.nowMs();
+    if (this.activeSubsystemRestart !== null) {
+      if (command === 'STOP') {
+        this.failSubsystemRestart();
+      } else {
+        return fail(createStructuredFailure({
+          component: 'system-integration-composition',
+          stage: 'command',
+          code: 'SUBSYSTEM_RESTART_IN_PROGRESS',
+          message: 'A bounded subsystem restart must settle before another lifecycle command.',
+          occurredAt: nowMs,
+          retryable: true,
+          safeCurrentState: this.supervisor.snapshot().phase,
+          recommendedOperatorAction: 'Wait for exact subsystem restart readback before retrying.',
+          correlationId: this.activeSubsystemRestart.identity.correlationId,
+        }));
+      }
+    }
     if (!this.acceptingCommands && command !== 'STOP') {
       return fail(createStructuredFailure({
         component: 'system-integration-composition',
@@ -144,7 +217,8 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
 
   driveOnce(): Readonly<ManagedCompositionReadSnapshot> {
     const nowMs = this.options.clock.nowMs();
-    this.supervisor.tick(nowMs);
+    if (this.activeSubsystemRestart === null) this.supervisor.tick(nowMs);
+    else this.advanceSubsystemRestart(nowMs);
     this.lastDriveAtMs = nowMs;
     this.advancePauseAfterStart(nowMs);
     const status = this.supervisor.snapshot();
@@ -162,6 +236,7 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
     // bookkeeping, never the supervisor's failure history or driver failure.
     this.drainPromise = null;
     this.resolveDrain = null;
+    if (this.activeSubsystemRestart !== null) this.failSubsystemRestart();
     this.acceptingCommands = false;
     this.draining = true;
     this.drainCompleted = false;
@@ -240,6 +315,132 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
       return 'FAILED';
     }
     return 'UNKNOWN';
+  }
+
+  readSubsystemRestart(
+    identity: Readonly<ManagedSubsystemRestartIdentity>,
+  ): ManagedRestartCompletionReadback {
+    const latest = this.latestSubsystemRestart;
+    if (!latest || !this.sameSubsystemRestartIdentity(latest.identity, identity)) return 'UNKNOWN';
+    return latest.state;
+  }
+
+  private dependentClosure(componentId: SystemComponentId): readonly PromisePollManagedComponent[] {
+    const selected = new Set<SystemComponentId>();
+    for (const component of this.graph.ordered) {
+      if (component.name === componentId
+        || component.dependsOn.some((dependency) => selected.has(dependency))) {
+        selected.add(component.name);
+      }
+    }
+    if (!selected.has(componentId)) return Object.freeze([]);
+    return Object.freeze(this.graph.ordered.filter((component) => selected.has(component.name)));
+  }
+
+  private subsystemRestartContext(
+    restart: Readonly<ActiveSubsystemRestart>,
+    nowMs: number,
+  ): ComponentStepContext {
+    let privateKeysAvailable: boolean | null = null;
+    try {
+      const environment = this.options.readEnvironment();
+      privateKeysAvailable = typeof environment?.privateKeysAvailable === 'boolean'
+        ? environment.privateKeysAvailable
+        : null;
+    } catch {
+      privateKeysAvailable = null;
+    }
+    return {
+      nowMs,
+      generation: this.supervisor.snapshot().generation,
+      correlationId: restart.identity.correlationId,
+      runMode: 'INTELLIGENCE',
+      privateKeysAvailable,
+    };
+  }
+
+  private advanceSubsystemRestart(nowMs: number): void {
+    const restart = this.activeSubsystemRestart;
+    if (restart === null) return;
+    const context = this.subsystemRestartContext(restart, nowMs);
+
+    while (restart.stage === 'STOPPING' && restart.index >= 0) {
+      const component = restart.closure[restart.index];
+      const timeoutMs = component.stepTimeoutMs ?? this.componentTimeoutMs;
+      if (restart.deadlineAtMs === null) restart.deadlineAtMs = nowMs + timeoutMs;
+      else if (nowMs >= restart.deadlineAtMs) {
+        this.failSubsystemRestart();
+        return;
+      }
+      const outcome = component.stop(context);
+      if (outcome.kind === 'PENDING') return;
+      if (outcome.kind === 'FAILED') {
+        this.failSubsystemRestart();
+        return;
+      }
+      restart.index -= 1;
+      restart.deadlineAtMs = null;
+    }
+
+    if (restart.stage === 'STOPPING') {
+      restart.stage = 'STARTING';
+      restart.index = 0;
+      restart.deadlineAtMs = null;
+    }
+
+    while (restart.stage === 'STARTING' && restart.index < restart.closure.length) {
+      const component = restart.closure[restart.index];
+      const timeoutMs = component.stepTimeoutMs ?? this.componentTimeoutMs;
+      if (restart.deadlineAtMs === null) restart.deadlineAtMs = nowMs + timeoutMs;
+      else if (nowMs >= restart.deadlineAtMs) {
+        this.failSubsystemRestart();
+        return;
+      }
+      const outcome = component.start(context);
+      if (outcome.kind === 'PENDING') return;
+      if (outcome.kind === 'FAILED' || !component.read().ownsUnderlyingRuntime) {
+        this.failSubsystemRestart();
+        return;
+      }
+      restart.index += 1;
+      restart.deadlineAtMs = null;
+    }
+
+    if (restart.stage === 'STARTING' && restart.index === restart.closure.length) {
+      this.latestSubsystemRestart = Object.freeze({ identity: restart.identity, state: 'APPLIED' });
+      this.activeSubsystemRestart = null;
+    }
+  }
+
+  private failSubsystemRestart(): void {
+    const restart = this.activeSubsystemRestart;
+    if (restart === null) return;
+    for (const component of [...restart.closure].reverse()) component.forceStop();
+    this.latestSubsystemRestart = Object.freeze({ identity: restart.identity, state: 'FAILED' });
+    this.activeSubsystemRestart = null;
+  }
+
+  private sameSubsystemRestartIdentity(
+    expected: Readonly<ManagedSubsystemRestartIdentity>,
+    candidate: Readonly<ManagedSubsystemRestartIdentity>,
+  ): boolean {
+    try {
+      if (!candidate || typeof candidate !== 'object'
+        || typeof candidate.correlationId !== 'string'
+        || !Number.isSafeInteger(candidate.revision) || candidate.revision < 1
+        || typeof candidate.targetComponentId !== 'string'
+        || !Array.isArray(candidate.closureComponentIds)
+        || candidate.correlationId !== expected.correlationId
+        || candidate.revision !== expected.revision
+        || candidate.targetComponentId !== expected.targetComponentId
+        || candidate.closureComponentIds.length !== expected.closureComponentIds.length) return false;
+      for (let index = 0; index < expected.closureComponentIds.length; index += 1) {
+        if (candidate.closureComponentIds[index] !== expected.closureComponentIds[index]) return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private ensureDriver(): void {
@@ -332,6 +533,7 @@ export class ManagedRuntimeComposition implements ManagedCompositionControl {
   private handleDriverFailure(): void {
     this.driverFailureCode = 'COMPOSITION_DRIVER_FAILED';
     this.drainFailureCode = 'COMPOSITION_DRIVER_FAILED';
+    if (this.activeSubsystemRestart !== null) this.failSubsystemRestart();
     this.forceStopAllReverse();
     if (this.draining) {
       this.completeDrain();

@@ -1,23 +1,33 @@
-# Clean Clone Gate — D-LAUNCH-62
+# Exact C9 Clean-Clone Evidence
 
-Status: `PENDING_EXACT_C2`
+Status: `NOT_RUN`
 
-Actor: `ACCOUNT_A_BUILDER`; independent acceptance authority: `false`.
+Selection ID: `C9_CLEAN_CLONE_NOT_RUN`
 
-## Sustained old-C defect
+- Exact candidate: `d8a86f722689ed82ad40f9ec44bbbc19c2347646`
+- Candidate tree: `1da28eb2dcc03a0545fc2bc51e2a735e88826014`
+- Sole direct parent: `dea2d2a5c2b5e83d3aea75b0e368f0a478596561`
+- Actor: `ACCOUNT_A_BUILDER_EVIDENCE_ONLY`
+- Candidate source write authority: `false`
 
-The durable clean-clone receipt for old C records `npm ci` exit `0`, `npm test` exit `0`, and `npm run test:all` exit `1` (`5889/5894`; I00 proof `42/47`). That result rejects old C for handoff.
+## Result
 
-## Implemented C2 correction
+No new clean-clone gate was executed while regenerating this evidence-only package.
 
-- Sealed machine evidence contains tracked-byte proof only.
-- Moving refs and optional external Git objects are not written into sealed bytes; ambient provenance is a separate `VERIFIED`/`FAILED`/`UNKNOWN` diagnostic.
-- Report parity compares all six generated artifacts as exact bytes and creates no synthetic `current-main` ref.
-- Product Assurance Git subprocesses use the bounded shared Git-evidence runner.
-- Root `npm test` now mounts `test:i00:proof:built`, so the I00 security scanner cannot remain red behind a green root gate.
+Unavailable or skipped: Dependency installation and canonical root/full gates were not rerun.
 
-Focused source proof after the correction: I00 proof `47/47`; acceptance contract `44/44`, including a sole-branch refs-absent exact-byte parity regression.
+## Machine proof references
 
-## Remaining exact-C2 gate
+| Proof ID | Commit | Path | Git blob | SHA-256 | Bytes |
+| --- | --- | --- | --- | --- | ---: |
+| `C9_SOURCE_STATE` | `d8a86f722689ed82ad40f9ec44bbbc19c2347646` | `STATE.md` | `2241a8f018e349ec7a7b49564c8dcca3ec03159b` | `7bbdb6d892394405e8ab0cb8a81ac4ba6096582175ce07dd6682cab22bd50b3e` | 17412 |
+| `SEALED_C9_MANIFEST_V2` | `5fd74604082420fbe46d98e408ef4ca0d1b57711` | `verification/product-truth-20260716/MANIFEST.json` | `c6b9bd8e63d14613b21284589975addb463ae3d3` | `d931ad1383f4b7a91700220b62b006c53316e4fe41102a7279884857bfcfead5` | 14957 |
 
-After the final source commit is frozen as C2, create a fresh `--no-hardlinks --single-branch --branch truth-campaign-20260716` clone from a local one-branch transport, detach exact C2, and run `npm ci`, `npm test`, and `npm run test:all`. Record real exits/counts and final clean status. Account A records builder evidence only and does not self-issue the independent `CLEAN_CLONE_ACCEPTED` token.
+## Receipt fields
+
+- Command or operator action: deterministic output-only rendering from verified Git objects; no candidate mutation and no live-worktree census.
+- Start UTC: `2026-07-17T14:43:20+05:30`
+- End UTC: `2026-07-17T14:43:20+05:30`
+- Timestamp basis: `EXACT_CANDIDATE_COMMITTER_TIMESTAMP_DETERMINISTIC`
+- Artifact generation result: `NOT_RUN`
+- Candidate source write authority: `false`

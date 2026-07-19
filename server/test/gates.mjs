@@ -206,6 +206,28 @@ const tokenIconSource = readFileSync('web/src/components/TokenIcon.tsx', 'utf8')
 const profileSource = readFileSync('server/src/binance/profile.ts', 'utf8');
 const iconSource = readFileSync('server/src/binance/icons.ts', 'utf8');
 const liquidationSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
+const newsContextSource = readFileSync('server/src/services/newsContext.ts', 'utf8');
+const environmentSource = readFileSync('server/src/bootstrap/environment.ts', 'utf8');
+const dataDirLeaseSource = readFileSync(
+  'server/src/systemIntegration/persistence/dataDirLease.ts',
+  'utf8',
+);
+check(
+  'Token current OI comes only from the canonical owner read model',
+  /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
+    /\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
+    !/\/api\/futures\/oi-hist/.test(tokenDetailSource) &&
+    !/openInterestSnapshot|setOpenInterestSnapshot/.test(tokenDetailSource) &&
+    !/latest\.notional|previous\.notional/.test(tokenDetailSource)
+);
+check(
+  'production Token readback uses one existing router and no new transport owner',
+  /new\s+VolumeEvidenceRouter\(\{\s*clock,\s*sink:\s*this\.bridge\s*\}\)/s.test(productionFactorySource) &&
+    /this\.router\.route\(\{/.test(productionFactorySource) &&
+    /readSymbol\(symbol:\s*string\)/.test(productionFactorySource) &&
+    /liquidationEventTimestamp\(symbol:\s*string\)/.test(marketEngineSource) &&
+    !/new\s+(?:BinanceStream|WebSocket|BinanceClient)\b/.test(productionFactorySource)
+);
 check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
@@ -256,10 +278,38 @@ check(
     /const\s+chain\s*=\s*\[resolved\]\.filter\(Boolean\)/.test(tokenIconSource)
 );
 check(
-  'browser campaign public caches default under the isolated DATA_DIR',
-  [profileSource, iconSource, liquidationSource].every((source) => (
-    /process\.env\.DATA_DIR/.test(source) && /path\.resolve\(process\.env\.DATA_DIR\)/.test(source)
-  ))
+  'browser campaign caches share dual DATA_DIR authority and pinned physical parents',
+  [profileSource, iconSource, liquidationSource, newsContextSource].every((source) => (
+    /resolveDataDirAuthority\(\)/.test(source) &&
+      /assertDataDirCachePathHeld\(/.test(source)
+  )) && /environment\.DATA_DIR/.test(environmentSource) &&
+    /PROCESS_DATA_DIR_AUTHORITY/.test(environmentSource) &&
+    /DATA_DIR_LOGICAL_LEASE_ROOT/.test(environmentSource) &&
+    /const\s+logicalBinding\s*=\s*acquireLogicalLease/.test(environmentSource) &&
+    /const\s+physicalLease\s*=\s*new\s+DataDirLease/.test(environmentSource) &&
+    /assertDataDirCachePathHeld/.test(environmentSource) &&
+    /realpathSync\.native/.test(environmentSource) &&
+    /function\s+asciiLowercase/.test(environmentSource) &&
+    /function\s+canonicalLogicalDataDirKey/.test(environmentSource) &&
+    /DATA_DIR_LOGICAL_PATH_NON_ASCII/.test(environmentSource) &&
+    /DATA_DIR_CACHE_PATH_NON_ASCII/.test(environmentSource) &&
+    /components\.some\(isReservedCacheComponent\)/.test(environmentSource) &&
+    /assertRequestedConfigurationNoMutation/.test(environmentSource) &&
+    /assertCacheReservations\(prospectiveCachePaths/.test(environmentSource) &&
+    /assertCacheLeafValid/.test(environmentSource) &&
+    /assertNoExistingCacheInodeAliases/.test(environmentSource) &&
+    /DATA_DIR_CACHE_PATH_OUTSIDE_DATA_DIR/.test(environmentSource) &&
+    /journal-compat\.json/.test(environmentSource) &&
+    /LEGACY_LEASE_ROOT/.test(dataDirLeaseSource) &&
+    /schemaVersion:\s*2/.test(dataDirLeaseSource) &&
+    /rejectOrScavengeLegacyLease/.test(dataDirLeaseSource) &&
+    /livenessNamespace/.test(dataDirLeaseSource) &&
+    /\/proc\/self\/ns\/pid/.test(dataDirLeaseSource) &&
+    /const\s+dataDirLease\s*=\s*DATA_DIR_LEASE/.test(serverIndex) &&
+    /beforeMutation:\s*\(\)\s*=>\s*dataDirLease\.assertHeld\(\)/.test(serverIndex) &&
+    /icon_cache\.json/.test(environmentSource) &&
+    /profile_cache\.json/.test(environmentSource) &&
+    /liquidations\.json/.test(environmentSource)
 );
 
 const cacheProbeRoot = mkdtempSync(path.join(tmpdir(), 'cosmos-cache-defaults-'));
@@ -777,13 +827,30 @@ check(
   ))
 );
 
+const loanTruthResponse = await get('/api/loans');
+check(
+  'borrow API exposes the Foundation owner and null private liability/collateral bindings',
+  loanTruthResponse.status === 503
+    && loanTruthResponse.body?.owner === 'FOUNDATION_BORROW_TRUTH'
+    && loanTruthResponse.body?.scope === null
+    && loanTruthResponse.body?.currentBorrowedAsset === null
+    && loanTruthResponse.body?.accruedInterestAsset === null
+    && loanTruthResponse.body?.collateralAmount === null
+    && loanTruthResponse.body?.collateralAsset === null
+    && loanTruthResponse.body?.currentLtv === null
+    && loanTruthResponse.body?.liabilitySource === null
+    && loanTruthResponse.body?.collateralSource === null
+    && loanTruthResponse.body?.liabilityFreshness === null
+    && loanTruthResponse.body?.collateralFreshness === null
+);
+
 const privateReadResponses = [
   await post('/api/fills/import', { symbol: 'BTCUSDT' }),
   equityHistoryResponse,
   earnResponse,
   walletBalanceResponse,
   pnlResponse,
-  await get('/api/loans'),
+  loanTruthResponse,
   await post('/api/loans/refresh', {}),
   await get('/api/orders/history?symbol=BTCUSDT'),
   await get('/api/loans/max-borrowable?asset=BTC'),
@@ -860,11 +927,30 @@ check(
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
 check('symbol context responds', Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
 check(
-  'symbol context keeps unconfigured balances and private orders null instead of fabricating zero',
+  'symbol context keeps unconfigured balances, private orders, and borrow truth explicit instead of fabricating zero',
   sctx?.accountTruthState === 'NOT_CONFIGURED' &&
     sctx?.orderTruthState === 'NOT_CONFIGURED' &&
+    sctx?.borrowTruthState === 'NOT_CONFIGURED' &&
     sctx?.balances === null &&
     sctx?.openOrders === null
+);
+
+const tokenIntelligenceResponse = await get('/api/intelligence/token?symbol=BTCUSDT');
+const tokenIntelligence = tokenIntelligenceResponse.body;
+check('token intelligence owner readback responds', tokenIntelligenceResponse.status === 200);
+check(
+  'token intelligence remains evidence-only and honest when public owners are unavailable',
+  tokenIntelligence?.schemaVersion === 'token-intelligence-owner-read.v1' &&
+    tokenIntelligence?.symbol === 'BTCUSDT' &&
+    tokenIntelligence?.projection?.state === 'NOT_RUNNING' &&
+    tokenIntelligence?.authority === 'EVIDENCE_ONLY' &&
+    tokenIntelligence?.liveMoneyAuthority === 'NONE' &&
+    tokenIntelligence?.openInterest?.state === 'UNAVAILABLE' &&
+    tokenIntelligence?.openInterest?.value === null &&
+    tokenIntelligence?.liquidation?.state === 'UNAVAILABLE' &&
+    tokenIntelligence?.liquidation?.value === null &&
+    tokenIntelligence?.bridge?.currentState === 'HISTORICAL_ONLY' &&
+    tokenIntelligence?.bridge?.artifact === null
 );
 
 const sys = (await get('/api/system')).body;

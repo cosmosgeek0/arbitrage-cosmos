@@ -5,6 +5,9 @@ export type SystemSafeMode = 'READ_ONLY' | 'ADVISORY' | 'VALIDATE_ONLY';
 export type SystemTruthLabel = 'LIVE_PUBLIC' | 'DRY_RUN' | 'SYNTHETIC_ONLY' | 'RECORDED_REPLAY' | 'UNAVAILABLE' | 'UNKNOWN';
 export type SystemReadiness = 'STOPPED' | 'WARMING' | 'READY' | 'DEGRADED' | 'BLOCKED' | 'FAILED';
 export type SystemOverallPosture = 'STOPPED' | 'WARMING' | 'READY' | 'DEGRADED' | 'BLOCKED' | 'FAILED';
+export type SystemRetryState = 'IDLE' | 'RETRYING' | 'BACKING_OFF' | 'COOLDOWN' | 'UNKNOWN' | 'UNAVAILABLE';
+export type SystemDataQualityState = 'GOOD' | 'DEGRADED' | 'UNKNOWN' | 'UNAVAILABLE';
+export type SystemCheckpointState = 'CURRENT' | 'DIRTY' | 'STALE' | 'MISSING' | 'UNKNOWN' | 'UNAVAILABLE';
 
 export type SystemComponentId =
   | 'public-spot-source'
@@ -48,6 +51,28 @@ export interface SystemComponentSnapshot {
   lastReceiveAtMs: number | null;
   lastProcessAtMs: number | null;
   lastSuccessAtMs: number | null;
+  processingLagMs?: number | null;
+  retry?: {
+    state: SystemRetryState;
+    attempt: number | null;
+    ceiling: number | null;
+    delayMs: number | null;
+    retryAtMs: number | null;
+    cooldownUntilMs: number | null;
+  };
+  dataQuality?: {
+    state: SystemDataQualityState;
+    invalidCount: number | null;
+    duplicateCount: number | null;
+    outOfOrderCount: number | null;
+    sequenceGapCount: number | null;
+    observedAtMs: number | null;
+  };
+  checkpoint?: {
+    state: SystemCheckpointState;
+    revision: string | null;
+    persistedAtMs: number | null;
+  };
   dependencies: SystemComponentId[];
   queue: { depth: number; capacity: number; dropped: number; coalesced: number; observedAtMs: number } | null;
   blockerCodes: string[];
@@ -98,6 +123,7 @@ export interface SystemSupervisorSummaries {
     heartbeatAtMs: number | null;
     candidateCount: number | null;
     proposalCount: number | null;
+    cooldownCount: number | null;
     rejectionCount: number | null;
     acceptedCount: number | null;
     lastDecisionAtMs: number | null;
@@ -123,14 +149,26 @@ export interface SystemSupervisorSummaries {
     reservationCount: number | null;
     stagedMandateCount: number | null;
     activeExposureCount: number | null;
+    recoveryCount: number | null;
     checkpointRevision: string | null;
     blockerCodes: string[];
   };
   risk: {
     truthLabel: SystemTruthLabel;
-    latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE';
+    latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
     latestVerdictAtMs: number | null;
     latestVerdictId: string | null;
+    correlationId: string | null;
+    maxAllowedSize: string | null;
+    requiredConfirmation: boolean | null;
+    decisiveInputSnapshot: Array<{
+      code: string;
+      status: 'PASS' | 'FAIL' | 'UNKNOWN';
+      detail: string;
+      observed: string | null;
+      limit: string | null;
+      evidenceTimestamp: number | null;
+    }>;
     rejectionCount: number | null;
     reasonCodes: string[];
   };

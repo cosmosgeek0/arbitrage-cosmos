@@ -25,7 +25,12 @@ User=cosmos
 Group=cosmos
 WorkingDirectory=/opt/cosmos/current
 EnvironmentFile=/etc/cosmos/cosmos-app.env
-ExecStart=/usr/bin/node server/dist/index.js
+RuntimeDirectory=cosmos-app
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
+# EnvironmentFile= overrides Environment= regardless of line order. Pin this
+# deployment-owned authority after systemd assembles the inherited environment.
+ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -35,7 +40,7 @@ KillSignal=SIGTERM
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/cosmos
+ReadWritePaths=/var/lib/cosmos /run/cosmos-app
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

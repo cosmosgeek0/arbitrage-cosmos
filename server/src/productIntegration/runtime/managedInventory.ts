@@ -7,6 +7,7 @@ import {
   PRODUCT_RUNTIME_MANAGED_INVENTORY_SCHEMA,
   type I00ManagedComponentIdentity,
   type ProductRuntimeComponentProjection,
+  type ProductRuntimeIncidentAvailability,
   type ProductRuntimeManagedInventoryProjection,
   type ProductRuntimeManagedInventoryState,
 } from './types.js';
@@ -121,6 +122,9 @@ function validateDescriptorInventory(): void {
 
 export function buildProductRuntimeManagedInventory(
   components: readonly Readonly<ProductRuntimeComponentProjection>[],
+  incidentAvailability: Readonly<ProductRuntimeIncidentAvailability> = Object.freeze({
+    state: 'NOT_CONFIGURED', truthLabel: 'NOT_CONFIGURED', blocker: 'INCIDENT_OWNER_NOT_CONFIGURED',
+  }),
 ): Readonly<ProductRuntimeManagedInventoryProjection> {
   validateDescriptorInventory();
   if (!Array.isArray(components) || components.length > 128) {
@@ -139,6 +143,34 @@ export function buildProductRuntimeManagedInventory(
 
   const entries = Object.freeze(MANAGED_INVENTORY_DESCRIPTORS.map((descriptor) => {
     const canonicalComponentIds = Object.freeze([...descriptor.componentIds]);
+    if (descriptor.identity === 'notification-incident-router'
+      && incidentAvailability.state === 'AVAILABLE'
+      && incidentAvailability.truthLabel === 'BUILT_AND_TESTED'
+      && incidentAvailability.blocker === null) {
+      return Object.freeze({
+        identity: descriptor.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds,
+        inventoryState: 'EVIDENCE_PRESENT' as const,
+        evidence: Object.freeze([Object.freeze({
+          source: 'PRODUCT_RUNTIME_OWNER_PROJECTION' as const,
+          ownerId: 'productIntegration.incident-router' as const,
+          truthLabel: 'BUILT_AND_TESTED' as const,
+        })]),
+        reasonCode: null,
+      });
+    }
+    if (descriptor.identity === 'notification-incident-router'
+      && incidentAvailability.state === 'UNAVAILABLE') {
+      return Object.freeze({
+        identity: descriptor.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds,
+        inventoryState: 'MISSING' as const,
+        evidence: null,
+        reasonCode: incidentAvailability.blocker ?? 'INCIDENT_OWNER_UNAVAILABLE',
+      });
+    }
     if (canonicalComponentIds.length === 0) {
       return Object.freeze({
         identity: descriptor.identity,
@@ -193,7 +225,8 @@ export function buildProductRuntimeManagedInventory(
   return Object.freeze({
     schemaVersion: PRODUCT_RUNTIME_MANAGED_INVENTORY_SCHEMA,
     expectedIdentityCount: 33,
-    mappedIdentityCount: MANAGED_INVENTORY_DESCRIPTORS.filter((entry) => entry.componentIds.length > 0).length,
+    mappedIdentityCount: MANAGED_INVENTORY_DESCRIPTORS.filter((entry) => entry.componentIds.length > 0).length
+      + (incidentAvailability.state === 'AVAILABLE' ? 1 : 0),
     evidencePresentCount,
     ownerGatedCount,
     notConfiguredCount,

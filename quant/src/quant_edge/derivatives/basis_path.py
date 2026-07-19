@@ -238,6 +238,14 @@ def build_basis_path(
                 f"{name} evidence kind {series.kind.value} cannot prove reference "
                 f"kind {reference_kind.value}; kinds are never substituted"
             )
+    spot_instrument = spot_series.instrument
+    perp_instrument = perp_series.instrument
+    if spot_instrument.instrument_id == perp_instrument.instrument_id:
+        raise ContractValueError("basis path legs must be distinct instruments")
+    if spot_instrument.base_size_unit_id != perp_instrument.base_size_unit_id:
+        raise ContractValueError("basis path legs must have matching base-size units")
+    if spot_instrument.quote_price_unit_id != perp_instrument.quote_price_unit_id:
+        raise ContractValueError("basis path legs must have matching quote-price units")
     require_strict_int(
         max_staleness_ns,
         field="max_staleness_ns",

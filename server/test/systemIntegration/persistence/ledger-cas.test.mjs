@@ -6,6 +6,8 @@ import path from 'node:path';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
+import Database from 'better-sqlite3';
+
 import { Ledger } from '../../../dist/ledger.js';
 import { BoundedInMemoryLedger } from '../fixtures/memory-ledger.mjs';
 import { ManualClock } from '../fixtures/manual-clock.mjs';
@@ -207,6 +209,10 @@ test('SIGKILL before transaction commit leaves no checkpoint, journal, or audit 
     assert.equal(child.kill('SIGKILL'), true);
     assert.deepEqual(await close, { code: null, signal: 'SIGKILL' });
 
+    assert.throws(() => new Ledger(dataDir), /LEDGER_EVENT_TRIGGER_SCHEMA_MALFORMED/);
+    const repair = new Database(path.join(dataDir, 'cosmos.db'));
+    repair.exec('DROP TRIGGER hold_before_cas_event_insert');
+    repair.close();
     const reopened = new Ledger(dataDir);
     try {
       assert.equal(reopened.getConfigValue(CONFIG_KEY), null);

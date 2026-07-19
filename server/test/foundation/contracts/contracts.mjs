@@ -72,6 +72,7 @@ import {
   // risk
   isRiskCheckStatus,
   isActionRiskClass,
+  MAX_RISK_VERDICT_CHECKS,
   validateRiskCheck,
   deriveRiskVerdict,
   // reconciliation
@@ -446,30 +447,46 @@ section('15. risk — fail-closed verdict derivation');
   const unknownCheck = { code: 'BORROW_AVAILABILITY', status: 'UNKNOWN', blocking: true, detail: 'borrow truth unavailable', observed: null, limit: null, evidenceTimestamp: null };
   const softFail = { code: 'SPREAD_WIDE', status: 'FAIL', blocking: false, detail: 'advisory only', observed: 0.4, limit: 0.2, evidenceTimestamp: NOW - 10 };
 
-  const allow = deriveRiskVerdict({ checks: [passCheck], evaluatedAt: NOW, ttlMs: 3_000 });
+  const allow = deriveRiskVerdict({ correlationId: 'corr_contract_allow', checks: [passCheck], evaluatedAt: NOW, ttlMs: 3_000, maxAllowedSize: 25 });
   check('all blocking PASS => allowed', allow.allowed === true && allow.blockingCodes.length === 0);
+  check('approved verdict exposes the explicit outcome', allow.decision === 'APPROVED' && allow.requiredConfirmation === false);
+  check('approved maximum size is exact', allow.maxAllowedSize === 25);
+  check('approved decisive snapshot preserves blocking evidence', allow.decisiveInputSnapshot.checks[0]?.code === 'KILL_SWITCH');
   check('expiresAt = evaluatedAt + ttl', allow.expiresAt === NOW + 3_000 && allow.evaluatedAt === NOW);
   check('verdict and checks frozen', Object.isFrozen(allow) && Object.isFrozen(allow.checks) && Object.isFrozen(allow.checks[0]));
 
-  const blocked = deriveRiskVerdict({ checks: [passCheck, failCheck], evaluatedAt: NOW, ttlMs: 3_000 });
+  const blocked = deriveRiskVerdict({ correlationId: 'corr_contract_blocked', checks: [passCheck, failCheck], evaluatedAt: NOW, ttlMs: 3_000 });
   check('blocking FAIL blocks', blocked.allowed === false && blocked.blockingCodes.join(',') === 'MAX_GROSS_NOTIONAL');
+  check('blocking FAIL is an explicit rejection', blocked.decision === 'REJECTED' && blocked.requiredConfirmation === false);
 
-  const unknownBlocked = deriveRiskVerdict({ checks: [passCheck, unknownCheck], evaluatedAt: NOW, ttlMs: 3_000 });
+  const unknownBlocked = deriveRiskVerdict({ correlationId: 'corr_contract_review', checks: [passCheck, unknownCheck], evaluatedAt: NOW, ttlMs: 3_000, maxAllowedSize: 10_000 });
   check('blocking UNKNOWN fails closed', unknownBlocked.allowed === false && unknownBlocked.blockingCodes.includes('BORROW_AVAILABILITY'));
+  check('blocking UNKNOWN needs review without becoming authority', unknownBlocked.decision === 'NEEDS_REVIEW' && unknownBlocked.requiredConfirmation === true && unknownBlocked.allowed === false);
   check('unknown evidence stays null (no fabricated 0)', unknownBlocked.checks[1].observed === null && unknownBlocked.checks[1].evidenceTimestamp === null);
+  check('unknown decisive snapshot stays null and frozen', unknownBlocked.decisiveInputSnapshot.checks[0].observed === null && Object.isFrozen(unknownBlocked.decisiveInputSnapshot) && Object.isFrozen(unknownBlocked.decisiveInputSnapshot.checks));
 
-  const advisory = deriveRiskVerdict({ checks: [passCheck, softFail], evaluatedAt: NOW, ttlMs: 3_000 });
+  const advisory = deriveRiskVerdict({ correlationId: 'corr_contract_advisory', checks: [passCheck, softFail], evaluatedAt: NOW, ttlMs: 3_000, maxAllowedSize: 25 });
   check('non-blocking FAIL does not block but is preserved', advisory.allowed === true && advisory.checks.length === 2 && advisory.checks[1].status === 'FAIL');
 
-  const multi = deriveRiskVerdict({ checks: [failCheck, unknownCheck, passCheck], evaluatedAt: NOW, ttlMs: 1 });
+  const multi = deriveRiskVerdict({ correlationId: 'corr_contract_multi', checks: [failCheck, unknownCheck, passCheck], evaluatedAt: NOW, ttlMs: 1, maxAllowedSize: 10_000 });
   check('blockingCodes preserve check order', multi.blockingCodes.join(',') === 'MAX_GROSS_NOTIONAL,BORROW_AVAILABILITY');
+  check('decisive snapshot preserves mixed blocker order and human reasons', multi.decisiveInputSnapshot.checks.map((item) => item.code).join(',') === multi.blockingCodes.join(',') && multi.decisiveInputSnapshot.checks[0].detail === 'gross too large');
+  check('known rejection cannot preserve a positive size authority', multi.maxAllowedSize === 0);
 
   check('invalid status rejected', validateRiskCheck({ ...passCheck, status: 'MAYBE' }).length > 0);
   check('lowercase code rejected', validateRiskCheck({ ...passCheck, code: 'kill_switch' }).length > 0);
   check('NaN observed rejected', validateRiskCheck({ ...passCheck, observed: NaN }).length > 0);
-  check('deriveRiskVerdict throws on invalid check', throws(() => deriveRiskVerdict({ checks: [{ ...passCheck, status: 'MAYBE' }], evaluatedAt: NOW, ttlMs: 1_000 })));
-  check('ttl 0 throws', throws(() => deriveRiskVerdict({ checks: [passCheck], evaluatedAt: NOW, ttlMs: 0 })));
-  check('NaN evaluatedAt throws', throws(() => deriveRiskVerdict({ checks: [passCheck], evaluatedAt: NaN, ttlMs: 1_000 })));
+  check('deriveRiskVerdict throws on invalid check', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_badcheck', checks: [{ ...passCheck, status: 'MAYBE' }], evaluatedAt: NOW, ttlMs: 1_000 })));
+  check('ttl 0 throws', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_badttl', checks: [passCheck], evaluatedAt: NOW, ttlMs: 0 })));
+  check('NaN evaluatedAt throws', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_badtime', checks: [passCheck], evaluatedAt: NaN, ttlMs: 1_000 })));
+  check('malformed maximum size throws', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_badsize', checks: [passCheck], evaluatedAt: NOW, ttlMs: 1_000, maxAllowedSize: NaN })));
+  check('approval without a maximum size throws', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_nomax', checks: [passCheck], evaluatedAt: NOW, ttlMs: 1_000 })));
+  check('approval without decisive blocking evidence throws', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_nocheck', checks: [], evaluatedAt: NOW, ttlMs: 1_000, maxAllowedSize: 1 })));
+  check('malformed correlation throws', throws(() => deriveRiskVerdict({ correlationId: 'bad correlation', checks: [passCheck], evaluatedAt: NOW, ttlMs: 1_000 })));
+  const oversizedChecks = Array.from({ length: MAX_RISK_VERDICT_CHECKS + 1 }, () => passCheck);
+  let oversizedCheckAccessed = false;
+  Object.defineProperty(oversizedChecks, 0, { enumerable: true, get() { oversizedCheckAccessed = true; throw new Error('oversized checks must be rejected before element access'); } });
+  check('513 checks reject at the canonical owner before per-check access', throws(() => deriveRiskVerdict({ correlationId: 'corr_contract_too_many', checks: oversizedChecks, evaluatedAt: NOW, ttlMs: 1_000, maxAllowedSize: 1 })) && !oversizedCheckAccessed);
   check('status/class guards', isRiskCheckStatus('UNKNOWN') && !isRiskCheckStatus('SKIP') && isActionRiskClass('RISK_REDUCING') && !isActionRiskClass('NEUTRALISH'));
 }
 

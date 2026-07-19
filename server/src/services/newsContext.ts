@@ -2,6 +2,10 @@ import { readFileSync, statSync } from 'node:fs';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import {
+  assertDataDirCachePathHeld,
+  resolveDataDirAuthority,
+} from '../bootstrap/environment.js';
 
 export type NewsContextChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain';
 export type NewsContextTone = 'bad' | 'warn' | 'ok' | 'idle';
@@ -67,7 +71,8 @@ const RSS_SOURCE_CONCURRENCY = 6;
 // timezone, including UTC-12 through UTC+14.
 const NEWS_ARCHIVE_RETENTION_MS = 8 * 86_400_000;
 const NEWS_ARCHIVE_MAX_ITEMS = 8_000;
-const NEWS_ARCHIVE_PATH = path.join(process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data'), 'news-archive.json');
+const DATA_DIR_AUTHORITY = resolveDataDirAuthority();
+const { newsArchive: NEWS_ARCHIVE_PATH } = DATA_DIR_AUTHORITY;
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const OFFICIAL_MACRO_KEYS = new Set([
   'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe', 'boj',
@@ -912,8 +917,11 @@ function persistNewsArchive(snapshot: NewsContextItem[]): void {
     .then(async () => {
       const temp = `${NEWS_ARCHIVE_PATH}.${process.pid}.${Date.now()}.tmp`;
       try {
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await mkdir(path.dirname(NEWS_ARCHIVE_PATH), { recursive: true });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await writeFile(temp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await rename(temp, NEWS_ARCHIVE_PATH);
       } finally {
         await unlink(temp).catch(() => undefined);

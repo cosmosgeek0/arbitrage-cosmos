@@ -1,3 +1,4 @@
+import { types as utilTypes } from 'node:util';
 import {
   evaluateFreshness,
   isCompleteness,
@@ -77,7 +78,7 @@ function issue(path: string, code: string, message: string): ValidationIssue {
 }
 
 function plainRecord(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  if (typeof value !== 'object' || value === null || Array.isArray(value) || utilTypes.isProxy(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return false;
   if (Object.getOwnPropertySymbols(value).length > 0) return false;
@@ -340,7 +341,8 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   const allowed = [
     'componentId', 'owner', 'ownerPath', 'releaseStatuses', 'truthLabel', 'desiredState', 'phase',
     'domainObservedState', 'sourceLifecycle', 'readiness', 'authority', 'completeness', 'sourceTimestamp',
-    'freshness', 'lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs', 'dependencies', 'queue',
+    'freshness', 'lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs', 'processingLagMs',
+    'retry', 'dataQuality', 'checkpoint', 'dependencies', 'queue',
     'lastFailure', 'blockerCodes', 'generation', 'restartCount', 'supportedControls', 'capitalExposed',
     'operatorAttentionRequired',
   ];
@@ -377,6 +379,134 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
   }
   for (const field of ['lastReceiveAtMs', 'lastProcessAtMs', 'lastSuccessAtMs'] as const) {
     if (value[field] !== null && !isValidUtcMillis(value[field])) issues.push(issue(field, 'UTC_MILLIS_INVALID', `${field} must be null or UTC ms`));
+  }
+  if (value.processingLagMs !== undefined
+      && value.processingLagMs !== null
+      && !validCount(value.processingLagMs)) {
+    issues.push(issue('processingLagMs', 'LAG_INVALID', 'processingLagMs must be a non-negative safe integer or null'));
+  }
+  if (value.retry !== undefined) {
+    if (!plainRecord(value.retry)) {
+      issues.push(issue('retry', 'RETRY_INVALID', 'retry must be a plain operational snapshot'));
+    } else {
+      const retry = value.retry;
+      issues.push(...exactFields(retry, ['state', 'attempt', 'ceiling', 'delayMs', 'retryAtMs', 'cooldownUntilMs'], 'retry'));
+      if (!['IDLE', 'RETRYING', 'BACKING_OFF', 'COOLDOWN', 'UNKNOWN', 'UNAVAILABLE'].includes(String(retry.state))) {
+        issues.push(issue('retry.state', 'RETRY_STATE_INVALID', 'retry state is unknown'));
+      }
+      for (const field of ['attempt', 'ceiling', 'delayMs'] as const) {
+        if (retry[field] !== null && !validCount(retry[field])) {
+          issues.push(issue(`retry.${field}`, 'COUNTER_INVALID', `${field} must be a non-negative safe integer or null`));
+        }
+      }
+      for (const field of ['retryAtMs', 'cooldownUntilMs'] as const) {
+        if (retry[field] !== null && !isValidUtcMillis(retry[field])) {
+          issues.push(issue(`retry.${field}`, 'UTC_MILLIS_INVALID', `${field} must be null or UTC ms`));
+        }
+      }
+      const state = String(retry.state);
+      const allNull = ['attempt', 'ceiling', 'delayMs', 'retryAtMs', 'cooldownUntilMs']
+        .every((field) => retry[field] === null);
+      const attempt = retry.attempt;
+      const ceiling = retry.ceiling;
+      const activeAttempt = validCount(attempt) && attempt > 0;
+      const boundedCeiling = validCount(ceiling)
+        && activeAttempt && ceiling >= attempt;
+      const scheduled = validCount(retry.delayMs) && retry.retryAtMs !== null;
+      if ((state === 'UNKNOWN' || state === 'UNAVAILABLE') && !allNull) {
+        issues.push(issue('retry', 'RETRY_UNKNOWN_CONFLICT', 'unknown or unavailable retry truth cannot carry invented values'));
+      } else if (state === 'IDLE'
+          && (retry.attempt !== 0 || !validCount(retry.ceiling)
+            || retry.delayMs !== null || retry.retryAtMs !== null || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_IDLE_CONFLICT', 'idle retry truth requires attempt zero, a bounded ceiling, and no active schedule'));
+      } else if (state === 'RETRYING'
+          && (!activeAttempt || !boundedCeiling || !scheduled || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_ACTIVE_EVIDENCE_REQUIRED', 'retrying truth requires one bounded active attempt and schedule without cooldown'));
+      } else if (state === 'BACKING_OFF'
+          && (!activeAttempt || !boundedCeiling || !scheduled || (retry.delayMs as number) < 1
+            || retry.cooldownUntilMs !== null)) {
+        issues.push(issue('retry', 'RETRY_BACKOFF_EVIDENCE_REQUIRED', 'backing-off truth requires one bounded delayed attempt without cooldown'));
+      } else if (state === 'COOLDOWN') {
+        if (!activeAttempt || !boundedCeiling || !scheduled || retry.cooldownUntilMs === null) {
+          issues.push(issue('retry', 'RETRY_COOLDOWN_EVIDENCE_REQUIRED', 'cooldown truth requires one bounded attempt, retry schedule, and cooldown end'));
+        } else if (typeof retry.retryAtMs === 'number'
+            && typeof retry.cooldownUntilMs === 'number'
+            && retry.cooldownUntilMs < retry.retryAtMs) {
+          issues.push(issue('retry.cooldownUntilMs', 'RETRY_COOLDOWN_ORDER_INVALID', 'cooldown cannot end before the scheduled retry'));
+        }
+      }
+      if (value.sourceLifecycle === 'LIVE' && state !== 'IDLE') {
+        issues.push(issue('retry.state', 'RETRY_LIVE_CONFLICT', 'a live source cannot retain an active retry schedule'));
+      }
+      if (value.sourceLifecycle === 'BACKING_OFF' && state !== 'BACKING_OFF' && state !== 'COOLDOWN') {
+        issues.push(issue('retry.state', 'RETRY_LIFECYCLE_CONFLICT', 'a backing-off source requires matching retry evidence'));
+      }
+    }
+  }
+  if (value.dataQuality !== undefined) {
+    if (!plainRecord(value.dataQuality)) {
+      issues.push(issue('dataQuality', 'DATA_QUALITY_INVALID', 'dataQuality must be a plain operational snapshot'));
+    } else {
+      const quality = value.dataQuality;
+      issues.push(...exactFields(quality, ['state', 'invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount', 'observedAtMs'], 'dataQuality'));
+      if (!['GOOD', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE'].includes(String(quality.state))) {
+        issues.push(issue('dataQuality.state', 'DATA_QUALITY_STATE_INVALID', 'data quality state is unknown'));
+      }
+      for (const field of ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount'] as const) {
+        if (quality[field] !== null && !validCount(quality[field])) {
+          issues.push(issue(`dataQuality.${field}`, 'COUNTER_INVALID', `${field} must be a non-negative safe integer or null`));
+        }
+      }
+      if (quality.observedAtMs !== null && !isValidUtcMillis(quality.observedAtMs)) {
+        issues.push(issue('dataQuality.observedAtMs', 'UTC_MILLIS_INVALID', 'observedAtMs must be null or UTC ms'));
+      }
+      const qualityValues = ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount', 'observedAtMs'];
+      const qualityUnknown = qualityValues.every((field) => quality[field] === null);
+      const qualityComplete = quality.observedAtMs !== null
+        && ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount']
+          .every((field) => validCount(quality[field]));
+      if ((quality.state === 'UNKNOWN' || quality.state === 'UNAVAILABLE') && !qualityUnknown) {
+        issues.push(issue('dataQuality', 'DATA_QUALITY_UNKNOWN_CONFLICT', 'unknown or unavailable quality cannot carry invented values'));
+      }
+      if (quality.state === 'GOOD') {
+        const counters = ['invalidCount', 'duplicateCount', 'outOfOrderCount', 'sequenceGapCount'] as const;
+        if (!qualityComplete) {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_EVIDENCE_REQUIRED', 'good quality requires observed-at evidence and every quality counter'));
+        } else if (counters.some((field) => quality[field] !== 0)) {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_CONFLICT', 'good quality cannot carry nonzero fault counters'));
+        }
+        if (value.completeness !== 'COMPLETE') {
+          issues.push(issue('dataQuality', 'DATA_QUALITY_GOOD_COMPLETENESS_CONFLICT', 'good quality requires complete owner truth'));
+        }
+      } else if (quality.state === 'DEGRADED' && !qualityComplete) {
+        issues.push(issue('dataQuality', 'DATA_QUALITY_DEGRADED_EVIDENCE_REQUIRED', 'degraded quality requires observed-at evidence and every quality counter'));
+      }
+    }
+  }
+  if (value.checkpoint !== undefined) {
+    if (!plainRecord(value.checkpoint)) {
+      issues.push(issue('checkpoint', 'CHECKPOINT_INVALID', 'checkpoint must be a plain operational snapshot'));
+    } else {
+      const checkpoint = value.checkpoint;
+      issues.push(...exactFields(checkpoint, ['state', 'revision', 'persistedAtMs'], 'checkpoint'));
+      if (!['CURRENT', 'DIRTY', 'STALE', 'MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(checkpoint.state))) {
+        issues.push(issue('checkpoint.state', 'CHECKPOINT_STATE_INVALID', 'checkpoint state is unknown'));
+      }
+      if (!validOptionalText(checkpoint.revision, 256)) {
+        issues.push(issue('checkpoint.revision', 'CHECKPOINT_REVISION_INVALID', 'revision must be null or bounded'));
+      }
+      if (checkpoint.persistedAtMs !== null && !isValidUtcMillis(checkpoint.persistedAtMs)) {
+        issues.push(issue('checkpoint.persistedAtMs', 'UTC_MILLIS_INVALID', 'persistedAtMs must be null or UTC ms'));
+      }
+      if ((checkpoint.state === 'UNKNOWN' || checkpoint.state === 'UNAVAILABLE' || checkpoint.state === 'MISSING')
+          && (checkpoint.revision !== null || checkpoint.persistedAtMs !== null)) {
+        issues.push(issue('checkpoint', 'CHECKPOINT_UNKNOWN_CONFLICT', 'missing, unknown, or unavailable checkpoint cannot carry invented values'));
+      }
+      if ((checkpoint.state === 'CURRENT' || checkpoint.state === 'DIRTY' || checkpoint.state === 'STALE')
+          && (checkpoint.revision === null || checkpoint.persistedAtMs === null)) {
+        issues.push(issue('checkpoint', 'CHECKPOINT_EVIDENCE_REQUIRED', 'current, dirty, or stale checkpoint truth requires revision and persistence time'));
+      }
+    }
   }
   if (!Array.isArray(value.dependencies) || value.dependencies.some((entry) => !isSystemComponentId(entry))
       || !unique(value.dependencies as string[]) || value.dependencies.includes(value.componentId)) {
@@ -457,6 +587,15 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
     REVOKE_APPROVAL: ['command', 'approvalId'],
     REVOKE_RESERVATION: ['command', 'reservationId'],
     RESTART_COMPONENT: ['command', 'componentId'],
+    SET_BASIS_INTAKE: ['command', 'paused'],
+    SET_VOLUME_INTAKE: ['command', 'paused'],
+    CLEAR_DEPLOYMENT_FREEZE: ['command', 'expectedObservedAtUtc'],
+    SET_PUBLIC_SOURCE_LIFECYCLE: ['command', 'sourceId', 'action'],
+    SET_BASIS_SYMBOL_POLICY: ['command', 'action', 'symbol'],
+    SET_VOLUME_SYMBOL_POLICY: ['command', 'action', 'symbol'],
+    REDUCE_SIZE_CEILING: ['command', 'scope', 'maximumNotionalUsd'],
+    SET_STRATEGY_THRESHOLD: ['command', 'strategy', 'threshold', 'value'],
+    PIN_FOCUS: ['command', 'symbol', 'pinned'],
   };
   issues.push(...exactFields(mutation, fields[command], 'mutation'));
   switch (command) {
@@ -464,10 +603,57 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       if (!isSystemComponentId(mutation.componentId) || !isDesiredRuntimeState(mutation.desiredState)) issues.push(issue('mutation', 'COMPONENT_STATE_INVALID', 'component and desired state must be canonical'));
       break;
     case 'SET_INTAKE_PAUSED':
+    case 'SET_BASIS_INTAKE':
+    case 'SET_VOLUME_INTAKE':
       if (typeof mutation.paused !== 'boolean') issues.push(issue('mutation.paused', 'BOOLEAN_REQUIRED', 'paused must be boolean'));
+      break;
+    case 'SET_BASIS_SYMBOL_POLICY':
+    case 'SET_VOLUME_SYMBOL_POLICY':
+      if ((mutation.action !== 'BLOCK' && mutation.action !== 'ALLOW')
+        || typeof mutation.symbol !== 'string'
+        || !/^[A-Z0-9]{4,20}$/.test(mutation.symbol)) {
+        issues.push(issue('mutation', 'STRATEGY_SYMBOL_POLICY_INVALID', 'symbol policy requires a canonical symbol and BLOCK or ALLOW'));
+      }
+      break;
+    case 'REDUCE_SIZE_CEILING': {
+      const decimal = mutation.maximumNotionalUsd;
+      if ((mutation.scope !== 'SYSTEM' && mutation.scope !== 'BASIS' && mutation.scope !== 'VOLUME')
+        || typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 96) {
+        issues.push(issue('mutation', 'SIZE_CEILING_INVALID', 'size ceiling reduction requires a canonical positive exact decimal'));
+      }
+      break;
+    }
+    case 'SET_STRATEGY_THRESHOLD': {
+      const decimal = mutation.value;
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const pairValid = (mutation.strategy === 'BASIS' && mutation.threshold === 'MIN_NET_BASIS_PCT')
+        || (mutation.strategy === 'VOLUME' && mutation.threshold === 'VOLUME_1S_MULTIPLE');
+      const bounded = mutation.strategy === 'BASIS'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (!pairValid || typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 12 || !Number.isFinite(numeric) || !bounded) {
+        issues.push(issue('mutation', 'STRATEGY_THRESHOLD_INVALID', 'strategy threshold must use an approved pair and bounded canonical value'));
+      }
+      break;
+    }
+    case 'PIN_FOCUS':
+      if (typeof mutation.symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(mutation.symbol)
+        || typeof mutation.pinned !== 'boolean') {
+        issues.push(issue('mutation', 'FOCUS_PIN_INVALID', 'focus pin requires one canonical symbol and boolean pinned value'));
+      }
       break;
     case 'SET_SAFE_MODE':
       if (!isSystemSafeMode(mutation.safeMode)) issues.push(issue('mutation.safeMode', 'SAFE_MODE_INVALID', 'only safe convergence modes are accepted'));
+      break;
+    case 'SET_PUBLIC_SOURCE_LIFECYCLE':
+      if ((mutation.sourceId !== 'public-spot-source' && mutation.sourceId !== 'public-usdm-source')
+        || (mutation.action !== 'ISOLATE' && mutation.action !== 'RESTART')) {
+        issues.push(issue('mutation', 'SOURCE_LIFECYCLE_INVALID', 'source lifecycle target and action must be canonical'));
+      }
       break;
     case 'SET_KILL_SWITCH':
       if (typeof mutation.engaged !== 'boolean') issues.push(issue('mutation.engaged', 'BOOLEAN_REQUIRED', 'engaged must be boolean'));
@@ -483,6 +669,9 @@ export function validateSystemControlMutationRequest(value: unknown): Validation
       break;
     case 'RESTART_COMPONENT':
       if (!isSystemComponentId(mutation.componentId)) issues.push(issue('mutation.componentId', 'COMPONENT_ID_INVALID', 'restart target must be canonical'));
+      break;
+    case 'CLEAR_DEPLOYMENT_FREEZE':
+      if (!validText(mutation.expectedObservedAtUtc, 32)) issues.push(issue('mutation.expectedObservedAtUtc', 'REVISION_INVALID', 'freeze clear readback revision must be bounded'));
       break;
   }
   return issues;

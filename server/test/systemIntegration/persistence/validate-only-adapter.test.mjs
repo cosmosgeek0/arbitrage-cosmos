@@ -30,6 +30,29 @@ async function captureRecord(input) {
   return { result, record: captured };
 }
 
+async function assertDurableRiskDecision(record, expectedDecision) {
+  const dataDir = mkdtempSync(path.join(tmpdir(), `cosmos-risk-${expectedDecision.toLowerCase()}-audit-`));
+  const ledger = new Ledger(dataDir);
+  try {
+    const persistence = new SystemIntegrationLedgerAdapter(ledger);
+    assert.equal(persistence.load(NOW - 100, `validate.risk.${expectedDecision.toLowerCase()}.load`).ok, true);
+    await persistence.persistValidateOnly(record);
+    const event = ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND)
+      .find((entry) => entry.data?.trace?.kind === 'RISK');
+    assert.notEqual(event, undefined);
+    assert.deepEqual(Object.keys(event.data.riskDecision).sort(), ['recordId', 'schema', 'verdict']);
+    assert.equal(event.data.riskDecision.schema, 'cosmos.foundation.risk-verdict.audit.v1');
+    assert.equal(event.data.riskDecision.recordId, record.recordId);
+    assert.equal(event.data.riskDecision.verdict.decision, expectedDecision);
+    assert.deepEqual(event.data.riskDecision.verdict, record.riskVerdict);
+    assert.equal(event.data.trace.correlationId, record.riskVerdict.correlationId);
+    assert.equal(event.data.trace.referenceIds.includes(record.recordId), true);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+}
+
 test('production persistence port commits one bounded VALIDATE_ONLY run and replays it exactly once', async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-validate-only-ledger-'));
   const ledger = new Ledger(dataDir);
@@ -52,6 +75,10 @@ test('production persistence port commits one bounded VALIDATE_ONLY run and repl
     assert.deepEqual(latestApproval, first.snapshot.approvalState);
     const trace = persistence.queryTrace({ correlationId: first.snapshot.rootCorrelationId, limit: 20 });
     assert.equal(trace.ok, true);
+    const riskTrace = trace.value.events.find(({ event }) => event.kind === 'RISK');
+    assert.equal(first.snapshot.riskVerdict.correlationId, first.snapshot.rootCorrelationId);
+    assert.equal(riskTrace.event.correlationId, first.snapshot.riskVerdict.correlationId);
+    assert.equal(riskTrace.event.referenceIds.includes(first.snapshot.boundRiskDecision.decisionId), true);
     assert.deepEqual(
       trace.value.events.map(({ event }) => [event.kind, event.componentId]),
       [
@@ -74,6 +101,9 @@ test('production persistence port commits one bounded VALIDATE_ONLY run and repl
     assert.equal(atomicAuditRows.length, 6);
     assert.equal(new Set(atomicAuditRows.map((event) => event.data.checkpointRevision)).size, 1);
     assert.equal(new Set(atomicAuditRows.map((event) => event.data.checkpointChecksum)).size, 1);
+    const durableRisk = atomicAuditRows.find((event) => event.data.trace?.kind === 'RISK');
+    assert.deepEqual(durableRisk.data.riskDecision.verdict, first.snapshot.riskVerdict);
+    assert.equal(durableRisk.data.riskDecision.verdict.decision, 'APPROVED');
     const eventCount = ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length;
 
     const replayInput = buildValidateOnlyInput();
@@ -105,6 +135,82 @@ test('production persistence port commits one bounded VALIDATE_ONLY run and repl
     const restarted = new SystemIntegrationLedgerAdapter(ledger);
     assert.equal(restarted.load(NOW + 1, 'validate.persistence.restart').ok, true);
     assert.deepEqual(await restarted.loadValidateOnlyApprovalState(first.snapshot.approvalId), first.snapshot.approvalState);
+  } finally {
+    ledger.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('Ledger risk projection preserves review evidence and rejects every forged semantic field before write', async () => {
+  const unknownInput = buildValidateOnlyInput();
+  unknownInput.riskEvidence.market = null;
+  const unknown = await captureRecord(unknownInput);
+  assert.equal(unknown.result.snapshot.disposition, 'RISK_REJECTED');
+  assert.equal(unknown.record.riskVerdict.decision, 'NEEDS_REVIEW');
+  assert.equal(unknown.record.riskVerdict.allowed, false);
+  assert.equal(unknown.record.riskVerdict.requiredConfirmation, true);
+  assert.equal(unknown.record.riskVerdict.maxAllowedSize, null);
+  assert.equal(unknown.record.riskVerdict.correlationId, unknown.record.rootCorrelationId);
+  assert.deepEqual(
+    unknown.record.riskVerdict.decisiveInputSnapshot.checks.map((check) => check.code),
+    unknown.record.riskVerdict.blockingCodes,
+  );
+  assert.equal(
+    unknown.record.riskVerdict.decisiveInputSnapshot.checks.some((check) => check.observed === null),
+    true,
+  );
+
+  const ready = await captureRecord(buildValidateOnlyInput());
+  const rejectedInput = buildValidateOnlyInput();
+  rejectedInput.riskEvidence.killSwitch.engaged = true;
+  rejectedInput.riskEvidence.killSwitch.reason = 'hostile known rejection';
+  const rejected = await captureRecord(rejectedInput);
+  assert.equal(rejected.record.riskVerdict.decision, 'REJECTED');
+  await assertDurableRiskDecision(unknown.record, 'NEEDS_REVIEW');
+  await assertDurableRiskDecision(rejected.record, 'REJECTED');
+  const forgeries = [
+    (record) => { delete record.riskVerdict.decision; },
+    (record) => { record.riskVerdict.unreviewedField = true; },
+    (record) => { record.riskVerdict.correlationId = 'forged.correlation'; },
+    (record) => { record.riskVerdict.requiredConfirmation = true; },
+    (record) => { record.riskVerdict.maxAllowedSize = 999; },
+    (record) => { record.riskVerdict.maxAllowedSize = -1; },
+    (record) => {
+      record.riskVerdict.decision = 'REJECTED';
+      record.riskVerdict.allowed = false;
+      record.riskVerdict.maxAllowedSize = 0;
+      record.riskVerdict.decisiveInputSnapshot.checks = [];
+    },
+    (record) => { record.riskVerdict.decisiveInputSnapshot.checks.reverse(); },
+    (record) => { record.boundRiskDecision.unreviewedField = true; },
+    (record) => { record.boundRiskDecision.mandateRevision += 1; },
+    (record) => { record.boundRiskDecision.verdict.maxAllowedSize = '999'; },
+  ];
+  const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-risk-projection-forgery-'));
+  const ledger = new Ledger(dataDir);
+  try {
+    const persistence = new SystemIntegrationLedgerAdapter(ledger);
+    assert.equal(persistence.load(NOW - 100, 'validate.risk-forgery.load').ok, true);
+    for (const forge of forgeries) {
+      const record = JSON.parse(JSON.stringify(ready.record));
+      forge(record);
+      await assert.rejects(
+        () => persistence.persistValidateOnly(record),
+        /risk verdict projection is invalid|execution plan is invalid/i,
+      );
+    }
+    const whitespaceReason = JSON.parse(JSON.stringify(unknown.record));
+    const decisive = whitespaceReason.riskVerdict.decisiveInputSnapshot.checks[0];
+    const matchingCheck = whitespaceReason.riskVerdict.checks.find((check) => check.code === decisive.code);
+    assert.ok(matchingCheck, 'self-consistent whitespace hostile requires its full canonical check');
+    decisive.detail = '   ';
+    matchingCheck.detail = '   ';
+    await assert.rejects(
+      () => persistence.persistValidateOnly(whitespaceReason),
+      /risk verdict projection is invalid/i,
+    );
+    assert.equal(ledger.recentEvents(100, SYSTEM_PERSISTENCE_EVENT_KIND).length, 0);
+    assert.equal(persistence.currentState().value.revision, 0);
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

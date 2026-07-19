@@ -10,12 +10,25 @@ Q01 pins:
 - `uv 0.11.28` through `[tool.uv].required-version`;
 - every direct dependency exactly in `pyproject.toml` and every transitive distribution/hash in `uv.lock`.
 
-Bootstrap from this directory:
+Bootstrap from the repository root. The command installs the pinned interpreter if needed, then
+synchronizes the exact lock with every dependency group and optional extra:
+
+```bash
+npm run bootstrap:quant:locked
+```
+
+The equivalent commands from this directory are:
 
 ```bash
 uv python install 3.13.14
-uv sync --locked --all-groups
+uv sync --locked --all-groups --all-extras --python 3.13.14
 ```
+
+`--all-extras` is mandatory: the `models` extra provides Optuna, scikit-learn and XGBoost. The
+canonical Quant gate imports their pinned versions before testing, executes all 3,063 collected
+tests, and fails on every skip except the six exact donor-worktree scope checks. In particular, the
+41 Q10 model test functions (44 collected cases) are never allowed to disappear behind a missing
+optional dependency.
 
 `uv` uses Astral's managed `python-build-standalone` distributions because CPython does not publish portable interpreter archives. The Python implementation and `uv` artifact must therefore be verified as separate supply-chain inputs; the Q01 receipt records the observed artifacts and hashes.
 

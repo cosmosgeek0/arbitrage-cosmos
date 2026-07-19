@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -7,6 +7,26 @@ import test from 'node:test';
 const originalFetch = globalThis.fetch;
 const sourceMode = process.env.NETWORK_TEST_SOURCE === '1';
 const modulePath = (relative) => sourceMode ? `../src/${relative}.ts` : `../dist/${relative}.js`;
+const CACHE_ENV_NAMES = Object.freeze([
+  'DATA_DIR',
+  'DATA_DIR_LOGICAL_LEASE_ROOT',
+  'PROFILE_CACHE',
+  'SKIP_DOTENV',
+]);
+const originalCacheEnvironment = Object.fromEntries(
+  CACHE_ENV_NAMES.map((name) => [name, process.env[name]]),
+);
+const suiteTemp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-network-cache-suite-'));
+const suiteRoot = await realpath(suiteTemp);
+const suiteDataDir = path.join(suiteRoot, 'data');
+const suiteProfileCache = path.join(suiteDataDir, 'profiles.json');
+await mkdir(suiteDataDir, { recursive: true, mode: 0o700 });
+Object.assign(process.env, {
+  DATA_DIR: suiteDataDir,
+  DATA_DIR_LOGICAL_LEASE_ROOT: path.join(suiteRoot, 'logical-runtime'),
+  PROFILE_CACHE: suiteProfileCache,
+  SKIP_DOTENV: '1',
+});
 
 function jsonResponse(value, init = {}) {
   return new Response(JSON.stringify(value), {
@@ -63,6 +83,20 @@ function controlledJsonFetch({ settleOnAbort = true } = {}) {
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+test.after(async () => {
+  try {
+    const environment = await import(modulePath('bootstrap/environment'));
+    environment.DATA_DIR_LEASE.release();
+  } finally {
+    for (const name of CACHE_ENV_NAMES) {
+      const original = originalCacheEnvironment[name];
+      if (original === undefined) delete process.env[name];
+      else process.env[name] = original;
+    }
+    await rm(suiteRoot, { recursive: true, force: true });
+  }
 });
 
 test('Binance REST canonicalizes cache keys and single-flights identical work', { concurrency: false }, async () => {
@@ -282,8 +316,7 @@ test('money flow reports call-cap truncation through coverage fields', { concurr
 });
 
 test('profile lookup single-flights misses and honors its negative cache', { concurrency: false }, async () => {
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-test-'));
-  process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');
+  await rm(suiteProfileCache, { force: true });
   let calls = 0;
   globalThis.fetch = async () => {
     calls += 1;
@@ -298,23 +331,19 @@ test('profile lookup single-flights misses and honors its negative cache', { con
   assert.equal(await profile.tokenProfile(base), null);
   assert.equal(calls, 1);
   await profile.flushProfileCache();
-  const persisted = JSON.parse(await readFile(process.env.PROFILE_CACHE, 'utf8'));
+  const persisted = JSON.parse(await readFile(suiteProfileCache, 'utf8'));
   assert.equal(Object.keys(persisted).length, 1);
-  assert.equal((await stat(process.env.PROFILE_CACHE)).size <= 16 * 1024 * 1024, true);
-  delete process.env.PROFILE_CACHE;
+  assert.equal((await stat(suiteProfileCache)).size <= 16 * 1024 * 1024, true);
 });
 
 test('profile outbound admission is bounded, single-flight, paced FIFO work', { concurrency: false }, async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_700_000_000_000 });
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-queue-test-'));
-  process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');
+  await rm(suiteProfileCache, { force: true });
   const transport = controlledJsonFetch();
   globalThis.fetch = transport.fetch;
   let profile = null;
   t.after(async () => {
     if (profile) await profile.flushProfileCache();
-    delete process.env.PROFILE_CACHE;
-    await rm(temp, { recursive: true, force: true });
   });
 
   profile = await import(`${modulePath('binance/profile')}?bounded-fifo`);
@@ -375,15 +404,12 @@ test('profile outbound admission is bounded, single-flight, paced FIFO work', { 
 
 test('profile deadline covers queue wait plus fetch and does not poison later admission', { concurrency: false }, async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_700_100_000_000 });
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-deadline-test-'));
-  process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');
+  await rm(suiteProfileCache, { force: true });
   const transport = controlledJsonFetch();
   globalThis.fetch = transport.fetch;
   let profile = null;
   t.after(async () => {
     if (profile) await profile.flushProfileCache();
-    delete process.env.PROFILE_CACHE;
-    await rm(temp, { recursive: true, force: true });
   });
 
   profile = await import(`${modulePath('binance/profile')}?end-to-end-deadline`);
@@ -412,15 +438,12 @@ test('profile deadline covers queue wait plus fetch and does not poison later ad
 
 test('profile retains its active permit until a timed-out transport actually settles', { concurrency: false }, async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_700_150_000_000 });
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-permit-test-'));
-  process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');
+  await rm(suiteProfileCache, { force: true });
   const transport = controlledJsonFetch({ settleOnAbort: false });
   globalThis.fetch = transport.fetch;
   let profile = null;
   t.after(async () => {
     if (profile) await profile.flushProfileCache();
-    delete process.env.PROFILE_CACHE;
-    await rm(temp, { recursive: true, force: true });
   });
 
   profile = await import(`${modulePath('binance/profile')}?retain-active-permit`);
@@ -454,11 +477,10 @@ test('profile retains its active permit until a timed-out transport actually set
 test('profile cache delivery reports stale fallback and lite truncation without restamping evidence', { concurrency: false }, async (t) => {
   const now = 1_700_200_000_000;
   t.mock.timers.enable({ apis: ['Date'], now });
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-profile-truth-test-'));
-  process.env.PROFILE_CACHE = path.join(temp, 'profiles.json');
+  await rm(suiteProfileCache, { force: true });
   const staleTs = now - 60 * 60 * 1000 - 1;
   const freshTs = now - 1_000;
-  await writeFile(process.env.PROFILE_CACHE, JSON.stringify({
+  await writeFile(suiteProfileCache, JSON.stringify({
     STALECACHE: {
       id: 'stale-cache', idTs: staleTs, profileTs: staleTs,
       profile: { id: 'stale-cache', name: 'Stale Cache', symbol: 'STALECACHE', categories: [], platforms: [], full: true, fetchedAt: staleTs },
@@ -476,8 +498,6 @@ test('profile cache delivery reports stale fallback and lite truncation without 
   let profile = null;
   t.after(async () => {
     if (profile) await profile.flushProfileCache();
-    delete process.env.PROFILE_CACHE;
-    await rm(temp, { recursive: true, force: true });
   });
 
   profile = await import(`${modulePath('binance/profile')}?delivery-truth`);
@@ -510,15 +530,13 @@ test('profile cache delivery reports stale fallback and lite truncation without 
     unknownFreshnessProfiles: 0,
     truncatedLiteProfiles: 1,
   });
-  const persisted = JSON.parse(await readFile(process.env.PROFILE_CACHE, 'utf8'));
+  const persisted = JSON.parse(await readFile(suiteProfileCache, 'utf8'));
   assert.equal(persisted.STALECACHE.profileTs, staleTs);
   assert.equal(persisted.STALECACHE.profile.fetchedAt, staleTs);
 });
 
 test('news archive sanitizes retained strings and URLs and never follows a disallowed redirect', { concurrency: false }, async () => {
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'cosmos-news-test-'));
-  process.env.DATA_DIR = temp;
-  await writeFile(path.join(temp, 'news-archive.json'), JSON.stringify([{
+  await writeFile(path.join(suiteDataDir, 'news-archive.json'), JSON.stringify([{
     id: `archive:${'x'.repeat(600)}`,
     title: `Market update ${'x'.repeat(2_000)}`,
     summary: 'summary',
@@ -556,7 +574,6 @@ test('news archive sanitizes retained strings and URLs and never follows a disal
   assert.notEqual(payload.items[0].timeLabel, 'stale');
   await news.refreshNewsContextNow();
   assert.equal(disallowedFollow, false);
-  delete process.env.DATA_DIR;
 });
 
 test('news context upstream policy rejects non-GET methods before fetch state and forces normalized GET', { concurrency: false }, async () => {

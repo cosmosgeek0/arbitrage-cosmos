@@ -103,15 +103,23 @@ export function createProductIntegrationRuntimeRouter(service: ProductIntegratio
       res.status(415).json({ ok: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: 'Content-Type must be application/json.' });
       return;
     }
-    if (!exactBody(req.body, ['controlId', 'expectedRevision'])
+    const incidentControl = typeof req.body?.controlId === 'string'
+      && /^incident\.ack\.[a-f0-9]{64}$/.test(req.body.controlId);
+    const expectedBody = incidentControl
+      ? ['controlId', 'expectedRevision', 'targetId']
+      : ['controlId', 'expectedRevision'];
+    if (!exactBody(req.body, expectedBody)
         || typeof req.body.controlId !== 'string' || req.body.controlId.length === 0 || req.body.controlId.length > 160
-        || typeof req.body.expectedRevision !== 'string' || req.body.expectedRevision.length === 0 || req.body.expectedRevision.length > 160) {
-      res.status(400).json({ ok: false, code: 'CONTROL_PREVIEW_INVALID', error: 'controlId and expectedRevision are required.' });
+        || typeof req.body.expectedRevision !== 'string' || req.body.expectedRevision.length === 0 || req.body.expectedRevision.length > 160
+        || (incidentControl && (typeof req.body.targetId !== 'string'
+          || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(req.body.targetId)))) {
+      res.status(400).json({ ok: false, code: 'CONTROL_PREVIEW_INVALID', error: 'Exact bounded controlId, expectedRevision, and incident targetId are required.' });
       return;
     }
     res.json(await service.previewCommand({
       controlId: req.body.controlId,
       expectedRevision: req.body.expectedRevision,
+      ...(incidentControl ? { targetId: req.body.targetId as string } : {}),
       operator: res.locals.productRuntimeOperator as Readonly<ProductRuntimeOperator>,
     }));
   }));

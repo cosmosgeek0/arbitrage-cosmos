@@ -122,8 +122,14 @@ test('connection resume cursor is preserved exactly and malformed restart input 
 
 test('supervisor invalidation is a stable bounded canonical delta, not a duplicate snapshot', () => {
   const delta = projectProductRuntimeSupervisorDelta({
-    revision: 'system-7-runtime-3-control-2',
+    revision: 'system-7-runtime-3-control-2-incident-available-1-17',
     truthLabel: 'UNKNOWN',
+    incidentAvailability: {
+      state: 'AVAILABLE',
+      truthLabel: 'BUILT_AND_TESTED',
+      blocker: null,
+    },
+    incidents: [{ ledgerEventId: 17 }],
     dashboard: {
       overallPosture: 'BLOCKED',
       firstRootBlockerComponentId: 'engine-supervisor',
@@ -149,14 +155,83 @@ test('supervisor invalidation is a stable bounded canonical delta, not a duplica
     'safeMode',
     'killSwitchEngaged',
     'intakePaused',
+    'incidentAvailability',
+    'incidentCount',
+    'incidentLedgerHighWater',
   ]);
   assert.equal(delta.schemaVersion, 'canonical-supervisor-delta.v1');
   assert.equal(delta.overallPosture, 'BLOCKED');
   assert.equal(delta.firstRootBlockerComponentId, 'engine-supervisor');
   assert.equal(delta.killSwitchEngaged, true);
+  assert.deepEqual(delta.incidentAvailability, {
+    state: 'AVAILABLE',
+    truthLabel: 'BUILT_AND_TESTED',
+    blocker: null,
+  });
+  assert.equal(delta.incidentCount, 1);
+  assert.equal(delta.incidentLedgerHighWater, 17);
+  assert.equal(Object.isFrozen(delta.incidentAvailability), true);
   assert.equal('components' in delta, false);
   assert.equal('materialEvents' in delta, false);
   assert.equal('evaluatedAtMs' in delta, false);
+});
+
+test('incident-only supervisor changes alter the WebSocket invalidation key', () => {
+  const dashboard = {
+    overallPosture: 'READY',
+    firstRootBlockerComponentId: null,
+    runtimeGeneration: 3,
+    controlGeneration: 2,
+    control: {
+      revision: 7,
+      safeMode: 'READ_ONLY',
+      killSwitchEngaged: false,
+      intakePaused: false,
+    },
+  };
+  const available = {
+    state: 'AVAILABLE',
+    truthLabel: 'BUILT_AND_TESTED',
+    blocker: null,
+  };
+  const before = projectProductRuntimeSupervisorDelta({
+    revision: 'same-non-incident-revision',
+    truthLabel: 'BUILT_AND_TESTED',
+    incidentAvailability: available,
+    incidents: [{ ledgerEventId: 17 }],
+    dashboard,
+  });
+  const after = projectProductRuntimeSupervisorDelta({
+    revision: 'same-non-incident-revision',
+    truthLabel: 'BUILT_AND_TESTED',
+    incidentAvailability: available,
+    incidents: [{ ledgerEventId: 19 }, { ledgerEventId: 23 }],
+    dashboard,
+  });
+
+  assert.equal(before.revision, after.revision, 'the fixture isolates incident-only invalidation');
+  assert.equal(before.incidentCount, 1);
+  assert.equal(before.incidentLedgerHighWater, 17);
+  assert.equal(after.incidentCount, 2);
+  assert.equal(after.incidentLedgerHighWater, 23);
+  assert.notEqual(JSON.stringify(before), JSON.stringify(after),
+    'the server WebSocket key changes when only canonical incident truth changes');
+
+  const unavailable = projectProductRuntimeSupervisorDelta({
+    revision: 'same-non-incident-revision',
+    truthLabel: 'BUILT_AND_TESTED',
+    incidentAvailability: {
+      state: 'UNAVAILABLE',
+      truthLabel: 'UNAVAILABLE',
+      blocker: 'INCIDENT_OWNER_UNAVAILABLE',
+    },
+    incidents: [],
+    dashboard,
+  });
+  assert.equal(unavailable.incidentAvailability.state, 'UNAVAILABLE');
+  assert.equal(unavailable.incidentCount, 0);
+  assert.equal(unavailable.incidentLedgerHighWater, 0);
+  assert.notEqual(JSON.stringify(after), JSON.stringify(unavailable));
 });
 
 test('application socket has no legacy state timer or push and preserves its safety boundaries', async () => {

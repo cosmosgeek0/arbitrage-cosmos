@@ -1,4 +1,12 @@
-import { buildProductRuntimeControlRegistry, parseProductRuntimeCommandRequest, previewProductRuntimeControl, submitProductRuntimeControl } from './controls.js';
+import { createHash } from 'node:crypto';
+
+import {
+  buildProductRuntimeControlRegistry,
+  parseProductRuntimeCommandRequest,
+  previewProductRuntimeControl,
+  productIncidentAcknowledgementControlId,
+  submitProductRuntimeControl,
+} from './controls.js';
 import { isProductRuntimeCursor, isProductRuntimeRowCursor, projectProductMaterialEventPage } from './events.js';
 import { buildProductRuntimeSupervisorEnvelope } from './projection.js';
 import { isProductRuntimeTraceId, projectProductCorrelationTrace } from './trace.js';
@@ -7,6 +15,7 @@ import type { BootReleaseReadback } from '../../systemIntegration/persistence/in
 import { traceByCorrelationId } from '../../systemIntegration/supervisor/index.js';
 import {
   PRODUCT_RUNTIME_MAX_QUERY_LIMIT,
+  PRODUCT_RUNTIME_COMMAND_SCHEMA,
   ProductRuntimeError,
   type ProductRuntimeCommandRequest,
   type ProductRuntimeCommandResultIdentity,
@@ -17,6 +26,7 @@ import {
   type ProductRuntimeMaterialEventPage,
   type ProductRuntimeOperator,
   type ProductRuntimeOptions,
+  type ProductRuntimeIncidentSnapshot,
   type ProductRuntimeSupervisorEnvelope,
 } from './types.js';
 
@@ -27,6 +37,102 @@ function checkedNow(options: Readonly<ProductRuntimeOptions>): number {
 }
 
 const PRODUCT_SUPERVISOR_EMBEDDED_TRACE_LIMIT = 200;
+
+function incidentTargetForControl(controlId: string, targetId: unknown): string | undefined {
+  const incidentControl = /^incident\.ack\.[a-f0-9]{64}$/.test(controlId);
+  if (!incidentControl) {
+    if (targetId !== undefined) {
+      throw new ProductRuntimeError('CONTROL_PREVIEW_INVALID', 'targetId is only accepted for an incident-bound control.', 400);
+    }
+    return undefined;
+  }
+  if (typeof targetId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(targetId)
+    || productIncidentAcknowledgementControlId(targetId) !== controlId) {
+    throw new ProductRuntimeError('CONTROL_PREVIEW_INVALID', 'Incident targetId does not match the bound control identity.', 400);
+  }
+  return targetId;
+}
+
+async function requireAvailableIncidentCommandTarget(
+  options: Readonly<ProductRuntimeOptions>,
+  incidentId: string,
+  controlId: string,
+  expectedRevision: string,
+): Promise<void> {
+  if (typeof options.read.incidents !== 'function') {
+    throw new ProductRuntimeError(
+      'INCIDENT_ROUTER_UNAVAILABLE',
+      'The canonical incident router is not configured for acknowledgement commands.',
+      503,
+    );
+  }
+  let snapshot: Readonly<ProductRuntimeIncidentSnapshot>;
+  try { snapshot = await options.read.incidents(); } catch {
+    throw new ProductRuntimeError(
+      'INCIDENT_ROUTER_UNAVAILABLE',
+      'The canonical incident router could not provide a verified command cut.',
+      503,
+    );
+  }
+  const matches = Array.isArray(snapshot?.incidents)
+    ? snapshot.incidents.filter((incident) => incident?.incidentId === incidentId)
+    : [];
+  const incident = matches[0];
+  if (!snapshot || snapshot.availability?.state !== 'AVAILABLE'
+    || snapshot.availability.truthLabel !== 'BUILT_AND_TESTED'
+    || snapshot.availability.blocker !== null
+    || !Array.isArray(snapshot.incidents) || snapshot.incidents.length > 200
+    || matches.length !== 1 || !incident
+    || incident.acknowledgementControlId !== controlId
+    || productIncidentAcknowledgementControlId(incidentId) !== controlId
+    || !Number.isSafeInteger(incident.ledgerEventId) || incident.ledgerEventId < 1
+    || incident.state !== 'OPEN'
+    || incident.acknowledgedAtMs !== null
+    || incident.acknowledgedByOperatorId !== null
+    || incident.resolvedAtMs !== null
+    || incident.routing?.inApp?.state !== 'WIRED_LOCAL') {
+    throw new ProductRuntimeError(
+      'INCIDENT_COMMAND_TRUTH_UNAVAILABLE',
+      'The incident is absent, stale, non-open, or withheld from the verified canonical router cut.',
+      409,
+    );
+  }
+  if (String(incident.ledgerEventId) !== expectedRevision) {
+    throw new ProductRuntimeError(
+      'REJECTED_STALE_REVISION',
+      'The incident acknowledgement revision is stale against the verified canonical router cut.',
+      409,
+    );
+  }
+}
+
+function commandResultIdentity(
+  idempotencyKey: string,
+  controlId: string,
+): Readonly<ProductRuntimeCommandResultIdentity> {
+  const canonical = `{"controlId":${JSON.stringify(controlId)},"idempotencyKey":${JSON.stringify(idempotencyKey)},"schema":${JSON.stringify(PRODUCT_RUNTIME_COMMAND_SCHEMA)}}`;
+  const digest = createHash('sha256').update(canonical, 'utf8').digest('hex');
+  return Object.freeze({ commandId: `sysctrl_${digest}`, idempotencyKey, controlId });
+}
+
+async function isExactTerminalCommandReplay(
+  options: Readonly<ProductRuntimeOptions>,
+  request: Readonly<ProductRuntimeCommandRequest>,
+): Promise<boolean> {
+  if (typeof options.commandOwner?.readResult !== 'function') return false;
+  const identity = commandResultIdentity(request.idempotencyKey, request.controlId);
+  try {
+    const readback = await options.commandOwner.readResult(identity);
+    return readback?.state === 'TERMINAL'
+      && readback.result !== null
+      && readback.failureCode === null
+      && readback.result.commandId === identity.commandId
+      && readback.result.controlId === identity.controlId
+      && ['APPLIED', 'ALREADY_APPLIED'].includes(readback.result.status);
+  } catch {
+    return false;
+  }
+}
 
 export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
@@ -110,6 +216,21 @@ export class ProductIntegrationRuntimeService {
           bootReleaseReadbackUnavailableReason = 'BOOT_RELEASE_READBACK_UNAVAILABLE';
         }
       }
+      let incidentSnapshot: Readonly<ProductRuntimeIncidentSnapshot> | undefined;
+      if (typeof this.options.read.incidents === 'function') {
+        try {
+          incidentSnapshot = await this.options.read.incidents();
+        } catch {
+          incidentSnapshot = Object.freeze({
+            availability: Object.freeze({
+              state: 'UNAVAILABLE',
+              truthLabel: 'UNAVAILABLE',
+              blocker: 'INCIDENT_OWNER_UNAVAILABLE',
+            }),
+            incidents: Object.freeze([]),
+          });
+        }
+      }
       const materialEvents = await this.readSupervisorMaterialTail();
       const correlationIds = [...new Set(snapshot.recentCorrelatedDecisions.map((event) => event.correlationId))].slice(0, 4);
       const traces: Readonly<ProductRuntimeCorrelationTrace>[] = [];
@@ -150,6 +271,7 @@ export class ProductIntegrationRuntimeService {
         bootReleaseReadbackUnavailableReason,
         materialEvents,
         traces: Object.freeze(traces),
+        ...(incidentSnapshot === undefined ? {} : { incidentSnapshot }),
         nowMs,
         ...(this.options.commandOwner ? { commandOwner: this.options.commandOwner } : {}),
       });
@@ -194,14 +316,29 @@ export class ProductIntegrationRuntimeService {
   async previewCommand(input: Readonly<{
     controlId: string;
     expectedRevision: string;
+    targetId?: string;
     operator: Readonly<ProductRuntimeOperator>;
   }>): Promise<Readonly<ProductRuntimeControlPreview>> {
     const nowMs = checkedNow(this.options);
+    const incidentId = incidentTargetForControl(input.controlId, input.targetId);
     let snapshot;
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner);
+    if (incidentId !== undefined) {
+      await requireAvailableIncidentCommandTarget(
+        this.options,
+        incidentId,
+        input.controlId,
+        input.expectedRevision,
+      );
+    }
+    const registry = buildProductRuntimeControlRegistry(
+      snapshot,
+      this.options.commandOwner,
+      input.controlId,
+      incidentId,
+    );
     return previewProductRuntimeControl({
       registry,
       owner: this.options.commandOwner,
@@ -215,11 +352,30 @@ export class ProductIntegrationRuntimeService {
   async submitCommand(value: unknown, operator: Readonly<ProductRuntimeOperator>): Promise<Readonly<ProductRuntimeControlResult>> {
     const request: Readonly<ProductRuntimeCommandRequest> = parseProductRuntimeCommandRequest(value);
     const nowMs = checkedNow(this.options);
+    const incidentId = /^incident\.ack\.[a-f0-9]{64}$/.test(request.controlId)
+      ? incidentTargetForControl(request.controlId, request.targetId)
+      : undefined;
     let snapshot;
     try { snapshot = await this.options.read.supervisor(); } catch {
       throw new ProductRuntimeError('PRODUCT_READ_MODEL_UNAVAILABLE', 'Canonical System Integration read evidence is unavailable.', 503);
     }
-    const registry = buildProductRuntimeControlRegistry(snapshot, this.options.commandOwner);
+    if (incidentId !== undefined) {
+      const exactReplay = await isExactTerminalCommandReplay(this.options, request);
+      if (!exactReplay) {
+        await requireAvailableIncidentCommandTarget(
+          this.options,
+          incidentId,
+          request.controlId,
+          request.expectedRevision,
+        );
+      }
+    }
+    const registry = buildProductRuntimeControlRegistry(
+      snapshot,
+      this.options.commandOwner,
+      request.controlId,
+      incidentId,
+    );
     return submitProductRuntimeControl({ registry, owner: this.options.commandOwner, request, nowMs, operator });
   }
 

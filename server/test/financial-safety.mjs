@@ -1110,13 +1110,15 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
     );
 
     const insertRaw = store.db.prepare(
-      'INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)',
+      'INSERT INTO events (ts, kind, symbol, data, created_at) VALUES (?, ?, ?, ?, ?)',
     );
-    insertRaw.run(Date.now(), 'order_request', 'BTCUSDT', '{broken');
-    insertRaw.run(Date.now(), 'loan_request', null, JSON.stringify({
+    const corruptOrderTs = Date.now();
+    insertRaw.run(corruptOrderTs, 'order_request', 'BTCUSDT', '{broken', corruptOrderTs);
+    const corruptLoanTs = Date.now();
+    insertRaw.run(corruptLoanTs, 'loan_request', null, JSON.stringify({
       mutationId: 'legacy-corrupt-loan',
       riskIncreasing: true,
-    }));
+    }), corruptLoanTs);
 
     const corrupt = store.readDurableMutationAuthority();
     check(

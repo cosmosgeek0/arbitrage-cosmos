@@ -2,12 +2,30 @@ import { BinanceStream, type FeedStatus } from '../binance/ws.js';
 import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
+import { deriveVolumeConfigVersion } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import type {
+  StrategyDecayCoordinatorRequest,
+  StrategyDecayCoordinatorResult,
+} from '../engine/decay/index.js';
+import type {
+  ObservedOrderFocusApplyResult,
+} from '../engine/volume/observedOrderFocus.js';
 import { systemClock } from '../engine/v0/clock.js';
 import { MAX_ENGINE_SYMBOLS, finite, isCanonicalSymbol, positive } from '../engine/volume/validation.js';
-import type { Decision, EngineEvent, EngineProposal } from '../engine/v0/types.js';
+import type { Decision, EngineEvent } from '../engine/v0/types.js';
+import type {
+  VolumeFoundationRiskAttachmentInput,
+  VolumeProposal,
+  VolumeProposalRiskCut,
+} from '../engine/volume/types.js';
 import type { AppConfig } from '../types.js';
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from '../capitalFoundation/contracts/index.js';
 import type { Ledger } from '../ledger.js';
+import {
+  createObservedOrderFocusPersistence,
+  DurableObservedOrderFocusCoordinator,
+} from './observedOrderFocus.js';
 
 interface MarketUniverseRow {
   symbol: string;
@@ -23,7 +41,31 @@ export interface VolumeRuntimeIntegrationSnapshot {
   lastTickTs: number | null;
   config: VolumeConfig;
   decisions: Decision[];
-  proposals: EngineProposal[];
+  proposals: VolumeProposal[];
+  ownerSummary: {
+    candidateCount: number;
+    opportunityCount: number;
+    cooldownCount: number;
+  };
+}
+
+export type VolumeRuntimeEvidenceCut = Readonly<{
+  kind: 'SPOT_AGG_TRADE';
+  generation: number;
+  revision: number;
+  receivedAtMs: number;
+  continuity: 'CONTIGUOUS' | 'GAP' | 'UNKNOWN';
+  baseAsset: string;
+  raw: Readonly<RawAggTrade>;
+} | {
+  kind: 'SOURCE_CLOSED';
+  generation: number;
+  revision: number;
+  observedAtMs: number;
+}>;
+
+export interface VolumeStrategyDecayCadencePort {
+  tick(request: Readonly<StrategyDecayCoordinatorRequest>): StrategyDecayCoordinatorResult;
 }
 
 const STREAM_CHUNK = 140;
@@ -38,10 +80,12 @@ function chunks<T>(rows: T[], size: number): T[][] {
 
 export class VolumeRuntime {
   private readonly engine: VolumeEngine;
+  private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
   private streams: BinanceStream[] = [];
   private streamStatus = new Map<string, FeedStatus>();
   private eligibleSymbols: string[] = [];
   private eligibleSymbolSet = new Set<string>();
+  private eligibleBaseBySymbol = new Map<string, string>();
   private symbolSetKey = '';
   private running = false;
   private generation = 0;
@@ -63,7 +107,10 @@ export class VolumeRuntime {
   private lastTradeTs: number | null = null;
   private symbolLastTradeTs = new Map<string, number>();
   private lastAggTradeId = new Map<string, number>();
+  private lastRawTradeId = new Map<string, number>();
   private tradeMessages = 0;
+  private evidenceRevision = 0;
+  private evidenceObserver: ((cut: VolumeRuntimeEvidenceCut) => void) | null = null;
   private configKey = '';
   private persistedEventKeys = new Set<string>();
   private persistedEventOrder: string[] = [];
@@ -73,15 +120,41 @@ export class VolumeRuntime {
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
+    private readonly strategyDecay: VolumeStrategyDecayCadencePort | null = null,
   ) {
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
+    this.observedOrderFocusCoordinator = typeof ledger?.getConfigValue === 'function'
+      && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
+      ? new DurableObservedOrderFocusCoordinator(
+          systemClock,
+          createObservedOrderFocusPersistence(ledger),
+          Object.freeze({
+            applyObservedOrderFocus: (snapshot: unknown) => this.engine.applyObservedOrderFocus(snapshot),
+            restoreObservedOrderFocus: (snapshot: unknown) => this.engine.restoreObservedOrderFocus(snapshot),
+            observedOrderFocusReadback: (
+              status: ObservedOrderFocusApplyResult['status'],
+              applied: boolean,
+              reasonCodes: readonly string[],
+            ) => this.engine.observedOrderFocusReadback(status, applied, reasonCodes),
+          }),
+        )
+      : null;
   }
 
   async start(): Promise<void> {
     if (this.running) return this.startPromise ?? Promise.resolve();
+    const restoration = this.observedOrderFocusCoordinator?.restore();
+    if (restoration !== undefined
+        && (restoration.state === 'UNAVAILABLE'
+          || restoration.state === 'CORRUPT'
+          || restoration.state === 'CONFLICT')) {
+      throw new Error(`volume observed-order focus restore failed: ${restoration.state}`);
+    }
     const generation = ++this.generation;
+    this.evidenceRevision = 0;
+    this.lastRawTradeId.clear();
     this.running = true;
     this.engine.start();
     const promise = this.startGeneration(generation);
@@ -92,6 +165,14 @@ export class VolumeRuntime {
 
   stop(): void {
     if (!this.running && !this.startPromise && !this.engine.isRunning()) return;
+    const closingGeneration = this.generation;
+    const observedAtMs = Date.now();
+    this.publishEvidence(Object.freeze({
+      kind: 'SOURCE_CLOSED' as const,
+      generation: closingGeneration,
+      revision: this.nextEvidenceRevision(),
+      observedAtMs,
+    }));
     ++this.generation;
     ++this.streamEpoch;
     this.running = false;
@@ -105,6 +186,8 @@ export class VolumeRuntime {
     this.symbolSetKey = '';
     this.eligibleSymbols = [];
     this.eligibleSymbolSet.clear();
+    this.eligibleBaseBySymbol.clear();
+    this.lastRawTradeId.clear();
     if (this.tickTimer) clearInterval(this.tickTimer);
     if (this.bookTimer) clearInterval(this.bookTimer);
     if (this.universeTimer) clearInterval(this.universeTimer);
@@ -155,11 +238,45 @@ export class VolumeRuntime {
         this.launch('config universe refresh', generation, () => this.refreshUniverse(generation));
       }
       this.engine.tick();
+      const tickAtMs = this.engine.lastTick();
+      if (tickAtMs !== null) this.tickStrategyDecay(tickAtMs);
     } catch (error) {
       this.safeLog('error_event', null, {
         source: 'volume-runtime.tick',
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  private tickStrategyDecay(evaluatedAtMs: number): void {
+    if (this.strategyDecay === null) return;
+    let configVersion: string;
+    try {
+      configVersion = deriveVolumeConfigVersion(this.engine.cfg);
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.strategy-decay.config',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    for (const direction of ['long', 'short'] as const) {
+      try {
+        const result = this.strategyDecay.tick({ strategy: 'VOLUME', configVersion, direction, evaluatedAtMs });
+        if (result.disposition === 'BLOCKED') {
+          this.safeLog('error_event', null, {
+            source: 'volume-runtime.strategy-decay',
+            direction,
+            reasonCodes: result.reasonCodes,
+          });
+        }
+      } catch (error) {
+        this.safeLog('error_event', null, {
+          source: 'volume-runtime.strategy-decay',
+          direction,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 
@@ -204,7 +321,101 @@ export class VolumeRuntime {
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
+      ownerSummary: {
+        candidateCount: this.engine.focusMgr.candidateList().length,
+        opportunityCount: this.engine.proposalStore.openProposals().length,
+        cooldownCount: this.engine.focusMgr.activeCooldownCount(),
+      },
     });
+  }
+
+  /** Passive exact-cut read used only by the production Foundation risk composer. */
+  readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null {
+    return this.engine.readProposalRiskCut(proposalId);
+  }
+
+  /** Exact compare-and-record; Volume remains the sole proposal mutation owner. */
+  recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean {
+    return this.engine.recordFoundationRiskResult(input);
+  }
+
+  setEvidenceObserver(observer: ((cut: VolumeRuntimeEvidenceCut) => void) | null): void {
+    if (observer !== null && typeof observer !== 'function') {
+      throw new TypeError('volume evidence observer must be a function or null');
+    }
+    if (observer !== null && this.evidenceObserver !== null && observer !== this.evidenceObserver) {
+      throw new TypeError('volume evidence observer already bound');
+    }
+    this.evidenceObserver = observer;
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return this.engine.operatorBlockedSymbols();
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    return this.engine.setOperatorSymbolBlocked(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
+  sizeCeiling(): string | null {
+    try {
+      return normalizeNonNegativeExactDecimal(String(this.engine.cfg.suggestedNotionalUsd));
+    } catch {
+      return null;
+    }
+  }
+
+  setSizeCeiling(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    if (canonical !== value) throw new TypeError('volume size ceiling must be canonical');
+    const numeric = Number(canonical);
+    if (!Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+      throw new RangeError('volume size ceiling cannot cross the legacy numeric boundary exactly');
+    }
+    const current = this.sizeCeiling();
+    if (current === null || compareExactDecimals(canonical, normalizeNonNegativeExactDecimal(current)) > 0) {
+      throw new RangeError('volume size ceiling is downward-only');
+    }
+    return this.engine.setSuggestedNotionalUsd(numeric);
+  }
+
+  strategyThreshold(): string | null {
+    try { return normalizeNonNegativeExactDecimal(String(this.engine.cfg.vol1sMultiple)); } catch { return null; }
+  }
+
+  setStrategyThreshold(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    const numeric = Number(canonical);
+    if (canonical !== value || !Number.isFinite(numeric) || numeric < 1 || numeric > 100 || String(numeric) !== canonical) {
+      throw new RangeError('Volume 1s threshold is invalid or inexact at the legacy boundary');
+    }
+    return this.engine.setVolume1sMultiple(numeric);
+  }
+
+  setIntakePaused(paused: boolean): boolean {
+    return this.engine.setIntakePaused(paused);
+  }
+
+  intakePaused(): boolean {
+    return this.engine.intakePaused();
+  }
+
+  /**
+   * Pure cached-owner injection only. The runtime exposes no private refresh
+   * or signed transport through this seam.
+   */
+  applyObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    return this.observedOrderFocusCoordinator === null
+      ? this.engine.observedOrderFocusReadback(
+          'REJECTED_PERSISTENCE_UNAVAILABLE',
+          false,
+          ['OBSERVED_ORDER_FOCUS_PERSISTENCE_UNAVAILABLE'],
+        )
+      : this.observedOrderFocusCoordinator.apply(snapshot);
   }
 
   private async refreshUniverse(generation: number): Promise<void> {
@@ -253,6 +464,9 @@ export class VolumeRuntime {
     const nextKey = nextSymbols.join(',');
     this.eligibleSymbols = nextSymbols;
     this.eligibleSymbolSet = new Set(nextSymbols);
+    this.eligibleBaseBySymbol = new Map(
+      metas.filter((meta) => meta.eligible).map((meta) => [meta.symbol, meta.base]),
+    );
     for (const symbol of this.seeded) if (!this.eligibleSymbolSet.has(symbol)) this.seeded.delete(symbol);
     for (const symbol of this.symbolLastTradeTs.keys()) {
       if (!this.eligibleSymbolSet.has(symbol)) this.symbolLastTradeTs.delete(symbol);
@@ -361,10 +575,48 @@ export class VolumeRuntime {
       return;
     }
     if (!this.engine.onTrade(mapped.tick, mapped.printCount)) return;
+    const previousRawTradeId = this.lastRawTradeId.get(mapped.tick.symbol);
+    const continuity = previousRawTradeId === undefined
+      ? 'UNKNOWN' as const
+      : candidate.f === previousRawTradeId + 1
+        ? 'CONTIGUOUS' as const
+        : 'GAP' as const;
     this.lastAggTradeId.set(mapped.tick.symbol, candidate.a as number);
+    this.lastRawTradeId.set(mapped.tick.symbol, candidate.l as number);
     this.lastTradeTs = mapped.tick.ts;
     this.symbolLastTradeTs.set(mapped.tick.symbol, mapped.tick.ts);
     this.tradeMessages += 1;
+    const baseAsset = this.eligibleBaseBySymbol.get(mapped.tick.symbol);
+    if (baseAsset !== undefined) {
+      this.publishEvidence(Object.freeze({
+        kind: 'SPOT_AGG_TRADE' as const,
+        generation,
+        revision: this.nextEvidenceRevision(),
+        receivedAtMs: Date.now(),
+        continuity,
+        baseAsset,
+        raw: Object.freeze({ ...(raw as RawAggTrade) }),
+      }));
+    }
+  }
+
+  private nextEvidenceRevision(): number {
+    if (!Number.isSafeInteger(this.evidenceRevision) || this.evidenceRevision >= Number.MAX_SAFE_INTEGER) {
+      throw new RangeError('volume evidence revision exhausted');
+    }
+    this.evidenceRevision += 1;
+    return this.evidenceRevision;
+  }
+
+  private publishEvidence(cut: VolumeRuntimeEvidenceCut): void {
+    try {
+      this.evidenceObserver?.(cut);
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.evidence-observer',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private onStreamStatus(name: string, status: FeedStatus, generation: number, streamEpoch: number): void {
@@ -534,6 +786,7 @@ export class VolumeRuntime {
     const threshold = positive(config.minQuoteVolume24h)
       ? config.minQuoteVolume24h
       : this.engine.cfg.minQuoteVolume24hUsd;
+    this.engine.setMinimumQuoteVolume24hUsd(threshold);
     return String(threshold);
   }
 
@@ -628,6 +881,15 @@ export class VolumeRuntime {
           direction: proposal.direction,
           confidence: proposal.confidence,
           reason: proposal.reason,
+          proposalRevision: proposal.proposalRevision,
+          proposalDigest: proposal.proposalDigest,
+          configurationRevision: proposal.configurationRevision,
+          featureObservedAtMs: proposal.featureObservedAtMs,
+          expiresAtMs: proposal.expiresAtMs,
+          baselineVolume: proposal.baselineVolume,
+          currentVolume1m: proposal.currentVolume1m,
+          tradeCountMultiple: proposal.tradeCountMultiple,
+          riskResult: proposal.riskResult,
         } : null,
       };
     }).filter((row): row is NonNullable<typeof row> => row !== null);

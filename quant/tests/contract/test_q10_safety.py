@@ -17,6 +17,7 @@ MODEL_SOURCES = tuple(
         "contracts.py",
         "engine.py",
         "estimators.py",
+        "focus_budget.py",
         "metrics.py",
         "quantize.py",
         "split.py",
@@ -28,6 +29,13 @@ PURE_CONTRACT_SOURCES = tuple(
     MODELS_DIR / name for name in ("__init__.py", "contracts.py", "split.py")
 )
 CAMPAIGN_SCRIPT = QUANT_ROOT / "scripts" / "q10_model_campaign.py"
+
+
+def test_the_model_module_inventory_is_exact() -> None:
+    observed = sorted(path.name for path in MODELS_DIR.glob("*.py"))
+    expected = sorted(path.name for path in MODEL_SOURCES)
+    assert observed == expected
+
 
 FORBIDDEN_NEEDLES = (
     "os.environ",
@@ -166,8 +174,23 @@ def test_committed_artifacts_are_canonical_and_float_free() -> None:
         parse_canonical_object(path.read_bytes())
 
 
-def test_no_model_persistence_interfaces_are_exposed() -> None:
+def test_no_file_model_persistence_interfaces_are_exposed() -> None:
     for path in MODEL_SOURCES:
         source = path.read_text(encoding="utf-8").lower()
-        for needle in ("save_model", "load_model", "dump(", "loads(", "to_json("):
+        for needle in ("save_model", "dump(", "loads(", "to_json("):
             assert needle not in source, f"{path.name}: {needle}"
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "load_model"
+            ):
+                continue
+            assert len(node.args) == 1
+            argument = node.args[0]
+            message = f"{path.name}: model loading must use bounded in-memory UBJ bytes"
+            assert isinstance(argument, ast.Call), message
+            assert isinstance(argument.func, ast.Name), message
+            assert argument.func.id == "bytearray", message
+            assert len(argument.args) == 1, message

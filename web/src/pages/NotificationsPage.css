@@ -108,7 +108,7 @@
 .notifx-mark-read:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .notifx-mark-read:disabled { color: var(--faint); cursor: default; }
 
-.notifx-week { padding-top: 4px; }
+.notifx-week { grid-template-columns: repeat(8, minmax(0, 1fr)); padding-top: 4px; }
 .notifx-week > button { min-height: 118px; }
 .notifx-week .notifx-count-bad { color: var(--down); }
 .notifx-week .notifx-count-good { color: var(--up); }
@@ -151,9 +151,9 @@
 
 .notifx-alert {
   display: grid;
-  grid-template-columns: 42px minmax(320px, 1fr) 160px 68px 100px;
+  grid-template-columns: 42px minmax(280px, 1fr) 160px 68px 100px 150px;
   align-items: center;
-  min-width: 790px;
+  min-width: 900px;
   min-height: 58px;
   padding: 0 14px;
   border-bottom: 1px solid var(--line);
@@ -211,6 +211,8 @@
 .notifx-status.critical { border-color: color-mix(in srgb, var(--down) 25%, var(--line)); color: var(--down); }
 .notifx-status.warning { border-color: color-mix(in srgb, #d39425 28%, var(--line)); color: #b77b13; }
 .notifx-status.resolved { border-color: color-mix(in srgb, var(--up) 25%, var(--line)); color: var(--up); }
+.notifx-alert > .pcr-incident-ack,
+.notifx-alert > .pcr-incident-ack-state { justify-self: end; }
 
 .notifx-routing { border-top: 0; }
 .notifx-routing-intro {

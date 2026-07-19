@@ -94,8 +94,8 @@ function controlCatalogFixture() {
     candidateSha256: 'e'.repeat(64),
     sealSha256: 'f'.repeat(64),
     declaredCount: 14,
-    wiredSourceCount: 4,
-    notConfiguredCount: 9,
+    wiredSourceCount: 5,
+    notConfiguredCount: 8,
     ownerGatedCount: 1,
     rows: structuredClone(PROOF_CONTROL_ROWS),
   };

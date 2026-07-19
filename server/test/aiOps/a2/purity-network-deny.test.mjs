@@ -11,13 +11,13 @@ import { connect as tlsConnect } from 'node:tls';
 import { lookup as dnsLookup, Resolver as DnsResolver } from 'node:dns';
 import { resolve as dnsPromiseResolve, Resolver as DnsPromiseResolver } from 'node:dns/promises';
 import { Socket as DatagramSocket } from 'node:dgram';
+import { readAiOpsGitIdentity } from '../../../../test/aiOps/a5/git-identity.mjs';
 
 const root = new URL('../../../../', import.meta.url).pathname;
 const productionRoot = join(root, 'server/src/aiOps/runtime');
 const fixtureRoot = join(root, 'fixtures/aiOps/a2');
 const testRoot = join(root, 'server/test/aiOps/a2');
 const receiptRoot = join(root, 'docs/archive/aiOps/a2');
-const donorBranch = 'port-a2-20260716';
 const ratifiedRoots = [productionRoot, fixtureRoot, testRoot, receiptRoot];
 
 function filesBelow(directory) {
@@ -42,8 +42,8 @@ test('production runtime contains no ambient I/O, clock, randomness, environment
 });
 
 test('all touched paths remain inside the four ratified A2 path families', () => {
-  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: root, encoding: 'utf8' }).trim();
-  if (branch !== donorBranch) {
+  const identity = readAiOpsGitIdentity(root, 'A2');
+  if (identity.mode === 'INTEGRATED') {
     const currentPaths = ratifiedRoots
       .flatMap((directory) => filesBelow(directory))
       .map((path) => relative(root, path).split('\\').join('/'))

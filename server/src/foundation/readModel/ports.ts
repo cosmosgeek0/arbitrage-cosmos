@@ -19,8 +19,228 @@
  *
  * Pure module: no I/O, no clocks, no env, no import-time side effects.
  */
+import { isProxy } from 'node:util/types';
 import type { Completeness, DataAuthority, ValidationIssue } from '../contracts/index.js';
 import { isCompleteness, isDataAuthority, isValidUtcMillis } from '../contracts/index.js';
+
+// ---------- guarded plain-data inspection ----------
+
+export interface OwnDataRecordInspection {
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly issues: readonly ValidationIssue[];
+}
+
+export interface OwnDataArrayInspection {
+  readonly isArray: boolean;
+  readonly shapeValid: boolean;
+  readonly values: readonly unknown[];
+  readonly invalidElementIndices: readonly number[];
+  readonly declaredLength: number | null;
+  readonly limitExceeded: boolean;
+}
+
+export const MAX_READ_MODEL_RECORDS_PER_KIND = 10_000 as const;
+const MAX_REPORTED_SHAPE_ISSUES = 128;
+
+/** Node's internal-slot check does not invoke Proxy traps, including revoked Proxies. */
+export function isProxyValue(value: unknown): boolean {
+  return ((typeof value === 'object' && value !== null) || typeof value === 'function')
+    && isProxy(value);
+}
+
+/**
+ * Read only named own data descriptors. Accessors, inherited fields, exotic
+ * objects, and Proxies are rejected without invoking user code.
+ */
+export function inspectOwnDataRecord(
+  input: unknown,
+  keys: readonly string[],
+  path = '',
+): OwnDataRecordInspection {
+  const values = Object.create(null) as Record<string, unknown>;
+  const issues: ValidationIssue[] = [];
+  const issuePath = (key = ''): string => path.length === 0 ? key : key.length === 0 ? path : `${path}.${key}`;
+
+  const objectLike = (typeof input === 'object' && input !== null) || typeof input === 'function';
+  const proxy = isProxyValue(input);
+  if (!objectLike || proxy) {
+    return {
+      values: Object.freeze(values),
+      issues: Object.freeze([{
+        path,
+        code: proxy ? 'PROXY_NOT_ALLOWED' : 'OBJECT_REQUIRED',
+        message: proxy
+          ? `${path || 'value'} must not be a Proxy`
+          : `${path || 'value'} must be a plain object`,
+      }]),
+    };
+  }
+
+  try {
+    const record = input as object;
+    if (Array.isArray(record)) {
+      issues.push({
+        path,
+        code: 'OBJECT_REQUIRED',
+        message: `${path || 'value'} must be a plain object`,
+      });
+    }
+    const prototype = Object.getPrototypeOf(record);
+    if (prototype !== Object.prototype && prototype !== null) {
+      issues.push({
+        path,
+        code: 'PLAIN_OBJECT_REQUIRED',
+        message: `${path || 'value'} must have Object.prototype or null prototype`,
+      });
+    }
+    const allowed = new Set<string>(keys);
+    const ownKeys = Reflect.ownKeys(record);
+    let reported = 0;
+    for (const ownKey of ownKeys) {
+      if (typeof ownKey !== 'string') {
+        if (reported < MAX_REPORTED_SHAPE_ISSUES) {
+          issues.push({
+            path,
+            code: 'SYMBOL_FIELD_NOT_ALLOWED',
+            message: `${path || 'value'} must not contain symbol fields`,
+          });
+        }
+        reported += 1;
+      } else if (!allowed.has(ownKey)) {
+        if (reported < MAX_REPORTED_SHAPE_ISSUES) {
+          issues.push({
+            path: issuePath(ownKey),
+            code: 'UNKNOWN_FIELD',
+            message: `unexpected field '${ownKey.slice(0, 200)}'`,
+          });
+        }
+        reported += 1;
+      }
+    }
+    if (reported > MAX_REPORTED_SHAPE_ISSUES) {
+      issues.push({
+        path,
+        code: 'SHAPE_ISSUE_LIMIT_EXCEEDED',
+        message: `${path || 'value'} contains more than ${MAX_REPORTED_SHAPE_ISSUES} unsupported fields`,
+      });
+    }
+    for (const key of keys) {
+      const descriptor = Object.getOwnPropertyDescriptor(record, key);
+      if (descriptor === undefined) continue;
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        issues.push({
+          path: issuePath(key),
+          code: 'OWN_DATA_PROPERTY_REQUIRED',
+          message: `${issuePath(key)} must be an own data property; accessors are not invoked`,
+        });
+        continue;
+      }
+      values[key] = descriptor.value;
+    }
+  } catch {
+    issues.push({
+      path,
+      code: 'PROPERTY_INSPECTION_FAILED',
+      message: `${path || 'value'} property descriptors could not be inspected safely`,
+    });
+  }
+  return { values: Object.freeze(values), issues: Object.freeze(issues) };
+}
+
+/** Snapshot an Array's own index data descriptors without invoking element accessors. */
+export function inspectOwnDataArray(
+  input: unknown,
+  maxLength: number = MAX_READ_MODEL_RECORDS_PER_KIND,
+): OwnDataArrayInspection {
+  if (typeof input !== 'object' || input === null || isProxyValue(input)) {
+    return {
+      isArray: false,
+      shapeValid: false,
+      values: Object.freeze([]),
+      invalidElementIndices: Object.freeze([]),
+      declaredLength: null,
+      limitExceeded: false,
+    };
+  }
+  try {
+    if (!Array.isArray(input)) {
+      return {
+        isArray: false,
+        shapeValid: false,
+        values: Object.freeze([]),
+        invalidElementIndices: Object.freeze([]),
+        declaredLength: null,
+        limitExceeded: false,
+      };
+    }
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(input, 'length');
+    if (lengthDescriptor === undefined || !Object.prototype.hasOwnProperty.call(lengthDescriptor, 'value')) {
+      return {
+        isArray: false,
+        shapeValid: false,
+        values: Object.freeze([]),
+        invalidElementIndices: Object.freeze([]),
+        declaredLength: null,
+        limitExceeded: false,
+      };
+    }
+    const length = lengthDescriptor.value;
+    if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) {
+      return {
+        isArray: false,
+        shapeValid: false,
+        values: Object.freeze([]),
+        invalidElementIndices: Object.freeze([]),
+        declaredLength: null,
+        limitExceeded: false,
+      };
+    }
+    if (length > maxLength) {
+      return {
+        isArray: true,
+        shapeValid: Object.getPrototypeOf(input) === Array.prototype,
+        values: Object.freeze([]),
+        invalidElementIndices: Object.freeze([]),
+        declaredLength: length,
+        limitExceeded: true,
+      };
+    }
+    const values = new Array<unknown>(length);
+    const invalidElementIndices: number[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
+      if (descriptor === undefined || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        values[index] = undefined;
+        invalidElementIndices.push(index);
+      } else {
+        values[index] = descriptor.value;
+      }
+    }
+    const shapeValid = Object.getPrototypeOf(input) === Array.prototype
+      && Reflect.ownKeys(input).every((key) => key === 'length' || (
+        typeof key === 'string'
+          && /^(0|[1-9][0-9]*)$/.test(key)
+          && Number(key) < length
+      ));
+    return {
+      isArray: true,
+      shapeValid,
+      values: Object.freeze(values),
+      invalidElementIndices: Object.freeze(invalidElementIndices),
+      declaredLength: length,
+      limitExceeded: false,
+    };
+  } catch {
+    return {
+      isArray: false,
+      shapeValid: false,
+      values: Object.freeze([]),
+      invalidElementIndices: Object.freeze([]),
+      declaredLength: null,
+      limitExceeded: false,
+    };
+  }
+}
 
 // ---------- per-record ports ----------
 
@@ -146,12 +366,31 @@ function checkString(
  * Never throws. Record-level validation lives in canonicalize.ts so that a
  * single malformed record rejects THAT record, not the whole snapshot.
  */
-export function validateEngineSnapshotInput(input: unknown): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return [{ path: '', code: 'OBJECT_REQUIRED', message: 'engine snapshot must be a plain object' }];
-  }
-  const rec = input as Record<string, unknown>;
+const ENGINE_SNAPSHOT_KEYS = [
+  'sourceId',
+  'snapshotTimeMs',
+  'receivedAtMs',
+  'maxAgeMs',
+  'authority',
+  'completeness',
+  'configVersion',
+  'decisions',
+  'proposals',
+] as const;
+
+export interface EngineSnapshotInspection {
+  readonly snapshot: Readonly<Record<string, unknown>>;
+  readonly decisions: readonly unknown[];
+  readonly proposals: readonly unknown[];
+  readonly decisionCount: number;
+  readonly proposalCount: number;
+  readonly issues: readonly ValidationIssue[];
+}
+
+export function inspectEngineSnapshotInput(input: unknown): EngineSnapshotInspection {
+  const inspected = inspectOwnDataRecord(input, ENGINE_SNAPSHOT_KEYS, 'snapshot');
+  const issues: ValidationIssue[] = [...inspected.issues];
+  const rec = inspected.values;
   checkString(issues, 'sourceId', rec.sourceId, 200);
   if (rec.snapshotTimeMs !== null && !isValidUtcMillis(rec.snapshotTimeMs)) {
     issues.push({
@@ -183,11 +422,51 @@ export function validateEngineSnapshotInput(input: unknown): ValidationIssue[] {
   if (rec.configVersion !== null && (typeof rec.configVersion !== 'string' || rec.configVersion.length === 0 || rec.configVersion.length > 200)) {
     issues.push({ path: 'configVersion', code: 'CONFIG_VERSION_INVALID', message: 'configVersion must be null or a non-empty string (<=200 chars)' });
   }
-  if (!Array.isArray(rec.decisions)) {
+  const decisions = inspectOwnDataArray(rec.decisions);
+  if (!decisions.isArray) {
     issues.push({ path: 'decisions', code: 'ARRAY_REQUIRED', message: 'decisions must be an array' });
+  } else if (decisions.limitExceeded) {
+    issues.push({
+      path: 'decisions',
+      code: 'ARRAY_LIMIT_EXCEEDED',
+      message: `decisions must contain at most ${MAX_READ_MODEL_RECORDS_PER_KIND} records`,
+    });
+  } else if (!decisions.shapeValid) {
+    issues.push({ path: 'decisions', code: 'ARRAY_SHAPE_INVALID', message: 'decisions must be a plain Array with only index data fields' });
   }
-  if (!Array.isArray(rec.proposals)) {
+  const proposals = inspectOwnDataArray(rec.proposals);
+  if (!proposals.isArray) {
     issues.push({ path: 'proposals', code: 'ARRAY_REQUIRED', message: 'proposals must be an array' });
+  } else if (proposals.limitExceeded) {
+    issues.push({
+      path: 'proposals',
+      code: 'ARRAY_LIMIT_EXCEEDED',
+      message: `proposals must contain at most ${MAX_READ_MODEL_RECORDS_PER_KIND} records`,
+    });
+  } else if (!proposals.shapeValid) {
+    issues.push({ path: 'proposals', code: 'ARRAY_SHAPE_INVALID', message: 'proposals must be a plain Array with only index data fields' });
   }
-  return issues;
+  const snapshot = Object.freeze({
+    sourceId: rec.sourceId,
+    snapshotTimeMs: rec.snapshotTimeMs,
+    receivedAtMs: rec.receivedAtMs,
+    maxAgeMs: rec.maxAgeMs,
+    authority: rec.authority,
+    completeness: rec.completeness,
+    configVersion: rec.configVersion,
+    decisions: decisions.values,
+    proposals: proposals.values,
+  });
+  return {
+    snapshot,
+    decisions: decisions.values,
+    proposals: proposals.values,
+    decisionCount: decisions.declaredLength ?? 0,
+    proposalCount: proposals.declaredLength ?? 0,
+    issues: Object.freeze(issues),
+  };
+}
+
+export function validateEngineSnapshotInput(input: unknown): ValidationIssue[] {
+  return [...inspectEngineSnapshotInput(input).issues];
 }

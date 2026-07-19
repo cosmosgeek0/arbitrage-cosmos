@@ -11,6 +11,8 @@ export const CORRELATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export const OPAQUE_CONTROL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 export const CONFIGURATION_REVISION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 export const PAYLOAD_DIGEST_PATTERN = /^(?:sha256:)?[a-f0-9]{64}$/;
+export const STRATEGY_SYMBOL_PATTERN = /^[A-Z0-9]{4,20}$/;
+export const POSITIVE_EXACT_DECIMAL_PATTERN = /^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/;
 const SENSITIVE_MATERIAL_PATTERN = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
 
 const DESIRED_STATES = new Set(['STOPPED', 'RUNNING', 'PAUSED']);
@@ -67,6 +69,64 @@ export function validateControlMutation(value: unknown): MutationValidation {
         return invalid('Intake mutation requires one boolean paused value.');
       }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_BASIS_INTAKE':
+      if (!exactKeys(value, ['command', 'paused']) || typeof value.paused !== 'boolean') {
+        return invalid('Basis intake mutation requires one boolean paused value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_VOLUME_INTAKE':
+      if (!exactKeys(value, ['command', 'paused']) || typeof value.paused !== 'boolean') {
+        return invalid('Volume intake mutation requires one boolean paused value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_BASIS_SYMBOL_POLICY':
+    case 'SET_VOLUME_SYMBOL_POLICY':
+      if (!exactKeys(value, ['command', 'action', 'symbol'])
+        || (value.action !== 'BLOCK' && value.action !== 'ALLOW')
+        || typeof value.symbol !== 'string'
+        || !STRATEGY_SYMBOL_PATTERN.test(value.symbol)) {
+        return invalid('Strategy symbol policy requires one canonical symbol and BLOCK or ALLOW.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'REDUCE_SIZE_CEILING': {
+      const decimal = value.maximumNotionalUsd;
+      const digits = typeof decimal === 'string' ? decimal.replace('.', '').length : 0;
+      if (!exactKeys(value, ['command', 'scope', 'maximumNotionalUsd'])
+        || (value.scope !== 'SYSTEM' && value.scope !== 'BASIS' && value.scope !== 'VOLUME')
+        || typeof decimal !== 'string'
+        || !POSITIVE_EXACT_DECIMAL_PATTERN.test(decimal)
+        || digits > 96) {
+        return invalid('Size ceiling reduction requires one scope and one canonical positive exact decimal.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    }
+    case 'SET_STRATEGY_THRESHOLD': {
+      const decimal = value.value;
+      const pairValid = (value.strategy === 'BASIS' && value.threshold === 'MIN_NET_BASIS_PCT')
+        || (value.strategy === 'VOLUME' && value.threshold === 'VOLUME_1S_MULTIPLE');
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const bounded = value.strategy === 'BASIS'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (!exactKeys(value, ['command', 'strategy', 'threshold', 'value'])
+        || !pairValid
+        || typeof decimal !== 'string'
+        || !POSITIVE_EXACT_DECIMAL_PATTERN.test(decimal)
+        || decimal.replace('.', '').length > 12
+        || !Number.isFinite(numeric)
+        || !bounded) {
+        return invalid('Strategy threshold requires one approved strategy/key pair and a bounded canonical value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    }
+    case 'PIN_FOCUS':
+      if (!exactKeys(value, ['command', 'symbol', 'pinned'])
+        || typeof value.symbol !== 'string'
+        || !STRATEGY_SYMBOL_PATTERN.test(value.symbol)
+        || typeof value.pinned !== 'boolean') {
+        return invalid('Focus pin requires one canonical symbol and boolean pinned value.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
     case 'SET_SAFE_MODE':
       if (!exactKeys(value, ['command', 'safeMode']) || typeof value.safeMode !== 'string') {
         return invalid('Mode mutation requires one safeMode value.');
@@ -114,6 +174,21 @@ export function validateControlMutation(value: unknown): MutationValidation {
         || typeof value.componentId !== 'string'
         || !COMPONENT_IDS.has(value.componentId)
       ) return invalid('Restart requires one known componentId.');
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'CLEAR_DEPLOYMENT_FREEZE':
+      if (!exactKeys(value, ['command', 'expectedObservedAtUtc'])
+        || typeof value.expectedObservedAtUtc !== 'string'
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value.expectedObservedAtUtc)
+        || !Number.isFinite(Date.parse(value.expectedObservedAtUtc))) {
+        return invalid('Freeze clear requires one exact canonical observedAtUtc revision.');
+      }
+      return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
+    case 'SET_PUBLIC_SOURCE_LIFECYCLE':
+      if (!exactKeys(value, ['command', 'sourceId', 'action'])
+        || (value.sourceId !== 'public-spot-source' && value.sourceId !== 'public-usdm-source')
+        || (value.action !== 'ISOLATE' && value.action !== 'RESTART')) {
+        return invalid('Public-source lifecycle control requires one known sourceId and ISOLATE or RESTART.');
+      }
       return { ok: true, mutation: value as unknown as Readonly<SystemControlMutation> };
   }
   return invalid('Mutation command is unsupported.');

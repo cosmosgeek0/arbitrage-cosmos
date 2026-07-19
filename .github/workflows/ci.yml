@@ -13,21 +13,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Typecheck, build, and deterministic tests
+  canonical-full:
+    name: Canonical full matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # Provenance and Product Assurance verify reachable historical donor
           # objects. The default depth of one cannot supply that evidence.
           fetch-depth: 0
 
       - name: Use pinned Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Use pinned Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: quant/.python-version
+
+      - name: Use pinned uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: 0.11.28
+          enable-cache: true
+          cache-dependency-glob: quant/uv.lock
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Synchronize complete locked Quant environment
+        run: uv sync --project quant --locked --all-groups --all-extras --python 3.13.14
+
+      - name: Run canonical full matrix
+        run: npm run test:all
+
+  ops-local:
+    name: Bounded local operations proofs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Use pinned Node.js
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -35,5 +73,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Verify
-        run: npm test
+      - name: Run generic local operations proofs
+        run: bash ops/tests/run-all.sh
+
+      - name: Run I00 local operations proofs
+        run: bash ops/tests/i00/run-all.sh

@@ -11,14 +11,15 @@
  * Kill switch converts a would-be proposal into a named reject at the end —
  * the engine keeps seeing, it just cannot arm.
  */
-import type { Decision, DecisionKind, RejectCode, ScanContext, Scanner, StrategyId } from '../v0/types.js';
+import type { Decision, DecisionKind, ScanContext, Scanner, StrategyId } from '../v0/types.js';
 import type { BasisConfig } from './config.js';
 import type { BasisDirection, BasisFeatureSnapshot } from './types.js';
+import type { BasisRejectCode } from './rejectVocabulary.js';
 
 interface DirectionVerdict {
   direction: BasisDirection;
   kind: DecisionKind;
-  rejectCode: RejectCode | null;
+  rejectCode: BasisRejectCode | null;
   human: string;
   gapPct: number | null;
   netEdgePct: number | null;
@@ -101,7 +102,7 @@ export class BasisScanner implements Scanner {
     const funding = direction === 'long_spot_short_perp' ? s.funding.A : s.funding.B;
     const liq = direction === 'long_spot_short_perp' ? s.liquidity.A : s.liquidity.B;
     const edge = direction === 'long_spot_short_perp' ? s.edge.A : s.edge.B;
-    const v = (kind: DecisionKind, rejectCode: RejectCode | null, human: string): DirectionVerdict => ({
+    const v = (kind: DecisionKind, rejectCode: BasisRejectCode | null, human: string): DirectionVerdict => ({
       direction,
       kind,
       rejectCode,
@@ -286,6 +287,25 @@ export class BasisScanner implements Scanner {
         gapPersistTicks: gap?.persistTicks ?? null,
         gapSlopePctPerMin: gap?.slopePctPerMin ?? null,
         gapStabilityCv: gap?.stabilityCv ?? null,
+        gapCausalQuadrant: gap?.causality.quadrant ?? 'UNKNOWN',
+        gapTrend: gap?.causality.trend ?? 'UNKNOWN',
+        gapInitiatingMarket: gap?.causality.initiatingMarket ?? 'UNKNOWN',
+        gapInitiatingSourceTs: gap?.causality.initiatingSourceTs ?? null,
+        gapInitiatingSourceSequence: gap?.causality.initiatingSourceSequence ?? null,
+        gapCausalEventSequence: gap?.causality.acceptedEventSequence ?? null,
+        gapInitiatingPriceTrend: gap?.causality.initiatingPriceTrend ?? 'UNKNOWN',
+        gapCausalSource: gap?.causality.source ?? 'UNKNOWN',
+        gapCausalAgeMs: gap?.causality.ageMs ?? null,
+        gapCausalPersistenceEvents: gap?.causality.persistenceEvents ?? 0,
+        gapCausalSlopePctPerMin: gap?.causality.slopePctPerMin ?? null,
+        gapEvolution: gap?.causality.evolution ?? 'UNKNOWN',
+        gapFollowerMarket: gap?.causality.followerMarket ?? 'UNKNOWN',
+        gapFollowerConfirmation: gap?.causality.followerConfirmation ?? 'UNKNOWN',
+        gapFollowerSourceTs: gap?.causality.followerSourceTs ?? null,
+        gapFollowerSourceSequence: gap?.causality.followerSourceSequence ?? null,
+        gapLastCausalSourceTs: gap?.causality.lastSourceTs ?? null,
+        gapLastCausalSourceSequence: gap?.causality.lastSourceSequence ?? null,
+        gapLastCausalEventSequence: gap?.causality.lastAcceptedEventSequence ?? null,
         fundingRate: bf.fundingRate,
         msToFunding: funding?.msToFunding ?? null,
         fundingCarryPctOverHold: funding?.carryPctOverHold ?? null,

@@ -13,6 +13,15 @@ import { TradingViewWidget } from '../components/TradingViewWidget';
 import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
+import {
+  parseSymbolAccountContext,
+  parseTokenIntelligence,
+  parseTokenNewsContext,
+  type BorrowTruthState,
+  type SymbolAccountContext,
+  type TokenIntelligenceRead,
+  type TokenNewsContext,
+} from '../lib/tokenIntelligence';
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { tokenName } from '../lib/tokenNames';
@@ -102,7 +111,6 @@ interface MoneyFlow {
   sampled: boolean;
 }
 
-interface OiPoint { t: number; contracts: number; notional: number }
 interface BasisPoint { t: number; futuresPrice: number; indexPrice: number; basis: number; basisRatePct: number }
 interface FuturesRatioPoint { t: number; ratio: number; longPct: number; shortPct: number }
 interface FuturesTakerFlowPoint { t: number; buyVol: number; sellVol: number; ratio: number }
@@ -112,7 +120,6 @@ interface FuturesTelemetry {
   updatedAt: number;
   available: boolean;
   errors: string[];
-  openInterest: OiPoint[];
   topAccountRatio: FuturesRatioPoint[];
   topPositionRatio: FuturesRatioPoint[];
   globalRatio: FuturesRatioPoint[];
@@ -797,7 +804,7 @@ function BasisCard({ symbol, base, hasPerp, market }: { symbol: string; base: st
   );
 }
 
-type IntelTab = 'funding' | 'oi' | 'volume' | 'liq' | 'basis';
+type IntelTab = 'funding' | 'volume' | 'liq' | 'basis';
 
 interface IntelPoint { t: number; a: number; b?: number }
 interface IntelDataset {
@@ -831,16 +838,6 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
   }
 
   if (!hasPerp) return { points: [], price: [], liqSince: null };
-
-  if (tab === 'oi') {
-    const rows = await fetchJson<OiPoint[]>(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`, { signal });
-    const normalized = normalizeTimedRows(Array.isArray(rows) ? rows : [], (row) => Number.isFinite(row.notional) && row.notional > 0);
-    return {
-      points: normalized.map((row) => ({ t: row.t, a: row.notional })),
-      price: await priceFor(opt, 500),
-      liqSince: null,
-    };
-  }
 
   if (tab === 'funding') {
     const rows = await fetchJson<{ t: number; ratePct: number }[]>(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`, { signal });
@@ -904,22 +901,20 @@ function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp
 
 const INTEL_OPTIONS: Record<IntelTab, { id: string; label: string }[]> = {
   funding: [{ id: '30d', label: '30D' }, { id: '90d', label: '90D' }, { id: 'all', label: 'All' }],
-  oi: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
   volume: [{ id: '1m', label: '1m' }, { id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }, { id: '1w', label: 'All' }],
   liq: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
   basis: [{ id: '5m', label: '5m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '1d', label: '1D' }],
 };
 
-const INTEL_DEFAULT: Record<IntelTab, string> = { funding: '30d', oi: '1h', volume: '1h', liq: '1h', basis: '1h' };
+const INTEL_DEFAULT: Record<IntelTab, string> = { funding: '30d', volume: '1h', liq: '1h', basis: '1h' };
 const INTEL_TITLE: Record<IntelTab, string> = {
   funding: 'Funding Rate',
-  oi: 'Open Interest',
   volume: 'Perpetual Volume',
   liq: 'Liquidations',
   basis: 'Basis',
 };
 
-function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
+function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterest }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterest: TokenIntelligenceRead['openInterest'] | null }) {
   const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
   const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp))?.value;
   const [tab, setTab] = useState<IntelTab>(initialTab);
@@ -933,7 +928,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
   const [chartBox, setChartBox] = useState({ width: 1160, height: 380 });
 
   useEffect(() => {
-    const tabs: IntelTab[] = hasPerp ? ['funding', 'oi', 'volume', 'liq', 'basis'] : ['volume'];
+    const tabs: IntelTab[] = hasPerp ? ['funding', 'volume', 'liq', 'basis'] : ['volume'];
     for (const next of tabs) void requestIntelDataset(symbol, next, INTEL_DEFAULT[next], hasPerp).catch(() => undefined);
   }, [hasPerp, symbol]);
 
@@ -1048,7 +1043,6 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
     const priceLine = inRange.filter((point) => point.t >= t0 && point.t <= t1).map((point, index) => `${index ? 'L' : 'M'}${x(point.t)},${py(point.v)}`).join(' ');
     const valueLine = points.map((point, index) => `${index ? 'L' : 'M'}${xi(index)},${ay(point.a)}`).join(' ');
     const barWidth = Math.max(1.2, ((W - PAD_L - PAD_R) / points.length) * 0.58);
-    const oiArea = `${valueLine} L${xi(points.length - 1)},${H - PAD_B} L${xi(0)},${H - PAD_B} Z`;
     const aTicks = Array.from({ length: 4 }, (_, index) => aMin + ((index + 0.5) / 4) * (aMax - aMin));
     const pTicks = Array.from({ length: 4 }, (_, index) => pMin + ((index + 0.5) / 4) * (pMax - pMin));
     const times = [0, Math.floor(points.length / 3), Math.floor((2 * points.length) / 3), points.length - 1];
@@ -1058,7 +1052,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
       for (const point of inRange) if (Math.abs(point.t - time) < Math.abs(closest.t - time)) closest = point;
       return closest.v;
     };
-    return { x, xi, ay, py, priceLine, valueLine, barWidth, oiArea, aTicks, pTicks, times, priceAt, zeroY: ay(0) };
+    return { x, xi, ay, py, priceLine, valueLine, barWidth, aTicks, pTicks, times, priceAt, zeroY: ay(0) };
   }, [H, W, points, price, tab]);
 
   const indexFromMouse = (clientX: number): number | null => {
@@ -1083,16 +1077,10 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
       { label: 'Next Settlement', value: hasPerp && market?.nextFundingTime ? countdown(market.nextFundingTime) : '—', note: 'Exchange Schedule' },
       { label: 'Latest Print', value: selected ? `${selected.a.toFixed(4)}%` : '—', note: opt === 'all' ? 'Full Available History' : opt.toUpperCase() + ' Window', tone: selected?.a && selected.a < 0 ? 'down' : 'up' },
     ],
-    oi: [
-      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only', note: 'USD Notional' },
-      { label: '5m Change', value: fmtPct(openInterestSnapshot?.changePct, 2), note: 'Latest Two Observations', tone: (openInterestSnapshot?.changePct ?? 0) < 0 ? 'down' : 'up' },
-      { label: 'Perpetual Volume', value: fmtMoney(market?.perpVolume24h), note: 'Rolling 24 Hours' },
-      { label: 'OI / Volume', value: market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: 'Leverage Density' },
-    ],
     volume: [
       { label: hasPerp ? 'Perpetual Volume' : 'Spot Volume', value: hasPerp ? fmtMoney(market?.perpVolume24h) : fmtMoney(market?.quoteVolume24h), note: 'Rolling 24 Hours' },
       { label: 'Latest Interval', value: selected ? '$' + fmtCompact(selected.a) : '—', note: INTEL_OPTIONS.volume.find((item) => item.id === opt)?.label ?? opt },
-      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only', note: hasPerp ? 'USD Notional' : 'No Perpetual Contract' },
+      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterest?.value?.quoteUsd) : 'Spot Only', note: hasPerp ? `${openInterest?.state ?? 'UNAVAILABLE'} · Owner snapshot` : 'No Perpetual Contract' },
       { label: 'OI / Volume', value: market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: hasPerp ? 'Leverage Density' : 'Not Applicable' },
     ],
     liq: [
@@ -1124,7 +1112,6 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
       </div>
       <div className="cgx-tabs tkx-intelligence-tabs" role="tablist" aria-label="Derivatives data">
         <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding</button>
-        <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} data-testid="token-cgx-oi" onClick={() => switchTab('oi')}>Open Interest</button>
         <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" onClick={() => switchTab('volume')}>Volume</button>
         <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" onClick={() => switchTab('liq')}>Liquidation</button>
         <button type="button" role="tab" aria-selected={tab === 'basis'} className={tab === 'basis' ? 'on' : ''} data-testid="token-cgx-basis" onClick={() => switchTab('basis')}>Basis</button>
@@ -1138,7 +1125,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
           </div>
         ))}
       </div>
-      <h3 className="cgx-title">{name} {INTEL_TITLE[tab]} <em className="tdx-src">{source}{tab === 'oi' ? ' · 30D Max Upstream' : ''}</em></h3>
+      <h3 className="cgx-title">{name} {INTEL_TITLE[tab]} <em className="tdx-src">{source}</em></h3>
       {requiresPerp && !hasPerp ? (
         <div className="tdx-cgx-empty"><p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual feed for this view.</p></div>
       ) : !model ? (
@@ -1170,8 +1157,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
               ))}
               {model.pTicks.map((value, index) => <text key={`p${index}`} x={W - PAD_R + 8} y={model.py(value) + 4} className="tdx-axis">{fmtPrice(value)}</text>)}
               {hov !== null && <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-              {tab === 'oi' && <path d={model.oiArea} fill="var(--accent)" opacity="0.11" />}
-              {(tab === 'oi' || tab === 'basis') && <path d={model.valueLine} fill="none" stroke="var(--accent)" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
+              {tab === 'basis' && <path d={model.valueLine} fill="none" stroke="var(--accent)" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
               {tab === 'volume' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={model.ay(point.a)} width={model.barWidth} height={Math.max(1, H - PAD_B - model.ay(point.a))} rx="1" fill="var(--accent)" opacity={hov === null ? 0.58 : hov === index ? 0.92 : 0.2} />)}
               {tab === 'funding' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={point.a >= 0 ? model.ay(point.a) : model.zeroY} width={model.barWidth} height={Math.max(1, Math.abs(model.ay(point.a) - model.zeroY))} rx="1" fill={point.a >= 0 ? 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.72 : hov === index ? 1 : 0.25} />)}
               {tab === 'liq' && points.map((point, index) => (
@@ -1212,290 +1198,216 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
   );
 }
 
-/* ==== The Coinglass panel — funding / open interest / volume / liquidations
-   (owner reference: coinglass.com/currencies/BTC). One dual-axis chart, the
-   token price overlaid, extended ranges, interval switching, Binance-format
-   hover tooltips. Liquidations are OUR recording of the live !forceOrder
-   stream — Binance publishes no history, so the panel says since when. ==== */
-type CgxTab = 'funding' | 'oi' | 'volume' | 'liq';
+const TOKEN_CAPABILITY_LABELS = [
+  ['ROLLING_ACTIVITY_FLOW', 'Rolling Flow'],
+  ['SPREAD_DEPTH_BOOK', 'Depth / Replenishment'],
+  ['CROSS_MARKET_LEADERSHIP', 'Cross-Market Lead'],
+  ['OPEN_INTEREST', 'Open Interest'],
+  ['FUNDING', 'Funding'],
+  ['VOLATILITY', 'Volatility'],
+  ['LIQUIDATION', 'Liquidations'],
+  ['CONTEXT', 'Context'],
+  ['SOURCE_QUALITY', 'Source Quality'],
+] as const;
 
-interface CgxPoint { t: number; a: number; b?: number }
-
-function CgxPanel({ symbol, base, name, hasPerp, market, openInterestSnapshot }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterestSnapshot: { usd: number; changePct: number | null } | null }) {
-  const [tab, setTab] = useState<CgxTab>('volume');
-  const [opt, setOpt] = useState<string>('1d');
-  const [points, setPoints] = useState<CgxPoint[]>([]);
-  const [price, setPrice] = useState<{ t: number; v: number }[]>([]);
-  const [liqSince, setLiqSince] = useState<number | null>(null);
-  const [hov, setHov] = useState<number | null>(null);
-  const [mouse, setMouse] = useState<{ x: number } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [chartBox, setChartBox] = useState({ width: 1160, height: 620 });
-
-  const OPTS: Record<CgxTab, { id: string; label: string }[]> = {
-    funding: [{ id: '30d', label: '30D' }, { id: '90d', label: '90D' }, { id: 'all', label: 'All' }],
-    oi: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
-    volume: [{ id: '1m', label: '1m' }, { id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '30m', label: '30m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }, { id: '1w', label: 'All' }],
-    liq: [{ id: '5m', label: '5m' }, { id: '15m', label: '15m' }, { id: '1h', label: '1H' }, { id: '4h', label: '4H' }, { id: '12h', label: '12H' }, { id: '1d', label: '1D' }],
-  };
-  const DEFAULT_OPT: Record<CgxTab, string> = { funding: 'all', oi: '1h', volume: '1d', liq: '1h' };
-
-  const switchTab = (next: CgxTab) => {
-    setTab(next);
-    setOpt(DEFAULT_OPT[next]);
-    setHov(null);
-  };
-
-  useEffect(() => {
-    let alive = true;
-    setPoints([]);
-    setPrice([]);
-    const priceFor = (interval: string, limit: number) =>
-      fetch(`/api/candles?symbol=${symbol}&interval=${interval}&limit=${limit}`)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((d: TvCandle[]) => (Array.isArray(d) ? d.map((c) => ({ t: c.t, v: c.c })) : []));
-
-    const load = async () => {
-      try {
-        if (tab === 'volume') {
-          const candles = (await fetch(`/api/candles?symbol=${symbol}&interval=${opt}&limit=1000`).then((r) => (r.ok ? r.json() : []))) as TvCandle[];
-          if (!alive || !Array.isArray(candles)) return;
-          setPoints(candles.map((c) => ({ t: c.t, a: c.qv || c.v * c.c })));
-          setPrice(candles.map((c) => ({ t: c.t, v: c.c })));
-        } else if (tab === 'oi' && hasPerp) {
-          const rows = (await fetch(`/api/futures/oi-hist?symbol=${symbol}&period=${opt}&limit=500`).then((r) => (r.ok ? r.json() : []))) as OiPoint[];
-          if (!alive || !Array.isArray(rows)) return;
-          setPoints(rows.map((r) => ({ t: r.t, a: r.notional })));
-          setPrice(await priceFor(opt === '12h' ? '12h' : opt, 500));
-        } else if (tab === 'funding' && hasPerp) {
-          const rows = (await fetch(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`).then((r) => (r.ok ? r.json() : []))) as { t: number; ratePct: number }[];
-          if (!alive || !Array.isArray(rows)) return;
-          const cut = opt === '30d' ? Date.now() - 30 * 864e5 : opt === '90d' ? Date.now() - 90 * 864e5 : 0;
-          setPoints(rows.filter((r) => r.t >= cut).map((r) => ({ t: r.t, a: r.ratePct })));
-          setPrice(await priceFor('8h', 1000));
-        } else if (tab === 'liq' && hasPerp) {
-          const ms: Record<string, number> = { '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '12h': 432e5, '1d': 864e5 };
-          const d = (await fetch(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${ms[opt] ?? 36e5}`).then((r) => (r.ok ? r.json() : null))) as { since: number; points: { t: number; long: number; short: number }[] } | null;
-          if (!alive || !d) return;
-          setLiqSince(d.since);
-          setPoints(d.points.map((p) => ({ t: p.t, a: p.long, b: p.short })));
-          setPrice(await priceFor(opt === '5m' ? '5m' : opt === '15m' ? '15m' : '1h', 1000));
-        }
-      } catch { /* honest empty */ }
-    };
-    void load();
-    const timer = setInterval(() => void load(), 60_000);
-    return () => { alive = false; clearInterval(timer); };
-  }, [symbol, tab, opt, hasPerp]);
-
-  useEffect(() => {
-    const host = wrapRef.current;
-    if (!host) return;
-    const measure = () => {
-      const width = host.getBoundingClientRect().width;
-      if (!Number.isFinite(width) || width <= 0) return;
-      const next = {
-        width: Math.round(width),
-        height: Math.round(Math.max(320, Math.min(440, width * 0.28))),
-      };
-      setChartBox((prev) => (
-        Math.abs(prev.width - next.width) > 2 || Math.abs(prev.height - next.height) > 2 ? next : prev
-      ));
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(measure);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, [points.length, tab]);
-
-  const W = chartBox.width;
-  const H = chartBox.height;
-  const PAD_L = 80;
-  const PAD_R = 80;
-  const PAD_B = 30;
-  const PAD_T = 14;
-
-  const model = useMemo(() => {
-    if (points.length < 3) return null;
-    const t0 = points[0].t;
-    const t1 = points[points.length - 1].t;
-    const x = (t: number) => PAD_L + ((t - t0) / Math.max(1, t1 - t0)) * (W - PAD_L - PAD_R);
-    const xi = (i: number) => x(points[i].t);
-    let aMin: number;
-    let aMax: number;
-    if (tab === 'funding') {
-      const vs = points.map((p) => p.a);
-      const m = Math.max(Math.abs(Math.min(...vs, 0)), Math.abs(Math.max(...vs, 0)), 1e-9);
-      aMin = -m * 1.1; aMax = m * 1.1;
-    } else if (tab === 'liq') {
-      const m = Math.max(...points.map((p) => Math.max(p.a, p.b ?? 0)), 1e-9);
-      aMin = -m * 1.1; aMax = m * 1.1;
-    } else {
-      aMin = 0;
-      aMax = Math.max(...points.map((p) => p.a), 1e-9) * 1.06;
-    }
-    const ay = (v: number) => PAD_T + ((aMax - v) / (aMax - aMin)) * (H - PAD_T - PAD_B);
-    const inRange = price.filter((p) => p.t >= t0 - 864e5 && p.t <= t1 + 864e5);
-    let pMin = Infinity;
-    let pMax = -Infinity;
-    for (const p of inRange) { if (p.v < pMin) pMin = p.v; if (p.v > pMax) pMax = p.v; }
-    if (!Number.isFinite(pMin)) { pMin = 0; pMax = 1; }
-    const span = Math.max(pMax - pMin, pMax * 1e-9, 1e-12);
-    pMin -= span * 0.08; pMax += span * 0.08;
-    const py = (v: number) => PAD_T + ((pMax - v) / (pMax - pMin)) * (H - PAD_T - PAD_B);
-    const priceLine = inRange.filter((p) => p.t >= t0 && p.t <= t1).map((p, i) => `${i ? 'L' : 'M'}${x(p.t)},${py(p.v)}`).join(' ');
-    const bw = Math.max(1.2, ((W - PAD_L - PAD_R) / points.length) * (tab === 'oi' ? 1 : 0.55));
-    const areaPath = tab === 'oi'
-      ? points.map((p, i) => `${i ? 'L' : 'M'}${xi(i)},${ay(p.a)}`).join(' ') + ` L${xi(points.length - 1)},${H - PAD_B} L${xi(0)},${H - PAD_B} Z`
-      : '';
-    const aTicks = Array.from({ length: 4 }, (_, i) => aMin + ((i + 0.5) / 4) * (aMax - aMin));
-    const pTicks = Array.from({ length: 4 }, (_, i) => pMin + ((i + 0.5) / 4) * (pMax - pMin));
-    const times = [0, Math.floor(points.length / 3), Math.floor((2 * points.length) / 3), points.length - 1];
-    const priceAt = (t: number): number | null => {
-      if (!inRange.length) return null;
-      let best = inRange[0];
-      for (const p of inRange) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
-      return best.v;
-    };
-    return { x, xi, ay, py, priceLine, bw, areaPath, aTicks, pTicks, times, priceAt, zeroY: ay(0) };
-  }, [points, price, tab]);
-
-  const idxFromMouse = (clientX: number): number | null => {
-    const r = wrapRef.current?.getBoundingClientRect();
-    if (!r || points.length < 2) return null;
-    const xv = ((clientX - r.left) / r.width) * W;
-    let best = 0;
-    let bd = Infinity;
-    for (let i = 0; i < points.length; i++) {
-      const d = Math.abs((model?.xi(i) ?? 0) - xv);
-      if (d < bd) { bd = d; best = i; }
-    }
-    return best;
-  };
-
-  const fmtA = (v: number): string =>
-    tab === 'funding' ? `${v.toFixed(4)}%` : '$' + fmtCompact(v);
-
-  const TAB_TITLE: Record<CgxTab, string> = {
-    funding: 'Funding Rate',
-    oi: 'Open Interest (USD)',
-    volume: 'Volume',
-    liq: 'Perpetual Liquidations',
-  };
-  const needsPerp = tab !== 'volume';
-  const p = hov !== null ? points[hov] : null;
+function TokenEvidenceWorkspace({
+  symbol,
+  base,
+  intelligence,
+  intelligenceError,
+  account,
+  accountError,
+  news,
+  newsError,
+  borrowTruth,
+}: {
+  symbol: string;
+  base: string;
+  intelligence: TokenIntelligenceRead | null;
+  intelligenceError: string | null;
+  account: SymbolAccountContext | null;
+  accountError: string | null;
+  news: TokenNewsContext | null;
+  newsError: string | null;
+  borrowTruth: BorrowTruthState;
+}) {
+  const thesis = intelligence?.bridge.thesis ?? null;
+  const usableThesisAtCut = thesis?.freshness === 'FRESH'
+    && thesis.completeness === 'COMPLETE'
+    ? thesis
+    : null;
+  const thesisCutState = thesis === null
+    ? 'MISSING'
+    : `${thesis.freshness === 'MISSING' ? 'MISSING' : `${thesis.freshness}_AT_CUT`} · ${thesis.completeness}`;
+  const capabilities = new Map(
+    (intelligence?.routing.capabilities ?? []).map((capability) => [capability.capability, capability]),
+  );
+  const anyFreshEvidence = intelligence !== null && (
+    intelligence.markFunding.state === 'FRESH'
+    || intelligence.openInterest.state === 'FRESH'
+    || intelligence.liquidation.state === 'FRESH'
+    || intelligence.routing.capabilities.some((capability) => capability.freshness === 'FRESH')
+  );
+  const surfaceState = intelligence === null
+    ? intelligenceError ? 'UNAVAILABLE' : 'UNKNOWN'
+    : intelligence.projection.state === 'ACTIVE' && anyFreshEvidence
+      ? 'EVIDENCE_ONLY'
+      : intelligence.projection.state;
+  const taggedNews = (news?.items ?? [])
+    .filter((item) => item.symbols.some((candidate) => candidate === base || candidate === symbol))
+    .slice(0, 3);
+  const liveNewsSources = news?.sources.filter((source) => source.status === 'live').length ?? 0;
+  const newsState = news === null
+    ? newsError ? 'UNAVAILABLE' : 'UNKNOWN'
+    : news.freshness === 'STALE'
+      ? 'STALE'
+      : news.sources.length === 0
+      ? 'UNAVAILABLE'
+      : liveNewsSources === news.sources.length
+        ? 'AVAILABLE'
+        : liveNewsSources > 0
+          ? 'PARTIAL'
+          : news.sources.some((source) => source.status === 'delayed') ? 'DELAYED' : 'UNAVAILABLE';
+  const accountState = account?.accountTruthState ?? (accountError ? 'UNAVAILABLE' : 'UNKNOWN');
+  const orderState = account?.orderTruthState ?? (accountError ? 'UNAVAILABLE' : 'UNKNOWN');
+  const ownerReasons = intelligence
+    ? [...intelligence.bridge.reasonCodes, ...(thesis?.reasonCodes ?? [])].slice(0, 8)
+    : [];
 
   return (
-    <section className="tdx-cell tdx-cgx" aria-label="Derivatives monitor">
-      <div className="tkx-evidence-strip tkx-derivatives-strip" aria-label="Derivatives Snapshot">
-        <div><span>Funding Rate</span><strong>{hasPerp ? fmtFunding(market?.fundingRate) : 'Spot Only'}</strong><small>{market?.fundingAnnualPct === null || market?.fundingAnnualPct === undefined ? 'Simple Annualized —' : `${fmtPct(market.fundingAnnualPct, 2)} Simple Annualized`}</small></div>
-        <div><span>Open Interest</span><strong>{hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? market?.openInterestUsd) : 'Spot Only'}</strong><small>{openInterestSnapshot?.changePct === null || openInterestSnapshot?.changePct === undefined ? '5m Change —' : `${fmtPct(openInterestSnapshot.changePct, 2)} · 5m`}</small></div>
-        <div><span>Perpetual Volume</span><strong>{hasPerp ? fmtMoney(market?.perpVolume24h) : 'Spot Only'}</strong><small>{market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? 'OI / Volume —' : `${market.oiToPerpVolume24h.toFixed(2)}× OI / Volume`}</small></div>
-        <div><span>Liquidations · 15m</span><strong>{hasPerp ? fmtMoney(market?.liquidations15mUsd) : 'Spot Only'}</strong><small>{hasPerp ? `${fmtMoney(market?.longLiquidations15mUsd)} Long · ${fmtMoney(market?.shortLiquidations15mUsd)} Short` : 'No Derivatives Telemetry'}</small></div>
-      </div>
-      <div className="tdx-cardhead">
-        <div className="cgx-tabs" role="tablist" aria-label="Derivatives data">
-          <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding Rate</button>
-          <button type="button" role="tab" aria-selected={tab === 'oi'} className={tab === 'oi' ? 'on' : ''} data-testid="token-cgx-oi" onClick={() => switchTab('oi')}>Open Interest</button>
-          <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" onClick={() => switchTab('volume')}>Volume</button>
-        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" onClick={() => switchTab('liq')}>Liquidation</button>
+    <section className="tkx-owner-evidence" aria-label="Canonical token evidence">
+      <header className="tkx-owner-evidence-head">
+        <div>
+          <span className="tkx-section-label">Canonical Evidence</span>
+          <h2>What changed, what led, and what remains unknown</h2>
         </div>
-        <PillSelect value={opt} options={OPTS[tab]} onChange={setOpt} ariaLabel="Data interval" />
+        <span className={`tkx-owner-state ${surfaceState === 'EVIDENCE_ONLY' ? 'available' : surfaceState === 'UNKNOWN' ? 'unknown' : 'unavailable'}`}>
+          {surfaceState}
+        </span>
+      </header>
+
+      <div className="tkx-owner-thesis">
+        <article>
+          <span>Changed First · Latest At Cut</span>
+          <strong>{usableThesisAtCut?.changedFirst ?? 'UNKNOWN'}</strong>
+          <small>{usableThesisAtCut
+            ? `Latest owner thesis ${thesisCutState} · Lead market ${usableThesisAtCut.leadMarket} · cut ${timeAgo(usableThesisAtCut.evaluatedAtMs)}`
+            : `Latest owner thesis ${thesisCutState} · value withheld`}</small>
+        </article>
+        <article>
+          <span>Hypothesis · Latest At Cut</span>
+          <strong>{usableThesisAtCut?.hypothesis ?? 'UNKNOWN'}</strong>
+          <small>{usableThesisAtCut
+            ? `Stage ${usableThesisAtCut.stage} · ${thesisCutState} · cut ${timeAgo(usableThesisAtCut.evaluatedAtMs)}`
+            : `Stage withheld · ${thesisCutState}`}</small>
+        </article>
+        <article>
+          <span>Confidence</span>
+          <strong>UNKNOWN</strong>
+          <small>This owner publishes no confidence score.</small>
+        </article>
+        <article>
+          <span>Current Projection</span>
+          <strong>{intelligence?.bridge.currentState ?? 'UNKNOWN'}</strong>
+          <small>{intelligence ? `Read ${timeAgo(intelligence.observedAtMs)}` : intelligenceError ?? 'Awaiting owner readback'}</small>
+        </article>
       </div>
-      <h3 className="cgx-title">{name} {TAB_TITLE[tab]} <em className="tdx-src">{tab === 'volume' ? 'Binance Spot' : 'Binance USD-M'}{tab === 'oi' ? ' · 30d Max Upstream' : ''}</em></h3>
-      {needsPerp && !hasPerp ? (
-        <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual.</p>
-      ) : !model ? (
-        tab === 'liq' ? (
-          <div className="tdx-cgx-empty">
-            <p className="tdx-dimnote">Recording live liquidations{liqSince ? ` since ${new Date(liqSince).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''} — Binance publishes no history. Buckets appear as events arrive.</p>
+
+      <div className="tkx-owner-body">
+        <div className="tkx-capability-list" role="list" aria-label="Token evidence capabilities">
+          {TOKEN_CAPABILITY_LABELS.map(([id, label]) => {
+            const capability = capabilities.get(id);
+            return (
+              <div role="listitem" key={id}>
+                <span>{label}</span>
+                <strong className={(capability?.freshness ?? 'MISSING').toLowerCase()}>{capability?.freshness ?? 'MISSING'}</strong>
+                <small>{capability
+                  ? `${capability.completeness} · ${capability.sourceIds.join(', ') || 'source unavailable'}${capability.reasonCodes.length ? ` · ${capability.reasonCodes.slice(0, 2).join(', ')}` : ''}`
+                  : 'No exact-symbol routed observation'}</small>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="tkx-context-truth" aria-label="Token account and context truth">
+          <div>
+            <span>Account Context</span>
+            <strong>{accountState}</strong>
+            <small>{account?.balances
+              ? `${fmtCompact(account.balances.base)} ${base} · ${fmtMoney(account.balances.usdtFree)} free · age unavailable`
+              : 'Balances unavailable; no zero substitute'}</small>
           </div>
-        ) : (
-          <div className="tdx-cgx-empty">
-            <div className="tdx-chart-empty small">Reading…</div>
+          <div>
+            <span>Open Orders</span>
+            <strong>{orderState}</strong>
+            <small>{account?.openOrders === null || account?.openOrders === undefined
+              ? 'Order truth unavailable'
+              : `${account.openOrders.length} owner rows · age unavailable`}</small>
           </div>
-        )
-      ) : (
-        <>
-          <div
-            ref={wrapRef}
-            className="tdx-chartwrap"
-            onMouseMove={(e) => {
-              setHov(idxFromMouse(e.clientX));
-              const r = wrapRef.current?.getBoundingClientRect();
-              if (r) setMouse({ x: e.clientX - r.left });
-            }}
-            onMouseLeave={() => { setHov(null); setMouse(null); }}
-          >
-            <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="tdx-datachart" aria-hidden>
-              {model.aTicks.map((v, i) => (
-                <g key={`a${i}`}>
-                  <line x1={PAD_L} x2={W - PAD_R} y1={model.ay(v)} y2={model.ay(v)} stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-                  <text x={PAD_L - 8} y={model.ay(v) + 4} textAnchor="end" className="tdx-axis">{fmtA(v)}</text>
-                </g>
-              ))}
-              {model.pTicks.map((v, i) => (
-                <text key={`p${i}`} x={W - PAD_R + 8} y={model.py(v) + 4} className="tdx-axis">{fmtPrice(v)}</text>
-              ))}
-              {hov !== null && (
-                <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" />
-              )}
-              {tab === 'oi' && <path d={model.areaPath} fill="var(--up)" opacity="0.16" />}
-              {tab === 'oi' && <path d={points.map((pt, i) => `${i ? 'L' : 'M'}${model.xi(i)},${model.ay(pt.a)}`).join(' ')} fill="none" stroke="var(--up)" strokeWidth="1.35" vectorEffect="non-scaling-stroke" />}
-              {tab === 'volume' && points.map((pt, i) => (
-                <rect key={pt.t} x={model.xi(i) - model.bw / 2} y={model.ay(pt.a)} width={model.bw} height={Math.max(1, H - PAD_B - model.ay(pt.a))} fill="var(--up)" opacity={hov === null ? 0.6 : hov === i ? 1 : 0.25} />
-              ))}
-              {tab === 'funding' && points.map((pt, i) => (
-                <rect key={pt.t} x={model.xi(i) - model.bw / 2} y={pt.a >= 0 ? model.ay(pt.a) : model.zeroY} width={model.bw} height={Math.max(1, Math.abs(model.ay(pt.a) - model.zeroY))} fill={pt.a >= 0 ? 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.75 : hov === i ? 1 : 0.3} />
-              ))}
-              {tab === 'liq' && points.map((pt, i) => (
-                <g key={pt.t}>
-                  <rect x={model.xi(i) - model.bw / 2} y={model.ay(pt.a)} width={model.bw} height={Math.max(0.5, model.zeroY - model.ay(pt.a))} fill="var(--up)" opacity={hov === null ? 0.8 : hov === i ? 1 : 0.3} />
-                  <rect x={model.xi(i) - model.bw / 2} y={model.zeroY} width={model.bw} height={Math.max(0.5, model.ay(-(pt.b ?? 0)) - model.zeroY)} fill="var(--down)" opacity={hov === null ? 0.8 : hov === i ? 1 : 0.3} />
-                </g>
-              ))}
-              {(tab === 'funding' || tab === 'liq') && (
-                <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" />
-              )}
-              <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-              {model.times.map((i) => (
-                <text key={`t${i}`} x={model.xi(i)} y={H - 8} textAnchor="middle" className="tdx-axis">
-                  {new Date(points[i].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}
-                </text>
-              ))}
-            </svg>
-            {p && mouse && (
-              <ChartTip
-                x={mouse.x}
-                w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(p.t)}
-                rows={[
-                  ...(tab === 'liq'
-                    ? [
-                        { dot: 'var(--up)', label: 'Long Liquidations', value: '$' + fmtFull(p.a, 0) },
-                        { dot: 'var(--down)', label: 'Short Liquidations', value: '$' + fmtFull(p.b ?? 0, 0) },
-                      ]
-                    : [{ dot: tab === 'funding' ? (p.a >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--up)', label: TAB_TITLE[tab], value: tab === 'funding' ? `${p.a.toFixed(4)}%` : '$' + fmtFull(p.a, 0) }]),
-                  ...(model.priceAt(p.t) !== null ? [{ dot: '#F0B90B', label: `${base} Price`, value: fmtFull(model.priceAt(p.t) as number, 2) }] : []),
-                ]}
-              />
-            )}
+          <div>
+            <span>Borrow Context</span>
+            <strong>{borrowTruth}</strong>
+            <small>Private owner boundary; no browser inference.</small>
           </div>
-          <div className="tdx-legend">
-            {tab === 'liq' ? (
-              <>
-                <span><i className="sw" style={{ background: 'var(--up)' }} />Long</span>
-                <span><i className="sw" style={{ background: 'var(--down)' }} />Short</span>
-              </>
-            ) : (
-              <span><i className="sw" style={{ background: 'var(--up)', opacity: tab === 'oi' ? 0.4 : 0.8 }} />{TAB_TITLE[tab]}</span>
-            )}
-            <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
-            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Upstream History</span> : null}
+          <div>
+            <span>Evidence History</span>
+            <strong>{intelligence ? `${intelligence.bridge.evidenceHistoryCount} HISTORICAL` : 'UNKNOWN'}</strong>
+            <small>{intelligence ? `${intelligence.bridge.evidenceHistoryState} retained history; not current truth` : 'Owner history unavailable'}</small>
           </div>
-        </>
-      )}
+          <div className="tkx-context-wide">
+            <span>News Context</span>
+            <strong>{newsState}</strong>
+            <small>{news
+              ? `${liveNewsSources}/${news.sources.length} sources live · owner read ${timeAgo(news.fetchedAt)}`
+              : newsError ?? 'Awaiting public-news owner'}</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="tkx-owner-current" aria-label="Current owner values">
+        <div>
+          <span>Canonical OI</span>
+          <strong>{fmtMoney(intelligence?.openInterest.value?.quoteUsd)}</strong>
+          <small>{intelligence?.openInterest.state ?? 'UNAVAILABLE'} · {intelligence?.openInterest.dataset ?? 'usd_m.open_interest'}</small>
+        </div>
+        <div>
+          <span>OI Change</span>
+          <strong>{fmtPct(intelligence?.openInterest.value?.changePct, 2)}</strong>
+          <small>MarketEngine owner observation; no client recompute.</small>
+        </div>
+        <div>
+          <span>Sampled Liquidations · 15m</span>
+          <strong>{fmtMoney(intelligence?.liquidation.value?.total15mUsd)}</strong>
+          <small>{intelligence?.liquidation.state ?? 'UNAVAILABLE'} · latest-per-symbol lower bound</small>
+        </div>
+        <div>
+          <span>Tagged News</span>
+          <strong>{news ? taggedNews.length : 'UNKNOWN'}</strong>
+          <small>Owner tags in returned slice; zero does not prove absence.</small>
+        </div>
+      </div>
+
+      {news?.sources.length ? (
+        <div className="tkx-news-sources" aria-label="News owner source status">
+          {news.sources.map((source) => (
+            <span key={source.key}><b>{source.key}</b> {source.status.toUpperCase()} · {source.fetchedAt === null ? 'age unknown' : timeAgo(source.fetchedAt)}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {taggedNews.length ? (
+        <div className="tkx-token-news" aria-label={`${base} owner-tagged news`}>
+          {taggedNews.map((item) => (
+            <div key={item.id}>
+              <span>{item.source}</span>
+              <strong>{item.title}</strong>
+              <small>{item.channel}{item.ts ? ` · ${timeAgo(item.ts)}` : ' · time UNKNOWN'}</small>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {ownerReasons.length ? <p className="tkx-owner-reasons">Owner reasons: {ownerReasons.join(' · ')}</p> : null}
     </section>
   );
 }
@@ -1610,7 +1522,12 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
-  const [openInterestSnapshot, setOpenInterestSnapshot] = useState<{ usd: number; changePct: number | null } | null>(null);
+  const [intelligence, setIntelligence] = useState<TokenIntelligenceRead | null>(null);
+  const [intelligenceError, setIntelligenceError] = useState<string | null>(null);
+  const [accountContext, setAccountContext] = useState<SymbolAccountContext | null>(null);
+  const [accountContextError, setAccountContextError] = useState<string | null>(null);
+  const [newsContext, setNewsContext] = useState<TokenNewsContext | null>(null);
+  const [newsContextError, setNewsContextError] = useState<string | null>(null);
 
   const live = markets.find((m) => m.symbol === symbol);
   const base = baseOf(symbol);
@@ -1715,35 +1632,84 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     return poll.stop;
   }, [hasPerp, symbol]);
 
-  // Hydrate OI directly from Binance history so the instrument summary does
-  // not wait for the slower all-market engine poll after a token switch.
+  // Exact-symbol public evidence comes from the one production
+  // MarketEngine -> router -> Bridge composition. This browser owns no OI,
+  // liquidation, source-health, or hypothesis calculation.
   useEffect(() => {
-    if (!hasPerp) {
-      setOpenInterestSnapshot(null);
-      return;
-    }
-    setOpenInterestSnapshot(null);
-    const poll = createSettledPoll<OiPoint[]>({
-      intervalMs: 60_000,
-      request: (signal) => fetchJson(`/api/futures/oi-hist?symbol=${symbol}&period=5m&limit=3`, { signal }),
-      onSuccess: (next) => {
-          const rows = normalizeTimedRows(Array.isArray(next) ? next : [], (row) => Number.isFinite(row.notional) && row.notional > 0);
-          if (!rows.length) {
-            setOpenInterestSnapshot(null);
-            return;
-          }
-          const latest = rows[rows.length - 1];
-          const previous = rows.length > 1 ? rows[rows.length - 2] : null;
-          setOpenInterestSnapshot({
-            usd: latest.notional,
-            changePct: previous && previous.notional > 0 ? ((latest.notional - previous.notional) / previous.notional) * 100 : null,
-          });
+    setIntelligence(null);
+    setIntelligenceError(null);
+    const poll = createSettledPoll<TokenIntelligenceRead>({
+      intervalMs: 2_000,
+      request: async (signal) => {
+        const raw = await fetchJson<unknown>(`/api/intelligence/token?symbol=${symbol}`, { cache: 'no-store', signal });
+        const parsed = parseTokenIntelligence(raw, symbol, Date.now());
+        if (!parsed) throw new Error('Canonical token evidence contract mismatch');
+        return parsed;
       },
-      onError: () => setOpenInterestSnapshot(null),
+      onSuccess: (next) => {
+        setIntelligence(next);
+        setIntelligenceError(null);
+      },
+      onError: (error) => {
+        setIntelligence(null);
+        setIntelligenceError(apiErrorMessage(error, 'Canonical token evidence unavailable'));
+      },
     });
     poll.start();
     return poll.stop;
-  }, [hasPerp, symbol]);
+  }, [symbol]);
+
+  // Account and order truth remain on their existing private-read owner. The
+  // endpoint returns nulls when unavailable; this surface never substitutes 0.
+  useEffect(() => {
+    setAccountContext(null);
+    setAccountContextError(null);
+    const poll = createSettledPoll<SymbolAccountContext>({
+      intervalMs: 5_000,
+      request: async (signal) => {
+        const raw = await fetchJson<unknown>(`/api/symbol/context?symbol=${symbol}`, { cache: 'no-store', signal });
+        const parsed = parseSymbolAccountContext(raw);
+        if (!parsed) throw new Error('Account context contract mismatch');
+        return parsed;
+      },
+      onSuccess: (next) => {
+        setAccountContext(next);
+        setAccountContextError(null);
+      },
+      onError: (error) => {
+        setAccountContext(null);
+        setAccountContextError(apiErrorMessage(error, 'Account context unavailable'));
+      },
+    });
+    poll.start();
+    return poll.stop;
+  }, [symbol]);
+
+  // News stays a separate public context owner. Symbol relevance uses only
+  // explicit owner-supplied symbol tags, never title heuristics.
+  useEffect(() => {
+    setNewsContext(null);
+    setNewsContextError(null);
+    const poll = createSettledPoll<TokenNewsContext>({
+      intervalMs: 15_000,
+      request: async (signal) => {
+        const raw = await fetchJson<unknown>('/api/news-context?limit=220', { cache: 'no-store', signal });
+        const parsed = parseTokenNewsContext(raw, Date.now());
+        if (!parsed) throw new Error('News context contract mismatch');
+        return parsed;
+      },
+      onSuccess: (next) => {
+        setNewsContext(next);
+        setNewsContextError(null);
+      },
+      onError: (error) => {
+        setNewsContext(null);
+        setNewsContextError(apiErrorMessage(error, 'News context unavailable'));
+      },
+    });
+    poll.start();
+    return poll.stop;
+  }, [symbol]);
 
   const points = useMemo(() => {
     if (candles.length) return candles.map((c) => ({ t: c.t, v: c.c }));
@@ -1867,12 +1833,24 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           </div>
           <div>
             <span>Open Interest</span>
-            <strong>{hasPerp ? fmtMoney(openInterestSnapshot?.usd ?? live?.openInterestUsd) : 'Spot Only'}</strong>
-            <small>{hasPerp ? <><Chg pct={openInterestSnapshot?.changePct}>{openInterestSnapshot?.changePct === null || openInterestSnapshot?.changePct === undefined ? '—' : fmtPct(Math.abs(openInterestSnapshot.changePct), 2, false)}</Chg> · {fmtMoney(live?.liquidations15mUsd)} Liq · 15m</> : 'No derivatives telemetry'}</small>
+            <strong>{hasPerp ? fmtMoney(intelligence?.openInterest.value?.quoteUsd) : 'Spot Only'}</strong>
+            <small>{hasPerp ? <><Chg pct={intelligence?.openInterest.value?.changePct}>{intelligence?.openInterest.value?.changePct === null || intelligence?.openInterest.value?.changePct === undefined ? 'UNKNOWN' : fmtPct(Math.abs(intelligence.openInterest.value.changePct), 2, false)}</Chg> · {intelligence?.openInterest.state ?? 'UNAVAILABLE'} · {intelligence?.liquidation.state ?? 'UNAVAILABLE'} Liq</> : 'No derivatives telemetry'}</small>
           </div>
         </div>
 
         <ProductSurfaceAdapter surfaceId="token" />
+
+        <TokenEvidenceWorkspace
+          symbol={symbol}
+          base={base}
+          intelligence={intelligence}
+          intelligenceError={intelligenceError}
+          account={accountContext}
+          accountError={accountContextError}
+          news={newsContext}
+          newsError={newsContextError}
+          borrowTruth={accountContext?.borrowTruthState ?? (accountContextError ? 'UNAVAILABLE' : 'UNKNOWN')}
+        />
 
         <div className="tkx-workspace">
           <section className="tdx-cell tdx-chartcell tkx-chartview">
@@ -1928,7 +1906,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <MoneyFlowCard symbol={symbol} base={base} />
             <PositioningCard symbol={symbol} base={base} hasPerp={hasPerp} />
           </div>
-          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterestSnapshot={openInterestSnapshot} />
+          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterest={intelligence?.openInterest ?? null} />
         </div>
       </section>
       {chartFocus && (

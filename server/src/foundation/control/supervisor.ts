@@ -23,6 +23,7 @@ import {
   isRunMode,
   isStructuredFailure,
   isValidUtcMillis,
+  observeRejectedThenable,
   ok,
   validateSourcedTimestamp,
   type ComponentStatusSnapshot,
@@ -552,7 +553,7 @@ export class DeterministicSupervisor {
     this.prerequisiteStopDeadlines.clear();
     this.transition('VALIDATING', nowMs, operation.correlationId);
 
-    let environment: ControlEnvironment;
+    let environment: unknown;
     try {
       environment = this.readEnvironment();
     } catch {
@@ -674,6 +675,7 @@ export class DeterministicSupervisor {
       }
 
       let outcome: PreflightGateOutcome;
+      let outcomeThenable = false;
       if (gate.borrowDependent && !environment.borrowTruthPresent) {
         const failure = this.failure(
           CONTROL_FAILURE_CODES.BORROW_TRUTH_UNAVAILABLE,
@@ -688,6 +690,7 @@ export class DeterministicSupervisor {
       } else {
         try {
           outcome = gate.run(this.gateContext(operation, nowMs));
+          outcomeThenable = observeRejectedThenable(outcome);
         } catch {
           const failure = this.failure(
             CONTROL_FAILURE_CODES.PREFLIGHT_GATE_THREW,
@@ -701,7 +704,7 @@ export class DeterministicSupervisor {
           outcome = { status: 'FAIL', detail: failure.message, failure };
         }
       }
-      if (!this.validGateOutcome(outcome)) {
+      if (outcomeThenable || !this.validGateOutcome(outcome)) {
         const failure = this.failure(
           CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION,
           `preflight:${gate.gate}`,
@@ -980,8 +983,10 @@ export class DeterministicSupervisor {
     context: ComponentStepContext,
   ): ComponentStepOutcome {
     let outcome: ComponentStepOutcome;
+    let outcomeThenable = false;
     try {
       outcome = component[stage](context);
+      outcomeThenable = observeRejectedThenable(outcome);
     } catch {
       const code = stage === 'validate'
         ? CONTROL_FAILURE_CODES.COMPONENT_VALIDATE_THREW
@@ -1001,7 +1006,7 @@ export class DeterministicSupervisor {
         ),
       };
     }
-    if (!this.validComponentOutcome(outcome)) {
+    if (outcomeThenable || !this.validComponentOutcome(outcome)) {
       return {
         kind: 'FAILED',
         failure: this.componentFailure(
@@ -1168,6 +1173,7 @@ export class DeterministicSupervisor {
         continue;
       }
       let probe: ComponentProbe;
+      let probeThenable = false;
       try {
         probe = component.probe({
           nowMs,
@@ -1176,6 +1182,7 @@ export class DeterministicSupervisor {
           runMode: this.config.runMode,
           privateKeysAvailable: environment?.privateKeysAvailable ?? null,
         });
+        probeThenable = observeRejectedThenable(probe);
       } catch {
         const failure = this.componentFailure(
           component,
@@ -1192,7 +1199,7 @@ export class DeterministicSupervisor {
         if (component.required) requiredFatalEvidence = recorded;
         continue;
       }
-      if (!this.validProbe(probe)) {
+      if (probeThenable || !this.validProbe(probe)) {
         const failure = this.componentFailure(
           component,
           'probe',
@@ -1655,8 +1662,9 @@ export class DeterministicSupervisor {
     });
   }
 
-  private readEnvironment(): ControlEnvironment {
-    return this.deps.readEnvironment();
+  private readEnvironment(): unknown {
+    const environment = this.deps.readEnvironment();
+    return observeRejectedThenable(environment) ? null : environment;
   }
 
   private tryReadEnvironment(): EnvironmentReadResult {

@@ -20,6 +20,7 @@ import {
 } from '../../../dist/systemIntegration/persistence/index.js';
 import {
   createSystemIntegrationRouter,
+  parseControlBody,
 } from '../../../dist/systemIntegration/routes/index.js';
 import { BoundedInMemoryLedger } from '../fixtures/memory-ledger.mjs';
 import { ManualClock, ManualScheduler } from '../fixtures/manual-clock.mjs';
@@ -209,6 +210,23 @@ function fixture(options = {}) {
     options.volumeStopThrows ?? false,
     options.volumeStartThrowsAtCall ?? null,
   );
+  const strategyIntakeState = { basis: false, volume: false };
+  const strategyIntakeOrder = [];
+  const strategySymbolPolicyState = { basis: new Set(), volume: new Set() };
+  const strategySymbolPolicyOrder = [];
+  const sizeCeilingState = {
+    SYSTEM: options.initialSystemSizeCeiling ?? '12',
+    BASIS: options.initialBasisSizeCeiling ?? '10',
+    VOLUME: options.initialVolumeSizeCeiling ?? '10',
+  };
+  const sizeCeilingOrder = [];
+  const strategyThresholdState = {
+    BASIS: options.initialBasisThreshold ?? '0.25',
+    VOLUME: options.initialVolumeThreshold ?? '3',
+  };
+  const strategyThresholdOrder = [];
+  const focusPinState = new Set();
+  const focusPinOrder = [];
   let readManagedRuntimeForControlEffect = null;
   const app = createSystemIntegrationApplication({
     ledger,
@@ -221,6 +239,141 @@ function fixture(options = {}) {
       basis: basis.port,
       volume: volume.port,
     },
+    strategyIntake: Object.freeze({
+      basis: Object.freeze({
+        readPaused: () => strategyIntakeState.basis,
+        setPaused: (paused) => {
+          strategyIntakeOrder.push(`basis:${paused}`);
+          order.push(`intake:set:basis:${paused}`);
+          if (options.strategyIntakeRestoreThrows === 'basis') throw new Error('deterministic Basis intake restore failure');
+          const changed = strategyIntakeState.basis !== paused;
+          strategyIntakeState.basis = paused;
+          return changed;
+        },
+      }),
+      volume: Object.freeze({
+        readPaused: () => strategyIntakeState.volume,
+        setPaused: (paused) => {
+          strategyIntakeOrder.push(`volume:${paused}`);
+          order.push(`intake:set:volume:${paused}`);
+          if (options.strategyIntakeRestoreThrows === 'volume') throw new Error('deterministic Volume intake restore failure');
+          const changed = strategyIntakeState.volume !== paused;
+          strategyIntakeState.volume = paused;
+          return changed;
+        },
+      }),
+    }),
+    strategySymbolPolicy: Object.freeze({
+      basis: Object.freeze({
+        readBlockedSymbols: () => [...strategySymbolPolicyState.basis].sort(),
+        setBlocked: (symbol, blocked) => {
+          strategySymbolPolicyOrder.push(`basis:${blocked ? 'BLOCK' : 'ALLOW'}:${symbol}`);
+          if (options.strategySymbolPolicyRestoreThrows === 'basis') throw new Error('deterministic Basis symbol-policy restore failure');
+          const before = strategySymbolPolicyState.basis.has(symbol);
+          if (blocked) strategySymbolPolicyState.basis.add(symbol);
+          else strategySymbolPolicyState.basis.delete(symbol);
+          return before !== blocked;
+        },
+        isAllowed: (symbol) => !strategySymbolPolicyState.basis.has(symbol),
+      }),
+      volume: Object.freeze({
+        readBlockedSymbols: () => [...strategySymbolPolicyState.volume].sort(),
+        setBlocked: (symbol, blocked) => {
+          strategySymbolPolicyOrder.push(`volume:${blocked ? 'BLOCK' : 'ALLOW'}:${symbol}`);
+          if (options.strategySymbolPolicyRestoreThrows === 'volume') throw new Error('deterministic Volume symbol-policy restore failure');
+          const before = strategySymbolPolicyState.volume.has(symbol);
+          if (blocked) strategySymbolPolicyState.volume.add(symbol);
+          else strategySymbolPolicyState.volume.delete(symbol);
+          return before !== blocked;
+        },
+        isAllowed: (symbol) => !strategySymbolPolicyState.volume.has(symbol),
+      }),
+    }),
+    sizeCeilings: Object.freeze(Object.fromEntries(
+      ['SYSTEM', 'BASIS', 'VOLUME'].map((scope) => [scope, Object.freeze({
+        readCeiling: () => {
+          if (options.sizeCeilingReadUnavailable === scope) return null;
+          if (options.sizeCeilingReadThrows === scope) throw new Error(`deterministic ${scope} size-ceiling read failure`);
+          return sizeCeilingState[scope];
+        },
+        setCeiling: (value) => {
+          sizeCeilingOrder.push(`${scope}:${value}`);
+          if (options.sizeCeilingRestoreThrows === scope) throw new Error(`deterministic ${scope} size-ceiling restore failure`);
+          const before = Number(sizeCeilingState[scope]);
+          const after = Number(value);
+          if (!Number.isFinite(before) || !Number.isFinite(after) || after > before) throw new Error('size ceiling increase forbidden');
+          const changed = sizeCeilingState[scope] !== value;
+          sizeCeilingState[scope] = value;
+          return changed;
+        },
+      })]),
+    )),
+    strategyThresholds: Object.freeze(Object.fromEntries(
+      ['BASIS', 'VOLUME']
+        .filter((strategy) => options.strategyThresholdOwnerUnavailable !== strategy)
+        .map((strategy) => [strategy, Object.freeze({
+          readThreshold: () => {
+            if (options.strategyThresholdReadUnavailable === strategy) return null;
+            if (options.strategyThresholdReadThrows === strategy) throw new Error(`deterministic ${strategy} threshold read failure`);
+            return strategyThresholdState[strategy];
+          },
+          setThreshold: (value) => {
+            strategyThresholdOrder.push(`${strategy}:${value}`);
+            order.push(`threshold:set:${strategy}:${value}`);
+            if (options.strategyThresholdRestoreThrows === strategy) throw new Error(`deterministic ${strategy} threshold restore failure`);
+            const numeric = Number(value);
+            const valid = strategy === 'BASIS'
+              ? numeric >= 0.01 && numeric <= 100
+              : numeric >= 1 && numeric <= 100;
+            if (!Number.isFinite(numeric) || !valid) throw new Error('strategy threshold outside owner range');
+            const changed = strategyThresholdState[strategy] !== value;
+            strategyThresholdState[strategy] = value;
+            return changed;
+          },
+        })]),
+    )),
+    ...(options.focusOwnerUnavailable === true ? {} : {
+      attentionFocus: Object.freeze({
+        readPinnedSymbols: () => [...focusPinState].sort(),
+        readFocusState: (symbol) => {
+          const readback = {
+            symbol,
+            pinned: focusPinState.has(symbol),
+            eligible: options.focusIneligibleSymbol === symbol ? false : true,
+            canPin: options.focusIneligibleSymbol !== symbol
+              && (focusPinState.has(symbol) || focusPinState.size < (options.focusPinCapacity ?? 25)),
+            effectivePinned: focusPinState.has(symbol),
+            effectiveTier: focusPinState.has(symbol) ? 'FOCUS' : 'UNIVERSE',
+            attentionPlanId: 'fixture-attention-plan',
+            attentionPlanAtMs: clock.nowMs(),
+            pinCount: focusPinState.size,
+            pinCapacity: options.focusPinCapacity ?? 25,
+          };
+          return Object.freeze(options.focusReadbackTransform
+            ? options.focusReadbackTransform(structuredClone(readback))
+            : readback);
+        },
+        setPinned: (symbol, pinned) => {
+          focusPinOrder.push(`${pinned ? 'PIN' : 'UNPIN'}:${symbol}`);
+          if (options.focusPinSetThrows === symbol) throw new Error('deterministic focus-pin owner failure');
+          if (pinned && options.focusIneligibleSymbol === symbol) throw new Error('focus symbol ineligible');
+          const before = focusPinState.has(symbol);
+          if (pinned) focusPinState.add(symbol);
+          else focusPinState.delete(symbol);
+          return before !== pinned;
+        },
+        restorePinnedSymbols: (symbols) => {
+          if (options.focusPinRestoreThrows === true) throw new Error('deterministic focus-pin restore failure');
+          focusPinState.clear();
+          for (const symbol of symbols) {
+            focusPinOrder.push(`RESTORE:${symbol}`);
+            order.push(`focus:restore:${symbol}`);
+            focusPinState.add(symbol);
+          }
+          return true;
+        },
+      }),
+    }),
     ...(options.traces ? { traces: options.traces } : {}),
     lifecycleTruth: {
       ...(options.restartTruth !== undefined || options.restartTruthThrows === true
@@ -308,6 +461,16 @@ function fixture(options = {}) {
     setOrdinaryDrainTruth(value) { ordinaryDrainTruth = value; },
     setControlRuntimeEffect(effectId, value) { controlRuntimeEffects.set(effectId, value); },
     setVolumeStopThrows(value) { volume.setStopThrows(value); },
+    strategyIntakeState,
+    strategyIntakeOrder,
+    strategySymbolPolicyState,
+    strategySymbolPolicyOrder,
+    sizeCeilingState,
+    sizeCeilingOrder,
+    strategyThresholdState,
+    strategyThresholdOrder,
+    focusPinState,
+    focusPinOrder,
     failNextPersistenceWrite() { persistenceWriteFailureAtCall = persistenceWriteCalls + 1; },
     restartTruthRefreshCalls() { return restartTruthRefreshCalls; },
     traceWindowReads() { return traceWindowReads; },
@@ -393,6 +556,432 @@ test('application shell persists startup before any data component and reads nev
   }
   assert.ok(supervisor.components.find((entry) => entry.componentId === 'engine-supervisor')
     .blockerCodes.includes('EFFECTIVE_KILL_SWITCH_ENGAGED'));
+});
+
+test('MIS-072 restores each durable strategy intake posture before managed runtimes start and fails closed on effect loss', async () => {
+  const first = fixture();
+  assert.equal(first.app.start().ok, true);
+  const paused = await first.app.controls.mutate(validControlRequest(
+    first,
+    { command: 'SET_BASIS_INTAKE', paused: true },
+    'basis-intake-durable-restore',
+  ), ACTOR);
+  assert.equal(paused.ok, true);
+  assert.equal(first.strategyIntakeState.basis, true);
+  assert.equal(first.strategyIntakeState.volume, false);
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.strategyIntake, { basisPaused: true, volumePaused: false });
+
+  const recovered = fixture({ ledger: first.ledger });
+  const recoveredStart = recovered.app.start();
+  assert.equal(recoveredStart.ok, true);
+  assert.deepEqual(recovered.strategyIntakeOrder.slice(0, 2), ['basis:true', 'volume:false']);
+  assert.equal(recovered.strategyIntakeState.basis, true);
+  assert.equal(recovered.strategyIntakeState.volume, false);
+  await drive(recovered, 4);
+  assert.ok(
+    recovered.order.indexOf('runtime:start:basis') > recovered.order.indexOf('intake:set:basis:true'),
+    'managed Basis runtime must start only after the durable posture restore completed',
+  );
+  assert.deepEqual(recovered.app.strategyIntakeState('basis'), {
+    strategy: 'basis', desiredPaused: true, effectivePaused: true,
+    controlRevision: 1, state: 'APPLIED',
+  });
+
+  const failed = fixture({ ledger: first.ledger, strategyIntakeRestoreThrows: 'basis' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+  assert.equal(failed.states.basis.starts, 0);
+  assert.equal(failed.states.volume.starts, 0);
+});
+
+test('MIS-075 persists versioned strategy symbol policy, blocks first, guards allow, and restores before runtime admission', async () => {
+  assert.equal(parseControlBody({
+    command: 'SET_BASIS_SYMBOL_POLICY', expectedRevision: 0, reason: 'block canonical symbol',
+    action: 'BLOCK', symbol: 'BTCUSDT',
+  }).ok, true);
+  assert.equal(parseControlBody({
+    command: 'SET_BASIS_SYMBOL_POLICY', expectedRevision: 0, reason: 'reject normalization ambiguity',
+    action: 'BLOCK', symbol: 'btcusdt',
+  }).ok, false);
+  assert.equal(parseControlBody({
+    command: 'SET_VOLUME_SYMBOL_POLICY', expectedRevision: 0, reason: 'reject payload substitution',
+    action: 'ALLOW', symbol: 'ETHUSDT', unexpected: true,
+  }).ok, false);
+  const restartTruth = Object.freeze({
+    publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0,
+  });
+  const first = fixture({ externalKill: false, restartTruth });
+  assert.equal(first.app.start().ok, true);
+
+  const basisBlock = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'BLOCK', symbol: 'BTCUSDT',
+  }, 'basis-symbol-block'), ACTOR);
+  assert.equal(basisBlock.ok, true);
+  assert.deepEqual([...first.strategySymbolPolicyState.basis], ['BTCUSDT']);
+  assert.deepEqual([...first.strategySymbolPolicyState.volume], [], 'strategy policy owners must remain isolated');
+
+  const stale = validControlRequest(first, {
+    command: 'SET_VOLUME_SYMBOL_POLICY', action: 'BLOCK', symbol: 'ETHUSDT',
+  }, 'volume-symbol-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const volumeBlock = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_VOLUME_SYMBOL_POLICY', action: 'BLOCK', symbol: 'ETHUSDT',
+  }, 'volume-symbol-block'), ACTOR);
+  assert.equal(volumeBlock.ok, true);
+  const blockedCheckpoint = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(blockedCheckpoint.ok, true);
+  assert.deepEqual(blockedCheckpoint.value.strategySymbolPolicy, {
+    basisBlocked: ['BTCUSDT'], volumeBlocked: ['ETHUSDT'],
+  });
+
+  const guardedAllow = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'ALLOW', symbol: 'BTCUSDT',
+  }, 'basis-symbol-allow-guarded'), ACTOR);
+  assert.equal(guardedAllow.ok, false);
+  assert.equal(guardedAllow.failure.code, 'EFFECTIVE_INTAKE_PAUSED');
+  assert.equal(first.strategySymbolPolicyState.basis.has('BTCUSDT'), true);
+
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_KILL_SWITCH', engaged: false,
+  }, 'symbol-policy-release-kill'), ACTOR)).ok, true);
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_INTAKE_PAUSED', paused: false,
+  }, 'symbol-policy-release-intake'), ACTOR)).ok, true);
+  const allowed = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_BASIS_SYMBOL_POLICY', action: 'ALLOW', symbol: 'BTCUSDT',
+  }, 'basis-symbol-allow'), ACTOR);
+  assert.equal(allowed.ok, true);
+  assert.deepEqual(first.app.strategySymbolPolicyState('basis', 'BTCUSDT'), {
+    strategy: 'basis', symbol: 'BTCUSDT', desiredBlocked: false, effectiveBlocked: false,
+    effectiveAllowed: true, controlRevision: 5, state: 'APPLIED',
+  });
+
+  const recovered = fixture({ ledger: first.ledger, externalKill: false });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.strategySymbolPolicyOrder, ['volume:BLOCK:ETHUSDT']);
+  assert.equal(recovered.strategySymbolPolicyState.volume.has('ETHUSDT'), true);
+  await drive(recovered, 4);
+  assert.equal(recovered.states.market.starts, 1);
+
+  const failed = fixture({ ledger: first.ledger, externalKill: false, strategySymbolPolicyRestoreThrows: 'volume' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+  assert.equal(failed.states.basis.starts, 0);
+});
+
+test('MIS-074 reduces exact Capital/config size ceilings only and reports unavailable truth honestly', async () => {
+  for (const maximumNotionalUsd of ['1e1', '08', '8.0', '0', '-1', ' 8', '8 ']) {
+    assert.equal(parseControlBody({
+      command: 'REDUCE_SIZE_CEILING', expectedRevision: 0, reason: 'hostile exact decimal',
+      scope: 'SYSTEM', maximumNotionalUsd,
+    }).ok, false, maximumNotionalUsd);
+  }
+  assert.equal(parseControlBody({
+    command: 'REDUCE_SIZE_CEILING', expectedRevision: 0, reason: 'canonical exact decimal',
+    scope: 'SYSTEM', maximumNotionalUsd: '8.5',
+  }).ok, true);
+
+  const first = fixture();
+  assert.equal(first.app.start().ok, true);
+  assert.deepEqual(first.app.sizeCeilingState('SYSTEM'), {
+    scope: 'SYSTEM', desiredMaximumNotionalUsd: null, effectiveMaximumNotionalUsd: '12',
+    controlRevision: 0, state: 'UNAVAILABLE',
+  }, 'no durable desired value must not be presented as applied');
+
+  const systemReduction = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '8.5',
+  }, 'system-size-reduce'), ACTOR);
+  assert.equal(systemReduction.ok, true);
+  assert.equal(first.sizeCeilingState.SYSTEM, '8.5');
+  assert.deepEqual(first.app.sizeCeilingState('SYSTEM'), {
+    scope: 'SYSTEM', desiredMaximumNotionalUsd: '8.5', effectiveMaximumNotionalUsd: '8.5',
+    controlRevision: 1, state: 'APPLIED',
+  });
+
+  const increase = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '9',
+  }, 'system-size-increase'), ACTOR);
+  assert.equal(increase.ok, false);
+  assert.equal(increase.failure.code, 'SIZE_CEILING_INCREASE_FORBIDDEN');
+  assert.equal(first.sizeCeilingState.SYSTEM, '8.5');
+
+  for (const [scope, value] of [['BASIS', '7'], ['VOLUME', '6.25']]) {
+    const reduced = await first.app.controls.mutate(validControlRequest(first, {
+      command: 'REDUCE_SIZE_CEILING', scope, maximumNotionalUsd: value,
+    }, `${scope.toLowerCase()}-size-reduce`), ACTOR);
+    assert.equal(reduced.ok, true);
+  }
+  assert.deepEqual(first.sizeCeilingState, { SYSTEM: '8.5', BASIS: '7', VOLUME: '6.25' });
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.sizeCeilings, { system: '8.5', basis: '7', volume: '6.25' });
+
+  const recovered = fixture({ ledger: first.ledger });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.sizeCeilingOrder, ['SYSTEM:8.5', 'BASIS:7', 'VOLUME:6.25']);
+  assert.deepEqual(recovered.sizeCeilingState, { SYSTEM: '8.5', BASIS: '7', VOLUME: '6.25' });
+
+  const unavailable = fixture({ sizeCeilingReadUnavailable: 'SYSTEM' });
+  assert.equal(unavailable.app.start().ok, true);
+  const refused = await unavailable.app.controls.mutate(validControlRequest(unavailable, {
+    command: 'REDUCE_SIZE_CEILING', scope: 'SYSTEM', maximumNotionalUsd: '8',
+  }, 'system-size-unavailable'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'SIZE_CEILING_EFFECT_UNAVAILABLE');
+  assert.equal(unavailable.app.sizeCeilingState('SYSTEM').state, 'UNAVAILABLE');
+
+  const widenedRuntime = fixture({ ledger: first.ledger, initialSystemSizeCeiling: '5' });
+  const failedStart = widenedRuntime.app.start();
+  assert.equal(failedStart.ok, false, 'restart restore cannot widen a stricter runtime owner');
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(widenedRuntime.states.market.starts, 0);
+});
+
+test('MIS-076 mutates only approved versioned strategy thresholds, guards lowering, and restores exact owner state', async () => {
+  for (const hostile of [
+    { strategy: 'BASIS', threshold: 'VOLUME_1S_MULTIPLE', value: '1' },
+    { strategy: 'VOLUME', threshold: 'MIN_NET_BASIS_PCT', value: '1' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '0.009' },
+    { strategy: 'VOLUME', threshold: 'VOLUME_1S_MULTIPLE', value: '101' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '1e-2' },
+    { strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', value: '0.10' },
+  ]) {
+    assert.equal(parseControlBody({
+      command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+      reason: 'hostile closed-catalog threshold', ...hostile,
+    }).ok, false, JSON.stringify(hostile));
+  }
+  assert.equal(parseControlBody({
+    command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+    reason: 'reject arbitrary payload expansion', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5', arbitrary: true,
+  }).ok, false);
+  assert.equal(parseControlBody({
+    command: 'SET_STRATEGY_THRESHOLD', expectedRevision: 0,
+    reason: 'approved bounded threshold', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }).ok, true);
+
+  const restartTruth = Object.freeze({
+    publicSourceTruth: 'FRESH', accountTruth: 'FRESH', reconciliationTruth: 'FRESH', observedAtMs: T0,
+  });
+  const first = fixture({ externalKill: false, restartTruth });
+  assert.equal(first.app.start().ok, true);
+  assert.deepEqual(first.app.strategyThresholdState('BASIS'), {
+    strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', desiredValue: null,
+    effectiveValue: '0.25', controlRevision: 0, state: 'UNAVAILABLE',
+  });
+
+  const raised = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }, 'basis-threshold-raise'), ACTOR);
+  assert.equal(raised.ok, true, 'raising a selectivity threshold is risk-reducing');
+  assert.equal(first.strategyThresholdState.BASIS, '0.5');
+
+  const stale = validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'VOLUME',
+    threshold: 'VOLUME_1S_MULTIPLE', value: '4',
+  }, 'volume-threshold-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const guarded = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.2',
+  }, 'basis-threshold-lower-guarded'), ACTOR);
+  assert.equal(guarded.ok, false);
+  assert.equal(guarded.failure.code, 'EFFECTIVE_INTAKE_PAUSED');
+  assert.equal(first.strategyThresholdState.BASIS, '0.5');
+
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_KILL_SWITCH', engaged: false,
+  }, 'threshold-release-kill'), ACTOR)).ok, true);
+  assert.equal((await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_INTAKE_PAUSED', paused: false,
+  }, 'threshold-release-intake'), ACTOR)).ok, true);
+  const lowered = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.2',
+  }, 'basis-threshold-lower'), ACTOR);
+  assert.equal(lowered.ok, true);
+  const volumeRaised = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'VOLUME',
+    threshold: 'VOLUME_1S_MULTIPLE', value: '4',
+  }, 'volume-threshold-raise'), ACTOR);
+  assert.equal(volumeRaised.ok, true);
+
+  assert.deepEqual(first.app.strategyThresholdState('BASIS'), {
+    strategy: 'BASIS', threshold: 'MIN_NET_BASIS_PCT', desiredValue: '0.2',
+    effectiveValue: '0.2', controlRevision: 5, state: 'APPLIED',
+  });
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.strategyThresholds, { basisMinNetPct: '0.2', volume1sMultiple: '4' });
+
+  const recovered = fixture({ ledger: first.ledger, externalKill: false });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.strategyThresholdOrder, ['BASIS:0.2', 'VOLUME:4']);
+  assert.deepEqual(recovered.strategyThresholdState, { BASIS: '0.2', VOLUME: '4' });
+  await drive(recovered, 4);
+  assert.ok(recovered.order.indexOf('runtime:start:basis') > recovered.order.indexOf('threshold:set:BASIS:0.2'));
+
+  const failed = fixture({ ledger: first.ledger, externalKill: false, strategyThresholdRestoreThrows: 'VOLUME' });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.market.starts, 0);
+
+  const unavailable = fixture({ strategyThresholdOwnerUnavailable: 'BASIS' });
+  assert.equal(unavailable.app.start().ok, true);
+  const refused = await unavailable.app.controls.mutate(validControlRequest(unavailable, {
+    command: 'SET_STRATEGY_THRESHOLD', strategy: 'BASIS',
+    threshold: 'MIN_NET_BASIS_PCT', value: '0.5',
+  }, 'basis-threshold-owner-unavailable'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
+  assert.equal(unavailable.app.strategyThresholdState('BASIS').state, 'OWNER_NOT_WIRED');
+});
+
+test('I00-037 revision-binds bounded focus pins, persists desired attention, and restores before runtime admission', async () => {
+  assert.equal(parseControlBody({
+    command: 'PIN_FOCUS', expectedRevision: 0, reason: 'pin bounded focus',
+    symbol: 'BTCUSDT', pinned: true,
+  }).ok, true);
+  for (const hostile of [
+    { symbol: 'btcusdt', pinned: true },
+    { symbol: 'BTCUSDT', pinned: 'true' },
+    { symbol: 'BTCUSDT', pinned: true, arbitrary: true },
+  ]) {
+    assert.equal(parseControlBody({
+      command: 'PIN_FOCUS', expectedRevision: 0, reason: 'hostile focus payload', ...hostile,
+    }).ok, false, JSON.stringify(hostile));
+  }
+
+  const first = fixture({ focusPinCapacity: 1 });
+  assert.equal(first.app.start().ok, true);
+  const pinned = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-btc'), ACTOR);
+  assert.equal(pinned.ok, true);
+  assert.deepEqual([...first.focusPinState], ['BTCUSDT']);
+  assert.deepEqual(await first.app.read.focusPin('BTCUSDT'), {
+    symbol: 'BTCUSDT', desiredPinned: true, ownerPinned: true, eligible: true, canPin: true,
+    effectivePinned: true, effectiveTier: 'FOCUS', attentionPlanId: 'fixture-attention-plan',
+    attentionPlanAtMs: T0, pinCount: 1, pinCapacity: 1, controlRevision: 1, state: 'APPLIED',
+  });
+
+  const stale = validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-pin-stale');
+  stale.expectedRevision = 0;
+  const staleResult = await first.app.controls.mutate(stale, ACTOR);
+  assert.equal(staleResult.ok, false);
+  assert.equal(staleResult.failure.code, 'STALE_COMMAND_REVISION');
+
+  const exhausted = await first.app.controls.mutate(validControlRequest(first, {
+    command: 'PIN_FOCUS', symbol: 'ETHUSDT', pinned: true,
+  }, 'focus-pin-capacity'), ACTOR);
+  assert.equal(exhausted.ok, false);
+  assert.equal(exhausted.failure.code, 'FOCUS_CAPACITY_UNAVAILABLE');
+  const durable = decodeSystemCheckpoint(first.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(durable.ok, true);
+  assert.deepEqual(durable.value.focusPins, { symbols: ['BTCUSDT'] });
+
+  const ineligible = fixture({ focusIneligibleSymbol: 'ETHUSDT' });
+  assert.equal(ineligible.app.start().ok, true);
+  const refused = await ineligible.app.controls.mutate(validControlRequest(ineligible, {
+    command: 'PIN_FOCUS', symbol: 'ETHUSDT', pinned: true,
+  }, 'focus-pin-ineligible'), ACTOR);
+  assert.equal(refused.ok, false);
+  assert.equal(refused.failure.code, 'FOCUS_SYMBOL_INELIGIBLE');
+
+  const failed = fixture({ ledger: first.ledger, focusPinRestoreThrows: true });
+  const failedStart = failed.app.start();
+  assert.equal(failedStart.ok, false);
+  assert.equal(failedStart.phase, 'FAILED');
+  assert.equal(failed.states.intelligenceRuntime.starts, 0);
+
+  const recovered = fixture({ ledger: first.ledger, focusPinCapacity: 1 });
+  assert.equal(recovered.app.start().ok, true);
+  assert.deepEqual(recovered.focusPinOrder, ['RESTORE:BTCUSDT']);
+  assert.deepEqual([...recovered.focusPinState], ['BTCUSDT']);
+  await drive(recovered, 4);
+  assert.ok(
+    recovered.order.indexOf('runtime:start:intelligence-runtime')
+      > recovered.order.indexOf('focus:restore:BTCUSDT'),
+    'Intelligence Runtime must start only after the durable desired pin set is restored',
+  );
+
+  const unpinned = await recovered.app.controls.mutate(validControlRequest(recovered, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-unpin-btc'), ACTOR);
+  assert.equal(unpinned.ok, true);
+  assert.deepEqual([...recovered.focusPinState], []);
+  assert.equal(recovered.app.focusPinState('BTCUSDT').state, 'APPLIED');
+
+  const hostileReadback = fixture({
+    focusReadbackTransform: (state) => ({
+      ...state,
+      pinned: true,
+      effectivePinned: true,
+      effectiveTier: 'UNIVERSE',
+      pinCount: 1,
+    }),
+  });
+  assert.equal(hostileReadback.app.start().ok, true);
+  const rejectedReadback = hostileReadback.app.focusPinState('BTCUSDT');
+  assert.equal(rejectedReadback.state, 'UNAVAILABLE');
+  assert.equal(rejectedReadback.effectivePinned, null);
+
+  const ineffectivePublication = fixture({
+    focusReadbackTransform: (state) => state.pinned
+      ? { ...state, effectivePinned: false, effectiveTier: 'UNIVERSE' }
+      : state,
+  });
+  assert.equal(ineffectivePublication.app.start().ok, true);
+  const ineffectiveRequest = validControlRequest(ineffectivePublication, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-ineffective-plan');
+  const ineffective = await ineffectivePublication.app.controls.mutate(ineffectiveRequest, ACTOR);
+  assert.equal(ineffective.ok, false);
+  assert.equal(ineffective.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  assert.deepEqual([...ineffectivePublication.focusPinState], ['BTCUSDT']);
+  const ineffectiveReceipt = await ineffectivePublication.app.controls.readResult(ineffectiveRequest.idempotencyKey);
+  assert.equal(ineffectiveReceipt.runtimePublication, 'PENDING');
+  assert.equal(ineffectivePublication.app.focusPinState('BTCUSDT').state, 'UNAVAILABLE');
+
+  const retainedCanonicalFocus = fixture({
+    focusReadbackTransform: (state) => state.pinned
+      ? state
+      : { ...state, effectivePinned: false, effectiveTier: 'FOCUS' },
+  });
+  assert.equal(retainedCanonicalFocus.app.start().ok, true);
+  const retainedPin = await retainedCanonicalFocus.app.controls.mutate(validControlRequest(retainedCanonicalFocus, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: true,
+  }, 'focus-pin-before-protected-focus'), ACTOR);
+  assert.equal(retainedPin.ok, true);
+  const retainedUnpin = await retainedCanonicalFocus.app.controls.mutate(validControlRequest(retainedCanonicalFocus, {
+    command: 'PIN_FOCUS', symbol: 'BTCUSDT', pinned: false,
+  }, 'focus-unpin-with-protected-focus'), ACTOR);
+  assert.equal(retainedUnpin.ok, true);
+  const retainedReadback = retainedCanonicalFocus.app.focusPinState('BTCUSDT');
+  assert.equal(retainedReadback.ownerPinned, false);
+  assert.equal(retainedReadback.effectivePinned, false);
+  assert.equal(retainedReadback.effectiveTier, 'FOCUS');
+  assert.equal(retainedReadback.state, 'APPLIED');
 });
 
 test('supervisor reuses one persisted trace cut until checkpoint revision advances', async () => {
@@ -822,6 +1411,57 @@ test('RESTART_COMPONENT stays pending until its exact supervisor correlation and
   );
   assert.equal(completedReceipt.receipt.runtimePublication, 'PUBLISHED');
   assert.equal(f.app.restartBarrier().reasonCodes.includes('CONTROL_COMMITTED_RUNTIME_PENDING'), false);
+});
+
+test('bounded subsystem restart publishes only after exact dependent-closure readback', async () => {
+  const f = fixture({
+    externalKill: false,
+    localMutationAuthority: 'PROVEN_ABSENT',
+    ordinaryDrainTruth: canonicalDrainTruth({
+      exposureState: 'NONE', ambiguityState: 'NONE', recoveryState: 'NONE',
+    }),
+  });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 8);
+  const initialStarts = structuredClone(f.states);
+  const lifecycleStart = f.order.length;
+  const request = validControlRequest(f, {
+    command: 'RESTART_COMPONENT', componentId: 'market-intelligence',
+  }, 'bounded-subsystem-restart');
+
+  const pendingResult = await f.app.controls.mutate(request, ACTOR);
+  assert.equal(pendingResult.ok, false);
+  assert.equal(pendingResult.failure.code, 'CONTROL_COMMITTED_RUNTIME_PENDING');
+  const pending = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(pending.ok, true);
+  assert.equal(pending.value.idempotencyReceipts.find(
+    (entry) => entry.idempotencyKey === request.idempotencyKey,
+  ).receipt.runtimePublication, 'PENDING');
+
+  await drive(f, 8);
+  assert.deepEqual(
+    f.order.slice(lifecycleStart).filter((entry) => entry.startsWith('runtime:stop:') || entry.startsWith('runtime:start:')),
+    [
+      'runtime:stop:volume', 'runtime:stop:basis', 'runtime:stop:market-intelligence',
+      'runtime:start:market-intelligence', 'runtime:start:basis', 'runtime:start:volume',
+    ],
+  );
+  assert.equal(f.states.market.starts, initialStarts.market.starts, 'upstream market owner must remain running');
+  assert.equal(
+    f.states.intelligenceRuntime.starts,
+    initialStarts.intelligenceRuntime.starts,
+    'upstream intelligence runtime must remain running',
+  );
+
+  const startsAfterCompletion = structuredClone(f.states);
+  const published = await f.app.controls.mutate(request, ACTOR);
+  assert.equal(published.ok, true);
+  assert.deepEqual(f.states, startsAfterCompletion, 'durable replay must not reissue the restart');
+  const completed = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(completed.ok, true);
+  assert.equal(completed.value.idempotencyReceipts.find(
+    (entry) => entry.idempotencyKey === request.idempotencyKey,
+  ).receipt.runtimePublication, 'PUBLISHED');
 });
 
 test('failed asynchronous restart never becomes published and exact replay never reissues it', async () => {

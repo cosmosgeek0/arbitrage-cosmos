@@ -6,6 +6,8 @@ import {
   PRODUCT_RUNTIME_TRACE_STAGES,
   buildProductRuntimeSupervisorEnvelope,
   createProductIntegrationRuntime,
+  productIncidentAcknowledgementControlId,
+  productRuntimeSurfaceReadinessBlocker,
   projectProductCorrelationTrace,
   projectProductMaterialEventPage,
 } from '../../../dist/productIntegration/runtime/index.js';
@@ -27,6 +29,43 @@ const OPS_PROJECTION = Object.freeze({
 });
 
 const SURFACE_BLOCKING_TRUTH = new Set(['BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN']);
+
+function availableIncidentSnapshot(overrides = {}) {
+  const incidentId = 'incident.product.runtime.episode.41';
+  return Object.freeze({
+    availability: Object.freeze({ state: 'AVAILABLE', truthLabel: 'BUILT_AND_TESTED', blocker: null }),
+    incidents: Object.freeze([Object.freeze({
+      incidentId,
+      fingerprint: 'incident.connection_unhealthy.runtime.episode.41',
+      ledgerEventId: 41,
+      severity: 'CRITICAL',
+      rootComponentId: 'market-streams',
+      sourceGroup: 'binance',
+      capitalRelevant: true,
+      firstSeenAtMs: T0 - 100,
+      lastSeenAtMs: T0 - 50,
+      count: 3,
+      state: 'OPEN',
+      reasonCode: 'CONNECTION_UNHEALTHY',
+      operatorAction: 'Acknowledge while recovery remains pending.',
+      correlationId: 'cor.product.runtime.41',
+      acknowledgedAtMs: null,
+      acknowledgedByOperatorId: null,
+      resolvedAtMs: null,
+      acknowledgementControlId: productIncidentAcknowledgementControlId(incidentId),
+      routing: Object.freeze({
+        inApp: Object.freeze({ state: 'WIRED_LOCAL', receiptId: 'ledger-event:17' }),
+        externalPaging: Object.freeze({
+          state: 'NOT_CONFIGURED',
+          receiptId: null,
+          blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED',
+        }),
+      }),
+      recoveryProof: Object.freeze({ state: 'PENDING', sourceEventId: null, resolvedAtMs: null }),
+      ...overrides,
+    })]),
+  });
+}
 
 function requiredSurfaceBlocker(surface) {
   return surface.evidence.find((datum) => datum.value === null || SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)) ?? null;
@@ -91,10 +130,59 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.equal(envelope.surfaces.account.bindingState, 'BLOCKED_BACKEND');
   assert.equal(envelope.surfaces.account.truthLabel, 'MISSING');
   assert.equal(envelope.surfaces.borrow.truthLabel, 'MISSING');
+  assert.deepEqual(
+    envelope.surfaces.borrow.evidence.map((datum) => datum.fieldId),
+    [
+      'mode-eligibility',
+      'borrow-eligibility',
+      'maximum-borrowable',
+      'borrow-limit',
+      'hourly-borrow-rate',
+      'current-borrowed',
+      'accrued-interest',
+      'collateral-amount',
+      'collateral-asset',
+      'current-ltv',
+      'liability-source-freshness',
+      'collateral-source-freshness',
+      'blocker',
+    ],
+  );
+  for (const datum of envelope.surfaces.borrow.evidence) {
+    assert.equal(datum.value, null, `${datum.fieldId} must stay null without canonical private owner evidence`);
+    assert.equal(datum.truthLabel, 'MISSING');
+    assert.equal(datum.canonicalSource, `systemIntegration:borrow:${datum.fieldId}`);
+    assert.equal(datum.unavailableReason, 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED');
+  }
+  const optionalBorrowFields = new Set([
+    'collateral-amount',
+    'collateral-asset',
+    'current-ltv',
+    'collateral-source-freshness',
+  ]);
+  const borrowWithOptionalUnknown = envelope.surfaces.borrow.evidence.map((datum) => Object.freeze({
+    ...datum,
+    value: optionalBorrowFields.has(datum.fieldId) ? null : 'OWNER_EVIDENCED',
+    truthLabel: optionalBorrowFields.has(datum.fieldId) ? 'MISSING' : 'WIRED',
+    unavailableReason: optionalBorrowFields.has(datum.fieldId) ? 'OPTIONAL_OWNER_NOT_AVAILABLE' : null,
+  }));
+  assert.equal(
+    productRuntimeSurfaceReadinessBlocker('borrow', borrowWithOptionalUnknown),
+    null,
+    'ENGINE section 11 optional collateral/LTV must not block an otherwise evidenced Borrow surface',
+  );
+  const missingBorrowed = borrowWithOptionalUnknown.map((datum) => datum.fieldId === 'current-borrowed'
+    ? Object.freeze({ ...datum, value: null, truthLabel: 'MISSING' })
+    : datum);
+  assert.equal(
+    productRuntimeSurfaceReadinessBlocker('borrow', missingBorrowed)?.fieldId,
+    'current-borrowed',
+    'required current liability remains fail-closed',
+  );
   assert.equal(envelope.surfaces.notifications.truthLabel, 'MISSING');
   assert.equal(envelope.surfaces.notifications.bindingState, 'BLOCKED_BACKEND');
   for (const surface of Object.values(envelope.surfaces)) {
-    const blocker = requiredSurfaceBlocker(surface);
+    const blocker = productRuntimeSurfaceReadinessBlocker(surface.surfaceId, surface.evidence);
     if (blocker === null) continue;
     assert.equal(surface.bindingState, 'BLOCKED_BACKEND', `${surface.surfaceId} cannot bind with ${blocker.fieldId} missing`);
     assert.ok(SURFACE_BLOCKING_TRUTH.has(surface.truthLabel), `${surface.surfaceId} cannot stay green with ${blocker.fieldId} missing`);
@@ -139,9 +227,106 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.match(envelope.digest, /^sha256:[a-f0-9]{64}$/);
   assert.deepEqual(envelope.controls.map((control) => control.backendCommandId), [
     'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
+    'SET_PUBLIC_SOURCE_LIFECYCLE', 'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_BASIS_INTAKE', 'SET_VOLUME_INTAKE',
   ]);
   assert.ok(envelope.controls.every((control) => control.wiringState === 'UNAVAILABLE:COMMAND_OWNER_NOT_CONFIGURED'));
   assert.ok(envelope.controls.every((control) => control.preview === null && control.disabledReason === 'COMMAND_OWNER_NOT_CONFIGURED'));
+});
+
+test('I00-050 projects one canonical incident cut without GET mutation and publishes local-only routing truth', async () => {
+  const base = makeRead();
+  let reads = 0;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      incidents: () => {
+        reads += 1;
+        return availableIncidentSnapshot();
+      },
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  const first = await service.readSupervisor();
+  assert.equal(reads, 1, 'one supervisor response consumes exactly one incident cut');
+  assert.equal(first.incidentAvailability.state, 'AVAILABLE');
+  assert.equal(first.incidents.length, 1);
+  assert.equal(first.incidents[0].acknowledgementControlId,
+    productIncidentAcknowledgementControlId(first.incidents[0].incidentId));
+  assert.equal(first.incidents[0].routing.inApp.state, 'WIRED_LOCAL');
+  assert.equal(first.incidents[0].routing.inApp.receiptId, 'ledger-event:17',
+    'the stable opening-route receipt is distinct from the current incident revision');
+  assert.equal(first.incidents[0].routing.externalPaging.state, 'NOT_CONFIGURED');
+  assert.equal(first.surfaces.notifications.bindingState, 'BINDING_READY');
+  assert.equal(first.surfaces.notifications.truthLabel, 'BUILT_AND_TESTED');
+  assert.equal(first.surfaces.notifications.canonicalSource,
+    'productIntegration incident-router projection');
+  assert.ok(first.surfaces.notifications.evidence.every((datum) => (
+    datum.value !== null && datum.canonicalSource.startsWith('productIntegration.incident-router:')
+  )));
+  const inventory = first.managedInventory.entries.find(
+    (entry) => entry.identity === 'notification-incident-router',
+  );
+  assert.deepEqual(inventory, {
+    identity: 'notification-incident-router',
+    owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+    canonicalComponentIds: [],
+    inventoryState: 'EVIDENCE_PRESENT',
+    evidence: [{
+      source: 'PRODUCT_RUNTIME_OWNER_PROJECTION',
+      ownerId: 'productIntegration.incident-router',
+      truthLabel: 'BUILT_AND_TESTED',
+    }],
+    reasonCode: null,
+  });
+  assert.equal(first.managedInventory.mappedIdentityCount, 15);
+  assert.equal(first.managedInventory.evidencePresentCount, 15);
+  assert.equal(first.managedInventory.notConfiguredCount, 2);
+
+  const second = await service.readSupervisor();
+  assert.equal(reads, 2);
+  assert.equal(JSON.stringify(second.incidents), JSON.stringify(first.incidents));
+});
+
+test('I00-050 rejects corrupt incident owner truth and contains unavailable owner reads', async () => {
+  const base = makeRead();
+  const malformed = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      incidents: () => availableIncidentSnapshot({ acknowledgementControlId: 'incident.ack.forged' }),
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  const malformedEnvelope = await malformed.readSupervisor();
+  assert.deepEqual(malformedEnvelope.incidentAvailability, {
+    state: 'UNAVAILABLE', truthLabel: 'UNAVAILABLE', blocker: 'INCIDENT_OWNER_READBACK_INVALID',
+  });
+  assert.deepEqual(malformedEnvelope.incidents, []);
+  assert.equal(malformedEnvelope.surfaces.notifications.bindingState, 'BLOCKED_BACKEND');
+
+  const impossibleChronology = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      incidents: () => availableIncidentSnapshot({
+        state: 'ACKNOWLEDGED',
+        acknowledgedAtMs: T0 - 101,
+        acknowledgedByOperatorId: 'operator-1',
+      }),
+    }),
+    clock: { nowMs: () => T0 },
+  });
+  const impossibleChronologyEnvelope = await impossibleChronology.readSupervisor();
+  assert.equal(impossibleChronologyEnvelope.incidentAvailability.blocker,
+    'INCIDENT_OWNER_READBACK_INVALID');
+  assert.deepEqual(impossibleChronologyEnvelope.incidents, []);
+
+  const failed = createProductIntegrationRuntime({
+    read: Object.freeze({ ...base, incidents: () => { throw new Error('owner unavailable'); } }),
+    clock: { nowMs: () => T0 },
+  });
+  const failedEnvelope = await failed.readSupervisor();
+  assert.equal(failedEnvelope.incidentAvailability.blocker, 'INCIDENT_OWNER_UNAVAILABLE');
+  assert.deepEqual(failedEnvelope.incidents, []);
 });
 
 test('I00 managed inventory reconciles all 33 roles without widening the 14-component supervisor', async () => {

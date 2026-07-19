@@ -4,41 +4,38 @@ import test from 'node:test';
 
 const headerUrl = new URL('../../src/components/Header.tsx', import.meta.url);
 
-test('premium Header notification polling is bounded and exposes last-known feed truth', async () => {
-  const source = await readFile(headerUrl, 'utf8');
+test('I00-050 premium Header and Notifications page share canonical incident truth without local regrouping', async () => {
+  const [source, page, selector] = await Promise.all([
+    readFile(headerUrl, 'utf8'),
+    readFile(new URL('../../src/pages/NotificationsPage.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/lib/productIntegration/incidentNotifications.ts', import.meta.url), 'utf8'),
+  ]);
   const sharedTopbarStart = source.indexOf('function SharedTopBar()');
-  const notificationReaderStart = source.indexOf('const readEventRows = async', sharedTopbarStart);
-  const notificationPollStart = source.indexOf('const notificationPoll = createSettledPoll<LedgerEvent[]>', sharedTopbarStart);
-  const notificationPollEnd = source.indexOf('// Compute the box geometry', notificationPollStart);
+  const notificationBoundaryEnd = source.indexOf('// Compute the box geometry', sharedTopbarStart);
   const premiumStart = source.indexOf('const premiumContent', sharedTopbarStart);
   const premiumNotificationStart = source.indexOf("case 'notif':", premiumStart);
   const premiumNotificationEnd = source.indexOf("case 'power':", premiumNotificationStart);
+  const canonicalProjectionStart = source.indexOf('const incidentAvailability =', sharedTopbarStart);
+  const canonicalProjectionEnd = source.indexOf('const killSwitchControl =', canonicalProjectionStart);
   const notificationTriggerTruthStart = source.indexOf('const notificationTriggerTruth =', sharedTopbarStart);
   const notificationTriggerTruthEnd = source.indexOf('const notificationFeedDetail =', notificationTriggerTruthStart);
 
-  assert.notEqual(notificationPollStart, -1, 'Header must use the shared settled-poll owner for notifications');
-  assert.notEqual(notificationReaderStart, -1, 'Header must route notification reads through the shared HTTP helper');
-  assert.notEqual(notificationPollEnd, -1, 'notification polling block is incomplete');
+  assert.notEqual(notificationBoundaryEnd, -1, 'Header notification state boundary is incomplete');
   assert.notEqual(premiumNotificationStart, -1, 'active premium notification sheet is missing');
   assert.notEqual(premiumNotificationEnd, -1, 'active premium notification sheet is incomplete');
+  assert.notEqual(canonicalProjectionStart, -1, 'Header canonical incident projection is missing');
+  assert.notEqual(canonicalProjectionEnd, -1, 'Header canonical incident projection is incomplete');
   assert.notEqual(notificationTriggerTruthStart, -1, 'notification trigger truth projection is missing');
   assert.notEqual(notificationTriggerTruthEnd, -1, 'notification trigger truth projection is incomplete');
 
-  const notificationEffect = source.slice(notificationReaderStart, notificationPollEnd);
-  const poll = source.slice(notificationPollStart, notificationPollEnd);
-  assert.match(poll, /intervalMs:\s*5_000/);
-  assert.match(poll, /timeoutMs:\s*15_000/);
-  assert.match(poll, /request:\s*async \(signal\)/);
-  assert.match(notificationEffect, /fetchJson<LedgerEvent\[]>\([^;]+\{[^}]*signal/s);
-  assert.match(poll, /onSuccess:[\s\S]*status:\s*'CURRENT'[\s\S]*lastSuccessAt:\s*Date\.now\(\)/);
-  assert.match(poll, /onError:[\s\S]*status:\s*current\.lastSuccessAt === null \? 'UNAVAILABLE' : 'STALE'/);
-  assert.match(poll, /apiErrorMessage\(error,\s*'Notification feed unavailable'\)/);
-  assert.match(poll, /notificationPoll\.start\(\)/);
-  assert.match(poll, /return notificationPoll\.stop/);
-  assert.match(poll, /Promise\.allSettled\(relevantKinds\.map/);
-  assert.match(poll, /bootstrapReads\.find\(\(result\) => result\.status === 'rejected'\)/);
-  assert.doesNotMatch(poll, /Promise\.all\(/);
-  assert.doesNotMatch(notificationEffect, /window\.setInterval|\bfetch\(/);
+  const preGeometry = source.slice(sharedTopbarStart, notificationBoundaryEnd);
+  const projection = source.slice(canonicalProjectionStart, canonicalProjectionEnd);
+  assert.doesNotMatch(preGeometry, /\/api\/events|notificationPoll|readEventRows|notifLiveEvents|groupNotifications|curateNotifications/);
+  assert.match(source.slice(sharedTopbarStart, canonicalProjectionStart), /const productSnapshot = productBinding\.snapshot/);
+  assert.match(projection, /productBinding\.continuity === 'PROVEN'/);
+  assert.match(projection, /productSnapshot\.incidentAvailability/);
+  assert.match(projection, /productSnapshot\.incidents/);
+  assert.match(projection, /projectCanonicalIncidentNotifications/);
 
   const premiumNotification = source.slice(premiumNotificationStart, premiumNotificationEnd);
   assert.match(premiumNotification, /notificationFeedStatus/);
@@ -46,11 +43,22 @@ test('premium Header notification polling is bounded and exposes last-known feed
   assert.match(premiumNotification, /Last-Known Feed/);
   assert.match(premiumNotification, /Notification Feed Unavailable/);
   assert.match(premiumNotification, /Feed Loading/);
+  assert.match(premiumNotification, /incident\.count[\s\S]*incident\.state[\s\S]*incident\.routing\.externalPaging\.state/);
+  assert.match(premiumNotification, /No Durable Incident Episodes/);
+  assert.match(premiumNotification, /not a derived system all-clear/);
 
   const notificationTriggerTruth = source.slice(notificationTriggerTruthStart, notificationTriggerTruthEnd);
-  assert.match(notificationTriggerTruth, /status === 'CURRENT'[\s\S]*'no unread events'/);
+  assert.match(notificationTriggerTruth, /status === 'CURRENT'[\s\S]*'no unread incidents'/);
   assert.match(notificationTriggerTruth, /status === 'STALE'[\s\S]*last-known unread[\s\S]*last-known feed/);
   assert.match(notificationTriggerTruth, /status === 'UNAVAILABLE'[\s\S]*feed unavailable[\s\S]*feed loading/);
   assert.match(source, /title: `Notifications — \$\{notificationTriggerTruth\} · feed \$\{notificationFeedStatus\}`/);
   assert.doesNotMatch(source, /title: `Notifications — \$\{unread \?/);
+
+  assert.match(page, /projectCanonicalIncidentNotifications/);
+  assert.match(page, /IncidentAcknowledgementButton/);
+  assert.match(page, /External Paging NOT_CONFIGURED/);
+  assert.match(page, /Mark \$\{unread\} Read/);
+  assert.doesNotMatch(page, /groupNotifications|curateNotifications|\/api\/events/);
+  assert.match(selector, /One-to-one browser presentation of server-grouped durable incident episodes/);
+  assert.doesNotMatch(selector, /new Map|groupNotifications|curateNotifications/);
 });

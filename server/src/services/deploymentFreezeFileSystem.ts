@@ -4,9 +4,12 @@ import {
   fstatSync,
   openSync,
   readFileSync,
+  lstatSync,
+  unlinkSync,
 } from 'node:fs';
 import type {
   DeploymentFreezeFileRead,
+  DeploymentFreezeClearFileSystem,
   DeploymentFreezeFileSystem,
 } from '../systemIntegration/ops/types.js';
 
@@ -21,6 +24,24 @@ class NodeDeploymentFreezeFileSystem implements DeploymentFreezeFileSystem {
     } finally {
       if (descriptor !== null) {
         try { closeSync(descriptor); } catch { /* caller remains fail closed */ }
+      }
+    }
+  }
+
+  removeRegularFileNoFollow(markerPath: string): void {
+    let descriptor: number | null = null;
+    try {
+      descriptor = openSync(markerPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const opened = fstatSync(descriptor);
+      const named = lstatSync(markerPath);
+      if (!opened.isFile() || !named.isFile() || named.isSymbolicLink()
+        || opened.dev !== named.dev || opened.ino !== named.ino) {
+        throw new Error('DEPLOYMENT_FREEZE_MARKER_IDENTITY_CHANGED');
+      }
+      unlinkSync(markerPath);
+    } finally {
+      if (descriptor !== null) {
+        try { closeSync(descriptor); } catch { /* unlink result remains authoritative */ }
       }
     }
   }
@@ -59,6 +80,6 @@ class NodeDeploymentFreezeFileSystem implements DeploymentFreezeFileSystem {
   }
 }
 
-export function createNodeDeploymentFreezeFileSystem(): DeploymentFreezeFileSystem {
+export function createNodeDeploymentFreezeFileSystem(): DeploymentFreezeFileSystem & DeploymentFreezeClearFileSystem {
   return Object.freeze(new NodeDeploymentFreezeFileSystem());
 }

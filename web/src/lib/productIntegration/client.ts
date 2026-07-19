@@ -29,7 +29,7 @@ export interface ProductIntegrationTransport {
     identity: Readonly<ProductCommandResultIdentity>,
     signal?: AbortSignal,
   ): Promise<Readonly<ProductCommandResultTransportResponse>>;
-  previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal): Promise<unknown>;
+  previewCommand(controlId: string, expectedRevision: string, targetId?: string, signal?: AbortSignal): Promise<unknown>;
   submitCommand(request: Readonly<ProductCommandRequest>, signal?: AbortSignal): Promise<unknown>;
 }
 
@@ -38,7 +38,7 @@ export interface ProductIntegrationClient {
   readMaterialEvents(afterCursor: string, limit?: number, signal?: AbortSignal): Promise<MaterialEventPage>;
   readTrace(correlationId: string, limit?: number, signal?: AbortSignal): Promise<ProductCorrelationTrace>;
   readCommandResult(identity: Readonly<ProductCommandResultIdentity>, signal?: AbortSignal): Promise<ProductCommandResultReadback>;
-  previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal): Promise<ProductControlPreview>;
+  previewCommand(controlId: string, expectedRevision: string, targetId?: string, signal?: AbortSignal): Promise<ProductControlPreview>;
   submitCommand(request: Readonly<ProductCommandRequest>, signal?: AbortSignal): Promise<ProductControlResult>;
 }
 
@@ -128,11 +128,12 @@ export function createProductIntegrationClient(
         : Object.freeze({ state, result, reasonCode: null });
     },
 
-    async previewCommand(controlId: string, expectedRevision: string, signal?: AbortSignal) {
-      if (!controlId || !expectedRevision) {
+    async previewCommand(controlId: string, expectedRevision: string, targetId?: string, signal?: AbortSignal) {
+      if (!controlId || !expectedRevision
+        || (targetId !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(targetId))) {
         throw new ProductBindingError('Control preview identity is incomplete.', ['CONTROL_PREVIEW_IDENTITY_INCOMPLETE']);
       }
-      const value = await transport.previewCommand(controlId, expectedRevision, signal);
+      const value = await transport.previewCommand(controlId, expectedRevision, targetId, signal);
       if (!isRecord(value)
         || value.controlId !== controlId
         || value.expectedRevision !== expectedRevision

@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, extname, join, relative, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
+import { scanProductionConsumers } from '../../../test/i00/baseline-route-consumers.mjs';
+import {
+  generateBaselineRouteMigration,
+  renderBaselineRouteMigration,
+} from '../../../test/i00/generate-baseline-route-migration.mjs';
 import { verifySealedOwnerClaim } from '../../../test/i00/sealed-owner-evidence.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -43,8 +48,6 @@ const MIGRATION_RESPONSES = Object.freeze([
   'RETIRED',
   'INTENTIONALLY_BLOCKED',
 ]);
-const EXPRESS_DECLARATION = /\b(?:app|router)\.(?:all|delete|get|patch|post|put|use)\s*\(/;
-
 function loadArtifact() {
   return JSON.parse(readFileSync(resolve(ROOT, ARTIFACT_PATH), 'utf8'));
 }
@@ -54,55 +57,6 @@ function directiveRoutes() {
   assert.equal(claim.ownerSha256, '9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5');
   assert.equal(claim.claimSha256, '6094f2eb554d601e0938344adcb20c60e4df83bd6c881ed7108972b5d1db3823');
   return [...claim.value];
-}
-
-function walk(rootPath, extensions) {
-  if (!existsSync(rootPath)) return [];
-  const rows = [];
-  for (const name of readdirSync(rootPath).sort()) {
-    const path = join(rootPath, name);
-    const stat = statSync(path);
-    if (stat.isDirectory()) rows.push(...walk(path, extensions));
-    else if (extensions.has(extname(name))) rows.push(path);
-  }
-  return rows;
-}
-
-function routeOccurrences(line, route) {
-  const family = route.endsWith('/*');
-  const literal = family ? route.slice(0, -2) : route;
-  let count = 0;
-  let cursor = 0;
-  while (cursor < line.length) {
-    const index = line.indexOf(literal, cursor);
-    if (index === -1) break;
-    const next = line[index + literal.length] ?? '';
-    const boundary = family
-      ? next === '' || next === '/' || next === '?' || /[\s'"`)}\],;]/.test(next)
-      : next === '' || next === '?' || /[\s'"`)}\],;]/.test(next);
-    if (boundary) count += 1;
-    cursor = index + literal.length;
-  }
-  return count;
-}
-
-function scanProductionConsumers(artifact, route) {
-  const extensions = new Set(artifact.consumerScan.extensions);
-  const counts = new Map();
-  for (const root of artifact.consumerScan.roots) {
-    for (const path of walk(resolve(ROOT, root), extensions)) {
-      const source = readFileSync(path, 'utf8');
-      let count = 0;
-      for (const line of source.split(/\r?\n/)) {
-        if (EXPRESS_DECLARATION.test(line)) continue;
-        count += routeOccurrences(line, route);
-      }
-      if (count > 0) counts.set(relative(ROOT, path), count);
-    }
-  }
-  return [...counts.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([path, occurrences]) => ({ path, occurrences }));
 }
 
 function countNeedle(path, needle) {
@@ -167,7 +121,7 @@ function validateArtifact(artifact) {
       assert.equal(countNeedle(evidence.path, evidence.needle), evidence.expectedOccurrences, `${route.route}: ${evidence.needle}`);
     }
 
-    const discoveredConsumers = scanProductionConsumers(artifact, route.route);
+    const discoveredConsumers = scanProductionConsumers(ROOT, artifact.consumerScan, route.route);
     assert.deepEqual(discoveredConsumers, route.productionConsumers, `${route.route} consumer inventory drifted`);
 
     if (route.classification === 'KEEP_CANONICAL') assert.equal(route.replacement, null, route.route);
@@ -215,6 +169,62 @@ test('§2A route inventory rejects missing routes, aliases without replacements 
   const registration = structuredClone(artifact);
   registration.routes[0].registrations[0].needle = "app.get('/api/not-state'";
   assert.throws(() => validateArtifact(registration));
+});
+
+test('§2A consumer inventory generator is deterministic and repairs only derived route consumers', () => {
+  const artifact = loadArtifact();
+  const generated = generateBaselineRouteMigration(artifact, ROOT);
+  const repeated = generateBaselineRouteMigration(generated, ROOT);
+  assert.equal(renderBaselineRouteMigration(generated), renderBaselineRouteMigration(repeated));
+  assert.equal(
+    readFileSync(resolve(ROOT, ARTIFACT_PATH), 'utf8'),
+    renderBaselineRouteMigration(generated),
+    'committed route inventory must be canonical generator output',
+  );
+  assert.deepEqual(
+    generated.routes.find((row) => row.route === '/api/markets').productionConsumers,
+    [
+      { path: 'server/src/engine/marketApiProjection.ts', occurrences: 1 },
+      { path: 'web/src/store.tsx', occurrences: 2 },
+    ],
+  );
+
+  const drifted = structuredClone(generated);
+  drifted.routes.find((row) => row.route === '/api/markets').productionConsumers = [];
+  assert.equal(
+    renderBaselineRouteMigration(generateBaselineRouteMigration(drifted, ROOT)),
+    renderBaselineRouteMigration(generated),
+  );
+
+  const withoutDerived = (document) => ({
+    ...document,
+    routes: document.routes.map(({ productionConsumers: _ignored, ...row }) => row),
+  });
+  assert.deepEqual(withoutDerived(generated), withoutDerived(artifact));
+});
+
+test('§2A consumer inventory generator rejects scan, route, and duplicate identity drift', () => {
+  const artifact = loadArtifact();
+  const wrongRoot = structuredClone(artifact);
+  wrongRoot.consumerScan.roots = ['server/src'];
+  assert.throws(
+    () => generateBaselineRouteMigration(wrongRoot, ROOT),
+    /BASELINE_ROUTE_CONSUMER_SCAN_INVALID/,
+  );
+
+  const wrongRoute = structuredClone(artifact);
+  wrongRoute.routes[0].route = '/not-api/state';
+  assert.throws(
+    () => generateBaselineRouteMigration(wrongRoute, ROOT),
+    /BASELINE_ROUTE_MIGRATION_GENERATOR_ROUTE_INVALID/,
+  );
+
+  const duplicate = structuredClone(artifact);
+  duplicate.routes[1].route = duplicate.routes[0].route;
+  assert.throws(
+    () => generateBaselineRouteMigration(duplicate, ROOT),
+    /BASELINE_ROUTE_MIGRATION_GENERATOR_ROUTE_INVALID/,
+  );
 });
 
 test('§2A legacy authority migrations are structurally fail-closed', () => {

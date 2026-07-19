@@ -3,5 +3,7 @@ export * from './commandIdentity';
 export * from './commandResultState';
 export * from './controlResultValidation';
 export * from './httpTransport';
+export * from './incidentNotifications';
 export * from './model';
+export * from './notificationRouting';
 export * from './useProductControlRoomBinding';

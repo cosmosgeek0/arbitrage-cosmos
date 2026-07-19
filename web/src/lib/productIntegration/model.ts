@@ -1,9 +1,13 @@
+import { browserIncidentAcknowledgementControlId } from './sha256';
+
 export const PRODUCT_SUPERVISOR_SCHEMA = 'product-supervisor.v1' as const;
 export const PRODUCT_COMMAND_SCHEMA = 'product-command.v1' as const;
 export const MATERIAL_CURSOR_SCHEMA = 'material-cursor.v1' as const;
 export const PRODUCT_MANAGED_INVENTORY_SCHEMA = 'i00-managed-inventory.v1' as const;
 export const SAFE_LIVE_BACKEND_COMMAND_IDS: readonly string[] = Object.freeze([
   'SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT',
+  'SET_PUBLIC_SOURCE_LIFECYCLE', 'SET_BASIS_INTAKE', 'SET_VOLUME_INTAKE',
+  'ACK_INCIDENT',
 ]);
 export const PRODUCT_TRACE_STAGES: readonly string[] = Object.freeze([
   'Market Source',
@@ -218,12 +222,33 @@ export interface ProductComponentProjection {
   readonly capability: ProductCapability;
   readonly heartbeatAtMs: number | null;
   readonly lastAdvanceAtMs: number | null;
+  readonly freshnessState: 'FRESH' | 'STALE' | 'CLOCK_SKEWED' | 'UNAVAILABLE';
   readonly sourceAgeMs: number | null;
   readonly eventAgeMs: number | null;
   readonly processingAgeMs: number | null;
+  readonly processingLagMs: number | null;
   readonly queueDepth: number | null;
   readonly queueCapacity: number | null;
   readonly droppedCount: number | null;
+  readonly dataQualityState: 'GOOD' | 'DEGRADED' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly dataQualityInvalidCount: number | null;
+  readonly dataQualityDuplicateCount: number | null;
+  readonly dataQualityOutOfOrderCount: number | null;
+  readonly dataQualitySequenceGapCount: number | null;
+  readonly dataQualityObservedAtMs: number | null;
+  readonly retryState: 'IDLE' | 'RETRYING' | 'BACKING_OFF' | 'COOLDOWN' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly retryAttempt: number | null;
+  readonly retryCeiling: number | null;
+  readonly backoffMs: number | null;
+  readonly retryAtMs: number | null;
+  readonly cooldownUntilMs: number | null;
+  readonly dependencyIds: readonly string[];
+  readonly checkpointState: 'CURRENT' | 'DIRTY' | 'STALE' | 'MISSING' | 'UNKNOWN' | 'UNAVAILABLE';
+  readonly checkpointRevision: string | null;
+  readonly checkpointPersistedAtMs: number | null;
+  readonly restartState: 'NEVER_RESTARTED' | 'RESTARTED' | 'RESTART_REQUIRED' | 'UNKNOWN';
+  readonly generation: number;
+  readonly restartCount: number;
   readonly blockerCode: string | null;
   readonly rootCauseComponentId: string | null;
   readonly capitalRelevance: 'NONE' | 'POTENTIAL' | 'EXPOSED' | 'RECOVERY';
@@ -259,11 +284,21 @@ export type ProductManagedInventoryState =
   | 'NOT_CONFIGURED'
   | 'MISSING';
 
-export interface ProductManagedInventoryEvidenceRef {
+export interface ProductManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
 }
+
+export interface ProductManagedInventoryOwnerEvidenceRef {
+  readonly source: 'PRODUCT_RUNTIME_OWNER_PROJECTION';
+  readonly ownerId: 'productIntegration.incident-router';
+  readonly truthLabel: 'BUILT_AND_TESTED';
+}
+
+export type ProductManagedInventoryEvidenceRef =
+  | ProductManagedInventoryComponentEvidenceRef
+  | ProductManagedInventoryOwnerEvidenceRef;
 
 export interface ProductManagedInventoryEntry {
   readonly identity: I00ManagedComponentIdentity;
@@ -498,17 +533,37 @@ export interface ProductIncidentAvailability {
 }
 
 export interface ProductIncidentProjection {
+  readonly incidentId: string;
   readonly fingerprint: string;
+  readonly ledgerEventId: number;
   readonly severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
   readonly rootComponentId: string;
+  readonly sourceGroup: string;
   readonly capitalRelevant: boolean;
   readonly firstSeenAtMs: number;
   readonly lastSeenAtMs: number;
   readonly count: number;
   readonly state: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   readonly reasonCode: string;
-  readonly operatorAction: string | null;
-  readonly correlationId: string | null;
+  readonly operatorAction: string;
+  readonly correlationId: string;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly acknowledgementControlId: string;
+  readonly routing: Readonly<{
+    readonly inApp: Readonly<{ readonly state: 'WIRED_LOCAL'; readonly receiptId: string }>;
+    readonly externalPaging: Readonly<{
+      readonly state: 'NOT_CONFIGURED';
+      readonly receiptId: null;
+      readonly blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED';
+    }>;
+  }>;
+  readonly recoveryProof: Readonly<{
+    readonly state: 'PENDING' | 'PROVEN';
+    readonly sourceEventId: number | null;
+    readonly resolvedAtMs: number | null;
+  }>;
 }
 
 export interface MaterialEventProjection {
@@ -725,7 +780,7 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   basis: Object.freeze(['directional-cases', 'economics', 'gap', 'funding', 'depth-slippage', 'borrow', 'feasibility', 'staging', 'proposal-reject', 'execution-recovery']),
   volume: Object.freeze(['quiet-baseline', 'transition-stage', 'anomaly-follow-through', 'spot-perp-leadership', 'liquidity-crowding', 'analogues-false-positives', 'q-uncertainty', 'proposal-reject', 'position-outcome']),
   opportunities: Object.freeze(['strategy-source-revision', 'evidence-conflict-missing', 'model-assessment', 'net-economics', 'capital-risk-verdict', 'size-staging', 'expiry-invalidation', 'entry-exit-recovery', 'approval', 'rejection']),
-  borrow: Object.freeze(['availability-inventory', 'maximum-borrowable', 'rate-interest', 'account-collateral', 'freshness', 'principal-accrual-repay', 'proposal-ticket', 'unsupported']),
+  borrow: Object.freeze(['mode-eligibility', 'borrow-eligibility', 'maximum-borrowable', 'borrow-limit', 'hourly-borrow-rate', 'current-borrowed', 'accrued-interest', 'collateral-amount', 'collateral-asset', 'current-ltv', 'liability-source-freshness', 'collateral-source-freshness', 'blocker']),
   execution: Object.freeze(['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'one-leg-timer', 'exit-capacity', 'funding-borrow', 'controls', 'pnl-attribution']),
   orders: Object.freeze(['ticket-leg-state', 'quantities', 'order-identities', 'ambiguity-reconciliation', 'controls']),
   positions: Object.freeze(['ticket-position-link', 'gross-net-unhedged', 'one-leg-timer', 'exit-capacity', 'recovery']),
@@ -737,13 +792,28 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
   notifications: Object.freeze(['fingerprint-dedup', 'causal-group', 'root-cause', 'severity-capital', 'first-last-count', 'state', 'owner-action', 'routing', 'correlation', 'silence-ack', 'recovery-proof']),
 });
 
+/**
+ * Required rows whose values are conditional rather than readiness-blocking.
+ * ENGINE section 11 permits collateral/LTV to stay unknown when no exact
+ * same-margin owner exists; the rows remain visible so the absence is honest.
+ */
+export const OPTIONAL_SURFACE_EVIDENCE: Readonly<Partial<Record<SurfaceId, readonly string[]>>> = Object.freeze({
+  borrow: Object.freeze([
+    'collateral-amount',
+    'collateral-asset',
+    'current-ltv',
+    'collateral-source-freshness',
+  ]),
+});
+
 const PRODUCT_SURFACE_BLOCKING_TRUTH = new Set<ProductTruthLabel>([
   'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
 ]);
 
 /**
- * Cross-field readiness law. Shape-valid fields are not enough: every required
- * datum must be present and non-blocking before a surface may render ready.
+ * Cross-field readiness law. Shape-valid fields are not enough: every
+ * readiness-required datum must be present and non-blocking before a surface
+ * may render ready. Conditional rows remain visible without fabricating facts.
  */
 export function productSurfaceReadinessBlocker(
   surface: Readonly<Pick<ProductSurfaceProjection, 'surfaceId' | 'evidence'>>,
@@ -752,6 +822,7 @@ export function productSurfaceReadinessBlocker(
     const matches = surface.evidence.filter((datum) => datum.fieldId === fieldId);
     if (matches.length !== 1) return `REQUIRED_EVIDENCE_CARDINALITY:${fieldId}`;
     const datum = matches[0]!;
+    if (OPTIONAL_SURFACE_EVIDENCE[surface.surfaceId]?.includes(fieldId)) continue;
     if (datum.value === null || PRODUCT_SURFACE_BLOCKING_TRUTH.has(datum.truthLabel)) {
       return `REQUIRED_EVIDENCE_${datum.truthLabel}:${fieldId}`;
     }
@@ -1289,12 +1360,33 @@ function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenario
       capability: projectedCapability,
       heartbeatAtMs: nowMs - 1_000 - index * 20,
       lastAdvanceAtMs: nowMs - 800 - index * 20,
+      freshnessState: componentId.includes('source') ? 'FRESH' : 'UNAVAILABLE',
       sourceAgeMs: componentId.includes('source') ? 1_000 : null,
       eventAgeMs: 1_000 + index * 10,
       processingAgeMs: 200 + index * 5,
+      processingLagMs: null,
       queueDepth: index % 3,
       queueCapacity: 100,
       droppedCount: 0,
+      dataQualityState: 'UNAVAILABLE',
+      dataQualityInvalidCount: null,
+      dataQualityDuplicateCount: null,
+      dataQualityOutOfOrderCount: null,
+      dataQualitySequenceGapCount: null,
+      dataQualityObservedAtMs: null,
+      retryState: 'UNAVAILABLE',
+      retryAttempt: null,
+      retryCeiling: null,
+      backoffMs: null,
+      retryAtMs: null,
+      cooldownUntilMs: null,
+      dependencyIds: Object.freeze([]),
+      checkpointState: 'UNAVAILABLE',
+      checkpointRevision: null,
+      checkpointPersistedAtMs: null,
+      restartState: 'NEVER_RESTARTED',
+      generation: 1,
+      restartCount: 0,
       blockerCode: null,
       rootCauseComponentId: null,
       capitalRelevance: scenarioId === 'RECOVERY_REQUIRED_ONE_LEG' && componentId === 'reconciliation' ? 'RECOVERY' : 'NONE',
@@ -1356,15 +1448,32 @@ function fixtureIncident(
   reasonCode: string,
   capitalRelevant: boolean,
 ): ProductIncidentProjection {
+  const ledgerEventId = Math.max(1, session.tick + 1);
   return Object.freeze({
+    incidentId: `incident.fixture.${session.sessionId}.${rootComponentId}`,
     fingerprint: `fixture:${rootComponentId}:${reasonCode}`,
+    ledgerEventId,
     severity, rootComponentId, capitalRelevant,
+    sourceGroup: rootComponentId === 'aws-runner' ? 'infrastructure' : 'bot',
     firstSeenAtMs: session.startedAtMs,
     lastSeenAtMs: session.nowMs,
     count: Math.max(1, session.tick + 1),
     state: 'OPEN', reasonCode,
     operatorAction: capitalRelevant ? 'Inspect the synthetic recovery control.' : 'Inspect the synthetic source/control evidence.',
     correlationId: `fixture-correlation-${session.sessionId}`,
+    acknowledgedAtMs: null,
+    acknowledgedByOperatorId: null,
+    resolvedAtMs: null,
+    acknowledgementControlId: `incident.ack.${'0'.repeat(64)}`,
+    routing: Object.freeze({
+      inApp: Object.freeze({ state: 'WIRED_LOCAL', receiptId: `ledger-event:${ledgerEventId}` }),
+      externalPaging: Object.freeze({
+        state: 'NOT_CONFIGURED',
+        receiptId: null,
+        blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED',
+      }),
+    }),
+    recoveryProof: Object.freeze({ state: 'PENDING', sourceEventId: null, resolvedAtMs: null }),
   });
 }
 
@@ -1768,9 +1877,85 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
           errors.push(`COMPONENT_CANONICAL_PRESENTATION_FALSE_GREEN:${component.componentId}`);
         }
       }
-      for (const field of ['heartbeatAtMs', 'lastAdvanceAtMs', 'sourceAgeMs', 'eventAgeMs', 'processingAgeMs', 'queueDepth', 'queueCapacity', 'droppedCount']) {
-        if (!isNonnegativeNumberOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
+      for (const field of ['heartbeatAtMs', 'lastAdvanceAtMs', 'dataQualityObservedAtMs', 'retryAtMs', 'cooldownUntilMs', 'checkpointPersistedAtMs']) {
+        if (!isUtcMillisOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
       }
+      for (const field of ['sourceAgeMs', 'eventAgeMs', 'processingAgeMs', 'processingLagMs', 'queueDepth', 'queueCapacity', 'droppedCount', 'dataQualityInvalidCount', 'dataQualityDuplicateCount', 'dataQualityOutOfOrderCount', 'dataQualitySequenceGapCount', 'retryAttempt', 'retryCeiling', 'backoffMs']) {
+        if (!isNonnegativeSafeIntegerOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
+      }
+      if (!['FRESH', 'STALE', 'CLOCK_SKEWED', 'UNAVAILABLE'].includes(String(component.freshnessState))) errors.push('COMPONENT_FIELD_INVALID:freshnessState');
+      if (!['GOOD', 'DEGRADED', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.dataQualityState))) errors.push('COMPONENT_FIELD_INVALID:dataQualityState');
+      if (!['IDLE', 'RETRYING', 'BACKING_OFF', 'COOLDOWN', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.retryState))) errors.push('COMPONENT_FIELD_INVALID:retryState');
+      if (!['CURRENT', 'DIRTY', 'STALE', 'MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.checkpointState))) errors.push('COMPONENT_FIELD_INVALID:checkpointState');
+      if (!['NEVER_RESTARTED', 'RESTARTED', 'RESTART_REQUIRED', 'UNKNOWN'].includes(String(component.restartState))) errors.push('COMPONENT_FIELD_INVALID:restartState');
+      if (!Number.isSafeInteger(component.generation) || Number(component.generation) < 0) errors.push('COMPONENT_FIELD_INVALID:generation');
+      if (!Number.isSafeInteger(component.restartCount) || Number(component.restartCount) < 0) errors.push('COMPONENT_FIELD_INVALID:restartCount');
+      if (!isStringArray(component.dependencyIds)
+        || component.dependencyIds.length > 200
+        || new Set(component.dependencyIds).size !== component.dependencyIds.length
+        || component.dependencyIds.includes(component.componentId)) errors.push('COMPONENT_FIELD_INVALID:dependencyIds');
+      if (component.checkpointRevision !== null
+        && (typeof component.checkpointRevision !== 'string'
+          || component.checkpointRevision.length === 0
+          || component.checkpointRevision.length > 256)) errors.push('COMPONENT_FIELD_INVALID:checkpointRevision');
+      const dataQualityCounts = ['dataQualityInvalidCount', 'dataQualityDuplicateCount', 'dataQualityOutOfOrderCount', 'dataQualitySequenceGapCount'];
+      const dataQualityDetails = [...dataQualityCounts, 'dataQualityObservedAtMs'];
+      if (['UNKNOWN', 'UNAVAILABLE'].includes(String(component.dataQualityState))
+        && dataQualityDetails.some((field) => component[field] !== null)) errors.push('COMPONENT_DATA_QUALITY_UNKNOWN_CONFLICT');
+      if (component.dataQualityState === 'GOOD') {
+        if (component.dataQualityObservedAtMs === null
+          || dataQualityCounts.some((field) => component[field] === null)) {
+          errors.push('COMPONENT_DATA_QUALITY_GOOD_EVIDENCE_REQUIRED');
+        } else if (dataQualityCounts.some((field) => component[field] !== 0)) {
+          errors.push('COMPONENT_DATA_QUALITY_GOOD_CONFLICT');
+        }
+      } else if (component.dataQualityState === 'DEGRADED'
+        && (component.dataQualityObservedAtMs === null
+          || dataQualityCounts.some((field) => component[field] === null))) {
+        errors.push('COMPONENT_DATA_QUALITY_DEGRADED_EVIDENCE_REQUIRED');
+      }
+      const retryDetails = ['retryAttempt', 'retryCeiling', 'backoffMs', 'retryAtMs', 'cooldownUntilMs'];
+      if (['UNKNOWN', 'UNAVAILABLE'].includes(String(component.retryState))
+        && retryDetails.some((field) => component[field] !== null)) errors.push('COMPONENT_RETRY_UNKNOWN_CONFLICT');
+      const retryAttempt = component.retryAttempt;
+      const retryCeiling = component.retryCeiling;
+      const activeAttempt = typeof retryAttempt === 'number' && retryAttempt > 0;
+      const boundedCeiling = typeof retryCeiling === 'number'
+        && activeAttempt && retryCeiling >= retryAttempt;
+      const scheduled = typeof component.backoffMs === 'number' && component.retryAtMs !== null;
+      if (component.retryState === 'IDLE'
+        && (component.retryAttempt !== 0 || component.retryCeiling === null
+          || component.backoffMs !== null || component.retryAtMs !== null || component.cooldownUntilMs !== null)) {
+        errors.push('COMPONENT_RETRY_IDLE_CONFLICT');
+      } else if (component.retryState === 'RETRYING'
+        && (!activeAttempt || !boundedCeiling || !scheduled || component.cooldownUntilMs !== null)) {
+        errors.push('COMPONENT_RETRY_ACTIVE_EVIDENCE_REQUIRED');
+      } else if (component.retryState === 'BACKING_OFF'
+        && (!activeAttempt || !boundedCeiling || !scheduled || Number(component.backoffMs) < 1
+          || component.cooldownUntilMs !== null)) {
+        errors.push('COMPONENT_RETRY_BACKOFF_EVIDENCE_REQUIRED');
+      } else if (component.retryState === 'COOLDOWN') {
+        if (!activeAttempt || !boundedCeiling || !scheduled || component.cooldownUntilMs === null) {
+          errors.push('COMPONENT_RETRY_COOLDOWN_EVIDENCE_REQUIRED');
+        } else if (typeof component.retryAtMs === 'number'
+          && typeof component.cooldownUntilMs === 'number'
+          && component.cooldownUntilMs < component.retryAtMs) {
+          errors.push('COMPONENT_RETRY_COOLDOWN_ORDER_INVALID');
+        }
+      }
+      if (['MISSING', 'UNKNOWN', 'UNAVAILABLE'].includes(String(component.checkpointState))
+        && (component.checkpointRevision !== null || component.checkpointPersistedAtMs !== null)) errors.push('COMPONENT_CHECKPOINT_UNKNOWN_CONFLICT');
+      if (['CURRENT', 'DIRTY', 'STALE'].includes(String(component.checkpointState))
+        && (component.checkpointRevision === null || component.checkpointPersistedAtMs === null)) errors.push('COMPONENT_CHECKPOINT_EVIDENCE_REQUIRED');
+      const restartEvidence = typeof component.blockerCode === 'string'
+        && (component.blockerCode === 'RESTART_REQUIRED' || component.blockerCode.endsWith('_RESTART_REQUIRED'));
+      if (component.restartState === 'RESTARTED'
+        && (!(Number(component.restartCount) > 0) || !(Number(component.generation) > 0))) errors.push('COMPONENT_RESTART_STATE_CONFLICT');
+      if (component.restartState === 'NEVER_RESTARTED'
+        && (component.restartCount !== 0 || !(Number(component.generation) > 0))) errors.push('COMPONENT_RESTART_STATE_CONFLICT');
+      if (component.restartState === 'RESTART_REQUIRED' && !restartEvidence) errors.push('COMPONENT_RESTART_EVIDENCE_REQUIRED');
+      if (component.restartState === 'UNKNOWN'
+        && (component.restartCount !== 0 || component.generation !== 0)) errors.push('COMPONENT_RESTART_STATE_CONFLICT');
       if (typeof component.queueDepth === 'number' && typeof component.queueCapacity === 'number' && component.queueDepth > component.queueCapacity) errors.push('COMPONENT_QUEUE_INVALID');
       for (const field of ['blockerCode', 'rootCauseComponentId', 'correlationId']) {
         if (!isStringOrNull(component[field])) errors.push(`COMPONENT_FIELD_INVALID:${field}`);
@@ -1792,7 +1977,12 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
     }
   }
   errors.push(...validateCanonicalCockpitTruth(value.canonicalCockpit, value.components, value.ownerView));
-  errors.push(...validateProductManagedInventory(value.managedInventory, value.components, value.ownerView));
+  errors.push(...validateProductManagedInventory(
+    value.managedInventory,
+    value.components,
+    value.ownerView,
+    value.incidentAvailability,
+  ));
   if (!Array.isArray(value.dependencyEdges)) errors.push('DEPENDENCY_EDGES_MISSING');
   else {
     if (value.dependencyEdges.length > 1_000) errors.push('DEPENDENCY_EDGES_OUT_OF_BOUNDS');
@@ -1817,7 +2007,9 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       && (typeof value.incidentAvailability.blocker !== 'string' || value.incidentAvailability.blocker.length === 0))) {
     errors.push('INCIDENT_AVAILABILITY_INVALID');
   } else if ((value.incidentAvailability.state === 'AVAILABLE'
-      && !['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY'].includes(String(value.incidentAvailability.truthLabel)))
+      && value.incidentAvailability.truthLabel !== 'BUILT_AND_TESTED'
+      && !(value.truthLabel === 'SYNTHETIC_ONLY'
+        && value.incidentAvailability.truthLabel === 'SYNTHETIC_ONLY'))
     || (value.incidentAvailability.state === 'NOT_CONFIGURED' && value.incidentAvailability.truthLabel !== 'NOT_CONFIGURED')
     || (value.incidentAvailability.state === 'UNAVAILABLE'
       && !['UNAVAILABLE', 'UNKNOWN'].includes(String(value.incidentAvailability.truthLabel)))) {
@@ -1826,19 +2018,102 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (!Array.isArray(value.incidents)) errors.push('INCIDENT_PROJECTION_MISSING');
   else {
     if (value.incidents.length > 200) errors.push('INCIDENT_PROJECTION_OUT_OF_BOUNDS');
+    const incidentIds = new Set<string>();
+    const incidentFingerprints = new Set<string>();
+    const incidentKeys = [
+      'incidentId', 'fingerprint', 'ledgerEventId', 'severity', 'rootComponentId',
+      'sourceGroup', 'capitalRelevant', 'firstSeenAtMs', 'lastSeenAtMs', 'count',
+      'state', 'reasonCode', 'operatorAction', 'correlationId', 'acknowledgedAtMs',
+      'acknowledgedByOperatorId', 'resolvedAtMs', 'acknowledgementControlId',
+      'routing', 'recoveryProof',
+    ];
     for (const incident of value.incidents) {
       if (!isRecord(incident)
-        || typeof incident.fingerprint !== 'string' || incident.fingerprint.length === 0
-        || typeof incident.rootComponentId !== 'string' || incident.rootComponentId.length === 0
-        || typeof incident.reasonCode !== 'string' || incident.reasonCode.length === 0
+        || !exactRecordKeys(incident, incidentKeys)
+        || typeof incident.incidentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.incidentId)
+        || typeof incident.fingerprint !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.fingerprint)
+        || !Number.isSafeInteger(incident.ledgerEventId) || Number(incident.ledgerEventId) < 1
+        || typeof incident.rootComponentId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.rootComponentId)
+        || typeof incident.sourceGroup !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.sourceGroup)
+        || typeof incident.reasonCode !== 'string' || incident.reasonCode.length === 0 || incident.reasonCode.length > 128
         || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(String(incident.severity))
         || !['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].includes(String(incident.state))
         || typeof incident.capitalRelevant !== 'boolean'
-        || !Number.isFinite(incident.firstSeenAtMs)
-        || !Number.isFinite(incident.lastSeenAtMs)
+        || !Number.isSafeInteger(incident.firstSeenAtMs)
+        || !Number.isSafeInteger(incident.lastSeenAtMs)
+        || Number(incident.firstSeenAtMs) < 0
+        || Number(incident.firstSeenAtMs) > PRODUCT_BOOT_RELEASE_MAX_UTC_MS
+        || Number(incident.lastSeenAtMs) > PRODUCT_BOOT_RELEASE_MAX_UTC_MS
+        || Number(incident.lastSeenAtMs) < Number(incident.firstSeenAtMs)
         || !Number.isInteger(incident.count) || Number(incident.count) < 1
-        || !isStringOrNull(incident.operatorAction)
-        || !isStringOrNull(incident.correlationId)) errors.push('INCIDENT_ENTRY_INVALID');
+        || typeof incident.operatorAction !== 'string' || incident.operatorAction.length < 1 || incident.operatorAction.length > 2_000
+        || typeof incident.correlationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/.test(incident.correlationId)
+        || !(incident.acknowledgedAtMs === null
+          || (Number.isSafeInteger(incident.acknowledgedAtMs)
+            && Number(incident.acknowledgedAtMs) >= 0
+            && Number(incident.acknowledgedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))
+        || !(incident.acknowledgedByOperatorId === null
+          || (typeof incident.acknowledgedByOperatorId === 'string' && incident.acknowledgedByOperatorId.length > 0))
+        || !(incident.resolvedAtMs === null
+          || (Number.isSafeInteger(incident.resolvedAtMs)
+            && Number(incident.resolvedAtMs) >= 0
+            && Number(incident.resolvedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))
+        || typeof incident.acknowledgementControlId !== 'string'
+        || !/^incident\.ack\.[a-f0-9]{64}$/.test(incident.acknowledgementControlId)
+        || !isRecord(incident.routing)
+        || !exactRecordKeys(incident.routing, ['inApp', 'externalPaging'])
+        || !isRecord(incident.routing.inApp)
+        || !exactRecordKeys(incident.routing.inApp, ['state', 'receiptId'])
+        || incident.routing.inApp.state !== 'WIRED_LOCAL'
+        || typeof incident.routing.inApp.receiptId !== 'string'
+        || !/^ledger-event:[1-9][0-9]{0,15}$/.test(incident.routing.inApp.receiptId)
+        || !Number.isSafeInteger(Number(incident.routing.inApp.receiptId.slice('ledger-event:'.length)))
+        || Number(incident.routing.inApp.receiptId.slice('ledger-event:'.length)) > Number(incident.ledgerEventId)
+        || !isRecord(incident.routing.externalPaging)
+        || !exactRecordKeys(incident.routing.externalPaging, ['state', 'receiptId', 'blocker'])
+        || incident.routing.externalPaging.state !== 'NOT_CONFIGURED'
+        || incident.routing.externalPaging.receiptId !== null
+        || incident.routing.externalPaging.blocker !== 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED'
+        || !isRecord(incident.recoveryProof)
+        || !exactRecordKeys(incident.recoveryProof, ['state', 'sourceEventId', 'resolvedAtMs'])
+        || !['PENDING', 'PROVEN'].includes(String(incident.recoveryProof.state))
+        || !(incident.recoveryProof.sourceEventId === null
+          || (Number.isSafeInteger(incident.recoveryProof.sourceEventId)
+            && Number(incident.recoveryProof.sourceEventId) >= 1))
+        || !(incident.recoveryProof.resolvedAtMs === null
+          || (Number.isSafeInteger(incident.recoveryProof.resolvedAtMs)
+            && Number(incident.recoveryProof.resolvedAtMs) >= 0
+            && Number(incident.recoveryProof.resolvedAtMs) <= PRODUCT_BOOT_RELEASE_MAX_UTC_MS))) {
+        errors.push('INCIDENT_ENTRY_INVALID');
+        continue;
+      }
+      const hasAck = incident.acknowledgedAtMs !== null && incident.acknowledgedByOperatorId !== null;
+      const exactAck = hasAck === (
+        incident.acknowledgedAtMs !== null || incident.acknowledgedByOperatorId !== null
+      );
+      const resolved = incident.state === 'RESOLVED';
+      if (!exactAck
+        || (incident.state === 'OPEN' && hasAck)
+        || (incident.state === 'ACKNOWLEDGED' && !hasAck)
+        || (incident.acknowledgedAtMs !== null
+          && Number(incident.acknowledgedAtMs) < Number(incident.firstSeenAtMs))
+        || resolved !== (incident.resolvedAtMs !== null)
+        || resolved !== (incident.recoveryProof.state === 'PROVEN')
+        || resolved !== (incident.recoveryProof.sourceEventId !== null)
+        || incident.recoveryProof.resolvedAtMs !== incident.resolvedAtMs
+        || (incident.resolvedAtMs !== null && incident.resolvedAtMs !== incident.lastSeenAtMs)
+        || (isRecord(value.incidentAvailability)
+          && value.incidentAvailability.truthLabel === 'BUILT_AND_TESTED'
+          && (incident.reasonCode !== 'CONNECTION_UNHEALTHY'
+            || incident.acknowledgementControlId
+              !== browserIncidentAcknowledgementControlId(incident.incidentId)))) {
+        errors.push('INCIDENT_STATE_RELATIONSHIP_INVALID');
+      }
+      if (incidentIds.has(incident.incidentId) || incidentFingerprints.has(incident.fingerprint)) {
+        errors.push('INCIDENT_IDENTITY_DUPLICATE');
+      }
+      incidentIds.add(incident.incidentId);
+      incidentFingerprints.add(incident.fingerprint);
     }
     if (isRecord(value.incidentAvailability) && value.incidentAvailability.state !== 'AVAILABLE' && value.incidents.length > 0) {
       errors.push('INCIDENTS_PUBLISHED_WHILE_UNAVAILABLE');
@@ -2066,6 +2341,7 @@ function validateProductManagedInventory(
   inventoryValue: unknown,
   componentsValue: unknown,
   ownerViewValue: unknown,
+  incidentAvailabilityValue: unknown,
 ): readonly string[] {
   if (!isRecord(inventoryValue)) return Object.freeze(['MANAGED_INVENTORY_MISSING']);
   const errors: string[] = [];
@@ -2089,6 +2365,13 @@ function validateProductManagedInventory(
   )).length;
 
   const entries = inventoryValue.entries;
+  const durableIncidentOwnerAvailable = isRecord(incidentAvailabilityValue)
+    && incidentAvailabilityValue.state === 'AVAILABLE'
+    && incidentAvailabilityValue.truthLabel === 'BUILT_AND_TESTED'
+    && incidentAvailabilityValue.blocker === null;
+  const durableIncidentOwnerUnavailable = isRecord(incidentAvailabilityValue)
+    && incidentAvailabilityValue.state === 'UNAVAILABLE'
+    && typeof incidentAvailabilityValue.blocker === 'string';
   const validEntries: Record<string, unknown>[] = [];
   if (!Array.isArray(entries)) {
     errors.push('MANAGED_INVENTORY_ENTRIES_MISSING');
@@ -2105,7 +2388,11 @@ function validateProductManagedInventory(
       }
       validEntries.push(entry);
       if (entry.identity !== contract.identity) errors.push('MANAGED_INVENTORY_IDENTITY_ORDER_INVALID');
-      if (entry.owner !== contract.owner) errors.push('MANAGED_INVENTORY_OWNER_MISMATCH');
+      const dynamicIncidentOwner = contract.identity === 'notification-incident-router'
+        && (durableIncidentOwnerAvailable || durableIncidentOwnerUnavailable);
+      if (entry.owner !== (dynamicIncidentOwner ? 'PRODUCT_INTEGRATION_INCIDENT_ROUTER' : contract.owner)) {
+        errors.push('MANAGED_INVENTORY_OWNER_MISMATCH');
+      }
       if (!Array.isArray(entry.canonicalComponentIds)
         || entry.canonicalComponentIds.length !== contract.canonicalComponentIds.length
         || entry.canonicalComponentIds.some((componentId, componentIndex) => (
@@ -2118,6 +2405,27 @@ function validateProductManagedInventory(
       }
 
       if (contract.canonicalComponentIds.length === 0) {
+        if (contract.identity === 'notification-incident-router' && durableIncidentOwnerAvailable) {
+          if (entry.inventoryState !== 'EVIDENCE_PRESENT'
+            || entry.reasonCode !== null
+            || !Array.isArray(entry.evidence)
+            || entry.evidence.length !== 1
+            || !isRecord(entry.evidence[0])
+            || entry.evidence[0].source !== 'PRODUCT_RUNTIME_OWNER_PROJECTION'
+            || entry.evidence[0].ownerId !== 'productIntegration.incident-router'
+            || entry.evidence[0].truthLabel !== 'BUILT_AND_TESTED') {
+            errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+          }
+          continue;
+        }
+        if (contract.identity === 'notification-incident-router' && durableIncidentOwnerUnavailable) {
+          if (entry.inventoryState !== 'MISSING'
+            || entry.evidence !== null
+            || entry.reasonCode !== incidentAvailabilityValue.blocker) {
+            errors.push('MANAGED_INVENTORY_DISPOSITION_INVALID');
+          }
+          continue;
+        }
         if (entry.inventoryState !== contract.unavailableState
           || entry.evidence !== null
           || entry.reasonCode !== contract.unavailableReason) {
@@ -2179,7 +2487,8 @@ function validateProductManagedInventory(
   )).length;
   const countExpectations: Readonly<Record<string, number>> = Object.freeze({
     expectedIdentityCount: 33,
-    mappedIdentityCount: PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length,
+    mappedIdentityCount: PRODUCT_MANAGED_INVENTORY_CONTRACT.filter((entry) => entry.canonicalComponentIds.length > 0).length
+      + (durableIncidentOwnerAvailable ? 1 : 0),
     evidencePresentCount: stateCount('EVIDENCE_PRESENT'),
     ownerGatedCount: stateCount('OWNER_GATED'),
     notConfiguredCount: stateCount('NOT_CONFIGURED'),
@@ -2541,7 +2850,7 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
   else for (const id of ['basis', 'volume']) {
     const strategy = strategies[id];
     if (!isRecord(strategy) || !isSystemTruthLabel(strategy.truthLabel)
-      || !fieldsAreNullableNumbers(strategy, ['heartbeatAtMs', 'candidateCount', 'proposalCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs'])
+      || !fieldsAreNullableNumbers(strategy, ['heartbeatAtMs', 'candidateCount', 'proposalCount', 'cooldownCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs'])
       || !isStringOrNull(strategy.sourceRevision)) errors.push(`DASHBOARD_SUMMARY_INVALID:strategies.${id}`);
   }
   const intelligence = value.intelligence;
@@ -2551,13 +2860,64 @@ function validateDashboardSummaries(value: Record<string, unknown>): readonly st
   if (!isRecord(capital) || !isSystemTruthLabel(capital.truthLabel)
     || typeof capital.accountTruthState !== 'string'
     || !fieldsAreStringOrNull(capital, ['allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'checkpointRevision'])
-    || !fieldsAreNullableNumbers(capital, ['eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount'])
+    || !fieldsAreNullableNumbers(capital, ['eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'recoveryCount'])
     || !isStringArray(capital.blockerCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:capital');
   const risk = value.risk;
-  if (!isRecord(risk) || !isSystemTruthLabel(risk.truthLabel)
-    || !['APPROVE', 'REJECT', 'CAP', 'UNAVAILABLE'].includes(String(risk.latestVerdict))
-    || !fieldsAreNullableNumbers(risk, ['latestVerdictAtMs', 'rejectionCount'])
-    || !isStringOrNull(risk.latestVerdictId) || !isStringArray(risk.reasonCodes)) errors.push('DASHBOARD_SUMMARY_INVALID:risk');
+  let riskValid = false;
+  if (isRecord(risk)) {
+    const expectedRiskKeys = [
+      'truthLabel', 'latestVerdict', 'latestVerdictAtMs', 'latestVerdictId', 'correlationId',
+      'maxAllowedSize', 'requiredConfirmation', 'decisiveInputSnapshot', 'rejectionCount', 'reasonCodes',
+    ].sort().join('|');
+    const decisive = Array.isArray(risk.decisiveInputSnapshot) ? risk.decisiveInputSnapshot : [];
+    const reasonCodes = Array.isArray(risk.reasonCodes) ? risk.reasonCodes : [];
+    const shapeValid = Object.keys(risk).sort().join('|') === expectedRiskKeys
+      && isSystemTruthLabel(risk.truthLabel)
+      && typeof risk.latestVerdict === 'string'
+      && ['APPROVE', 'REJECT', 'NEEDS_REVIEW', 'CAP', 'UNAVAILABLE'].includes(risk.latestVerdict)
+      && fieldsAreNullableNumbers(risk, ['latestVerdictAtMs', 'rejectionCount'])
+      && isStringOrNull(risk.latestVerdictId)
+      && isStringOrNull(risk.correlationId)
+      && isStringOrNull(risk.maxAllowedSize)
+      && (risk.maxAllowedSize === null || (risk.maxAllowedSize.length <= 80 && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(risk.maxAllowedSize)))
+      && (risk.requiredConfirmation === null || typeof risk.requiredConfirmation === 'boolean')
+      && decisive.length <= 512
+      && decisive.every((entry) => isRecord(entry)
+        && Object.keys(entry).sort().join('|') === ['code', 'status', 'detail', 'observed', 'limit', 'evidenceTimestamp'].sort().join('|')
+        && typeof entry.code === 'string'
+        && /^[A-Z][A-Z0-9_]{0,99}$/.test(entry.code)
+        && typeof entry.status === 'string'
+        && ['PASS', 'FAIL', 'UNKNOWN'].includes(entry.status)
+        && typeof entry.detail === 'string'
+        && entry.detail.trim().length >= 1
+        && entry.detail.length <= 1_000
+        && (entry.observed === null || (typeof entry.observed === 'string' && entry.observed.length >= 1 && entry.observed.length <= 300))
+        && (entry.limit === null || (typeof entry.limit === 'string' && entry.limit.length >= 1 && entry.limit.length <= 300))
+        && (entry.evidenceTimestamp === null || (typeof entry.evidenceTimestamp === 'number' && Number.isSafeInteger(entry.evidenceTimestamp) && entry.evidenceTimestamp >= 0)))
+      && reasonCodes.length <= 64
+      && reasonCodes.every((code) => typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(code));
+    const directDecision = typeof risk.latestVerdict === 'string'
+      && ['APPROVE', 'REJECT', 'NEEDS_REVIEW'].includes(risk.latestVerdict);
+    const directSemantics = !directDecision || (
+      typeof risk.correlationId === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(risk.correlationId)
+      && decisive.length > 0
+      && (risk.latestVerdict === 'APPROVE'
+        ? risk.maxAllowedSize !== null
+          && risk.requiredConfirmation === false
+          && reasonCodes.length === 0
+          && decisive.every((entry) => isRecord(entry) && entry.status === 'PASS')
+        : risk.requiredConfirmation === (risk.latestVerdict === 'NEEDS_REVIEW')
+          && decisive.every((entry) => isRecord(entry) && entry.status !== 'PASS')
+          && decisive.map((entry) => isRecord(entry) ? entry.code : null).join('|') === reasonCodes.join('|')
+          && (risk.latestVerdict === 'REJECT'
+            ? risk.maxAllowedSize === '0' && decisive.some((entry) => isRecord(entry) && entry.status === 'FAIL')
+            : risk.maxAllowedSize === null
+              && decisive.every((entry) => isRecord(entry) && entry.status === 'UNKNOWN')))
+    );
+    riskValid = shapeValid && directSemantics;
+  }
+  if (!riskValid) errors.push('DASHBOARD_SUMMARY_INVALID:risk');
   const execution = value.execution;
   if (!isRecord(execution) || !isSystemTruthLabel(execution.truthLabel)
     || !['VALIDATE_ONLY', 'UNAVAILABLE'].includes(String(execution.mode))
@@ -2760,6 +3120,14 @@ function validateCanonicalOpsEnvelope(
 
 function isNonnegativeNumberOrNull(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
+function isNonnegativeSafeIntegerOrNull(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && Number(value) >= 0);
+}
+
+function isUtcMillisOrNull(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 4_102_444_800_000);
 }
 
 function isStringOrNull(value: unknown): value is string | null {

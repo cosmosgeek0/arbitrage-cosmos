@@ -1,5 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import {
+  assertDataDirCachePathHeld,
+  resolveDataDirAuthority,
+} from '../bootstrap/environment.js';
 import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 /**
@@ -14,8 +18,8 @@ import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js'
 const CG = 'https://api.coingecko.com/api/v3';
 const ICON_TTL = 7 * 86400 * 1000; // successes: 7 days
 const ICON_RETRY = 180 * 1000; // failures: retry after 3 min
-const DATA_ROOT = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.resolve(process.cwd(), 'data');
-const DISK = path.resolve(process.cwd(), process.env.ICON_CACHE ?? path.join(DATA_ROOT, 'icon_cache.json'));
+const DATA_DIR_AUTHORITY = resolveDataDirAuthority();
+const { iconCache: DISK } = DATA_DIR_AUTHORITY;
 // CoinGecko keyless throttles harder than its published limit — 1.3s gaps got
 // 429s that looked like "no logo". 4.5s converges slower but never lies.
 const RESOLVE_GAP_MS = 4500;
@@ -146,10 +150,13 @@ function loadDisk(): void {
 function saveDisk(): void {
   const temp = `${DISK}.${process.pid}.${Date.now()}.tmp`;
   try {
+    assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
     mkdirSync(path.dirname(DISK), { recursive: true });
     const data: Record<string, string> = {};
     for (const [b, v] of [...cache.entries()].slice(-MAX_CACHE_ENTRIES)) if (v.url) data[b] = v.url;
+    assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
     writeFileSync(temp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, DISK);
     renameSync(temp, DISK);
   } catch {
     // non-fatal

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 /** Import/use purity and static no-I/O proof for Wave 3 calibration. */
+import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
 const results = [];
 function check(name, pass, detail = '') {
@@ -9,21 +10,19 @@ function check(name, pass, detail = '') {
 function section(title) { console.log(`\n${title}`); }
 
 let dateNowCalls = 0;
-let fetchCalls = 0;
 let timeoutCalls = 0;
 let intervalCalls = 0;
 let randomCalls = 0;
 const envReads = [];
 const NODE_LOADER_ENV_KEYS = new Set(['WATCH_REPORT_DEPENDENCIES']);
 const realDateNow = Date.now;
-const realFetch = globalThis.fetch;
 const realTimeout = globalThis.setTimeout;
 const realInterval = globalThis.setInterval;
 const realRandom = Math.random;
 const realEnv = process.env;
 
 Date.now = function countedNow() { dateNowCalls += 1; return realDateNow(); };
-globalThis.fetch = function countedFetch(...args) { fetchCalls += 1; return realFetch.apply(this, args); };
+const fetchDenial = installFoundationFetchDenial();
 globalThis.setTimeout = function countedTimeout(...args) { timeoutCalls += 1; return realTimeout.apply(this, args); };
 globalThis.setInterval = function countedInterval(...args) { intervalCalls += 1; return realInterval.apply(this, args); };
 Math.random = function countedRandom() { randomCalls += 1; return realRandom(); };
@@ -38,7 +37,8 @@ const globalsBefore = new Set(Object.getOwnPropertyNames(globalThis));
 section('1. importing calibration has no ambient effects');
 const mod = await import('../../../dist/foundation/calibration/index.js');
 check('no Date.now during import', dateNowCalls === 0, `${dateNowCalls} calls`);
-check('no fetch during import', fetchCalls === 0, `${fetchCalls} calls`);
+check('fetch denial negative control is active', fetchDenial.negativeControlProven);
+check('no fetch during import', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('no setTimeout during import', timeoutCalls === 0, `${timeoutCalls} calls`);
 check('no setInterval during import', intervalCalls === 0, `${intervalCalls} calls`);
 check('no Math.random during import', randomCalls === 0, `${randomCalls} calls`);
@@ -48,7 +48,7 @@ const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globa
 check('no globals created', newGlobals.length === 0, newGlobals.join(','));
 
 Date.now = realDateNow;
-globalThis.fetch = realFetch;
+fetchDenial.restore();
 globalThis.setTimeout = realTimeout;
 globalThis.setInterval = realInterval;
 Math.random = realRandom;

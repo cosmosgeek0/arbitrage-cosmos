@@ -71,6 +71,71 @@ export interface TruthMetadata {
   completeness: Completeness;
 }
 
+export interface NewLensProvenance {
+  readonly sourceIds: readonly string[];
+  readonly inputFeatureIds: readonly string[];
+  readonly transformIds: readonly string[];
+}
+
+export interface NewLensFreshnessExpectation {
+  readonly basis: FreshnessBasis;
+  readonly maximumAgeMs: number | null;
+}
+
+export type NewLensUnavailableState = 'UNKNOWN' | 'UNAVAILABLE' | 'BLOCKED';
+
+export interface NewLensMissingDataBehavior {
+  readonly state: NewLensUnavailableState;
+  readonly reasonCode: string;
+}
+
+export interface NewLensFailureMode {
+  readonly code: string;
+  readonly description: string;
+  readonly state: NewLensUnavailableState;
+}
+
+export interface NewLensHistory {
+  readonly availability: 'NONE' | 'BOUNDED' | 'REPLAYABLE';
+  readonly retentionMs: number | null;
+}
+
+export interface NewLensCost {
+  readonly complexity: 'CONSTANT' | 'LINEAR' | 'SUPERLINEAR';
+  readonly maxInputRecords: number;
+  readonly maxRetainedRecords: number;
+}
+
+export interface NewLensIncrementalRationale {
+  readonly baselineFeatureIds: readonly string[];
+  readonly incrementalReferenceIds: readonly string[];
+  readonly hypothesis: string;
+}
+
+export interface NewLensTestReplayPath {
+  readonly kind: 'TEST' | 'REPLAY';
+  readonly path: string;
+}
+
+export interface NewLensDescriptorInput {
+  readonly lensId: string;
+  readonly definition: string;
+  readonly provenance: NewLensProvenance;
+  readonly freshness: NewLensFreshnessExpectation;
+  readonly missingDataBehavior: NewLensMissingDataBehavior;
+  readonly failureMode: NewLensFailureMode;
+  readonly history: NewLensHistory;
+  readonly cost: NewLensCost;
+  readonly incrementalRationale: NewLensIncrementalRationale;
+  readonly version: string;
+  readonly testReplayPath: NewLensTestReplayPath;
+}
+
+/** A proposal contract only. Runtime registration and promotion remain separate owner decisions. */
+export interface NewLensDescriptor extends NewLensDescriptorInput {
+  readonly id: string;
+}
+
 export interface InstrumentIdentity {
   instrumentId: string;
   venue: 'BINANCE' | 'OTHER' | 'UNKNOWN';

@@ -39,6 +39,7 @@ import type {
   SourcedTimestamp,
   StrategySource,
   StructuredFailure,
+  ValidationIssue,
 } from '../contracts/index.js';
 import {
   canonicalJson,
@@ -52,7 +53,11 @@ import {
   ok,
 } from '../contracts/index.js';
 import type { EngineSnapshotInput, ReadModelInput } from './ports.js';
-import { validateEngineSnapshotInput } from './ports.js';
+import {
+  inspectEngineSnapshotInput,
+  inspectOwnDataRecord,
+  type EngineSnapshotInspection,
+} from './ports.js';
 import type { CanonicalizeResult, RejectedRecord } from './canonicalize.js';
 import { canonicalizeDecision, canonicalizeProposal } from './canonicalize.js';
 
@@ -123,6 +128,31 @@ export interface CanonicalReadModelView {
   reconciliation: ReadModelReconciliation;
 }
 
+/**
+ * Structural rejection used only when hostile outer metadata prevents the
+ * caller from supplying a trustworthy injected clock/correlation. It is not
+ * a StructuredFailure: unavailable metadata remains null instead of forged.
+ */
+export interface ReadModelStructuralInputFailure {
+  readonly code: 'READ_MODEL_STRUCTURAL_INPUT_INVALID';
+  readonly message: string;
+  readonly occurredAt: null;
+  readonly correlationId: null;
+  readonly metadataAuthority: 'UNAVAILABLE';
+  readonly safeCurrentState: 'READ_MODEL_NOT_BUILT';
+  readonly issues: readonly ValidationIssue[];
+}
+
+export interface ReadModelStructuralInputRejection {
+  readonly ok: false;
+  readonly failureKind: 'STRUCTURAL_INPUT_REJECTION';
+  readonly structuralFailure: Readonly<ReadModelStructuralInputFailure>;
+}
+
+export type CanonicalReadModelResult =
+  | ContractResult<CanonicalReadModelView>
+  | ReadModelStructuralInputRejection;
+
 // ---------- internals ----------
 
 function deepFreeze<T>(value: T, seen: Set<object> = new Set()): T {
@@ -141,6 +171,24 @@ function keyPart(v: unknown): string {
   if (typeof v === 'string' && v.length > 0) return v;
   if (typeof v === 'number' && Number.isFinite(v)) return String(v);
   return '?';
+}
+
+export function createReadModelStructuralInputRejection(
+  issues: readonly ValidationIssue[],
+): ReadModelStructuralInputRejection {
+  return Object.freeze({
+    ok: false as const,
+    failureKind: 'STRUCTURAL_INPUT_REJECTION' as const,
+    structuralFailure: Object.freeze({
+      code: 'READ_MODEL_STRUCTURAL_INPUT_INVALID' as const,
+      message: 'Read-model input metadata is unavailable or malformed; no canonical state was built.',
+      occurredAt: null,
+      correlationId: null,
+      metadataAuthority: 'UNAVAILABLE' as const,
+      safeCurrentState: 'READ_MODEL_NOT_BUILT' as const,
+      issues: Object.freeze([...issues]),
+    }),
+  });
 }
 
 function compareRejects(a: RejectedRecord, b: RejectedRecord): number {
@@ -256,11 +304,11 @@ function absentSection(source: StrategySource): SourceSection {
 
 function invalidSection(
   source: StrategySource,
-  snapshot: unknown,
+  inspected: EngineSnapshotInspection,
   nowMs: number,
   correlationId: string,
 ): SourceSection {
-  const issues = validateEngineSnapshotInput(snapshot);
+  const issues = inspected.issues;
   const failure = failureFromIssues(issues, {
     component: COMPONENT,
     stage: `validate:snapshot:${source}`,
@@ -272,16 +320,12 @@ function invalidSection(
     recommendedOperatorAction: 'Fix the snapshot adapter so it supplies valid provenance for this source.',
   });
 
-  const rec =
-    typeof snapshot === 'object' && snapshot !== null && !Array.isArray(snapshot)
-      ? (snapshot as Record<string, unknown>)
-      : {};
-  const decisionsIn = Array.isArray(rec.decisions) ? rec.decisions : [];
-  const proposalsIn = Array.isArray(rec.proposals) ? rec.proposals : [];
+  const decisionsIn = inspected.decisions;
+  const proposalsIn = inspected.proposals;
 
   const rejects: RejectedRecord[] = [];
   for (const d of decisionsIn) {
-    const dr = typeof d === 'object' && d !== null ? (d as Record<string, unknown>) : {};
+    const dr = inspectOwnDataRecord(d, ['correlationId', 'symbol', 'ts', 'kind'], 'decision').values;
     rejects.push({
       kind: 'DECISION',
       source,
@@ -292,7 +336,7 @@ function invalidSection(
     });
   }
   for (const p of proposalsIn) {
-    const pr = typeof p === 'object' && p !== null ? (p as Record<string, unknown>) : {};
+    const pr = inspectOwnDataRecord(p, ['id', 'symbol'], 'proposal').values;
     const idPart = keyPart(pr.id);
     rejects.push({
       kind: 'PROPOSAL',
@@ -315,14 +359,14 @@ function invalidSection(
     proposals: [],
     rejects,
     reconciliation: {
-      inputDecisions: decisionsIn.length,
-      inputProposals: proposalsIn.length,
+      inputDecisions: inspected.decisionCount,
+      inputProposals: inspected.proposalCount,
       canonicalDecisions: 0,
       canonicalProposals: 0,
       duplicateDecisions: 0,
       duplicateProposals: 0,
-      rejectedDecisions: decisionsIn.length,
-      rejectedProposals: proposalsIn.length,
+      rejectedDecisions: inspected.decisionCount,
+      rejectedProposals: inspected.proposalCount,
       balanced: true,
     },
   };
@@ -400,9 +444,9 @@ function buildSection(
   correlationId: string,
 ): SourceSection {
   if (snapshot === null) return absentSection(source);
-  const issues = validateEngineSnapshotInput(snapshot);
-  if (issues.length > 0) return invalidSection(source, snapshot, nowMs, correlationId);
-  return presentSection(source, snapshot, nowMs);
+  const inspected = inspectEngineSnapshotInput(snapshot);
+  if (inspected.issues.length > 0) return invalidSection(source, inspected, nowMs, correlationId);
+  return presentSection(source, inspected.snapshot as unknown as EngineSnapshotInput, nowMs);
 }
 
 // ---------- the builder ----------
@@ -412,25 +456,62 @@ function buildSection(
  * the same input (including nowMs) always yields a byte-identical view,
  * regardless of record order inside the input arrays.
  *
- * Throws TypeError only on programmer misuse (non-object input, invalid
- * injected clock, invalid correlationId). Operational problems — undeclared
- * sources, malformed snapshots, malformed records — travel as named
- * failures/rejects inside the result, per source, so one source's trouble
- * never hides the other source's health.
+ * Never throws for hostile input. When outer metadata cannot provide a
+ * trustworthy injected clock/correlation, a distinct structural rejection
+ * preserves both as unavailable nulls; it never forges a StructuredFailure.
+ * Undeclared sources, malformed snapshots, and malformed records travel as
+ * named failures/rejects inside the result, per source, so one source's
+ * trouble never hides the other source's health.
  */
-export function buildCanonicalReadModel(input: ReadModelInput): ContractResult<CanonicalReadModelView> {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    throw new TypeError('buildCanonicalReadModel: input must be a plain object');
-  }
-  const rec = input as unknown as Record<string, unknown>;
+export function buildCanonicalReadModel(input: ReadModelInput): CanonicalReadModelResult {
+  const inspectedInput = inspectOwnDataRecord(
+    input,
+    ['nowMs', 'correlationId', 'basis', 'volume'],
+    'input',
+  );
+  const rec = inspectedInput.values;
+  const metadataIssues = inspectedInput.issues.filter((issue) => (
+    (issue.path === 'input' && [
+      'PROXY_NOT_ALLOWED',
+      'PROPERTY_INSPECTION_FAILED',
+    ].includes(issue.code))
+      || issue.path === 'input.nowMs'
+      || issue.path === 'input.correlationId'
+  ));
   if (!isValidUtcMillis(rec.nowMs)) {
-    throw new TypeError('buildCanonicalReadModel: nowMs must be a safe-integer UTC ms from an injected clock');
+    metadataIssues.push({
+      path: 'input.nowMs',
+      code: 'UTC_MILLIS_INVALID',
+      message: 'nowMs must be a safe-integer UTC ms from an injected clock',
+    });
   }
-  const nowMs = rec.nowMs as number;
   if (typeof rec.correlationId !== 'string' || rec.correlationId.trim().length === 0 || rec.correlationId.length > 128) {
-    throw new TypeError('buildCanonicalReadModel: correlationId must be a non-empty string (<=128 chars)');
+    metadataIssues.push({
+      path: 'input.correlationId',
+      code: 'NON_EMPTY_STRING_REQUIRED',
+      message: 'correlationId must be a non-empty string (<=128 chars)',
+    });
   }
-  const correlationId = rec.correlationId;
+  if (metadataIssues.length > 0) return createReadModelStructuralInputRejection(metadataIssues);
+
+  const nowMs = rec.nowMs as number;
+  const correlationId = rec.correlationId as string;
+
+  if (inspectedInput.issues.length > 0) {
+    return fail(
+      createStructuredFailure({
+        component: COMPONENT,
+        stage: 'validate:input',
+        code: 'READ_MODEL_INPUT_SHAPE_INVALID',
+        message: 'read-model input must contain only closed own data fields',
+        occurredAt: nowMs,
+        retryable: false,
+        safeCurrentState: 'READ_MODEL_NOT_BUILT',
+        recommendedOperatorAction: 'Replace accessors, Proxies, symbols, and unknown side fields with explicit plain data.',
+        correlationId,
+      }),
+    );
+  }
 
   const undeclared: string[] = [];
   for (const key of ['basis', 'volume'] as const) {

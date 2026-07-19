@@ -68,7 +68,7 @@ test('missing and malformed composition identity remains explicit UNKNOWN', () =
     assert.equal(readback.latest?.deployedCommit, null);
     assert.equal(readback.latest?.configRevision, null);
     assert.equal(readback.latest?.modelRevision, null);
-    assert.equal(readback.latest?.schemaRevision, '2');
+    assert.equal(readback.latest?.schemaRevision, '3');
     assert.equal(readback.latest?.blockerCode, 'TESTED_COMMIT_UNKNOWN');
     assert.deepEqual(readback.latest?.identityIssues, [
       'TESTED_COMMIT_UNKNOWN',
@@ -357,13 +357,13 @@ test('shutdown composition orders listener closure before boot completion and ex
   assert.doesNotMatch(source.slice(listenersClosed, finalization), /completeCleanShutdown|ledger\.close/);
   assert.match(
     source,
-    /const systemIntegrationStart = bootReleaseStart\.ok \? systemIntegration\.start\(\) : null;/,
+    /const systemIntegrationStart = bootReleaseStart\.ok \? \(\(\) => \{\s*dataDirLease\.assertHeld\(\);\s*return systemIntegration\.start\(\);\s*\}\)\(\) : null;/,
   );
   assert.match(
     source,
     /if \(canonicalApplicationStartOk\) \{[\s\S]*?server\.listen\([\s\S]*?startServerTimers\(\);/,
   );
-  const failedBootBranch = source.indexOf("const systemIntegrationStart = bootReleaseStart.ok ? systemIntegration.start() : null;");
+  const failedBootBranch = source.indexOf('const systemIntegrationStart = bootReleaseStart.ok ? (() => {');
   const listenerAdmission = source.indexOf('if (canonicalApplicationStartOk) {', failedBootBranch);
   assert.ok(failedBootBranch > 0 && listenerAdmission > failedBootBranch);
   assert.match(source, /applicationStartOk: \(\) => canonicalApplicationStartOk/);

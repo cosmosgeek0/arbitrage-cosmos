@@ -464,10 +464,24 @@ export interface DashboardDonorTraceDecisionPort {
 }
 export interface DashboardDonorSupervisorSummariesPort {
   readonly sourceCoverage: Readonly<{ truthLabel: DashboardDonorTruthLabel; universeSymbols: number | null; spotCoveredSymbols: number | null; usdMCoveredSymbols: number | null; quietSymbolsRetained: number | null; materialGapCount: number | null; rateLimitedSourceCount: number | null; lastMaterialGapAtMs: number | null }>;
-  readonly strategies: Readonly<Record<'basis' | 'volume', Readonly<{ truthLabel: DashboardDonorTruthLabel; heartbeatAtMs: number | null; candidateCount: number | null; proposalCount: number | null; rejectionCount: number | null; acceptedCount: number | null; lastDecisionAtMs: number | null; sourceRevision: string | null }>>>;
+  readonly strategies: Readonly<Record<'basis' | 'volume', Readonly<{ truthLabel: DashboardDonorTruthLabel; heartbeatAtMs: number | null; candidateCount: number | null; proposalCount: number | null; cooldownCount: number | null; rejectionCount: number | null; acceptedCount: number | null; lastDecisionAtMs: number | null; sourceRevision: string | null }>>>;
   readonly intelligence: Readonly<{ truthLabel: DashboardDonorTruthLabel; evidenceCount: number | null; attentionCount: number | null; focusRequestedCount: number | null; focusActiveCount: number | null; thesisCount: number | null; insufficientEvidenceCount: number | null; lastUpdateAtMs: number | null }>;
-  readonly capital: Readonly<{ truthLabel: DashboardDonorTruthLabel; accountTruthState: string; allocatableAmount: string | null; reservedAmount: string | null; activeExposureAmount: string | null; eligibleCount: number | null; reservationCount: number | null; stagedMandateCount: number | null; activeExposureCount: number | null; checkpointRevision: string | null; blockerCodes: readonly string[] }>;
-  readonly risk: Readonly<{ truthLabel: DashboardDonorTruthLabel; latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE'; latestVerdictAtMs: number | null; latestVerdictId: string | null; rejectionCount: number | null; reasonCodes: readonly string[] }>;
+  readonly capital: Readonly<{ truthLabel: DashboardDonorTruthLabel; accountTruthState: string; allocatableAmount: string | null; reservedAmount: string | null; activeExposureAmount: string | null; eligibleCount: number | null; reservationCount: number | null; stagedMandateCount: number | null; activeExposureCount: number | null; recoveryCount: number | null; checkpointRevision: string | null; blockerCodes: readonly string[] }>;
+  readonly risk: Readonly<{
+    truthLabel: DashboardDonorTruthLabel;
+    latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
+    latestVerdictAtMs: number | null;
+    latestVerdictId: string | null;
+    correlationId: string | null;
+    maxAllowedSize: string | null;
+    requiredConfirmation: boolean | null;
+    decisiveInputSnapshot: readonly Readonly<{
+      code: string; status: 'PASS' | 'FAIL' | 'UNKNOWN'; detail: string;
+      observed: string | null; limit: string | null; evidenceTimestamp: number | null;
+    }>[];
+    rejectionCount: number | null;
+    reasonCodes: readonly string[];
+  }>;
   readonly execution: Readonly<{ truthLabel: DashboardDonorTruthLabel; mode: 'VALIDATE_ONLY' | 'UNAVAILABLE'; barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED'; planId: string | null; planLifecycle: string | null; coordinatorState: string; legCount: number | null; recoveryState: string | null; lastTransitionAtMs: number | null }>;
   readonly reconciliation: Readonly<{ truthLabel: DashboardDonorTruthLabel; status: string; blocksNewExposure: boolean; recommendation: string | null; checkpointId: string | null; evaluatedAtMs: number | null; reasonCodes: readonly string[] }>;
   readonly ledger: Readonly<{ truthLabel: DashboardDonorTruthLabel; writable: boolean | null; lastEventId: string | null; lastPersistedAtMs: number | null; checkpointRevision: string | null; recentTraceCount: number | null; lastCleanShutdownAtMs: number | null }>;

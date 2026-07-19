@@ -301,6 +301,18 @@ export class BoundedEvidenceIndex {
     return Object.freeze(records);
   }
 
+  /** Exact retained count without cloning the indexed evidence payloads. */
+  countForSymbol(symbol: string, evaluatedAtMs: number): number {
+    safeTime(evaluatedAtMs, 'evidence count cutoff');
+    const ids = this.#bySymbol.get(symbol) ?? [];
+    let count = 0;
+    for (const id of ids) {
+      const record = this.#records.get(id);
+      if (record !== undefined && evidenceTime(record.evidence) <= evaluatedAtMs) count += 1;
+    }
+    return count;
+  }
+
   isTruncated(symbol: string, evaluatedAtMs: number, currentWindowMs: number): boolean {
     safeTime(evaluatedAtMs, 'truncation evaluation time');
     positiveInteger(currentWindowMs, 'truncation completeness window');

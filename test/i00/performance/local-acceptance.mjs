@@ -187,6 +187,9 @@ const PROOF_CONTROL_RUNTIME_CROSSWALK = Object.freeze([
   Object.freeze({ catalogId: 'CTRL-INTAKE', runtimeControlId: 'global.intake.pause' }),
   Object.freeze({ catalogId: 'CTRL-RESTART', runtimeControlId: 'component.engine-supervisor.restart' }),
 ]);
+const TARGET_SCOPED_PROOF_CONTROL_RUNTIME_CROSSWALK = Object.freeze([
+  Object.freeze({ catalogId: 'CTRL-ACK', command: 'ACK_INCIDENT', runtimeControlId: 'incident.ack.<incident-sha256>' }),
+]);
 const EXTERNAL_BOUNDARY_DETAIL = Object.freeze({
   privateReads: Object.freeze({
     status: 'OWNER_GATED_NOT_RUN',
@@ -315,7 +318,7 @@ export const EXPECTED_PROTOCOL_AND_CONFIG_HASHES = Object.freeze([
   Object.freeze({ id: 'QL-EDGE-PROTOCOL-DOCUMENT', kind: 'SHA256', hash: '951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1' }),
   Object.freeze({ id: 'EDGE-PROTOCOL-SCHEMA', kind: 'SHA256', hash: '229af0ff13d600c7d305c6deb7f57b61bdb6f8a35f6f2349d91f5ab1b4972f1c' }),
   Object.freeze({ id: 'EDGE-PROTOCOL-FIXTURES', kind: 'SHA256', hash: 'c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4' }),
-  Object.freeze({ id: 'ARCHITECTURE-AUTHORITY-MAP', kind: 'SHA256', hash: 'beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db' }),
+  Object.freeze({ id: 'ARCHITECTURE-AUTHORITY-MAP', kind: 'SHA256', hash: '14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c' }),
   Object.freeze({ id: 'Q-DIRECTIVE-LOCK', kind: 'SHA256', hash: 'd4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24' }),
   Object.freeze({ id: 'QL-DIRECTOR-STATE', kind: 'SHA256', hash: '77f7c47251e6c9f990352c6ca63408a5a2dbfbbfb87cac0f38d71bf0446258cc' }),
   Object.freeze({ id: 'QL-PARALLEL-DAG', kind: 'SHA256', hash: 'cb4312843160e5f72029ee9f7b169987cfc07b9ef82d952c3feba60476392dec' }),
@@ -923,17 +926,24 @@ function proofControlCatalog(document, hashes = {}) {
   const wiredRows = rows.filter((row) => row?.wiringState === 'WIRED_SOURCE');
   const notConfiguredRows = rows.filter((row) => /^NOT_CONFIGURED:/u.test(row?.wiringState ?? ''));
   const ownerGatedRows = rows.filter((row) => /^OWNER_GATED:/u.test(row?.wiringState ?? ''));
-  if (wiredRows.length !== 4 || notConfiguredRows.length !== 9 || ownerGatedRows.length !== 1
+  if (wiredRows.length !== 5 || notConfiguredRows.length !== 8 || ownerGatedRows.length !== 1
       || wiredRows.length + notConfiguredRows.length + ownerGatedRows.length !== rows.length) {
     failures.push('PROOF_CONTROL_CATALOG_CLASSIFICATION_INVALID');
   }
+  const fixedRuntimeRows = wiredRows.filter((row) => PRODUCT_RUNTIME_CONTROL_IDS.includes(row?.runtimeControlId));
+  const targetScopedRuntimeRows = wiredRows.filter((row) => !PRODUCT_RUNTIME_CONTROL_IDS.includes(row?.runtimeControlId));
   if (rows.some((row) => (
     row?.wiringState === 'WIRED_SOURCE'
-      ? typeof row.runtimeControlId !== 'string' || !PRODUCT_RUNTIME_CONTROL_IDS.includes(row.runtimeControlId)
+      ? typeof row.runtimeControlId !== 'string'
       : row?.runtimeControlId !== null
   ))) failures.push('PROOF_CONTROL_CATALOG_RUNTIME_REFERENCE_INVALID');
-  const actualCrosswalk = wiredRows.map((row) => ({ catalogId: row.id, runtimeControlId: row.runtimeControlId }));
+  const actualCrosswalk = fixedRuntimeRows.map((row) => ({ catalogId: row.id, runtimeControlId: row.runtimeControlId }));
   if (!exactJson(actualCrosswalk, PROOF_CONTROL_RUNTIME_CROSSWALK)) failures.push('PROOF_CONTROL_CATALOG_CROSSWALK_INVALID');
+  const actualTargetScopedCrosswalk = targetScopedRuntimeRows
+    .map((row) => ({ catalogId: row.id, command: row.command, runtimeControlId: row.runtimeControlId }));
+  if (!exactJson(actualTargetScopedCrosswalk, TARGET_SCOPED_PROOF_CONTROL_RUNTIME_CROSSWALK)) {
+    failures.push('PROOF_CONTROL_CATALOG_TARGET_SCOPED_CROSSWALK_INVALID');
+  }
   return Object.freeze({
     inventory: Object.freeze({
       sourcePath: PROOF_CATALOG_PATH,
@@ -3396,7 +3406,9 @@ function candidateManagedComponentInventory(performanceReceipt) {
 function candidateControlInventory(performanceReceipt, controlCatalog) {
   const observedControls = performanceReceipt.canonicalRuntimeEvidence?.productControls ?? [];
   const catalogRuntimeIds = Array.isArray(controlCatalog?.rows)
-    ? controlCatalog.rows.filter((row) => row?.runtimeControlId !== null).map((row) => row.runtimeControlId)
+    ? controlCatalog.rows
+      .filter((row) => PRODUCT_RUNTIME_CONTROL_IDS.includes(row?.runtimeControlId))
+      .map((row) => row.runtimeControlId)
     : [];
   const observedIds = Array.isArray(observedControls) ? observedControls.map((row) => row?.controlId) : [];
   const runtimeOnly = observedIds.filter((controlId) => !catalogRuntimeIds.includes(controlId));
@@ -3415,7 +3427,9 @@ function candidateControlInventory(performanceReceipt, controlCatalog) {
     }),
     crosswalk: Object.freeze({
       mappedRuntimeCount: catalogRuntimeIds.filter((controlId) => observedIds.includes(controlId)).length,
-      catalogOnlyBlockedCount: (controlCatalog?.declaredCount ?? 0) - catalogRuntimeIds.length,
+      catalogOnlyBlockedCount: Array.isArray(controlCatalog?.rows)
+        ? controlCatalog.rows.filter((row) => row?.runtimeControlId === null).length
+        : 0,
       runtimeOnlyCount: runtimeOnly.length,
       exact: catalogRuntimeIds.length === PRODUCT_RUNTIME_CONTROL_IDS.length
         && runtimeOnly.length === 0
@@ -3651,8 +3665,8 @@ function candidateControlInventoryShapeValid(value) {
       || catalog.sourcePath !== PROOF_CATALOG_PATH
       || !/^[0-9a-f]{64}$/u.test(catalog.candidateSha256 ?? '')
       || !/^[0-9a-f]{64}$/u.test(catalog.sealSha256 ?? '')
-      || catalog.declaredCount !== 14 || catalog.wiredSourceCount !== 4
-      || catalog.notConfiguredCount !== 9 || catalog.ownerGatedCount !== 1
+      || catalog.declaredCount !== 14 || catalog.wiredSourceCount !== 5
+      || catalog.notConfiguredCount !== 8 || catalog.ownerGatedCount !== 1
       || !Array.isArray(catalog.rows) || catalog.rows.length !== 14
       || catalog.rows.some((row) => !hasExactKeys(row, PROOF_CONTROL_ROW_KEYS))) return false;
   const observed = value.observedProductRuntime;
@@ -3670,7 +3684,7 @@ function candidateControlInventoryShapeValid(value) {
     'mappedRuntimeCount', 'catalogOnlyBlockedCount', 'runtimeOnlyCount', 'exact',
   ])
     && value.crosswalk.mappedRuntimeCount === 4
-    && value.crosswalk.catalogOnlyBlockedCount === 10
+    && value.crosswalk.catalogOnlyBlockedCount === 9
     && value.crosswalk.runtimeOnlyCount === 0
     && value.crosswalk.exact === true;
 }

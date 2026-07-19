@@ -410,6 +410,7 @@ test('policy bounds compare exact decimals and reject out-of-bound values', () =
 
 test('bound external risk verdict remains Foundation-owned and fail-closed', () => {
   const verdict = deriveRiskVerdict({
+    correlationId: 'corr_capital_contract',
     evaluatedAt: NOW,
     ttlMs: 500,
     checks: [{
@@ -423,13 +424,38 @@ test('bound external risk verdict remains Foundation-owned and fail-closed', () 
     }],
   });
   assert.equal(verdict.allowed, false);
+  assert.equal(verdict.decision, 'NEEDS_REVIEW');
+  assert.equal(verdict.requiredConfirmation, true);
+  assert.equal(verdict.maxAllowedSize, null);
   assert.deepEqual(verdict.blockingCodes, ['ACCOUNT_TRUTH']);
   assert.equal(Object.isFrozen(verdict), true);
   const projection = projectFoundationRiskVerdict(verdict);
   assert.equal(projection.allowed, false);
+  assert.equal(projection.decision, 'NEEDS_REVIEW');
+  assert.equal(projection.requiredConfirmation, true);
+  assert.equal(projection.maxAllowedSize, null);
+  assert.equal(projection.decisiveInputSnapshot.checks[0].code, 'ACCOUNT_TRUTH');
+  assert.equal(projection.decisiveInputSnapshot.checks[0].observed, null);
+  assert.equal(Object.isFrozen(projection.decisiveInputSnapshot.checks), true);
   assert.deepEqual(projection.omittedFields, ['checks.observed', 'checks.limit']);
   assert.equal('observed' in projection.checks[0], false);
   assert.equal('limit' in projection.checks[0], false);
+});
+
+test('approved risk maximum keeps a plain exact decimal across the Capital projection', () => {
+  const verdict = deriveRiskVerdict({
+    correlationId: 'corr_capital_tiny_maximum',
+    evaluatedAt: NOW,
+    ttlMs: 500,
+    maxAllowedSize: 0.00000001,
+    checks: [{
+      code: 'MAX_GROSS_NOTIONAL', status: 'PASS', blocking: true,
+      detail: 'tiny exact gross is within the configured limit',
+      observed: '0.00000001', limit: '1', evidenceTimestamp: NOW,
+    }],
+  });
+  assert.equal(verdict.decision, 'APPROVED');
+  assert.equal(projectFoundationRiskVerdict(verdict).maxAllowedSize, '0.00000001');
 });
 
 test('capital JSON payload guard rejects every numeric payload and cyclic state', () => {

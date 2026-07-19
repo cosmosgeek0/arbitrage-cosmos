@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -46,6 +45,7 @@ import { SystemControlService } from '../../../dist/systemIntegration/controls/i
 import { A5_SYNTHETIC_HARD_DENIAL_CATEGORIES } from '../../../../fixtures/aiOps/a5/hard-denial-categories.mjs';
 import { SECTION16_SCENARIOS } from '../../../../fixtures/aiOps/a5/campaign-catalog.mjs';
 import { PERMANENTLY_FORBIDDEN_CAPABILITIES } from '../../../../fixtures/productAssurance/systemic/agentBoundary/evaluators.mjs';
+import { readAiOpsGitIdentity } from '../../../../test/aiOps/a5/git-identity.mjs';
 import { campaign } from '../../productAssurance/helpers.mjs';
 import {
   T0,
@@ -56,7 +56,6 @@ import {
 
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const HASH = /^[a-f0-9]{64}$/u;
-const A5_DONOR_BRANCH = 'port-a5-20260716';
 
 function digest(value) {
   return createHash('sha256').update(String(value)).digest('hex');
@@ -440,14 +439,28 @@ test('landed remediation resource acquisition is atomic and conflict graph stays
   assert.equal(graph.length, 1);
 });
 
-test('Product exposes exactly four fail-safe controls beneath SystemControlService authority', () => {
+test('Product preserves four global fail-safe controls, two source-local lifecycle controls, and two strategy-intake controls', () => {
   const controls = buildProductRuntimeControlRegistry(makeSupervisor());
-  assert.deepEqual(controls.map(({ backendCommandId }) => backendCommandId), PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS);
-  assert.equal(controls.length, 4);
+  assert.deepEqual(controls.map(({ backendCommandId }) => backendCommandId), [
+    ...PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.slice(0, 4),
+    'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_PUBLIC_SOURCE_LIFECYCLE',
+    'SET_BASIS_INTAKE',
+    'SET_VOLUME_INTAKE',
+  ]);
+  assert.equal(controls.length, 8);
+  assert.deepEqual(
+    [...new Set(controls.map(({ backendCommandId }) => backendCommandId))],
+    PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.filter((command) => !['PIN_FOCUS', 'ACK_INCIDENT'].includes(command)),
+  );
+  assert.equal(controls.some(({ backendCommandId }) => ['PIN_FOCUS', 'ACK_INCIDENT'].includes(backendCommandId)), false);
   assert.ok(controls.every(({ wiringState, authority }) => (
     wiringState.startsWith('UNAVAILABLE:') && authority === 'NOT_CONFIGURED'
   )));
-  assert.ok(PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS.every((command) => SYSTEM_CONTROL_COMMANDS.includes(command)));
+  assert.ok(PRODUCT_RUNTIME_SAFE_BACKEND_COMMANDS
+    .filter((command) => command !== 'ACK_INCIDENT')
+    .every((command) => SYSTEM_CONTROL_COMMANDS.includes(command)));
+  assert.equal(SYSTEM_CONTROL_COMMANDS.includes('ACK_INCIDENT'), false);
   assert.equal(controls.some(({ controlId }) => /AI_OPS/u.test(controlId)), false);
   assert.equal(typeof SystemControlService, 'function');
   assert.throws(() => new SystemControlService({ initialState: {} }), /valid fail-closed initial state/u);
@@ -521,8 +534,8 @@ async function recursiveFiles(directory) {
 
 test('A5 creates no production owner, store, socket, executor, or reverse fixture dependency', async () => {
   const aiOpsRoot = path.join(ROOT, 'server/src/aiOps');
-  const branch = execFileSync('git', ['branch', '--show-current'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  if (branch === A5_DONOR_BRANCH) {
+  const identity = readAiOpsGitIdentity(ROOT, 'A5');
+  if (identity.mode === 'DONOR') {
     await assert.rejects(access(aiOpsRoot), { code: 'ENOENT' });
   } else {
     await access(aiOpsRoot);

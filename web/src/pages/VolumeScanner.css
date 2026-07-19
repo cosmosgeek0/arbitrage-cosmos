@@ -488,6 +488,131 @@
 .volx-actions button:hover { background: color-mix(in srgb, var(--text) 4%, var(--panel)); }
 .volx-actions button.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
 
+.volx-owner-evidence {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.volx-owner-evidence > header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-owner-evidence > header span,
+.volx-owner-grid article,
+.volx-capabilities > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.volx-owner-evidence > header strong,
+.volx-owner-grid strong,
+.volx-capabilities strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 470;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-owner-evidence > header small,
+.volx-owner-grid small,
+.volx-capabilities small {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 10.5px;
+  font-weight: 410;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.volx-owner-evidence > header > em,
+.volx-capabilities em {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 520;
+  letter-spacing: .045em;
+}
+
+.volx-owner-evidence > header > em.fresh,
+.volx-capabilities em.fresh { color: #278b5d; }
+.volx-owner-evidence > header > em.degraded,
+.volx-capabilities em.stale { color: #a57b19; }
+.volx-owner-evidence > header > em.missing,
+.volx-capabilities em.missing { color: #b84e4b; }
+
+.volx-owner-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-owner-grid article {
+  min-height: 80px;
+  justify-content: center;
+  padding: 12px 14px;
+  border-right: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-owner-grid article:nth-child(4n) { border-right: 0; }
+.volx-owner-grid article:nth-last-child(-n + 4) { border-bottom: 0; }
+
+.volx-owner-grid article > span {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 520;
+  letter-spacing: .055em;
+  line-height: 13px;
+  text-transform: uppercase;
+}
+
+.volx-owner-grid strong { font-variant-numeric: tabular-nums; }
+.volx-owner-grid small { margin-top: 3px; }
+
+.volx-capabilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.volx-capabilities > span {
+  position: relative;
+  min-height: 66px;
+  justify-content: center;
+  padding: 10px 78px 10px 14px;
+  border-right: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.volx-capabilities > span:nth-child(3n) { border-right: 0; }
+.volx-capabilities > span:nth-last-child(-n + 3) { border-bottom: 0; }
+.volx-capabilities em { position: absolute; top: 13px; right: 14px; }
+
+.volx-owner-unavailable {
+  margin: 0;
+  padding: 16px 14px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 17px;
+}
+
 .volx-empty {
   display: flex;
   min-height: 230px;
@@ -514,6 +639,11 @@
   .volx-summary-cell:nth-child(-n + 2) { border-bottom: 1px solid var(--line-2); }
   .volx-table { max-height: calc(100vh - 456px); }
   .volx-detail { grid-template-columns: 1fr; padding-left: 20px; }
+  .volx-owner-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .volx-owner-grid article:nth-child(4n) { border-right: 1px solid var(--line-2); }
+  .volx-owner-grid article:nth-child(2n) { border-right: 0; }
+  .volx-owner-grid article:nth-last-child(-n + 4) { border-bottom: 1px solid var(--line-2); }
+  .volx-owner-grid article:nth-last-child(-n + 2) { border-bottom: 0; }
 }
 
 @container (max-width: 760px) {
@@ -528,6 +658,10 @@
   .volx-view-note { padding-left: 2px; }
   .volx-table { max-height: none; }
   .volx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .volx-capabilities { grid-template-columns: 1fr; }
+  .volx-capabilities > span,
+  .volx-capabilities > span:nth-child(3n) { border-right: 0; border-bottom: 1px solid var(--line-2); }
+  .volx-capabilities > span:last-child { border-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

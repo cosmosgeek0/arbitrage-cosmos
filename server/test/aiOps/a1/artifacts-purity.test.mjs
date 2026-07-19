@@ -13,7 +13,6 @@ const testDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(testDirectory, '../../../..');
 const fixtureDirectory = resolve(repositoryRoot, 'fixtures/aiOps/a1');
 const receiptDirectory = resolve(repositoryRoot, 'docs/archive/aiOps/a1/shadow');
-const donorBranch = 'port-a1-20260716';
 const expectedSourcePaths = Object.keys(contracts.AI_OPS_LOCAL_SOURCE_RESOURCE_ID_BY_PATH).sort();
 const expectedSourcePathSet = new Set(expectedSourcePaths);
 
@@ -212,12 +211,16 @@ test('mechanical authority fixture is current, unsigned, and closed across all 3
 });
 
 test('entry inventory binds current bytes and recognizes only ratified or external request IDs', async () => {
-  const currentBranch = process.env.AI_OPS_A1_CURRENT_BRANCH;
+  const currentIdentityMode = process.env.AI_OPS_A1_IDENTITY_MODE;
+  const currentHeadCommit = process.env.AI_OPS_HEAD_COMMIT;
+  const currentHeadTree = process.env.AI_OPS_HEAD_TREE;
   const currentHeadBlobs = JSON.parse(process.env.AI_OPS_A1_CURRENT_HEAD_BLOBS ?? 'null');
-  assert.equal(typeof currentBranch, 'string');
+  assert.ok(currentIdentityMode === 'DONOR' || currentIdentityMode === 'INTEGRATED');
+  assert.match(currentHeadCommit ?? '', /^[0-9a-f]{40}$/u);
+  assert.match(currentHeadTree ?? '', /^[0-9a-f]{40}$/u);
   assert.ok(currentHeadBlobs !== null && typeof currentHeadBlobs === 'object' && !Array.isArray(currentHeadBlobs));
   assert.equal(Object.getPrototypeOf(currentHeadBlobs), Object.prototype);
-  const donorIdentityMode = currentBranch === donorBranch;
+  const donorIdentityMode = currentIdentityMode === 'DONOR';
   const rowsById = new Map(contracts.AI_OPS_ENTRY_INVENTORY.map((row) => [row.entryId, row]));
   assert.equal(
     contracts.sha256Canonical(contracts.AI_OPS_ENTRY_INVENTORY),

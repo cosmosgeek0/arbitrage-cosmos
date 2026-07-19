@@ -18,6 +18,7 @@ from quant_edge.validation.bootstrap import (
 )
 from quant_edge.validation.multiplicity import (
     BhReportV1,
+    HolmReportV1,
     PboReportV1,
     PboStatus,
     TrialLedgerV1,
@@ -25,6 +26,7 @@ from quant_edge.validation.multiplicity import (
     TrialStatus,
     benjamini_hochberg,
     distinct_trial_count,
+    holm_bonferroni,
     pbo_cscv,
 )
 
@@ -229,6 +231,64 @@ def test_benjamini_hochberg_law() -> None:
         benjamini_hochberg((("t-a", 0.5),), fdr_per_myriad=500)  # type: ignore[arg-type]
     with pytest.raises(ContractValueError, match="lie in"):
         benjamini_hochberg((("t-a", make_ratio(3, 2)),), fdr_per_myriad=500)
+
+
+def test_holm_uses_exact_ledger_identity_and_counts_failed_trials() -> None:
+    ledger = TrialLedgerV1(trials=(_trial(0), _trial(1), _trial(2, TrialStatus.FAILED)))
+    report = holm_bonferroni(
+        ledger,
+        (
+            ("t-000", make_ratio(1, 1_000)),
+            ("t-001", make_ratio(1, 10)),
+            ("t-002", None),
+        ),
+        familywise_alpha_per_myriad=500,
+    )
+
+    assert isinstance(report, HolmReportV1)
+    assert report.tested_count == ledger.attempted_count == 3
+    assert report.rejected_trial_ids == ("t-000",)
+    failed = next(item for item in report.decisions if item.trial_id == "t-002")
+    assert failed.raw_p_value is None
+    assert failed.effective_p_value == make_ratio(1, 1)
+
+
+def test_holm_step_down_latches_after_the_first_failure() -> None:
+    ledger = TrialLedgerV1(trials=(_trial(0), _trial(1), _trial(2)))
+    report = holm_bonferroni(
+        ledger,
+        (
+            ("t-000", make_ratio(1, 100)),
+            ("t-001", make_ratio(3, 100)),
+            ("t-002", make_ratio(31, 1_000)),
+        ),
+        familywise_alpha_per_myriad=500,
+    )
+
+    assert report.rejected_trial_ids == ("t-000",)
+    decisions = {item.trial_id: item for item in report.decisions}
+    assert decisions["t-001"].selected is False
+    assert decisions["t-002"].threshold == make_ratio(1, 20)
+    assert decisions["t-002"].selected is False
+
+
+def test_holm_rejects_mismatched_identity_and_status_values() -> None:
+    ledger = TrialLedgerV1(trials=(_trial(0), _trial(1, TrialStatus.FAILED)))
+    with pytest.raises(ContractValueError, match="exactly equal"):
+        holm_bonferroni(
+            ledger,
+            (("t-000", make_ratio(1, 100)),),
+            familywise_alpha_per_myriad=500,
+        )
+    with pytest.raises(ContractValueError, match="non-completed"):
+        holm_bonferroni(
+            ledger,
+            (
+                ("t-000", make_ratio(1, 100)),
+                ("t-001", make_ratio(1, 100)),
+            ),
+            familywise_alpha_per_myriad=500,
+        )
 
 
 def test_distinct_trial_count_collapses_exact_clones() -> None:

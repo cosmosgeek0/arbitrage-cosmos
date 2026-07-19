@@ -7,6 +7,8 @@
  */
 import {
   BASIS_DEFAULTS,
+  BASIS_HISTORICAL_REJECT_CODE_MAP,
+  BASIS_REJECT_CODES,
   EXECUTABLE_BASIS_RETURN_CONTRACT,
   buildFundingContext,
   buildSnapshots,
@@ -14,6 +16,7 @@ import {
   executableBasisReturnPct,
   estimateEdge,
   fundingCarryPctOverHold,
+  projectBasisRejectDisposition,
 } from '../dist/engine/basis/index.js';
 import { BasisRuntime } from '../dist/services/basisRuntime.js';
 
@@ -121,6 +124,66 @@ section('0. one versioned executable-return law owns both constructions');
   );
   check('equal prices have zero return', executableBasisReturnPct(100, 100) === 0);
   check('profitable reverse basis stays positive', executableBasisReturnPct(101, 100) === 1);
+}
+
+section('0b. stable Basis reject vocabulary classifies every historical spelling');
+{
+  check('borrow_required retires to borrow_unknown',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.borrow_required.successorCode === 'borrow_unknown');
+  check('risk_blocked moves to the canonical risk_rejected event',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorOutcome === 'risk_rejected'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.risk_blocked.successorCode === null);
+  check('account_not_connected moves to Capital account-truth eligibility',
+    BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorOutcome === 'ACCOUNT_TRUTH_BLOCKED'
+      && BASIS_HISTORICAL_REJECT_CODE_MAP.account_not_connected.successorCode === null);
+  check('retired spellings cannot appear in the emitted scanner vocabulary',
+    ['borrow_required', 'risk_blocked', 'account_not_connected'].every((code) => !BASIS_REJECT_CODES.includes(code)));
+  const borrowReplay = projectBasisRejectDisposition('borrow_required');
+  check('projection preserves raw borrow_required while routing to borrow_unknown',
+    borrowReplay.rawCode === 'borrow_required'
+      && borrowReplay.classification === 'HISTORICAL'
+      && borrowReplay.successorCode === 'borrow_unknown');
+  const riskReplay = projectBasisRejectDisposition('risk_blocked');
+  check('projection preserves raw risk_blocked and consumes the formal risk map',
+    riskReplay.rawCode === 'risk_blocked'
+      && riskReplay.owner === 'FOUNDATION_RISK'
+      && riskReplay.successorOutcome === 'risk_rejected'
+      && riskReplay.focusExitReason === 'risk_rejected');
+  const accountReplay = projectBasisRejectDisposition('account_not_connected');
+  check('projection preserves raw account spelling and canonical Capital owner',
+    accountReplay.rawCode === 'account_not_connected'
+      && accountReplay.owner === 'CAPITAL_ELIGIBILITY'
+      && accountReplay.successorOutcome === 'ACCOUNT_TRUTH_BLOCKED');
+  const h = createReplayHarness(CFG, T0);
+  const snapshot = buildSnapshots(h.engine, h.sink).rejectVocabulary();
+  check('snapshot exposes the exact canonical vocabulary and retirement map',
+    JSON.stringify(snapshot.emitted) === JSON.stringify(BASIS_REJECT_CODES)
+      && snapshot.historical.borrow_required.successorCode === 'borrow_unknown');
+
+  const replay = createReplayHarness(CFG, T0);
+  const replayResult = replay.run([initStep(T0), ...gapSeries([0.78])]);
+  const focused = replayResult.decisions[0];
+  replay.engine.lifecycle.applyDecision({
+    ...focused,
+    kind: 'reject',
+    rejectCode: 'risk_blocked',
+    humanReason: 'historical risk replay',
+  }, {
+    symbol: SYM,
+    direction: 'long_spot_short_perp',
+    score: 1,
+    components: {
+      netEdge: 1,
+      persistence: 1,
+      liquidity: 1,
+      fundingUsefulness: 1,
+      dataQuality: 1,
+      momentum: 1,
+    },
+  });
+  const replayExit = replay.engine.lifecycle.focusSessions().find((session) => session.symbol === SYM)?.exitReason;
+  check('historical risk_blocked replay closes focus as risk_rejected, never signal_expired',
+    focused?.kind === 'focus' && replayExit === 'risk_rejected');
 }
 
 // =====================================================================
@@ -262,6 +325,9 @@ section('6. stale data ⇒ data_stale, then cooldown suppresses the symbol');
   const r3 = h.run([{ atMs: T0 + 14_000, events: [] }]);
   check('cooldown: symbol skipped next tick', r3.decisions.length === 0);
   check('lifecycle state is COOLDOWN', h.engine.lifecycle.get(SYM).state === 'COOLDOWN');
+  check('owner summary counts the active cooldown', h.engine.lifecycle.activeCooldownCount() === 1);
+  h.clock.advance(BASIS_DEFAULTS.cooldownMs);
+  check('owner summary excludes an expired cooldown without requiring another tick', h.engine.lifecycle.activeCooldownCount() === 0);
 }
 
 // =====================================================================
@@ -300,6 +366,11 @@ section('8. kill switch ⇒ blocked from the execution path');
   const ok = h2.engine.prepareOrderIntents(p.id);
   check('unkilled: two-leg intent stubs (BUY spot / SELL perp)', !ok.blocked && ok.intents.length === 2 && ok.intents[0].side === 'BUY' && ok.intents[1].side === 'SELL');
   check('intents are stubs for the risk gate (source=proposal)', ok.intents.every((i) => i.source === 'proposal' && i.proposalId === p.id));
+  h2.engine.setIntakePaused(true);
+  const intakeBlocked = h2.engine.prepareOrderIntents(p.id);
+  check('paused Basis intake blocks an already-open proposal at the final intent bridge',
+    intakeBlocked.blocked === true && intakeBlocked.verdict.reasons.includes('intake_paused') && intakeBlocked.intents.length === 0);
+  check('pausing Basis invalidates the pre-existing proposal', h2.engine.proposals.get(p.id)?.status === 'expired');
 
   // (c) traceability — one signal end-to-end by correlationId
   section('9. correlationId traces one signal end-to-end');
@@ -469,8 +540,18 @@ section('19. EXTRA: symbol blocklist ⇒ symbol_blocked');
 {
   const h = createReplayHarness(CFG, T0);
   h.engine.blockSymbol(SYM);
+  h.engine.replaceBlockedSymbols([]);
   const r = h.run([initStep(T0), ...gapSeries([0.78])]);
-  check('blocked symbol rejected symbol_blocked', r.decisions[0]?.rejectCode === 'symbol_blocked', r.decisions[0]?.humanReason);
+  check('operator block survives application-config refresh', r.decisions[0]?.rejectCode === 'symbol_blocked', r.decisions[0]?.humanReason);
+  check('operator block readback is canonical and sorted', JSON.stringify(h.engine.operatorBlockedSymbols()) === JSON.stringify([SYM]));
+  h.engine.replaceBlockedSymbols([SYM]);
+  h.engine.unblockSymbol(SYM);
+  check('ALLOW removes only the operator overlay, not global policy', h.engine.symbolAllowedByPolicy(SYM) === false);
+
+  const future = createReplayHarness(CFG, T0);
+  future.engine.blockSymbol('FUTUREUSDT');
+  future.run([initStep(T0, [meta('FUTUREUSDT')]), marketStep(T0 + 2_000, { symbol: 'FUTUREUSDT' })]);
+  check('BLOCK applies before a symbol enters the universe', future.engine.symbolAllowedByPolicy('FUTUREUSDT') === false);
 }
 
 // =====================================================================
@@ -565,6 +646,16 @@ section('22. SAFETY: universe/config reconciliation prunes derived state');
   check('config revision is detected', revised.engine.updateConfig({ persistTicks: 4 }) === true);
   check('config revision invalidates old proposal', proposal?.status === 'expired' && proposal.reason.includes('config_changed'));
   check('config revision clears signal-derived priorities', revised.engine.priorityOf(SYM) === null);
+  const thresholdRevision = createReplayHarness(CFG, T0);
+  thresholdRevision.run([initStep(T0), ...gapSeries([0.78, 0.78, 0.78])]);
+  const thresholdProposal = thresholdRevision.engine.proposals.open()[0];
+  check('MIN_NET_BASIS_PCT mutation invalidates state derived under the old threshold',
+    thresholdRevision.engine.updateConfig({ minNetBasisPct: 0.5 }) === true
+      && thresholdProposal?.status === 'expired'
+      && thresholdProposal.reason.includes('config_changed')
+      && thresholdRevision.engine.priorityOf(SYM) === null);
+  check('downward Basis size ceiling reaches the proposal owner',
+    revised.engine.setSuggestedNotionalUsd(5) === true && revised.engine.cfg.suggestedNotionalUsd === 5);
   let invalidConfigRejected = false;
   try {
     revised.engine.updateConfig({ fundingPeriodMs: 0 });
@@ -713,6 +804,64 @@ section('25. SAFETY: runtime retries an empty startup and trusts source timestam
   await staleRuntime.start();
   check('unchanged stale mark is not refreshed by adapter receipt time', staleRuntime.connectionStatus().markState === 'stale');
   staleRuntime.stop();
+}
+
+// =====================================================================
+section('26. RUNTIME: decay governance reuses the successful owner tick cadence');
+{
+  const runtimeConfig = {
+    feesPct: 0.3,
+    minNetBasisPct: 0.25,
+    persistTicks: 3,
+    minQuoteVolume24h: 0,
+    killSwitch: false,
+    blockedSymbols: [],
+  };
+  const universe = [{
+    symbol: SYM,
+    base: 'TEST',
+    quoteVolume24h: 50_000_000,
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 100.01,
+    fundingRate: 0.0001,
+    nextFundingTime: Date.now() + 3_600_000,
+    markUpdatedAt: Date.now(),
+  }];
+  const fakeFetch = async () => new Map([[
+    SYM,
+    { bidPrice: 100, askPrice: 100.02, bidQty: 10, askQty: 10 },
+  ]]);
+  const calls = [];
+  const decay = {
+    tick(request) {
+      calls.push(request);
+      return { disposition: 'NOT_DUE', reasonCodes: [] };
+    },
+  };
+  const runtime = new BasisRuntime(
+    { logEvent() {} },
+    () => runtimeConfig,
+    () => universe,
+    fakeFetch,
+    decay,
+  );
+  await runtime.start();
+  check('one successful Basis tick evaluates both exact owner directions',
+    calls.length === 2
+      && calls[0].direction === 'long_spot_short_perp'
+      && calls[1].direction === 'short_spot_long_perp');
+  check('both direction lanes share owner tick time and config version',
+    calls[0].evaluatedAtMs === calls[1].evaluatedAtMs
+      && calls[0].configVersion === calls[1].configVersion
+      && calls.every((call) => call.strategy === 'BASIS' && /^cfg_/.test(call.configVersion)));
+  const originalRevision = calls[0].configVersion;
+  runtimeConfig.minNetBasisPct = 0.31;
+  runtime.refreshUniverse();
+  await runtime.refreshBooks();
+  check('effective Basis config mutation changes the owner revision before decay evaluation',
+    calls.length === 4 && calls[2].configVersion !== originalRevision && calls[2].configVersion === calls[3].configVersion);
+  runtime.stop();
 }
 
 // ---------- summary ----------

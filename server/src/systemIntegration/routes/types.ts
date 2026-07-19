@@ -1,6 +1,7 @@
 import type {
   SystemControlState,
   SystemDependencyEdge,
+  SystemFocusPinReadback,
   SystemSupervisorSnapshot,
   SystemTraceEvent,
   SystemTraceSnapshot,
@@ -42,6 +43,7 @@ export interface SystemIntegrationReadPort {
     | Readonly<SystemIntegrationEventPage>
     | Promise<Readonly<SystemIntegrationEventPage>>;
   controls(): Readonly<SystemControlState> | Promise<Readonly<SystemControlState>>;
+  focusPin(symbol: string): Readonly<SystemFocusPinReadback> | Promise<Readonly<SystemFocusPinReadback>>;
   trace(correlationId: string):
     | Readonly<SystemTraceSnapshot>
     | null

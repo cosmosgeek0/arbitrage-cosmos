@@ -34,15 +34,25 @@ SECOND_NS = 1_000_000_000
 STALENESS = 5 * SECOND_NS
 
 
+def _price(price: int, unit_id: str = "USDT") -> ExactScaledValueV1:
+    return ExactScaledValueV1(coefficient=price, scale=2, unit_id=unit_id)
+
+
 def _usdt(price: int) -> ExactScaledValueV1:
-    return ExactScaledValueV1(coefficient=price, scale=2, unit_id="USDT")
+    return _price(price)
 
 
-def _market_identity(symbol: str) -> InstrumentIdentityV1:
+def _market_identity(
+    symbol: str,
+    *,
+    instrument_id: str | None = None,
+    base_size_unit_id: str = "BNB",
+    quote_price_unit_id: str = "USDT",
+) -> InstrumentIdentityV1:
     return InstrumentIdentityV1(
-        instrument_id=f"test-{symbol}",
-        base_size_unit_id="BNB",
-        quote_price_unit_id="USDT",
+        instrument_id=instrument_id or f"test-{symbol}",
+        base_size_unit_id=base_size_unit_id,
+        quote_price_unit_id=quote_price_unit_id,
     )
 
 
@@ -55,11 +65,19 @@ def _series(
     gaps: tuple[GapIntervalV1, ...] = (),
     kind: SeriesKind = SeriesKind.TRADE_MID_PROXY,
     posture: EvidencePosture = EvidencePosture.SYNTHETIC,
+    instrument_id: str | None = None,
+    base_size_unit_id: str = "BNB",
+    quote_price_unit_id: str = "USDT",
 ) -> EvidenceSeriesV1:
     return EvidenceSeriesV1(
         series_id=series_id,
         symbol=symbol,
-        instrument=_market_identity(symbol),
+        instrument=_market_identity(
+            symbol,
+            instrument_id=instrument_id,
+            base_size_unit_id=base_size_unit_id,
+            quote_price_unit_id=quote_price_unit_id,
+        ),
         kind=kind,
         posture=posture,
         completeness_start_ns=BASE_NS,
@@ -68,7 +86,7 @@ def _series(
             PricePointV1(
                 event_time_ns=BASE_NS + offset_s * SECOND_NS,
                 ordinal=index,
-                price=_usdt(price),
+                price=_price(price, quote_price_unit_id),
             )
             for index, (offset_s, price) in enumerate(prices)
         ),
@@ -213,6 +231,47 @@ class TestBuildBasisPath:
         assert path.points[1].ordinal == 1
         assert path.spot_symbol == "BNBUSDT"
         assert path.perp_symbol == "BNBUSDT-PERP"
+
+    def test_leg_instruments_and_units_must_define_one_compatible_pair(self) -> None:
+        spot = _series("spot", "BNBUSDT", [(0, 10_000)])
+        incompatible_legs = (
+            (
+                _series(
+                    "perp-same-instrument",
+                    "BNBUSDT-PERP",
+                    [(1, 10_060)],
+                    instrument_id=spot.instrument.instrument_id,
+                ),
+                "distinct instruments",
+            ),
+            (
+                _series(
+                    "perp-cross-base",
+                    "ETHUSDT-PERP",
+                    [(1, 10_060)],
+                    base_size_unit_id="ETH",
+                ),
+                "matching base-size units",
+            ),
+            (
+                _series(
+                    "perp-cross-quote",
+                    "BNBUSDC-PERP",
+                    [(1, 10_060)],
+                    quote_price_unit_id="USDC",
+                ),
+                "matching quote-price units",
+            ),
+        )
+        for perp, message in incompatible_legs:
+            with pytest.raises(ContractValueError, match=message):
+                build_basis_path(
+                    path_id="q08-hostile-cross-instrument",
+                    spot_series=spot,
+                    perp_series=perp,
+                    reference_kind=ReferenceKind.LAST_TRADE,
+                    max_staleness_ns=STALENESS,
+                )
 
     def test_reference_kind_must_match_the_evidence_kind(self) -> None:
         spot = _series("spot", "BNBUSDT", [(0, 10_000)])

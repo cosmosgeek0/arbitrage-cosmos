@@ -1,5 +1,6 @@
 import {
   evaluateFreshness,
+  riskMaximumExactDecimal,
   type RuntimePhase,
 } from '../../foundation/contracts/index.js';
 import {
@@ -55,13 +56,13 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_PUBLIC_SOURCE_LIFECYCLE'),
   }),
   'public-usdm-source': Object.freeze({
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_PUBLIC_SOURCE_LIFECYCLE'),
   }),
   'market-universe': Object.freeze({
     owner: 'AUDITED_APP', ownerPath: 'server/src/engine/marketData.ts',
@@ -73,7 +74,7 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'INTELLIGENCE_RUNTIME', ownerPath: 'server/src/intelligenceRuntime',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('PIN_FOCUS'),
   }),
   'market-intelligence': Object.freeze({
     owner: 'MARKET_INTELLIGENCE', ownerPath: 'server/src/intelligenceFoundation',
@@ -91,13 +92,13 @@ const COMPONENT_METADATA: Readonly<Record<SystemComponentId, ComponentMetadata>>
     owner: 'BASIS_ENGINE', ownerPath: 'server/src/engine/basis',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_BASIS_INTAKE'),
   }),
   'volume-engine': Object.freeze({
     owner: 'VOLUME_ENGINE', ownerPath: 'server/src/engine/volume',
     availableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
     unavailableStatuses: statuses('BUILT_AND_TESTED', 'IMPORTED', 'WIRED'),
-    supportedControls: Object.freeze([]),
+    supportedControls: controls('SET_VOLUME_INTAKE'),
   }),
   'capital-supervision': Object.freeze({
     owner: 'CAPITAL_SUPERVISION', ownerPath: 'server/src/capitalFoundation',
@@ -351,7 +352,7 @@ function dryRunComponent(
   const state = componentId === 'capital-supervision'
     ? run.capitalReservationDialect
     : componentId === 'multileg-risk'
-      ? run.riskVerdict?.allowed ? 'APPROVED' : 'REJECTED'
+      ? run.riskVerdict?.decision ?? 'UNAVAILABLE'
       : componentId === 'execution-coordinator-validate-only'
         ? run.executionState?.lifecycle ?? run.disposition
         : run.reconciliation?.status ?? run.disposition;
@@ -359,9 +360,13 @@ function dryRunComponent(
     ? run.reconciliation?.status !== 'EXACT'
     : componentId === 'execution-coordinator-validate-only'
       ? run.disposition === 'EXECUTION_PREFLIGHT_REJECTED'
-      : false;
+      : componentId === 'multileg-risk'
+        ? run.riskVerdict?.allowed === false
+        : false;
   const blockerCodes = domainBlocked
-    ? Object.freeze([run.failure?.code ?? `${componentId.replaceAll('-', '_').toUpperCase()}_BLOCKED`])
+    ? componentId === 'multileg-risk' && run.riskVerdict
+      ? Object.freeze([...run.riskVerdict.blockingCodes])
+      : Object.freeze([run.failure?.code ?? `${componentId.replaceAll('-', '_').toUpperCase()}_BLOCKED`])
     : Object.freeze([] as string[]);
   return Object.freeze({
     componentId,
@@ -500,6 +505,7 @@ function unavailableStrategy() {
   return Object.freeze({
     truthLabel: 'UNAVAILABLE' as const,
     heartbeatAtMs: null, candidateCount: null, proposalCount: null,
+    cooldownCount: null,
     rejectionCount: null, acceptedCount: null, lastDecisionAtMs: null,
     sourceRevision: null,
   });
@@ -584,11 +590,14 @@ export function defaultApplicationSummaries(
       truthLabel: 'UNAVAILABLE', accountTruthState: 'UNAVAILABLE', allocatableAmount: null,
       reservedAmount: null, activeExposureAmount: null, eligibleCount: null,
       reservationCount: null, stagedMandateCount: null, activeExposureCount: null,
+      recoveryCount: null,
       checkpointRevision: null, blockerCodes: Object.freeze(['CAPITAL_OWNER_RECORD_UNAVAILABLE']),
     }),
     risk: Object.freeze({
       truthLabel: 'UNAVAILABLE', latestVerdict: 'UNAVAILABLE', latestVerdictAtMs: null,
-      latestVerdictId: null, rejectionCount: null, reasonCodes: Object.freeze([]),
+      latestVerdictId: null, correlationId: null, maxAllowedSize: null,
+      requiredConfirmation: null, decisiveInputSnapshot: Object.freeze([]),
+      rejectionCount: null, reasonCodes: Object.freeze([]),
     }),
     execution: Object.freeze({
       truthLabel: 'UNAVAILABLE', mode: 'UNAVAILABLE', barrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
@@ -628,16 +637,34 @@ export function mergeApplicationSummaries(
   let execution = defaults.execution;
   let reconciliation = defaults.reconciliation;
   if (run && run.disposition !== 'MODE_BLOCKED' && run.disposition !== 'PERSISTENCE_FAILED') {
-    capital = Object.freeze({
-      truthLabel: 'SYNTHETIC_ONLY', accountTruthState: 'SYNTHETIC_FIXTURE',
-      allocatableAmount: null, reservedAmount: null, activeExposureAmount: null,
-      eligibleCount: 1, reservationCount: 1, stagedMandateCount: 1,
-      activeExposureCount: 0, checkpointRevision: null, blockerCodes: Object.freeze([]),
-    });
+    if (!owner?.capital) {
+      capital = Object.freeze({
+        truthLabel: 'SYNTHETIC_ONLY', accountTruthState: 'SYNTHETIC_FIXTURE',
+        allocatableAmount: null, reservedAmount: null, activeExposureAmount: null,
+        eligibleCount: 1, reservationCount: 1, stagedMandateCount: 1,
+        activeExposureCount: null, recoveryCount: null,
+        checkpointRevision: null, blockerCodes: Object.freeze(['CAPITAL_EXPOSURE_OWNER_UNAVAILABLE']),
+      });
+    }
     risk = run.riskVerdict ? Object.freeze({
-      truthLabel: 'DRY_RUN', latestVerdict: run.riskVerdict.allowed ? 'APPROVE' : 'REJECT',
+      truthLabel: 'DRY_RUN', latestVerdict: run.riskVerdict.decision === 'APPROVED'
+        ? 'APPROVE' as const
+        : run.riskVerdict.decision === 'REJECTED'
+          ? 'REJECT' as const
+          : 'NEEDS_REVIEW' as const,
       latestVerdictAtMs: run.riskVerdict.evaluatedAt, latestVerdictId: run.recordId,
-      rejectionCount: run.riskVerdict.allowed ? 0 : 1,
+      correlationId: run.riskVerdict.correlationId,
+      maxAllowedSize: riskMaximumExactDecimal(run.riskVerdict.maxAllowedSize),
+      requiredConfirmation: run.riskVerdict.requiredConfirmation,
+      decisiveInputSnapshot: Object.freeze(run.riskVerdict.decisiveInputSnapshot.checks.map((check) => Object.freeze({
+        code: check.code,
+        status: check.status,
+        detail: check.detail,
+        observed: check.observed === null ? null : String(check.observed),
+        limit: check.limit === null ? null : String(check.limit),
+        evidenceTimestamp: check.evidenceTimestamp,
+      }))),
+      rejectionCount: run.riskVerdict.decision === 'REJECTED' ? 1 : 0,
       reasonCodes: Object.freeze([...run.riskVerdict.blockingCodes]),
     }) : defaults.risk;
     execution = run.executionState ? Object.freeze({

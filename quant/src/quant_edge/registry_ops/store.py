@@ -19,7 +19,15 @@ from typing import cast
 
 from quant_edge.canonical import canonical_json_bytes, parse_canonical_object
 from quant_edge.errors import ContractValueError, QuantEdgeError
-from quant_edge.lake.contracts import DigestV1, require_contract_id, require_strict_int
+from quant_edge.lake.contracts import (
+    DigestV1,
+    QualityState,
+    require_contract_id,
+    require_strict_int,
+)
+from quant_edge.lake.contracts import (
+    EvidencePosture as LakeEvidencePosture,
+)
 from quant_edge.primitives import require_utc_millis
 from quant_edge.registry_ops.artifacts import read_verified_artifact
 from quant_edge.registry_ops.contracts import (
@@ -38,6 +46,7 @@ from quant_edge.registry_ops.contracts import (
     ModelCardV1,
     ModelLifecycle,
     ModelRegistrationV1,
+    OutcomeReality,
     OwnerAnnotationV1,
     RetirementRecordV1,
     ServingPosture,
@@ -46,6 +55,35 @@ from quant_edge.registry_ops.contracts import (
     TransitionKind,
     ValidationBindingV1,
     mapping_digest,
+)
+from quant_edge.registry_ops.passive_fill_receipts import (
+    MAX_PASSIVE_FILL_CALIBRATION_RECEIPT_TTL_MS,
+    PASSIVE_FILL_CALIBRATION_OWNER_ID,
+    PASSIVE_FILL_CALIBRATION_OWNER_REVISION,
+    PassiveFillCalibrationCompleteness,
+    PassiveFillCalibrationMode,
+    PassiveFillHeldOutCalibrationReceiptV1,
+)
+from quant_edge.registry_ops.recorded_outcomes import (
+    CalibrationAuthority,
+    RecordedCalibrationComparisonV1,
+    RecordedCalibrationPolicyV1,
+    RecordedCalibrationReportV1,
+    RecordedCalibrationSnapshotV1,
+    RecordedComparisonVerdict,
+    RecordedOutcomeAttestationV1,
+    RecordedOutcomeCorpusV1,
+    RecordedPredictionRegistrationV1,
+    RecordedPredictionV1,
+    _evaluate_recorded_calibration,
+    compare_recorded_calibrations,
+    evaluate_recorded_calibration,
+)
+from quant_edge.survival.passive_fill import (
+    MISSING_PASSIVE_FILL_CALIBRATION_ATTESTATION,
+    PassiveFillChallengerV1,
+    PassiveFillObservationV1,
+    fit_passive_fill_challenger,
 )
 
 SCHEMA_VERSION = 1
@@ -112,6 +150,123 @@ def _snapshot_from_mapping(mapping: dict[str, object]) -> ChampionSnapshotV1:
         )
     except (KeyError, TypeError, ValueError) as error:
         raise RegistryIntegrityError("persisted champion snapshot is malformed") from error
+
+
+def _recorded_calibration_snapshot_from_mapping(
+    mapping: dict[str, object],
+) -> RecordedCalibrationSnapshotV1:
+    try:
+        return RecordedCalibrationSnapshotV1(
+            slot_id=str(mapping["slotId"]),
+            generation=_mapping_int(mapping, "generation"),
+            report_id=str(mapping["reportId"]),
+            report_revision=str(mapping["reportRevision"]),
+            model_id=str(mapping["modelId"]),
+            model_revision=str(mapping["modelRevision"]),
+            policy_revision=str(mapping["policyRevision"]),
+            authority=CalibrationAuthority(str(mapping["authority"])),
+            transition_id=str(mapping["transitionId"]),
+            updated_at_ms=_mapping_int(mapping, "updatedAtMs"),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration snapshot is malformed"
+        ) from error
+
+
+def _recorded_calibration_comparison_from_mapping(
+    mapping: dict[str, object],
+) -> RecordedCalibrationComparisonV1:
+    expected_keys = {
+        "absoluteBiasDeltaMicros",
+        "absoluteBiasExactDeltaNumerator",
+        "baselineModelRevision",
+        "baselineReportRevision",
+        "brierDeltaMicros",
+        "brierExactDeltaNumerator",
+        "challengerModelRevision",
+        "challengerReportRevision",
+        "comparisonId",
+        "meanAbsoluteCostResidualDeltaMicros",
+        "meanAbsoluteCostResidualExactDeltaNumerator",
+        "meanAbsoluteResidualDeltaMicros",
+        "meanAbsoluteResidualExactDeltaNumerator",
+        "outcomeSha256",
+        "reasonCodes",
+        "schema",
+        "verdict",
+        "version",
+    }
+    if (
+        set(mapping) != expected_keys
+        or mapping.get("schema") != "Q15RecordedCalibrationComparisonV1"
+        or mapping.get("version") != 1
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison schema is malformed"
+        )
+
+    def required_text(key: str) -> str:
+        value = mapping[key]
+        if not isinstance(value, str):
+            raise RegistryIntegrityError(
+                f"persisted recorded-calibration comparison {key} is malformed"
+            )
+        return value
+
+    def optional_integer(key: str) -> int | None:
+        value = mapping[key]
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise RegistryIntegrityError(
+                f"persisted recorded-calibration comparison {key} is malformed"
+            )
+        return value
+
+    outcome_digests = mapping["outcomeSha256"]
+    reason_codes = mapping["reasonCodes"]
+    if not isinstance(outcome_digests, list) or any(
+        not isinstance(value, str) for value in outcome_digests
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison outcomes are malformed"
+        )
+    if not isinstance(reason_codes, list) or any(
+        not isinstance(value, str) for value in reason_codes
+    ):
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison reasons are malformed"
+        )
+    try:
+        return RecordedCalibrationComparisonV1(
+            comparison_id=required_text("comparisonId"),
+            baseline_report_revision=required_text("baselineReportRevision"),
+            challenger_report_revision=required_text("challengerReportRevision"),
+            baseline_model_revision=required_text("baselineModelRevision"),
+            challenger_model_revision=required_text("challengerModelRevision"),
+            outcome_digests=tuple(DigestV1(value) for value in outcome_digests),
+            verdict=RecordedComparisonVerdict(required_text("verdict")),
+            reason_codes=tuple(reason_codes),
+            brier_delta_micros=optional_integer("brierDeltaMicros"),
+            absolute_bias_delta_micros=optional_integer("absoluteBiasDeltaMicros"),
+            mean_absolute_residual_delta_micros=optional_integer("meanAbsoluteResidualDeltaMicros"),
+            mean_absolute_cost_residual_delta_micros=optional_integer(
+                "meanAbsoluteCostResidualDeltaMicros"
+            ),
+            brier_exact_delta_numerator=optional_integer("brierExactDeltaNumerator"),
+            absolute_bias_exact_delta_numerator=optional_integer("absoluteBiasExactDeltaNumerator"),
+            mean_absolute_residual_exact_delta_numerator=optional_integer(
+                "meanAbsoluteResidualExactDeltaNumerator"
+            ),
+            mean_absolute_cost_residual_exact_delta_numerator=optional_integer(
+                "meanAbsoluteCostResidualExactDeltaNumerator"
+            ),
+        )
+    except (ContractValueError, ValueError) as error:
+        raise RegistryIntegrityError(
+            "persisted recorded-calibration comparison is malformed"
+        ) from error
 
 
 def _verify_transition_record(
@@ -386,7 +541,20 @@ def _verify_validation_report_content(
 class ResearchRegistryStore:
     """One explicit local registry root and one serialized writer connection."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        recorded_outcome_attestation: ArtifactRefV1 | None = None,
+        recorded_outcome_artifact_root: Path | None = None,
+        recorded_prediction_owner_id: str | None = None,
+        recorded_prediction_owner_revision: str | None = None,
+        recorded_prediction_clock: Callable[[], int] | None = None,
+        passive_fill_calibration_owner_id: str | None = None,
+        passive_fill_calibration_owner_revision: str | None = None,
+        passive_fill_calibration_clock: Callable[[], int] | None = None,
+        passive_fill_calibration_receipt_ttl_ms: int | None = None,
+    ) -> None:
         if not isinstance(root, Path) or not root.is_absolute():
             raise ContractValueError("registry root must be an absolute pathlib.Path")
         try:
@@ -395,7 +563,83 @@ class ResearchRegistryStore:
             raise RegistryIntegrityError("registry root must pre-exist") from error
         if not stat.S_ISDIR(info.st_mode) or root.is_symlink():
             raise RegistryIntegrityError("registry root must be a real non-symlink directory")
+        if (recorded_outcome_attestation is None) != (recorded_outcome_artifact_root is None):
+            raise ContractValueError(
+                "recorded outcome attestation reference and artifact root "
+                "must be configured together"
+            )
+        if recorded_outcome_attestation is not None and not isinstance(
+            recorded_outcome_attestation, ArtifactRefV1
+        ):
+            raise ContractValueError("recorded_outcome_attestation must be ArtifactRefV1")
+        if recorded_outcome_artifact_root is not None and not isinstance(
+            recorded_outcome_artifact_root, Path
+        ):
+            raise ContractValueError("recorded_outcome_artifact_root must be pathlib.Path")
+        prediction_owner_configuration = (
+            recorded_prediction_owner_id,
+            recorded_prediction_owner_revision,
+            recorded_prediction_clock,
+        )
+        if any(value is not None for value in prediction_owner_configuration) and not all(
+            value is not None for value in prediction_owner_configuration
+        ):
+            raise ContractValueError(
+                "recorded prediction owner identity, revision and clock must be configured together"
+            )
+        if recorded_prediction_owner_id is not None:
+            require_contract_id(
+                recorded_prediction_owner_id,
+                field="recorded_prediction_owner_id",
+            )
+            require_contract_id(
+                recorded_prediction_owner_revision,
+                field="recorded_prediction_owner_revision",
+            )
+            if not callable(recorded_prediction_clock):
+                raise ContractValueError("recorded_prediction_clock must be callable")
+        if recorded_outcome_attestation is not None and recorded_prediction_owner_id is None:
+            raise ContractValueError(
+                "production outcome attestation requires a configured prediction owner"
+            )
+        passive_fill_owner_configuration = (
+            passive_fill_calibration_owner_id,
+            passive_fill_calibration_owner_revision,
+            passive_fill_calibration_clock,
+            passive_fill_calibration_receipt_ttl_ms,
+        )
+        if any(value is not None for value in passive_fill_owner_configuration) and not all(
+            value is not None for value in passive_fill_owner_configuration
+        ):
+            raise ContractValueError(
+                "passive-fill calibration owner, revision, clock and TTL "
+                "must be configured together"
+            )
+        if passive_fill_calibration_owner_id is not None:
+            if (
+                passive_fill_calibration_owner_id != PASSIVE_FILL_CALIBRATION_OWNER_ID
+                or passive_fill_calibration_owner_revision
+                != PASSIVE_FILL_CALIBRATION_OWNER_REVISION
+            ):
+                raise ContractValueError("passive-fill calibration owner identity is not canonical")
+            if not callable(passive_fill_calibration_clock):
+                raise ContractValueError("passive_fill_calibration_clock must be callable")
+            require_strict_int(
+                passive_fill_calibration_receipt_ttl_ms,
+                field="passive_fill_calibration_receipt_ttl_ms",
+                minimum=1,
+                maximum=MAX_PASSIVE_FILL_CALIBRATION_RECEIPT_TTL_MS,
+            )
         self._root = root
+        self._recorded_outcome_attestation = recorded_outcome_attestation
+        self._recorded_outcome_artifact_root = recorded_outcome_artifact_root
+        self._recorded_prediction_owner_id = recorded_prediction_owner_id
+        self._recorded_prediction_owner_revision = recorded_prediction_owner_revision
+        self._recorded_prediction_clock = recorded_prediction_clock
+        self._passive_fill_calibration_owner_id = passive_fill_calibration_owner_id
+        self._passive_fill_calibration_owner_revision = passive_fill_calibration_owner_revision
+        self._passive_fill_calibration_clock = passive_fill_calibration_clock
+        self._passive_fill_calibration_receipt_ttl_ms = passive_fill_calibration_receipt_ttl_ms
         self._root_identity = (info.st_dev, info.st_ino)
         database = root / "q15-registry.sqlite3"
         created = False
@@ -622,6 +866,76 @@ class ResearchRegistryStore:
                 body_sha TEXT NOT NULL,
                 body BLOB NOT NULL,
                 UNIQUE(model_id, model_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_reports(
+                report_id TEXT PRIMARY KEY,
+                report_revision TEXT NOT NULL UNIQUE,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                authority TEXT NOT NULL,
+                status TEXT NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_predictions(
+                prediction_id TEXT PRIMARY KEY,
+                prediction_sha TEXT NOT NULL UNIQUE,
+                registration_sha TEXT NOT NULL UNIQUE,
+                owner_id TEXT NOT NULL,
+                owner_revision TEXT NOT NULL,
+                registered_at_ms INTEGER NOT NULL,
+                body BLOB NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_heads(
+                slot_id TEXT PRIMARY KEY,
+                generation INTEGER NOT NULL,
+                snapshot_sha TEXT NOT NULL,
+                snapshot BLOB NOT NULL
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS passive_fill_calibration_receipts(
+                receipt_id TEXT PRIMARY KEY,
+                receipt_revision TEXT NOT NULL UNIQUE,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                owner_id TEXT NOT NULL,
+                owner_revision TEXT NOT NULL,
+                report_revision TEXT NOT NULL,
+                challenger_sha TEXT NOT NULL,
+                expected_generation INTEGER NOT NULL,
+                issued_at_ms INTEGER NOT NULL,
+                expires_at_ms INTEGER NOT NULL,
+                FOREIGN KEY(report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_comparisons(
+                comparison_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL UNIQUE,
+                baseline_report_revision TEXT NOT NULL,
+                challenger_report_revision TEXT NOT NULL,
+                body_sha TEXT NOT NULL,
+                body BLOB NOT NULL,
+                verdict TEXT NOT NULL,
+                FOREIGN KEY(baseline_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision),
+                FOREIGN KEY(challenger_report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_transitions(
+                transition_id TEXT PRIMARY KEY,
+                slot_id TEXT NOT NULL,
+                expected_generation INTEGER NOT NULL,
+                report_revision TEXT NOT NULL,
+                snapshot_sha TEXT NOT NULL,
+                snapshot BLOB NOT NULL,
+                committed_at_ms INTEGER NOT NULL,
+                FOREIGN KEY(report_revision)
+                    REFERENCES recorded_calibration_reports(report_revision)
+            ) STRICT;
+            CREATE TABLE IF NOT EXISTS recorded_calibration_transition_comparisons(
+                transition_id TEXT PRIMARY KEY,
+                comparison_revision TEXT NOT NULL,
+                FOREIGN KEY(transition_id)
+                    REFERENCES recorded_calibration_transitions(transition_id),
+                FOREIGN KEY(comparison_revision)
+                    REFERENCES recorded_calibration_comparisons(comparison_revision)
             ) STRICT;
             """
         )
@@ -2269,6 +2583,1337 @@ class ResearchRegistryStore:
             (item.artifact_id, item.sha256.hexdigest): item for item in lineage_references
         }
         return snapshot, tuple(unique_references[key] for key in sorted(unique_references))
+
+    def record_recorded_prediction(
+        self,
+        prediction: RecordedPredictionV1,
+    ) -> RecordedPredictionRegistrationV1:
+        """Append one prediction using the configured owner's trusted receive clock."""
+
+        if not isinstance(prediction, RecordedPredictionV1):
+            raise ContractValueError("prediction must be RecordedPredictionV1")
+        owner_id = self._recorded_prediction_owner_id
+        owner_revision = self._recorded_prediction_owner_revision
+        clock = self._recorded_prediction_clock
+        if owner_id is None or owner_revision is None or clock is None:
+            raise RegistryConflictError("RECORDED_PREDICTION_OWNER_NOT_CONFIGURED")
+        connection = self._require_open()
+        existing = connection.execute(
+            "SELECT prediction_sha,registration_sha,owner_id,owner_revision,body "
+            "FROM recorded_predictions WHERE prediction_id=?",
+            (prediction.prediction_id,),
+        ).fetchone()
+        if existing is not None:
+            try:
+                mapping = parse_canonical_object(bytes(existing["body"]))
+                registration = RecordedPredictionRegistrationV1.from_mapping(mapping)
+            except QuantEdgeError as error:
+                raise RegistryIntegrityError(
+                    "persisted recorded prediction registration is invalid"
+                ) from error
+            if (
+                bytes(existing["body"]) != canonical_json_bytes(mapping)
+                or existing["prediction_sha"] != prediction.content_digest.hexdigest
+                or existing["registration_sha"] != registration.content_digest.hexdigest
+                or existing["owner_id"] != owner_id
+                or existing["owner_revision"] != owner_revision
+                or registration.prediction != prediction
+                or registration.owner_id != owner_id
+                or registration.owner_revision != owner_revision
+            ):
+                raise RegistryConflictError("recorded prediction identity already differs")
+            return registration
+        registered_at_ms = clock()
+        require_utc_millis(registered_at_ms, field="recorded prediction owner clock")
+        registration = RecordedPredictionRegistrationV1(
+            owner_id=owner_id,
+            owner_revision=owner_revision,
+            prediction=prediction,
+            registered_at_ms=registered_at_ms,
+        )
+        body = canonical_json_bytes(registration.as_mapping())
+        connection = self._begin(None)
+        try:
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_predictions("
+                    "prediction_id,prediction_sha,registration_sha,owner_id,owner_revision,"
+                    "registered_at_ms,body) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        prediction.prediction_id,
+                        prediction.content_digest.hexdigest,
+                        registration.content_digest.hexdigest,
+                        owner_id,
+                        owner_revision,
+                        registered_at_ms,
+                        body,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded prediction identity or content is already bound"
+                ) from error
+            self._finish(connection, None)
+            return registration
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def _recorded_prediction_registration(
+        self,
+        prediction_id: str,
+    ) -> RecordedPredictionRegistrationV1:
+        require_contract_id(prediction_id, field="prediction_id")
+        owner_id = self._recorded_prediction_owner_id
+        owner_revision = self._recorded_prediction_owner_revision
+        if owner_id is None or owner_revision is None:
+            raise RegistryConflictError("RECORDED_PREDICTION_OWNER_NOT_CONFIGURED")
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT prediction_sha,registration_sha,owner_id,owner_revision,"
+                "registered_at_ms,body FROM recorded_predictions WHERE prediction_id=?",
+                (prediction_id,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            raise RegistryConflictError(
+                "recorded outcome requires a durable pre-outcome prediction"
+            )
+        try:
+            mapping = parse_canonical_object(bytes(row["body"]))
+            registration = RecordedPredictionRegistrationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "persisted recorded prediction registration is invalid"
+            ) from error
+        if (
+            bytes(row["body"]) != canonical_json_bytes(mapping)
+            or row["prediction_sha"] != registration.prediction.content_digest.hexdigest
+            or row["registration_sha"] != registration.content_digest.hexdigest
+            or row["owner_id"] != registration.owner_id
+            or row["owner_revision"] != registration.owner_revision
+            or row["registered_at_ms"] != registration.registered_at_ms
+        ):
+            raise RegistryIntegrityError("persisted recorded prediction binding is corrupt")
+        if registration.owner_id != owner_id or registration.owner_revision != owner_revision:
+            raise RegistryConflictError("recorded prediction belongs to a foreign owner")
+        return registration
+
+    def _prediction_registrations_for_corpus(
+        self,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> tuple[RecordedPredictionRegistrationV1, ...]:
+        registrations = tuple(
+            self._recorded_prediction_registration(record.prediction_id)
+            for record in corpus.records
+        )
+        if any(
+            not registration.matches_outcome(record)
+            for record, registration in zip(corpus.records, registrations, strict=True)
+        ):
+            raise RegistryConflictError(
+                "recorded outcome does not bind an exact pre-outcome prediction"
+            )
+        return registrations
+
+    def _require_recorded_outcome_attestation_registration(
+        self,
+        reference: ArtifactRefV1,
+    ) -> None:
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT digest,body FROM artifacts WHERE artifact_id=?",
+                (reference.artifact_id,),
+            )
+            .fetchone()
+        )
+        expected_reference_body = canonical_json_bytes(reference.as_mapping())
+        if (
+            row is None
+            or row["digest"] != mapping_digest(reference.as_mapping()).hexdigest
+            or bytes(row["body"]) != expected_reference_body
+        ):
+            raise RegistryConflictError(
+                "recorded outcome attestation must be the exact registered artifact"
+            )
+
+    def verify_recorded_outcome_attestation(
+        self, corpus: RecordedOutcomeCorpusV1
+    ) -> RecordedOutcomeAttestationV1:
+        if not isinstance(corpus, RecordedOutcomeCorpusV1):
+            raise ContractValueError("corpus must be RecordedOutcomeCorpusV1")
+        reference = self._recorded_outcome_attestation
+        artifact_root = self._recorded_outcome_artifact_root
+        if reference is None or artifact_root is None:
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        if (
+            reference.schema_name != "Q15RecordedOutcomeAttestationV1"
+            or reference.schema_version != 1
+        ):
+            raise RegistryConflictError("recorded outcome attestation schema is not configured")
+        self._require_recorded_outcome_attestation_registration(reference)
+        try:
+            raw = read_verified_artifact(artifact_root, reference)
+            mapping = parse_canonical_object(raw)
+            attestation = RecordedOutcomeAttestationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "recorded outcome attestation bytes are invalid"
+            ) from error
+        registrations = self._prediction_registrations_for_corpus(corpus)
+        if (
+            attestation.prediction_owner_id != self._recorded_prediction_owner_id
+            or attestation.prediction_owner_revision != self._recorded_prediction_owner_revision
+            or not attestation.matches_corpus(corpus, registrations)
+        ):
+            raise RegistryConflictError(
+                "recorded outcome attestation does not bind the exact corpus and predictions"
+            )
+        return attestation
+
+    def evaluate_recorded_calibration(
+        self,
+        *,
+        report_id: str,
+        slot_id: str,
+        corpus: RecordedOutcomeCorpusV1,
+        policy: RecordedCalibrationPolicyV1,
+    ) -> RecordedCalibrationReportV1:
+        """Verify configured production bytes and evaluate in one store operation."""
+
+        if policy.authority is not CalibrationAuthority.PRODUCTION:
+            return evaluate_recorded_calibration(
+                report_id=report_id,
+                slot_id=slot_id,
+                corpus=corpus,
+                policy=policy,
+            )
+        attestation = self.verify_recorded_outcome_attestation(corpus)
+        reference = self._recorded_outcome_attestation
+        if reference is None:  # pragma: no cover - verification enforces configuration
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        return _evaluate_recorded_calibration(
+            report_id=report_id,
+            slot_id=slot_id,
+            corpus=corpus,
+            policy=policy,
+            attestation_artifact_sha256=reference.sha256,
+            prediction_registration_digests=attestation.prediction_registration_sha256,
+        )
+
+    def _require_production_attestation(self, report: RecordedCalibrationReportV1) -> None:
+        reference = self._recorded_outcome_attestation
+        artifact_root = self._recorded_outcome_artifact_root
+        if reference is None or artifact_root is None:
+            raise RegistryConflictError("OUTCOME_ATTESTATION_NOT_CONFIGURED")
+        if report.attestation_artifact_sha256 != reference.sha256:
+            raise RegistryConflictError("production report attestation is not configured")
+        self._require_recorded_outcome_attestation_registration(reference)
+        try:
+            mapping = parse_canonical_object(read_verified_artifact(artifact_root, reference))
+            attestation = RecordedOutcomeAttestationV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "recorded outcome attestation bytes are invalid"
+            ) from error
+        if (
+            attestation.corpus_id != report.corpus_id
+            or attestation.corpus_revision != report.corpus_revision
+            or attestation.corpus_sha256 != report.corpus_sha256
+            or attestation.record_ids != report.record_ids
+            or attestation.outcome_sha256 != report.outcome_digests
+            or attestation.prediction_sha256 != report.prediction_digests
+            or attestation.prediction_registration_sha256 != report.prediction_registration_digests
+        ):
+            raise RegistryConflictError("production report is not content-bound to attestation")
+        registrations = tuple(
+            self._recorded_prediction_registration(prediction_id)
+            for prediction_id in attestation.prediction_ids
+        )
+        if (
+            tuple(item.prediction.content_digest for item in registrations)
+            != attestation.prediction_sha256
+            or tuple(item.content_digest for item in registrations)
+            != attestation.prediction_registration_sha256
+        ):
+            raise RegistryConflictError(
+                "production report prediction registrations no longer match attestation"
+            )
+
+    def record_recorded_calibration_report(
+        self,
+        report: RecordedCalibrationReportV1,
+        *,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> DigestV1:
+        if not isinstance(report, RecordedCalibrationReportV1):
+            raise ContractValueError("report must be RecordedCalibrationReportV1")
+        if not isinstance(corpus, RecordedOutcomeCorpusV1):
+            raise ContractValueError("corpus must be RecordedOutcomeCorpusV1")
+        production_bound = report.policy.authority is CalibrationAuthority.PRODUCTION and (
+            report.attestation_artifact_sha256 is not None or report.is_promotable
+        )
+        expected = (
+            self.evaluate_recorded_calibration(
+                report_id=report.report_id,
+                slot_id=report.slot_id,
+                corpus=corpus,
+                policy=report.policy,
+            )
+            if production_bound
+            else evaluate_recorded_calibration(
+                report_id=report.report_id,
+                slot_id=report.slot_id,
+                corpus=corpus,
+                policy=report.policy,
+            )
+        )
+        if expected != report:
+            raise RegistryConflictError(
+                "recorded calibration report does not match exact corpus evaluation"
+            )
+        body = canonical_json_bytes(report.as_mapping())
+        connection = self._begin(None)
+        try:
+            existing = connection.execute(
+                "SELECT report_revision,body_sha,body FROM recorded_calibration_reports "
+                "WHERE report_id=?",
+                (report.report_id,),
+            ).fetchone()
+            if existing is not None:
+                if (
+                    existing["report_revision"] != report.report_revision
+                    or existing["body_sha"] != report.content_digest.hexdigest
+                    or bytes(existing["body"]) != body
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration report identity already differs"
+                    )
+                self._finish(connection, None)
+                return report.content_digest
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_reports("
+                    "report_id,report_revision,body_sha,body,authority,status) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (
+                        report.report_id,
+                        report.report_revision,
+                        report.content_digest.hexdigest,
+                        body,
+                        report.policy.authority.value,
+                        report.status.value,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded calibration revision is already bound"
+                ) from error
+            self._finish(connection, None)
+            return report.content_digest
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def _passive_fill_owner_configuration(
+        self,
+    ) -> tuple[str, str, Callable[[], int], int]:
+        owner_id = self._passive_fill_calibration_owner_id
+        owner_revision = self._passive_fill_calibration_owner_revision
+        clock = self._passive_fill_calibration_clock
+        ttl_ms = self._passive_fill_calibration_receipt_ttl_ms
+        if owner_id is None or owner_revision is None or clock is None or ttl_ms is None:
+            raise RegistryConflictError("PASSIVE_FILL_CALIBRATION_OWNER_NOT_CONFIGURED")
+        return owner_id, owner_revision, clock, ttl_ms
+
+    def _require_persisted_recorded_calibration_report(
+        self,
+        report: RecordedCalibrationReportV1,
+    ) -> sqlite3.Row:
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT report_id,report_revision,body_sha,body,authority,status "
+                "FROM recorded_calibration_reports WHERE report_revision=?",
+                (report.report_revision,),
+            )
+            .fetchone()
+        )
+        body = canonical_json_bytes(report.as_mapping())
+        if (
+            row is None
+            or row["report_id"] != report.report_id
+            or row["report_revision"] != report.report_revision
+            or row["body_sha"] != report.content_digest.hexdigest
+            or bytes(row["body"]) != body
+            or row["authority"] != report.policy.authority.value
+            or row["status"] != report.status.value
+        ):
+            raise RegistryConflictError(
+                "passive-fill calibration requires its exact persisted report"
+            )
+        return cast(sqlite3.Row, row)
+
+    @staticmethod
+    def _require_passive_fill_calibration_evidence(
+        *,
+        challenger: PassiveFillChallengerV1,
+        training_observations: tuple[PassiveFillObservationV1, ...],
+        report: RecordedCalibrationReportV1,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> tuple[PassiveFillChallengerV1, int, int, int]:
+        if not isinstance(challenger, PassiveFillChallengerV1):
+            raise ContractValueError("challenger must be PassiveFillChallengerV1")
+        if not isinstance(training_observations, tuple) or any(
+            not isinstance(item, PassiveFillObservationV1) for item in training_observations
+        ):
+            raise ContractValueError("training_observations must contain PassiveFillObservationV1")
+        if not isinstance(report, RecordedCalibrationReportV1):
+            raise ContractValueError("report must be RecordedCalibrationReportV1")
+        if not isinstance(corpus, RecordedOutcomeCorpusV1):
+            raise ContractValueError("corpus must be RecordedOutcomeCorpusV1")
+        refit = fit_passive_fill_challenger(training_observations, challenger.config)
+        if refit != challenger:
+            raise RegistryConflictError(
+                "passive-fill challenger does not match the exact training observations"
+            )
+        if (
+            not challenger.is_research_ready
+            or challenger.is_promotable
+            or challenger.promotion_blockers != (MISSING_PASSIVE_FILL_CALIBRATION_ATTESTATION,)
+            or challenger.training_ended_at_ms is None
+            or not challenger.training_event_ids
+        ):
+            raise RegistryConflictError("passive-fill challenger is not research-ready")
+        if any(
+            item.posture is not LakeEvidencePosture.REPLAY
+            or item.quality is not QualityState.COMPLETE
+            for item in training_observations
+        ):
+            raise RegistryConflictError(
+                "passive-fill calibration requires COMPLETE recorded REPLAY training evidence"
+            )
+        expected_report = evaluate_recorded_calibration(
+            report_id=report.report_id,
+            slot_id=report.slot_id,
+            corpus=corpus,
+            policy=report.policy,
+        )
+        if expected_report != report:
+            raise RegistryConflictError(
+                "passive-fill report does not match its exact recorded-outcome corpus"
+            )
+        if (
+            not report.is_promotable
+            or report.policy.authority is not CalibrationAuthority.RESEARCH_ONLY
+            or report.model_id != "passive-fill"
+            or report.model_revision != challenger.config.model_revision
+            or not corpus.records
+            or any(item.reality is not OutcomeReality.REPLAY for item in corpus.records)
+        ):
+            raise RegistryConflictError(
+                "passive-fill receipt requires a complete research-only recorded-outcome report"
+            )
+        heldout_event_ids = {item.event_id for item in corpus.records}
+        if set(challenger.training_event_ids) & heldout_event_ids:
+            raise RegistryConflictError("passive-fill training and held-out events overlap")
+        heldout_start = min(item.prediction_cutoff_ms for item in corpus.records)
+        heldout_end = max(item.observed_at_ms for item in corpus.records)
+        if challenger.training_ended_at_ms >= heldout_start:
+            raise RegistryConflictError(
+                "passive-fill training overlaps the chronological held-out window"
+            )
+        return refit, challenger.training_ended_at_ms, heldout_start, heldout_end
+
+    @staticmethod
+    def _passive_fill_receipt_from_row(
+        row: sqlite3.Row,
+    ) -> PassiveFillHeldOutCalibrationReceiptV1:
+        try:
+            mapping = parse_canonical_object(bytes(row["body"]))
+            receipt = PassiveFillHeldOutCalibrationReceiptV1.from_mapping(mapping)
+        except QuantEdgeError as error:
+            raise RegistryIntegrityError(
+                "persisted passive-fill calibration receipt is invalid"
+            ) from error
+        if (
+            bytes(row["body"]) != canonical_json_bytes(mapping)
+            or row["receipt_id"] != receipt.receipt_id
+            or row["receipt_revision"] != receipt.receipt_revision
+            or row["body_sha"] != receipt.content_digest.hexdigest
+            or row["owner_id"] != receipt.owner_id
+            or row["owner_revision"] != receipt.owner_revision
+            or row["report_revision"] != receipt.report_revision
+            or row["challenger_sha"] != receipt.challenger_sha256.hexdigest
+            or row["expected_generation"] != receipt.expected_generation
+            or row["issued_at_ms"] != receipt.issued_at_ms
+            or row["expires_at_ms"] != receipt.expires_at_ms
+        ):
+            raise RegistryIntegrityError(
+                "persisted passive-fill calibration receipt binding is corrupt"
+            )
+        return receipt
+
+    def record_passive_fill_held_out_calibration_receipt(
+        self,
+        *,
+        receipt_id: str,
+        challenger: PassiveFillChallengerV1,
+        training_observations: tuple[PassiveFillObservationV1, ...],
+        report: RecordedCalibrationReportV1,
+        corpus: RecordedOutcomeCorpusV1,
+        transition_id: str,
+        expected_generation: int,
+    ) -> PassiveFillHeldOutCalibrationReceiptV1:
+        require_contract_id(receipt_id, field="receipt_id")
+        require_contract_id(transition_id, field="transition_id")
+        require_strict_int(expected_generation, field="expected_generation", minimum=0)
+        owner_id, owner_revision, clock, ttl_ms = self._passive_fill_owner_configuration()
+        _, training_end, heldout_start, heldout_end = (
+            self._require_passive_fill_calibration_evidence(
+                challenger=challenger,
+                training_observations=training_observations,
+                report=report,
+                corpus=corpus,
+            )
+        )
+        self._require_persisted_recorded_calibration_report(report)
+        current = self.current_recorded_calibration(report.slot_id)
+        current_generation = 0 if current is None else current.generation
+        if current_generation != expected_generation:
+            raise RegistryConflictError("passive-fill calibration generation is stale")
+        issued_at_ms = clock()
+        require_utc_millis(issued_at_ms, field="passive-fill calibration owner clock")
+        if issued_at_ms < heldout_end:
+            raise RegistryConflictError(
+                "passive-fill receipt cannot precede held-out outcome observation"
+            )
+        receipt = PassiveFillHeldOutCalibrationReceiptV1(
+            receipt_id=receipt_id,
+            owner_id=owner_id,
+            owner_revision=owner_revision,
+            mode=PassiveFillCalibrationMode.CHRONOLOGICAL_HELD_OUT,
+            completeness=PassiveFillCalibrationCompleteness.COMPLETE,
+            challenger_model_revision=challenger.config.model_revision,
+            challenger_sha256=challenger.content_digest,
+            training_observations_sha256=challenger.training_observation_sha256,
+            training_event_ids=challenger.training_event_ids,
+            training_observed_through_ms=training_end,
+            report_id=report.report_id,
+            report_revision=report.report_revision,
+            report_sha256=report.content_digest,
+            policy_revision=report.policy.policy_revision,
+            authority=report.policy.authority,
+            corpus_id=corpus.corpus_id,
+            corpus_revision=corpus.corpus_revision,
+            corpus_sha256=corpus.content_digest,
+            heldout_reality=OutcomeReality.REPLAY,
+            heldout_event_ids=tuple(sorted(item.event_id for item in corpus.records)),
+            heldout_prediction_cutoff_from_ms=heldout_start,
+            heldout_observed_through_ms=heldout_end,
+            transition_id=transition_id,
+            expected_generation=expected_generation,
+            issued_at_ms=issued_at_ms,
+            expires_at_ms=issued_at_ms + ttl_ms,
+        )
+        body = canonical_json_bytes(receipt.as_mapping())
+        connection = self._begin(None)
+        try:
+            existing = connection.execute(
+                "SELECT * FROM passive_fill_calibration_receipts WHERE receipt_id=?",
+                (receipt.receipt_id,),
+            ).fetchone()
+            if existing is not None:
+                stored = self._passive_fill_receipt_from_row(existing)
+                if stored != receipt:
+                    raise RegistryConflictError(
+                        "passive-fill calibration receipt identity already differs"
+                    )
+                self._finish(connection, None)
+                return stored
+            try:
+                connection.execute(
+                    "INSERT INTO passive_fill_calibration_receipts("
+                    "receipt_id,receipt_revision,body_sha,body,owner_id,owner_revision,"
+                    "report_revision,challenger_sha,expected_generation,issued_at_ms,expires_at_ms"
+                    ") VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        receipt.receipt_id,
+                        receipt.receipt_revision,
+                        receipt.content_digest.hexdigest,
+                        body,
+                        receipt.owner_id,
+                        receipt.owner_revision,
+                        receipt.report_revision,
+                        receipt.challenger_sha256.hexdigest,
+                        receipt.expected_generation,
+                        receipt.issued_at_ms,
+                        receipt.expires_at_ms,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "passive-fill calibration receipt content is already bound"
+                ) from error
+            self._finish(connection, None)
+            return receipt
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def verify_passive_fill_promotion_authority(
+        self,
+        *,
+        receipt_revision: str,
+        challenger: PassiveFillChallengerV1,
+        training_observations: tuple[PassiveFillObservationV1, ...],
+        report: RecordedCalibrationReportV1,
+        corpus: RecordedOutcomeCorpusV1,
+    ) -> PassiveFillHeldOutCalibrationReceiptV1:
+        require_contract_id(receipt_revision, field="receipt_revision")
+        owner_id, owner_revision, clock, ttl_ms = self._passive_fill_owner_configuration()
+        _, training_end, heldout_start, heldout_end = (
+            self._require_passive_fill_calibration_evidence(
+                challenger=challenger,
+                training_observations=training_observations,
+                report=report,
+                corpus=corpus,
+            )
+        )
+        self._require_persisted_recorded_calibration_report(report)
+        row = (
+            self._require_open()
+            .execute(
+                "SELECT * FROM passive_fill_calibration_receipts WHERE receipt_revision=?",
+                (receipt_revision,),
+            )
+            .fetchone()
+        )
+        if row is None:
+            raise RegistryConflictError("passive-fill calibration receipt is not persisted")
+        receipt = self._passive_fill_receipt_from_row(row)
+        current = self.current_recorded_calibration(report.slot_id)
+        current_generation = 0 if current is None else current.generation
+        now_ms = clock()
+        require_utc_millis(now_ms, field="passive-fill calibration owner clock")
+        expected_bindings = (
+            owner_id,
+            owner_revision,
+            PassiveFillCalibrationMode.CHRONOLOGICAL_HELD_OUT,
+            PassiveFillCalibrationCompleteness.COMPLETE,
+            challenger.config.model_revision,
+            challenger.content_digest,
+            challenger.training_observation_sha256,
+            challenger.training_event_ids,
+            training_end,
+            report.report_id,
+            report.report_revision,
+            report.content_digest,
+            report.policy.policy_revision,
+            report.policy.authority,
+            corpus.corpus_id,
+            corpus.corpus_revision,
+            corpus.content_digest,
+            OutcomeReality.REPLAY,
+            tuple(sorted(item.event_id for item in corpus.records)),
+            heldout_start,
+            heldout_end,
+        )
+        observed_bindings = (
+            receipt.owner_id,
+            receipt.owner_revision,
+            receipt.mode,
+            receipt.completeness,
+            receipt.challenger_model_revision,
+            receipt.challenger_sha256,
+            receipt.training_observations_sha256,
+            receipt.training_event_ids,
+            receipt.training_observed_through_ms,
+            receipt.report_id,
+            receipt.report_revision,
+            receipt.report_sha256,
+            receipt.policy_revision,
+            receipt.authority,
+            receipt.corpus_id,
+            receipt.corpus_revision,
+            receipt.corpus_sha256,
+            receipt.heldout_reality,
+            receipt.heldout_event_ids,
+            receipt.heldout_prediction_cutoff_from_ms,
+            receipt.heldout_observed_through_ms,
+        )
+        if observed_bindings != expected_bindings:
+            raise RegistryConflictError(
+                "passive-fill calibration receipt does not bind the exact evidence"
+            )
+        if receipt.expires_at_ms - receipt.issued_at_ms != ttl_ms:
+            raise RegistryConflictError("passive-fill calibration receipt TTL is not configured")
+        if now_ms < receipt.issued_at_ms or now_ms > receipt.expires_at_ms:
+            raise RegistryConflictError("passive-fill calibration receipt is stale")
+        if current_generation != receipt.expected_generation:
+            completed = (
+                self._require_open()
+                .execute(
+                    "SELECT expected_generation,report_revision FROM "
+                    "recorded_calibration_transitions WHERE transition_id=?",
+                    (receipt.transition_id,),
+                )
+                .fetchone()
+            )
+            if (
+                completed is None
+                or completed["expected_generation"] != receipt.expected_generation
+                or completed["report_revision"] != receipt.report_revision
+            ):
+                raise RegistryConflictError("passive-fill calibration receipt generation is stale")
+        return receipt
+
+    @staticmethod
+    def _verified_recorded_calibration_transition(
+        row: sqlite3.Row,
+    ) -> RecordedCalibrationSnapshotV1:
+        try:
+            mapping = parse_canonical_object(bytes(row["snapshot"]))
+            snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError(
+                "recorded calibration transition snapshot is malformed"
+            ) from error
+        expected_generation = row["expected_generation"]
+        if (
+            isinstance(expected_generation, bool)
+            or not isinstance(expected_generation, int)
+            or snapshot.transition_id != row["transition_id"]
+            or snapshot.slot_id != row["slot_id"]
+            or snapshot.generation != expected_generation + 1
+            or snapshot.report_revision != row["report_revision"]
+            or snapshot.content_digest.hexdigest != row["snapshot_sha"]
+            or bytes(row["snapshot"]) != canonical_json_bytes(snapshot.as_mapping())
+            or snapshot.updated_at_ms != row["committed_at_ms"]
+        ):
+            raise RegistryIntegrityError("recorded calibration transition is corrupt")
+        return snapshot
+
+    def _require_recorded_calibration_transition(
+        self,
+        connection: sqlite3.Connection,
+        transition_id: str,
+    ) -> RecordedCalibrationSnapshotV1:
+        rows = connection.execute(
+            "SELECT transition_id,slot_id,expected_generation,report_revision,"
+            "snapshot_sha,snapshot,committed_at_ms FROM recorded_calibration_transitions "
+            "WHERE transition_id=? LIMIT 2",
+            (transition_id,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration transition must exist exactly once")
+        return self._verified_recorded_calibration_transition(rows[0])
+
+    def _require_previous_recorded_calibration_transition(
+        self,
+        connection: sqlite3.Connection,
+        snapshot: RecordedCalibrationSnapshotV1,
+    ) -> RecordedCalibrationSnapshotV1:
+        if snapshot.generation <= 1:
+            raise RegistryIntegrityError(
+                "recorded calibration comparison requires a prior transition"
+            )
+        rows = connection.execute(
+            "SELECT transition_id,slot_id,expected_generation,report_revision,"
+            "snapshot_sha,snapshot,committed_at_ms FROM recorded_calibration_transitions "
+            "WHERE slot_id=? AND expected_generation=? LIMIT 2",
+            (snapshot.slot_id, snapshot.generation - 2),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError(
+                "recorded calibration prior transition must exist exactly once"
+            )
+        previous = self._verified_recorded_calibration_transition(rows[0])
+        if previous.generation != snapshot.generation - 1:
+            raise RegistryIntegrityError(
+                "recorded calibration prior transition generation is corrupt"
+            )
+        return previous
+
+    @staticmethod
+    def _require_recorded_calibration_report_binding(
+        connection: sqlite3.Connection,
+        snapshot: RecordedCalibrationSnapshotV1,
+    ) -> dict[str, object]:
+        rows = connection.execute(
+            "SELECT report_revision,body_sha,body,authority,status FROM "
+            "recorded_calibration_reports WHERE report_revision=? LIMIT 2",
+            (snapshot.report_revision,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration report must exist exactly once")
+        report = rows[0]
+        try:
+            report_mapping = parse_canonical_object(bytes(report["body"]))
+            canonical_body = canonical_json_bytes(report_mapping)
+            body_digest = mapping_digest(report_mapping).hexdigest
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError("recorded calibration report body is malformed") from error
+        policy_mapping = report_mapping.get("policy")
+        if (
+            bytes(report["body"]) != canonical_body
+            or body_digest != report["body_sha"]
+            or report["report_revision"] != f"sha256:{body_digest}"
+            or snapshot.report_revision != report["report_revision"]
+            or report_mapping.get("reportId") != snapshot.report_id
+            or report_mapping.get("slotId") != snapshot.slot_id
+            or report_mapping.get("modelId") != snapshot.model_id
+            or report_mapping.get("modelRevision") != snapshot.model_revision
+            or report_mapping.get("status") != "PROMOTION_ELIGIBLE"
+            or not isinstance(policy_mapping, dict)
+            or policy_mapping.get("policyRevision") != snapshot.policy_revision
+            or policy_mapping.get("authority") != snapshot.authority.value
+            or report["authority"] != snapshot.authority.value
+            or report["status"] != report_mapping.get("status")
+        ):
+            raise RegistryIntegrityError("recorded calibration head and report binding is corrupt")
+        return report_mapping
+
+    @staticmethod
+    def _require_persisted_recorded_calibration_comparison(
+        connection: sqlite3.Connection,
+        comparison_revision: str,
+        *,
+        require_pass: bool = True,
+    ) -> RecordedCalibrationComparisonV1:
+        rows = connection.execute(
+            "SELECT comparison_id,comparison_revision,baseline_report_revision,"
+            "challenger_report_revision,body_sha,body,verdict FROM "
+            "recorded_calibration_comparisons WHERE comparison_revision=? LIMIT 2",
+            (comparison_revision,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration comparison must exist exactly once")
+        row = rows[0]
+        try:
+            mapping = parse_canonical_object(bytes(row["body"]))
+            comparison = _recorded_calibration_comparison_from_mapping(mapping)
+            canonical_body = canonical_json_bytes(comparison.as_mapping())
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError(
+                "recorded calibration comparison body is malformed"
+            ) from error
+        digest = comparison.content_digest.hexdigest
+        if (
+            bytes(row["body"]) != canonical_body
+            or row["body_sha"] != digest
+            or row["comparison_revision"] != f"sha256:{digest}"
+            or comparison_revision != row["comparison_revision"]
+            or row["comparison_id"] != comparison.comparison_id
+            or row["baseline_report_revision"] != comparison.baseline_report_revision
+            or row["challenger_report_revision"] != comparison.challenger_report_revision
+            or row["verdict"] != comparison.verdict.value
+            or (require_pass and comparison.verdict is not RecordedComparisonVerdict.PASS)
+        ):
+            raise RegistryIntegrityError("recorded calibration comparison evidence is corrupt")
+        return comparison
+
+    def _require_recorded_calibration_transition_comparison(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        snapshot: RecordedCalibrationSnapshotV1,
+        expected_comparison: RecordedCalibrationComparisonV1 | None,
+    ) -> RecordedCalibrationComparisonV1:
+        link_rows = connection.execute(
+            "SELECT transition_id,comparison_revision FROM "
+            "recorded_calibration_transition_comparisons WHERE transition_id=? LIMIT 2",
+            (snapshot.transition_id,),
+        ).fetchall()
+        if len(link_rows) != 1:
+            raise RegistryIntegrityError(
+                "recorded calibration transition comparison link must exist exactly once"
+            )
+        link = link_rows[0]
+        if link["transition_id"] != snapshot.transition_id:
+            raise RegistryIntegrityError(
+                "recorded calibration transition comparison link is corrupt"
+            )
+        comparison = self._require_persisted_recorded_calibration_comparison(
+            connection,
+            str(link["comparison_revision"]),
+        )
+        previous = self._require_previous_recorded_calibration_transition(
+            connection,
+            snapshot,
+        )
+        baseline_report = self._require_recorded_calibration_report_binding(
+            connection,
+            previous,
+        )
+        challenger_report = self._require_recorded_calibration_report_binding(
+            connection,
+            snapshot,
+        )
+        outcome_digests = [digest.hexdigest for digest in comparison.outcome_digests]
+        if (
+            comparison.baseline_report_revision != previous.report_revision
+            or comparison.challenger_report_revision != snapshot.report_revision
+            or comparison.baseline_model_revision != previous.model_revision
+            or comparison.challenger_model_revision != snapshot.model_revision
+            or baseline_report.get("outcomeSha256") != outcome_digests
+            or challenger_report.get("outcomeSha256") != outcome_digests
+        ):
+            raise RegistryIntegrityError(
+                "recorded calibration comparison report binding is corrupt"
+            )
+        if expected_comparison is not None and comparison != expected_comparison:
+            raise RegistryConflictError("recorded calibration transition idempotency key conflicts")
+        return comparison
+
+    def current_recorded_calibration(self, slot_id: str) -> RecordedCalibrationSnapshotV1 | None:
+        require_contract_id(slot_id, field="slot_id")
+        connection = self._require_open()
+        rows = connection.execute(
+            "SELECT slot_id,generation,snapshot_sha,snapshot FROM "
+            "recorded_calibration_heads WHERE slot_id=? LIMIT 2",
+            (slot_id,),
+        ).fetchall()
+        if not rows:
+            return None
+        if len(rows) != 1:
+            raise RegistryIntegrityError("recorded calibration head must exist exactly once")
+        row = rows[0]
+        try:
+            mapping = parse_canonical_object(bytes(row["snapshot"]))
+            snapshot = _recorded_calibration_snapshot_from_mapping(mapping)
+        except (KeyError, TypeError, QuantEdgeError) as error:
+            raise RegistryIntegrityError("recorded calibration head is malformed") from error
+        if (
+            snapshot.slot_id != slot_id
+            or row["slot_id"] != slot_id
+            or snapshot.generation != row["generation"]
+            or snapshot.content_digest.hexdigest != row["snapshot_sha"]
+            or bytes(row["snapshot"]) != canonical_json_bytes(snapshot.as_mapping())
+        ):
+            raise RegistryIntegrityError("recorded calibration head is corrupt")
+        transition = self._require_recorded_calibration_transition(
+            connection,
+            snapshot.transition_id,
+        )
+        if transition != snapshot:
+            raise RegistryIntegrityError(
+                "recorded calibration head and transition binding is corrupt"
+            )
+        self._require_recorded_calibration_report_binding(connection, snapshot)
+        if snapshot.generation > 1:
+            self._require_recorded_calibration_transition_comparison(
+                connection,
+                snapshot=snapshot,
+                expected_comparison=None,
+            )
+        else:
+            link = connection.execute(
+                "SELECT 1 FROM recorded_calibration_transition_comparisons WHERE transition_id=?",
+                (snapshot.transition_id,),
+            ).fetchone()
+            if link is not None:
+                raise RegistryIntegrityError(
+                    "initial recorded calibration transition cannot have comparison evidence"
+                )
+        return snapshot
+
+    def record_recorded_calibration_comparison(
+        self,
+        comparison: RecordedCalibrationComparisonV1,
+        *,
+        baseline: RecordedCalibrationReportV1,
+        challenger: RecordedCalibrationReportV1,
+    ) -> DigestV1:
+        if not isinstance(comparison, RecordedCalibrationComparisonV1):
+            raise ContractValueError("comparison must be RecordedCalibrationComparisonV1")
+        expected = compare_recorded_calibrations(
+            comparison_id=comparison.comparison_id,
+            baseline=baseline,
+            challenger=challenger,
+        )
+        if expected != comparison:
+            raise RegistryConflictError(
+                "recorded calibration comparison does not match exact reports"
+            )
+        body = canonical_json_bytes(comparison.as_mapping())
+        revision = f"sha256:{comparison.content_digest.hexdigest}"
+        connection = self._begin(None)
+        try:
+            for persisted_report in (baseline, challenger):
+                report_revision = persisted_report.report_revision
+                report = connection.execute(
+                    "SELECT body_sha,body FROM recorded_calibration_reports "
+                    "WHERE report_revision=?",
+                    (report_revision,),
+                ).fetchone()
+                if report is None:
+                    raise RegistryConflictError(
+                        "recorded calibration comparison requires both persisted reports"
+                    )
+                expected_report_body = canonical_json_bytes(persisted_report.as_mapping())
+                if (
+                    report["body_sha"] != persisted_report.content_digest.hexdigest
+                    or bytes(report["body"]) != expected_report_body
+                    or report_revision != f"sha256:{report['body_sha']}"
+                ):
+                    raise RegistryIntegrityError(
+                        "recorded calibration comparison requires exact persisted report bytes"
+                    )
+            existing_rows = connection.execute(
+                "SELECT comparison_revision FROM "
+                "recorded_calibration_comparisons WHERE comparison_id=? LIMIT 2",
+                (comparison.comparison_id,),
+            ).fetchall()
+            if len(existing_rows) > 1:
+                raise RegistryIntegrityError(
+                    "recorded calibration comparison identity is ambiguous"
+                )
+            if existing_rows:
+                existing = self._require_persisted_recorded_calibration_comparison(
+                    connection,
+                    str(existing_rows[0]["comparison_revision"]),
+                    require_pass=False,
+                )
+                if existing != comparison or existing_rows[0]["comparison_revision"] != revision:
+                    raise RegistryConflictError(
+                        "recorded calibration comparison identity already differs"
+                    )
+                self._finish(connection, None)
+                return comparison.content_digest
+            try:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_comparisons("
+                    "comparison_id,comparison_revision,baseline_report_revision,"
+                    "challenger_report_revision,body_sha,body,verdict) VALUES(?,?,?,?,?,?,?)",
+                    (
+                        comparison.comparison_id,
+                        revision,
+                        comparison.baseline_report_revision,
+                        comparison.challenger_report_revision,
+                        comparison.content_digest.hexdigest,
+                        body,
+                        comparison.verdict.value,
+                    ),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "recorded calibration comparison revision is already bound"
+                ) from error
+            self._finish(connection, None)
+            return comparison.content_digest
+        except BaseException:
+            self._rollback(connection)
+            raise
+
+    def promote_recorded_calibration(
+        self,
+        *,
+        report: RecordedCalibrationReportV1,
+        transition_id: str,
+        expected_generation: int,
+        now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
+        hook: FaultHook | None = None,
+    ) -> RecordedCalibrationSnapshotV1:
+        if report.model_id == "passive-fill":
+            raise RegistryConflictError(
+                "passive-fill promotion requires a verified held-out calibration receipt"
+            )
+        return self._promote_recorded_calibration(
+            report=report,
+            transition_id=transition_id,
+            expected_generation=expected_generation,
+            now_ms=now_ms,
+            comparison=comparison,
+            hook=hook,
+        )
+
+    def promote_passive_fill_challenger(
+        self,
+        *,
+        receipt_revision: str,
+        challenger: PassiveFillChallengerV1,
+        training_observations: tuple[PassiveFillObservationV1, ...],
+        report: RecordedCalibrationReportV1,
+        corpus: RecordedOutcomeCorpusV1,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
+        hook: FaultHook | None = None,
+    ) -> RecordedCalibrationSnapshotV1:
+        receipt = self.verify_passive_fill_promotion_authority(
+            receipt_revision=receipt_revision,
+            challenger=challenger,
+            training_observations=training_observations,
+            report=report,
+            corpus=corpus,
+        )
+        _, _, clock, _ = self._passive_fill_owner_configuration()
+        now_ms = clock()
+        require_utc_millis(now_ms, field="passive-fill calibration owner clock")
+        return self._promote_recorded_calibration(
+            report=report,
+            transition_id=receipt.transition_id,
+            expected_generation=receipt.expected_generation,
+            now_ms=now_ms,
+            comparison=comparison,
+            hook=hook,
+            passive_fill_receipt=receipt,
+        )
+
+    def _promote_recorded_calibration(
+        self,
+        *,
+        report: RecordedCalibrationReportV1,
+        transition_id: str,
+        expected_generation: int,
+        now_ms: int,
+        comparison: RecordedCalibrationComparisonV1 | None = None,
+        hook: FaultHook | None = None,
+        passive_fill_receipt: PassiveFillHeldOutCalibrationReceiptV1 | None = None,
+    ) -> RecordedCalibrationSnapshotV1:
+        if not isinstance(report, RecordedCalibrationReportV1):
+            raise ContractValueError("report must be RecordedCalibrationReportV1")
+        require_contract_id(transition_id, field="transition_id")
+        require_strict_int(expected_generation, field="expected_generation", minimum=0)
+        require_utc_millis(now_ms, field="now_ms")
+        if not report.is_promotable or report.model_id is None or report.model_revision is None:
+            raise RegistryConflictError(
+                "recorded calibration promotion requires eligible exact-model evidence"
+            )
+        if report.model_id == "passive-fill" and (
+            passive_fill_receipt is None
+            or passive_fill_receipt.report_revision != report.report_revision
+            or passive_fill_receipt.challenger_model_revision != report.model_revision
+        ):
+            raise RegistryConflictError(
+                "passive-fill promotion requires its verified held-out calibration receipt"
+            )
+        if report.policy.authority is CalibrationAuthority.PRODUCTION:
+            self._require_production_attestation(report)
+        connection = self._begin(hook)
+        try:
+            report_row = connection.execute(
+                "SELECT body_sha,body,authority,status FROM recorded_calibration_reports "
+                "WHERE report_revision=?",
+                (report.report_revision,),
+            ).fetchone()
+            report_body = canonical_json_bytes(report.as_mapping())
+            if (
+                report_row is None
+                or report_row["body_sha"] != report.content_digest.hexdigest
+                or bytes(report_row["body"]) != report_body
+                or report_row["authority"] != report.policy.authority.value
+                or report_row["status"] != report.status.value
+            ):
+                raise RegistryConflictError(
+                    "recorded calibration promotion requires its exact persisted report"
+                )
+            existing_rows = connection.execute(
+                "SELECT transition_id,slot_id,expected_generation,report_revision,"
+                "snapshot_sha,snapshot,committed_at_ms FROM "
+                "recorded_calibration_transitions WHERE transition_id=? LIMIT 2",
+                (transition_id,),
+            ).fetchall()
+            if len(existing_rows) > 1:
+                raise RegistryIntegrityError(
+                    "recorded calibration transition must exist at most once"
+                )
+            if existing_rows:
+                existing_transition = existing_rows[0]
+                existing = self._verified_recorded_calibration_transition(existing_transition)
+                if (
+                    existing_transition["expected_generation"] != expected_generation
+                    or existing_transition["report_revision"] != report.report_revision
+                    or existing.slot_id != report.slot_id
+                    or existing.report_id != report.report_id
+                    or existing.model_id != report.model_id
+                    or existing.model_revision != report.model_revision
+                    or existing.policy_revision != report.policy.policy_revision
+                    or existing.authority is not report.policy.authority
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration transition idempotency key conflicts"
+                    )
+                self._require_recorded_calibration_report_binding(connection, existing)
+                if existing.generation > 1:
+                    persisted_comparison = self._require_recorded_calibration_transition_comparison(
+                        connection,
+                        snapshot=existing,
+                        expected_comparison=None,
+                    )
+                    if not isinstance(comparison, RecordedCalibrationComparisonV1):
+                        raise RegistryConflictError(
+                            "recorded calibration transition retry requires comparison evidence"
+                        )
+                    if persisted_comparison != comparison:
+                        raise RegistryConflictError(
+                            "recorded calibration transition idempotency key conflicts"
+                        )
+                else:
+                    linked_comparisons = connection.execute(
+                        "SELECT comparison_revision FROM "
+                        "recorded_calibration_transition_comparisons "
+                        "WHERE transition_id=? LIMIT 1",
+                        (transition_id,),
+                    ).fetchall()
+                    if comparison is not None or linked_comparisons:
+                        raise RegistryConflictError(
+                            "recorded calibration transition idempotency key conflicts"
+                        )
+                self._finish(connection, hook)
+                return existing
+            head = connection.execute(
+                "SELECT generation,snapshot_sha,snapshot FROM recorded_calibration_heads "
+                "WHERE slot_id=?",
+                (report.slot_id,),
+            ).fetchone()
+            generation = 0 if head is None else int(head["generation"])
+            if generation != expected_generation:
+                if head is not None:
+                    try:
+                        stale_mapping = parse_canonical_object(bytes(head["snapshot"]))
+                        stale_snapshot = _recorded_calibration_snapshot_from_mapping(stale_mapping)
+                    except (KeyError, TypeError, QuantEdgeError) as error:
+                        raise RegistryIntegrityError(
+                            "recorded calibration head is malformed"
+                        ) from error
+                    if stale_snapshot.transition_id == transition_id:
+                        raise RegistryIntegrityError(
+                            "recorded calibration head transition is absent"
+                        )
+                raise RegistryConflictError("recorded calibration generation is stale")
+            comparison_revision: str | None = None
+            if head is not None:
+                head_mapping = parse_canonical_object(bytes(head["snapshot"]))
+                head_snapshot = _recorded_calibration_snapshot_from_mapping(head_mapping)
+                if (
+                    head_snapshot.slot_id != report.slot_id
+                    or head_snapshot.generation != head["generation"]
+                    or head_snapshot.content_digest.hexdigest != head["snapshot_sha"]
+                    or bytes(head["snapshot"]) != canonical_json_bytes(head_snapshot.as_mapping())
+                ):
+                    raise RegistryIntegrityError("recorded calibration prior head is corrupt")
+                prior_transition = self._require_recorded_calibration_transition(
+                    connection,
+                    head_snapshot.transition_id,
+                )
+                if prior_transition != head_snapshot:
+                    raise RegistryIntegrityError(
+                        "recorded calibration prior head transition binding is corrupt"
+                    )
+                if now_ms <= head_snapshot.updated_at_ms:
+                    raise RegistryConflictError(
+                        "recorded calibration promotion time must strictly advance"
+                    )
+                try:
+                    prior_mapping = self._require_recorded_calibration_report_binding(
+                        connection,
+                        head_snapshot,
+                    )
+                except RegistryIntegrityError as error:
+                    raise RegistryIntegrityError(
+                        "recorded calibration prior report binding is corrupt"
+                    ) from error
+                if head_snapshot.generation > 1:
+                    self._require_recorded_calibration_transition_comparison(
+                        connection,
+                        snapshot=head_snapshot,
+                        expected_comparison=None,
+                    )
+                if not isinstance(comparison, RecordedCalibrationComparisonV1):
+                    raise RegistryConflictError(
+                        "subsequent recorded calibration promotion requires comparison evidence"
+                    )
+                comparison_revision = f"sha256:{comparison.content_digest.hexdigest}"
+                comparison_rows = connection.execute(
+                    "SELECT comparison_revision FROM "
+                    "recorded_calibration_comparisons WHERE comparison_revision=? LIMIT 2",
+                    (comparison_revision,),
+                ).fetchall()
+                if not comparison_rows:
+                    raise RegistryConflictError(
+                        "recorded calibration promotion comparison does not authorize revision"
+                    )
+                if len(comparison_rows) != 1:
+                    raise RegistryIntegrityError(
+                        "recorded calibration comparison must exist exactly once"
+                    )
+                persisted_comparison = self._require_persisted_recorded_calibration_comparison(
+                    connection,
+                    comparison_revision,
+                    require_pass=False,
+                )
+                outcome_digests = [digest.hexdigest for digest in comparison.outcome_digests]
+                if (
+                    comparison.verdict is not RecordedComparisonVerdict.PASS
+                    or persisted_comparison != comparison
+                    or comparison.baseline_report_revision != head_snapshot.report_revision
+                    or comparison.challenger_report_revision != report.report_revision
+                    or comparison.baseline_model_revision != head_snapshot.model_revision
+                    or comparison.challenger_model_revision != report.model_revision
+                    or prior_mapping.get("outcomeSha256") != outcome_digests
+                    or report.as_mapping().get("outcomeSha256") != outcome_digests
+                ):
+                    raise RegistryConflictError(
+                        "recorded calibration promotion comparison does not authorize revision"
+                    )
+            elif comparison is not None:
+                raise RegistryConflictError(
+                    "initial recorded calibration promotion cannot claim a prior comparison"
+                )
+            snapshot = RecordedCalibrationSnapshotV1(
+                slot_id=report.slot_id,
+                generation=generation + 1,
+                report_id=report.report_id,
+                report_revision=report.report_revision,
+                model_id=report.model_id,
+                model_revision=report.model_revision,
+                policy_revision=report.policy.policy_revision,
+                authority=report.policy.authority,
+                transition_id=transition_id,
+                updated_at_ms=now_ms,
+            )
+            snapshot_body = canonical_json_bytes(snapshot.as_mapping())
+            connection.execute(
+                "INSERT INTO recorded_calibration_transitions("
+                "transition_id,slot_id,expected_generation,report_revision,snapshot_sha,"
+                "snapshot,committed_at_ms) VALUES(?,?,?,?,?,?,?)",
+                (
+                    transition_id,
+                    report.slot_id,
+                    expected_generation,
+                    report.report_revision,
+                    snapshot.content_digest.hexdigest,
+                    snapshot_body,
+                    now_ms,
+                ),
+            )
+            connection.execute(
+                "INSERT INTO recorded_calibration_heads(slot_id,generation,snapshot_sha,snapshot) "
+                "VALUES(?,?,?,?) ON CONFLICT(slot_id) DO UPDATE SET "
+                "generation=excluded.generation,snapshot_sha=excluded.snapshot_sha,"
+                "snapshot=excluded.snapshot",
+                (
+                    report.slot_id,
+                    snapshot.generation,
+                    snapshot.content_digest.hexdigest,
+                    snapshot_body,
+                ),
+            )
+            if comparison_revision is not None:
+                connection.execute(
+                    "INSERT INTO recorded_calibration_transition_comparisons("
+                    "transition_id,comparison_revision) VALUES(?,?)",
+                    (transition_id, comparison_revision),
+                )
+            self._finish(connection, hook)
+            return snapshot
+        except BaseException:
+            self._rollback(connection)
+            raise
 
     def transition_count(self, slot_id: str) -> int:
         require_contract_id(slot_id, field="slot_id")

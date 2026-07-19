@@ -5,6 +5,7 @@
  * touching logic.
  */
 import { ENGINE_DEFAULTS, type EngineConfig } from '../v0/config.js';
+import { deriveConfigVersionId } from '../../foundation/contracts/index.js';
 
 export interface BasisConfig extends EngineConfig {
   // --- gap thresholds (gross executable gap, pct) ---
@@ -36,6 +37,10 @@ export interface BasisConfig extends EngineConfig {
   maxGapCv: number;
   /** samples kept in the gap tracking window */
   gapWindowSize: number;
+  /** minimum executable-gap change, in percentage points, eligible for causality */
+  causalMoveThresholdPct: number;
+  /** max age of an initiating-market attribution before it expires */
+  causalExpiryMs: number;
 
   // --- funding model ---
   /** default expected hold when the gap slope gives no estimate, ms */
@@ -87,6 +92,8 @@ export const BASIS_DEFAULTS: BasisConfig = {
 
   maxGapCv: 0.6,
   gapWindowSize: 60,
+  causalMoveThresholdPct: 0.005,
+  causalExpiryMs: 15_000,
 
   defaultHoldMs: 4 * 60 * 60_000,
   minHoldMs: 10 * 60_000,
@@ -144,6 +151,7 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     'perpTakerFeePct',
     'maxFutureSkewMs',
     'maxGapCv',
+    'causalMoveThresholdPct',
     'maxFundingDragPct',
     'fundingExtremeAbs',
     'maxBorrowHourlyRatePct',
@@ -167,6 +175,7 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     'maxHoldMs',
     'fundingPeriodMs',
     'borrowSafetyFactor',
+    'causalExpiryMs',
   ] as const) finite(name, Number.MIN_VALUE);
 
   for (const name of [
@@ -198,6 +207,9 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
   if (cfg.gapWindowSize < 3 || cfg.fundingHistoryKeep < 3) {
     throw new RangeError('invalid basis config: rolling history sizes must be at least 3');
   }
+  if (cfg.causalMoveThresholdPct <= 0 || cfg.causalMoveThresholdPct >= cfg.watchGapPct) {
+    throw new RangeError('invalid basis config: causalMoveThresholdPct must be in (0, watchGapPct)');
+  }
   if (cfg.stagedSizeFractions.length === 0 || cfg.stagedSizeFractions.length > 16) {
     throw new RangeError('invalid basis config stagedSizeFractions length');
   }
@@ -209,4 +221,21 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     previous = fraction;
   }
   return cfg;
+}
+
+/** Content identity owned by the Basis engine configuration boundary. */
+export function deriveBasisConfigVersion(config: Readonly<BasisConfig>): string {
+  if (Object.values(config).some((value) => typeof value === 'number' && Object.is(value, -0))
+    || config.stagedSizeFractions.some((value) => Object.is(value, -0))) {
+    throw new TypeError('basis config revision rejects negative zero');
+  }
+  const validated = basisConfig({
+    ...config,
+    stagedSizeFractions: [...config.stagedSizeFractions],
+  });
+  if (Object.values(validated).some((value) => typeof value === 'number' && Object.is(value, -0))
+    || validated.stagedSizeFractions.some((value) => Object.is(value, -0))) {
+    throw new TypeError('basis config revision rejects negative zero');
+  }
+  return deriveConfigVersionId({ scope: 'engine.basis', payload: validated });
 }

@@ -1,11 +1,17 @@
 import { fetchAllBookTickers } from '../binance/rest.js';
 import type { BasisConfig } from '../engine/basis/config.js';
+import { deriveBasisConfigVersion } from '../engine/basis/config.js';
 import { BasisEngine } from '../engine/basis/engine.js';
-import type { BasisProposal } from '../engine/basis/types.js';
+import type { BasisBookObservation, BasisProposal } from '../engine/basis/types.js';
+import type {
+  StrategyDecayCoordinatorRequest,
+  StrategyDecayCoordinatorResult,
+} from '../engine/decay/index.js';
 import { systemClock } from '../engine/v0/clock.js';
 import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
 import type { AppConfig } from '../types.js';
+import { compareExactDecimals, normalizeNonNegativeExactDecimal } from '../capitalFoundation/contracts/index.js';
 
 interface MarketUniverseRow {
   symbol: string;
@@ -26,6 +32,15 @@ export interface BasisRuntimeIntegrationSnapshot {
   config: BasisConfig;
   decisions: Decision[];
   proposals: BasisProposal[];
+  ownerSummary: {
+    candidateCount: number;
+    opportunityCount: number;
+    cooldownCount: number;
+  };
+}
+
+export interface BasisStrategyDecayCadencePort {
+  tick(request: Readonly<StrategyDecayCoordinatorRequest>): StrategyDecayCoordinatorResult;
 }
 
 // The basis quality gate intentionally decays inside the 5s stale window.
@@ -77,12 +92,14 @@ export class BasisRuntime {
   private universePolicyKey = '';
   private lastErrorLogAttemptTs = 0;
   private eventLastLogged = new Map<string, { ts: number; symbol: string | null }>();
+  private operatorMinNetBasisPct: number | null = null;
 
   constructor(
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
     fetchBookTickers: typeof fetchAllBookTickers = fetchAllBookTickers,
+    private readonly strategyDecay: BasisStrategyDecayCadencePort | null = null,
   ) {
     this.fetchBookTickers = fetchBookTickers;
     const config = getConfig();
@@ -137,6 +154,9 @@ export class BasisRuntime {
     this.universeTimer = null;
     this.eligibleSymbols = [];
     this.engine.stop();
+    this.engine.resetBookContinuity();
+    this.lastBookTs = null;
+    this.lastMarkTs = null;
   }
 
   connectionStatus(): {
@@ -171,7 +191,69 @@ export class BasisRuntime {
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.openProposals(),
+      ownerSummary: {
+        candidateCount: this.engine.lifecycle.candidateList().length,
+        opportunityCount: this.engine.openProposals().length,
+        cooldownCount: this.engine.lifecycle.activeCooldownCount(),
+      },
     });
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return this.engine.operatorBlockedSymbols();
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    return this.engine.setOperatorSymbolBlocked(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.engine.symbolAllowedByPolicy(symbol);
+  }
+
+  sizeCeiling(): string | null {
+    try {
+      return normalizeNonNegativeExactDecimal(String(this.engine.cfg.suggestedNotionalUsd));
+    } catch {
+      return null;
+    }
+  }
+
+  setSizeCeiling(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    if (canonical !== value) throw new TypeError('basis size ceiling must be canonical');
+    const numeric = Number(canonical);
+    if (!Number.isFinite(numeric) || numeric <= 0 || String(numeric) !== canonical) {
+      throw new RangeError('basis size ceiling cannot cross the legacy numeric boundary exactly');
+    }
+    const current = this.sizeCeiling();
+    if (current === null || compareExactDecimals(canonical, normalizeNonNegativeExactDecimal(current)) > 0) {
+      throw new RangeError('basis size ceiling is downward-only');
+    }
+    return this.engine.setSuggestedNotionalUsd(numeric);
+  }
+
+  strategyThreshold(): string | null {
+    try { return normalizeNonNegativeExactDecimal(String(this.engine.cfg.minNetBasisPct)); } catch { return null; }
+  }
+
+  setStrategyThreshold(value: string): boolean {
+    const canonical = normalizeNonNegativeExactDecimal(value);
+    const numeric = Number(canonical);
+    if (canonical !== value || !Number.isFinite(numeric) || numeric < 0.01 || numeric > 100 || String(numeric) !== canonical) {
+      throw new RangeError('Basis minimum-net threshold is invalid or inexact at the legacy boundary');
+    }
+    const ownerChanged = this.operatorMinNetBasisPct !== numeric;
+    this.operatorMinNetBasisPct = numeric;
+    return this.engine.updateConfig({ minNetBasisPct: numeric }) || ownerChanged;
+  }
+
+  setIntakePaused(paused: boolean): boolean {
+    return this.engine.setIntakePaused(paused);
+  }
+
+  intakePaused(): boolean {
+    return this.engine.intakePaused();
   }
 
   private onEngineEvent(event: EngineEvent): void {
@@ -212,7 +294,7 @@ export class BasisRuntime {
       const config = this.getConfig();
       this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,
@@ -241,7 +323,10 @@ export class BasisRuntime {
         eligible: true,
         ineligibleReason: null,
       })));
-      this.engine.replaceBlockedSymbols(Array.isArray(config.blockedSymbols) ? config.blockedSymbols : []);
+      this.engine.replaceSymbolPolicy(
+        Array.isArray(config.allowedSymbols) ? config.allowedSymbols : [],
+        Array.isArray(config.blockedSymbols) ? config.blockedSymbols : [],
+      );
       this.eligibleSymbols = this.engine.market.universe().filter((meta) => meta.eligible).map((meta) => meta.symbol).sort();
       this.universePolicyKey = this.policyKey(config);
       if (this.eligibleSymbols.length === 0) {
@@ -273,7 +358,7 @@ export class BasisRuntime {
       let config = this.getConfig();
       const configChanged = this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,
@@ -293,7 +378,7 @@ export class BasisRuntime {
       config = this.getConfig();
       const changedDuringFetch = this.engine.updateConfig({
         feesPct: config.feesPct,
-        minNetBasisPct: config.minNetBasisPct,
+        minNetBasisPct: this.operatorMinNetBasisPct ?? config.minNetBasisPct,
         persistTicks: config.persistTicks,
         minQuoteVolume24hUsd: config.minQuoteVolume24h,
         spotTakerFeePct: config.feesPct / 3,
@@ -314,26 +399,31 @@ export class BasisRuntime {
       for (const symbol of active) {
         const spot = spotBooks.get(symbol);
         const perp = perpBooks.get(symbol);
-        if (usableBook(spot)) {
-          this.engine.onSpotBook({
+        const spotObservation: BasisBookObservation | null = usableBook(spot)
+          ? {
             symbol,
             bid: spot!.bidPrice,
             ask: spot!.askPrice,
             bidQty: spot!.bidQty,
             askQty: spot!.askQty,
             ts: receivedTs,
-          });
-        }
-        if (usableBook(perp)) {
-          this.engine.onPerpBook({
+            sourceEventTimeMs: spot!.time ?? null,
+            sourceSequence: null,
+          }
+          : null;
+        const perpetualObservation: BasisBookObservation | null = usableBook(perp)
+          ? {
             symbol,
             bid: perp!.bidPrice,
             ask: perp!.askPrice,
             bidQty: perp!.bidQty,
             askQty: perp!.askQty,
             ts: receivedTs,
-          });
-        }
+            sourceEventTimeMs: perp!.time ?? null,
+            sourceSequence: null,
+          }
+          : null;
+        this.engine.onBookPair(symbol, spotObservation, perpetualObservation);
         if (this.engine.market.spotBook(symbol)?.ts === receivedTs && this.engine.market.perpBook(symbol)?.ts === receivedTs) {
           booksSeen += 1;
         }
@@ -370,6 +460,8 @@ export class BasisRuntime {
       // decision, and evidence exposed by snapshot() are one coherent book.
       this.engine.setKillSwitch(config.killSwitch);
       this.engine.tick();
+      const tickAtMs = this.engine.lastTick();
+      if (tickAtMs !== null) this.tickStrategyDecay(tickAtMs);
       if (this.errorRevision === errorRevision) this.lastError = null;
     } catch (error) {
       if (this.owns(generation)) {
@@ -378,6 +470,30 @@ export class BasisRuntime {
       }
     } finally {
       if (this.bookBusyGeneration === generation) this.bookBusyGeneration = null;
+    }
+  }
+
+  private tickStrategyDecay(evaluatedAtMs: number): void {
+    if (this.strategyDecay === null) return;
+    let configVersion: string;
+    try {
+      configVersion = deriveBasisConfigVersion(this.engine.cfg);
+    } catch (error) {
+      this.noteError('basis-runtime.strategy-decay.config', error);
+      this.safeLogError('basis-runtime.strategy-decay.config');
+      return;
+    }
+    for (const direction of ['long_spot_short_perp', 'short_spot_long_perp'] as const) {
+      try {
+        const result = this.strategyDecay.tick({ strategy: 'BASIS', configVersion, direction, evaluatedAtMs });
+        if (result.disposition === 'BLOCKED') {
+          this.noteError('basis-runtime.strategy-decay', result.reasonCodes.join(',') || 'blocked');
+          this.safeLogError('basis-runtime.strategy-decay');
+        }
+      } catch (error) {
+        this.noteError('basis-runtime.strategy-decay', error);
+        this.safeLogError('basis-runtime.strategy-decay');
+      }
     }
   }
 

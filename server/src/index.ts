@@ -1665,7 +1665,17 @@ app.get('/api/calendar', (req, res) => {
     // Cached reads stay instant; only authenticated same-origin POST routes
     // may intentionally force upstream work.
     if (!calCache && calInFlight) await calInFlight.catch(() => undefined);
-    if (calCache) res.json({ items: calCache.items, fetchedAt: calCache.at });
+    // Label what is already computed: without a state field a consumer must
+    // know the 60s TTL to interpret fetchedAt, so a stale calendar read is
+    // indistinguishable from a fresh one.
+    if (calCache) {
+      res.json({
+        items: calCache.items,
+        fetchedAt: calCache.at,
+        state: Date.now() - calCache.at < 60_000 ? 'fresh' : 'stale',
+        maxAgeMs: 60_000,
+      });
+    }
     else res.status(503).json({ error: 'calendar unavailable', items: [] });
   });
 });
@@ -1706,7 +1716,17 @@ app.get('/api/fx', (_req, res) => {
         .finally(() => { fxInFlight = null; });
     }
     if (!fxCache && fxInFlight) await fxInFlight.catch(() => undefined);
-    if (fxCache) res.json({ base: 'USD', rates: fxCache.rates, fetchedAt: fxCache.at });
+    // Same freshness label as /api/calendar: the 30-minute TTL becomes part
+    // of the payload instead of tribal knowledge.
+    if (fxCache) {
+      res.json({
+        base: 'USD',
+        rates: fxCache.rates,
+        fetchedAt: fxCache.at,
+        state: Date.now() - fxCache.at < 30 * 60_000 ? 'fresh' : 'stale',
+        maxAgeMs: 30 * 60_000,
+      });
+    }
     else res.status(503).json({ error: 'fx unavailable', rates: {} });
   });
 });

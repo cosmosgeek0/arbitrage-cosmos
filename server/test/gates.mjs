@@ -249,6 +249,11 @@ check(
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
 );
 check(
+  'calendar and fx GET responses declare their own freshness state and TTL',
+  /items:\s*calCache\.items,\s*fetchedAt:\s*calCache\.at,\s*state:\s*Date\.now\(\)\s*-\s*calCache\.at\s*<\s*60_000\s*\?\s*'fresh'\s*:\s*'stale',\s*maxAgeMs:\s*60_000,/.test(serverIndex) &&
+    /rates:\s*fxCache\.rates,\s*fetchedAt:\s*fxCache\.at,\s*state:\s*Date\.now\(\)\s*-\s*fxCache\.at\s*<\s*30\s*\*\s*60_000\s*\?\s*'fresh'\s*:\s*'stale',\s*maxAgeMs:\s*30\s*\*\s*60_000,/.test(serverIndex)
+);
+check(
   'a failed canonical supervisor health read records its cause instead of a bare catch',
   /function\s+sendI00Health\([\s\S]*?\}\s*catch\s*\(error\)\s*\{\s*recordSupervisorReadFailure\(error\);/.test(serverIndex) &&
     /function\s+recordSupervisorReadFailure\([\s\S]*?safeLogEvent\('error_event',\s*null,\s*\{\s*source:\s*'server\.i00_health',[\s\S]*?cause:\s*message,/.test(serverIndex)

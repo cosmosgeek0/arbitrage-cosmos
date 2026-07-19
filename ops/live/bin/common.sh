@@ -848,6 +848,10 @@ http_ok() { "$CURL" -fsS -m "$HTTP_TIMEOUT_SEC" -o /dev/null "$1" 2>/dev/null; }
 # fail fast instead of polling a corpse until timeout.
 gate_wait() {
   local base="$1" paths="$2" timeout="$3" guard="${4:-}"
+  # F-026: an empty path list would iterate zero times and return success,
+  # silently passing every gate. Refuse it - an empty gate is a
+  # misconfiguration, never a pass.
+  [ -n "$paths" ] || { ops_log "gate: refusing an empty gate path list"; return 1; }
   local deadline=$(( $(now_epoch) + timeout )) p
   for p in $paths; do
     while ! http_ok "${base}${p}"; do

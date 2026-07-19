@@ -130,6 +130,11 @@ export class VolumeEngine {
     if (positive(value)) this.cfg.suggestedNotionalUsd = Math.min(value, 1_000_000);
   }
 
+  /** Keep the owner config revision bound to the threshold used by runtime eligibility. */
+  setMinimumQuoteVolume24hUsd(value: number): void {
+    if (positive(value)) this.cfg.minQuoteVolume24hUsd = Math.min(value, 1_000_000_000);
+  }
+
   pin(symbol: string, pinned = true): void {
     if (!this.universeMap.get(symbol)?.eligible || !this.features.observe(symbol)) return;
     this.focusMgr.pin(symbol, pinned);

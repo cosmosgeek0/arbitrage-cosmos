@@ -747,6 +747,46 @@ section('25. live runtime start/stop generations are idempotent (zero network)')
 }
 
 // ================================================================
+section('25b. decay governance reuses the successful Volume owner tick cadence');
+{
+  const config = {
+    killSwitch: true,
+    maxOrderNotionalUsd: 10,
+    minQuoteVolume24h: 3_000_000,
+    allowedSymbols: [],
+    blockedSymbols: [],
+  };
+  const calls = [];
+  const decay = {
+    tick(request) {
+      calls.push(request);
+      return { disposition: 'NOT_DUE', reasonCodes: [] };
+    },
+  };
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => config,
+    () => [],
+    decay,
+  );
+  await runtime.start();
+  runtime.onTick(runtime.generation);
+  check('one successful Volume tick evaluates both exact owner directions',
+    calls.length === 2 && calls[0].direction === 'long' && calls[1].direction === 'short');
+  check('both Volume lanes share owner tick time and full owner config version',
+    calls[0].evaluatedAtMs === calls[1].evaluatedAtMs
+      && calls[0].configVersion === calls[1].configVersion
+      && calls.every((call) => call.strategy === 'VOLUME' && /^cfg_/.test(call.configVersion)));
+  const originalRevision = calls[0].configVersion;
+  config.minQuoteVolume24h = 4_000_000;
+  config.maxOrderNotionalUsd = 25;
+  runtime.onTick(runtime.generation);
+  check('effective threshold and notional mutation change the Volume owner revision before decay evaluation',
+    calls.length === 4 && calls[2].configVersion !== originalRevision && calls[2].configVersion === calls[3].configVersion);
+  runtime.stop();
+}
+
+// ================================================================
 section('26. hostile config values are normalized to bounded invariants');
 {
   const cfg = volumeConfig({

@@ -47,6 +47,11 @@ import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
+  StrategyDecayCoordinator,
+  StrategyDecayLedgerAdapter,
+  UnavailableStrategyDecayPerformanceMeasurementPort,
+} from './engine/decay/index.js';
+import {
   createSystemIntegrationApplication,
   OrdinaryShutdownAdmission,
   type SystemIntegrationApplicationFacade,
@@ -196,11 +201,15 @@ function legacyScannerSnapshot() {
     grossThresholdPct: null,
   });
 }
+const strategyDecayCoordinator = new StrategyDecayCoordinator(
+  new StrategyDecayLedgerAdapter(ledger),
+  new UnavailableStrategyDecayPerformanceMeasurementPort(),
+);
 const basisRuntime = new BasisRuntime(ledger, () => config, () => engine.allRows().map((row) => ({
   ...row,
   markUpdatedAt: engine.markEventTimestamp(row.symbol),
-})));
-const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows());
+})), fetchAllBookTickers, strategyDecayCoordinator);
+const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRows(), strategyDecayCoordinator);
 let shuttingDown = false;
 const ordinaryShutdownAdmission = new OrdinaryShutdownAdmission();
 const systemIntegrationClock = createSystemUtcClock();

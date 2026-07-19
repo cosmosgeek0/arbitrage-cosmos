@@ -2,7 +2,12 @@ import { BinanceStream, type FeedStatus } from '../binance/ws.js';
 import { fetchAllBookTickers, fetchKlineCandles } from '../binance/rest.js';
 import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
+import { deriveVolumeConfigVersion } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import type {
+  StrategyDecayCoordinatorRequest,
+  StrategyDecayCoordinatorResult,
+} from '../engine/decay/index.js';
 import type {
   ObservedOrderFocusApplyResult,
   ObservedOrderFocusSnapshot,
@@ -28,6 +33,10 @@ export interface VolumeRuntimeIntegrationSnapshot {
   config: VolumeConfig;
   decisions: Decision[];
   proposals: EngineProposal[];
+}
+
+export interface VolumeStrategyDecayCadencePort {
+  tick(request: Readonly<StrategyDecayCoordinatorRequest>): StrategyDecayCoordinatorResult;
 }
 
 const STREAM_CHUNK = 140;
@@ -77,6 +86,7 @@ export class VolumeRuntime {
     private readonly ledger: Ledger,
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
+    private readonly strategyDecay: VolumeStrategyDecayCadencePort | null = null,
   ) {
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
@@ -159,11 +169,45 @@ export class VolumeRuntime {
         this.launch('config universe refresh', generation, () => this.refreshUniverse(generation));
       }
       this.engine.tick();
+      const tickAtMs = this.engine.lastTick();
+      if (tickAtMs !== null) this.tickStrategyDecay(tickAtMs);
     } catch (error) {
       this.safeLog('error_event', null, {
         source: 'volume-runtime.tick',
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  private tickStrategyDecay(evaluatedAtMs: number): void {
+    if (this.strategyDecay === null) return;
+    let configVersion: string;
+    try {
+      configVersion = deriveVolumeConfigVersion(this.engine.cfg);
+    } catch (error) {
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.strategy-decay.config',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+    for (const direction of ['long', 'short'] as const) {
+      try {
+        const result = this.strategyDecay.tick({ strategy: 'VOLUME', configVersion, direction, evaluatedAtMs });
+        if (result.disposition === 'BLOCKED') {
+          this.safeLog('error_event', null, {
+            source: 'volume-runtime.strategy-decay',
+            direction,
+            reasonCodes: result.reasonCodes,
+          });
+        }
+      } catch (error) {
+        this.safeLog('error_event', null, {
+          source: 'volume-runtime.strategy-decay',
+          direction,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 
@@ -548,6 +592,7 @@ export class VolumeRuntime {
     const threshold = positive(config.minQuoteVolume24h)
       ? config.minQuoteVolume24h
       : this.engine.cfg.minQuoteVolume24hUsd;
+    this.engine.setMinimumQuoteVolume24hUsd(threshold);
     return String(threshold);
   }
 

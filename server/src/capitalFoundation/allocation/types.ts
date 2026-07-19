@@ -48,11 +48,31 @@ export interface AllocationCandidate {
   readonly conflictingConsiderationIds: readonly OpportunityConsiderationId[];
 }
 
+/** Capital-owned read projection of the latest durable Engine decay lane. */
+export interface StrategyDecayAllocationPosture {
+  readonly strategy: 'BASIS' | 'VOLUME';
+  readonly configVersion: string;
+  readonly direction: string;
+  readonly effectivePosture: 'ENABLED' | 'REDUCED' | 'DISABLED' | 'RETIRED';
+  readonly latestMeasurementState: 'UNKNOWN' | 'STABLE' | 'DEGRADED' | 'DEAD';
+  readonly decisionId: string;
+  readonly measurementId: string;
+  readonly policyRevision: string;
+  readonly historyRevision: number;
+  readonly evaluatedAtMs: number;
+  /** Exclusive freshness boundary. */
+  readonly validUntilMs: number;
+  readonly historyDigest: string;
+  readonly projectionRevision: string;
+}
+
 export interface AllocationBatchInput {
   readonly policy: Readonly<CapitalBudgetPolicy>;
   readonly snapshot: Readonly<PortfolioBudgetSnapshot>;
   readonly candidates: readonly Readonly<AllocationCandidate>[];
   readonly nowMs: number;
+  /** Undefined is legacy/unconfigured; a present set is mandatory authority. */
+  readonly strategyDecayPostures?: readonly Readonly<StrategyDecayAllocationPosture>[];
 }
 
 export interface AllocationBudgetRemainder {
@@ -96,5 +116,10 @@ export interface AllocationAuthorityReceipt {
   readonly decidedAtMs: number;
   /** Exclusive validity boundary derived from policy plus both truth sources. */
   readonly validUntilMs: number | null;
+  readonly strategyDecay?: Readonly<{
+    readonly gatePolicyRevision: string;
+    readonly postureSetDigest: string;
+    readonly matchedProjectionRevision: string | null;
+  }>;
   readonly digest: string;
 }

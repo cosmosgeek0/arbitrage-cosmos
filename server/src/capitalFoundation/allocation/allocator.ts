@@ -29,9 +29,15 @@ import {
   type AllocationBatchResult,
   type AllocationCandidate,
 } from './types.js';
+import {
+  STRATEGY_DECAY_ALLOCATION_GATE_POLICY_REVISION,
+  assessStrategyDecayAllocationGate,
+  strategyDecayPostureSetDigest,
+} from './strategyDecay.js';
 
 const ZERO = normalizeNonNegativeExactDecimal('0');
 const QUANTUM = normalizeNonNegativeExactDecimal('0.000000000000000000000001');
+const TWO = normalizeExactDecimal('2');
 
 function sortedUnique(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values)].sort());
@@ -238,9 +244,32 @@ function allocationReplayReceipt(
 ): Readonly<AllocationAuthorityReceipt> {
   const snapshotUntil = truthValidityExclusiveMs(input.snapshot.truth);
   const candidateUntil = truthValidityExclusiveMs(candidate.truth);
-  const validUntilMs = snapshotUntil === null || candidateUntil === null
+  const decay = assessStrategyDecayAllocationGate(input.strategyDecayPostures, candidate, input.nowMs);
+  const postureUntil = decay.configured && decay.reasonCodes.length === 0 && decay.posture !== null
+    ? decay.posture.validUntilMs
+    : decay.configured ? null : Number.MAX_SAFE_INTEGER;
+  const validUntilMs = snapshotUntil === null || candidateUntil === null || postureUntil === null
     ? null
-    : Math.min(snapshotUntil, candidateUntil, input.policy.authority.effectiveUntilMs ?? snapshotUntil);
+    : Math.min(
+      snapshotUntil,
+      candidateUntil,
+      input.policy.authority.effectiveUntilMs ?? snapshotUntil,
+      postureUntil,
+    );
+  const configuredPostures = input.strategyDecayPostures;
+  const strategyDecay = configuredPostures === undefined
+    ? null
+    : Object.freeze({
+      gatePolicyRevision: STRATEGY_DECAY_ALLOCATION_GATE_POLICY_REVISION,
+      postureSetDigest: (() => {
+        try {
+          return strategyDecayPostureSetDigest(configuredPostures);
+        } catch {
+          return capitalDigest({ invalidStrategyDecayPostures: true });
+        }
+      })(),
+      matchedProjectionRevision: decay.posture?.projectionRevision ?? null,
+    });
   const semantic = Object.freeze({
     allocationDecisionId: decision.id,
     considerationId: decision.considerationId,
@@ -252,6 +281,7 @@ function allocationReplayReceipt(
     batchCandidateDigests: Object.freeze([...batchCandidateDigests]),
     decidedAtMs: decision.decidedAtMs,
     validUntilMs,
+    ...(strategyDecay === null ? {} : { strategyDecay }),
   });
   return Object.freeze({ ...semantic, digest: capitalDigest(semantic) });
 }
@@ -475,7 +505,12 @@ export function allocateCapital(input: Readonly<AllocationBatchInput>): Allocati
   };
 
   for (const candidate of unique) {
-    const reasons = [...context.reasonCodes, ...validateAllocationCandidate(candidate, input.nowMs)];
+    const decay = assessStrategyDecayAllocationGate(input.strategyDecayPostures, candidate, input.nowMs);
+    const reasons = [
+      ...context.reasonCodes,
+      ...validateAllocationCandidate(candidate, input.nowMs),
+      ...decay.reasonCodes,
+    ];
     if (candidate.valuationAsset !== input.policy.valuationAsset) reasons.push('VALUATION_ASSET_MISMATCH');
     if (duplicateIds.has(candidate.considerationId)) reasons.push('DUPLICATE_CONSIDERATION_ID');
     if (conflicts.has(candidate.primarySymbol) || explicitConflicts.has(candidate.considerationId)) reasons.push('CONFLICTING_OPPORTUNITY');
@@ -486,6 +521,31 @@ export function allocateCapital(input: Readonly<AllocationBatchInput>): Allocati
 
     let grant = candidate.requestedAmount;
     const audit: AllocationAuditStep[] = [];
+    if (decay.configured && decay.posture !== null) {
+      if (decay.posture.effectivePosture === 'REDUCED') {
+        let reducedCap = ZERO;
+        try {
+          reducedCap = normalizeNonNegativeExactDecimal(divideExactDecimals(candidate.requestedAmount, TWO, 24));
+        } catch {
+          reducedCap = ZERO;
+        }
+        grant = applyCap(
+          audit,
+          'STRATEGY_DECAY_REDUCED',
+          grant,
+          reducedCap,
+          `Capital gate ${STRATEGY_DECAY_ALLOCATION_GATE_POLICY_REVISION} limits a reduced lane to one half`,
+        );
+      } else {
+        grant = applyCap(
+          audit,
+          'STRATEGY_DECAY_ENABLED',
+          grant,
+          candidate.requestedAmount,
+          `Capital gate ${STRATEGY_DECAY_ALLOCATION_GATE_POLICY_REVISION} admits the enabled lane`,
+        );
+      }
+    }
     grant = applyCap(audit, 'PORTFOLIO_GROSS', grant,
       grantForCapacity(nonNegativeDifference(input.policy.portfolioGrossLimit.value, gross), candidate.grossExposureIncrease, candidate.requestedAmount),
       'portfolio gross exposure plus commitments');

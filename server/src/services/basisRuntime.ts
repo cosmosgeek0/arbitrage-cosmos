@@ -1,7 +1,12 @@
 import { fetchAllBookTickers } from '../binance/rest.js';
 import type { BasisConfig } from '../engine/basis/config.js';
+import { deriveBasisConfigVersion } from '../engine/basis/config.js';
 import { BasisEngine } from '../engine/basis/engine.js';
 import type { BasisProposal } from '../engine/basis/types.js';
+import type {
+  StrategyDecayCoordinatorRequest,
+  StrategyDecayCoordinatorResult,
+} from '../engine/decay/index.js';
 import { systemClock } from '../engine/v0/clock.js';
 import type { Decision, EngineEvent, EventSink } from '../engine/v0/types.js';
 import type { Ledger } from '../ledger.js';
@@ -26,6 +31,10 @@ export interface BasisRuntimeIntegrationSnapshot {
   config: BasisConfig;
   decisions: Decision[];
   proposals: BasisProposal[];
+}
+
+export interface BasisStrategyDecayCadencePort {
+  tick(request: Readonly<StrategyDecayCoordinatorRequest>): StrategyDecayCoordinatorResult;
 }
 
 // The basis quality gate intentionally decays inside the 5s stale window.
@@ -83,6 +92,7 @@ export class BasisRuntime {
     private readonly getConfig: () => AppConfig,
     private readonly getUniverse: () => MarketUniverseRow[],
     fetchBookTickers: typeof fetchAllBookTickers = fetchAllBookTickers,
+    private readonly strategyDecay: BasisStrategyDecayCadencePort | null = null,
   ) {
     this.fetchBookTickers = fetchBookTickers;
     const config = getConfig();
@@ -370,6 +380,8 @@ export class BasisRuntime {
       // decision, and evidence exposed by snapshot() are one coherent book.
       this.engine.setKillSwitch(config.killSwitch);
       this.engine.tick();
+      const tickAtMs = this.engine.lastTick();
+      if (tickAtMs !== null) this.tickStrategyDecay(tickAtMs);
       if (this.errorRevision === errorRevision) this.lastError = null;
     } catch (error) {
       if (this.owns(generation)) {
@@ -378,6 +390,30 @@ export class BasisRuntime {
       }
     } finally {
       if (this.bookBusyGeneration === generation) this.bookBusyGeneration = null;
+    }
+  }
+
+  private tickStrategyDecay(evaluatedAtMs: number): void {
+    if (this.strategyDecay === null) return;
+    let configVersion: string;
+    try {
+      configVersion = deriveBasisConfigVersion(this.engine.cfg);
+    } catch (error) {
+      this.noteError('basis-runtime.strategy-decay.config', error);
+      this.safeLogError('basis-runtime.strategy-decay.config');
+      return;
+    }
+    for (const direction of ['long_spot_short_perp', 'short_spot_long_perp'] as const) {
+      try {
+        const result = this.strategyDecay.tick({ strategy: 'BASIS', configVersion, direction, evaluatedAtMs });
+        if (result.disposition === 'BLOCKED') {
+          this.noteError('basis-runtime.strategy-decay', result.reasonCodes.join(',') || 'blocked');
+          this.safeLogError('basis-runtime.strategy-decay');
+        }
+      } catch (error) {
+        this.noteError('basis-runtime.strategy-decay', error);
+        this.safeLogError('basis-runtime.strategy-decay');
+      }
     }
   }
 

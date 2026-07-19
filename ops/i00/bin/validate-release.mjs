@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys, sha256File,
-  treeDigest, typedTreeDigest,
+  RELEASE_KEYS, fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys,
+  sha256File, treeDigest, typedTreeDigest, verifyArtifactManifest,
 } from '../lib.mjs';
 import {
   COMPLETE_ACCEPTANCE_STEP_COUNT, COMPLETE_ACCEPTANCE_TRUTH,
@@ -33,15 +33,7 @@ try {
   fail(`artifact-manifest.json is unreadable or invalid JSON: ${error.message}`);
 }
 const artifactManifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
-const releaseKeys = [
-  'releaseId', 'gitSha', 'testedSha', 'builtAtUtc', 'schemaVersion', 'rollbackBarrier',
-  'rollbackFloor', 'compatibilitySource', 'compatibilitySourceSha256',
-  'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256', 'acceptanceEvidence',
-  'activationState', 'sourceTree', 'sourceVerification', 'packageLockSha256',
-  'runtimeDepsDigestSha256', 'serverDistDigestSha256', 'webDistDigestSha256',
-  'runtimeDependencies', 'l15OpsProvenance', 'buildAttestation',
-];
-requireExactKeys(release, releaseKeys, 'release.json');
+requireExactKeys(release, RELEASE_KEYS, 'release.json');
 if (!isFullSha(release.gitSha) || release.gitSha !== release.testedSha) fail('release SHA fields must be one identical full Git SHA');
 if (release.releaseId !== `i00-${release.testedSha}`) fail('releaseId must be keyed by the full tested SHA');
 if (!isUtc(release.builtAtUtc)) fail('release builtAtUtc is invalid');
@@ -223,52 +215,17 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
   }
 }
 
-requireExactKeys(manifest, [
-  'schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs',
-  'acceptanceEvidence', 'l15OpsProvenance', 'ledgerCompatibility', 'buildAttestation', 'files',
-], 'artifact manifest');
-requireExactKeys(manifest.testedBuildOutputs, ['serverDistDigestSha256', 'webDistDigestSha256'], 'artifact manifest.testedBuildOutputs');
-requireExactKeys(manifest.ledgerCompatibility, [
-  'schemaVersion', 'rollbackFloor', 'rollbackBarrier',
-  'compatibilitySource', 'compatibilitySourceSha256',
-], 'artifact manifest.ledgerCompatibility');
-if (manifest.schemaVersion !== 1) fail('artifact manifest schemaVersion must be 1');
-if (manifest.releaseId !== release.releaseId || manifest.testedSha !== release.testedSha) fail('artifact manifest identity mismatch');
-if (JSON.stringify(manifest.acceptanceEvidence) !== JSON.stringify(release.acceptanceEvidence)) {
-  fail('artifact manifest acceptance evidence does not match release provenance');
-}
-if (JSON.stringify(manifest.l15OpsProvenance) !== JSON.stringify(release.l15OpsProvenance)) {
-  fail('artifact manifest effective L15 provenance does not match release provenance');
-}
+// The artifact-manifest core (exact keys, identity, provenance equality,
+// path-set equality, per-file sha256+mode, tree digests, TOCTOU re-read) is
+// shared with preflight.mjs via lib.mjs so the two gates can never drift.
+const verifiedArtifacts = verifyArtifactManifest(root, release);
+const verifiedFileCount = verifiedArtifacts.fileCount;
 for (const key of Object.keys(compiledCompatibility)) {
   if (manifest.ledgerCompatibility[key] !== compiledCompatibility[key]) {
     fail(`artifact manifest Ledger compatibility ${key} mismatch`);
   }
 }
-if (JSON.stringify(manifest.buildAttestation) !== JSON.stringify(release.buildAttestation)) {
-  fail('artifact manifest build attestation does not match release provenance');
-}
-if (manifest.testedBuildOutputs.serverDistDigestSha256 !== release.serverDistDigestSha256
-    || manifest.testedBuildOutputs.webDistDigestSha256 !== release.webDistDigestSha256) {
-  fail('artifact manifest build-output digests do not match release provenance');
-}
-if (!Array.isArray(manifest.files) || manifest.files.length === 0) fail('artifact manifest files must be non-empty');
-const actualFiles = listRegularFiles(root).filter((file) => file !== 'artifact-manifest.json');
-const declared = new Map(manifest.files.map((entry) => [entry.path, entry.sha256]));
-if (declared.size !== actualFiles.length || actualFiles.some((file) => !declared.has(file))) {
-  fail('artifact manifest path set does not match the release');
-}
-for (const file of actualFiles) {
-  const entry = manifest.files.find((candidate) => candidate.path === file);
-  if (sha256File(resolve(root, file)) !== entry.sha256 || (lstatSync(resolve(root, file)).mode & 0o777) !== entry.mode) {
-    fail(`artifact digest/mode mismatch: ${file}`);
-  }
-}
-if (treeDigest(resolve(root, 'server/dist')) !== release.serverDistDigestSha256
-    || treeDigest(resolve(root, 'web/dist')) !== release.webDistDigestSha256) {
-  fail('release build-output trees do not match tested provenance');
-}
-if (sha256File(manifestPath) !== artifactManifestSha256) {
+if (verifiedArtifacts.artifactManifestSha256 !== artifactManifestSha256) {
   fail('artifact manifest changed during validation');
 }
 
@@ -277,5 +234,5 @@ process.stdout.write(`${JSON.stringify({
   releaseId: release.releaseId,
   testedSha: release.testedSha,
   artifactManifestSha256,
-  fileCount: actualFiles.length,
+  fileCount: verifiedFileCount,
 })}\n`);

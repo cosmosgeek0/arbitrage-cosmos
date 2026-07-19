@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys } from '../lib.mjs';
+import {
+  fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys,
+  verifyArtifactManifest,
+} from '../lib.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 for (const key of ['release', 'host', 'supervisor', 'mode', 'now', 'max-host-age-sec', 'max-supervisor-age-sec', 'required-supervisor-window-sec']) {
@@ -9,7 +12,13 @@ for (const key of ['release', 'host', 'supervisor', 'mode', 'now', 'max-host-age
 }
 if (!['deploy', 'rollback'].includes(args.mode)) fail('--mode must be deploy or rollback');
 
-const release = readJson(resolve(args.release, 'release.json'), 'release.json');
+// The operator-facing gate must never be weaker than the release validator:
+// before this call, a tampered payload and a 192-byte stub containing only a
+// hand-written release.json both preflighted green while validate-release.mjs
+// rejected the identical artifacts. The manifest-verification core (exact
+// keys, per-file sha256+mode, tree digests, TOCTOU re-read) is shared from
+// lib.mjs — a re-use, not a re-implementation, so the two cannot drift.
+const { release, artifactManifestSha256 } = verifyArtifactManifest(resolve(args.release));
 const host = readJson(args.host, 'host preflight');
 const supervisor = readJson(args.supervisor, 'supervisor readback');
 requireExactKeys(host, ['source', 'account', 'targetHost', 'environment', 'freeBytes', 'backupReserveBytes', 'sqliteVersion', 'evidenceSha256', 'observedAtUtc'], 'host preflight');
@@ -73,5 +82,7 @@ process.stdout.write(`${JSON.stringify({
   releaseBytes,
   environment: host.environment,
   supervisorValidUntilUtc: supervisor.validUntilUtc,
+  releaseIntegrity: 'MANIFEST_VERIFIED',
+  artifactManifestSha256,
   blocker: null,
 })}\n`);

@@ -135,3 +135,81 @@ export function requireExactKeys(value, keys, label) {
 export function hasPlaceholder(value) {
   return /REPLACE_ME|CHANGEME|example\.com|000000000000/.test(String(value));
 }
+
+// The exact release.json field set. Exported so the operator-facing preflight
+// and the release validator can never drift apart — the R1 finding was
+// precisely that the two commands disagreed about what a release is.
+export const RELEASE_KEYS = Object.freeze([
+  'releaseId', 'gitSha', 'testedSha', 'builtAtUtc', 'schemaVersion', 'rollbackBarrier',
+  'rollbackFloor', 'compatibilitySource', 'compatibilitySourceSha256',
+  'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256', 'acceptanceEvidence',
+  'activationState', 'sourceTree', 'sourceVerification', 'packageLockSha256',
+  'runtimeDepsDigestSha256', 'serverDistDigestSha256', 'webDistDigestSha256',
+  'runtimeDependencies', 'l15OpsProvenance', 'buildAttestation',
+]);
+
+// The artifact-manifest verification core shared by validate-release.mjs and
+// preflight.mjs: exact key sets, identity match against release.json,
+// provenance equality, path-set equality, per-file sha256 + mode, build-tree
+// digest equality, and a TOCTOU re-read. One implementation on purpose — a
+// second copy would re-create the divergence this closes. Deeper provenance
+// (build-attestation verification, compiled-ledger compatibility) stays in
+// validate-release.mjs.
+export function verifyArtifactManifest(root, preloadedRelease = null) {
+  const release = preloadedRelease ?? readJson(resolve(root, 'release.json'), 'release.json');
+  requireExactKeys(release, RELEASE_KEYS, 'release.json');
+  const manifestPath = resolve(root, 'artifact-manifest.json');
+  let manifestBytes;
+  let manifest;
+  try {
+    manifestBytes = readFileSync(manifestPath);
+    manifest = JSON.parse(manifestBytes);
+  } catch (error) {
+    fail(`artifact-manifest.json is unreadable or invalid JSON: ${error.message}`);
+  }
+  const artifactManifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
+  requireExactKeys(manifest, [
+    'schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs',
+    'acceptanceEvidence', 'l15OpsProvenance', 'ledgerCompatibility', 'buildAttestation', 'files',
+  ], 'artifact manifest');
+  requireExactKeys(manifest.testedBuildOutputs, ['serverDistDigestSha256', 'webDistDigestSha256'], 'artifact manifest.testedBuildOutputs');
+  requireExactKeys(manifest.ledgerCompatibility, [
+    'schemaVersion', 'rollbackFloor', 'rollbackBarrier',
+    'compatibilitySource', 'compatibilitySourceSha256',
+  ], 'artifact manifest.ledgerCompatibility');
+  if (manifest.schemaVersion !== 1) fail('artifact manifest schemaVersion must be 1');
+  if (manifest.releaseId !== release.releaseId || manifest.testedSha !== release.testedSha) fail('artifact manifest identity mismatch');
+  if (JSON.stringify(manifest.acceptanceEvidence) !== JSON.stringify(release.acceptanceEvidence)) {
+    fail('artifact manifest acceptance evidence does not match release provenance');
+  }
+  if (JSON.stringify(manifest.l15OpsProvenance) !== JSON.stringify(release.l15OpsProvenance)) {
+    fail('artifact manifest effective L15 provenance does not match release provenance');
+  }
+  if (JSON.stringify(manifest.buildAttestation) !== JSON.stringify(release.buildAttestation)) {
+    fail('artifact manifest build attestation does not match release provenance');
+  }
+  if (manifest.testedBuildOutputs.serverDistDigestSha256 !== release.serverDistDigestSha256
+      || manifest.testedBuildOutputs.webDistDigestSha256 !== release.webDistDigestSha256) {
+    fail('artifact manifest build-output digests do not match release provenance');
+  }
+  if (!Array.isArray(manifest.files) || manifest.files.length === 0) fail('artifact manifest files must be non-empty');
+  const actualFiles = listRegularFiles(root).filter((file) => file !== 'artifact-manifest.json');
+  const declared = new Map(manifest.files.map((entry) => [entry.path, entry.sha256]));
+  if (declared.size !== actualFiles.length || actualFiles.some((file) => !declared.has(file))) {
+    fail('artifact manifest path set does not match the release');
+  }
+  for (const file of actualFiles) {
+    const entry = manifest.files.find((candidate) => candidate.path === file);
+    if (sha256File(resolve(root, file)) !== entry.sha256 || (lstatSync(resolve(root, file)).mode & 0o777) !== entry.mode) {
+      fail(`artifact digest/mode mismatch: ${file}`);
+    }
+  }
+  if (treeDigest(resolve(root, 'server/dist')) !== release.serverDistDigestSha256
+      || treeDigest(resolve(root, 'web/dist')) !== release.webDistDigestSha256) {
+    fail('release build-output trees do not match tested provenance');
+  }
+  if (sha256File(manifestPath) !== artifactManifestSha256) {
+    fail('artifact manifest changed during validation');
+  }
+  return { release, manifest, artifactManifestSha256, fileCount: actualFiles.length };
+}

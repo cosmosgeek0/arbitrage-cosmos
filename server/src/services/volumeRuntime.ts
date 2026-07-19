@@ -530,7 +530,7 @@ export class VolumeRuntime {
       const names = group.map((symbol) => symbol.toLowerCase() + '@aggTrade').join('/');
       const stream = new BinanceStream(
         'volume-aggtrade-' + String(index + 1),
-        'wss://stream.binance.com:9443/stream?streams=' + names,
+        'wss://stream.binance.com:443/stream?streams=' + names,
         (data) => this.onTradeMessage(data, generation, streamEpoch),
         (name, status) => this.onStreamStatus(name, status, generation, streamEpoch),
       );

@@ -321,7 +321,7 @@ export class MarketEngine {
 
     const spotStream = new BinanceStream(
       'spot-miniticker',
-      'wss://stream.binance.com:9443/ws/!miniTicker@arr',
+      'wss://stream.binance.com:443/ws/!miniTicker@arr',
       (data) => this.onSpotMiniTickers(data, generation),
       onStatus
     );

@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3535,
+        "line": 3562,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1175,7 +1175,7 @@
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 515,
+        "line": 533,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
@@ -1298,7 +1298,7 @@
         "concept": "semantic-source",
         "declaration": "function observeLiquidationSourceStatus",
         "file": "server/src/binance/liquidations.ts",
-        "line": 281
+        "line": 285
       },
       {
         "concept": "semantic-source",
@@ -1316,25 +1316,25 @@
         "concept": "exchange-hand",
         "declaration": "interface SpotExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 153
+        "line": 186
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface FuturesExchangeInfo",
         "file": "server/src/binance/rest.ts",
-        "line": 164
+        "line": 197
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface ExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 178
+        "line": 211
       },
       {
         "concept": "exchange-hand",
         "declaration": "function fetchExchangeUniverse",
         "file": "server/src/binance/rest.ts",
-        "line": 189
+        "line": 222
       },
       {
         "concept": "semantic-source",
@@ -1370,7 +1370,7 @@
         "concept": "capital-authority",
         "declaration": "function assertCacheReservations",
         "file": "server/src/bootstrap/environment.ts",
-        "line": 477
+        "line": 485
       },
       {
         "concept": "capital-authority",
@@ -3542,37 +3542,37 @@
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 847
+        "line": 871
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2007
+        "line": 2034
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2016
+        "line": 2043
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2396
+        "line": 2423
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2408
+        "line": 2435
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2418
+        "line": 2445
       },
       {
         "concept": "semantic-source",
@@ -4544,13 +4544,13 @@
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 4893
+        "line": 4920
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 4899
+        "line": 4926
       },
       {
         "concept": "semantic-source",
@@ -15122,5 +15122,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "90531cf95feedff893791801e34fefb520ba7f1755d9a9339d232060ce3f1311"
+  "evidenceSha256": "05f20fd452309adba0d8ee63c0c3a278ebfdfaf87498b109a2faab852a163007"
 }

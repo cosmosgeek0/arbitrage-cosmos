@@ -1683,15 +1683,6 @@ test('remote, PID-namespace-mismatched, corrupt, and future-dated records fail c
       }),
     },
     {
-      expectedCode: 'DATA_DIR_LEASE_REMOTE_HOST',
-      record: leaseRecord({
-        ownerToken: 'd'.repeat(36),
-        ownerHostname: hostname(),
-        hostIdentity: 'd'.repeat(64),
-      }),
-      witness: true,
-    },
-    {
       expectedCode: 'DATA_DIR_LEASE_LIVENESS_NAMESPACE_MISMATCH',
       record: leaseRecord({
         ownerToken: 'n'.repeat(36),
@@ -1733,6 +1724,76 @@ test('remote, PID-namespace-mismatched, corrupt, and future-dated records fail c
         entry.expectedCode,
       );
       assertNoLeaseDatabase(dataDir);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('a dead owner with a changed host identity is scavenged, never a permanent brick', () => {
+  // The brick: a NIC-set change (Docker bridge/veth churn, ENI attach/detach,
+  // DR restore to a replacement instance) rewrites the MAC-derived
+  // hostIdentity, and identity used to be decided before liveness — so a
+  // provably dead owner blocked every restart until its lease files were
+  // deleted by hand. Liveness now outranks identity: dead means scavenge;
+  // live-and-foreign still refuses, keeping the true cross-host case caught.
+
+  // (a) dead owner + foreign identity WITNESS -> scavenged, boot proceeds
+  {
+    const dataDir = tempDataDir();
+    try {
+      const record = leaseRecord({
+        ownerToken: 'd'.repeat(36),
+        ownerHostname: hostname(),
+        hostIdentity: 'd'.repeat(64),
+      });
+      writeFileSync(
+        path.join(dataDir, `${LEASE_WITNESS_PREFIX}${tokenDigest(record.ownerToken)}`),
+        `${JSON.stringify(record)}\n`,
+        { flag: 'wx', mode: 0o600 },
+      );
+      const lease = new DataDirLease(dataDir);
+      lease.release();
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }
+
+  // (b) dead owner + foreign identity chain ROOT -> succeeded, boot proceeds
+  {
+    const dataDir = tempDataDir();
+    try {
+      writeLeaseRecord(path.join(dataDir, LEASE_ROOT), leaseRecord({
+        ownerToken: 'f'.repeat(36),
+        ownerHostname: `${hostname()}-replacement`,
+        hostIdentity: 'c'.repeat(64),
+      }));
+      const lease = new DataDirLease(dataDir);
+      lease.release();
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
+  }
+
+  // (c) LIVE owner + foreign identity WITNESS -> still DATA_DIR_LEASE_REMOTE_HOST
+  {
+    const dataDir = tempDataDir();
+    try {
+      const record = leaseRecord({
+        ownerToken: 'e'.repeat(36),
+        pid: process.pid,
+        ownerHostname: `${hostname()}-remote`,
+        hostIdentity: 'c'.repeat(64),
+      });
+      writeFileSync(
+        path.join(dataDir, `${LEASE_WITNESS_PREFIX}${tokenDigest(record.ownerToken)}`),
+        `${JSON.stringify(record)}\n`,
+        { flag: 'wx', mode: 0o600 },
+      );
+      assert.throws(
+        () => new DataDirLease(dataDir),
+        (error) => error?.code === 'DATA_DIR_LEASE_REMOTE_HOST',
+      );
     } finally {
       rmSync(dataDir, { recursive: true, force: true });
     }

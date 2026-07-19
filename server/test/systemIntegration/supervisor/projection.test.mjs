@@ -398,6 +398,44 @@ test('projection rejects malformed runtime, lifecycle, and freshness boundary fa
   });
   assert.equal(buildSystemSupervisorProjection(invalidLifecycle).ok, false);
 
+  // a healthy LIVE source that reports no retry telemetry must project, not throw:
+  // absent retry is materialised as UNAVAILABLE (all-null), which is not an
+  // active schedule and must never fire RETRY_LIVE_CONFLICT
+  const liveWithoutRetry = projectionInput({
+    componentOverrides: { 'public-spot-source': { sourceLifecycle: 'LIVE' } },
+  });
+  const projected = buildSystemSupervisorProjection(liveWithoutRetry);
+  assert.equal(projected.ok, true, projected.ok ? undefined : projected.failure.message);
+  assert.equal(
+    projected.value.components.find((node) => node.componentId === 'public-spot-source').retry.state,
+    'UNAVAILABLE',
+  );
+
+  // the same holds for explicitly-published bounded UNKNOWN retry truth
+  const liveWithUnknownRetry = projectionInput({
+    componentOverrides: {
+      'public-spot-source': {
+        sourceLifecycle: 'LIVE',
+        retry: { state: 'UNKNOWN', attempt: null, ceiling: null, delayMs: null, retryAtMs: null, cooldownUntilMs: null },
+      },
+    },
+  });
+  const projectedUnknown = buildSystemSupervisorProjection(liveWithUnknownRetry);
+  assert.equal(projectedUnknown.ok, true, projectedUnknown.ok ? undefined : projectedUnknown.failure.message);
+
+  // over-application guard: a LIVE source with a genuinely active schedule is still rejected
+  const liveWithActiveRetry = projectionInput({
+    componentOverrides: {
+      'public-spot-source': {
+        sourceLifecycle: 'LIVE',
+        retry: { state: 'BACKING_OFF', attempt: 2, ceiling: 8, delayMs: 500, retryAtMs: NOW + 500, cooldownUntilMs: null },
+      },
+    },
+  });
+  const projectedActive = buildSystemSupervisorProjection(liveWithActiveRetry);
+  assert.equal(projectedActive.ok, false);
+  assert.match(projectedActive.failure.message, /retry\.state:RETRY_LIVE_CONFLICT/u);
+
   const invalidFreshness = projectionInput({
     componentOverrides: {
       'public-spot-source': {

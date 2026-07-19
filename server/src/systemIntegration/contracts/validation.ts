@@ -435,10 +435,19 @@ export function validateSystemComponentSnapshot(value: unknown): ValidationIssue
           issues.push(issue('retry.cooldownUntilMs', 'RETRY_COOLDOWN_ORDER_INVALID', 'cooldown cannot end before the scheduled retry'));
         }
       }
-      if (value.sourceLifecycle === 'LIVE' && state !== 'IDLE') {
+      // Absent retry telemetry is materialised as UNAVAILABLE (all-null) by
+      // normalizeComponentTruth, and RETRY_UNKNOWN_CONFLICT above already forbids
+      // UNKNOWN/UNAVAILABLE from carrying any invented schedule values. Neither is
+      // an active retry schedule, so neither may conflict with a LIVE (or
+      // BACKING_OFF) lifecycle: rejecting them manufactured a violation out of an
+      // honestly-missing field the instant a source reached LIVE.
+      if (value.sourceLifecycle === 'LIVE'
+          && state !== 'IDLE' && state !== 'UNAVAILABLE' && state !== 'UNKNOWN') {
         issues.push(issue('retry.state', 'RETRY_LIVE_CONFLICT', 'a live source cannot retain an active retry schedule'));
       }
-      if (value.sourceLifecycle === 'BACKING_OFF' && state !== 'BACKING_OFF' && state !== 'COOLDOWN') {
+      if (value.sourceLifecycle === 'BACKING_OFF'
+          && state !== 'BACKING_OFF' && state !== 'COOLDOWN'
+          && state !== 'UNAVAILABLE' && state !== 'UNKNOWN') {
         issues.push(issue('retry.state', 'RETRY_LIFECYCLE_CONFLICT', 'a backing-off source requires matching retry evidence'));
       }
     }

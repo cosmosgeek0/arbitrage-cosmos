@@ -610,9 +610,11 @@ def wall_time_evidence() -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    if len(argv) != 2 or argv[1].startswith("-"):
+        # A flag must never satisfy the positional arity check: `--help` once
+        # became the output root and produced a tracked `quant/--help/` tree.
         print("usage: q07_micro_campaign.py OUTPUT_ROOT", file=sys.stderr)
-        return 2
+        return 0 if argv[1:2] in (["-h"], ["--help"]) else 2
     output_root = Path(argv[1])
     fixture_bytes, campaign_bytes, markdown_bytes = build_artifacts()
     fixture_path = output_root / "fixtures" / "q07_micro_golden_v1.json"

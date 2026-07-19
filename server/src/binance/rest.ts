@@ -303,11 +303,20 @@ export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<M
   const raw = await requestJson<RawBookTicker[]>(url, `${market} bookTicker`, LARGE_JSON_LIMIT_BYTES);
   if (!Array.isArray(raw)) throw new Error(`${market} bookTicker invalid JSON`);
   const data = new Map<string, BookTicker>();
-  for (const row of raw.slice(0, 20_000)) {
+  const rows = raw.slice(0, 20_000);
+  let skipped = 0;
+  for (const row of rows) {
     try {
       const parsed = parseBookTicker(row);
       data.set(parsed.symbol, parsed);
-    } catch { /* skip malformed upstream rows */ }
+    } catch { skipped += 1; /* skip malformed upstream rows */ }
+  }
+  // Per-row tolerance is for genuine one-off malformations. A majority of
+  // rows failing the shape check means the upstream schema changed; caching
+  // the near-empty map would silently present it as the real market for the
+  // cache window. Throw so the honest-unavailable path takes over (Part 4 #13).
+  if (rows.length > 0 && skipped > rows.length / 2) {
+    throw new Error(`${market} bookTicker schema mismatch: ${skipped} of ${rows.length} rows malformed`);
   }
   allBookCache.set(market, { fetchedAt: Date.now(), data });
   return data;

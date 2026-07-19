@@ -42,6 +42,7 @@
           "afterSha256": "3e554005c869958e660798f9c9ee045fcfc1913ff7ac7e4bc4d4205b7130ccab"
         }
       ],
+      "changedTestFiles": [],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-WATCHDOG-007_CORRECTION_RECEIPT.md",
         "gitBlob": "9f5631fd7124cf28aaa98fa78aea8325d63b732a",
@@ -79,6 +80,7 @@
           "afterSha256": "a2e6f29fa59a6ad0d0c0e15912348c4326eee83c61f203a08e7af2242327b332"
         }
       ],
+      "changedTestFiles": [],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md",
         "gitBlob": "a09f927763a1f6aef1a08f0cd164e736633e12bc",
@@ -116,6 +118,7 @@
           "afterSha256": "295893ed396c1ae7801c58602c93d48dfd5ba7d1e86d70de3b00693388885244"
         }
       ],
+      "changedTestFiles": [],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/CS-03_CORRECTION_RECEIPT.md",
         "gitBlob": "0112382ac50d20b0528fe2fa90bcecb498c771b3",
@@ -145,6 +148,7 @@
           "afterSha256": "0cc163d0fdc2b5ff61dbe44348bb94fa85c056bebf3667be3a5bbcd6a0648f6d"
         }
       ],
+      "changedTestFiles": [],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/RB-27_CORRECTION_RECEIPT.md",
         "gitBlob": "d7f80f6981cb655515deec641424c794771c5b16",
@@ -190,10 +194,20 @@
           "afterSha256": "811ed8b022eb9e173f269f3a18a859208d0b7cb5476aa88bab70d0e96de77b21"
         }
       ],
+      "changedTestFiles": [
+        {
+          "path": "ops/tests/test-systemd-units.sh",
+          "mode": "100755",
+          "beforeGitBlob": "bd7ab661e802482a7143e90861bd2d35e783eb84",
+          "beforeSha256": "b17443e04d8bb5c0a652a82de81146d9dc4964430e69402474a974bce8f55dcd",
+          "afterGitBlob": "980a31c0057a4608f77466d3069df0aa3eb559ea",
+          "afterSha256": "7fb37c63ef5caea0597f4b2a894e799baec13c75e162b9afffb4f1cc3b3bd897"
+        }
+      ],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/FIX-031-CS-06_CORRECTION_RECEIPT.md",
-        "gitBlob": "1f069139ae03adbe71196ca9758b62ac7c99bba5",
-        "sha256": "a9932d6119ae24635bf386ab771016b058307a346f0d853f88f2a9b6e8a7fd66"
+        "gitBlob": "c73ff643e396aa9410619c643a6f8244c28cc7b5",
+        "sha256": "29d501c4d7b00c715be9d10e176e11276e0de76123c34504952ca76b001487e5"
       },
       "regressionTests": [
         {

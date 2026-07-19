@@ -49,6 +49,17 @@ const FINDING_PATHS = Object.freeze({
     'ops/live/systemd/cosmos-app.service',
   ]),
 });
+// Donor-owned test files a finding is authorized to evolve, with exact
+// before/after byte binding in the amendment. Empty for historical findings.
+const FINDING_TEST_CHANGES = Object.freeze({
+  'R3-D-WATCHDOG-007': Object.freeze([]),
+  'R3-D-BACKUP-008': Object.freeze([]),
+  'CS-03': Object.freeze([]),
+  'RB-27': Object.freeze([]),
+  'FIX-031-CS-06': Object.freeze([
+    'ops/tests/test-systemd-units.sh',
+  ]),
+});
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
   'R3-D-BACKUP-008': 'ops/tests/i00/test-r3-d-backup-008.sh',
@@ -91,7 +102,8 @@ function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
   const label = `L15 amendment[${index}]`;
   requireExactKeys(amendment, [
     'findingId', 'baseLiveTree', 'effectiveLiveTree', 'baseRootDigestSha256',
-    'effectiveRootDigestSha256', 'changedFiles', 'correctionReceipt', 'regressionTests',
+    'effectiveRootDigestSha256', 'changedFiles', 'changedTestFiles', 'correctionReceipt',
+    'regressionTests',
   ], label);
   const expectedId = FINDING_ORDER[index];
   if (amendment.findingId !== expectedId) fail(`${label}.findingId is out of the closed correction order`);
@@ -121,6 +133,31 @@ function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
       fail(`${fileLabel}.path is not the exact finding-owned replacement`);
     }
     seenPaths.add(file.path);
+    if (!GIT_MODES.has(file.mode)) fail(`${fileLabel}.mode is not a supported regular-file Git mode`);
+    assertGitObject(file.beforeGitBlob, `${fileLabel}.beforeGitBlob`);
+    assertGitObject(file.afterGitBlob, `${fileLabel}.afterGitBlob`);
+    assertSha256(file.beforeSha256, `${fileLabel}.beforeSha256`);
+    assertSha256(file.afterSha256, `${fileLabel}.afterSha256`);
+    if (file.beforeGitBlob === file.afterGitBlob || file.beforeSha256 === file.afterSha256) {
+      fail(`${fileLabel} does not bind distinct before and after bytes`);
+    }
+  });
+  if (!Array.isArray(amendment.changedTestFiles)) fail(`${label}.changedTestFiles must be an array`);
+  const expectedTestPaths = FINDING_TEST_CHANGES[expectedId];
+  if (amendment.changedTestFiles.length !== expectedTestPaths.length) {
+    fail(`${label}.changedTestFiles has the wrong closed path count`);
+  }
+  const seenTestPaths = new Set();
+  amendment.changedTestFiles.forEach((file, fileIndex) => {
+    const fileLabel = `${label}.changedTestFiles[${fileIndex}]`;
+    requireExactKeys(file, [
+      'path', 'mode', 'beforeGitBlob', 'beforeSha256', 'afterGitBlob', 'afterSha256',
+    ], fileLabel);
+    assertSafePath(file.path, `${fileLabel}.path`, 'ops/tests/');
+    if (file.path !== expectedTestPaths[fileIndex] || seenTestPaths.has(file.path)) {
+      fail(`${fileLabel}.path is not the exact finding-owned test replacement`);
+    }
+    seenTestPaths.add(file.path);
     if (!GIT_MODES.has(file.mode)) fail(`${fileLabel}.mode is not a supported regular-file Git mode`);
     assertGitObject(file.beforeGitBlob, `${fileLabel}.beforeGitBlob`);
     assertGitObject(file.afterGitBlob, `${fileLabel}.afterGitBlob`);

@@ -9,7 +9,7 @@ import {
 import { loadL15AmendmentContract } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '5b94d4e4cf8ab57df3651a28e757705c347a5603bfb123836c20ad42d06588a5';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'b574044daa93296c74f900dba488a77db6f19501a63430740854047dff038656';
 const args = parseArgs(process.argv.slice(2), new Set(['contract-only', 'integrated']));
 const here = dirname(fileURLToPath(import.meta.url));
 const contractPath = resolve(args.contract ?? resolve(here, '../donor-contract.json'));
@@ -206,9 +206,25 @@ if (args.integrated === true) {
   if (donorTestPaths.length !== loadedAmendment.contract.immutableDonor.acceptedDonorTestFileCount) {
     fail('accepted donor test path set count changed');
   }
+  // A donor-owned test may evolve only through a receipted amendment that binds
+  // its exact before/after bytes; the latest amendment's after-bytes govern.
+  const latestTestAfter = new Map();
+  for (const amendment of loadedAmendment.contract.amendments) {
+    for (const changed of amendment.changedTestFiles ?? []) {
+      latestTestAfter.set(changed.path, changed);
+    }
+  }
   for (const path of donorTestPaths) {
     const acceptedBlob = git('rev-parse', '--verify', '--end-of-options', `${contract.acceptedCommit}:${path}`);
     const integratedBlob = git('rev-parse', '--verify', '--end-of-options', `${head}:${path}`);
+    const evolution = latestTestAfter.get(path);
+    if (evolution !== undefined) {
+      if (evolution.beforeGitBlob !== acceptedBlob || integratedBlob !== evolution.afterGitBlob
+          || !gitSucceeds('diff', '--quiet', 'HEAD', '--', path)) {
+        fail(`integrated donor-owned test bytes differ from their amended binding: ${path}`);
+      }
+      continue;
+    }
     if (acceptedBlob !== integratedBlob || !gitSucceeds('diff', '--quiet', 'HEAD', '--', path)) {
       fail(`integrated donor-owned test bytes differ from accepted Git: ${path}`);
     }

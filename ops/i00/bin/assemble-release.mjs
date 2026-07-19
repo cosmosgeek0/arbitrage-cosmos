@@ -16,7 +16,7 @@ import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendme
 import { expectedBuildAttestation, verifyBuildAttestation } from './verify-build-attestation.mjs';
 import { loadProtectedOwnerDirectiveBundle } from '../../../test/i00/performance/contract.mjs';
 
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '5b94d4e4cf8ab57df3651a28e757705c347a5603bfb123836c20ad42d06588a5';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'b574044daa93296c74f900dba488a77db6f19501a63430740854047dff038656';
 const args = parseArgs(process.argv.slice(2), new Set(['rollback-barrier', 'simulation-source']));
 if (args['schema-version'] !== undefined || args['rollback-floor'] !== undefined || args['rollback-barrier'] === true) {
   fail('release compatibility is derived from the tested compiled Ledger; caller overrides are forbidden');

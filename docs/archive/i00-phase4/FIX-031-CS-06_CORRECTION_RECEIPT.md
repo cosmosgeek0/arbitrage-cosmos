@@ -32,3 +32,15 @@ bash ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh
 No deployment, private exchange call, signed action, or money path was
 performed or authorized by this correction. Deployment remains `NOT_CONFIGURED`
 pending separate owner approval.
+
+## Donor-owned test evolution
+
+FIX-031 changed the systemd unit that the donor-owned generic proof
+`ops/tests/test-systemd-units.sh` asserts, so that test evolved with it: the
+old entrypoint pattern became an exact assertion of the pinned
+lease-root `ExecStart`, and coverage was added for the runtime directory
+(mode 0700, preserved across restart), the forbidden `Environment=` override,
+the absence of `PrivatePIDs`, and the lease runtime in `ReadWritePaths`.
+The amendment binds this evolution's exact before/after bytes
+(`changedTestFiles`); the strengthened test replaces, and never weakens, the
+donor's original assertions.

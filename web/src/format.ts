@@ -14,6 +14,7 @@ export function baseOf(symbol: string | null | undefined): string {
 export function fmtPrice(v: number | null | undefined): string {
   const n = Number(v);
   if (!isFinite(n) || v === null || v === undefined) return '—';
+  if (fxRate === null) return '—';
   if (n === 0) return fxSymbol + '0.00';
   const c = n * fxRate;
   const a = Math.abs(c);
@@ -33,16 +34,17 @@ export function fmtQty(v: number | null | undefined): string {
 }
 
 // Display currency: converts USD money values with a live rate from /api/fx.
-let fxRate = 1;
+let fxRate: number | null = 1;
 let fxSymbol = '$';
-export function setFxRate(rate: number, symbol: string): void {
-  fxRate = isFinite(rate) && rate > 0 ? rate : 1;
+export function setFxRate(rate: number | null, symbol: string, current = true): void {
+  fxRate = current && rate !== null && isFinite(rate) && rate > 0 ? rate : null;
   fxSymbol = symbol || '$';
 }
 
 export function fmtMoney(v: number | null | undefined): string {
   const n = Number(v);
   if (!isFinite(n) || v === null || v === undefined) return '—';
+  if (fxRate === null) return '—';
   return fxSymbol + Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(n * fxRate);
 }
 

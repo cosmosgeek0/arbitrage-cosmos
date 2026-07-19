@@ -23,10 +23,12 @@ from quant_edge.models.contracts import ProbabilitySemantics
 from quant_edge.validation import (
     FoldStatus,
     PlanStatus,
+    PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
     WalkForwardPlanV1,
+    build_walk_forward_plan,
     subset_by_ids,
 )
 
@@ -235,6 +237,8 @@ def validate_oof_bundles(
         raise ContractValueError("plan must be a valid WalkForwardPlanV1")
     if plan.dataset_digest != samples.digest():
         raise ContractValueError("plan is bound to a different sample set")
+    if plan != build_walk_forward_plan(samples, plan.spec):
+        raise ContractValueError("plan must equal the canonical walk-forward plan")
     require_contract_id(target_id, field="target_id")
     require_strict_int(horizon_ns, field="horizon_ns", minimum=1)
     if not isinstance(specialist_ids, tuple):
@@ -606,5 +610,9 @@ def stack_predictions_for_folds(
             model_id=_bound_stack_model_id(fitted),
             dataset_digest=subset.digest(),
             predictions=tuple(sorted(predictions, key=lambda item: item.sample_id)),
+            lineage=PredictionLineageV1(
+                feature_artifact_digest=matrix.digest(),
+                fit_receipt_digest=fitted.digest(),
+            ),
         ),
     )

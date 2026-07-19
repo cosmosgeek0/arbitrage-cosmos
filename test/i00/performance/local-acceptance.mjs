@@ -60,6 +60,7 @@ const BROWSER_ARTIFACT_COUNT = 194;
 const BROWSER_SUPERVISOR_PATH = '/api/product-integration/v1/supervisor';
 const BROWSER_CONSOLE_LIMIT = 1000;
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+const Q_ARCHIVE_EXTRACTION_TIMEOUT_MS = 120_000;
 const Q_PYPROJECT_SHA256 = 'a4d68e05b607e60a99fa3856ed8f8cd3addc80998c65ca6d458118745970ca81';
 const Q_UV_LOCK_SHA256 = '716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29';
 const Q_ACCEPTED_VENV_MANIFEST_SHA256 = 'ab78066bcbe7297d30c9bcd3699348e8daa82a44de64b743c11cd6b0a397fc7d';
@@ -1478,6 +1479,73 @@ export function validateQArchiveInventory(expectedEntries, observedEntries) {
   });
 }
 
+export function superviseQArchiveChildren({
+  archive,
+  unpack,
+  timeoutMs = Q_ARCHIVE_EXTRACTION_TIMEOUT_MS,
+  errorText,
+}) {
+  return new Promise((resolve, reject) => {
+    const exits = { archive: null, unpack: null };
+    let settled = false;
+    let deadline;
+
+    const capturedErrors = () => {
+      try {
+        return typeof errorText === 'function' ? String(errorText()) : '';
+      } catch {
+        return 'ERROR_TEXT_UNAVAILABLE';
+      }
+    };
+    const stop = (child) => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // The child error listener remains authoritative when kill itself fails.
+      }
+    };
+    const disconnectPipeline = () => {
+      archive.stdout?.unpipe?.(unpack.stdin);
+      unpack.stdin?.destroy?.();
+    };
+    const failure = (reason, source, errorIdentity = 'NONE') => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      disconnectPipeline();
+      stop(source === 'archive' ? unpack : archive);
+      reject(new Error(`Q_ARCHIVE_EXTRACTION_FAILED:${sha256(`${reason}:${source}:${errorIdentity}\n${capturedErrors()}`)}`));
+    };
+    const closed = (source, peer) => (code, signal) => {
+      exits[source] = { code, signal };
+      if (code !== 0 || signal !== null) {
+        failure('CHILD_CLOSE', source, `${code ?? 'NULL'}:${signal ?? 'NONE'}`);
+        return;
+      }
+      if (!settled && exits[peer]?.code === 0 && exits[peer]?.signal === null) {
+        settled = true;
+        clearTimeout(deadline);
+        resolve(Object.freeze({ archive: exits.archive, unpack: exits.unpack }));
+      }
+    };
+
+    archive.on('error', (error) => failure('CHILD_ERROR', 'archive', error?.code ?? error?.name ?? 'ERROR'));
+    unpack.on('error', (error) => failure('CHILD_ERROR', 'unpack', error?.code ?? error?.name ?? 'ERROR'));
+    archive.once('close', closed('archive', 'unpack'));
+    unpack.once('close', closed('unpack', 'archive'));
+
+    deadline = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      disconnectPipeline();
+      stop(archive);
+      stop(unpack);
+      reject(new Error(`Q_ARCHIVE_EXTRACTION_TIMEOUT:${sha256(capturedErrors())}`));
+    }, timeoutMs);
+  });
+}
+
 async function extractQArchive(destination, environment) {
   mkdirSync(destination, { recursive: true });
   const archive = spawn('git', Q_DONOR_ARCHIVE_ARGS, { cwd: ROOT, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -1486,13 +1554,7 @@ async function extractQArchive(destination, environment) {
   let errors = '';
   archive.stderr.on('data', (chunk) => { errors += chunk.toString('utf8'); });
   unpack.stderr.on('data', (chunk) => { errors += chunk.toString('utf8'); });
-  const [archiveExit, unpackExit] = await Promise.all([
-    new Promise((resolve) => archive.once('close', (code, signal) => resolve({ code, signal }))),
-    new Promise((resolve) => unpack.once('close', (code, signal) => resolve({ code, signal }))),
-  ]);
-  if (archiveExit.code !== 0 || unpackExit.code !== 0 || archiveExit.signal !== null || unpackExit.signal !== null) {
-    throw new Error(`Q_ARCHIVE_EXTRACTION_FAILED:${sha256(errors)}`);
-  }
+  await superviseQArchiveChildren({ archive, unpack, errorText: () => errors });
 }
 
 async function verifyQArchiveInventory(archiveRoot, environment) {

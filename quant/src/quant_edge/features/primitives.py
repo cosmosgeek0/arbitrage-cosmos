@@ -11,6 +11,7 @@ from quant_edge.features.baselines import RollingMedianMad
 from quant_edge.features.domains import BarDomain, BarV1
 from quant_edge.features.fixedpoint import (
     FIXED_POINT_SCALE,
+    MAX_FIXED_MANTISSA,
     FixedPointV1,
     fp_div,
     fp_from_int,
@@ -59,13 +60,16 @@ def _fp_close(bar: BarV1) -> FixedPointV1 | None:
     return FixedPointV1(round_half_even(aligned, 10**26))
 
 
-def _return_fp(previous_aligned: int, current_aligned: int) -> FixedPointV1:
-    return FixedPointV1(
-        _signed_round(
-            (current_aligned - previous_aligned) * FIXED_POINT_SCALE,
-            previous_aligned,
-        )
+def _return_fp(previous_aligned: int, current_aligned: int) -> FixedPointV1 | None:
+    if previous_aligned <= 0 or current_aligned <= 0:
+        return None
+    mantissa = _signed_round(
+        (current_aligned - previous_aligned) * FIXED_POINT_SCALE,
+        previous_aligned,
     )
+    if abs(mantissa) > MAX_FIXED_MANTISSA:
+        return None
+    return FixedPointV1(mantissa)
 
 
 def _signed_round(numerator: int, denominator: int) -> int:
@@ -137,7 +141,11 @@ class _StreamingRobustZ:
             median = self.__baseline.median()
             mad = self.__baseline.mad()
             if median is not None and mad is not None and not mad.is_zero:
-                result = fp_div(fp_sub(close, median), mad)
+                deviation = fp_sub(close, median)
+                if abs(deviation.mantissa) * FIXED_POINT_SCALE <= MAX_FIXED_MANTISSA * abs(
+                    mad.mantissa
+                ):
+                    result = fp_div(deviation, mad)
         self.__baseline.push(close)
         return result
 
@@ -154,7 +162,10 @@ def _batch_robust_z(bars: tuple[BarV1, ...]) -> FixedPointV1 | None:
     mad = baseline.mad()
     if median is None or mad is None or mad.is_zero:
         return None
-    return fp_div(fp_sub(closes[-1], median), mad)
+    deviation = fp_sub(closes[-1], median)
+    if abs(deviation.mantissa) * FIXED_POINT_SCALE > MAX_FIXED_MANTISSA * abs(mad.mantissa):
+        return None
+    return fp_div(deviation, mad)
 
 
 # -- EWMA variance of bar returns -----------------------------------------------------
@@ -177,6 +188,10 @@ class _StreamingEwmaVariance:
         if previous is None:
             return None
         observed = _return_fp(previous, close)
+        if observed is None:
+            self.__mean = None
+            self.__variance = FixedPointV1(0)
+            return None
         mean = self.__mean
         if mean is None:
             self.__mean = observed
@@ -197,6 +212,14 @@ class _StreamingEwmaVariance:
 def _batch_ewma_variance(bars: tuple[BarV1, ...]) -> FixedPointV1 | None:
     closes = [close for close in (_bar_close(bar) for bar in bars) if close is not None]
     if len(closes) < 2 or _bar_close(bars[-1]) is None:
+        return None
+    last_nonpositive = next(
+        (index for index in range(len(closes) - 1, -1, -1) if closes[index] <= 0),
+        None,
+    )
+    if last_nonpositive is not None:
+        closes = closes[last_nonpositive + 1 :]
+    if len(closes) < 2:
         return None
     if len(closes) > MAX_BATCH_POINTS:
         raise ContractValueError("the batch reference is bounded to MAX_BATCH_POINTS closes")
@@ -227,7 +250,10 @@ def _batch_ewma_variance(bars: tuple[BarV1, ...]) -> FixedPointV1 | None:
         # Keep the exact fractions bounded by reducing with a cheap power-of-ten gcd.
         mean_num, mean_den = _reduce(mean_num, mean_den)
         var_num, var_den = _reduce(var_num, var_den)
-    return FixedPointV1(_signed_round(var_num * scale, var_den))
+    mantissa = _signed_round(var_num * scale, var_den)
+    if abs(mantissa) > MAX_FIXED_MANTISSA:
+        return None
+    return FixedPointV1(mantissa)
 
 
 def _reduce(numerator: int, denominator: int) -> tuple[int, int]:

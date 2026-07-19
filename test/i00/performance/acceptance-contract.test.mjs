@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,6 +33,7 @@ import {
   validateIntegrationCandidateReceiptMarkdown,
   validateProofCatalogSealBindingDocuments,
   validateQArchiveInventory,
+  superviseQArchiveChildren,
   validateSealEvidencePathBinding,
   validateWorkingSealPathSet,
   verifyCandidateHeadReportParityRegression,
@@ -449,6 +451,58 @@ test('exact Q donor archive preserves the complete accepted repository root', ()
     sha256: entry.sha256,
   }));
   assert.equal(validateQArchiveInventory(expected, observed).passed, true);
+});
+
+test('Q archive child supervision fails boundedly and tears down the peer', async () => {
+  const child = () => {
+    const process = new EventEmitter();
+    process.exitCode = null;
+    process.signalCode = null;
+    process.kills = [];
+    process.kill = (signal) => {
+      process.kills.push(signal);
+      return true;
+    };
+    return process;
+  };
+
+  const archiveStartFailure = child();
+  const unpackPeer = child();
+  const startFailure = superviseQArchiveChildren({
+    archive: archiveStartFailure,
+    unpack: unpackPeer,
+    timeoutMs: 100,
+    errorText: () => '',
+  });
+  archiveStartFailure.emit('error', Object.assign(new Error('spawn denied'), { code: 'EACCES' }));
+  await assert.rejects(startFailure, /Q_ARCHIVE_EXTRACTION_FAILED/);
+  assert.deepEqual(unpackPeer.kills, ['SIGTERM']);
+
+  const archivePeer = child();
+  const unpackStartFailure = child();
+  const reverseStartFailure = superviseQArchiveChildren({
+    archive: archivePeer,
+    unpack: unpackStartFailure,
+    timeoutMs: 100,
+    errorText: () => '',
+  });
+  unpackStartFailure.emit('error', Object.assign(new Error('spawn denied'), { code: 'EACCES' }));
+  await assert.rejects(reverseStartFailure, /Q_ARCHIVE_EXTRACTION_FAILED/);
+  assert.deepEqual(archivePeer.kills, ['SIGTERM']);
+
+  const stalledArchive = child();
+  const stalledUnpack = child();
+  await assert.rejects(
+    superviseQArchiveChildren({
+      archive: stalledArchive,
+      unpack: stalledUnpack,
+      timeoutMs: 5,
+      errorText: () => '',
+    }),
+    /Q_ARCHIVE_EXTRACTION_TIMEOUT/,
+  );
+  assert.deepEqual(stalledArchive.kills, ['SIGTERM']);
+  assert.deepEqual(stalledUnpack.kills, ['SIGTERM']);
 });
 
 test('validate-only requires an explicit exact candidate SHA', () => {

@@ -45,6 +45,7 @@ class LeakageVerdict(StrEnum):
     ACCEPTED_FOR_COMPARISON = "ACCEPTED_FOR_COMPARISON"
     REJECTED_TEMPORAL_LEAK = "REJECTED_TEMPORAL_LEAK"
     REJECTED_IMPLAUSIBLE_SKILL = "REJECTED_IMPLAUSIBLE_SKILL"
+    REJECTED_UNVERIFIED_SKILL = "REJECTED_UNVERIFIED_SKILL"
     REJECTED_CONTROL_FAILURE = "REJECTED_CONTROL_FAILURE"
     INVALID_INPUT = "INVALID_INPUT"
 
@@ -225,6 +226,16 @@ def _implausible(skill: FixedPointV1, spec: LeakageSpecV1) -> bool:
     return skill.mantissa <= spec.implausible_skill.mantissa
 
 
+def _exceeds_no_skill_band(
+    skill: FixedPointV1,
+    band: NoSkillBandV1,
+    spec: LeakageSpecV1,
+) -> bool:
+    if spec.primary.higher_is_better:
+        return skill.mantissa > band.upper.mantissa
+    return skill.mantissa < band.lower.mantissa
+
+
 def control_probe_ok(band: NoSkillBandV1 | None, probe: MetricValueV1) -> bool:
     """The shuffled-label probe must land inside the measured no-skill envelope."""
 
@@ -281,6 +292,20 @@ def assess_leakage(
         )
 
     band = no_skill_band(samples, predictions, spec)
+    if (
+        band is not None
+        and _exceeds_no_skill_band(measured.value, band, spec)
+        and predictions.lineage is None
+    ):
+        return LeakageAssessmentV1(
+            model_id=predictions.model_id,
+            verdict=LeakageVerdict.REJECTED_UNVERIFIED_SKILL,
+            audit=audit,
+            measured_skill=measured,
+            band=band,
+            shuffled_probe=None,
+            spec=spec,
+        )
     probe_samples = shuffled_labels(samples, seed=spec.band_seed + spec.band_replicates)
     probe_predictions = rebind_predictions(predictions, probe_samples)
     probe = evaluate_primary(spec.primary, probe_samples, probe_predictions)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from fractions import Fraction
 
 import pytest
@@ -48,6 +49,8 @@ CAUSES = CauseSetV1(cause_ids=("X", "Y"))
 HALF = FixedPointV1(FIXED_POINT_SCALE // 2)
 ONE_FP = FixedPointV1(FIXED_POINT_SCALE)
 ZERO_FP = FixedPointV1(0)
+MODEL_ID = "q11.test.model"
+SPLIT_ID = "q11.test.split"
 
 
 def subject(
@@ -95,6 +98,10 @@ def constant_predictions(
     row = tuple(probability for _ in target_grid.times_ns)
     return PredictionSetV1(
         prediction_id="q11.test.constant",
+        cohort_id=target_cohort.cohort_id,
+        model_id=MODEL_ID,
+        target=target_cohort.target,
+        split_id=SPLIT_ID,
         grid=target_grid,
         cause_scope=cause_scope,
         predictions=tuple(
@@ -136,6 +143,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="every grid time"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid=grid(4),
                 cause_scope=ANY_CAUSE,
                 predictions=(prediction,),
@@ -143,6 +154,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="duplicate"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid=grid(4, 6),
                 cause_scope=ANY_CAUSE,
                 predictions=(prediction, prediction),
@@ -150,6 +165,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="grid"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid="grid",  # type: ignore[arg-type]
                 cause_scope=ANY_CAUSE,
                 predictions=(prediction,),
@@ -157,6 +176,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="non-empty"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid=grid(4, 6),
                 cause_scope=ANY_CAUSE,
                 predictions=(),
@@ -164,6 +187,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="SubjectPredictionV1"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid=grid(4, 6),
                 cause_scope=ANY_CAUSE,
                 predictions=("x",),  # type: ignore[arg-type]
@@ -171,6 +198,10 @@ class TestPredictionContracts:
         with pytest.raises(ContractValueError, match="cause_scope"):
             PredictionSetV1(
                 prediction_id="p",
+                cohort_id=HAND_COHORT.cohort_id,
+                model_id=MODEL_ID,
+                target=HAND_COHORT.target,
+                split_id=SPLIT_ID,
                 grid=grid(4, 6),
                 cause_scope="bad scope",
                 predictions=(prediction,),
@@ -181,6 +212,10 @@ class TestPredictionContracts:
     def test_predictions_must_cover_exactly_the_cohort(self) -> None:
         missing = PredictionSetV1(
             prediction_id="p",
+            cohort_id=HAND_COHORT.cohort_id,
+            model_id=MODEL_ID,
+            target=HAND_COHORT.target,
+            split_id=SPLIT_ID,
             grid=HAND_GRID,
             cause_scope=ANY_CAUSE,
             predictions=(SubjectPredictionV1(subject_id="s1", event_probabilities=(HALF, HALF)),),
@@ -212,6 +247,10 @@ class TestBrier:
         }
         prediction_set = PredictionSetV1(
             prediction_id="q11.test.oracle",
+            cohort_id=uncensored.cohort_id,
+            model_id=MODEL_ID,
+            target=uncensored.target,
+            split_id=SPLIT_ID,
             grid=grid(4, 6),
             cause_scope=ANY_CAUSE,
             predictions=tuple(
@@ -323,8 +362,12 @@ class TestBrier:
         with pytest.raises(ContractValueError, match="non-empty"):
             BrierReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
                 points=(),
                 integrated_status=MetricStatus.AVAILABLE,
                 integrated=ZERO_FP,
@@ -333,8 +376,12 @@ class TestBrier:
         with pytest.raises(ContractValueError, match="BrierPointV1"):
             BrierReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
                 points=("x",),  # type: ignore[arg-type]
                 integrated_status=MetricStatus.AVAILABLE,
                 integrated=ZERO_FP,
@@ -343,8 +390,12 @@ class TestBrier:
         with pytest.raises(ContractValueError, match="AVAILABLE integral"):
             BrierReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
                 points=(good_point,),
                 integrated_status=MetricStatus.AVAILABLE,
                 integrated=None,
@@ -353,8 +404,12 @@ class TestBrier:
         with pytest.raises(ContractValueError, match="UNAVAILABLE integral"):
             BrierReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
                 points=(good_point,),
                 integrated_status=MetricStatus.UNAVAILABLE,
                 integrated=ZERO_FP,
@@ -363,8 +418,12 @@ class TestBrier:
         with pytest.raises(ContractValueError, match="integrated_status"):
             BrierReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
                 points=(good_point,),
                 integrated_status="AVAILABLE",  # type: ignore[arg-type]
                 integrated=ZERO_FP,
@@ -378,6 +437,10 @@ class TestConcordance:
     def scores(self, values: dict[str, int]) -> RiskScoreSetV1:
         return RiskScoreSetV1(
             score_id="q11.test.scores",
+            cohort_id="q11.test.metrics",
+            model_id=MODEL_ID,
+            target=SurvivalTarget.TIME_TO_CONVERGENCE,
+            split_id=SPLIT_ID,
             scores=tuple((subject_id, FixedPointV1(value)) for subject_id, value in values.items()),
         )
 
@@ -461,17 +524,49 @@ class TestConcordance:
 
     def test_score_set_contract(self) -> None:
         with pytest.raises(ContractValueError, match="non-empty"):
-            RiskScoreSetV1(score_id="s", scores=())
+            RiskScoreSetV1(
+                score_id="s",
+                cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
+                scores=(),
+            )
         with pytest.raises(ContractValueError, match="duplicate"):
             RiskScoreSetV1(
                 score_id="s",
+                cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 scores=(("s1", ZERO_FP), ("s1", HALF)),
             )
         with pytest.raises(ContractValueError, match="subject_id, score"):
-            RiskScoreSetV1(score_id="s", scores=(("s1",),))  # type: ignore[arg-type]
+            RiskScoreSetV1(
+                score_id="s",
+                cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
+                scores=(("s1",),),  # type: ignore[arg-type]
+            )
         with pytest.raises(ContractValueError, match="FixedPointV1"):
-            RiskScoreSetV1(score_id="s", scores=(("s1", 1),))  # type: ignore[arg-type]
-        scores = RiskScoreSetV1(score_id="s", scores=(("s1", HALF),))
+            RiskScoreSetV1(
+                score_id="s",
+                cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
+                scores=(("s1", 1),),  # type: ignore[arg-type]
+            )
+        scores = RiskScoreSetV1(
+            score_id="s",
+            cohort_id="c",
+            model_id=MODEL_ID,
+            target=SurvivalTarget.TIME_TO_CONVERGENCE,
+            split_id=SPLIT_ID,
+            scores=(("s1", HALF),),
+        )
         assert scores.as_mapping()["scores"] == {
             "s1": {"mantissa": str(FIXED_POINT_SCALE // 2), "scale": str(FIXED_POINT_SCALE)}
         }
@@ -480,6 +575,9 @@ class TestConcordance:
         with pytest.raises(ContractValueError, match="AVAILABLE concordance"):
             ConcordanceReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 score_id="s",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=None,
@@ -493,6 +591,9 @@ class TestConcordance:
         with pytest.raises(ContractValueError, match="UNAVAILABLE concordance"):
             ConcordanceReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 score_id="s",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=None,
@@ -506,6 +607,9 @@ class TestConcordance:
         with pytest.raises(ContractValueError, match="status"):
             ConcordanceReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 score_id="s",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=None,
@@ -587,6 +691,10 @@ class TestCalibration:
         }
         prediction = PredictionSetV1(
             prediction_id="q11.test.split",
+            cohort_id=members.cohort_id,
+            model_id=MODEL_ID,
+            target=members.target,
+            split_id=SPLIT_ID,
             grid=grid(8),
             cause_scope=ANY_CAUSE,
             predictions=tuple(
@@ -603,7 +711,8 @@ class TestCalibration:
         assert report.unavailable_subjects == 2
         assert report.bins[1].status is BinStatus.AVAILABLE
         assert report.evaluated == 2
-        assert report.status is MetricStatus.AVAILABLE
+        assert report.status is MetricStatus.UNAVAILABLE
+        assert report.expected_calibration_error is None
 
     def test_all_bins_unknowable_is_unavailable(self) -> None:
         members = cohort((subject("s1", 2, None),))
@@ -707,6 +816,9 @@ class TestCalibration:
         with pytest.raises(ContractValueError, match="calibration bins"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -719,6 +831,9 @@ class TestCalibration:
         with pytest.raises(ContractValueError, match="dense and ordered"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -731,6 +846,9 @@ class TestCalibration:
         with pytest.raises(ContractValueError, match="CalibrationBinV1"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -750,9 +868,47 @@ class TestCalibration:
             observed=None,
             signed_gap=None,
         )
+        unavailable_bin = CalibrationBinV1(
+            bin_index=0,
+            lower=lower,
+            upper=upper,
+            status=BinStatus.UNAVAILABLE,
+            count=1,
+            mean_predicted=None,
+            observed=None,
+            signed_gap=None,
+        )
+        available_bin = CalibrationBinV1(
+            bin_index=1,
+            lower=upper,
+            upper=make_ratio(1, 1),
+            status=BinStatus.AVAILABLE,
+            count=1,
+            mean_predicted=ZERO_FP,
+            observed=ZERO_FP,
+            signed_gap=ZERO_FP,
+        )
+        with pytest.raises(ContractValueError, match="minimum evaluated support"):
+            CalibrationReportV1(
+                cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
+                prediction_id="p",
+                cause_scope=ANY_CAUSE,
+                horizon_ns=SECOND_NS,
+                bins=(unavailable_bin, available_bin),
+                evaluated=1,
+                unavailable_subjects=1,
+                status=MetricStatus.AVAILABLE,
+                expected_calibration_error=ZERO_FP,
+            )
         with pytest.raises(ContractValueError, match="AVAILABLE report carries"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -765,6 +921,9 @@ class TestCalibration:
         with pytest.raises(ContractValueError, match="UNAVAILABLE report carries"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -777,6 +936,9 @@ class TestCalibration:
         with pytest.raises(ContractValueError, match="status"):
             CalibrationReportV1(
                 cohort_id="c",
+                model_id=MODEL_ID,
+                target=SurvivalTarget.TIME_TO_CONVERGENCE,
+                split_id=SPLIT_ID,
                 prediction_id="p",
                 cause_scope=ANY_CAUSE,
                 horizon_ns=SECOND_NS,
@@ -811,12 +973,16 @@ class TestBudget:
         brier = evaluate_brier(members, prediction)
         scores = RiskScoreSetV1(
             score_id="q11.test.budget.scores",
+            cohort_id=members.cohort_id,
+            model_id=MODEL_ID,
+            target=members.target,
+            split_id=SPLIT_ID,
             scores=tuple(
                 (member.subject_id, FixedPointV1(-member.duration_ns))
                 for member in members.subjects
             ),
         )
-        concordance = evaluate_concordance(members, scores)
+        concordance = evaluate_concordance(members, scores, horizon_ns=6 * SECOND_NS)
         calibration = evaluate_calibration(
             members, prediction, horizon_ns=6 * SECOND_NS, bin_count=4
         )
@@ -829,6 +995,22 @@ class TestBudget:
         )
         assert verdict.verdict is Verdict.PASS
         assert verdict.reasons == ()
+        mismatched_calibrations = (
+            replace(calibration, cohort_id="q11.test.foreign"),
+            replace(calibration, model_id="q11.test.foreign-model"),
+            replace(calibration, target=SurvivalTarget.ACTIONABILITY_WINDOW),
+            replace(calibration, split_id="q11.test.foreign-split"),
+            replace(calibration, cause_scope="X"),
+            replace(calibration, horizon_ns=7 * SECOND_NS),
+        )
+        for mismatched in mismatched_calibrations:
+            with pytest.raises(ContractValueError, match="exact evaluation identity"):
+                judge_survival(
+                    self.BUDGET,
+                    brier=brier,
+                    concordance=concordance,
+                    calibration=mismatched,
+                )
 
     def test_every_fail_reason_is_reachable(self) -> None:
         brier, concordance, calibration = self._reports()
@@ -853,9 +1035,13 @@ class TestBudget:
         # An externally estimated censoring curve may be unavailable; the shape
         # is hand-built because same-cohort IPCW can never produce it.
         unavailable_brier = BrierReportV1(
-            cohort_id="c",
-            prediction_id="p",
+            cohort_id=members.cohort_id,
+            model_id=MODEL_ID,
+            target=members.target,
+            split_id=SPLIT_ID,
+            prediction_id=prediction.prediction_id,
             cause_scope=ANY_CAUSE,
+            horizon_ns=4 * SECOND_NS,
             points=(
                 BrierPointV1(
                     time_ns=SECOND_NS,
@@ -872,7 +1058,15 @@ class TestBudget:
         )
         unavailable_concordance = evaluate_concordance(
             members,
-            RiskScoreSetV1(score_id="s", scores=(("s1", ZERO_FP),)),
+            RiskScoreSetV1(
+                score_id="s",
+                cohort_id=members.cohort_id,
+                model_id=MODEL_ID,
+                target=members.target,
+                split_id=SPLIT_ID,
+                scores=(("s1", ZERO_FP),),
+            ),
+            horizon_ns=4 * SECOND_NS,
         )
         unavailable_calibration = evaluate_calibration(
             members, prediction, horizon_ns=4 * SECOND_NS, bin_count=2
@@ -898,11 +1092,15 @@ class TestBudget:
         brier = evaluate_brier(members, prediction)
         anti_scores = RiskScoreSetV1(
             score_id="q11.test.anti",
+            cohort_id=members.cohort_id,
+            model_id=MODEL_ID,
+            target=members.target,
+            split_id=SPLIT_ID,
             scores=tuple(
                 (member.subject_id, FixedPointV1(member.duration_ns)) for member in members.subjects
             ),
         )
-        concordance = evaluate_concordance(members, anti_scores)
+        concordance = evaluate_concordance(members, anti_scores, horizon_ns=6 * SECOND_NS)
         calibration = evaluate_calibration(
             members, prediction, horizon_ns=6 * SECOND_NS, bin_count=2
         )

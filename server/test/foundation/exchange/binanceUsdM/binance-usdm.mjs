@@ -726,7 +726,23 @@ section('8. bounded input and configuration rejection');
 
 section('9. explicit zero-network proof');
 {
-  check('all harness transports are caller-injected fakes', true);
+  const injected = createHarness();
+  injected.enqueue({ response: response({ serverTime: T0 }) });
+  const result = await injected.client.getServerTime({ correlationId: 'injected-transport-proof' });
+  const request = injected.state.requests[0];
+  check(
+    'caller-injected fake receives the exact server-time request envelope',
+    result.ok &&
+      injected.state.requests.length === 1 &&
+      request.operation === 'SERVER_TIME' &&
+      request.method === 'GET' &&
+      request.path === '/fapi/v1/time' &&
+      request.query === '' &&
+      request.body === null &&
+      Object.keys(request.headers).length === 0 &&
+      request.timeoutMs === 9_000 &&
+      request.idempotent === true,
+  );
   check('module exports no concrete transport constructor', typeof (await import('../../../../dist/foundation/exchange/binanceUsdM/index.js')).BinanceUsdMHttpTransport === 'undefined');
   check('global network call counter remains zero', globalNetworkCalls === 0, `${globalNetworkCalls}`);
 }

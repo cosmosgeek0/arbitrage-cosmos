@@ -40,6 +40,14 @@ DIRECTIVE_INPUT_LOCK_CURRENT_SHA256: Final = (
     "d4bf31826625c2602ebb7ed72194e94a4571f7597a413ca545839f236c7a5a24"
 )
 DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH: Final = 1_757
+PACKAGE_LOCK_ACCEPTED_SHA256: Final = (
+    "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf"
+)
+PACKAGE_LOCK_ACCEPTED_BYTE_LENGTH: Final = 147_793
+PACKAGE_LOCK_CURRENT_SHA256: Final = (
+    "59e4151191058e0bea3c82356e4b90ff84538cc1a62066104f05498d4f60b353"
+)
+PACKAGE_LOCK_CURRENT_BYTE_LENGTH: Final = 147_256
 
 FROZEN_Q_LANE_FILES_SHA256: Final[tuple[tuple[str, str], ...]] = (
     (
@@ -76,7 +84,7 @@ FROZEN_Q_LANE_FILES_SHA256: Final[tuple[tuple[str, str], ...]] = (
     ),
     (
         "package-lock.json",
-        "3c97820f912390fcad3dab57b436319b95c15bc7877384dd98032d7751ec2fcf",
+        PACKAGE_LOCK_ACCEPTED_SHA256,
     ),
 )
 
@@ -1732,24 +1740,40 @@ class FrozenVerificationV1:
         }
 
 
-def require_only_post_acceptance_directive_lock_drift(
+def require_only_declared_post_acceptance_frozen_file_drift(
     report: FrozenVerificationV1,
 ) -> None:
-    """Allow only the exact, declared post-acceptance directive-lock mismatch."""
+    """Allow only the exact, declared post-acceptance frozen-file mismatches."""
 
     if not isinstance(report, FrozenVerificationV1):
         raise SecurityPolicyError("frozen verification report is required")
+    historical = dict(FROZEN_Q_LANE_FILES_SHA256)
+    expected_paths = tuple(sorted(historical))
+    if tuple(item.relative_path for item in report.files) != expected_paths:
+        raise SecurityPolicyError(
+            "frozen report must cover the exact historical acceptance inventory"
+        )
+    if any(item.expected_sha256 != historical[item.relative_path] for item in report.files):
+        raise SecurityPolicyError("frozen report changes a historical acceptance expectation")
     drifted = tuple(item for item in report.files if not item.matches)
-    if len(drifted) != 1:
-        raise SecurityPolicyError("frozen files differ beyond the declared directive-lock drift")
-    lock = drifted[0]
-    if (
-        lock.relative_path != "quant/DIRECTIVE_INPUTS.lock"
-        or lock.expected_sha256 != DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256
-        or lock.observed_sha256 != DIRECTIVE_INPUT_LOCK_CURRENT_SHA256
-        or lock.byte_length != DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH
-    ):
-        raise SecurityPolicyError("directive-lock drift differs from declared current truth")
+    declared = {
+        "package-lock.json": (
+            PACKAGE_LOCK_CURRENT_SHA256,
+            PACKAGE_LOCK_CURRENT_BYTE_LENGTH,
+        ),
+        "quant/DIRECTIVE_INPUTS.lock": (
+            DIRECTIVE_INPUT_LOCK_CURRENT_SHA256,
+            DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH,
+        ),
+    }
+    if {item.relative_path for item in drifted} != set(declared):
+        raise SecurityPolicyError("frozen files differ beyond the declared post-acceptance drift")
+    for item in drifted:
+        observed_sha256, byte_length = declared[item.relative_path]
+        if item.observed_sha256 != observed_sha256 or item.byte_length != byte_length:
+            raise SecurityPolicyError(
+                "post-acceptance frozen-file drift differs from declared current truth"
+            )
 
 
 def verify_frozen_files(

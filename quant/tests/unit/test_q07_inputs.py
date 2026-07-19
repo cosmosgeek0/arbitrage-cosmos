@@ -256,6 +256,29 @@ class TestJoin:
         assert joined[1].event_time_ns == trades.trades[1].event_time_ns
         assert joined[1].ordinal == trades.trades[1].ordinal
 
+        prior = quote(6, 5, bid=9_990)
+        tied = quote(7, 20, bid=10_005)
+        same_time_quotes = TopOfBookSeriesV1(
+            series_id="tob-tie",
+            symbol="BNBUSDT",
+            posture=EvidencePosture.REPLAY,
+            points=(prior, tied),
+        )
+        same_time_trades = TradeSeriesV1(
+            series_id="trades-tie",
+            symbol="BNBUSDT",
+            posture=EvidencePosture.REPLAY,
+            trades=(trade(7, 10), trade(7, 20), trade(7, 30)),
+        )
+
+        tie_joined = join_trades_with_quotes(same_time_trades, same_time_quotes)
+
+        # The global receive order makes the same-event-time quote unavailable
+        # both before its arrival and at an ambiguous exact receive-order tie.
+        assert tie_joined[0].prevailing is prior
+        assert tie_joined[1].prevailing is prior
+        assert tie_joined[2].prevailing is tied
+
     def test_join_contracts(self) -> None:
         quotes = TopOfBookSeriesV1(
             series_id="tob-1",

@@ -37,6 +37,7 @@ from quant_edge.models.contracts import BatteryDisposition, ProbabilitySemantics
 from quant_edge.survival import (
     ANY_CAUSE,
     SubjectPredictionV1,
+    SurvivalTarget,
     TimeGridV1,
 )
 from quant_edge.survival import (
@@ -328,6 +329,10 @@ def _samples() -> SampleSetV1:
 def _survival() -> SurvivalPredictionSetV1:
     return SurvivalPredictionSetV1(
         prediction_id="survival:v1",
+        cohort_id="q12-survival-adapter-cohort:v1",
+        model_id="q12-survival-adapter-model:v1",
+        target=SurvivalTarget.TIME_TO_CONVERGENCE,
+        split_id="q12-survival-adapter-split:v1",
         grid=TimeGridV1("survival-grid:v1", (10, 20)),
         cause_scope=ANY_CAUSE,
         predictions=(

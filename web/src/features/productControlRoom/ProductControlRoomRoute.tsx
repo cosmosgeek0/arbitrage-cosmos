@@ -10,8 +10,8 @@ import { useProductControlRoomContext } from './ProductControlRoomProvider';
 export function ProductControlRoomRoute() {
   const { binding, client } = useProductControlRoomContext();
   const continuityBlocked = binding.continuity !== 'PROVEN';
-  const preview = useCallback((control: Readonly<ProductControlRegistryEntry>) => (
-    client.previewCommand(control.controlId, control.currentStateRevision)
+  const preview = useCallback((control: Readonly<ProductControlRegistryEntry>, signal: AbortSignal) => (
+    client.previewCommand(control.controlId, control.currentStateRevision, signal)
   ), [client]);
   const submit = useCallback((request: Readonly<ProductCommandRequest>) => client.submitCommand(request), [client]);
   const readCommandResult = useCallback((identity: Readonly<ProductCommandResultIdentity>, signal?: AbortSignal) => (

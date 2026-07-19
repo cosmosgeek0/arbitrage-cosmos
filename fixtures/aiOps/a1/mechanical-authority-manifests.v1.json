@@ -1,6 +1,6 @@
 {
   "artifactId": "aiops-mechanical-authority-manifest-set",
-  "contentHash": "02415681e9ef32994c74200833dc1c4980ec38609bf386ce37de30670664d0af",
+  "contentHash": "cc2a924d91a39fe27ba37b545dc1a255076ff1f1620ded8084a2e18483b114a2",
   "createdAtMs": 1784160000000,
   "environment": "SHADOW",
   "owner": "AI_OPS_A1_CONTRACTS",
@@ -1058,7 +1058,7 @@
           ],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [],
           "kind": "RUNBOOK",
@@ -1201,7 +1201,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_ORDER_MUTATION"
@@ -1222,7 +1222,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_FUNDS_MUTATION"
@@ -1243,7 +1243,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_TRADING_CONSTRAINT_MUTATION"
@@ -1264,7 +1264,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_OWNER_GATE_BYPASS"
@@ -1285,7 +1285,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_CREDENTIAL_ACCESS_OR_MUTATION"
@@ -1306,7 +1306,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_SELF_POLICY_MUTATION"
@@ -1327,7 +1327,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_EVIDENCE_OR_HISTORY_MUTATION"
@@ -1348,7 +1348,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_LIVE_CODE_OR_PERSISTENCE_WRITE"
@@ -1369,7 +1369,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_SELF_MERGE_OR_DEPLOY"
@@ -1390,7 +1390,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_SELF_APPROVAL_OR_VERIFICATION"
@@ -1411,7 +1411,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_ARBITRARY_TOOL_OR_IO"
@@ -1432,7 +1432,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_SAFETY_CONTROL_DISABLE"
@@ -1453,7 +1453,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_DUPLICATE_AUTHORITY_CREATION"
@@ -1474,7 +1474,7 @@
           "directDependencyIds": [],
           "evidenceDigest": "cbc523fd18578641f6fcc02a5efb564ac861ca1320fcc189948a0725b41b5195",
           "evidenceDigestAlgorithm": "SHA-256",
-          "evidencePath": "/Users/cosmosgeek/Desktop/POST_I00_EVENT_DRIVEN_AI_OPERATIONS_ACTIVATION.md",
+          "evidencePath": "external-provenance/owner/post-i00-event-driven-ai-operations-activation.md",
           "evidenceRevision": "owner-file-20260714",
           "hardDenialIds": [
             "AI_OPS_DENY_UNTRUSTED_DATA_AS_INSTRUCTION"
@@ -1610,7 +1610,7 @@
             "aiops-source-schemas",
             "aiops-source-shared"
           ],
-          "evidenceDigest": "fda6ee91a4166bd1f69352bfda19618c8e7960106518350d1a2f070f390506d7",
+          "evidenceDigest": "7db28f3343b856b70bdfd1d4c994255d9925e074d349c70acdad44726c637ffd",
           "evidenceDigestAlgorithm": "SHA-256",
           "evidencePath": "server/src/aiOps/manifests/artifacts.ts",
           "evidenceRevision": "PORT_WORKTREE_FROM_492e3f69b054c85686bcfc4c09dbff4ababeda3f",
@@ -2036,14 +2036,14 @@
         "id": "ai-ops-a1-transitive-classifier",
         "version": 1
       },
-      "inputDigest": "b1c5412e3b8223fc9b16f9a798a26e5e982da8aa014724d2f490f39b338c5e0e",
-      "manifestDigest": "6b63a6e198d2e21d3866dba9978ee6730cde20975d02df941121ff383aa8b9a6",
+      "inputDigest": "06b4c07eed088c532732d451406d0199d0b3c25ba74bd8fc415e22a2f1df66c6",
+      "manifestDigest": "8c6dc00f8e0b41fee4e1feeabf335b5ef8ff66f6abf36e0e2514b24c652d4954",
       "operationalAuthorityCreated": false,
       "schema": "AI_OPS_CLASSIFICATION_MANIFEST_V1",
       "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f"
     },
-    "classificationInputDigest": "b1c5412e3b8223fc9b16f9a798a26e5e982da8aa014724d2f490f39b338c5e0e",
-    "classificationManifestDigest": "6b63a6e198d2e21d3866dba9978ee6730cde20975d02df941121ff383aa8b9a6",
+    "classificationInputDigest": "06b4c07eed088c532732d451406d0199d0b3c25ba74bd8fc415e22a2f1df66c6",
+    "classificationManifestDigest": "8c6dc00f8e0b41fee4e1feeabf335b5ef8ff66f6abf36e0e2514b24c652d4954",
     "identityDraft": {
       "branch": "aiops-prestage-20260714",
       "commitSha": "08e0beaa54c4c3ca9c24276785d6a302f751a226",
@@ -2063,7 +2063,7 @@
       "signatureBytesBase64Url": null,
       "signatureState": "OWNER_SIGNATURE_REQUIRED",
       "signedAtMs": null,
-      "signedPayloadDigest": "8db3075eb11f45505c51f874f291adbb273d5c24daa66bea36c55556e289bbb8",
+      "signedPayloadDigest": "e58344a32e37344df1466b5281fc1da0df91e42c877887443035b674d330827c",
       "signerIdentityId": null,
       "signerRole": "AI_OPS_OWNER"
     },
@@ -2978,7 +2978,7 @@
     "shadowA1SealedSha": "83c1624d4a582eace27321182de35c372babbc1a",
     "sourceRevision": "492e3f69b054c85686bcfc4c09dbff4ababeda3f",
     "state": "SHADOW_SPECULATIVE",
-    "unsignedPayloadDigest": "8db3075eb11f45505c51f874f291adbb273d5c24daa66bea36c55556e289bbb8"
+    "unsignedPayloadDigest": "e58344a32e37344df1466b5281fc1da0df91e42c877887443035b674d330827c"
   },
   "provenance": {
     "acceptedS6Revision": "97e87bd7045d2883ef8c4bd3cdb7f5daf83e0437",

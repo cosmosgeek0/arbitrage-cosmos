@@ -15,6 +15,7 @@ import { PillSelect } from '../components/PillSelect';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
+import { parseNotificationCursor } from '../lib/notificationCursor';
 import { notificationEnabled, type CuratedNotification } from '../lib/notifications';
 import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
@@ -47,6 +48,9 @@ const FILTERS: { id: NotificationFilter; label: string; configured?: boolean }[]
   { id: 'health', label: 'Bot Health' },
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
+
+export { NOTIFICATION_ARCHIVE_LIMIT, retainNotificationArchive };
+export type { NotificationArchiveState };
 
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
@@ -123,13 +127,14 @@ function statusLabel(item: CuratedNotification): string {
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
+  const notificationFeed = useNotificationFeed();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
   const [query, setQuery] = useState('');
   const [selectedDay, setSelectedDay] = useState('active');
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [draftRules, setDraftRules] = useState<NotificationRules>(() => prefs.alerts);
-  const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [seen, setSeen] = useState(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const [routingReadback, setRoutingReadback] = useState<RoutingSnapshot>(EMPTY_ROUTING);
   const [routingFailed, setRoutingFailed] = useState(false);
 

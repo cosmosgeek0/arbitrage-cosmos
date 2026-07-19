@@ -1,11 +1,12 @@
 """Exact-current Q00-Q17 component inventory for the final Q-lane proof.
 
-The manifest is a projection of already accepted receipts and artifacts.  It does
-not ask Git what is current at runtime and it does not infer acceptance from a
-directory merely existing.  Commit identities are pinned constants; accepted
-phase references, the current Q17 task and every accepted package tree are
-reverified from current regular, non-symlink bytes.  Q17 activation-task metadata
-is explicitly historical and is never relabeled as the current task reference.
+The manifest projects accepted receipts and artifacts alongside explicitly
+unaccepted current correction bytes.  It does not ask Git what is current at
+runtime and it does not infer acceptance from a directory merely existing.
+Commit identities and historical acceptance seals remain pinned constants;
+current Q17 task and correction bytes are reverified from regular, non-symlink
+paths.  Q17 activation-task metadata is explicitly historical and is never
+relabeled as the current task reference.
 """
 
 from __future__ import annotations
@@ -386,8 +387,8 @@ _Q16_RB13_SERVICE_SPEC: Final = _ArtifactSpec(
 # historical phase identities or receipts.  The original accepted source and
 # evidence pins above remain immutable.  ``fix_commits`` is populated only for
 # prior correction commits whose identities are already embedded; the Bucket-D
-# fixes carry stable directive references while exact commit verification is
-# pending.
+# and final-hunt fixes carry stable correction/directive references while exact
+# commit verification is pending.
 _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = {
     "Q02": _PostAcceptanceCorrectionSpec(
         "MONEY_TRUTH_Q02_INSTRUMENT_UNIT_IDENTITY",
@@ -555,6 +556,145 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
         None,
         (),
         ("RB13_QUANT_INFERENCE_WORKER_ISOLATION", "Q-070"),
+    ),
+    "Q06": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q06_NUMERICAL_DOMAIN_BOUNDS",
+        _SourceSpec(
+            "quant/src/quant_edge/features",
+            "src/quant_edge/features",
+            9,
+            "67f64bffa5319cb2ac17245b8a744a0a057fdc57ce112cfc244c16e1a5fc18dd",
+        ),
+        None,
+        (),
+        ("QUANT_HUNT_19",),
+    ),
+    "Q07": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q07_CROSS_STREAM_ORDERING",
+        _SourceSpec(
+            "quant/src/quant_edge/micro",
+            "src/quant_edge/micro",
+            7,
+            "f7e0cdf5790fef4b0d0b552195822d716b5d7544687e91ff1837ad5ec19d7c2f",
+        ),
+        _ArtifactSpec(
+            "q07.final-hunt-micro-golden.v1",
+            "quant/fixtures/q07_micro_golden_v1.json",
+            26_326,
+            "6b5ad2e2b43b3574240ae649eaede07962cb67963359b5df2ab685022acd580c",
+            "application/json",
+            "Q07MicroGoldenFixtureV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_09",),
+    ),
+    "Q09": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q09_TRUTH_AND_NUMERICAL_BOUNDS",
+        _SourceSpec(
+            "quant/src/quant_edge/regime",
+            "src/quant_edge/regime",
+            13,
+            "2592c0abccec3dfb510a0755fda9d7858c974890a768de5940fff1b0b109075a",
+        ),
+        None,
+        (),
+        ("QUANT_HUNT_08", "QUANT_HUNT_10", "QUANT_HUNT_19"),
+    ),
+    "Q11": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q11_SURVIVAL_SUPPORT_AND_IDENTITY",
+        _SourceSpec(
+            "quant/src/quant_edge/survival",
+            "src/quant_edge/survival",
+            8,
+            "5d9d0e2c918e82c3b2b4670ee3e11f06df81c1def9677b1babd46813586fef47",
+        ),
+        _ArtifactSpec(
+            "q11.final-hunt-survival-campaign.v1",
+            "quant/generated/q11/survival_campaign.v1.json",
+            18_709,
+            "6d35ef2d42d627c1cf3a95a7ca77be50daea64655c8366d46b0382f59a9582c1",
+            "application/json",
+            "Q11SurvivalCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_13", "QUANT_HUNT_14"),
+    ),
+    "Q12": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q12_SPLIT_AND_PREDICTION_LINEAGE",
+        _SourceSpec(
+            "quant/src/quant_edge/ensemble",
+            "src/quant_edge/ensemble",
+            7,
+            "284a22a9f71849c8485c3b1b933d544eaa87cef2159b8a35033f4b78af4dd87e",
+        ),
+        _ArtifactSpec(
+            "q12.final-hunt-ensemble-campaign.v1",
+            "quant/generated/q12/ensemble_campaign.v1.json",
+            2_376,
+            "3230b579cf7d8262761591209bad5dbc024214a3cd5c5fd22fff82e72c3f9863",
+            "application/json",
+            "Q12EnsembleCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_07", "Q12_LINEAGE_CASCADE_FROM_QUANT_HUNT_01"),
+    ),
+    "Q14": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q14_VALIDATION_TRUTH",
+        _SourceSpec(
+            "quant/src/quant_edge/validation",
+            "src/quant_edge/validation",
+            12,
+            "5f537f1bbdaed1f88e726fce58dfb05f13d0050bb990b318ac71e4a21eee804f",
+        ),
+        None,
+        (),
+        (
+            "QUANT_HUNT_01",
+            "QUANT_HUNT_03",
+            "QUANT_HUNT_04",
+            "QUANT_HUNT_07",
+            "QUANT_HUNT_12",
+        ),
+    ),
+    "Q15": _PostAcceptanceCorrectionSpec(
+        "FINAL_HUNT_Q15_REGISTRY_EXACTNESS",
+        _SourceSpec(
+            "quant/src/quant_edge/registry_ops",
+            "src/quant_edge/registry_ops",
+            7,
+            "0e7a58f1298b2b2cfe67c0ac00dad8f41f14eba9e654a2862c7f7b3ccdb6b6cf",
+        ),
+        _ArtifactSpec(
+            "q15.final-hunt-registry-campaign.v1",
+            "quant/generated/q15/registry_campaign.v1.json",
+            4_425,
+            "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d",
+            "application/json",
+            "Q15RegistryCampaignV1",
+            1,
+        ),
+        (),
+        ("QUANT_HUNT_11", "QUANT_HUNT_21"),
+    ),
+    "Q16": _PostAcceptanceCorrectionSpec(
+        "Q16_CUMULATIVE_POST_ACCEPTANCE_CORRECTION",
+        _SourceSpec(
+            "quant/src/quant_edge/inference",
+            "src/quant_edge/inference",
+            8,
+            "b16710dfdeaf1d2792d0b62d2805f91c425ce4db5c9f13a6a4282f74b407a20d",
+        ),
+        None,
+        (),
+        (
+            "RB13_QUANT_INFERENCE_WORKER_ISOLATION",
+            "QUANT_HUNT_20",
+            "QUANT_HUNT_21",
+            "Q16_REGENERATION_CASCADE_FROM_Q12_CURRENT_EVIDENCE",
+        ),
     ),
 }
 

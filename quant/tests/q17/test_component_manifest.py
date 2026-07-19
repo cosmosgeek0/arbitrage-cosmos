@@ -367,6 +367,205 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             list[str], row["limitations"]
         )
 
+    final_hunt_expectations: dict[int, dict[str, object]] = {
+        6: {
+            "correctionId": "FINAL_HUNT_Q06_NUMERICAL_DOMAIN_BOUNDS",
+            "correctionRefs": ["QUANT_HUNT_19"],
+            "currentPrimaryBytes": 5_486,
+            "currentPrimarySha256": (
+                "06c81655ebb61a6311f29f7964d99b6d4dca94d7a1f8c2416d922fda3fcbabb3"
+            ),
+            "currentSourceSha256": (
+                "67f64bffa5319cb2ac17245b8a744a0a057fdc57ce112cfc244c16e1a5fc18dd"
+            ),
+            "historicalPrimarySha256": (
+                "06c81655ebb61a6311f29f7964d99b6d4dca94d7a1f8c2416d922fda3fcbabb3"
+            ),
+            "historicalSourceSha256": (
+                "c005edec4d0e3ec20263a8c026fca15620e918bc06f6304b3fe528d7707c5d3e"
+            ),
+        },
+        7: {
+            "correctionId": "FINAL_HUNT_Q07_CROSS_STREAM_ORDERING",
+            "correctionRefs": ["QUANT_HUNT_09"],
+            "currentPrimaryBytes": 26_326,
+            "currentPrimarySha256": (
+                "6b5ad2e2b43b3574240ae649eaede07962cb67963359b5df2ab685022acd580c"
+            ),
+            "currentSourceSha256": (
+                "f7e0cdf5790fef4b0d0b552195822d716b5d7544687e91ff1837ad5ec19d7c2f"
+            ),
+            "historicalPrimarySha256": (
+                "d8308437461b8d6aebd3814ef91044208255f34290ff9d260b167b21723f4ce3"
+            ),
+            "historicalSourceSha256": (
+                "cd50265ea4e986b32c07f5766b1de3b904a28a136450af8888f7712e36a65798"
+            ),
+        },
+        9: {
+            "correctionId": "FINAL_HUNT_Q09_TRUTH_AND_NUMERICAL_BOUNDS",
+            "correctionRefs": ["QUANT_HUNT_08", "QUANT_HUNT_10", "QUANT_HUNT_19"],
+            "currentPrimaryBytes": 1_505,
+            "currentPrimarySha256": (
+                "897660948b868b564558b227d32fe65359b4c7f24ce17357e4eb4d4ade69737a"
+            ),
+            "currentSourceSha256": (
+                "2592c0abccec3dfb510a0755fda9d7858c974890a768de5940fff1b0b109075a"
+            ),
+            "historicalPrimarySha256": (
+                "897660948b868b564558b227d32fe65359b4c7f24ce17357e4eb4d4ade69737a"
+            ),
+            "historicalSourceSha256": (
+                "89b8e3747755f595d6adbb2a94e4c0d88b4eb0882a3ec5fec240a8dac3a697ae"
+            ),
+        },
+        11: {
+            "correctionId": "FINAL_HUNT_Q11_SURVIVAL_SUPPORT_AND_IDENTITY",
+            "correctionRefs": ["QUANT_HUNT_13", "QUANT_HUNT_14"],
+            "currentPrimaryBytes": 18_709,
+            "currentPrimarySha256": (
+                "6d35ef2d42d627c1cf3a95a7ca77be50daea64655c8366d46b0382f59a9582c1"
+            ),
+            "currentSourceSha256": (
+                "5d9d0e2c918e82c3b2b4670ee3e11f06df81c1def9677b1babd46813586fef47"
+            ),
+            "historicalPrimarySha256": (
+                "091a8d9e646cb879d49f0788cb88edc803caa73ac866028245a3e46529c18ac0"
+            ),
+            "historicalSourceSha256": (
+                "0f635f5e6f3924fc6f0e071dfd82b49a724b06b4163cfc6a1b0e214e2963642c"
+            ),
+        },
+        12: {
+            "correctionId": "FINAL_HUNT_Q12_SPLIT_AND_PREDICTION_LINEAGE",
+            "correctionRefs": [
+                "QUANT_HUNT_07",
+                "Q12_LINEAGE_CASCADE_FROM_QUANT_HUNT_01",
+            ],
+            "currentPrimaryBytes": 2_376,
+            "currentPrimarySha256": (
+                "3230b579cf7d8262761591209bad5dbc024214a3cd5c5fd22fff82e72c3f9863"
+            ),
+            "currentSourceSha256": (
+                "284a22a9f71849c8485c3b1b933d544eaa87cef2159b8a35033f4b78af4dd87e"
+            ),
+            "historicalPrimarySha256": (
+                "ad9d9b1f6ba9ffe3fc59450075f5221792f6c900403775f6820e2da763c28bb2"
+            ),
+            "historicalSourceSha256": (
+                "0e933737922c1d6255b90e1be275bdd47f34318e239d549caf051246fa8c449d"
+            ),
+        },
+        14: {
+            "correctionId": "FINAL_HUNT_Q14_VALIDATION_TRUTH",
+            "correctionRefs": [
+                "QUANT_HUNT_01",
+                "QUANT_HUNT_03",
+                "QUANT_HUNT_04",
+                "QUANT_HUNT_07",
+                "QUANT_HUNT_12",
+            ],
+            "currentPrimaryBytes": 2_322,
+            "currentPrimarySha256": (
+                "a0522034a97c2676d4af31c7b22c10412ebb06a115df4de72f307081b23d9f87"
+            ),
+            "currentSourceSha256": (
+                "5f537f1bbdaed1f88e726fce58dfb05f13d0050bb990b318ac71e4a21eee804f"
+            ),
+            "historicalPrimarySha256": (
+                "a0522034a97c2676d4af31c7b22c10412ebb06a115df4de72f307081b23d9f87"
+            ),
+            "historicalSourceSha256": (
+                "8c4482643582c9e9fbd7be3bd470c4d106717955bd10ad80854df9314e6b7356"
+            ),
+        },
+        15: {
+            "correctionId": "FINAL_HUNT_Q15_REGISTRY_EXACTNESS",
+            "correctionRefs": ["QUANT_HUNT_11", "QUANT_HUNT_21"],
+            "currentPrimaryBytes": 4_425,
+            "currentPrimarySha256": (
+                "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d"
+            ),
+            "currentSourceSha256": (
+                "0e7a58f1298b2b2cfe67c0ac00dad8f41f14eba9e654a2862c7f7b3ccdb6b6cf"
+            ),
+            "historicalPrimarySha256": (
+                "24debb2a96b91338d937b67878c75be2ef38615880c9c0ad8cd30590ac0bd11b"
+            ),
+            "historicalSourceSha256": (
+                "ccb0a8dd86e8b6548728d11bb3b28db29ce0e3e8e6d3288653375ef4d39af262"
+            ),
+        },
+        16: {
+            "correctionId": "Q16_CUMULATIVE_POST_ACCEPTANCE_CORRECTION",
+            "correctionRefs": [
+                "RB13_QUANT_INFERENCE_WORKER_ISOLATION",
+                "QUANT_HUNT_20",
+                "QUANT_HUNT_21",
+                "Q16_REGENERATION_CASCADE_FROM_Q12_CURRENT_EVIDENCE",
+            ],
+            "currentPrimaryBytes": 2_798,
+            "currentPrimarySha256": (
+                "10d4a858ac08c29b03ab3df6476b7eb6830359581d00791a229ccd765b369329"
+            ),
+            "currentSourceSha256": (
+                "b16710dfdeaf1d2792d0b62d2805f91c425ce4db5c9f13a6a4282f74b407a20d"
+            ),
+            "historicalPrimarySha256": (
+                "10d4a858ac08c29b03ab3df6476b7eb6830359581d00791a229ccd765b369329"
+            ),
+            "historicalSourceSha256": (
+                "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"
+            ),
+        },
+    }
+    for index, hunt_expected in final_hunt_expectations.items():
+        row = rows[index]
+        correction = cast(dict[str, object], row["postAcceptanceCorrection"])
+        current_primary = cast(dict[str, object], correction["currentPrimaryEvidence"])
+        current_source = cast(dict[str, object], correction["currentSourceRoot"])
+        provenance = cast(dict[str, object], correction["currentBytesProvenance"])
+        source_root = cast(dict[str, object], row["sourceRoot"])
+        evidence_refs = cast(list[dict[str, object]], row["evidenceRefs"])
+
+        assert correction["acceptanceState"] == "NOT_ACCEPTED"
+        assert correction["correctionId"] == hunt_expected["correctionId"]
+        assert correction["historicalReceipts"] == "DOES_NOT_ATTEST_CORRECTED_BYTES"
+        assert correction["implementationCommit"] == components.PENDING
+        assert correction["implementationTree"] == components.PENDING
+        assert correction["verificationState"] == ("PENDING_INDEPENDENT_EXACT_COMMIT_VERIFICATION")
+        assert provenance == {
+            "correctionRefs": hunt_expected["correctionRefs"],
+            "identityPosture": "CURRENT_BYTES_PINNED_EXACT_COMMIT_PENDING",
+        }
+        assert source_root["sha256"] == hunt_expected["historicalSourceSha256"]
+        assert evidence_refs[2]["sha256"] == hunt_expected["historicalPrimarySha256"]
+        assert (
+            correction["historicalAcceptedPrimaryEvidenceSha256"]
+            == hunt_expected["historicalPrimarySha256"]
+        )
+        assert current_source["sha256"] == hunt_expected["currentSourceSha256"]
+        assert current_primary["bytes"] == hunt_expected["currentPrimaryBytes"]
+        assert current_primary["sha256"] == hunt_expected["currentPrimarySha256"]
+        current_primary_raw = (REPO_ROOT / cast(str, current_primary["path"])).read_bytes()
+        assert current_primary["bytes"] == len(current_primary_raw)
+        assert current_primary["sha256"] == hashlib.sha256(current_primary_raw).hexdigest()
+        dispositions = cast(list[str], row["dispositions"])
+        assert f"Q{index:02}_POST_ACCEPTANCE_CORRECTION_IMPLEMENTED" in dispositions
+        assert "CURRENT_CORRECTED_BYTES_NOT_ACCEPTED" in dispositions
+        assert "NOT_ACCEPTED" in dispositions
+        assert "EXACT_COMMIT_ACCEPTED" not in dispositions
+        assert "CURRENT_BYTES_VERIFIED" not in dispositions
+        assert row["evidencePosture"] == (
+            "HISTORICAL_ACCEPTANCE_WITH_POST_ACCEPTANCE_CORRECTION_PENDING"
+        )
+        assert cast(dict[str, object], row["evidenceSeal"])["status"] == (
+            "HISTORICAL_RECEIPT_BYTES_VERIFIED_CORRECTION_NOT_ATTESTED"
+        )
+        assert f"POST_ACCEPTANCE_CORRECTION_NOT_ATTESTED_BY_Q{index:02}_RECEIPTS" in cast(
+            list[str], row["limitations"]
+        )
+
     assert rows[16]["implementationState"] == (
         "CORRECTION_IMPLEMENTED_PENDING_INDEPENDENT_VERIFICATION"
     )
@@ -697,6 +896,52 @@ def test_current_byte_tamper_symlink_and_source_inventory_fail_closed(
         target.write_bytes(b"native")
     else:
         target.write_bytes(target.read_bytes() + b"\n")
+
+    with pytest.raises(ComponentManifestError):
+        build_component_manifest(mirror)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "quant/src/quant_edge/features/primitives.py",
+        "quant/src/quant_edge/micro/inputs.py",
+        "quant/src/quant_edge/regime/analog.py",
+        "quant/src/quant_edge/survival/metrics.py",
+        "quant/src/quant_edge/ensemble/stacking.py",
+        "quant/src/quant_edge/validation/leakage.py",
+        "quant/src/quant_edge/registry_ops/store.py",
+        "quant/src/quant_edge/inference/artifacts.py",
+    ],
+)
+def test_final_hunt_current_source_pins_reject_tamper(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    mirror = _component_mirror(tmp_path)
+    target = mirror / relative_path
+    target.write_bytes(target.read_bytes() + b"\n")
+
+    with pytest.raises(ComponentManifestError, match="source bytes changed"):
+        build_component_manifest(mirror)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "quant/fixtures/q07_micro_golden_v1.json",
+        "quant/generated/q11/survival_campaign.v1.json",
+        "quant/generated/q12/ensemble_campaign.v1.json",
+        "quant/generated/q15/registry_campaign.v1.json",
+    ],
+)
+def test_final_hunt_current_primary_evidence_pins_reject_tamper(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    mirror = _component_mirror(tmp_path)
+    target = mirror / relative_path
+    target.write_bytes(target.read_bytes() + b"\n")
 
     with pytest.raises(ComponentManifestError):
         build_component_manifest(mirror)

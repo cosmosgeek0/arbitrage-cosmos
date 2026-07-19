@@ -184,6 +184,9 @@ def build_campaign(
                 "shadowBatchSha256": batch.content_digest.hexdigest,
                 "shadowComparison": comparison.as_mapping(),
                 "shadowComparisonSha256": comparison.content_digest.hexdigest,
+                "shadowEvaluationCounts": store.shadow_evaluation_counts(
+                    initial.slot_id
+                ).as_mapping(),
                 "transitionCount": store.transition_count(initial.slot_id),
                 "version": 1,
             }

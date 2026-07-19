@@ -4,13 +4,14 @@
    — all straight from Binance endpoints, one template for every token, with
    honest spot-only fallbacks. The second base row is reserved (owner). */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lucide-react';
+import { FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lucide-react';
 import { useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
 import { PillSelect } from '../components/PillSelect';
 import { normalizeTvCandles, type TvCandle } from '../components/TradingViewChart';
 import { TradingViewWidget } from '../components/TradingViewWidget';
 import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
+import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import {
@@ -24,6 +25,7 @@ import {
 } from '../lib/tokenIntelligence';
 import { IconClose, IconMaximize } from '../components/Icons';
 import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
+import { formatClockZone } from '../lib/time';
 import { tokenName } from '../lib/tokenNames';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { MarketRow } from '../types';
@@ -126,11 +128,10 @@ interface FuturesTelemetry {
   takerFlow: FuturesTakerFlowPoint[];
 }
 
-interface TimedCache<T> { value: T; updatedAt: number }
-
-const tokenCandleCache = new Map<string, TimedCache<TvCandle[]>>();
-const moneyFlowCache = new Map<string, TimedCache<MoneyFlow>>();
-const positioningCache = new Map<string, TimedCache<FuturesTelemetry>>();
+const TOKEN_DATA_CACHE_TTL_MS = 5 * 60_000;
+const tokenCandleCache = new BoundedTtlCache<string, TvCandle[]>({ maxEntries: 64, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
+const moneyFlowCache = new BoundedTtlCache<string, MoneyFlow>({ maxEntries: 32, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
+const positioningCache = new BoundedTtlCache<string, FuturesTelemetry>({ maxEntries: 32, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
 
 function nonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -199,7 +200,7 @@ function Chg({ pct, children }: { pct: number | null | undefined; children?: Rea
 }
 
 /** The Coinbase chart: smooth line over a dotted area fill, axis right. */
-function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: boolean }) {
+function PriceChart({ points, up, clockZone }: { points: { t: number; v: number }[]; up: boolean; clockZone: string }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [chartWidth, setChartWidth] = useState(1080);
   useEffect(() => {
@@ -255,14 +256,13 @@ function PriceChart({ points, up }: { points: { t: number; v: number }[]; up: bo
     const times = Array.from({ length: 7 }, (_, i) => points[Math.round((i / 6) * (points.length - 1))].t);
     const spanMs = points[points.length - 1].t - points[0].t;
     const timeFmt = (t: number) => {
-      const dte = new Date(t);
-      if (spanMs < 864e5 * 2) return dte.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      if (spanMs < 864e5 * 400) return dte.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      return dte.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      if (spanMs < 864e5 * 2) return formatClockZone(t, clockZone, { hour: 'numeric', minute: '2-digit' });
+      if (spanMs < 864e5 * 400) return formatClockZone(t, clockZone, { month: 'short', day: 'numeric' });
+      return formatClockZone(t, clockZone, { month: 'short', year: '2-digit' });
     };
     const last = xy[xy.length - 1];
     return { d, area, ticks, y, times, timeFmt, last };
-  }, [H, W, points]);
+  }, [H, W, clockZone, points]);
 
   if (!model) return <div className="tdx-chart-empty">Waiting For Candles…</div>;
   const stroke = up ? 'var(--up)' : 'var(--down)';
@@ -298,9 +298,14 @@ function fmtFull(v: number, dec = 2): string {
   return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-function tipTime(t: number): string {
-  const d = new Date(t);
-  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+function tipTime(t: number, clockZone: string): string {
+  return formatClockZone(t, clockZone, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).replace(',', '');
 }
 
 function ChartTip({ x, w, title, rows }: { x: number; w: number; title: string; rows: { dot: string; label: string; value: string }[] }) {
@@ -343,14 +348,14 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
 
   useEffect(() => {
     const key = `${symbol}:${win}`;
-    setFlow(moneyFlowCache.get(key)?.value ?? null);
+    setFlow(moneyFlowCache.get(key) ?? null);
     setFlowError(null);
     const poll = createSettledPoll<MoneyFlow>({
       intervalMs: 60_000,
       request: (signal) => fetchJson(`/api/token/moneyflow?symbol=${symbol}&window=${win}`, { signal }),
       onSuccess: (next) => {
         if (!validMoneyFlow(next, symbol)) throw new Error('Money-flow payload is invalid');
-        moneyFlowCache.set(key, { value: next, updatedAt: Date.now() });
+        moneyFlowCache.set(key, next);
         setFlow(next);
         setFlowError(null);
       },
@@ -552,7 +557,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
       return;
     }
     const key = `${symbol}:${period}`;
-    setTelemetry(positioningCache.get(key)?.value ?? null);
+    setTelemetry(positioningCache.get(key) ?? null);
     setTelemetryError(null);
     const poll = createSettledPoll<FuturesTelemetry>({
       intervalMs: 60_000,
@@ -565,7 +570,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
           !Array.isArray(next.takerFlow) ||
           !validTelemetry(next, symbol)
         ) throw new Error('Positioning payload is invalid');
-        positioningCache.set(key, { value: next, updatedAt: Date.now() });
+        positioningCache.set(key, next);
         setTelemetry(next);
         setTelemetryError(null);
       },
@@ -813,9 +818,8 @@ interface IntelDataset {
   liqSince: number | null;
 }
 
-const intelCache = new Map<string, TimedCache<IntelDataset>>();
+const intelCache = new BoundedTtlCache<string, IntelDataset>({ maxEntries: 64, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
 const intelInflight = new Map<string, Promise<IntelDataset>>();
-const INTEL_CACHE_MS = 5 * 60_000;
 
 const intelKey = (symbol: string, tab: IntelTab, opt: string, hasPerp: boolean) =>
   `${symbol}:${hasPerp ? 'perp' : 'spot'}:${tab}:${opt}`;
@@ -877,18 +881,18 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
 function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, force = false, signal?: AbortSignal): Promise<IntelDataset> {
   const key = intelKey(symbol, tab, opt, hasPerp);
   const cached = intelCache.get(key);
-  if (!force && cached && Date.now() - cached.updatedAt < INTEL_CACHE_MS) return Promise.resolve(cached.value);
+  if (!force && cached) return Promise.resolve(cached);
   const pending = intelInflight.get(key);
-  // Only unowned warm-up requests are shared. A request carrying a component
+  // Only requests without a component owner are shared. A request carrying a
   // AbortSignal belongs to that poll generation and must never be reused by a
   // later tab/symbol generation after its owner aborts.
   if (!signal && pending) return pending;
   const request = fetchIntelDataset(symbol, tab, opt, hasPerp, signal)
     .then((value) => {
-      // An upstream warm-up failure must not become a five-minute blank chart.
+      // An upstream empty response must not become a five-minute blank chart.
       // Liquidations are the exception: an empty live bucket is valid data.
       if (value.points.length > 0 || tab === 'liq') {
-        intelCache.set(key, { value, updatedAt: Date.now() });
+        intelCache.set(key, value);
       }
       return value;
     })
@@ -916,7 +920,7 @@ const INTEL_TITLE: Record<IntelTab, string> = {
 
 function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterest }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterest: TokenIntelligenceRead['openInterest'] | null }) {
   const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
-  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp))?.value;
+  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp));
   const [tab, setTab] = useState<IntelTab>(initialTab);
   const [opt, setOpt] = useState(INTEL_DEFAULT[initialTab]);
   const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null });
@@ -941,7 +945,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
 
   useEffect(() => {
     const key = intelKey(symbol, tab, opt, hasPerp);
-    const cached = intelCache.get(key)?.value;
+    const cached = intelCache.get(key);
     if (cached) {
       setDataset(cached);
       setLoading(false);
@@ -990,7 +994,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
 
   const switchTab = (next: IntelTab) => {
     const nextOpt = INTEL_DEFAULT[next];
-    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp))?.value;
+    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp));
     if (cached) {
       setDataset(cached);
       setLoading(false);
@@ -1168,13 +1172,13 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
               ))}
               {(tab === 'funding' || tab === 'liq' || tab === 'basis') && <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
               <path d={model.priceLine} fill="none" stroke="#F0B90B" strokeWidth="1.2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-              {model.times.map((index) => <text key={`t${index}`} x={model.xi(index)} y={H - 8} textAnchor="middle" className="tdx-axis">{new Date(points[index].t).toLocaleDateString('en-US', points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}</text>)}
+              {model.times.map((index) => <text key={`t${index}`} x={model.xi(index)} y={H - 8} textAnchor="middle" className="tdx-axis">{formatClockZone(points[index].t, clockZone, points[points.length - 1].t - points[0].t > 300 * 864e5 ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' })}</text>)}
             </svg>
             {activePoint && mouse && (
               <ChartTip
                 x={mouse.x}
                 w={wrapRef.current?.clientWidth ?? W}
-                title={tipTime(activePoint.t)}
+                title={tipTime(activePoint.t, clockZone)}
                 rows={[
                   ...(tab === 'liq'
                     ? [
@@ -1190,7 +1194,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
           <div className="tdx-legend">
             {tab === 'liq' ? <><span><i className="sw" style={{ background: 'var(--down)' }} />Long Liquidations</span><span><i className="sw" style={{ background: 'var(--up)' }} />Short Liquidations</span></> : <span><i className="sw" style={{ background: 'var(--accent)', opacity: 0.8 }} />{INTEL_TITLE[tab]}</span>}
             <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
-            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {new Date(liqSince).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
+            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
           </div>
         </>
       )}
@@ -1509,7 +1513,7 @@ function ProfilePanel({ profile, base }: { profile: TokenProfile | null; base: s
 }
 
 export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, toggleWatch, setPage, openDetail } = useStore();
+  const { markets, state, prefs, toggleWatch, setPage, openDetail } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -1556,7 +1560,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   useEffect(() => {
     const { interval, limit } = effective;
     const cacheKey = `${symbol}:${src}:${interval}:${limit}`;
-    setCandles(tokenCandleCache.get(cacheKey)?.value ?? []);
+    setCandles(tokenCandleCache.get(cacheKey) ?? []);
     setCandleError(null);
     // The same-origin public-source owner hydrates and periodically reconciles
     // history. The browser never opens a second exchange transport.
@@ -1569,7 +1573,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           setCandleError('Candle source returned no usable rows.');
           return;
         }
-        tokenCandleCache.set(cacheKey, { value: next, updatedAt: Date.now() });
+        tokenCandleCache.set(cacheKey, next);
         setCandles(next);
         setCandleError(null);
       },
@@ -1894,10 +1898,10 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </div>
           </div>
           {tv ? (
-            <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={390} />
+            <TradingViewWidget symbol={tvSymbol} win={tvInterval} clockZone={prefs.clockZone} height={390} />
           ) : (
             <div className="tdx-line-frame">
-              <PriceChart points={points} up={up} />
+              <PriceChart points={points} up={up} clockZone={prefs.clockZone} />
               {candleError ? <p className="tdx-updated" role="status">{candles.length ? 'Candle refresh unavailable · showing the last verified series.' : candleError}</p> : null}
             </div>
           )}
@@ -1919,7 +1923,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             </span>
             <button type="button" aria-label="Close Full Chart" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setChartFocus(false); }}><IconClose size={17} /></button>
           </div>
-          <TradingViewWidget symbol={tvSymbol} win={tvInterval} height={Math.round(window.innerHeight * 0.78)} />
+          <TradingViewWidget symbol={tvSymbol} win={tvInterval} clockZone={prefs.clockZone} height={Math.round(window.innerHeight * 0.78)} />
         </div>
       )}
     </div>

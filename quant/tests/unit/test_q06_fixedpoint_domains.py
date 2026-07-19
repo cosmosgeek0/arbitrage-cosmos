@@ -19,6 +19,7 @@ from quant_edge.features.fixedpoint import (
     FIXED_POINT_SCALE,
     FP_ONE,
     FP_ZERO,
+    MAX_FIXED_MANTISSA,
     FixedPointV1,
     fp_abs,
     fp_add,
@@ -241,6 +242,51 @@ class TestBarSpecs:
                 volume_aligned_total=None,
                 complete="yes",  # type: ignore[arg-type]
             )
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("first_value_aligned", True),
+            ("first_value_aligned", -(MAX_FIXED_MANTISSA * 10**26) - 1),
+            ("last_value_aligned", (MAX_FIXED_MANTISSA * 10**26) + 1),
+            ("volume_aligned_total", -1),
+            ("volume_aligned_total", (MAX_FIXED_MANTISSA * 10**26) + 1),
+        ],
+    )
+    def test_bar_rejects_invalid_or_unbounded_numeric_facts(
+        self,
+        field: str,
+        value: int,
+    ) -> None:
+        facts: dict[str, object] = {
+            "index": 0,
+            "start_ns": BASE_NS,
+            "end_ns": BASE_NS + 1,
+            "point_count": 1,
+            "first_value_aligned": 1,
+            "last_value_aligned": 1,
+            "volume_aligned_total": 0,
+            "complete": True,
+        }
+        facts[field] = value
+
+        with pytest.raises(ContractValueError, match=field):
+            BarV1(**facts)  # type: ignore[arg-type]
+
+    def test_bar_accepts_bounded_signed_feature_values(self) -> None:
+        bar = BarV1(
+            index=0,
+            start_ns=BASE_NS,
+            end_ns=BASE_NS + 1,
+            point_count=1,
+            first_value_aligned=-1,
+            last_value_aligned=0,
+            volume_aligned_total=0,
+            complete=True,
+        )
+
+        assert bar.first_value_aligned == -1
+        assert bar.last_value_aligned == 0
 
 
 class TestBarBuilding:

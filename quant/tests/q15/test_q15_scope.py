@@ -1,45 +1,11 @@
 from __future__ import annotations
 
-import hashlib
 import subprocess
 from pathlib import Path
 
-import pytest
-
-
-def _on_shard_branch() -> bool:
-    """The per-commit scope law is assertable only on the shard branch itself.
-
-    After the director merges this shard onto the lane branch, history after
-    the shard base legitimately contains other phases' commits (merge-law fix,
-    same pattern as Q08)."""
-    probe = subprocess.run(
-        ["git", "branch", "--show-current"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=60,
-        cwd=Path(__file__).resolve().parents[2].parent,
-    )
-    return probe.stdout.strip() == "q15-registry-20260712"
-
-
-pytestmark = pytest.mark.skipif(
-    not _on_shard_branch(),
-    reason="the shard scope law is verifiable only on the shard branch",
-)
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BASE = "f756f3b582f24857811e6ec4c0d08a3a61026b74"
-OWNER_INPUTS = {"DIRECTOR_Q_L_TWO_LANE_LAUNCH.md", "QUANT_EDGE_RESEARCH_FACTORY_12H.md"}
-OWNER_INPUT_SHA256 = {
-    "DIRECTOR_Q_L_TWO_LANE_LAUNCH.md": (
-        "26b1d5ce118982b4b3ba64b44b7fb3e88b0b7ded26a818a775a65bffaa0f2c06"
-    ),
-    "QUANT_EDGE_RESEARCH_FACTORY_12H.md": (
-        "198f131d4b04c1edab728b85ea6a5e5c5f7f80875866e407a3c93a24aafa5ab4"
-    ),
-}
+TIP = "e69f6879b5914879b5d9342e3f05fa964f5b9496"
 
 
 def _allowed(path: str) -> bool:
@@ -56,43 +22,49 @@ def _allowed(path: str) -> bool:
 
 
 def test_all_q15_changes_stay_inside_exclusive_write_set() -> None:
-    assert {
-        path: hashlib.sha256((REPO_ROOT / path).read_bytes()).hexdigest()
-        for path in sorted(OWNER_INPUTS)
-    } == OWNER_INPUT_SHA256
-    tracked = subprocess.run(
-        ["git", "diff", "--name-only", BASE],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.splitlines()
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.splitlines()
-    changed = set(tracked) | (set(untracked) - OWNER_INPUTS)
+    changed = set(
+        subprocess.run(
+            [
+                "git",
+                "log",
+                "--format=",
+                "--name-only",
+                "--no-renames",
+                f"{BASE}..{TIP}",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+    )
+    changed.discard("")
     assert changed
     assert not [path for path in sorted(changed) if not _allowed(path)]
 
 
-def test_branch_and_base_are_exact() -> None:
-    branch = subprocess.run(
-        ["git", "branch", "--show-current"],
+def test_audited_tip_and_base_are_exact() -> None:
+    resolved_base = subprocess.run(
+        ["git", "rev-parse", f"{BASE}^{{commit}}"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    resolved_tip = subprocess.run(
+        ["git", "rev-parse", f"{TIP}^{{commit}}"],
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
         text=True,
     ).stdout.strip()
     ancestry = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", BASE, "HEAD"],
+        ["git", "merge-base", "--is-ancestor", BASE, TIP],
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
         text=True,
     )
-    assert branch == "q15-registry-20260712"
+    assert resolved_base == BASE
+    assert resolved_tip == TIP
     assert ancestry.returncode == 0

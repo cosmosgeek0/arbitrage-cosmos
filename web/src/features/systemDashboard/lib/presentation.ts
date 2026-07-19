@@ -19,6 +19,33 @@ export type Tone = 'ok' | 'warn' | 'bad' | 'idle';
 
 export const UNKNOWN_TEXT = 'UNKNOWN';
 
+export type ExposureVerdict = Readonly<{
+  kind: 'ACTIVE' | 'NONE' | 'UNKNOWN';
+  count: number | null;
+  amount: string | null;
+}>;
+
+/** Exposure is tri-state. Absence is proven only by explicit zero count and amount. */
+export function exposureVerdict(
+  reportedCount: number | null,
+  reportedAmount: string | null,
+): ExposureVerdict {
+  const count = Number.isInteger(reportedCount) && reportedCount !== null && reportedCount >= 0
+    ? reportedCount
+    : null;
+  const parsedAmount = reportedAmount === null || reportedAmount.trim() === ''
+    ? null
+    : Number.parseFloat(reportedAmount.replaceAll(',', ''));
+  const amount = parsedAmount !== null && Number.isFinite(parsedAmount) && parsedAmount >= 0
+    ? reportedAmount
+    : null;
+  if ((count !== null && count > 0) || (parsedAmount !== null && parsedAmount > 0)) {
+    return { kind: 'ACTIVE', count, amount };
+  }
+  if (count === 0 && parsedAmount === 0) return { kind: 'NONE', count, amount };
+  return { kind: 'UNKNOWN', count, amount };
+}
+
 /** The full managed-component set the owner expects on the machine graph.
  *  A member absent from a snapshot renders as an explicit MISSING box. */
 export const EXPECTED_COMPONENTS: SystemComponentId[] = [
@@ -114,6 +141,44 @@ export function freshnessText(verdict: FreshnessVerdict): string {
   if (verdict.kind === 'UNKNOWN') return UNKNOWN_TEXT;
   if (verdict.ageMs === null) return verdict.kind;
   return `${verdict.kind} · ${millisecondsText(verdict.ageMs)}`;
+}
+
+/** Publisher readiness is only current-ready when its supporting evidence is
+ * complete, fresh, and available. Synthetic and replay labels remain valid
+ * known truth modes; UNKNOWN and UNAVAILABLE never count as ready. */
+export function isComponentCurrentReady(component: SystemComponentSnapshot): boolean {
+  return component.readiness === 'READY'
+    && component.completeness === 'COMPLETE'
+    && freshnessOf(component).kind === 'FRESH'
+    && component.truthLabel !== 'UNKNOWN'
+    && component.truthLabel !== 'UNAVAILABLE';
+}
+
+export type ReconciliationVerdict = 'BLOCKED' | 'CLEAR' | 'UNKNOWN';
+
+/** A false blocking flag is not proof of convergence. Green requires the
+ *  matching component to be current and complete plus an exact evaluated
+ *  CONVERGED summary on available truth. */
+export function reconciliationVerdict(
+  snapshot: SystemSupervisorSnapshot,
+): ReconciliationVerdict {
+  const reconciliation = snapshot.summaries.reconciliation;
+  if (reconciliation.blocksNewExposure) return 'BLOCKED';
+  const component = snapshot.components.find(({ componentId }) => componentId === 'reconciliation');
+  const evaluatedAtMs = reconciliation.evaluatedAtMs;
+  const evaluated = evaluatedAtMs !== null
+    && Number.isFinite(evaluatedAtMs)
+    && evaluatedAtMs > 0
+    && evaluatedAtMs <= snapshot.evaluatedAtMs;
+  const available = reconciliation.truthLabel !== 'UNAVAILABLE'
+    && reconciliation.truthLabel !== 'UNKNOWN';
+  const current = component !== undefined
+    && component.readiness === 'READY'
+    && component.completeness === 'COMPLETE'
+    && freshnessOf(component).kind === 'FRESH';
+  return reconciliation.status === 'CONVERGED' && evaluated && available && current
+    ? 'CLEAR'
+    : 'UNKNOWN';
 }
 
 // ---------------------------------------------------------------------------

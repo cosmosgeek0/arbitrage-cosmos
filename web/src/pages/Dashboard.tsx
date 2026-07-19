@@ -21,6 +21,7 @@ import { TokenIcon } from '../components/TokenIcon';
 import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
+import { formatClockZone } from '../lib/time';
 import { useStore, type Page } from '../store';
 import { fmtMoney, fmtPrice, signClass, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
@@ -161,7 +162,7 @@ function Metric({ label, value, detail, tone = 'idle' }: { label: string; value:
 }
 
 export function Dashboard() {
-  const { state, setPage } = useStore();
+  const { state, stateStatus, stateLastSuccessAtMs, stateError, prefs, setPage } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const [refreshTick, setRefreshTick] = useState(0);
   const [range, setRange] = useState<RangeId>('1M');
@@ -378,6 +379,14 @@ export function Dashboard() {
           </div>
         </header>
 
+        {stateStatus !== 'CURRENT' && (
+          <div className="dcx-state-truth" role="alert">
+            {stateStatus === 'STALE' ? 'STALE LAST-KNOWN' : 'UNAVAILABLE'} · Compatibility state
+            {stateLastSuccessAtMs === null ? ' has no successful read.' : ` last succeeded ${timeAgo(stateLastSuccessAtMs)}.`}
+            {stateError ? ` ${stateError}` : ''}
+          </div>
+        )}
+
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric
             label="Account Value"
@@ -506,7 +515,7 @@ export function Dashboard() {
             <div className="dcx-decision-list">
               {recentDecisions.length ? recentDecisions.map((event) => (
                 <button type="button" key={event.id} onClick={() => open('ledger')}>
-                  <span className="dcx-decision-time">{new Date(event.ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                  <span className="dcx-decision-time">{formatClockZone(event.ts, prefs.clockZone, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }, 'en-GB')}</span>
                   <StatusMark tone={eventTone(event)} />
                   <span className="dcx-decision-source"><b>{strategyLabel(event)}</b><small>{event.symbol ?? 'System'}</small></span>
                   <span className="dcx-decision-message">{decisionMessage(event)}</span>

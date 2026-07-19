@@ -247,10 +247,13 @@ def test_analog_retrieval_never_leaks_future_or_overlap(
             feature_id="window-v1",
             start_ns=BASE_NS + hours * HOUR_NS - 4 * SECOND_NS,
             end_ns=BASE_NS + hours * HOUR_NS,
+            outcome_start_ns=BASE_NS + hours * HOUR_NS,
+            outcome_end_ns=BASE_NS + hours * HOUR_NS + SECOND_NS,
+            label_available_ns=BASE_NS + hours * HOUR_NS + 2 * SECOND_NS,
             values=tuple(FixedPointV1((500 + delta) * HUNDREDTH) for delta in deltas),
             outcome_label="UNKNOWN",
             completeness=QualityState.SYNTHETIC,
-            event_id=None,
+            event_id=f"event-{index:02d}",
         )
         for index, (hours, deltas) in enumerate(raw_records)
     )
@@ -268,14 +271,19 @@ def test_analog_retrieval_never_leaks_future_or_overlap(
             FixedPointV1(520 * HUNDREDTH),
             FixedPointV1(480 * HUNDREDTH),
         ),
-        event_id=None,
+        event_id="event-query",
     )
     retrieval = retrieve_analogs(query, records, k=k)
     horizon = query.cutoff_ns - query.embargo_ns
-    end_by_id = {record.record_id: record.end_ns for record in records}
+    record_by_id = {record.record_id: record for record in records}
     for neighbor in retrieval.neighbors:
+        record = record_by_id[neighbor.record_id]
         assert neighbor.end_ns <= horizon
-        assert end_by_id[neighbor.record_id] <= query.start_ns
+        assert record.end_ns <= query.start_ns
+        assert record.label_available_ns <= horizon
+        assert record.event_id is not None
+        assert query.event_id is not None
+        assert record.event_id != query.event_id
     counted = sum(count for _, count in retrieval.exclusion_counts)
     assert counted + retrieval.cohort_size == len(records)
 

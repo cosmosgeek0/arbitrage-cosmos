@@ -6,7 +6,7 @@ import warnings
 import pytest
 
 from quant_edge.errors import ContractValueError
-from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, MAX_FIXED_MANTISSA, FixedPointV1
 from quant_edge.labels.rational import make_ratio
 from quant_edge.lake.contracts import QualityState
 from quant_edge.models.quantize import quantize_binary64
@@ -328,9 +328,12 @@ def _observation(
     index: int,
     hundredths: int,
     quality: QualityState = QualityState.SYNTHETIC,
+    *,
+    event_time_index: int | None = None,
 ) -> ObservationV1:
     return ObservationV1(
-        event_time_ns=BASE_NS + index * SECOND_NS,
+        event_time_ns=BASE_NS
+        + (index if event_time_index is None else event_time_index) * SECOND_NS,
         ordinal=index,
         value=FixedPointV1(hundredths * HUNDREDTH),
         quality=quality,
@@ -590,6 +593,8 @@ class TestSoftRegimeFilter:
         regime_filter.update(_observation(0, 1_000))
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
             regime_filter.update(_observation(0, 1_000))
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            regime_filter.update(_observation(1, 1_000, event_time_index=-1))
 
     def test_warmup_keeps_uniform_posterior(self) -> None:
         regime_filter = SoftRegimeFilter(_tiny_spec())
@@ -764,6 +769,8 @@ class TestRobustAnomalyScorer:
         scorer.update(_observation(0, 1_000))
         with pytest.raises(ContractValueError, match="ordinal-ordered"):
             scorer.update(_observation(0, 1_000))
+        with pytest.raises(ContractValueError, match="event-time-ordered"):
+            scorer.update(_observation(1, 1_000, event_time_index=-1))
 
     def test_warmup_then_scores_and_flags_spikes_with_persistence(self) -> None:
         scorer = self._scorer()
@@ -802,6 +809,31 @@ class TestRobustAnomalyScorer:
         assert step.exceeds
         assert step.score is None
         assert step.reasons == (AnomalyReason.ZERO_MAD_DEVIATION,)
+
+    def test_near_zero_mad_extreme_deviation_is_bounded_surprise(self) -> None:
+        scorer = self._scorer(window=3)
+        for index, mantissa in enumerate((-1, 0, 1)):
+            scorer.update(
+                ObservationV1(
+                    event_time_ns=BASE_NS + index * SECOND_NS,
+                    ordinal=index,
+                    value=FixedPointV1(mantissa),
+                    quality=QualityState.SYNTHETIC,
+                )
+            )
+
+        step = scorer.update(
+            ObservationV1(
+                event_time_ns=BASE_NS + 3 * SECOND_NS,
+                ordinal=3,
+                value=FixedPointV1(MAX_FIXED_MANTISSA),
+                quality=QualityState.SYNTHETIC,
+            )
+        )
+
+        assert step.exceeds
+        assert step.score is None
+        assert step.reasons == (AnomalyReason.THRESHOLD_EXCEEDED,)
 
     def test_stale_suppresses_and_gap_resets(self) -> None:
         scorer = self._scorer()

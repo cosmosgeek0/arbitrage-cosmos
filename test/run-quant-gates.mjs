@@ -29,32 +29,7 @@ const MAX_CAPTURE_BYTES = 2 * 1024 * 1024;
 const EXPECTED_PYTEST_FILES = 163;
 const EXPECTED_PYTEST_TESTS = 3_209;
 
-const ALLOWED_SKIPS = new Map([
-  [
-    'tests/q08/test_q08_scope.py::test_the_shard_base_commit_is_an_ancestor',
-    'the shard scope law is verifiable only inside the shard git worktree',
-  ],
-  [
-    'tests/q08/test_q08_scope.py::test_every_commit_after_the_shard_base_stays_inside_the_allowlist',
-    'the shard scope law is verifiable only inside the shard git worktree',
-  ],
-  [
-    'tests/q08/test_q08_scope.py::test_frozen_paths_are_byte_identical_to_the_shard_base',
-    'the shard scope law is verifiable only inside the shard git worktree',
-  ],
-  [
-    'tests/q08/test_q08_scope.py::test_the_worktree_holds_no_staged_out_of_scope_change',
-    'the shard scope law is verifiable only inside the shard git worktree',
-  ],
-  [
-    'tests/q15/test_q15_scope.py::test_all_q15_changes_stay_inside_exclusive_write_set',
-    'the shard scope law is verifiable only on the shard branch',
-  ],
-  [
-    'tests/q15/test_q15_scope.py::test_branch_and_base_are_exact',
-    'the shard scope law is verifiable only on the shard branch',
-  ],
-]);
+const ALLOWED_SKIPS = new Map();
 
 function executable(candidate) {
   if (!candidate) return null;

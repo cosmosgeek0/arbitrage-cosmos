@@ -772,6 +772,35 @@ class ShadowScoreBatchV1:
 
 
 @dataclass(frozen=True, slots=True)
+class ShadowEvaluationCountsV1:
+    slot_id: str
+    evaluation_unit_count: int
+    distinct_event_count: int
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.slot_id, field="slot_id")
+        evaluation_units = require_strict_int(
+            self.evaluation_unit_count,
+            field="evaluation_unit_count",
+            minimum=0,
+        )
+        distinct_events = require_strict_int(
+            self.distinct_event_count,
+            field="distinct_event_count",
+            minimum=0,
+        )
+        if distinct_events > evaluation_units:
+            raise ContractValueError("distinct event count cannot exceed evaluation units")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "distinctEventCount": self.distinct_event_count,
+            "evaluationUnitCount": self.evaluation_unit_count,
+            "slotId": self.slot_id,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ShadowComparisonV1:
     comparison_id: str
     slot_id: str

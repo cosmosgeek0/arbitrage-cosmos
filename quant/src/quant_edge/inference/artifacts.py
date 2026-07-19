@@ -282,8 +282,8 @@ EXPECTED_SHA256: Final[dict[str, str]] = {
     ),
     "q12.ensemble-golden.v1": "88382d291f6d0ddb4443888df80ce1d03bc893790ca746d13237b23b58d2bb77",
     "q13.data-sufficiency.v1": "126e27674a99f18accfc21638cbb5bdb1d1bda0f563a03284a7e4ad75665365d",
-    "q15.registry-campaign.v1": "24debb2a96b91338d937b67878c75be2ef38615880c9c0ad8cd30590ac0bd11b",
-    "q15.registry-cards.v1": "0457f22f9b713955f654d99b7dcfe9795d84c71c7ec8baf5a927e007d5a08fb5",
+    "q15.registry-campaign.v1": "1b93c4ce93d3fa0dee57ff1a38bfec78363921b2173dac0a6db642d46f1ad82d",
+    "q15.registry-cards.v1": "88554771ed8f570721bf55c2a28ef8fa5370c3ec34bcfcbf191763d3aed6e844",
     "q16.dependency-lock.v1": "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29",
 }
 
@@ -311,7 +311,7 @@ EXPECTED_BYTES: Final[dict[str, int]] = {
     "q07.source.point-process.v1": 27_092,
     "q12.ensemble-golden.v1": 153_049,
     "q13.data-sufficiency.v1": 1_813,
-    "q15.registry-campaign.v1": 4_322,
+    "q15.registry-campaign.v1": 4_425,
     "q15.registry-cards.v1": 16_676,
     "q16.dependency-lock.v1": 123_424,
 }

@@ -132,6 +132,17 @@ function numberOrDash(value: number | null | undefined, digits = 1): string {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(digits) : '—';
 }
 
+export function windowCountLabel(
+  windowMetric: WindowMetric | undefined,
+  countKey: 'tradeCount' | 'largeTradeCount',
+  suffix = '',
+): string {
+  const count = windowMetric?.[countKey];
+  return typeof count === 'number' && Number.isInteger(count) && count >= 0
+    ? `${count}${suffix}`
+    : 'UNKNOWN';
+}
+
 function titleCase(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -387,7 +398,7 @@ export function VolumeScanner() {
                     <span><em>1m</em><strong>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
                   </span>
                   <span className="volx-tape" role="cell">
-                    <strong>{countLabel(five?.tradeCount)} Trades</strong>
+                    <strong>{windowCountLabel(five, 'tradeCount', ' Trades')}</strong>
                     <small>{ratioLabel(row.takerBuyRatio)} · {fmtMoney(five?.avgTradeSize ?? null)} Avg</small>
                   </span>
                   <span className="volx-quality" role="cell">
@@ -415,11 +426,11 @@ export function VolumeScanner() {
                     <dl className="volx-facts">
                       <div><dt>Baseline</dt><dd>{row.baseline.samples}/{snapshot.thresholds.baselineMinutes} min</dd></div>
                       <div><dt>Normal Volume</dt><dd>{fmtMoney(row.baseline.quotePerMinMedian)}/min</dd></div>
-                      <div><dt>1s Trades</dt><dd>{countLabel(one?.tradeCount)}</dd></div>
+                      <div><dt>1s Trades</dt><dd>{windowCountLabel(one, 'tradeCount')}</dd></div>
                       <div><dt>5s Trade Multiple</dt><dd>{multiple(row.tradeCountMultiple['5s'])}</dd></div>
                       <div><dt>Average Trade</dt><dd>{fmtMoney(five?.avgTradeSize ?? null)}</dd></div>
                       <div><dt>Taker Aggression</dt><dd>{ratioLabel(row.takerBuyRatio)}</dd></div>
-                      <div><dt>Large Trades · 1m</dt><dd>{countLabel(minute?.largeTradeCount)}</dd></div>
+                      <div><dt>Large Trades · 1m</dt><dd>{windowCountLabel(minute, 'largeTradeCount')}</dd></div>
                       <div><dt>Depth Score</dt><dd>{numberOrDash(row.depthScore, 2)}</dd></div>
                       <div><dt>Depth Vs Norm</dt><dd>{row.depthVsNorm === null ? '—' : Math.round(row.depthVsNorm * 100) + '%'}</dd></div>
                       <div><dt>Focus Reason</dt><dd>{row.focusReason ? titleCase(row.focusReason) : 'Not Focused'}</dd></div>

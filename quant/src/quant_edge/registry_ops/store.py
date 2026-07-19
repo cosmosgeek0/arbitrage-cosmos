@@ -51,6 +51,7 @@ from quant_edge.registry_ops.contracts import (
     RetirementRecordV1,
     ServingPosture,
     ShadowComparisonV1,
+    ShadowEvaluationCountsV1,
     ShadowScoreBatchV1,
     TransitionKind,
     ValidationBindingV1,
@@ -86,7 +87,9 @@ from quant_edge.survival.passive_fill import (
     fit_passive_fill_challenger,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+_PREVIOUS_SCHEMA_VERSION = 1
+_MICROS_PER_UNIT = 1_000_000
 
 
 class RegistryError(QuantEdgeError):
@@ -102,6 +105,69 @@ class RegistryIntegrityError(RegistryError):
 
 
 FaultHook = Callable[[CommitStage], None]
+EvaluationUnitKey = tuple[str, str, str, int, int]
+
+
+def _evaluation_unit_key(batch: dict[str, object]) -> EvaluationUnitKey:
+    try:
+        slot_id = require_contract_id(batch["slotId"], field="slot_id")
+        event_id = require_contract_id(batch["eventId"], field="event_id")
+        target_id = require_contract_id(batch["targetId"], field="target_id")
+        horizon_ms = require_strict_int(
+            _mapping_int(batch, "horizonMs"),
+            field="horizon_ms",
+            minimum=1,
+        )
+        champion_generation = require_strict_int(
+            _mapping_int(batch, "championGeneration"),
+            field="champion_generation",
+            minimum=1,
+        )
+    except (KeyError, ValueError, QuantEdgeError) as error:
+        raise RegistryIntegrityError("shadow evaluation unit identity is malformed") from error
+    return slot_id, event_id, target_id, horizon_ms, champion_generation
+
+
+def _verify_evaluation_unit_binding(
+    connection: sqlite3.Connection,
+    *,
+    batch_id: str,
+    expected: EvaluationUnitKey,
+) -> None:
+    row = connection.execute(
+        "SELECT slot_id,event_id,target_id,horizon_ms,champion_generation "
+        "FROM shadow_evaluation_units WHERE batch_id=?",
+        (batch_id,),
+    ).fetchone()
+    if row is None:
+        raise RegistryIntegrityError("shadow evaluation unit binding is absent")
+    observed = (
+        str(row["slot_id"]),
+        str(row["event_id"]),
+        str(row["target_id"]),
+        int(row["horizon_ms"]),
+        int(row["champion_generation"]),
+    )
+    if observed != expected:
+        raise RegistryIntegrityError("shadow evaluation unit binding is corrupt")
+
+
+def _derive_exact_brier_comparison(
+    champion_squared_errors: list[int],
+    challenger_squared_errors: list[int],
+) -> tuple[int, int, str]:
+    if not champion_squared_errors or len(champion_squared_errors) != len(
+        challenger_squared_errors
+    ):
+        raise RegistryIntegrityError("shadow comparison metric support is inconsistent")
+    champion_exact_sum = sum(champion_squared_errors)
+    challenger_exact_sum = sum(challenger_squared_errors)
+    # Every row has the same probability scale: rank exact numerators, then project once.
+    display_denominator = len(champion_squared_errors) * _MICROS_PER_UNIT
+    champion_metric_micros = champion_exact_sum // display_denominator
+    challenger_metric_micros = challenger_exact_sum // display_denominator
+    verdict = "PASS" if challenger_exact_sum < champion_exact_sum else "FAIL"
+    return champion_metric_micros, challenger_metric_micros, verdict
 
 
 def _require_reason(value: object, *, field: str) -> str:
@@ -411,8 +477,9 @@ def _verify_persisted_shadow_lineage(
     ):
         raise RegistryIntegrityError("shadow comparison lineage lists are malformed")
     observed_feedback: list[str] = []
-    champion_losses: list[int] = []
-    challenger_losses: list[int] = []
+    champion_squared_errors: list[int] = []
+    challenger_squared_errors: list[int] = []
+    evaluation_units: set[EvaluationUnitKey] = set()
     for batch_id in batch_ids:
         if not isinstance(batch_id, str):
             raise RegistryIntegrityError("shadow batch identity is malformed")
@@ -423,6 +490,15 @@ def _verify_persisted_shadow_lineage(
         if row is None or row["feedback_id"] is None:
             raise RegistryIntegrityError("mature shadow batch lineage is absent")
         batch = parse_canonical_object(bytes(row["body"]))
+        evaluation_unit = _evaluation_unit_key(batch)
+        _verify_evaluation_unit_binding(
+            connection,
+            batch_id=batch_id,
+            expected=evaluation_unit,
+        )
+        if evaluation_unit in evaluation_units:
+            raise RegistryIntegrityError("shadow comparison repeats an evaluation unit")
+        evaluation_units.add(evaluation_unit)
         feedback_row = connection.execute(
             "SELECT body_sha,body FROM feedback WHERE feedback_id=?",
             (row["feedback_id"],),
@@ -493,12 +569,13 @@ def _verify_persisted_shadow_lineage(
             raise RegistryIntegrityError("shadow metric values are not digest-bound")
         champion_error = cast(int, champion_score) - cast(int, outcome)
         challenger_error = cast(int, challenger_score) - cast(int, outcome)
-        champion_losses.append((champion_error * champion_error) // 1_000_000)
-        challenger_losses.append((challenger_error * challenger_error) // 1_000_000)
+        champion_squared_errors.append(champion_error * champion_error)
+        challenger_squared_errors.append(challenger_error * challenger_error)
         observed_feedback.append(str(feedback_row["body_sha"]))
-    derived_champion = sum(champion_losses) // len(champion_losses)
-    derived_challenger = sum(challenger_losses) // len(challenger_losses)
-    derived_verdict = "PASS" if derived_challenger < derived_champion else "FAIL"
+    derived_champion, derived_challenger, derived_verdict = _derive_exact_brier_comparison(
+        champion_squared_errors,
+        challenger_squared_errors,
+    )
     if (
         sorted(observed_feedback) != sorted(str(value) for value in feedback_hashes)
         or comparison.get("metricId") != "brier_loss_micros:v1"
@@ -824,6 +901,16 @@ class ResearchRegistryStore:
                 matures_at_ms INTEGER NOT NULL,
                 feedback_id TEXT
             ) STRICT;
+            CREATE TABLE IF NOT EXISTS shadow_evaluation_units(
+                slot_id TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                horizon_ms INTEGER NOT NULL,
+                champion_generation INTEGER NOT NULL,
+                batch_id TEXT NOT NULL UNIQUE,
+                PRIMARY KEY(slot_id,event_id,target_id,horizon_ms,champion_generation),
+                FOREIGN KEY(batch_id) REFERENCES shadow_batches(batch_id)
+            ) STRICT;
             CREATE TABLE IF NOT EXISTS feedback(
                 feedback_id TEXT PRIMARY KEY,
                 batch_id TEXT NOT NULL UNIQUE,
@@ -947,8 +1034,56 @@ class ResearchRegistryStore:
                 "INSERT INTO registry_meta(key, value) VALUES('schema_version', ?)",
                 (str(SCHEMA_VERSION),),
             )
+        elif row["value"] == str(_PREVIOUS_SCHEMA_VERSION):
+            self._migrate_shadow_evaluation_units(connection)
         elif row["value"] != str(SCHEMA_VERSION):
             raise RegistryIntegrityError("unsupported registry schema version")
+
+    @staticmethod
+    def _migrate_shadow_evaluation_units(connection: sqlite3.Connection) -> None:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            rows = connection.execute(
+                "SELECT batch_id,body_sha,body FROM shadow_batches ORDER BY batch_id"
+            ).fetchall()
+            for row in rows:
+                batch = parse_canonical_object(bytes(row["body"]))
+                if (
+                    bytes(row["body"]) != canonical_json_bytes(batch)
+                    or mapping_digest(batch).hexdigest != row["body_sha"]
+                ):
+                    raise RegistryIntegrityError(
+                        "persisted shadow batch is corrupt during schema migration"
+                    )
+                slot_id, event_id, target_id, horizon_ms, generation = _evaluation_unit_key(batch)
+                connection.execute(
+                    "INSERT INTO shadow_evaluation_units("
+                    "slot_id,event_id,target_id,horizon_ms,champion_generation,batch_id"
+                    ") VALUES(?,?,?,?,?,?)",
+                    (
+                        slot_id,
+                        event_id,
+                        target_id,
+                        horizon_ms,
+                        generation,
+                        row["batch_id"],
+                    ),
+                )
+            connection.execute(
+                "UPDATE registry_meta SET value=? WHERE key='schema_version'",
+                (str(SCHEMA_VERSION),),
+            )
+            connection.execute("COMMIT")
+        except sqlite3.IntegrityError as error:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise RegistryIntegrityError(
+                "legacy registry contains duplicate shadow evaluation units"
+            ) from error
+        except BaseException:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
 
     def _begin(self, hook: FaultHook | None) -> sqlite3.Connection:
         connection = self._require_open()
@@ -1993,6 +2128,11 @@ class ResearchRegistryStore:
                     or bytes(existing["body"]) != body
                 ):
                     raise RegistryConflictError("shadow batch idempotency key conflicts")
+                _verify_evaluation_unit_binding(
+                    connection,
+                    batch_id=batch.batch_id,
+                    expected=_evaluation_unit_key(batch.as_mapping()),
+                )
                 self._finish(connection, None)
                 return batch.content_digest
             current = self._current(batch.slot_id)
@@ -2022,6 +2162,17 @@ class ResearchRegistryStore:
                     raise RegistryConflictError(
                         "shadow prediction is not an exact compatible challenger"
                     )
+            evaluation_unit = _evaluation_unit_key(batch.as_mapping())
+            duplicate = connection.execute(
+                "SELECT batch_id FROM shadow_evaluation_units WHERE "
+                "slot_id=? AND event_id=? AND target_id=? AND horizon_ms=? "
+                "AND champion_generation=?",
+                evaluation_unit,
+            ).fetchone()
+            if duplicate is not None:
+                raise RegistryConflictError(
+                    "shadow evaluation unit is already bound to another batch"
+                )
             connection.execute(
                 "INSERT INTO shadow_batches(batch_id,body_sha,body,slot_id,event_id,target_id,"
                 "horizon_ms,matures_at_ms) VALUES(?,?,?,?,?,?,?,?)",
@@ -2036,6 +2187,17 @@ class ResearchRegistryStore:
                     batch.matures_at_ms,
                 ),
             )
+            try:
+                connection.execute(
+                    "INSERT INTO shadow_evaluation_units("
+                    "slot_id,event_id,target_id,horizon_ms,champion_generation,batch_id"
+                    ") VALUES(?,?,?,?,?,?)",
+                    (*evaluation_unit, batch.batch_id),
+                )
+            except sqlite3.IntegrityError as error:
+                raise RegistryConflictError(
+                    "shadow evaluation unit is already bound to another batch"
+                ) from error
             self._finish(connection, None)
             return batch.content_digest
         except BaseException:
@@ -2113,8 +2275,9 @@ class ResearchRegistryStore:
                 self._finish(connection, None)
                 return comparison.content_digest
             observed_feedback: list[str] = []
-            champion_losses: list[int] = []
-            challenger_losses: list[int] = []
+            champion_squared_errors: list[int] = []
+            challenger_squared_errors: list[int] = []
+            evaluation_units: set[EvaluationUnitKey] = set()
             for batch_id in comparison.batch_ids:
                 row = connection.execute(
                     "SELECT body_sha,body,feedback_id FROM shadow_batches WHERE batch_id=?",
@@ -2123,6 +2286,15 @@ class ResearchRegistryStore:
                 if row is None or row["feedback_id"] is None:
                     raise RegistryConflictError("shadow comparison requires mature feedback")
                 batch = parse_canonical_object(bytes(row["body"]))
+                evaluation_unit = _evaluation_unit_key(batch)
+                _verify_evaluation_unit_binding(
+                    connection,
+                    batch_id=batch_id,
+                    expected=evaluation_unit,
+                )
+                if evaluation_unit in evaluation_units:
+                    raise RegistryConflictError("shadow comparison repeats an evaluation unit")
+                evaluation_units.add(evaluation_unit)
                 if (
                     bytes(row["body"]) != canonical_json_bytes(batch)
                     or mapping_digest(batch).hexdigest != row["body_sha"]
@@ -2186,15 +2358,16 @@ class ResearchRegistryStore:
                     )
                 champion_error = cast(int, champion_score) - cast(int, outcome)
                 challenger_error = cast(int, challenger_score) - cast(int, outcome)
-                champion_losses.append((champion_error * champion_error) // 1_000_000)
-                challenger_losses.append((challenger_error * challenger_error) // 1_000_000)
+                champion_squared_errors.append(champion_error * champion_error)
+                challenger_squared_errors.append(challenger_error * challenger_error)
                 observed_feedback.append(str(feedback["body_sha"]))
             expected_feedback = [item.hexdigest for item in comparison.feedback_digests]
             if sorted(observed_feedback) != expected_feedback:
                 raise RegistryConflictError("shadow comparison feedback digests mismatch")
-            derived_champion = sum(champion_losses) // len(champion_losses)
-            derived_challenger = sum(challenger_losses) // len(challenger_losses)
-            derived_verdict = "PASS" if derived_challenger < derived_champion else "FAIL"
+            derived_champion, derived_challenger, derived_verdict = _derive_exact_brier_comparison(
+                champion_squared_errors,
+                challenger_squared_errors,
+            )
             if (
                 comparison.metric_id != "brier_loss_micros:v1"
                 or comparison.champion_metric_micros != derived_champion
@@ -3936,6 +4109,47 @@ class ResearchRegistryStore:
         if row is None:
             raise RegistryConflictError("shadow batch is unknown")
         return "PENDING" if row["feedback_id"] is None else "MATURED"
+
+    def shadow_evaluation_counts(self, slot_id: str) -> ShadowEvaluationCountsV1:
+        require_contract_id(slot_id, field="slot_id")
+        connection = self._require_open()
+        rows = connection.execute(
+            "SELECT u.batch_id,u.slot_id,u.event_id,u.target_id,u.horizon_ms,"
+            "u.champion_generation,b.body_sha,b.body FROM shadow_evaluation_units AS u "
+            "JOIN shadow_batches AS b ON b.batch_id=u.batch_id WHERE u.slot_id=? "
+            "ORDER BY u.event_id,u.target_id,u.horizon_ms,u.champion_generation,u.batch_id",
+            (slot_id,),
+        ).fetchall()
+        batch_count_row = connection.execute(
+            "SELECT COUNT(*) AS count FROM shadow_batches WHERE slot_id=?",
+            (slot_id,),
+        ).fetchone()
+        if batch_count_row is None or int(batch_count_row["count"]) != len(rows):
+            raise RegistryIntegrityError("shadow evaluation unit index is incomplete")
+        events: set[str] = set()
+        for row in rows:
+            batch = parse_canonical_object(bytes(row["body"]))
+            if (
+                bytes(row["body"]) != canonical_json_bytes(batch)
+                or mapping_digest(batch).hexdigest != row["body_sha"]
+            ):
+                raise RegistryIntegrityError("shadow evaluation unit batch is corrupt")
+            expected = _evaluation_unit_key(batch)
+            observed = (
+                str(row["slot_id"]),
+                str(row["event_id"]),
+                str(row["target_id"]),
+                int(row["horizon_ms"]),
+                int(row["champion_generation"]),
+            )
+            if observed != expected:
+                raise RegistryIntegrityError("shadow evaluation unit index is corrupt")
+            events.add(expected[1])
+        return ShadowEvaluationCountsV1(
+            slot_id=slot_id,
+            evaluation_unit_count=len(rows),
+            distinct_event_count=len(events),
+        )
 
     def list_model_lifecycles(self) -> tuple[tuple[str, str, ModelLifecycle], ...]:
         rows = (

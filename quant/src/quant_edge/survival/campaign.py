@@ -269,6 +269,10 @@ def _oracle_predictions(cohort: SurvivalCohortV1, grid: TimeGridV1) -> Predictio
         )
     return PredictionSetV1(
         prediction_id=f"{cohort.cohort_id}.oracle",
+        cohort_id=cohort.cohort_id,
+        model_id=f"{cohort.cohort_id}.oracle-model.v1",
+        target=cohort.target,
+        split_id=f"{cohort.cohort_id}.evaluation-split.v1",
         grid=grid,
         cause_scope=ANY_CAUSE,
         predictions=tuple(predictions),
@@ -281,6 +285,10 @@ def _constant_one_predictions(cohort: SurvivalCohortV1, grid: TimeGridV1) -> Pre
     row = tuple(FixedPointV1(FIXED_POINT_SCALE) for _ in grid.times_ns)
     return PredictionSetV1(
         prediction_id=f"{cohort.cohort_id}.constant-one",
+        cohort_id=cohort.cohort_id,
+        model_id=f"{cohort.cohort_id}.constant-one-model.v1",
+        target=cohort.target,
+        split_id=f"{cohort.cohort_id}.evaluation-split.v1",
         grid=grid,
         cause_scope=ANY_CAUSE,
         predictions=tuple(
@@ -307,6 +315,10 @@ def _marginal_predictions(
     fixed_row = tuple(row)
     return PredictionSetV1(
         prediction_id=f"{cohort.cohort_id}.marginal",
+        cohort_id=cohort.cohort_id,
+        model_id=f"{source.cohort_id}.marginal-model.v1",
+        target=cohort.target,
+        split_id=f"{cohort.cohort_id}.evaluation-split.v1",
         grid=grid,
         cause_scope=ANY_CAUSE,
         predictions=tuple(
@@ -318,13 +330,6 @@ def _marginal_predictions(
 
 def _golden_metrics() -> dict[str, object]:
     cohort = _freireich_cohort()
-    oracle = _oracle_predictions(cohort, _METRIC_GRID)
-    constant_one = _constant_one_predictions(cohort, _METRIC_GRID)
-    marginal = _marginal_predictions(cohort, _METRIC_GRID, cohort)
-    brier_oracle = evaluate_brier(cohort, oracle)
-    brier_constant = evaluate_brier(cohort, constant_one)
-    brier_marginal = evaluate_brier(cohort, marginal)
-
     # A perfectly discriminating risk score: earlier observed time, higher risk.
     # Two subjects share one group to exercise the same-group exclusion law.
     grouped = list(cohort.subjects)
@@ -337,8 +342,19 @@ def _golden_metrics() -> dict[str, object]:
         posture=cohort.posture,
         subjects=tuple(grouped),
     )
+    oracle = _oracle_predictions(grouped_cohort, _METRIC_GRID)
+    constant_one = _constant_one_predictions(grouped_cohort, _METRIC_GRID)
+    marginal = _marginal_predictions(grouped_cohort, _METRIC_GRID, grouped_cohort)
+    brier_oracle = evaluate_brier(grouped_cohort, oracle)
+    brier_constant = evaluate_brier(grouped_cohort, constant_one)
+    brier_marginal = evaluate_brier(grouped_cohort, marginal)
+
     perfect_scores = RiskScoreSetV1(
         score_id="q11.golden.scores.perfect",
+        cohort_id=grouped_cohort.cohort_id,
+        model_id=oracle.model_id,
+        target=grouped_cohort.target,
+        split_id=oracle.split_id,
         scores=tuple(
             (subject.subject_id, FixedPointV1(-subject.duration_ns))
             for subject in grouped_cohort.subjects
@@ -346,21 +362,32 @@ def _golden_metrics() -> dict[str, object]:
     )
     constant_scores = RiskScoreSetV1(
         score_id="q11.golden.scores.constant",
+        cohort_id=grouped_cohort.cohort_id,
+        model_id=constant_one.model_id,
+        target=grouped_cohort.target,
+        split_id=constant_one.split_id,
         scores=tuple((subject.subject_id, FixedPointV1(0)) for subject in grouped_cohort.subjects),
     )
-    concordance_perfect = evaluate_concordance(grouped_cohort, perfect_scores)
-    concordance_constant = evaluate_concordance(grouped_cohort, constant_scores)
+    concordance_perfect = evaluate_concordance(
+        grouped_cohort, perfect_scores, horizon_ns=_METRIC_GRID.end_ns
+    )
+    concordance_constant = evaluate_concordance(
+        grouped_cohort, constant_scores, horizon_ns=_METRIC_GRID.end_ns
+    )
+    calibration_oracle = evaluate_calibration(
+        grouped_cohort, oracle, horizon_ns=_METRIC_GRID.end_ns, bin_count=4
+    )
     calibration_marginal = evaluate_calibration(
-        cohort, marginal, horizon_ns=13 * SECOND_NS, bin_count=4
+        grouped_cohort, marginal, horizon_ns=_METRIC_GRID.end_ns, bin_count=4
     )
     calibration_constant = evaluate_calibration(
-        cohort, constant_one, horizon_ns=13 * SECOND_NS, bin_count=4
+        grouped_cohort, constant_one, horizon_ns=_METRIC_GRID.end_ns, bin_count=4
     )
     verdict_pass = judge_survival(
         _GOLDEN_BUDGET,
         brier=brier_oracle,
         concordance=concordance_perfect,
-        calibration=calibration_marginal,
+        calibration=calibration_oracle,
     )
     verdict_fail = judge_survival(
         _GOLDEN_BUDGET,
@@ -378,6 +405,7 @@ def _golden_metrics() -> dict[str, object]:
         "calibration": {
             "constantOne": calibration_constant.as_mapping(),
             "marginal": calibration_marginal.as_mapping(),
+            "oracle": calibration_oracle.as_mapping(),
         },
         "concordance": {
             "constant": concordance_constant.as_mapping(),
@@ -525,12 +553,20 @@ def _prediction_sets_from_model(
     return (
         PredictionSetV1(
             prediction_id=f"{cohort.cohort_id}.model.any",
+            cohort_id=cohort.cohort_id,
+            model_id=model.config.model_version,
+            target=cohort.target,
+            split_id=f"{cohort.cohort_id}.evaluation-split.v1",
             grid=SEEDED_GRID,
             cause_scope=ANY_CAUSE,
             predictions=any_event,
         ),
         PredictionSetV1(
             prediction_id=f"{cohort.cohort_id}.model.primary",
+            cohort_id=cohort.cohort_id,
+            model_id=model.config.model_version,
+            target=cohort.target,
+            split_id=f"{cohort.cohort_id}.evaluation-split.v1",
             grid=SEEDED_GRID,
             cause_scope=CAUSE_PRIMARY,
             predictions=primary,
@@ -612,12 +648,16 @@ def _build_campaign(fixture_sha256: str) -> tuple[dict[str, object], list[str]]:
     end_index = SEEDED_BINS - 1
     scores = RiskScoreSetV1(
         score_id="q11.seeded.scores.model",
+        cohort_id=test.cohort_id,
+        model_id=model_any.model_id,
+        target=test.target,
+        split_id=model_any.split_id,
         scores=tuple(
             (subject.subject_id, rows[subject.stratum_id][0][end_index])
             for subject in test.subjects
         ),
     )
-    concordance = evaluate_concordance(test, scores)
+    concordance = evaluate_concordance(test, scores, horizon_ns=horizon_end)
 
     budget = SurvivalBudgetV1(
         budget_id="q11.seeded.budget.v1",

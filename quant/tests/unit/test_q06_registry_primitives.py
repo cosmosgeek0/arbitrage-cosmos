@@ -13,7 +13,7 @@ from quant_edge.features.domains import (
     WallTimeBarSpecV1,
     build_bars,
 )
-from quant_edge.features.fixedpoint import FixedPointV1, fp_from_int
+from quant_edge.features.fixedpoint import MAX_FIXED_MANTISSA, FixedPointV1, fp_from_int
 from quant_edge.features.harness import (
     EquivalenceReportV1,
     run_equivalence,
@@ -149,6 +149,73 @@ class TestPrimitives:
         assert vector[1].mantissa == 10_000_000_000  # +1%
         assert vector[2] is not None
         assert vector[2].mantissa == 0
+
+    @pytest.mark.parametrize(
+        "closes",
+        [
+            (1, MAX_FIXED_MANTISSA * 10**26),
+            (0, 1),
+            (1, 0),
+            (-1, 1),
+            (1, -1),
+        ],
+    )
+    def test_invalid_or_unrepresentable_bar_return_is_unknown_not_an_exception(
+        self,
+        closes: tuple[int, int],
+    ) -> None:
+        bars = tuple(
+            BarV1(
+                index=index,
+                start_ns=BASE_NS + index,
+                end_ns=BASE_NS + index + 1,
+                point_count=1,
+                first_value_aligned=close,
+                last_value_aligned=close,
+                volume_aligned_total=0,
+                complete=True,
+            )
+            for index, close in enumerate(closes)
+        )
+
+        assert bar_return_feature().batch(bars) is None
+
+    def test_ewma_variance_is_unknown_for_nonpositive_closes(self) -> None:
+        bars = tuple(
+            BarV1(
+                index=index,
+                start_ns=BASE_NS + index,
+                end_ns=BASE_NS + index + 1,
+                point_count=1,
+                first_value_aligned=close,
+                last_value_aligned=close,
+                volume_aligned_total=0,
+                complete=True,
+            )
+            for index, close in enumerate((1, 0, 1))
+        )
+
+        assert ewma_variance_feature().batch(bars) is None
+
+    def test_ewma_variance_recovers_on_trailing_positive_segment(self) -> None:
+        bars = tuple(
+            BarV1(
+                index=index,
+                start_ns=BASE_NS + index,
+                end_ns=BASE_NS + index + 1,
+                point_count=1,
+                first_value_aligned=close,
+                last_value_aligned=close,
+                volume_aligned_total=0,
+                complete=True,
+            )
+            for index, close in enumerate((1, 0, 2, 3))
+        )
+        implementation = ewma_variance_feature()
+        streaming = implementation.make_streaming()
+        streamed = tuple(streaming.update(bar) for bar in bars)
+
+        assert implementation.batch(bars) == streamed[-1] == FixedPointV1(0)
 
     def test_activity_counts_and_empty_bars(self) -> None:
         bars = _bars((10_000, 10_100), width_s=1)

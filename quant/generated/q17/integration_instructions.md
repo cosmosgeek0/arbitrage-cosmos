@@ -8,8 +8,15 @@
 - There is no loadable accepted champion, real-market edge claim,
   capital/risk approval, order, transfer, withdrawal, borrow/repay or
   execution authority.
+- Historical C17/A17 acceptance remains immutable. Current corrected
+  Q06/Q07/Q09/Q11/Q12/Q14/Q15/Q16 and Q17 proof-kit bytes are
+  `NOT_ACCEPTED` pending independent exact-commit verification.
 
-## Accepted local Q16 startup (no dedicated CLI exists)
+## Historical Q16 startup boundary (not current authorization)
+
+These steps describe historical C16/A16 startup evidence only.
+Current corrected Q16/Q17 bytes are `NOT_ACCEPTED`; do not start or
+integrate them until they are independently verified and accepted.
 
 Construct `build_serving_manifest(QUANT_ROOT)`, then
 `load_serving_lineage(QUANT_ROOT, manifest)`,
@@ -24,7 +31,8 @@ stale/gapped evidence or any blocker as no assessment.
 
 ## Director-owned future integration
 
-1. Pin exact C17/A17 and all generated artifact hashes on a director integration branch.
+1. Pin historical C17/A17 identities separately from the current correction
+   commit/tree and artifact hashes; historical receipts do not attest current bytes.
 2. Add only a narrow adapter into the existing systemIntegration composition
    root; do not create a second source, cache, model registry, risk gate,
    store or socket owner.

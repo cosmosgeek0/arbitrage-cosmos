@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from quant_edge.errors import ContractValueError
@@ -37,10 +39,16 @@ def _record(
     regime_id: str = "UNKNOWN",
     feature_id: str = "window-v1",
     outcome: str = "CONTINUATION",
-    event_id: str | None = None,
+    label_available_offset_hours: int | None = None,
+    event_id: str | None = "event-record",
     completeness: QualityState = QualityState.SYNTHETIC,
 ) -> AnalogRecordV1:
     end_ns = BASE_NS + end_offset_hours * HOUR_NS
+    label_available_ns = (
+        end_ns + 2 * SECOND_NS
+        if label_available_offset_hours is None
+        else BASE_NS + label_available_offset_hours * HOUR_NS
+    )
     return AnalogRecordV1(
         record_id=record_id,
         symbol=symbol,
@@ -48,6 +56,9 @@ def _record(
         feature_id=feature_id,
         start_ns=end_ns - 8 * SECOND_NS,
         end_ns=end_ns,
+        outcome_start_ns=end_ns,
+        outcome_end_ns=end_ns + SECOND_NS,
+        label_available_ns=label_available_ns,
         values=_fp_window(deltas),
         outcome_label=outcome,
         completeness=completeness,
@@ -87,6 +98,9 @@ class TestAnalogContracts:
                 feature_id="window-v1",
                 start_ns=BASE_NS,
                 end_ns=BASE_NS,
+                outcome_start_ns=BASE_NS + SECOND_NS,
+                outcome_end_ns=BASE_NS + 2 * SECOND_NS,
+                label_available_ns=BASE_NS + 3 * SECOND_NS,
                 values=_fp_window(MOTIF),
                 outcome_label="CONTINUATION",
                 completeness=QualityState.SYNTHETIC,
@@ -100,6 +114,9 @@ class TestAnalogContracts:
                 feature_id="window-v1",
                 start_ns=BASE_NS,
                 end_ns=BASE_NS + SECOND_NS,
+                outcome_start_ns=BASE_NS + SECOND_NS,
+                outcome_end_ns=BASE_NS + 2 * SECOND_NS,
+                label_available_ns=BASE_NS + 3 * SECOND_NS,
                 values=(FixedPointV1(1),),
                 outcome_label="CONTINUATION",
                 completeness=QualityState.SYNTHETIC,
@@ -113,6 +130,9 @@ class TestAnalogContracts:
                 feature_id="window-v1",
                 start_ns=BASE_NS,
                 end_ns=BASE_NS + SECOND_NS,
+                outcome_start_ns=BASE_NS + SECOND_NS,
+                outcome_end_ns=BASE_NS + 2 * SECOND_NS,
+                label_available_ns=BASE_NS + 3 * SECOND_NS,
                 values=_fp_window(MOTIF),
                 outcome_label="CONTINUATION",
                 completeness="SYNTHETIC",  # type: ignore[arg-type]
@@ -120,8 +140,18 @@ class TestAnalogContracts:
             )
         with pytest.raises(ContractValueError, match="event_id"):
             _record("analog-1", end_offset_hours=1, event_id="")
-        mapping = _record("analog-1", end_offset_hours=1).as_mapping()
+        valid = _record("analog-1", end_offset_hours=1)
+        with pytest.raises(ContractValueError, match="outcome_start_ns"):
+            replace(valid, outcome_start_ns=valid.end_ns - 1)
+        with pytest.raises(ContractValueError, match="outcome_end_ns"):
+            replace(valid, outcome_end_ns=valid.outcome_start_ns)
+        with pytest.raises(ContractValueError, match="label_available_ns"):
+            replace(valid, label_available_ns=valid.outcome_end_ns - 1)
+        mapping = valid.as_mapping()
         assert mapping["outcomeLabel"] == "CONTINUATION"
+        assert mapping["outcomeStartNs"] == str(valid.outcome_start_ns)
+        assert mapping["outcomeEndNs"] == str(valid.outcome_end_ns)
+        assert mapping["labelAvailableNs"] == str(valid.label_available_ns)
 
     def test_query_rejects_bad_fields(self) -> None:
         with pytest.raises(ContractValueError, match="query_id"):
@@ -307,7 +337,13 @@ class TestRetrieveAnalogs:
             _record("analog-shape-length", end_offset_hours=1, deltas=MOTIF[:4]),
             _record("analog-future", end_offset_hours=11),
             _record("analog-embargo", end_offset_hours=10),
+            _record(
+                "analog-label-unavailable",
+                end_offset_hours=1,
+                label_available_offset_hours=10,
+            ),
             _record("analog-same-event", end_offset_hours=2, event_id="event-q"),
+            _record("analog-unknown-event", end_offset_hours=2, event_id=None),
             _record("analog-degenerate", end_offset_hours=2, deltas=(0,) * 8),
             _record("analog-good", end_offset_hours=3),
         )
@@ -315,9 +351,9 @@ class TestRetrieveAnalogs:
         counts = dict(retrieval.exclusion_counts)
         assert counts[AnalogExclusionReason.COHORT] == 1
         assert counts[AnalogExclusionReason.SHAPE] == 2
-        assert counts[AnalogExclusionReason.FUTURE] == 2
+        assert counts[AnalogExclusionReason.FUTURE] == 3
         assert counts[AnalogExclusionReason.OVERLAP] == 0
-        assert counts[AnalogExclusionReason.SAME_EVENT] == 1
+        assert counts[AnalogExclusionReason.SAME_EVENT] == 2
         assert counts[AnalogExclusionReason.DEGENERATE] == 1
         assert retrieval.cohort_size == 1
         assert retrieval.neighbors[0].record_id == "analog-good"
@@ -330,6 +366,9 @@ class TestRetrieveAnalogs:
             feature_id="window-v1",
             start_ns=BASE_NS + 10 * HOUR_NS - 4 * SECOND_NS,
             end_ns=BASE_NS + 10 * HOUR_NS + 4 * SECOND_NS,
+            outcome_start_ns=BASE_NS + 10 * HOUR_NS + 4 * SECOND_NS,
+            outcome_end_ns=BASE_NS + 10 * HOUR_NS + 5 * SECOND_NS,
+            label_available_ns=BASE_NS + 10 * HOUR_NS + 6 * SECOND_NS,
             values=_fp_window(MOTIF),
             outcome_label="CONTINUATION",
             completeness=QualityState.SYNTHETIC,

@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { SURFACE_MOUNT_CONTRACTS } from '../../src/features/productControlRoom/surfaceMounts.ts';
 
 const read = (path) => readFile(new URL(`../../src/${path}`, import.meta.url), 'utf8');
+const sourceExists = async (path) => {
+  try {
+    await access(new URL(`../../src/${path}`, import.meta.url));
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+};
 
 test('production shell owns one frozen product client, provider, durable cursor, and full route', async () => {
   const app = await read('App.tsx');
@@ -39,11 +48,22 @@ test('production shell owns one frozen product client, provider, durable cursor,
   assert.doesNotMatch(app, /FixtureProductControlRoom|fixtureBinding|preview\/main/);
 });
 
-test('all eighteen mount contracts are registered once without legacy convergence summaries', async () => {
+test('all eighteen mount contracts are registered once and the retired convergence renderer is absent', async () => {
   assert.equal(SURFACE_MOUNT_CONTRACTS.length, 18);
   assert.equal(new Set(SURFACE_MOUNT_CONTRACTS.map((entry) => entry.surfaceId)).size, 18);
   for (const contract of SURFACE_MOUNT_CONTRACTS) {
     assert.doesNotMatch(contract.insertionAnchor, /\bMISSING\b|must add|must pass/i);
+    assert.doesNotMatch(contract.insertionAnchor, /SystemIntegrationSurface|legacy convergence/i);
+    if (contract.mountKind === 'REPLACE_LEGACY_SUMMARY') {
+      assert.equal(contract.insertionAnchor, `<ProductSurfaceAdapter surfaceId="${contract.surfaceId}" />`);
+    }
+  }
+
+  for (const retiredSource of [
+    'components/SystemIntegrationSurface.tsx',
+    'components/SystemIntegrationSurface.css',
+  ]) {
+    assert.equal(await sourceExists(retiredSource), false, `${retiredSource} must stay deleted`);
   }
 
   const mounts = new Map([

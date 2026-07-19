@@ -226,7 +226,7 @@ def pr_auc(
     *,
     restrict_ids: tuple[str, ...] | None = None,
 ) -> MetricValueV1:
-    """Average precision under the deterministic rank order law."""
+    """Average precision over exact score thresholds with a tie-aware law."""
 
     rows = _scored_rows(samples, predictions, restrict_ids)
     if not rows:
@@ -234,13 +234,26 @@ def pr_auc(
     positives = sum(1 for row in rows if row.label)
     if positives == 0:
         return _unknown("pr_auc", "NO_POSITIVE_SAMPLES", rows)
-    hits = 0
+    ranked = _ranked(rows)
+    cumulative_hits = 0
+    cumulative_support = 0
     total = Fraction(0)
-    for rank, row in enumerate(_ranked(rows), start=1):
-        if row.label:
-            hits += 1
-            total += Fraction(hits, rank)
-    return _available("pr_auc", total / positives, rows)
+    group_start = 0
+    while group_start < len(ranked):
+        score = ranked[group_start].score
+        group_end = group_start
+        group_hits = 0
+        while group_end < len(ranked) and ranked[group_end].score == score:
+            group_hits += int(ranked[group_end].label)
+            group_end += 1
+        cumulative_hits += group_hits
+        cumulative_support += group_end - group_start
+        if group_hits:
+            recall_increment = Fraction(group_hits, positives)
+            precision = Fraction(cumulative_hits, cumulative_support)
+            total += recall_increment * precision
+        group_start = group_end
+    return _available("pr_auc", total, rows)
 
 
 def roc_auc(

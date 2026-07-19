@@ -2,10 +2,14 @@
 // Overall state · mode · kill switch + intake · generations · first
 // actionable blocker (root cause, not the cascade).
 
+import React from 'react';
 import type { SystemSupervisorSnapshot } from '../../../lib/systemIntegration';
 import {
+  EXPECTED_COMPONENTS,
   UNKNOWN_TEXT,
   ageText,
+  exposureVerdict,
+  isComponentCurrentReady,
   readinessTone,
   words,
 } from '../lib/presentation';
@@ -20,14 +24,14 @@ export function PostureStrip({ snapshot, nowMs }: { snapshot: SystemSupervisorSn
   const rootCause = rootBlocker
     ? rootBlocker.lastFailure?.code ?? rootBlocker.blockerCodes[0] ?? UNKNOWN_TEXT
     : null;
-  const ready = snapshot.components.filter((c) => c.readiness === 'READY').length;
+  const ready = snapshot.components.filter(isComponentCurrentReady).length;
 
   return (
     <div className="sdx-summary" role="status" aria-label="Whole-machine posture">
       <div className="sdx-summary-cell">
         <span>Overall State</span>
         <strong className={readinessTone(posture)}>{words(posture)}</strong>
-        <small>{ready}/{snapshot.components.length} Components Ready · Phase {words(snapshot.phase)}</small>
+        <small>{ready}/{EXPECTED_COMPONENTS.length} Components Current-Ready · Phase {words(snapshot.phase)}</small>
       </div>
       <div className="sdx-summary-cell">
         <span>Mode</span>
@@ -73,23 +77,23 @@ export function PostureStrip({ snapshot, nowMs }: { snapshot: SystemSupervisorSn
  *  it owns the top of the screen, directly under the posture band. */
 export function ExposureBanner({ snapshot }: { snapshot: SystemSupervisorSnapshot }) {
   const capital = snapshot.summaries.capital;
-  const count = capital.activeExposureCount ?? 0;
-  const amount = capital.activeExposureAmount;
-  const nonzero = count > 0 || (amount !== null && parseAmount(amount) > 0);
-  if (!nonzero) return null;
+  const exposure = exposureVerdict(
+    capital.activeExposureCount,
+    capital.activeExposureAmount,
+  );
+  if (exposure.kind === 'NONE') return null;
   return (
     <div className="sdx-exposure" role="alert">
-      <strong>Capital Exposed · {amount ?? UNKNOWN_TEXT}</strong>
+      <strong>{exposure.kind === 'ACTIVE'
+        ? `Capital Exposed · ${exposure.amount ?? UNKNOWN_TEXT}`
+        : 'EXPOSURE UNKNOWN'}</strong>
       <span>
-        {count} active exposure{count === 1 ? '' : 's'} · Account truth {capital.accountTruthState}
+        {exposure.kind === 'ACTIVE'
+          ? `${exposure.count ?? UNKNOWN_TEXT} active exposure${exposure.count === 1 ? '' : 's'}`
+          : 'Canonical exposure count or amount is unavailable'} · Account truth {capital.accountTruthState}
         {snapshot.control.killSwitchEngaged ? ' · Kill switch engaged — exposure is NOT liquidated by the kill switch' : ''}
       </span>
       <TruthTag label={capital.truthLabel} />
     </div>
   );
-}
-
-function parseAmount(amount: string): number {
-  const numeric = Number.parseFloat(amount.replaceAll(',', ''));
-  return Number.isFinite(numeric) ? numeric : 0;
 }

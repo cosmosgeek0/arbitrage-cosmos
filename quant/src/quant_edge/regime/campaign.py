@@ -264,15 +264,19 @@ def _golden_analog_inputs() -> tuple[AnalogQueryV1, tuple[AnalogRecordV1, ...]]:
         values: tuple[FixedPointV1, ...],
         symbol: str = "BNBUSDT",
         outcome: str = "CONTINUATION",
-        event_id: str | None = None,
+        event_id: str | None = "event-record",
     ) -> AnalogRecordV1:
+        end_ns = BASE_NS + end_offset_ns
         return AnalogRecordV1(
             record_id=record_id,
             symbol=symbol,
             regime_id="UNKNOWN",
             feature_id="close-window-v1",
-            start_ns=BASE_NS + end_offset_ns - 8 * SECOND_NS,
-            end_ns=BASE_NS + end_offset_ns,
+            start_ns=end_ns - 8 * SECOND_NS,
+            end_ns=end_ns,
+            outcome_start_ns=end_ns,
+            outcome_end_ns=end_ns + SECOND_NS,
+            label_available_ns=end_ns + 2 * SECOND_NS,
             values=values,
             outcome_label=outcome,
             completeness=QualityState.SYNTHETIC,
@@ -332,6 +336,9 @@ def _golden_analog_inputs() -> tuple[AnalogQueryV1, tuple[AnalogRecordV1, ...]]:
             feature_id="close-window-v1",
             start_ns=BASE_NS + hour,
             end_ns=BASE_NS + hour + 4 * SECOND_NS,
+            outcome_start_ns=BASE_NS + hour + 4 * SECOND_NS,
+            outcome_end_ns=BASE_NS + hour + 5 * SECOND_NS,
+            label_available_ns=BASE_NS + hour + 6 * SECOND_NS,
             values=short_values,
             outcome_label="CONTINUATION",
             completeness=QualityState.SYNTHETIC,
@@ -607,10 +614,15 @@ def _aggregate_analogs(rng: DeterministicRandom) -> dict[str, object]:
                     feature_id="close-window-v1",
                     start_ns=BASE_NS + end_offset - 8 * SECOND_NS,
                     end_ns=BASE_NS + end_offset,
+                    outcome_start_ns=BASE_NS + end_offset,
+                    outcome_end_ns=BASE_NS + end_offset + SECOND_NS,
+                    label_available_ns=BASE_NS + end_offset + 2 * SECOND_NS,
                     values=values,
                     outcome_label=outcomes[int(rng.next_u64() % 3)],
                     completeness=QualityState.SYNTHETIC,
-                    event_id=f"event-{batch:02d}" if index % 7 == 0 else None,
+                    event_id=(
+                        f"event-{batch:02d}" if index % 7 == 0 else f"event-{batch:02d}-{index:02d}"
+                    ),
                 )
             )
         query_values = tuple(

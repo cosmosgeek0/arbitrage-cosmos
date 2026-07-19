@@ -2,13 +2,17 @@
 // staged mandates, active exposure. Approval expiry is not in schema v1 and
 // is rendered as a stated gap.
 
+import React from 'react';
 import type { SystemSupervisorSnapshot } from '../../../lib/systemIntegration';
-import { amountText, countText, textOrUnknown } from '../lib/presentation';
+import { amountText, countText, exposureVerdict, textOrUnknown } from '../lib/presentation';
 import { Band, FactRow, NotPublished, TruthTag, Val } from './bits';
 
 export function CapitalPanel({ snapshot }: { snapshot: SystemSupervisorSnapshot }) {
   const capital = snapshot.summaries.capital;
-  const exposed = capital.activeExposureCount !== null && capital.activeExposureCount > 0;
+  const exposure = exposureVerdict(
+    capital.activeExposureCount,
+    capital.activeExposureAmount,
+  );
 
   return (
     <section className="sdx-section" aria-label="Capital and exposure">
@@ -22,7 +26,7 @@ export function CapitalPanel({ snapshot }: { snapshot: SystemSupervisorSnapshot 
       <div className="sdx-stats">
         <div className="sdx-stat"><span>Allocatable</span><b className={capital.allocatableAmount === null ? 'unk' : ''}>{amountText(capital.allocatableAmount)}</b></div>
         <div className="sdx-stat"><span>Reserved</span><b className={capital.reservedAmount === null ? 'unk' : ''}>{amountText(capital.reservedAmount)}</b></div>
-        <div className="sdx-stat"><span>Active Exposure</span><b className={capital.activeExposureAmount === null ? 'unk' : exposed ? 'bad' : ''}>{amountText(capital.activeExposureAmount)}</b></div>
+        <div className="sdx-stat"><span>Active Exposure</span><b className={exposure.amount === null ? 'unk' : exposure.kind === 'ACTIVE' ? 'bad' : ''}>{amountText(exposure.amount)}</b></div>
         <div className="sdx-stat"><span>Eligible</span><b className={capital.eligibleCount === null ? 'unk' : ''}>{countText(capital.eligibleCount)}</b></div>
       </div>
       <div className="sdx-rows">
@@ -38,10 +42,12 @@ export function CapitalPanel({ snapshot }: { snapshot: SystemSupervisorSnapshot 
         />
         <FactRow
           label="Active Exposure Positions"
-          sub={capital.activeExposureCount === null
-            ? 'Canonical active-exposure owner count is unavailable'
-            : exposed ? 'Open exposure — highest attention priority on this screen' : 'No open exposure'}
-          end={<Val text={countText(capital.activeExposureCount)} tone={exposed ? 'bad' : undefined} />}
+          sub={exposure.kind === 'ACTIVE'
+            ? 'Open exposure — highest attention priority on this screen'
+            : exposure.kind === 'NONE'
+              ? 'No open exposure'
+              : 'EXPOSURE UNKNOWN — canonical count or amount is unavailable'}
+          end={<Val text={countText(exposure.count)} tone={exposure.kind === 'ACTIVE' ? 'bad' : undefined} />}
         />
         <FactRow
           label="Recoveries"

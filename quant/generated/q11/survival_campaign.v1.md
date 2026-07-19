@@ -1,7 +1,7 @@
 # Q11 survival campaign evidence (synthetic only)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `887825d1423b2a9568f9ab86d9fb9500a893a7ba0630a1e33228deb5efdf7a06`
+- Golden fixture SHA-256: `b3041042e63b98d4d70367b13cff4f04abe82c1169f8fb066b6d6c8088aef99b`
 - Train/test: 240/240 subjects over 4 strata, 12 one-minute bins
 
 No survival model, curve or hazard is claimed to be predictive, calibrated

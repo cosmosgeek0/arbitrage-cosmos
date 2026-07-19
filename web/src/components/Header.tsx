@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { useStore, useResolvedTheme, type Page } from '../store';
+import {
+  resolveFxRate,
+  useStore,
+  useResolvedTheme,
+  type CompatibilityStateStatus,
+  type Page,
+} from '../store';
+import type { MarketRow } from '../types';
 import { fmtClockZone, timeAgo } from '../format';
 import { eventSummary } from '../lib/eventText';
 import { calVal, flag, type CalItem } from '../lib/calendar';
 import { notificationEnabled } from '../lib/notifications';
+import { parseNotificationCursor } from '../lib/notificationCursor';
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
+import { useNotificationFeed } from '../lib/notificationFeed';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import {
   projectCanonicalIncidentNotifications,
@@ -150,8 +159,23 @@ function useMenu<T extends HTMLElement>(hover = true) {
   return { open, setOpen: setOpenExclusive, ref };
 }
 
+export type QuickViewLoadStatus = 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+
+export function parseQuickViewItems<T>(payload: unknown): T[] {
+  if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { items?: unknown }).items)) {
+    throw new Error('Quick-view response is missing an items array');
+  }
+  return (payload as { items: T[] }).items;
+}
+
+export function quickViewLivePresentation(status: QuickViewLoadStatus): { ok: boolean; title: string } {
+  if (status === 'CURRENT') return { ok: true, title: 'Live — current response' };
+  if (status === 'UNAVAILABLE') return { ok: false, title: 'Unavailable — current response failed' };
+  return { ok: false, title: 'Loading — awaiting current response' };
+}
+
 // A small live-pulsing dot for anything that refreshes continuously.
-export function LiveDot({ ok = true, title = 'Live — refreshing' }: { ok?: boolean; title?: string }) {
+export function LiveDot({ ok = false, title = 'Not current' }: { ok?: boolean; title?: string }) {
   return <span className={`live-dot ${ok ? 'on' : 'off'}`} title={title} aria-hidden />;
 }
 
@@ -460,8 +484,90 @@ interface SearchEntry {
   fundingRate?: number | null;
   keywords: string;
   kind?: 'token' | 'perp' | 'page' | 'setting';
+  marketTruth?: MarketConsumerTruth;
 }
 type SearchTab = 'top' | 'crypto' | 'perps' | 'settings';
+
+export type MarketConsumerTruth = Readonly<{
+  label: 'CURRENT' | 'STALE LAST-KNOWN' | 'UNAVAILABLE' | 'LOADING';
+  evidenceAtMs: number | null;
+  evidenceAgeMs: number | null;
+  factsAvailable: boolean;
+  retained: boolean;
+}>;
+
+function validMarketTimestamp(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * Translate canonical market-read liveness into the only presentation states
+ * consumers may assert. A source timestamp cannot make rows current without a
+ * successful read, and retained rows remain explicitly stale.
+ */
+export function projectMarketConsumerTruth(input: Readonly<{
+  status: CompatibilityStateStatus;
+  lastSuccessAtMs: number | null;
+  sourceUpdatedAtMs: number | null;
+  nowMs: number;
+}>): MarketConsumerTruth {
+  const lastSuccessAtMs = validMarketTimestamp(input.lastSuccessAtMs);
+  if (input.status === 'LOADING') {
+    return Object.freeze({
+      label: 'LOADING',
+      evidenceAtMs: null,
+      evidenceAgeMs: null,
+      factsAvailable: false,
+      retained: false,
+    });
+  }
+  if (input.status === 'UNAVAILABLE' || lastSuccessAtMs === null) {
+    return Object.freeze({
+      label: 'UNAVAILABLE',
+      evidenceAtMs: null,
+      evidenceAgeMs: null,
+      factsAvailable: false,
+      retained: false,
+    });
+  }
+
+  const evidenceAtMs = validMarketTimestamp(input.sourceUpdatedAtMs) ?? lastSuccessAtMs;
+  const evidenceAgeMs = Number.isFinite(input.nowMs) && input.nowMs >= evidenceAtMs
+    ? input.nowMs - evidenceAtMs
+    : null;
+  const retained = input.status === 'STALE';
+  return Object.freeze({
+    label: retained ? 'STALE LAST-KNOWN' : 'CURRENT',
+    evidenceAtMs,
+    evidenceAgeMs,
+    factsAvailable: true,
+    retained,
+  });
+}
+
+type PerpetualSearchMarket = Pick<
+  MarketRow,
+  'perpMark' | 'perpLast' | 'perpVolume24h' | 'perpChange24hPct' | 'fundingRate'
+>;
+
+const finiteSearchFact = (value: number | null | undefined): number | null => (
+  typeof value === 'number' && Number.isFinite(value) ? value : null
+);
+
+/**
+ * Project only perpetual-owned evidence into a perpetual search result. Spot
+ * price/change fields are deliberately absent from this boundary so a missing
+ * futures fact cannot be made to look known by borrowing another instrument.
+ */
+export function projectPerpetualSearchFacts(market: PerpetualSearchMarket) {
+  return {
+    perpMark: finiteSearchFact(market.perpMark) ?? finiteSearchFact(market.perpLast),
+    volume: finiteSearchFact(market.perpVolume24h),
+    changePct: finiteSearchFact(market.perpChange24hPct),
+    fundingRate: finiteSearchFact(market.fundingRate),
+  };
+}
+
 const compactMoney = (v: number | null | undefined) => {
   if (!Number.isFinite(v ?? NaN)) return '—';
   const n = Number(v);
@@ -516,13 +622,27 @@ function buildIndex(): SearchEntry[] {
   return out;
 }
 function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }) {
-  const { setPage, setPaletteOpen, markets, openDetail } = useStore();
+  const {
+    setPage,
+    setPaletteOpen,
+    markets,
+    marketStatus,
+    marketsLastSuccessAtMs,
+    marketsUpdatedAt,
+    openDetail,
+  } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const [tab, setTab] = useState<SearchTab>('top');
   const [focused, setFocused] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const isTopbar = placement === 'topbar';
+  const marketTruth = useMemo(() => projectMarketConsumerTruth({
+    status: marketStatus,
+    lastSuccessAtMs: marketsLastSuccessAtMs,
+    sourceUpdatedAtMs: marketsUpdatedAt,
+    nowMs: Date.now(),
+  }), [marketStatus, marketsLastSuccessAtMs, marketsUpdatedAt]);
   // Global index: nav/settings/actions PLUS every tradable token, so typing any
   // letter finds tokens across the whole app (not just the menu).
   const index = useMemo(() => {
@@ -532,26 +652,30 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
       hint: `${m.symbol} · Crypto`,
       symbol: m.symbol,
       base: m.base,
-      spot: m.spot,
-      volume: m.quoteVolume24h,
-      changePct: m.change24hPct,
+      spot: marketTruth.factsAvailable ? m.spot : null,
+      volume: marketTruth.factsAvailable ? m.quoteVolume24h : null,
+      changePct: marketTruth.factsAvailable ? m.change24hPct : null,
       kind: 'token' as const,
+      marketTruth,
       keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
     }));
-    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => ({
-      label: `${m.base} Perpetual`,
-      hint: `${m.symbol} · Perpetual`,
-      symbol: m.symbol,
-      base: m.base,
-      perpMark: m.perpMark ?? m.perpLast ?? m.spot,
-      volume: m.perpVolume24h,
-      changePct: m.perpChange24hPct ?? m.change24hPct,
-      fundingRate: m.fundingRate,
-      kind: 'perp' as const,
-      keywords: `${m.base} ${m.symbol} perp perpetual futures funding leverage`.toLowerCase(),
-    }));
+    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
+      const facts = marketTruth.factsAvailable
+        ? projectPerpetualSearchFacts(m)
+        : { perpMark: null, volume: null, changePct: null, fundingRate: null };
+      return {
+        label: `${m.base} Perpetual`,
+        hint: `${m.symbol} · Perpetual`,
+        symbol: m.symbol,
+        base: m.base,
+        ...facts,
+        kind: 'perp' as const,
+        marketTruth,
+        keywords: `${m.base} ${m.symbol} perp perpetual futures funding`.toLowerCase(),
+      };
+    });
     return [...pages, ...tokens, ...perps];
-  }, [markets]);
+  }, [markets, marketTruth]);
   // Close on outside click even when the query is empty. The panel opens on
   // focus, so tying outside-close only to `q` leaves an empty focused search
   // stuck open.
@@ -621,6 +745,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   }), [results]);
 
   const go = (e: SearchEntry) => {
+    if (e.symbol && e.marketTruth && !e.marketTruth.factsAvailable) return;
     if (e.symbol) openDetail(e.symbol);
     else if (e.overlay) openOverlay(e.overlay);
     else if (e.page) setPage(e.page);
@@ -631,22 +756,40 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   const renderRow = (r: SearchEntry, i: number) => {
     const isMarket = r.kind === 'token' || r.kind === 'perp';
     const change = r.changePct ?? null;
+    const marketTruthNote = r.marketTruth
+      ? `${r.marketTruth.label}${r.marketTruth.evidenceAtMs === null ? '' : ` · Updated ${timeAgo(r.marketTruth.evidenceAtMs)}`}`
+      : null;
     return (
-      <button key={`${r.kind}-${r.label}-${r.symbol ?? r.page ?? i}`} className={`ssr-row ${i === sel ? 'sel' : ''} ${isMarket ? 'market' : 'command'}`} onMouseEnter={() => setSel(i)} onMouseDown={(e) => { e.preventDefault(); go(r); }}>
+      <button
+        key={`${r.kind}-${r.label}-${r.symbol ?? r.page ?? i}`}
+        className={`ssr-row ${i === sel ? 'sel' : ''} ${isMarket ? 'market' : 'command'}`}
+        disabled={Boolean(isMarket && r.marketTruth && !r.marketTruth.factsAvailable)}
+        onMouseEnter={() => setSel(i)}
+        onMouseDown={(e) => { e.preventDefault(); go(r); }}
+      >
         {isMarket ? (
           <>
             <TokenIcon symbol={r.symbol ?? r.base ?? r.label} size={34} />
             <span className="ssr-asset">
-              <span className="ssr-label">{r.label}{r.kind === 'perp' && <em>50X</em>}</span>
-              <span className="ssr-hint">{r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}</span>
+              <span className="ssr-label">{r.label}</span>
+              <span className="ssr-hint">
+                {r.kind === 'perp' ? 'INTX' : r.hint.replace(' · Crypto', '')}
+                {marketTruthNote ? ` · ${marketTruthNote}` : ''}
+              </span>
             </span>
             <span className="ssr-mid">
-              <b>{compactMoney(r.volume)} vol</b>
-              <small>{r.kind === 'perp' ? `${searchPct((r.fundingRate ?? 0) * 100, 4).replace('↗ ', '').replace('↘ ', '')}/hr funding` : r.symbol}</small>
+              <b>{r.kind === 'perp' && r.volume == null ? 'UNKNOWN vol' : `${compactMoney(r.volume)} vol`}</b>
+              <small>{r.kind === 'perp'
+                ? r.fundingRate == null
+                  ? 'UNKNOWN funding'
+                  : `${searchPct(r.fundingRate * 100, 4).replace('↗ ', '').replace('↘ ', '')} funding`
+                : r.symbol}</small>
             </span>
             <span className="ssr-price">
-              <b>{searchPrice(r.kind === 'perp' ? r.perpMark : r.spot)}</b>
-              <small className={change !== null && change < 0 ? 'neg' : 'pos'}>{searchPct(change)}</small>
+              <b>{r.kind === 'perp' && r.perpMark == null ? 'UNKNOWN' : searchPrice(r.kind === 'perp' ? r.perpMark : r.spot)}</b>
+              <small className={change === null ? undefined : change < 0 ? 'neg' : 'pos'}>
+                {r.kind === 'perp' && change === null ? 'UNKNOWN' : searchPct(change)}
+              </small>
             </span>
           </>
         ) : (
@@ -869,7 +1012,7 @@ function NotificationMenu() {
   const { state, setPage } = useStore();
   const { open, setOpen, ref } = useMenu<HTMLDivElement>();
   const events = state?.events ?? [];
-  const [seen, setSeen] = useState<number>(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [seen, setSeen] = useState<number>(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const unread = events.filter((e) => e.id > seen).length;
   const toggle = () => {
     const willOpen = !open;
@@ -986,19 +1129,6 @@ type Sev = 'action' | 'invest' | 'pass';
 // A single box: centered under the hovered trigger with a pointer aimed at it.
 // Moving to another trigger doesn't close/reopen — the same box slides, resizes
 // (via the per-key width) and the pointer re-aims; only the contents cross-fade.
-const TbpCheck = () => (
-  <svg className="tbp-check" viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-    <path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const IconDollar = ({ size = 16 }: { size?: number }) => (
-  <svg viewBox="0 0 20 20" width={size} height={size} aria-hidden>
-    <circle cx="10" cy="10" r="8.1" fill="none" stroke="currentColor" strokeWidth="1.6" />
-    <path d="M12.3 7.3c-.4-.8-1.2-1.2-2.3-1.2-1.3 0-2.2.7-2.2 1.7 0 2.5 5 1.1 5 3.9 0 1.1-1 1.8-2.6 1.8-1.2 0-2.1-.5-2.5-1.4M10 4.9v10.2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-  </svg>
-);
-
 function BinanceLogo({ size = 32 }: { size?: number }) {
   const [failed, setFailed] = useState(false);
   return (
@@ -1046,41 +1176,6 @@ function CloudflareMark({ size = 31 }: { size?: number }) {
         <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727" />
       </svg>
     </span>
-  );
-}
-
-function TopPanelHeader({
-  className = '',
-  logo,
-  title,
-  sub,
-  value,
-  status,
-  action,
-}: {
-  className?: string;
-  logo: ReactNode;
-  title: string;
-  sub?: ReactNode;
-  value?: ReactNode;
-  status?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className={`top-panel-head ${className}`}>
-      <span className="top-panel-logo">{logo}</span>
-      <span className="top-panel-copy">
-        <b>{title}</b>
-        {value !== undefined && <strong>{value}</strong>}
-        {sub !== undefined && <em>{sub}</em>}
-      </span>
-      {(status !== undefined || action !== undefined) && (
-        <span className="top-panel-right">
-          {status !== undefined && <span className="top-panel-status">{status}</span>}
-          {action}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -1328,8 +1423,12 @@ function AwsOwnerGatedSheet() {
 }
 
 function SharedTopBar() {
-  const { state, connected, page, prefs, updatePref, setPage } = useStore();
+  const {
+    state, connected, page, prefs, updatePref, setPage,
+    fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
+  } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
+  const notificationFeedState = useNotificationFeed();
   const theme = useResolvedTheme();
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
@@ -1363,29 +1462,13 @@ function SharedTopBar() {
     setOutgoingContent(null);
   }, []);
   const [now, setNow] = useState(() => new Date());
-  const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
+  const [seen, setSeen] = useState(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const [notifTab, setNotifTab] = useState<NotifTab>('all');
-  const [currencyFx, setCurrencyFx] = useState<{ ok: boolean | null; rates: Record<string, number>; fetchedAt: number | null }>({ ok: null, rates: {}, fetchedAt: null });
-  const [currencyBusy, setCurrencyBusy] = useState(false);
   const [currencyNotional, setCurrencyNotional] = useState(1000);
   const [basisSamplePct, setBasisSamplePct] = useState(0.042);
 
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
-  useEffect(() => {
-    if (active !== 'currency') return;
-    let alive = true;
-    setCurrencyBusy(true);
-    fetch('/api/fx')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
-        if (!alive) return;
-        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
-        else setCurrencyFx((x) => ({ ...x, ok: false }));
-      })
-      .catch(() => { if (alive) setCurrencyFx((x) => ({ ...x, ok: false })); })
-      .finally(() => { if (alive) setCurrencyBusy(false); });
-    return () => { alive = false; };
-  }, [active]);
+
   // Compute the box geometry for a trigger, in the row's LOCAL (pre-zoom) space.
   const computeGeo = (k: MK) => {
     const btn = btnRefs.current[k]; const row = rowRef.current;
@@ -1491,26 +1574,26 @@ function SharedTopBar() {
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
   const accountTone = 'off';
   const accountSub = 'OWNER GATED · NOT CONFIGURED';
-  const events = state?.events ?? [];
+  const events = notificationFeedState.archive.events;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
   const cur = CURRENCIES[prefs.currency] ? prefs.currency : 'USD';
   const curInfo = CURRENCIES[cur] ?? CURRENCIES.USD;
   const curSymbol = curInfo.symbol.trim() || cur;
-  const curRate = cur === 'USD' ? 1 : currencyFx.rates[cur] ?? null;
-  const curTone = cur === 'USD' || curRate ? 'ok' : currencyFx.ok === false ? 'bad' : 'warn';
+  const curFx = resolveFxRate(fxTruth, cur, now.getTime());
+  const curRate = curFx.rate;
+  const curTone = curFx.status === 'CURRENT' ? 'ok' : curFx.status === 'LOADING' ? 'warn' : 'bad';
   const curRateText = cur === 'USD'
     ? '1.0000'
     : curRate
       ? curRate.toLocaleString('en-US', { maximumFractionDigits: curRate >= 100 ? 2 : 4 })
-      : currencyFx.ok === false
-        ? 'Unavailable'
-        : 'Loading';
+      : curFx.status === 'STALE' ? 'Stale' : curFx.status === 'UNAVAILABLE' ? 'Unavailable' : 'Loading';
   const currencyRateText = (code: string) => {
     if (code === 'USD') return '1.0000';
-    const r = currencyFx.rates[code];
-    if (!r) return currencyFx.ok === false ? 'OFF' : 'FX';
+    const resolved = resolveFxRate(fxTruth, code, now.getTime());
+    const r = resolved.rate;
+    if (!r) return resolved.status === 'STALE' ? 'STALE' : resolved.status === 'UNAVAILABLE' ? 'OFF' : 'FX';
     return r.toLocaleString('en-US', { maximumFractionDigits: r >= 100 ? 2 : 4 });
   };
   const formatCurrencyPanelValue = (code: string, amount: number) => {
@@ -1533,18 +1616,6 @@ function SharedTopBar() {
     : curTone === 'bad'
       ? 'Unavailable'
       : 'Loading';
-  const refreshCurrencyFx = () => {
-    if (currencyBusy) return;
-    setCurrencyBusy(true);
-    fetch('/api/fx')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { rates?: Record<string, number>; fetchedAt?: number } | null) => {
-        if (d?.rates) setCurrencyFx({ ok: true, rates: d.rates, fetchedAt: d.fetchedAt ?? null });
-        else setCurrencyFx((x) => ({ ...x, ok: false }));
-      })
-      .catch(() => setCurrencyFx((x) => ({ ...x, ok: false })))
-      .finally(() => setCurrencyBusy(false));
-  };
   const basisIsBps = prefs.basisUnit === 'bps';
   const basisIsDecimal = prefs.basisUnit === 'decimal';
   const formatBasisPct = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(Math.abs(value) < 0.1 ? 3 : 2)}%`;
@@ -2549,9 +2620,23 @@ function SharedTopBar() {
             <OpsSheetHeader
               icon={<PopupSourceMark tone="#69c634" brand><CurrencyDollarIdentityMark size={40} /></PopupSourceMark>}
               title="Display Currency"
-              subtitle={currencyFx.fetchedAt ? `Rates updated ${timeAgo(currencyFx.fetchedAt)}` : 'Loading cached FX rates'}
+              subtitle={fxTruth.sourceTimeMs
+                ? `${fxTruth.status} · source ${timeAgo(fxTruth.sourceTimeMs)}`
+                : fxTruth.error ?? 'Loading FX source truth'}
               status={cur}
               tone={statusTone(curTone)}
+              action={(
+                <button
+                  className={`curfx-refresh ${currencyBusy ? 'spin' : ''}`}
+                  type="button"
+                  onClick={refreshCurrencyFx}
+                  title="Refresh FX rates"
+                  aria-label="Refresh FX rates"
+                  disabled={currencyBusy}
+                >
+                  <IconRefresh size={14} />
+                </button>
+              )}
             />
             <div className="ops-list">
               {Object.entries(CURRENCIES).map(([code, currency]) => (
@@ -2779,6 +2864,32 @@ type BrowserHealthProbe = {
   observationReported: boolean;
   observationError: string | null;
 };
+type WatchmanHealthFreshnessStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+export const WATCHMAN_HEALTH_STALE_AFTER_MS = 15_000;
+
+export function resolveWatchmanHealthFreshness(input: {
+  probeStatus: 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+  lastSuccessAt: number | null;
+  observedAt: number;
+  staleAfterMs: number;
+}): { status: WatchmanHealthFreshnessStatus; lastSuccessAt: number | null; ageMs: number | null } {
+  if (input.lastSuccessAt === null) {
+    return {
+      status: input.probeStatus === 'LOADING' ? 'LOADING' : 'UNAVAILABLE',
+      lastSuccessAt: null,
+      ageMs: null,
+    };
+  }
+  const ageMs = Math.max(0, input.observedAt - input.lastSuccessAt);
+  const staleAfterMs = Number.isFinite(input.staleAfterMs) && input.staleAfterMs > 0
+    ? input.staleAfterMs
+    : WATCHMAN_HEALTH_STALE_AFTER_MS;
+  return {
+    status: input.probeStatus === 'UNAVAILABLE' || ageMs >= staleAfterMs ? 'STALE' : 'CURRENT',
+    lastSuccessAt: input.lastSuccessAt,
+    ageMs,
+  };
+}
 type WatchmanComponent = {
   id: string;
   label: string;
@@ -2864,6 +2975,8 @@ export function RefreshDock() {
   const [healthProbeError, setHealthProbeError] = useState<string | null>(null);
   const [browserObservationError, setBrowserObservationError] = useState<string | null>(null);
   const [healthProbeStatus, setHealthProbeStatus] = useState<'LOADING' | 'CURRENT' | 'UNAVAILABLE'>('LOADING');
+  const [healthProbeLastSuccessAt, setHealthProbeLastSuccessAt] = useState<number | null>(null);
+  const [healthObservedAt, setHealthObservedAt] = useState(0);
   const busy = useRef(false);
   const healthPollRef = useRef<SettledPoll | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -2898,14 +3011,17 @@ export function RefreshDock() {
       timeoutMs: 8_000,
       request: runHealthProbe,
       onSuccess: (probe) => {
+        const successAt = Date.now();
         setHealthProbeStatus('CURRENT');
+        setHealthProbeLastSuccessAt(successAt);
+        setHealthObservedAt(successAt);
         setAppRtt(probe.rttMs);
         setHealthProbeError(null);
         setBrowserObservationError(probe.observationReported ? null : probe.observationError);
       },
       onError: (error) => {
         setHealthProbeStatus('UNAVAILABLE');
-        setAppRtt(null);
+        setHealthObservedAt(Date.now());
         setHealthProbeError(apiErrorMessage(error, 'Watchman health probe failed'));
         setBrowserObservationError(null);
       },
@@ -2917,6 +3033,18 @@ export function RefreshDock() {
       healthPoll.stop();
     };
   }, [runHealthProbe]);
+
+  useEffect(() => {
+    if (healthProbeLastSuccessAt === null) return;
+    const staleAt = healthProbeLastSuccessAt + WATCHMAN_HEALTH_STALE_AFTER_MS;
+    const remainingMs = Math.max(0, staleAt - Date.now());
+    if (remainingMs === 0) {
+      setHealthObservedAt(staleAt);
+      return;
+    }
+    const timer = window.setTimeout(() => setHealthObservedAt(Date.now()), remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [healthProbeLastSuccessAt]);
 
   useEffect(() => () => recoveryStatusReset.cancel(), [recoveryStatusReset]);
 
@@ -2963,31 +3091,41 @@ export function RefreshDock() {
   const productBindingContinuity = binding.continuity;
   const canonicalComponents = (productSnapshot?.components ?? []).map((component) => watchmanComponentFromSupervisor(component, productBindingContinuity));
   const effectiveLastResetTs = lastRefreshTs;
+  const healthFreshness = resolveWatchmanHealthFreshness({
+    probeStatus: healthProbeStatus,
+    lastSuccessAt: healthProbeLastSuccessAt,
+    observedAt: healthObservedAt,
+    staleAfterMs: WATCHMAN_HEALTH_STALE_AFTER_MS,
+  });
   const browserStatus: WatchmanStatus = !connected || appRtt === null
     ? 'outage'
-    : browserObservationError
+    : healthFreshness.status === 'LOADING' || healthFreshness.status === 'UNAVAILABLE'
+      ? 'outage'
+      : healthFreshness.status === 'STALE' || browserObservationError
       ? 'degraded'
-      : appRtt >= 800
-        ? 'outage'
-        : appRtt >= 350
-          ? 'degraded'
-          : 'operational';
+        : appRtt >= 800
+          ? 'outage'
+          : appRtt >= 350
+            ? 'degraded'
+            : 'operational';
   const browserComponent: WatchmanComponent = {
     id: 'browser-session',
     label: 'Browser / Website Session',
     group: 'control_path',
     status: browserStatus,
     statusLabel: watchmanStatusLabel(browserStatus),
-    detail: healthProbeStatus === 'LOADING'
+    detail: healthFreshness.status === 'LOADING'
       ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · liveness probe loading · browser observation unreported`
-      : healthProbeError
+      : healthFreshness.status === 'UNAVAILABLE'
       ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · ${healthProbeError}`
+      : healthFreshness.status === 'STALE'
+        ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · liveness evidence stale · last successful probe ${timeAgo(healthFreshness.lastSuccessAt!)} · ${healthProbeError ?? 'stale threshold exceeded'}`
       : browserObservationError
         ? `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · browser observation stale · ${browserObservationError}`
         : `Cockpit state socket ${connected ? 'live' : 'reconnecting'} · direct /health/live liveness round trip · browser observation reported`,
     value: appRtt === null ? 'Offline' : msLabel(appRtt),
     required: false,
-    updatedAt: Date.now(),
+    updatedAt: healthFreshness.lastSuccessAt,
     latencyMs: appRtt,
   };
   // Private account and external infrastructure are explicit owner boundaries,
@@ -3310,26 +3448,36 @@ function NewsModal({ onClose }: { onClose: () => void }) {
   const { setPage } = useStore();
   const [tab, setTab] = useState<number>(48);
   const [items, setItems] = useState<NewsRow[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<QuickViewLoadStatus>('LOADING');
 
   useEffect(() => {
-    let alive = true;
+    const controller = new AbortController();
     setItems(null);
-    setFailed(false);
-    fetch(`/api/news?catalog=${tab}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
-      .then((d: { items: NewsRow[] }) => alive && setItems(d.items ?? []))
-      .catch(() => alive && setFailed(true));
-    return () => {
-      alive = false;
-    };
+    setLoadStatus('LOADING');
+    void fetchJson<unknown>(
+      `/api/news?catalog=${tab}`,
+      { cache: 'no-store', signal: controller.signal },
+      6_000,
+    )
+      .then((payload: unknown) => {
+        const nextItems = parseQuickViewItems<NewsRow>(payload);
+        if (controller.signal.aborted) return;
+        setItems(nextItems);
+        setLoadStatus('CURRENT');
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setItems(null);
+        setLoadStatus('UNAVAILABLE');
+      });
+    return () => controller.abort();
   }, [tab]);
 
   return (
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-modal news-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
-          <div className="ov-title"><IconNewspaper size={17} /> Binance news <LiveDot /></div>
+          <div className="ov-title"><IconNewspaper size={17} /> Binance news <LiveDot {...quickViewLivePresentation(loadStatus)} /></div>
           <div className="ov-actions">
             <button className="ov-btn" onClick={() => { onClose(); setPage('news'); }}>Full page →</button>
             <a className="ov-btn" href="https://www.binance.com/en/support/announcement" target="_blank" rel="noreferrer noopener"><IconExternal size={14} /> Binance</a>
@@ -3353,7 +3501,7 @@ function NewsModal({ onClose }: { onClose: () => void }) {
               </a>
             ))
           ) : (
-            <div className="ov-empty">{failed ? 'Feed unavailable — Binance could not be reached.' : items ? 'No announcements in this category.' : 'Loading…'}</div>
+            <div className="ov-empty">{loadStatus === 'UNAVAILABLE' ? 'Feed unavailable — Binance could not be reached.' : items ? 'No announcements in this category.' : 'Loading…'}</div>
           )}
         </div>
       </div>
@@ -3364,18 +3512,30 @@ function NewsModal({ onClose }: { onClose: () => void }) {
 function CalendarModal({ onClose }: { onClose: () => void }) {
   const { setPage, prefs } = useStore();
   const [items, setItems] = useState<CalItem[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<QuickViewLoadStatus>('LOADING');
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
 
   useEffect(() => {
-    let alive = true;
-    fetch('/api/calendar')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad'))))
-      .then((d: { items: CalItem[] }) => alive && setItems(d.items ?? []))
-      .catch(() => alive && setFailed(true));
-    return () => {
-      alive = false;
-    };
+    const controller = new AbortController();
+    setItems(null);
+    setLoadStatus('LOADING');
+    void fetchJson<unknown>(
+      '/api/calendar',
+      { cache: 'no-store', signal: controller.signal },
+      6_000,
+    )
+      .then((payload: unknown) => {
+        const nextItems = parseQuickViewItems<CalItem>(payload);
+        if (controller.signal.aborted) return;
+        setItems(nextItems);
+        setLoadStatus('CURRENT');
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setItems(null);
+        setLoadStatus('UNAVAILABLE');
+      });
+    return () => controller.abort();
   }, []);
 
   const days: { key: string; label: string; rows: CalItem[] }[] = [];
@@ -3395,7 +3555,7 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
     <div className="ov-backdrop" onMouseDown={onClose}>
       <div className="ov-modal cal-modal" onMouseDown={(e) => e.stopPropagation()}>
         <div className="ov-head">
-          <div className="ov-title"><IconCalendar size={17} /> Economic calendar <LiveDot /></div>
+          <div className="ov-title"><IconCalendar size={17} /> Economic calendar <LiveDot {...quickViewLivePresentation(loadStatus)} /></div>
           <div className="ov-actions">
             <button className="ov-btn" onClick={() => { onClose(); setPage('calendar'); }}>Full page →</button>
             <a className="ov-btn" href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noreferrer noopener"><IconExternal size={14} /> TradingView</a>
@@ -3431,7 +3591,7 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
               </div>
             ))
           ) : (
-            <div className="ov-empty">{failed ? 'Calendar unavailable — source could not be reached.' : items ? 'No events in range.' : 'Loading…'}</div>
+            <div className="ov-empty">{loadStatus === 'UNAVAILABLE' ? 'Calendar unavailable — source could not be reached.' : items ? 'No events in range.' : 'Loading…'}</div>
           )}
         </div>
       </div>

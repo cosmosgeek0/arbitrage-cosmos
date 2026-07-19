@@ -36,6 +36,21 @@ test('RefreshDock health and observation polling is one bounded abortable genera
   assert.match(poll, /healthPoll\.start\(\)/);
   assert.match(poll, /healthPoll\.stop\(\)/);
   assert.doesNotMatch(poll, /window\.setInterval/);
+
+  const browserComponentStart = dock.indexOf('const browserComponent: WatchmanComponent');
+  const browserComponentEnd = dock.indexOf('// Private account and external infrastructure', browserComponentStart);
+  const browserComponent = dock.slice(browserComponentStart, browserComponentEnd);
+  assert.notEqual(browserComponentStart, -1, 'browser Watchman projection is missing');
+  assert.notEqual(browserComponentEnd, -1, 'browser Watchman projection is incomplete');
+  assert.match(dock, /healthProbeLastSuccessAt[^=]*= useState<number \| null>\(null\)/);
+  assert.match(dock, /const successAt = Date\.now\(\);[\s\S]*setHealthProbeLastSuccessAt\(successAt\)/);
+  assert.match(dock, /resolveWatchmanHealthFreshness\(\{[\s\S]*staleAfterMs: WATCHMAN_HEALTH_STALE_AFTER_MS/);
+  assert.match(dock, /const staleAt = healthProbeLastSuccessAt \+ WATCHMAN_HEALTH_STALE_AFTER_MS/);
+  assert.match(dock, /window\.setTimeout\(\(\) => setHealthObservedAt\(Date\.now\(\)\), remainingMs\)/);
+  assert.match(dock, /window\.clearTimeout\(timer\)/);
+  assert.match(browserComponent, /updatedAt: healthFreshness\.lastSuccessAt/);
+  assert.doesNotMatch(browserComponent, /updatedAt:\s*Date\.now\(\)/);
+  assert.match(browserComponent, /healthFreshness\.status === 'STALE'/);
 });
 
 test('RefreshDock recovery is bounded and releases busy state unconditionally', async () => {
@@ -64,7 +79,7 @@ test('RefreshDock recovery is bounded and releases busy state unconditionally', 
   assert.match(dock, /healthProbeStatus[^=]*= useState<[^>]+>\('LOADING'\)/);
   assert.match(dock, /setHealthProbeStatus\('CURRENT'\)/);
   assert.match(dock, /setHealthProbeStatus\('UNAVAILABLE'\)/);
-  assert.match(dock, /healthProbeStatus === 'LOADING'[\s\S]*browser observation unreported/);
+  assert.match(dock, /healthFreshness\.status === 'LOADING'[\s\S]*browser observation unreported/);
 
   assert.match(dock, /productSnapshot\.canonicalCockpit\.watchmanOverall/);
   assert.match(dock, /canonicalWatchmanLauncherPresentation\(\{/);

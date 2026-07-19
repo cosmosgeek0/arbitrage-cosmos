@@ -22,8 +22,10 @@ PYTHON_CLIENT = '''"""Generated Q16 strict one-request UDS client; local use onl
 from __future__ import annotations
 import json
 import math
+import os
 import re
 import socket
+import stat
 from pathlib import Path
 
 MAXIMUM_SAFE_INTEGER = 9007199254740991
@@ -434,6 +436,53 @@ def request_bytes(
         raise ValueError("local inference server returned multiple frames")
     return _parse(bytes(received[:-1]))
 
+def _file_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+def _read_request_file(payload_path: Path, maximum_bytes: int) -> bytes:
+    if not isinstance(payload_path, Path):
+        raise ValueError("payload_path must be pathlib.Path")
+    if type(maximum_bytes) is not int or not 1 <= maximum_bytes <= MAXIMUM_SAFE_INTEGER:
+        raise ValueError("maximum_bytes must be a positive safe integer")
+    before = os.lstat(payload_path)
+    if not stat.S_ISREG(before.st_mode):
+        raise ValueError("raw request path must resolve to a regular file")
+    if not 1 <= before.st_size <= maximum_bytes:
+        raise ValueError("raw request file exceeds the bounded local protocol frame")
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    non_blocking = getattr(os, "O_NONBLOCK", None)
+    if not isinstance(no_follow, int) or not isinstance(non_blocking, int):
+        raise ValueError("safe raw request file admission is unsupported on this platform")
+    flags = os.O_RDONLY | no_follow | non_blocking | getattr(os, "O_BINARY", 0)
+    descriptor = os.open(payload_path, flags)
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            raise ValueError("raw request path must resolve to a regular file")
+        if _file_identity(before) != _file_identity(opened):
+            raise ValueError("raw request file changed during admission")
+        raw = bytearray()
+        remaining = opened.st_size + 1
+        while remaining:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            raw.extend(chunk)
+            remaining -= len(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    if _file_identity(opened) != _file_identity(after) or len(raw) != opened.st_size:
+        raise ValueError("raw request file changed during admission")
+    return bytes(raw)
+
 def request_file(
     socket_path: Path,
     payload_path: Path,
@@ -443,7 +492,7 @@ def request_file(
 ) -> dict[str, object]:
     return request_bytes(
         socket_path,
-        payload_path.read_bytes(),
+        _read_request_file(payload_path, maximum_bytes),
         maximum_bytes=maximum_bytes,
         timeout_seconds=timeout_seconds,
     )
@@ -962,8 +1011,63 @@ export function requestBytes(socketPath, payloadBytes, maximumBytes = 262144, ti
   });
 }
 
+function sameFileIdentity(left, right) {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.mode === right.mode
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.ctimeNs === right.ctimeNs;
+}
+
+function readRequestFile(payloadPath, maximumBytes) {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes <= 0) {
+    fail('maximumBytes must be a positive safe integer');
+  }
+  const before = fs.lstatSync(payloadPath, { bigint: true });
+  if (!before.isFile()) fail('raw request path must resolve to a regular file');
+  if (before.size <= 0n || before.size > BigInt(maximumBytes)) {
+    fail('raw request file exceeds bounded local frame');
+  }
+  const noFollow = fs.constants.O_NOFOLLOW;
+  const nonBlocking = fs.constants.O_NONBLOCK;
+  if (!Number.isInteger(noFollow) || !Number.isInteger(nonBlocking)) {
+    fail('safe raw request file admission is unsupported on this platform');
+  }
+  let descriptor;
+  try {
+    descriptor = fs.openSync(payloadPath, fs.constants.O_RDONLY | noFollow | nonBlocking);
+  } catch (error) {
+    throw new Error(`raw request file changed during admission: ${error}`);
+  }
+  try {
+    const opened = fs.fstatSync(descriptor, { bigint: true });
+    if (!opened.isFile()) fail('raw request path must resolve to a regular file');
+    if (!sameFileIdentity(before, opened)) fail('raw request file changed during admission');
+    const raw = Buffer.alloc(Number(opened.size) + 1);
+    let total = 0;
+    while (total < raw.length) {
+      const count = fs.readSync(descriptor, raw, total, raw.length - total, null);
+      if (count === 0) break;
+      total += count;
+    }
+    const after = fs.fstatSync(descriptor, { bigint: true });
+    if (!sameFileIdentity(opened, after) || total !== Number(opened.size)) {
+      fail('raw request file changed during admission');
+    }
+    return raw.subarray(0, total);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 export function requestFile(socketPath, payloadPath, maximumBytes = 262144, timeoutMs = 2000) {
-  return requestBytes(socketPath, fs.readFileSync(payloadPath), maximumBytes, timeoutMs);
+  return requestBytes(
+    socketPath,
+    readRequestFile(payloadPath, maximumBytes),
+    maximumBytes,
+    timeoutMs,
+  );
 }
 
 export function request(socketPath, payload, maximumBytes = 262144, timeoutMs = 2000) {

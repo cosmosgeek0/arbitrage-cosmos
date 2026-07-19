@@ -41,21 +41,18 @@ from quant_edge.models.contracts import ProbabilitySemantics
 from quant_edge.regime.anomaly import DisorderConfigV1, fuse_disorder
 from quant_edge.validation import (
     CostStressScenarioV1,
-    FoldStatus,
-    FoldV1,
     OpportunityDecayV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
     StressSpecV1,
     ValidationSampleV1,
-    WalkForwardPlanV1,
     WalkForwardSpecV1,
     build_walk_forward_plan,
     run_cost_stress,
     subset_by_ids,
 )
-from quant_edge.validation.splits import PlanStatus, SplitScheme
+from quant_edge.validation.splits import SplitScheme
 
 BASE = 1_700_000_000_000_000_000
 PROPERTY_SETTINGS = settings(max_examples=30, deadline=None, derandomize=True)
@@ -97,16 +94,23 @@ def _conformal_research(
     ConformalResearchSliceV1,
     ConformalResearchSliceV1,
 ]:
-    warmup_ids = tuple(f"property-warmup-{index:04d}" for index in range(8))
-    meta_ids = tuple(f"property-meta-{index:04d}" for index in range(8))
-    stack_calibration_ids = tuple(f"property-stack-calibration-{index:04d}" for index in range(8))
+    segment_size = len(outcomes)
+    warmup_ids = tuple(f"property-warmup-{index:04d}" for index in range(segment_size))
+    meta_ids = tuple(f"property-meta-{index:04d}" for index in range(segment_size))
+    stack_calibration_ids = tuple(
+        f"property-stack-calibration-{index:04d}" for index in range(segment_size)
+    )
     fit_ids = tuple(f"property-fit-{index:04d}" for index in range(len(outcomes)))
+    application_ids = (
+        "property-assessment",
+        *(f"property-application-{index:04d}" for index in range(segment_size - 1)),
+    )
     sample_ids = (
         *warmup_ids,
         *meta_ids,
         *stack_calibration_ids,
         *fit_ids,
-        "property-assessment",
+        *application_ids,
     )
     binary_outcomes = (
         *(index % 2 for index in range(len(warmup_ids))),
@@ -114,6 +118,7 @@ def _conformal_research(
         *(index % 2 for index in range(len(stack_calibration_ids))),
         *outcomes,
         assessment_outcome,
+        *(index % 2 for index in range(segment_size - 1)),
     )
     rows = tuple(
         ValidationSampleV1(
@@ -141,28 +146,8 @@ def _conformal_research(
         make_ratio(0, 1),
         None,
     )
-    fold_rows = (
-        (warmup_ids, meta_ids),
-        ((*warmup_ids, *meta_ids), stack_calibration_ids),
-        ((*warmup_ids, *meta_ids, *stack_calibration_ids), fit_ids),
-        ((*warmup_ids, *meta_ids, *stack_calibration_ids, *fit_ids), ("property-assessment",)),
-    )
-    folds = tuple(
-        FoldV1(
-            f"fold-{index + 1:02d}",
-            FoldStatus.VALID,
-            train_sample_ids,
-            fold_sample_ids,
-            samples.by_id(fold_sample_ids[0]).cutoff_ns,
-            samples.by_id(fold_sample_ids[-1]).cutoff_ns,
-            0,
-            0,
-            0,
-            0,
-        )
-        for index, (train_sample_ids, fold_sample_ids) in enumerate(fold_rows)
-    )
-    plan = WalkForwardPlanV1(split_spec, samples.digest(), folds, (), (), PlanStatus.VALID)
+    plan = build_walk_forward_plan(samples, split_spec)
+    folds = plan.folds
     specialist_ids = ("property-specialist-a", "property-specialist-b")
     sample_indexes = {sample_id: index for index, sample_id in enumerate(sample_ids)}
     bundles = tuple(

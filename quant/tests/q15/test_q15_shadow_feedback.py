@@ -19,7 +19,7 @@ from quant_edge.registry_ops.contracts import (
     ShadowScoreBatchV1,
     mapping_digest,
 )
-from quant_edge.registry_ops.store import RegistryConflictError
+from quant_edge.registry_ops.store import RegistryConflictError, ResearchRegistryStore
 
 
 def _batch(
@@ -71,6 +71,12 @@ def test_delayed_feedback_is_horizon_exact_idempotent_and_immutable(tmp_path: Pa
     assert store.record_shadow_batch(one_second) == one_second.content_digest
     assert store.record_shadow_batch(one_second) == one_second.content_digest
     store.record_shadow_batch(one_hour)
+    cloned_event = replace(one_second, batch_id="batch-1s-clone")
+    with pytest.raises(RegistryConflictError, match="evaluation unit"):
+        store.record_shadow_batch(cloned_event)
+    counts = store.shadow_evaluation_counts(champion.slot_id)
+    assert counts.evaluation_unit_count == 3
+    assert counts.distinct_event_count == 2
     early = DelayedFeedbackV1(
         feedback_id="feedback-early",
         batch_id=one_second.batch_id,
@@ -152,6 +158,10 @@ def test_delayed_feedback_is_horizon_exact_idempotent_and_immutable(tmp_path: Pa
     with pytest.raises(RegistryConflictError, match="requires available"):
         store.record_owner_annotation(premature_known)
     store.close()
+    with ResearchRegistryStore(tmp_path) as restarted:
+        assert restarted.shadow_evaluation_counts(champion.slot_id) == counts
+        with pytest.raises(RegistryConflictError, match="evaluation unit"):
+            restarted.record_shadow_batch(cloned_event)
 
 
 def test_unknown_feedback_stays_unknown_and_owner_annotation_is_separate(tmp_path: Path) -> None:

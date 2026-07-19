@@ -53,7 +53,8 @@ class AnalogRecordV1:
     """One stored earlier window with its later outcome and honest completeness.
 
     The outcome label is whatever the label factory assigned, including the honest
-    ``UNKNOWN``; retrieval never invents or filters outcomes.
+    ``UNKNOWN``. Its outcome horizon and availability time are explicit so retrieval
+    cannot expose a label before that label was knowable.
     """
 
     record_id: str
@@ -62,6 +63,9 @@ class AnalogRecordV1:
     feature_id: str
     start_ns: int
     end_ns: int
+    outcome_start_ns: int
+    outcome_end_ns: int
+    label_available_ns: int
     values: tuple[FixedPointV1, ...]
     outcome_label: str
     completeness: QualityState
@@ -73,7 +77,25 @@ class AnalogRecordV1:
         require_contract_id(self.regime_id, field="regime_id")
         require_contract_id(self.feature_id, field="feature_id")
         start = _require_ns(self.start_ns, field="start_ns")
-        require_strict_int(self.end_ns, field="end_ns", minimum=start + 1, maximum=UTC_NS_MAX)
+        end = require_strict_int(self.end_ns, field="end_ns", minimum=start + 1, maximum=UTC_NS_MAX)
+        outcome_start = require_strict_int(
+            self.outcome_start_ns,
+            field="outcome_start_ns",
+            minimum=end,
+            maximum=UTC_NS_MAX,
+        )
+        outcome_end = require_strict_int(
+            self.outcome_end_ns,
+            field="outcome_end_ns",
+            minimum=outcome_start + 1,
+            maximum=UTC_NS_MAX,
+        )
+        require_strict_int(
+            self.label_available_ns,
+            field="label_available_ns",
+            minimum=outcome_end,
+            maximum=UTC_NS_MAX,
+        )
         _require_window_values(self.values, field="values")
         require_contract_id(self.outcome_label, field="outcome_label")
         if not isinstance(self.completeness, QualityState):
@@ -87,7 +109,10 @@ class AnalogRecordV1:
             "endNs": str(self.end_ns),
             "eventId": self.event_id,
             "featureId": self.feature_id,
+            "labelAvailableNs": str(self.label_available_ns),
+            "outcomeEndNs": str(self.outcome_end_ns),
             "outcomeLabel": self.outcome_label,
+            "outcomeStartNs": str(self.outcome_start_ns),
             "recordId": self.record_id,
             "regimeId": self.regime_id,
             "startNs": str(self.start_ns),
@@ -266,9 +291,11 @@ def retrieve_analogs(
     *,
     k: int,
 ) -> AnalogRetrievalV1:
-    """Rank strictly earlier, non-overlapping, cohort-matched records against the
-    query; exclusions are measured per reason and ties break deterministically by
-    earlier end time then record identity."""
+    """Rank earlier, label-available, identity-safe records against the query.
+
+    Exclusions are measured per reason and ties break deterministically by earlier
+    end time then record identity.
+    """
 
     if not isinstance(query, AnalogQueryV1):
         raise ContractValueError("query must be AnalogQueryV1")
@@ -292,17 +319,13 @@ def retrieve_analogs(
         if record.feature_id != query.feature_id or len(record.values) != len(query.values):
             exclusions[AnalogExclusionReason.SHAPE] += 1
             continue
-        if record.end_ns > horizon:
+        if record.end_ns > horizon or record.label_available_ns > horizon:
             exclusions[AnalogExclusionReason.FUTURE] += 1
             continue
         if record.end_ns > query.start_ns:
             exclusions[AnalogExclusionReason.OVERLAP] += 1
             continue
-        if (
-            record.event_id is not None
-            and query.event_id is not None
-            and record.event_id == query.event_id
-        ):
+        if record.event_id is None or query.event_id is None or record.event_id == query.event_id:
             exclusions[AnalogExclusionReason.SAME_EVENT] += 1
             continue
         record_total, record_variance = _centered_moments(record.values)

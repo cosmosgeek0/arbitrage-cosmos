@@ -39,7 +39,7 @@ import {
 } from './campaign-input-registry.mjs';
 import { renderCanonicalHumanArtifact } from './human-evidence-renderer.mjs';
 
-const repo = process.cwd();
+const repo = resolve(process.cwd());
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const rootRelative = 'verification/product-truth-20260716';
 const root = resolve(repo, rootRelative);
@@ -558,6 +558,8 @@ if (selfTest) {
   process.exit(0);
 }
 
+const executingCheckout = resolve(gitText('rev-parse', '--show-toplevel'));
+assert(executingCheckout === repo, 'EXECUTING_CHECKOUT_ROOT_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(candidate ?? ''), 'EXACT_FULL_CANDIDATE_SHA_REQUIRED');
 assert(/^[a-f0-9]{40}$/u.test(requiredParent ?? ''), 'EXACT_FULL_REQUIRED_PARENT_SHA_REQUIRED');
 assert(requiredParent === REQUIRED_C2_PARENT, 'IMMUTABLE_C2_PARENT_MISMATCH');

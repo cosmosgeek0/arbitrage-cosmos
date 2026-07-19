@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Final, cast
 
 from quant_edge.errors import ContractValueError
+from quant_edge.features.fixedpoint import MAX_FIXED_MANTISSA
 from quant_edge.labels.rational import scaled_to_aligned
 from quant_edge.lake.contracts import (
     UTC_NS_MAX,
@@ -18,6 +19,7 @@ from quant_edge.lake.contracts import (
 MAX_FEATURE_POINTS: Final = 100_000
 MAX_BARS: Final = 100_000
 MAX_TRADES_PER_BAR: Final = 1_000_000
+MAX_BAR_ALIGNED_VALUE: Final = MAX_FIXED_MANTISSA * 10**26
 
 _ALLOWED_POSTURES: Final = frozenset({EvidencePosture.SYNTHETIC, EvidencePosture.REPLAY})
 
@@ -259,6 +261,26 @@ class BarV1:
             (self.last_value_aligned is None) != (self.point_count == 0)
         ):
             raise ContractValueError("bar values exist exactly when the bar has points")
+        if self.point_count > 0:
+            require_strict_int(
+                self.first_value_aligned,
+                field="first_value_aligned",
+                minimum=-MAX_BAR_ALIGNED_VALUE,
+                maximum=MAX_BAR_ALIGNED_VALUE,
+            )
+            require_strict_int(
+                self.last_value_aligned,
+                field="last_value_aligned",
+                minimum=-MAX_BAR_ALIGNED_VALUE,
+                maximum=MAX_BAR_ALIGNED_VALUE,
+            )
+        if self.volume_aligned_total is not None:
+            require_strict_int(
+                self.volume_aligned_total,
+                field="volume_aligned_total",
+                minimum=0,
+                maximum=MAX_BAR_ALIGNED_VALUE,
+            )
         if not isinstance(self.complete, bool):
             raise ContractValueError("complete must be boolean")
 

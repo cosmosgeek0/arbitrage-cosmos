@@ -116,11 +116,16 @@ class SampleSetV1:
     dataset_id: str
     posture: EvidencePosture
     samples: tuple[ValidationSampleV1, ...]
+    parent_dataset_digest: DigestV1 | None = None
 
     def __post_init__(self) -> None:
         require_contract_id(self.dataset_id, field="dataset_id")
         if not isinstance(self.posture, EvidencePosture):
             raise ContractValueError("posture must be an EvidencePosture")
+        if self.parent_dataset_digest is not None and not isinstance(
+            self.parent_dataset_digest, DigestV1
+        ):
+            raise ContractValueError("parent_dataset_digest must be DigestV1 or None")
         if not isinstance(self.samples, tuple) or not self.samples:
             raise ContractValueError("samples must be a non-empty tuple")
         if len(self.samples) > MAX_SAMPLES:
@@ -153,13 +158,16 @@ class SampleSetV1:
         raise ContractValueError(f"unknown sample id: {sample_id}")
 
     def as_mapping(self) -> dict[str, object]:
-        return {
+        mapping: dict[str, object] = {
             "datasetId": self.dataset_id,
             "posture": self.posture.value,
             "sampleCount": len(self.samples),
             "samples": [sample.as_mapping() for sample in self.samples],
             "schema": "Q14SampleSetV1",
         }
+        if self.parent_dataset_digest is not None:
+            mapping["parentDatasetDigest"] = self.parent_dataset_digest.hexdigest
+        return mapping
 
     def digest(self) -> DigestV1:
         return DigestV1(
@@ -190,12 +198,109 @@ class PredictionV1:
 
 
 @dataclass(frozen=True, slots=True)
+class FoldFitReceiptV1:
+    """One immutable fold fit/predict receipt bound to exact plan evidence."""
+
+    fold_id: str
+    model_id: str
+    plan_digest: DigestV1
+    training_dataset_digest: DigestV1
+    train_sample_ids: tuple[str, ...]
+    validation_sample_ids: tuple[str, ...]
+    max_training_label_end_ns: int
+    validation_start_cutoff_ns: int
+    embargo_ns: int
+    prediction_digest: DigestV1
+    model_artifact_digest: DigestV1
+    code_digest: DigestV1
+    config_digest: DigestV1
+    seed: int
+
+    def __post_init__(self) -> None:
+        require_contract_id(self.fold_id, field="fold_id")
+        require_contract_id(self.model_id, field="model_id")
+        for field_name in (
+            "plan_digest",
+            "training_dataset_digest",
+            "prediction_digest",
+            "model_artifact_digest",
+            "code_digest",
+            "config_digest",
+        ):
+            if not isinstance(getattr(self, field_name), DigestV1):
+                raise ContractValueError(f"{field_name} must be DigestV1")
+        for field_name in ("train_sample_ids", "validation_sample_ids"):
+            values = getattr(self, field_name)
+            if not isinstance(values, tuple) or not values:
+                raise ContractValueError(f"{field_name} must be a non-empty tuple")
+            if len(values) != len(set(values)):
+                raise ContractValueError(f"{field_name} must contain unique ids")
+            for sample_id in values:
+                require_contract_id(sample_id, field=field_name)
+        _require_ns(self.max_training_label_end_ns, field="max_training_label_end_ns")
+        _require_ns(self.validation_start_cutoff_ns, field="validation_start_cutoff_ns")
+        require_strict_int(
+            self.embargo_ns,
+            field="embargo_ns",
+            minimum=0,
+            maximum=UTC_NS_MAX,
+        )
+        require_strict_int(self.seed, field="seed", minimum=0)
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "codeDigest": self.code_digest.hexdigest,
+            "configDigest": self.config_digest.hexdigest,
+            "embargoNs": str(self.embargo_ns),
+            "foldId": self.fold_id,
+            "maxTrainingLabelEndNs": str(self.max_training_label_end_ns),
+            "modelArtifactDigest": self.model_artifact_digest.hexdigest,
+            "modelId": self.model_id,
+            "planDigest": self.plan_digest.hexdigest,
+            "predictionDigest": self.prediction_digest.hexdigest,
+            "seed": str(self.seed),
+            "trainSampleIds": list(self.train_sample_ids),
+            "trainingDatasetDigest": self.training_dataset_digest.hexdigest,
+            "validationSampleIds": list(self.validation_sample_ids),
+            "validationStartCutoffNs": str(self.validation_start_cutoff_ns),
+        }
+
+    def digest(self) -> DigestV1:
+        return DigestV1(
+            hexdigest=hashlib.sha256(canonical_json_bytes(self.as_mapping())).hexdigest()
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionLineageV1:
+    """Immutable identities of the pre-cutoff features and fitted model receipt."""
+
+    feature_artifact_digest: DigestV1
+    fit_receipt_digest: DigestV1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.feature_artifact_digest, DigestV1):
+            raise ContractValueError("feature_artifact_digest must be DigestV1")
+        if not isinstance(self.fit_receipt_digest, DigestV1):
+            raise ContractValueError("fit_receipt_digest must be DigestV1")
+
+    def as_mapping(self) -> dict[str, object]:
+        return {
+            "featureArtifactDigest": self.feature_artifact_digest.hexdigest,
+            "fitReceiptDigest": self.fit_receipt_digest.hexdigest,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionSetV1:
     """Digest-bound predictions of one model over one sample set."""
 
     model_id: str
     dataset_digest: DigestV1
     predictions: tuple[PredictionV1, ...]
+    lineage: PredictionLineageV1 | None = None
+    fold_fit_receipts: tuple[FoldFitReceiptV1, ...] = ()
+    parent_dataset_digest: DigestV1 | None = None
 
     def __post_init__(self) -> None:
         require_contract_id(self.model_id, field="model_id")
@@ -203,6 +308,21 @@ class PredictionSetV1:
             raise ContractValueError("dataset_digest must be DigestV1")
         if not isinstance(self.predictions, tuple) or not self.predictions:
             raise ContractValueError("predictions must be a non-empty tuple")
+        if self.lineage is not None and not isinstance(self.lineage, PredictionLineageV1):
+            raise ContractValueError("lineage must be PredictionLineageV1 or None")
+        if self.parent_dataset_digest is not None and not isinstance(
+            self.parent_dataset_digest, DigestV1
+        ):
+            raise ContractValueError("parent_dataset_digest must be DigestV1 or None")
+        if not isinstance(self.fold_fit_receipts, tuple) or any(
+            not isinstance(receipt, FoldFitReceiptV1) for receipt in self.fold_fit_receipts
+        ):
+            raise ContractValueError("fold_fit_receipts must contain FoldFitReceiptV1 entries")
+        receipt_fold_ids = tuple(receipt.fold_id for receipt in self.fold_fit_receipts)
+        if len(receipt_fold_ids) != len(set(receipt_fold_ids)):
+            raise ContractValueError("fold_fit_receipts must have unique fold ids")
+        if any(receipt.model_id != self.model_id for receipt in self.fold_fit_receipts):
+            raise ContractValueError("fold fit receipt model_id must match prediction model_id")
         if len(self.predictions) > MAX_SAMPLES:
             raise ContractValueError("prediction count exceeds MAX_SAMPLES")
         previous_id: str | None = None
@@ -220,13 +340,22 @@ class PredictionSetV1:
         raise ContractValueError(f"no prediction for sample id: {sample_id}")
 
     def as_mapping(self) -> dict[str, object]:
-        return {
+        mapping: dict[str, object] = {
             "datasetDigest": self.dataset_digest.hexdigest,
             "modelId": self.model_id,
             "predictionCount": len(self.predictions),
             "predictions": [prediction.as_mapping() for prediction in self.predictions],
             "schema": "Q14PredictionSetV1",
         }
+        if self.lineage is not None:
+            mapping["lineage"] = self.lineage.as_mapping()
+        if self.fold_fit_receipts:
+            mapping["foldFitReceipts"] = [
+                receipt.as_mapping() for receipt in self.fold_fit_receipts
+            ]
+        if self.parent_dataset_digest is not None:
+            mapping["parentDatasetDigest"] = self.parent_dataset_digest.hexdigest
+        return mapping
 
     def digest(self) -> DigestV1:
         return DigestV1(
@@ -250,6 +379,7 @@ def subset_by_ids(samples: SampleSetV1, ids: tuple[str, ...]) -> SampleSetV1:
         dataset_id=f"{samples.dataset_id}.subset",
         posture=samples.posture,
         samples=tuple(sample for sample in samples.samples if sample.sample_id in selected),
+        parent_dataset_digest=samples.digest(),
     )
 
 
@@ -263,6 +393,12 @@ def restrict_predictions(
         raise ContractValueError("predictions must be PredictionSetV1")
     if not isinstance(samples, SampleSetV1):
         raise ContractValueError("samples must be SampleSetV1")
+    expected_parent = samples.parent_dataset_digest
+    if expected_parent is None:
+        if predictions.dataset_digest != samples.digest():
+            raise ContractValueError("predictions are bound to a different sample set")
+    elif predictions.dataset_digest != expected_parent:
+        raise ContractValueError("predictions are bound to a different parent sample set")
     wanted = set(samples.sample_ids)
     kept = tuple(
         prediction for prediction in predictions.predictions if prediction.sample_id in wanted
@@ -273,6 +409,9 @@ def restrict_predictions(
         model_id=predictions.model_id,
         dataset_digest=samples.digest(),
         predictions=kept,
+        lineage=predictions.lineage,
+        fold_fit_receipts=predictions.fold_fit_receipts,
+        parent_dataset_digest=predictions.dataset_digest,
     )
 
 
@@ -295,6 +434,9 @@ def rebind_predictions(predictions: PredictionSetV1, samples: SampleSetV1) -> Pr
         model_id=predictions.model_id,
         dataset_digest=samples.digest(),
         predictions=predictions.predictions,
+        lineage=predictions.lineage,
+        fold_fit_receipts=predictions.fold_fit_receipts,
+        parent_dataset_digest=predictions.parent_dataset_digest,
     )
 
 

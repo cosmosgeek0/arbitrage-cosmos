@@ -43,6 +43,8 @@ from quant_edge.survival.metrics import (
 
 SECOND_NS = 1_000_000_000
 CAUSES = CauseSetV1(cause_ids=("A", "B"))
+MODEL_ID = "q11.prop.model"
+SPLIT_ID = "q11.prop.split"
 
 # One observation: (duration seconds 1..40, outcome 0=censored, 1=A, 2=B).
 OBSERVATIONS = st.lists(
@@ -212,6 +214,10 @@ def test_oracle_brier_is_zero_without_censoring(
         cohort,
         PredictionSetV1(
             prediction_id="q11.prop.oracle",
+            cohort_id=cohort.cohort_id,
+            model_id=MODEL_ID,
+            target=cohort.target,
+            split_id=SPLIT_ID,
             grid=grid,
             cause_scope=ANY_CAUSE,
             predictions=predictions,
@@ -236,6 +242,10 @@ def test_constant_prediction_brier_identity_without_censoring(
         cohort,
         PredictionSetV1(
             prediction_id="q11.prop.const",
+            cohort_id=cohort.cohort_id,
+            model_id=MODEL_ID,
+            target=cohort.target,
+            split_id=SPLIT_ID,
             grid=grid,
             cause_scope=ANY_CAUSE,
             predictions=tuple(
@@ -270,12 +280,20 @@ def test_concordance_reversal_symmetry_without_ties(
     cohort = build([(seconds, outcome) for seconds, outcome, _ in rows])
     forward = RiskScoreSetV1(
         score_id="q11.prop.fwd",
+        cohort_id=cohort.cohort_id,
+        model_id="q11.prop.forward-model",
+        target=cohort.target,
+        split_id=SPLIT_ID,
         scores=tuple(
             (f"s{index:03d}", FixedPointV1(score)) for index, (_, _, score) in enumerate(rows)
         ),
     )
     backward = RiskScoreSetV1(
         score_id="q11.prop.bwd",
+        cohort_id=cohort.cohort_id,
+        model_id="q11.prop.backward-model",
+        target=cohort.target,
+        split_id=SPLIT_ID,
         scores=tuple(
             (f"s{index:03d}", FixedPointV1(-score)) for index, (_, _, score) in enumerate(rows)
         ),
@@ -313,6 +331,10 @@ def test_marginal_calibration_gap_is_zero_at_a_covered_horizon(
         cohort,
         PredictionSetV1(
             prediction_id="q11.prop.marginal",
+            cohort_id=cohort.cohort_id,
+            model_id=MODEL_ID,
+            target=cohort.target,
+            split_id=SPLIT_ID,
             grid=grid,
             cause_scope=ANY_CAUSE,
             predictions=tuple(

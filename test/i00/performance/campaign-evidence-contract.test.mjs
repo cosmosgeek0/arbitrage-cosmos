@@ -367,3 +367,24 @@ test('generated C9 selection binds all six human artifacts to executable Git-obj
   assert.equal(manifest.tooling_bundle_sha256, selection.tooling_bundle_sha256);
   assert.equal(manifest.sealed_git_object_payload_bundle_sha256, SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256);
 });
+
+test('worktree census is bound to the executing checkout without a machine-local path', () => {
+  const generatorSource = readFileSync(
+    path.join(CAMPAIGN, 'generate-exact-candidate-evidence.mjs'),
+    'utf8',
+  );
+  const censusSource = readFileSync(
+    path.join(CAMPAIGN, 'generate-worktree-census.mjs'),
+    'utf8',
+  );
+
+  assert.doesNotMatch(censusSource, /\/Users\/cosmosgeek\/Desktop\/Main/u);
+  assert.match(generatorSource, /EXECUTING_CHECKOUT_ROOT_REQUIRED/u);
+  // The sealed-census discipline (CAMP-091) superseded the live census rerun:
+  // the generator now refreshes only from the sealed census artifact instead of
+  // invoking the census generator with --executing-checkout.
+  assert.match(generatorSource, /SEALED_CENSUS_CANDIDATE/u);
+  assert.match(censusSource, /EXECUTING_CHECKOUT_ARGUMENT_REQUIRED/u);
+  assert.match(censusSource, /EXECUTING_CHECKOUT_MISMATCH/u);
+  assert.match(censusSource, /git -C \$\{EXECUTING_CHECKOUT\} worktree list/u);
+});

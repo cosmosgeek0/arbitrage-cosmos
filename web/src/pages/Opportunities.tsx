@@ -6,6 +6,7 @@ import {
   X,
 } from 'lucide-react';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
+import { projectMarketConsumerTruth } from '../components/Header';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { useStore } from '../store';
@@ -30,11 +31,20 @@ export function Opportunities() {
   const {
     state,
     markets,
+    marketStatus,
+    marketsLastSuccessAtMs,
     marketsUpdatedAt,
     openDetail,
   } = useStore();
   const [view, setView] = useState<View>('active');
   const [search, setSearch] = useState('');
+
+  const marketTruth = projectMarketConsumerTruth({
+    status: marketStatus,
+    lastSuccessAtMs: marketsLastSuccessAtMs,
+    sourceUpdatedAtMs: marketsUpdatedAt,
+    nowMs: Date.now(),
+  });
 
   const query = search.trim().toUpperCase();
 
@@ -45,7 +55,16 @@ export function Opportunities() {
     ));
   }, [markets, query]);
 
-  const updatedLabel = marketsUpdatedAt ? timeAgo(marketsUpdatedAt) : 'Waiting';
+  const marketEvidenceAge = marketTruth.evidenceAtMs === null
+    ? 'Age unknown'
+    : `Updated ${timeAgo(marketTruth.evidenceAtMs)}`;
+  const updatedLabel = marketTruth.label === 'CURRENT'
+    ? marketEvidenceAge
+    : marketTruth.label === 'STALE LAST-KNOWN'
+      ? `STALE LAST-KNOWN · ${marketEvidenceAge}`
+      : marketTruth.label === 'LOADING'
+        ? 'Market Feed Loading'
+        : 'Market Feed Unavailable';
 
   if (!state) {
     return (
@@ -78,7 +97,7 @@ export function Opportunities() {
               <i aria-hidden="true" />
               Legacy Scanner Retired
             </span>
-            <span className="opportunityx-updated">Updated {updatedLabel}</span>
+            <span className="opportunityx-updated">{updatedLabel}</span>
           </div>
           <label className="opportunityx-search">
             <Search size={14} aria-hidden="true" />
@@ -115,8 +134,8 @@ export function Opportunities() {
           </div>
           <div className="opportunityx-summary-cell">
             <span>Raw Market Rows</span>
-            <strong>{markets.length} <em>rows</em></strong>
-            <small>Source order · no UI filtering, scoring, or strategy rank</small>
+            <strong>{marketTruth.factsAvailable ? markets.length : 'UNKNOWN'} {marketTruth.factsAvailable ? <em>{marketTruth.retained ? 'retained rows' : 'rows'}</em> : null}</strong>
+            <small>{marketTruth.retained ? 'STALE LAST-KNOWN · source order retained after refresh failure' : marketTruth.factsAvailable ? 'Source order · no UI filtering, scoring, or strategy rank' : 'No successful market read is available'}</small>
           </div>
         </div>
 
@@ -134,14 +153,16 @@ export function Opportunities() {
                 onClick={() => setView(item.id)}
               >
                 {item.label}
-                <span>{item.id === 'active' ? 'UNKNOWN' : rawRows.length}</span>
+                <span>{item.id === 'active' ? 'UNKNOWN' : marketTruth.factsAvailable ? rawRows.length : 'UNKNOWN'}</span>
               </button>
             ))}
           </div>
           <span className="opportunityx-view-note">
             {view === 'active'
               ? 'Canonical Foundation projection not mounted'
-              : String(rawRows.length) + ' source-order rows'}
+              : marketTruth.factsAvailable
+                ? `${rawRows.length} ${marketTruth.retained ? 'retained' : 'source-order'} rows`
+                : 'Raw market facts unavailable'}
           </span>
         </div>
 
@@ -165,13 +186,19 @@ export function Opportunities() {
               <span role="columnheader">Raw Top Depth</span>
               <span role="columnheader">View</span>
             </div>
-            {rawRows.length ? rawRows.map((market) => (
+            {!marketTruth.factsAvailable ? (
+              <div className="opportunityx-empty">
+                <Radar size={18} />
+                <strong>Raw Market Facts Unavailable</strong>
+                <span>No successful market read is available. Prices, funding, changes, volumes, and depth remain unknown.</span>
+              </div>
+            ) : rawRows.length ? rawRows.map((market) => (
                 <div className="opportunityx-radar-row" role="row" key={market.symbol}>
                   <span className="opportunityx-asset" role="cell">
                     <TokenIcon symbol={market.symbol} size={26} />
                     <span>
                       <strong>{market.base}</strong>
-                      <small>{market.symbol}</small>
+                      <small>{market.symbol}{marketTruth.retained ? ' · STALE LAST-KNOWN' : ''}</small>
                     </span>
                   </span>
                   <span className="opportunityx-radar-value" role="cell">

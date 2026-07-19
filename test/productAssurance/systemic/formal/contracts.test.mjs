@@ -4,17 +4,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import {
-  evaluateConformanceMapping,
-  MODEL_ELEMENT_MANIFEST_BY_ID,
-  validateConformanceMapping,
-} from '../../../../fixtures/productAssurance/systemic/formal/contracts/conformance.mjs';
-import {
   computeCounterexampleTraceSha256,
+  evaluateConformanceMapping,
   evaluateCounterexampleTriage,
+  MODEL_ELEMENT_MANIFEST_BY_ID,
+  projectFormalAssuranceView,
+  validateConformanceMapping,
+  validateExplicitStateReport,
   validateCounterexampleTriage,
-} from '../../../../fixtures/productAssurance/systemic/formal/contracts/triage.mjs';
-import { validateExplicitStateReport } from '../../../../fixtures/productAssurance/systemic/formal/contracts/report.mjs';
-import { projectFormalAssuranceView } from '../../../../fixtures/productAssurance/systemic/formal/contracts/view-model.mjs';
+} from '../../../../fixtures/productAssurance/systemic/formal/contracts/index.mjs';
 import { CANONICAL_MODELS, NEGATIVE_CONTROL_MODELS } from '../../../../fixtures/productAssurance/systemic/formal/explicitState/index.mjs';
 import { EXPLICIT_STATE_CHECKER, runModels } from '../../../../fixtures/productAssurance/systemic/formal/explicitState/kernel.mjs';
 import { CONFORMANCE_FIXTURES, FORMAL_FIXTURE_TIME_MS, IMPLEMENTATION_RELEASE_SHA } from '../../../../fixtures/productAssurance/systemic/formal/fixtures/conformance-fixtures.mjs';
@@ -24,6 +22,17 @@ import {
   buildCounterexampleTriageFixtures,
   buildCounterexampleTriageInventory,
 } from '../../../../fixtures/productAssurance/systemic/formal/fixtures/triage-fixtures.mjs';
+
+test('formal contract tests exercise the public contract barrel', () => {
+  const source = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const formalContractImports = [...source.matchAll(/from\s+['"]([^'"]+)['"]/g)]
+    .map((match) => match[1])
+    .filter((specifier) => specifier.includes('/systemic/formal/contracts/'));
+
+  assert.deepEqual(formalContractImports, [
+    '../../../../fixtures/productAssurance/systemic/formal/contracts/index.mjs',
+  ]);
+});
 
 function supportingCandidate() {
   const source = CONFORMANCE_FIXTURES[0];

@@ -27,12 +27,42 @@ export interface ControlRegistryPanelProps {
   readonly controls: readonly Readonly<ProductControlRegistryEntry>[];
   readonly busy: boolean;
   readonly allowFixtureControls?: boolean;
-  readonly onPreview: (control: Readonly<ProductControlRegistryEntry>) => Promise<ProductControlPreview>;
+  readonly onPreview: (
+    control: Readonly<ProductControlRegistryEntry>,
+    signal: AbortSignal,
+  ) => Promise<ProductControlPreview>;
   readonly onSubmit: (request: Readonly<ProductCommandRequest>) => Promise<ProductControlResult>;
   readonly onReadCommandResult?: (
     identity: Readonly<ProductCommandResultIdentity>,
     signal?: AbortSignal,
   ) => Promise<ProductCommandResultReadback>;
+}
+
+export interface ControlPreviewRequestIdentity {
+  readonly requestId: number;
+  readonly controlId: string;
+  readonly controlRevision: string;
+}
+
+export function controlPreviewMatchesCurrentRevision(
+  preview: Readonly<Pick<ProductControlPreview, 'controlId' | 'expectedRevision'>>,
+  controls: readonly Readonly<Pick<ProductControlRegistryEntry, 'controlId' | 'currentStateRevision'>>[],
+): boolean {
+  const control = controls.find((entry) => entry.controlId === preview.controlId);
+  return control !== undefined && control.currentStateRevision === preview.expectedRevision;
+}
+
+export function isCurrentControlPreviewRequest(
+  request: Readonly<ControlPreviewRequestIdentity>,
+  activeRequest: Readonly<ControlPreviewRequestIdentity> | null,
+  currentRequestId: number,
+  signal: AbortSignal,
+): boolean {
+  return !signal.aborted
+    && request.requestId === currentRequestId
+    && activeRequest?.requestId === request.requestId
+    && activeRequest.controlId === request.controlId
+    && activeRequest.controlRevision === request.controlRevision;
 }
 
 export function controlResultTruthLabel(result: Readonly<ProductControlResult> | null): 'NO_RESULT_TRUTH' | 'SYNTHETIC' | 'CANONICAL' {
@@ -61,12 +91,51 @@ export function ControlRegistryPanel({
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const initiatorRef = useRef<HTMLButtonElement | null>(null);
   const idempotencyKeyRef = useRef<string | null>(null);
+  const previewRequestRef = useRef(0);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const activePreviewRef = useRef<Readonly<ControlPreviewRequestIdentity> | null>(null);
   const reconciliationRequestRef = useRef(0);
   const reconciliationAbortRef = useRef<AbortController | null>(null);
+
+  const restoreInitiatorFocus = useCallback(() => {
+    window.requestAnimationFrame(() => initiatorRef.current?.focus());
+  }, []);
+
+  const cancelControlPreviewRequest = useCallback(() => {
+    previewRequestRef.current += 1;
+    previewAbortRef.current?.abort();
+    previewAbortRef.current = null;
+    activePreviewRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (pending) confirmRef.current?.focus();
   }, [pending]);
+
+  useEffect(() => () => cancelControlPreviewRequest(), [cancelControlPreviewRequest]);
+
+  useEffect(() => {
+    const activeRequest = activePreviewRef.current;
+    const activeControl = activeRequest === null
+      ? undefined
+      : controls.find((control) => control.controlId === activeRequest.controlId);
+    const activeRevisionChanged = activeRequest !== null
+      && (activeControl === undefined || activeControl.currentStateRevision !== activeRequest.controlRevision);
+    const pendingRevisionChanged = pending !== null && !controlPreviewMatchesCurrentRevision(pending, controls);
+    if (!activeRevisionChanged && !pendingRevisionChanged) return;
+
+    if (activeRevisionChanged) {
+      cancelControlPreviewRequest();
+      setWorking(false);
+      setWorkingMessage(null);
+    }
+    if (pendingRevisionChanged) {
+      setPending(null);
+      idempotencyKeyRef.current = null;
+    }
+    setError('Control revision changed. Request a new preview before confirming.');
+    restoreInitiatorFocus();
+  }, [cancelControlPreviewRequest, controls, pending, restoreInitiatorFocus]);
 
   useEffect(() => {
     if (!result) return;
@@ -170,10 +239,6 @@ export function ControlRegistryPanel({
     return () => window.removeEventListener('storage', handleStorage);
   }, [allowFixtureControls, cancelCommandResultRead, reconcileCommandResult]);
 
-  const restoreInitiatorFocus = () => {
-    window.requestAnimationFrame(() => initiatorRef.current?.focus());
-  };
-
   const preview = async (control: Readonly<ProductControlRegistryEntry>, initiator: HTMLButtonElement) => {
     initiatorRef.current = initiator;
     if (control.wiringState === 'WIRED_LIVE' && !allowFixtureControls) {
@@ -184,16 +249,58 @@ export function ControlRegistryPanel({
         return;
       }
     }
+    previewAbortRef.current?.abort();
+    const controller = new AbortController();
+    const request = Object.freeze({
+      requestId: previewRequestRef.current + 1,
+      controlId: control.controlId,
+      controlRevision: control.currentStateRevision,
+    });
+    previewRequestRef.current = request.requestId;
+    previewAbortRef.current = controller;
+    activePreviewRef.current = request;
+    setPending(null);
+    idempotencyKeyRef.current = null;
     setWorking(true); setWorkingMessage(`Loading preview for ${control.label}.`); setError(null); setResult(null);
     try {
-      const nextPreview = await onPreview(control);
+      const nextPreview = await onPreview(control, controller.signal);
+      if (!isCurrentControlPreviewRequest(
+        request,
+        activePreviewRef.current,
+        previewRequestRef.current,
+        controller.signal,
+      )) return;
+      if (nextPreview.controlId !== request.controlId || nextPreview.expectedRevision !== request.controlRevision) {
+        throw new Error('CONTROL_PREVIEW_REVISION_MISMATCH');
+      }
       if (control.wiringState === 'WIRED_LIVE' && nextPreview.synthetic) throw new Error('LIVE_CONTROL_RETURNED_SYNTHETIC_PREVIEW');
       if (control.wiringState === 'WIRED_FIXTURE' && !nextPreview.synthetic) throw new Error('FIXTURE_CONTROL_RETURNED_NON_SYNTHETIC_PREVIEW');
       idempotencyKeyRef.current = `ui:${control.controlId}:${crypto.randomUUID()}`;
       setPending(nextPreview);
     }
-    catch (cause) { setError(cause instanceof Error ? cause.message : 'Control preview failed.'); restoreInitiatorFocus(); }
-    finally { setWorking(false); setWorkingMessage(null); }
+    catch (cause) {
+      if (!isCurrentControlPreviewRequest(
+        request,
+        activePreviewRef.current,
+        previewRequestRef.current,
+        controller.signal,
+      )) return;
+      setError(cause instanceof Error ? cause.message : 'Control preview failed.');
+      restoreInitiatorFocus();
+    }
+    finally {
+      if (isCurrentControlPreviewRequest(
+        request,
+        activePreviewRef.current,
+        previewRequestRef.current,
+        controller.signal,
+      )) {
+        previewAbortRef.current = null;
+        activePreviewRef.current = null;
+        setWorking(false);
+        setWorkingMessage(null);
+      }
+    }
   };
   const submit = async () => {
     if (!pending) return;
@@ -206,6 +313,13 @@ export function ControlRegistryPanel({
     }
     const control = controls.find((entry) => entry.controlId === pending.controlId);
     if (!control) { setError('The previewed control is no longer in the registry.'); return; }
+    if (!controlPreviewMatchesCurrentRevision(pending, controls)) {
+      setPending(null);
+      idempotencyKeyRef.current = null;
+      setError('Control revision changed. Request a new preview before confirming.');
+      restoreInitiatorFocus();
+      return;
+    }
     if (reconciliationBlocksCommands(reconciliation)) {
       setError(`A durable command result is unresolved (${reconciliation.state}). Recheck it before another command.`);
       return;
@@ -281,6 +395,7 @@ export function ControlRegistryPanel({
   };
 
   const cancel = () => {
+    cancelControlPreviewRequest();
     setPending(null);
     idempotencyKeyRef.current = null;
     setError(null);
@@ -371,7 +486,7 @@ export function ControlRegistryPanel({
                   onClick={(event) => void preview(control, event.currentTarget)}
                 >{buttonLabel.replace('Preview ', '')}</button>
               </div>
-              {pending?.controlId === control.controlId && (
+              {pending?.controlId === control.controlId && controlPreviewMatchesCurrentRevision(pending, controls) && (
                 <div className="pcr-confirm" role="group" aria-labelledby={`pcr-confirm-title-${control.controlId}`} aria-describedby={`pcr-confirm-consequence-${control.controlId}`}>
                   <span><strong id={`pcr-confirm-title-${control.controlId}`}>Confirm {pending.controlId}</strong><small id={`pcr-confirm-consequence-${control.controlId}`}>{pending.consequence}</small></span>
                   <code>{pending.digest}</code><code>{pending.expectedRevision}</code><code>Expires {new Date(pending.expiresAtMs).toLocaleTimeString()}</code>

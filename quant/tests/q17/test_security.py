@@ -15,6 +15,10 @@ from quant_edge.final_proof.security import (
     DIRECTIVE_INPUT_LOCK_CURRENT_SHA256,
     FROZEN_Q_LANE_FILES_SHA256,
     MAX_SOURCE_BYTES,
+    PACKAGE_LOCK_ACCEPTED_BYTE_LENGTH,
+    PACKAGE_LOCK_ACCEPTED_SHA256,
+    PACKAGE_LOCK_CURRENT_BYTE_LENGTH,
+    PACKAGE_LOCK_CURRENT_SHA256,
     FrozenFileIdentityV1,
     FrozenVerificationV1,
     ScopeVerificationV1,
@@ -22,7 +26,7 @@ from quant_edge.final_proof.security import (
     SecurityFindingV1,
     SecurityPolicyError,
     SecurityScanV1,
-    require_only_post_acceptance_directive_lock_drift,
+    require_only_declared_post_acceptance_frozen_file_drift,
     scan_python_bytes,
     scan_python_file,
     scan_python_files,
@@ -778,7 +782,7 @@ def test_frozen_verification_rejects_bad_expectations_and_paths(tmp_path: Path) 
         verify_frozen_files(tmp_path, {"folder": "0" * 64})
 
 
-def test_frozen_protocol_preserves_historical_input_lock_and_reports_current_drift() -> None:
+def test_frozen_protocol_preserves_history_and_reports_declared_current_drift() -> None:
     report = verify_frozen_files(REPO_ROOT, FROZEN_Q_LANE_FILES_SHA256)
     assert not report.clean
     assert tuple(item.relative_path for item in report.files) == tuple(
@@ -797,18 +801,26 @@ def test_frozen_protocol_preserves_historical_input_lock_and_reports_current_dri
         )
     )
     frozen_rows = {item.relative_path: item for item in report.files}
+    drift_paths = {"package-lock.json", "quant/DIRECTIVE_INPUTS.lock"}
     assert all(
         item.matches
         for relative_path, item in frozen_rows.items()
-        if relative_path != "quant/DIRECTIVE_INPUTS.lock"
+        if relative_path not in drift_paths
     )
+    assert sum(item.matches for item in frozen_rows.values()) == 7
     lock_row = frozen_rows["quant/DIRECTIVE_INPUTS.lock"]
     assert DIRECTIVE_INPUT_LOCK_ACCEPTED_BYTE_LENGTH == 1_568
     assert lock_row.expected_sha256 == DIRECTIVE_INPUT_LOCK_ACCEPTED_SHA256
     assert lock_row.observed_sha256 == DIRECTIVE_INPUT_LOCK_CURRENT_SHA256
     assert lock_row.byte_length == DIRECTIVE_INPUT_LOCK_CURRENT_BYTE_LENGTH
     assert not lock_row.matches
-    require_only_post_acceptance_directive_lock_drift(report)
+    package_row = frozen_rows["package-lock.json"]
+    assert PACKAGE_LOCK_ACCEPTED_BYTE_LENGTH == 147_793
+    assert package_row.expected_sha256 == PACKAGE_LOCK_ACCEPTED_SHA256
+    assert package_row.observed_sha256 == PACKAGE_LOCK_CURRENT_SHA256
+    assert package_row.byte_length == PACKAGE_LOCK_CURRENT_BYTE_LENGTH
+    assert not package_row.matches
+    require_only_declared_post_acceptance_frozen_file_drift(report)
     with pytest.raises(SecurityPolicyError, match="drifted"):
         report.require_clean()
 
@@ -823,10 +835,61 @@ def test_frozen_protocol_preserves_historical_input_lock_and_reports_current_dri
 
     wider_drift = dict(FROZEN_Q_LANE_FILES_SHA256)
     wider_drift["EDGE_PROTOCOL_V1.md"] = "0" * 64
-    with pytest.raises(SecurityPolicyError, match="beyond"):
-        require_only_post_acceptance_directive_lock_drift(
+    with pytest.raises(SecurityPolicyError, match="historical acceptance expectation"):
+        require_only_declared_post_acceptance_frozen_file_drift(
             verify_frozen_files(REPO_ROOT, wider_drift)
         )
+    with pytest.raises(SecurityPolicyError, match="exact historical acceptance inventory"):
+        require_only_declared_post_acceptance_frozen_file_drift(lock)
+
+    historical_row = next(
+        item for item in report.files if item.relative_path == "EDGE_PROTOCOL_V1.md"
+    )
+    unexpected_row = FrozenFileIdentityV1(
+        historical_row.relative_path,
+        historical_row.expected_sha256,
+        "0" * 64,
+        historical_row.byte_length,
+    )
+    forged_rows = tuple(
+        unexpected_row if item.relative_path == "EDGE_PROTOCOL_V1.md" else item
+        for item in report.files
+    )
+    material = "\n".join(
+        f"{item.relative_path}\x00{item.expected_sha256}\x00"
+        f"{item.observed_sha256}\x00{item.byte_length}"
+        for item in forged_rows
+    ).encode()
+    forged_report = FrozenVerificationV1(
+        forged_rows,
+        hashlib.sha256(material).hexdigest(),
+        security_module._VERIFIED_REPORT_SEAL,
+    )
+    with pytest.raises(SecurityPolicyError, match="beyond"):
+        require_only_declared_post_acceptance_frozen_file_drift(forged_report)
+
+    wrong_lock_row = FrozenFileIdentityV1(
+        lock_row.relative_path,
+        lock_row.expected_sha256,
+        "0" * 64,
+        lock_row.byte_length,
+    )
+    wrong_lock_rows = tuple(
+        wrong_lock_row if item.relative_path == lock_row.relative_path else item
+        for item in report.files
+    )
+    wrong_lock_material = "\n".join(
+        f"{item.relative_path}\x00{item.expected_sha256}\x00"
+        f"{item.observed_sha256}\x00{item.byte_length}"
+        for item in wrong_lock_rows
+    ).encode()
+    wrong_lock_report = FrozenVerificationV1(
+        wrong_lock_rows,
+        hashlib.sha256(wrong_lock_material).hexdigest(),
+        security_module._VERIFIED_REPORT_SEAL,
+    )
+    with pytest.raises(SecurityPolicyError, match="declared current truth"):
+        require_only_declared_post_acceptance_frozen_file_drift(wrong_lock_report)
 
 
 def test_changed_path_scope_accepts_only_q17_exclusive_paths() -> None:

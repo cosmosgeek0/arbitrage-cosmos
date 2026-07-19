@@ -101,7 +101,7 @@ function utilization(value: number | null, limit: number): number {
 }
 
 export function Risk() {
-  const { state, setPage } = useStore();
+  const { state, stateStatus, stateLastSuccessAtMs, stateError, setPage } = useStore();
 
   if (!state) {
     return (
@@ -253,6 +253,14 @@ export function Risk() {
           </div>
 
         </header>
+
+        {stateStatus !== 'CURRENT' && (
+          <div className="riskx-state-truth" role="alert">
+            {stateStatus === 'STALE' ? 'STALE LAST-KNOWN' : 'UNAVAILABLE'} · Compatibility state
+            {stateLastSuccessAtMs === null ? ' has no successful read.' : ` last succeeded ${timeAgo(stateLastSuccessAtMs)}.`}
+            {stateError ? ` ${stateError}` : ''}
+          </div>
+        )}
 
         <div className="riskx-summary" aria-label="Risk Summary">
           <div className="riskx-summary-cell">

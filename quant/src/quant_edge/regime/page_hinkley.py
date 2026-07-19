@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from quant_edge.errors import ContractValueError
-from quant_edge.features.fixedpoint import FixedPointV1, round_half_even
+from quant_edge.features.fixedpoint import MAX_FIXED_MANTISSA, FixedPointV1, round_half_even
 from quant_edge.lake.contracts import require_contract_id, require_strict_int
 from quant_edge.regime.contracts import (
     AlarmDirection,
@@ -99,10 +99,8 @@ class TwoSidedPageHinkley:
         "__config",
         "__count",
         "__guard",
-        "__m_down",
-        "__m_up",
-        "__min_down",
-        "__min_up",
+        "__statistic_down",
+        "__statistic_up",
         "__sum",
     )
 
@@ -120,10 +118,8 @@ class TwoSidedPageHinkley:
     def __restart(self) -> None:
         self.__count = 0
         self.__sum = 0
-        self.__m_up = 0
-        self.__min_up = 0
-        self.__m_down = 0
-        self.__min_down = 0
+        self.__statistic_up = 0
+        self.__statistic_down = 0
 
     def __step(
         self,
@@ -138,8 +134,8 @@ class TwoSidedPageHinkley:
             ordinal=observation.ordinal,
             event_time_ns=observation.event_time_ns,
             status=status,
-            statistic_up=FixedPointV1(self.__m_up - self.__min_up),
-            statistic_down=FixedPointV1(self.__m_down - self.__min_down),
+            statistic_up=FixedPointV1(self.__statistic_up),
+            statistic_down=FixedPointV1(self.__statistic_down),
             alarm=alarm,
             direction=direction,
         )
@@ -147,7 +143,7 @@ class TwoSidedPageHinkley:
     def update(self, observation: ObservationV1) -> PageHinkleyStepV1:
         if not isinstance(observation, ObservationV1):
             raise ContractValueError("observation must be ObservationV1")
-        self.__guard.check(observation.ordinal)
+        self.__guard.check(observation.ordinal, observation.event_time_ns)
         disposition = observation.disposition
         if disposition is InputDisposition.SUPPRESS:
             return self.__step(observation, status=StepStatus.SUPPRESSED)
@@ -158,14 +154,18 @@ class TwoSidedPageHinkley:
         self.__sum += observation.value.mantissa
         mean = round_half_even(self.__sum, self.__count)
         delta = self.__config.delta.mantissa
-        self.__m_up += observation.value.mantissa - mean - delta
-        self.__min_up = min(self.__min_up, self.__m_up)
-        self.__m_down += mean - observation.value.mantissa - delta
-        self.__min_down = min(self.__min_down, self.__m_down)
+        self.__statistic_up = min(
+            MAX_FIXED_MANTISSA,
+            max(0, self.__statistic_up + observation.value.mantissa - mean - delta),
+        )
+        self.__statistic_down = min(
+            MAX_FIXED_MANTISSA,
+            max(0, self.__statistic_down + mean - observation.value.mantissa - delta),
+        )
         if self.__count <= self.__config.warmup:
             return self.__step(observation, status=StepStatus.WARMUP)
-        statistic_up = self.__m_up - self.__min_up
-        statistic_down = self.__m_down - self.__min_down
+        statistic_up = self.__statistic_up
+        statistic_down = self.__statistic_down
         threshold = self.__config.threshold_lambda.mantissa
         alarm_up = statistic_up >= threshold
         alarm_down = statistic_down >= threshold

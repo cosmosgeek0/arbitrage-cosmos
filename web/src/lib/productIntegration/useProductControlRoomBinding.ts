@@ -95,6 +95,10 @@ export async function proveMaterialContinuity(input: Readonly<{
   if (input.durableCursor.state === 'UNAVAILABLE') {
     throw new ProductBindingError('Durable material cursor storage is unavailable.', ['MATERIAL_CURSOR_STORAGE_UNAVAILABLE']);
   }
+  if (!isDecimalCursor(input.supervisorPage.highWaterCursor)) {
+    throw new ProductBindingError('Supervisor material high-water evidence is malformed.', ['MATERIAL_HIGH_WATER_INVALID']);
+  }
+  const pinnedHighWater = BigInt(input.supervisorPage.highWaterCursor);
 
   let cursor = input.durableCursor.state === 'VALID' ? input.durableCursor.cursor : null;
   let lastPage: Readonly<MaterialEventPage> = input.supervisorPage;
@@ -125,8 +129,11 @@ export async function proveMaterialContinuity(input: Readonly<{
     }
     cursor = page.nextCursor;
     lastPage = page;
-    if (!page.hasMore) {
+    if (BigInt(cursor) >= pinnedHighWater) {
       return Object.freeze({ page: lastPage, cursor, continuity: 'PROVEN', pagesRead: index + 1 });
+    }
+    if (!page.hasMore) {
+      return Object.freeze({ page: lastPage, cursor, continuity: 'BACKFILL', pagesRead: index + 1 });
     }
   }
 

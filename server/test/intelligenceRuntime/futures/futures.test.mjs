@@ -327,7 +327,7 @@ test('adapter emits correlated foundation evidence without bridge raw reconstruc
   assert.deepEqual(markResult.normalized.map((entry) => entry.evidence?.kind), ['MARK_PRICE', 'FUNDING']);
   assert.ok(markResult.normalized.every((entry) => entry.status === 'NORMALIZED'));
   assert.ok(markResult.normalized.every((entry) => entry.correlationId === markResult.events[0].correlationId));
-  assert.equal(markResult.events[0].payload.rawRecord, markResult.events[0].payload.rawRecord);
+  assert.deepEqual(markResult.events[0].payload.rawRecord, mark());
 
   const symbol = adapter.snapshot().symbols[0];
   assert.deepEqual(symbol.prices, {

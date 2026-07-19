@@ -6,6 +6,7 @@ import type { SystemSupervisorSnapshot } from '../../../lib/systemIntegration';
 import {
   ageText,
   countText,
+  reconciliationVerdict,
   textOrUnknown,
   words,
   type Tone,
@@ -129,6 +130,7 @@ function ExecutionSection({
 }) {
   const execution = snapshot.summaries.execution;
   const reconciliation = snapshot.summaries.reconciliation;
+  const reconciliationState = reconciliationVerdict(snapshot);
   return (
     <section className="sdx-section" aria-label="Execution and reconciliation">
       <Band
@@ -164,9 +166,11 @@ function ExecutionSection({
           sub={`${reconciliation.recommendation ?? 'No recommendation'} · Checkpoint ${textOrUnknown(reconciliation.checkpointId)} · Evaluated ${ageText(reconciliation.evaluatedAtMs, nowMs)}`}
           end={<>
             {reconciliation.reasonCodes.map((code) => <span key={code} className="sdx-reason">{code}</span>)}
-            {reconciliation.blocksNewExposure
+            {reconciliationState === 'BLOCKED'
               ? <Chip tone="bad">BLOCKS NEW EXPOSURE</Chip>
-              : <Chip tone="ok">CLEAR</Chip>}
+              : reconciliationState === 'CLEAR'
+                ? <Chip tone="ok">CLEAR</Chip>
+                : <Chip tone="warn">RECONCILIATION UNKNOWN</Chip>}
             <TruthTag label={reconciliation.truthLabel} />
           </>}
         />

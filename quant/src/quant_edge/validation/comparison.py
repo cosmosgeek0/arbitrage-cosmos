@@ -45,9 +45,11 @@ from quant_edge.validation.samples import (
     subset_by_ids,
 )
 from quant_edge.validation.splits import (
+    FoldStatus,
     HoldoutGrantV1,
     PlanStatus,
     WalkForwardPlanV1,
+    build_walk_forward_plan,
     open_holdout,
 )
 
@@ -61,6 +63,7 @@ class ComparisonVerdict(StrEnum):
     INVALID_PLAN = "INVALID_PLAN"
     INVALID_BASELINE = "INVALID_BASELINE"
     REJECTED_CHALLENGER_LEAKAGE = "REJECTED_CHALLENGER_LEAKAGE"
+    REJECTED_CHALLENGER_LINEAGE = "REJECTED_CHALLENGER_LINEAGE"
     INSUFFICIENT_FOLDS = "INSUFFICIENT_FOLDS"
 
 
@@ -181,6 +184,68 @@ def _effect(
     return make_ratio(delta, FIXED_POINT_SCALE)
 
 
+def _has_verified_fold_fit_lineage(
+    samples: SampleSetV1,
+    plan: WalkForwardPlanV1,
+    predictions: PredictionSetV1,
+) -> bool:
+    """Verify fold receipts against plan, samples, predictions, and aggregate lineage."""
+
+    if predictions.lineage is None:
+        return False
+    valid_folds = tuple(fold for fold in plan.folds if fold.status is FoldStatus.VALID)
+    if len(predictions.fold_fit_receipts) != len(valid_folds):
+        return False
+    receipt_digest = DigestV1(
+        hexdigest=hashlib.sha256(
+            canonical_json_bytes(
+                [receipt.as_mapping() for receipt in predictions.fold_fit_receipts]
+            )
+        ).hexdigest()
+    )
+    if receipt_digest != predictions.lineage.fit_receipt_digest:
+        return False
+    receipts = {receipt.fold_id: receipt for receipt in predictions.fold_fit_receipts}
+    prediction_by_id = {prediction.sample_id: prediction for prediction in predictions.predictions}
+    for fold in valid_folds:
+        receipt = receipts.get(fold.fold_id)
+        if receipt is None:
+            return False
+        if (
+            receipt.model_id != predictions.model_id
+            or receipt.plan_digest != plan.digest()
+            or receipt.train_sample_ids != fold.train_sample_ids
+            or receipt.validation_sample_ids != fold.validation_sample_ids
+            or receipt.validation_start_cutoff_ns != fold.validation_start_cutoff_ns
+            or receipt.embargo_ns != plan.spec.embargo_ns
+        ):
+            return False
+        try:
+            training = subset_by_ids(samples, fold.train_sample_ids)
+        except ContractValueError:
+            return False
+        if (
+            receipt.training_dataset_digest != training.digest()
+            or receipt.max_training_label_end_ns
+            != max(sample.label_end_ns for sample in training.samples)
+            or receipt.max_training_label_end_ns
+            >= receipt.validation_start_cutoff_ns - receipt.embargo_ns
+        ):
+            return False
+        validation_rows: list[dict[str, object]] = []
+        for sample_id in fold.validation_sample_ids:
+            prediction = prediction_by_id.get(sample_id)
+            if prediction is None:
+                return False
+            validation_rows.append(prediction.as_mapping())
+        prediction_digest = DigestV1(
+            hexdigest=hashlib.sha256(canonical_json_bytes(validation_rows)).hexdigest()
+        )
+        if prediction_digest != receipt.prediction_digest:
+            return False
+    return True
+
+
 def compare_models(
     samples: SampleSetV1,
     plan: WalkForwardPlanV1,
@@ -203,10 +268,12 @@ def compare_models(
         raise ContractValueError("spec must be ComparisonSpecV1")
     if plan.dataset_digest != samples.digest():
         raise ContractValueError("plan is bound to a different sample set")
+    canonical_plan = build_walk_forward_plan(samples, plan.spec)
+    plan_is_canonical = plan == canonical_plan
 
     # Leakage is assessed strictly on research samples: holdout and quarantined
     # outcomes must not influence any pre-holdout decision, including this one.
-    excluded = set(plan.holdout_sample_ids) | set(plan.quarantined_sample_ids)
+    excluded = set(canonical_plan.holdout_sample_ids) | set(canonical_plan.quarantined_sample_ids)
     if excluded:
         research_ids = tuple(
             sample_id for sample_id in samples.sample_ids if sample_id not in excluded
@@ -253,12 +320,16 @@ def compare_models(
             spec=spec,
         )
 
-    if plan.status is not PlanStatus.VALID:
+    if not plan_is_canonical or plan.status is not PlanStatus.VALID:
         return report(ComparisonVerdict.INVALID_PLAN)
     if challenger_assessment.verdict is not LeakageVerdict.ACCEPTED_FOR_COMPARISON:
         return report(ComparisonVerdict.REJECTED_CHALLENGER_LEAKAGE)
     if baseline_assessment.verdict is not LeakageVerdict.ACCEPTED_FOR_COMPARISON:
         return report(ComparisonVerdict.INVALID_BASELINE)
+    if not _has_verified_fold_fit_lineage(samples, plan, baseline):
+        return report(ComparisonVerdict.INVALID_BASELINE)
+    if not _has_verified_fold_fit_lineage(samples, plan, challenger):
+        return report(ComparisonVerdict.REJECTED_CHALLENGER_LINEAGE)
 
     folds: list[FoldComparisonV1] = []
     effects: list[ExactRatioV1] = []

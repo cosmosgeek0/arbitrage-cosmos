@@ -139,6 +139,8 @@ from quant_edge.validation.normal import (
     normal_quantile,
 )
 from quant_edge.validation.samples import (
+    FoldFitReceiptV1,
+    PredictionLineageV1,
     PredictionSetV1,
     PredictionV1,
     SampleSetV1,
@@ -204,6 +206,7 @@ __all__ = [
     "FoldFeatureShapeV1",
     "FoldFeatureVariantV1",
     "FoldFitManifestV1",
+    "FoldFitReceiptV1",
     "FoldMutualInformationV1",
     "FoldPredictionsV1",
     "FoldStatus",
@@ -227,6 +230,7 @@ __all__ = [
     "PermutationImportanceV1",
     "PermutationManifestV1",
     "PlanStatus",
+    "PredictionLineageV1",
     "PredictionSetV1",
     "PredictionV1",
     "PrimaryMetricSpecV1",

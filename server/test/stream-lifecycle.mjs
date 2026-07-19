@@ -537,6 +537,64 @@ test('UserStream honors Binance retryAfter and stop cancels the deferred reconne
   assert.equal(stream.status, 'off');
 });
 
+test('UserStream latches terminal exhaustion and re-arms only for an explicit lifecycle restart', async () => {
+  let socketFactoryCalls = 0;
+  const statuses = [];
+  const exhaustionWaiters = [];
+  const waitForExhaustion = () => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('timed out waiting for user-stream exhaustion')), 250);
+    exhaustionWaiters.push(() => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+  const stream = new UserStream(
+    {
+      userDataStreamSubscribeFrame() {
+        throw new Error('private subscription must not be reached when socket construction fails');
+      },
+    },
+    () => undefined,
+    (status, detail) => {
+      statuses.push({ status, detail });
+      if (status === 'exhausted') exhaustionWaiters.shift()?.();
+    },
+    {
+      socketFactory: () => {
+        socketFactoryCalls += 1;
+        throw new Error('synthetic private socket construction failure');
+      },
+      retryBaseMs: 1,
+      retryMaxMs: 1,
+      maximumAttempts: 99,
+      random: () => 0.5,
+    },
+  );
+
+  try {
+    const firstExhaustion = waitForExhaustion();
+    await stream.start();
+    await firstExhaustion;
+    assert.equal(socketFactoryCalls, 8, 'a widening override cannot construct canonical attempt nine');
+    assert.deepEqual(statuses.at(-1), {
+      status: 'exhausted',
+      detail: 'private stream retry campaign exhausted',
+    });
+    assert.equal(stream.status, 'exhausted');
+    await sleep(10);
+    assert.equal(socketFactoryCalls, 8, 'terminal exhaustion cannot self-rearm');
+
+    stream.stop();
+    const secondExhaustion = waitForExhaustion();
+    await stream.start();
+    await secondExhaustion;
+    assert.equal(socketFactoryCalls, 16, 'an explicit lifecycle restart owns one fresh bounded campaign');
+    assert.equal(stream.status, 'exhausted');
+  } finally {
+    stream.stop();
+  }
+});
+
 test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and evicts slow viewers', () => {
   const handles = [];
   const streamFactory = (name, url, onMessage) => {
@@ -605,6 +663,76 @@ test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and e
   assert.equal(handles[1].stops, 1, 'hub stop is idempotent');
   hub.handleMessage(third, { type: 'sub-book', symbol: 'BTCUSDT' });
   assert.equal(handles.length, 2, 'messages cannot reopen feeds after hub stop');
+});
+
+test('BookStreamHub publishes bounded lifecycle truth and requires resubscription after exhaustion', () => {
+  const handles = [];
+  const streamFactory = (name, url, onMessage, onStatus) => {
+    const handle = {
+      name,
+      url,
+      onMessage,
+      onStatus,
+      starts: 0,
+      stops: 0,
+      start() { this.starts += 1; },
+      stop() { this.stops += 1; },
+    };
+    handles.push(handle);
+    return handle;
+  };
+  const hub = new BookStreamHub(
+    (symbol) => symbol === 'BTCUSDT',
+    { maxFeeds: 1, maxSubscriptions: 1, streamFactory },
+  );
+  const viewer = new FakeSocket();
+  viewer.open();
+
+  hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
+  assert.equal(handles.length, 1);
+  assert.deepEqual(JSON.parse(viewer.sent.at(-1)), {
+    type: 'book-status',
+    symbol: 'BTCUSDT',
+    status: 'connecting',
+    lastMessageAtMs: null,
+  }, 'a new viewer receives the retained pre-message lifecycle truth');
+
+  handles[0].onStatus(handles[0].name, 'open');
+  assert.deepEqual(JSON.parse(viewer.sent.at(-1)), {
+    type: 'book-status',
+    symbol: 'BTCUSDT',
+    status: 'open',
+    lastMessageAtMs: null,
+  });
+
+  const beforeMessageAtMs = Date.now();
+  handles[0].onMessage({
+    stream: 'btcusdt@depth20@100ms',
+    data: { lastUpdateId: 42, bids: [['100', '2']], asks: [['101', '3']] },
+  });
+  const afterMessageAtMs = Date.now();
+  handles[0].onStatus(handles[0].name, 'closed');
+  const closed = JSON.parse(viewer.sent.at(-1));
+  assert.deepEqual(Object.keys(closed).sort(), ['lastMessageAtMs', 'status', 'symbol', 'type']);
+  assert.equal(closed.type, 'book-status');
+  assert.equal(closed.symbol, 'BTCUSDT');
+  assert.equal(closed.status, 'closed');
+  assert.ok(
+    closed.lastMessageAtMs >= beforeMessageAtMs && closed.lastMessageAtMs <= afterMessageAtMs,
+    'the status frame retains the real last upstream message receipt time',
+  );
+  assert.ok(JSON.stringify(closed).length < 256, 'lifecycle frames have a fixed bounded shape');
+
+  handles[0].onStatus(handles[0].name, 'exhausted');
+  const exhausted = JSON.parse(viewer.sent.at(-1));
+  assert.equal(exhausted.status, 'exhausted');
+  assert.equal(exhausted.lastMessageAtMs, closed.lastMessageAtMs);
+  assert.equal(handles[0].stops, 1, 'an exhausted feed is disposed after its terminal truth is published');
+
+  hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
+  assert.equal(handles.length, 2, 'the viewer must explicitly subscribe into a fresh feed generation');
+  assert.equal(handles[1].starts, 1);
+  hub.stop();
 });
 
 test('passive liquidation projection is restart-safe, bounded, and rejects malformed canonical prints', async () => {

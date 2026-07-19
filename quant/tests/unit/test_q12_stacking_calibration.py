@@ -448,6 +448,9 @@ def test_oof_matrix_stacker_and_bound_prediction_identity() -> None:
         fold_ids=matrix.fold_ids[2:3],
     )
     assert later_predictions.dataset_digest == later_samples.digest()
+    assert later_predictions.lineage is not None
+    assert later_predictions.lineage.feature_artifact_digest == matrix.digest()
+    assert later_predictions.lineage.fit_receipt_digest == fitted.digest()
     assert f"fit-{fitted.digest().hexdigest[:16]}" in later_predictions.model_id
     assert all(
         0 <= row.score.numerator <= row.score.denominator for row in later_predictions.predictions
@@ -471,7 +474,7 @@ def test_oof_validation_rejects_global_overlap_and_bundle_substitution() -> None
             *plan.folds[2:],
         ),
     )
-    with pytest.raises(ContractValueError, match="exactly once"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate_oof_bundles(
             samples=samples,
             plan=overlapping,
@@ -546,9 +549,9 @@ def test_oof_validation_rejects_membership_digest_lineage_and_forbidden_rows() -
                 ),
             )
         )
-    with pytest.raises(ContractValueError, match="specialist fitting"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate(bundle, replace(plan, holdout_sample_ids=(bundle.train_sample_ids[0],)))
-    with pytest.raises(ContractValueError, match="OOF predictions"):
+    with pytest.raises(ContractValueError, match="canonical walk-forward plan"):
         validate(bundle, replace(plan, holdout_sample_ids=(prediction.sample_id,)))
 
 

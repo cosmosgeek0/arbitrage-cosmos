@@ -30,6 +30,7 @@ import {
   readDurableMaterialCursor,
   type ProductIntegrationEndpoints,
 } from './lib/productIntegration';
+import { NotificationFeedProvider } from './lib/notificationFeed';
 import './pages/MetricTiles.css';
 
 const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
@@ -45,6 +46,20 @@ const productIntegrationClient = createProductIntegrationClient(
   createHttpProductIntegrationTransport(PRODUCT_INTEGRATION_ENDPOINTS),
 );
 const durableResumeCursor = readDurableMaterialCursor();
+
+function MutationFailureAlert() {
+  const { mutationError } = useStore();
+  return (
+    <div className="global-mutation-alert" role="alert" aria-atomic="true">
+      {mutationError ? (
+        <>
+          <strong>CHANGE NOT SAVED</strong>
+          <span>{mutationError.code} · {mutationError.message}</span>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 function Shell() {
   const { page, detailSymbol, prefs } = useStore();
@@ -67,6 +82,7 @@ function Shell() {
   return (
     <div className="app-root">
       <Topbar />
+      <MutationFailureAlert />
       <div className="app-body">
         <Sidebar />
         <div className="app-main">
@@ -146,7 +162,9 @@ export default function App() {
   return (
     <StoreProvider>
       <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
-        <Shell />
+        <NotificationFeedProvider>
+          <Shell />
+        </NotificationFeedProvider>
       </ProductControlRoomProvider>
     </StoreProvider>
   );

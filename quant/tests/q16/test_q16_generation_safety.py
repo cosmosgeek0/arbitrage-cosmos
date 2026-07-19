@@ -5,6 +5,7 @@ import hashlib
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
@@ -21,6 +22,84 @@ from quant_edge.inference.service import LocalInferenceServiceV1
 from quant_edge.inference.transport import create_unix_server
 
 from .conftest import QUANT_ROOT, REPO_ROOT
+
+
+def test_test_subprocesses_have_positive_local_deadlines() -> None:
+    targets = (
+        "quant/tests/q15/test_q15_campaign.py",
+        "quant/tests/q15/test_q15_restart_chaos.py",
+        "quant/tests/q16/test_q16_generation_safety.py",
+        "quant/tests/q16/test_q16_protocol.py",
+    )
+    missing_or_invalid: list[str] = []
+    observed = 0
+    for relative_path in targets:
+        path = REPO_ROOT / relative_path
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "subprocess"
+                and node.func.attr == "run"
+            ):
+                continue
+            observed += 1
+            timeout = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "timeout"),
+                None,
+            )
+            if not (
+                isinstance(timeout, ast.Constant)
+                and isinstance(timeout.value, (int, float))
+                and not isinstance(timeout.value, bool)
+                and timeout.value > 0
+            ):
+                missing_or_invalid.append(f"{relative_path}:{node.lineno}")
+
+    assert observed == 15
+    assert not missing_or_invalid, (
+        "subprocess.run calls require an explicit positive local timeout: "
+        + ", ".join(missing_or_invalid)
+    )
+
+
+def test_python_subprocesses_reuse_active_test_interpreter() -> None:
+    tree = ast.parse(Path(__file__).read_text())
+    python_command_heads: list[ast.expr] = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
+            and node.func.attr == "run"
+            and node.args
+            and isinstance(node.args[0], ast.List)
+            and len(node.args[0].elts) >= 2
+            and isinstance(node.args[0].elts[1], ast.Constant)
+            and node.args[0].elts[1].value in {"-c", "-m"}
+        ):
+            continue
+        python_command_heads.append(node.args[0].elts[0])
+
+    assert python_command_heads
+    assert all(
+        isinstance(head, ast.Attribute)
+        and isinstance(head.value, ast.Name)
+        and head.value.id == "sys"
+        and head.attr == "executable"
+        for head in python_command_heads
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", "import sys; print(sys.executable)"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert Path(completed.stdout.strip()).samefile(sys.executable)
 
 
 def test_generated_artifacts_match_fresh_generation_byte_for_byte() -> None:
@@ -49,12 +128,13 @@ def test_generation_is_cwd_timezone_and_hash_seed_stable(tmp_path: Path) -> None
             }
         )
         completed = subprocess.run(
-            [str(QUANT_ROOT / ".venv" / "bin" / "python"), "-c", code, str(REPO_ROOT)],
+            [sys.executable, "-c", code, str(REPO_ROOT)],
             cwd=tmp_path,
             env=env,
             check=True,
             capture_output=True,
             text=True,
+            timeout=120,
         )
         outputs.append(completed.stdout)
     assert len(set(outputs)) == 1
@@ -84,23 +164,156 @@ def test_generated_manifest_hashes_every_generated_kit_file() -> None:
         assert hashlib.sha256(raw).hexdigest() == row["sha256"]
 
 
-def test_generated_clients_are_syntax_valid_and_assessment_is_protocol_canonical() -> None:
+def test_generated_clients_are_syntax_valid_and_assessment_is_protocol_canonical(
+    tmp_path: Path,
+) -> None:
     subprocess.run(
         ["node", "--check", str(QUANT_ROOT / "generated" / "q16" / "node_client_v1.mjs")],
         check=True,
+        timeout=10,
     )
     subprocess.run(
         [
-            str(QUANT_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-m",
             "py_compile",
             str(QUANT_ROOT / "generated" / "q16" / "python_client_v1.py"),
         ],
         check=True,
+        timeout=10,
     )
     assessment_raw = (QUANT_ROOT / "generated" / "q16" / "edge_assessment.v1.json").read_bytes()
     assessment = strict_json_object(assessment_raw, maximum_bytes=262_144)
     assert protocol_json_bytes(assessment) == assessment_raw
+
+    python_client = tmp_path / "python_client_v1.py"
+    node_client = tmp_path / "node_client_v1.mjs"
+    python_client.write_bytes(
+        (QUANT_ROOT / "generated" / "q16" / "python_client_v1.py").read_bytes()
+    )
+    node_client.write_bytes((QUANT_ROOT / "generated" / "q16" / "node_client_v1.mjs").read_bytes())
+    valid = tmp_path / "valid.json"
+    valid.write_bytes((QUANT_ROOT / "generated" / "q16" / "request_assess.v1.json").read_bytes())
+    oversized = tmp_path / "oversized.json"
+    with oversized.open("wb") as handle:
+        handle.truncate(4096)
+    oversized.chmod(0)
+    symlink = tmp_path / "request-link.json"
+    symlink.symlink_to(valid)
+    fifo = tmp_path / "request.fifo"
+    os.mkfifo(fifo)
+    race = tmp_path / "race.json"
+    race.write_bytes(b"{}")
+    python_replacement = tmp_path / "python-replacement.json"
+    python_replacement.write_bytes(b'{"python":true}')
+    node_replacement = tmp_path / "node-replacement.json"
+    node_replacement.write_bytes(b'{"node":true}')
+
+    python_probe = r"""
+import importlib.util
+import os
+import pathlib
+import sys
+
+spec = importlib.util.spec_from_file_location("q16_generated_client", sys.argv[1])
+assert spec is not None and spec.loader is not None
+client = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(client)
+socket_path = pathlib.Path("/does/not/exist/q16.sock")
+
+def rejected(path: pathlib.Path, expected: str) -> None:
+    try:
+        client.request_file(socket_path, path, maximum_bytes=64)
+    except (OSError, ValueError) as error:
+        if expected not in str(error):
+            raise AssertionError(f"unexpected rejection for {path}: {error}") from error
+    else:
+        raise AssertionError(f"unsafe raw request file was accepted: {path}")
+
+rejected(pathlib.Path(sys.argv[2]), "exceeds the bounded local protocol frame")
+rejected(pathlib.Path(sys.argv[3]), "regular file")
+rejected(pathlib.Path(sys.argv[4]), "regular file")
+rejected(pathlib.Path(os.devnull), "regular file")
+
+race_path = pathlib.Path(sys.argv[5])
+replacement_path = pathlib.Path(sys.argv[6])
+original_open = client.os.open
+def racing_open(path: object, flags: int) -> int:
+    os.replace(replacement_path, race_path)
+    return original_open(path, flags)
+client.os.open = racing_open
+rejected(race_path, "changed during admission")
+"""
+    node_probe = r"""
+import fs from 'node:fs';
+const client = await import(process.argv[1]);
+const socketPath = '/does/not/exist/q16.sock';
+
+async function rejected(path, expected) {
+  try {
+    await client.requestFile(socketPath, path, 64, 30);
+  } catch (error) {
+    if (!String(error).includes(expected)) {
+      throw new Error(`unexpected rejection for ${path}: ${error}`);
+    }
+    return;
+  }
+  throw new Error(`unsafe raw request file was accepted: ${path}`);
+}
+
+await rejected(process.argv[2], 'exceeds bounded local frame');
+await rejected(process.argv[3], 'regular file');
+await rejected(process.argv[4], 'regular file');
+await rejected('/dev/null', 'regular file');
+
+const racePath = process.argv[5];
+const replacementPath = process.argv[6];
+const originalOpenSync = fs.openSync;
+fs.openSync = (path, flags, mode) => {
+  fs.renameSync(replacementPath, racePath);
+  return originalOpenSync(path, flags, mode);
+};
+await rejected(racePath, 'changed during admission');
+"""
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                python_probe,
+                str(python_client),
+                str(oversized),
+                str(symlink),
+                str(fifo),
+                str(race),
+                str(python_replacement),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        race.write_bytes(b"{}")
+        subprocess.run(
+            [
+                "node",
+                "--input-type=module",
+                "-e",
+                node_probe,
+                str(node_client),
+                str(oversized),
+                str(symlink),
+                str(fifo),
+                str(race),
+                str(node_replacement),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    finally:
+        oversized.chmod(0o600)
 
 
 def test_generated_node_client_strictly_validates_wrapped_response_and_mutations(
@@ -201,6 +414,7 @@ console.log('strict-ok');
         check=True,
         capture_output=True,
         text=True,
+        timeout=15,
     )
     assert completed.stdout.strip() == "strict-ok"
 
@@ -337,7 +551,7 @@ else:
 """
     subprocess.run(
         [
-            str(QUANT_ROOT / ".venv" / "bin" / "python"),
+            sys.executable,
             "-c",
             script,
             str(client),
@@ -345,6 +559,7 @@ else:
             str(health_response),
         ],
         check=True,
+        timeout=15,
     )
 
 
@@ -393,6 +608,7 @@ console.log(`${response.schema}:${response.payload.advisoryAction}`);
             check=True,
             capture_output=True,
             text=True,
+            timeout=15,
         )
         assert completed.stdout.strip() == ("Q16LocalInferenceResponseV1:ABSTAIN_UNKNOWN")
     finally:
@@ -446,6 +662,7 @@ try {
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         assert completed.stdout.strip() == "timeout-ok"
     finally:
@@ -498,7 +715,7 @@ else:
     try:
         completed = subprocess.run(
             [
-                str(QUANT_ROOT / ".venv" / "bin" / "python"),
+                sys.executable,
                 "-c",
                 script,
                 str(client),
@@ -508,6 +725,7 @@ else:
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
         )
         assert completed.stdout.strip() == "timeout-ok"
     finally:

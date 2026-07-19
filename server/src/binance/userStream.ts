@@ -3,7 +3,7 @@ import WebSocket, { type ClientOptions, type RawData } from 'ws';
 import type { BinanceClient } from './client.js';
 import { boundedBinanceIdentifier } from './identifiers.js';
 
-export type UserStreamStatus = 'off' | 'connecting' | 'open' | 'failed';
+export type UserStreamStatus = 'off' | 'connecting' | 'open' | 'failed' | 'exhausted';
 
 export interface ExecutionReport {
   e: 'executionReport';
@@ -27,6 +27,8 @@ export interface UserStreamOptions {
   socketFactory?: SocketFactory;
   retryBaseMs?: number;
   retryMaxMs?: number;
+  /** A lifecycle may reduce, but never widen, the canonical attempt ceiling. */
+  maximumAttempts?: number;
   subscriptionTimeoutMs?: number;
   livenessCheckMs?: number;
   staleAfterMs?: number;
@@ -39,6 +41,7 @@ export interface UserStreamOptions {
 const USER_STREAM_URL = 'wss://ws-api.binance.com:443/ws-api/v3';
 const DEFAULT_RETRY_BASE_MS = 1_000;
 const DEFAULT_RETRY_MAX_MS = 30_000;
+const MAXIMUM_RETRY_ATTEMPTS = 8;
 const MAX_RETRY_BASE_MS = 60_000;
 const MAX_RETRY_DELAY_MS = 5 * 60_000;
 const MAX_SERVER_RETRY_AFTER_MS = 7 * 24 * 60 * 60_000;
@@ -179,6 +182,7 @@ export class UserStream {
   private stopped = true;
   private generation = 0;
   private retryMs: number;
+  private retryAttempts = 0;
   private retryNotBeforeAt = 0;
   private lastActivityAt = 0;
   private lastStatusDetail = '';
@@ -186,6 +190,7 @@ export class UserStream {
   private readonly socketFactory: SocketFactory;
   private readonly retryBaseMs: number;
   private readonly retryMaxMs: number;
+  private readonly maximumAttempts: number;
   private readonly subscriptionTimeoutMs: number;
   private readonly livenessCheckMs: number;
   private readonly staleAfterMs: number;
@@ -205,6 +210,11 @@ export class UserStream {
     this.retryMaxMs = Math.max(
       this.retryBaseMs,
       positiveInt(options.retryMaxMs, DEFAULT_RETRY_MAX_MS, MAX_RETRY_DELAY_MS),
+    );
+    this.maximumAttempts = positiveInt(
+      options.maximumAttempts,
+      MAXIMUM_RETRY_ATTEMPTS,
+      MAXIMUM_RETRY_ATTEMPTS,
     );
     this.subscriptionTimeoutMs = positiveInt(
       options.subscriptionTimeoutMs,
@@ -235,6 +245,7 @@ export class UserStream {
     if (!this.stopped) return;
     this.stopped = false;
     this.retryMs = this.retryBaseMs;
+    this.retryAttempts = 0;
     this.lastStatusDetail = '';
     const generation = ++this.generation;
     this.setStatus('connecting');
@@ -247,6 +258,7 @@ export class UserStream {
     this.stopped = true;
     ++this.generation;
     this.clearAllTimers();
+    this.retryAttempts = 0;
 
     const ws = this.ws;
     this.ws = null;
@@ -256,6 +268,11 @@ export class UserStream {
 
   private connect(generation: number): void {
     if (!this.isActive(generation) || this.ws) return;
+    if (this.retryAttempts >= this.maximumAttempts) {
+      this.exhaustRetries(generation);
+      return;
+    }
+    this.retryAttempts += 1;
     let ws: WebSocket;
     try {
       ws = this.socketFactory(USER_STREAM_URL, {
@@ -363,6 +380,7 @@ export class UserStream {
         this.stableTimer = setTimeout(() => {
           if (this.isCurrent(generation, ws)) {
             this.retryMs = this.retryBaseMs;
+            this.retryAttempts = 0;
             this.retryNotBeforeAt = 0;
           }
         }, STABLE_CONNECTION_MS);
@@ -424,6 +442,10 @@ export class UserStream {
 
   private scheduleRestart(generation: number): void {
     if (!this.isActive(generation) || this.restartTimer) return;
+    if (this.retryAttempts >= this.maximumAttempts) {
+      this.exhaustRetries(generation);
+      return;
+    }
     const random = Math.min(1, Math.max(0, this.random()));
     const localDelay = Math.max(1, Math.floor(this.retryMs * (0.8 + random * 0.4)));
     const serverDelay = Math.max(
@@ -439,6 +461,13 @@ export class UserStream {
       else this.connect(generation);
     }, delay);
     this.restartTimer.unref?.();
+  }
+
+  private exhaustRetries(generation: number): void {
+    if (!this.isActive(generation)) return;
+    if (this.restartTimer) clearTimeout(this.restartTimer);
+    this.restartTimer = null;
+    this.setStatus('exhausted', 'private stream retry campaign exhausted');
   }
 
   private isActive(generation: number): boolean {

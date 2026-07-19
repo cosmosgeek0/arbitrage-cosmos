@@ -1192,6 +1192,17 @@ def test_directory_validator_rejects_instruction_drift(
         validate_q17_artifact_directory(REPO_ROOT)
 
 
+def test_integration_instructions_separate_history_from_current_corrections() -> None:
+    instructions = generation._integration_instructions().decode()
+    committed = (GENERATED / "integration_instructions.md").read_text()
+
+    assert instructions == committed
+    assert "Historical C17/A17 acceptance remains immutable" in instructions
+    assert "Current corrected Q16/Q17 bytes are `NOT_ACCEPTED`" in instructions
+    assert "historical receipts do not attest current bytes" in instructions
+    assert "Accepted local Q16 startup" not in instructions
+
+
 def test_directory_validator_binds_generator_and_entire_regenerated_manifest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

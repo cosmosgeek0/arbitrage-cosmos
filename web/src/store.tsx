@@ -19,6 +19,19 @@ import {
   webSocketCloseDiagnosticAttributes,
   type WebSocketCloseDiagnostic,
 } from './lib/webSocketCloseDiagnostic';
+import {
+  INITIAL_WEB_SOCKET_PROTOCOL_HEALTH,
+  WEB_SOCKET_PROTOCOL_CLOSE_CODE,
+  WEB_SOCKET_PROTOCOL_CLOSE_REASON,
+  decodeWebSocketProtocolEnvelope,
+  reduceWebSocketProtocolHealth,
+  type WebSocketProtocolObservation,
+} from './lib/webSocketProtocolHealth';
+import {
+  INITIAL_RECONNECT_BACKOFF_STATE,
+  RECONNECT_BACKOFF_STABLE_OPEN_MS,
+  planReconnectBackoff,
+} from './lib/reconnectBackoff';
 import type {
   AppConfig,
   MarketRow,
@@ -30,6 +43,97 @@ export type RefreshResult = {
   issues: string[];
   ts?: number;
 };
+
+export type CompatibilityStateStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+
+export type CompatibilityStateTruth = Readonly<{
+  status: CompatibilityStateStatus;
+  lastSuccessAtMs: number | null;
+  error: string | null;
+}>;
+
+export type CompatibilityStateTruthEvent =
+  | Readonly<{ kind: 'SUCCESS'; observedAtMs: number }>
+  | Readonly<{ kind: 'FAILURE'; observedAtMs: number; error: string }>;
+
+export const INITIAL_COMPATIBILITY_STATE_TRUTH: CompatibilityStateTruth = Object.freeze({
+  status: 'LOADING',
+  lastSuccessAtMs: null,
+  error: null,
+});
+
+export function reduceCompatibilityStateTruth(
+  current: Readonly<CompatibilityStateTruth>,
+  event: Readonly<CompatibilityStateTruthEvent>,
+): CompatibilityStateTruth {
+  const observedAtMs = Number.isFinite(event.observedAtMs) && event.observedAtMs >= 0
+    ? event.observedAtMs
+    : null;
+  if (event.kind === 'SUCCESS' && observedAtMs !== null) {
+    return Object.freeze({ status: 'CURRENT', lastSuccessAtMs: observedAtMs, error: null });
+  }
+  const error = event.kind === 'FAILURE' && event.error.trim()
+    ? event.error.trim()
+    : 'Compatibility state refresh failed.';
+  return Object.freeze({
+    status: current.lastSuccessAtMs === null ? 'UNAVAILABLE' : 'STALE',
+    lastSuccessAtMs: current.lastSuccessAtMs,
+    error,
+  });
+}
+
+export type MarketStateTruth = CompatibilityStateTruth;
+export type MarketStateTruthEvent = CompatibilityStateTruthEvent;
+
+export const INITIAL_MARKET_STATE_TRUTH: MarketStateTruth = Object.freeze({
+  status: 'LOADING',
+  lastSuccessAtMs: null,
+  error: null,
+});
+
+export function reduceMarketStateTruth(
+  current: Readonly<MarketStateTruth>,
+  event: Readonly<MarketStateTruthEvent>,
+): MarketStateTruth {
+  const reduced = reduceCompatibilityStateTruth(current, event);
+  if (event.kind === 'FAILURE' && reduced.error === 'Compatibility state refresh failed.') {
+    return Object.freeze({ ...reduced, error: 'Market refresh failed.' });
+  }
+  return reduced;
+}
+
+export type MarketFreshnessStatus = 'ERROR' | 'UNKNOWN' | 'DISCONNECTED' | 'LIVE' | 'STALE';
+
+export type MarketFreshnessTruth = Readonly<{
+  status: MarketFreshnessStatus;
+  live: boolean;
+  ageMs: number | null;
+}>;
+
+export function normalizeMarketSourceTime(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+export function resolveMarketFreshness(input: Readonly<{
+  connected: boolean;
+  error: string | null;
+  sourceTimeMs: number | null;
+  nowMs: number;
+  staleAfterMs: number;
+}>): MarketFreshnessTruth {
+  if (input.error) return Object.freeze({ status: 'ERROR', live: false, ageMs: null });
+  const sourceTimeMs = normalizeMarketSourceTime(input.sourceTimeMs);
+  if (sourceTimeMs === null || !Number.isFinite(input.nowMs) || sourceTimeMs > input.nowMs) {
+    return Object.freeze({ status: 'UNKNOWN', live: false, ageMs: null });
+  }
+  const ageMs = input.nowMs - sourceTimeMs;
+  if (!input.connected) return Object.freeze({ status: 'DISCONNECTED', live: false, ageMs });
+  const staleAfterMs = Number.isFinite(input.staleAfterMs) && input.staleAfterMs > 0
+    ? input.staleAfterMs
+    : 0;
+  if (ageMs < staleAfterMs) return Object.freeze({ status: 'LIVE', live: true, ageMs });
+  return Object.freeze({ status: 'STALE', live: false, ageMs });
+}
 
 // Account detail ids render controlled, read-only Account subviews. Product
 // truth remains in ProductControlRoomProvider; this store owns navigation only.
@@ -64,10 +168,18 @@ const PAGE_IDS: Page[] = [
 
 interface Store {
   state: ServerState | null;
+  stateStatus: CompatibilityStateStatus;
+  stateLastSuccessAtMs: number | null;
+  stateError: string | null;
   markets: MarketRow[];
+  marketStatus: CompatibilityStateStatus;
+  marketsLastSuccessAtMs: number | null;
   marketsUpdatedAt: number | null;
   marketsError: string | null;
   mutationError: ApiFailure | null;
+  fxTruth: FxTruth;
+  fxBusy: boolean;
+  refreshFx: () => void;
   connected: boolean;
   dataNonce: number;
   refresh: () => Promise<RefreshResult>;
@@ -85,6 +197,71 @@ interface Store {
 }
 
 const StoreContext = createContext<Store | null>(null);
+
+export const FX_MAX_SOURCE_AGE_MS = 30 * 60_000;
+export type FxTruthStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+export type FxTruth = Readonly<{
+  status: FxTruthStatus;
+  rates: Readonly<Record<string, number>>;
+  sourceTimeMs: number | null;
+  lastSuccessAtMs: number | null;
+  error: string | null;
+}>;
+export type FxTruthEvent =
+  | Readonly<{ kind: 'SUCCESS'; observedAtMs: number; payload: Readonly<{ rates?: Record<string, number>; fetchedAt?: number }> }>
+  | Readonly<{ kind: 'FAILURE'; observedAtMs: number; error: string }>;
+
+export const INITIAL_FX_TRUTH: FxTruth = Object.freeze({
+  status: 'LOADING', rates: Object.freeze({}), sourceTimeMs: null, lastSuccessAtMs: null, error: null,
+});
+
+export function reduceFxTruth(current: FxTruth, event: FxTruthEvent): FxTruth {
+  if (event.kind === 'FAILURE') {
+    return Object.freeze({
+      ...current,
+      status: current.lastSuccessAtMs === null ? 'UNAVAILABLE' : 'STALE',
+      error: event.error.trim() || 'FX refresh failed.',
+    });
+  }
+  const observedAtMs = Number.isFinite(event.observedAtMs) ? event.observedAtMs : 0;
+  const sourceTimeMs = Number.isFinite(event.payload.fetchedAt) && Number(event.payload.fetchedAt) > 0
+    ? Number(event.payload.fetchedAt)
+    : null;
+  const rates = Object.fromEntries(Object.entries(event.payload.rates ?? {}).filter(([, rate]) => Number.isFinite(rate) && rate > 0));
+  const fresh = sourceTimeMs !== null
+    && sourceTimeMs <= observedAtMs
+    && observedAtMs - sourceTimeMs <= FX_MAX_SOURCE_AGE_MS
+    && Object.keys(rates).length > 0;
+  return Object.freeze({
+    status: fresh ? 'CURRENT' : Object.keys(rates).length > 0 ? 'STALE' : 'UNAVAILABLE',
+    rates: Object.freeze(rates),
+    sourceTimeMs,
+    lastSuccessAtMs: fresh ? observedAtMs : current.lastSuccessAtMs,
+    error: fresh ? null : 'FX source is stale or invalid.',
+  });
+}
+
+export function resolveFxRate(
+  truth: FxTruth,
+  currency: string,
+  nowMs: number,
+): Readonly<{ status: FxTruthStatus; rate: number | null }> {
+  if (currency === 'USD') return Object.freeze({ status: 'CURRENT', rate: 1 });
+  const rate = truth.rates[currency];
+  const current = truth.status === 'CURRENT'
+    && truth.sourceTimeMs !== null
+    && nowMs >= truth.sourceTimeMs
+    && nowMs - truth.sourceTimeMs <= FX_MAX_SOURCE_AGE_MS
+    && Number.isFinite(rate)
+    && rate > 0;
+  if (current) return Object.freeze({ status: 'CURRENT', rate });
+  const status = truth.status === 'LOADING'
+    ? 'LOADING'
+    : truth.lastSuccessAtMs !== null || Number.isFinite(rate)
+      ? 'STALE'
+      : 'UNAVAILABLE';
+  return Object.freeze({ status, rate: null });
+}
 
 // ---- live order-book stream (Token Detail) -------------------------------
 // Rides the same /ws socket as canonical invalidations and material-event
@@ -119,6 +296,18 @@ export function subscribeLiveBook(symbol: string, fn: (m: LiveBookMsg) => void):
 // ---------------------------------------------------------------------------
 
 type MutationResult<T> = { data: T; error: null } | { data: null; error: ApiFailure };
+
+export type MutationFailureTruthEvent =
+  | Readonly<{ kind: 'REJECTED'; failure: ApiFailure }>
+  | Readonly<{ kind: 'ACKNOWLEDGED' }>;
+
+export function reduceMutationFailureTruth(
+  current: ApiFailure | null,
+  event: MutationFailureTruthEvent,
+): ApiFailure | null {
+  if (event.kind === 'ACKNOWLEDGED') return null;
+  return event.failure ?? current;
+}
 
 function mutationFailure(error: unknown): ApiFailure {
   if (error instanceof ApiRequestError) {
@@ -163,7 +352,98 @@ function isCanonicalSupervisorDeltaMessage(value: unknown): value is Readonly<{
   return payload.schemaVersion === 'canonical-supervisor-delta.v1'
     && typeof payload.revision === 'string'
     && payload.revision.length > 0
-    && payload.revision.length <= 256;
+    && payload.revision.length <= 256
+    && ['LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED', 'SYNTHETIC_ONLY', 'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN'].includes(String(payload.truthLabel))
+    && ['STOPPED', 'WARMING', 'READY', 'DEGRADED', 'BLOCKED', 'FAILED'].includes(String(payload.overallPosture))
+    && (payload.firstRootBlockerComponentId === null
+      || (typeof payload.firstRootBlockerComponentId === 'string'
+        && payload.firstRootBlockerComponentId.length > 0
+        && payload.firstRootBlockerComponentId.length <= 128))
+    && Number.isSafeInteger(payload.runtimeGeneration)
+    && Number(payload.runtimeGeneration) >= 0
+    && Number.isSafeInteger(payload.controlGeneration)
+    && Number(payload.controlGeneration) >= 0
+    && Number.isSafeInteger(payload.controlRevision)
+    && Number(payload.controlRevision) >= 0
+    && ['READ_ONLY', 'ADVISORY', 'VALIDATE_ONLY'].includes(String(payload.safeMode))
+    && typeof payload.killSwitchEngaged === 'boolean'
+    && typeof payload.intakePaused === 'boolean';
+}
+
+function isDecimalWebSocketCursor(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^(?:0|[1-9]\d{0,18})$/.test(value)
+    && BigInt(value) <= 9_223_372_036_854_775_807n;
+}
+
+function isMaterialEventPageMessage(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (message.type !== 'material-event-page'
+      || !message.payload || typeof message.payload !== 'object' || Array.isArray(message.payload)) return false;
+  const payload = message.payload as Record<string, unknown>;
+  if (!isDecimalWebSocketCursor(payload.afterCursor)
+      || !isDecimalWebSocketCursor(payload.nextCursor)
+      || BigInt(payload.nextCursor) < BigInt(payload.afterCursor)
+      || !Array.isArray(payload.events)
+      || payload.events.length > 200
+      || !payload.events.every((event) => Boolean(event && typeof event === 'object' && !Array.isArray(event)))
+      || !['CONTINUOUS', 'GAP_REQUIRES_BACKFILL', 'TRUNCATED_REQUIRES_BACKFILL'].includes(String(payload.continuity))
+      || typeof payload.hasMore !== 'boolean') return false;
+  const missingFrom = payload.missingFromCursor;
+  const missingTo = payload.missingToCursor;
+  return (missingFrom === null && missingTo === null)
+    || (isDecimalWebSocketCursor(missingFrom)
+      && isDecimalWebSocketCursor(missingTo)
+      && BigInt(missingFrom) <= BigInt(missingTo));
+}
+
+function isPositiveNumericString(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 64) return false;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+function isBookLevel(value: unknown): value is [string, string] {
+  return Array.isArray(value)
+    && value.length === 2
+    && isPositiveNumericString(value[0])
+    && isPositiveNumericString(value[1]);
+}
+
+function isLiveBookMessage(value: unknown): value is LiveBookMsg {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Record<string, unknown>;
+  if (typeof message.symbol !== 'string' || !/^[A-Z0-9]{2,32}$/.test(message.symbol)) return false;
+  if (message.type === 'book') {
+    if (!Array.isArray(message.bids) || message.bids.length < 1 || message.bids.length > 20
+        || !Array.isArray(message.asks) || message.asks.length < 1 || message.asks.length > 20
+        || !message.bids.every(isBookLevel) || !message.asks.every(isBookLevel)
+        || !Number.isSafeInteger(message.ts) || Number(message.ts) <= 0) return false;
+    return Number(message.bids[0][0]) < Number(message.asks[0][0]);
+  }
+  if (message.type !== 'btrades'
+      || !Array.isArray(message.trades)
+      || message.trades.length < 1
+      || message.trades.length > 400) return false;
+  let previousId = -1;
+  for (const trade of message.trades) {
+    if (!trade || typeof trade !== 'object' || Array.isArray(trade)) return false;
+    const row = trade as Record<string, unknown>;
+    if (!Number.isSafeInteger(row.id) || Number(row.id) <= previousId
+        || !Number.isFinite(row.price) || Number(row.price) <= 0
+        || !Number.isFinite(row.qty) || Number(row.qty) <= 0
+        || !Number.isSafeInteger(row.time) || Number(row.time) <= 0
+        || typeof row.isBuyerMaker !== 'boolean') return false;
+    previousId = Number(row.id);
+  }
+  return true;
+}
+
+function isKnownWebSocketEnvelope(value: unknown): boolean {
+  return isCanonicalSupervisorDeltaMessage(value)
+    || isMaterialEventPageMessage(value)
+    || isLiveBookMessage(value);
 }
 
 function failClosedConfig(config: AppConfig): AppConfig {
@@ -229,12 +509,64 @@ async function post<T>(url: string, body: unknown): Promise<MutationResult<T>> {
   }
 }
 
+type WatchlistAcknowledgement = Readonly<Pick<AppConfig, 'watchlist'>>;
+
+export type SerializedWatchlistMutationQueue = Readonly<{
+  synchronize: (watchlist: readonly string[]) => void;
+  enqueue: (symbol: string) => Promise<WatchlistAcknowledgement | null>;
+}>;
+
+/**
+ * Serializes complete-watchlist writes and keeps an acknowledgement-backed
+ * shadow while a batch is pending. The config API does not expose a revision
+ * or compare-and-swap token, so sending the next mutation only after the
+ * preceding acknowledgement is the client-side ordering authority.
+ */
+export function createSerializedWatchlistMutationQueue(
+  initialWatchlist: readonly string[],
+  submit: (watchlist: readonly string[]) => Promise<WatchlistAcknowledgement | null>,
+): SerializedWatchlistMutationQueue {
+  let acknowledgedWatchlist = [...initialWatchlist];
+  let pendingCount = 0;
+  let tail: Promise<void> = Promise.resolve();
+
+  const synchronize = (watchlist: readonly string[]) => {
+    if (pendingCount === 0) acknowledgedWatchlist = [...watchlist];
+  };
+
+  const enqueue = (symbol: string): Promise<WatchlistAcknowledgement | null> => {
+    pendingCount += 1;
+    const operation = tail.then(async () => {
+      const current = acknowledgedWatchlist;
+      const next = current.includes(symbol)
+        ? current.filter((entry) => entry !== symbol)
+        : [...current, symbol];
+      const acknowledgement = await submit(Object.freeze([...next]));
+      if (acknowledgement) acknowledgedWatchlist = [...acknowledgement.watchlist];
+      return acknowledgement;
+    });
+    tail = operation.then(
+      () => { pendingCount -= 1; },
+      () => { pendingCount -= 1; },
+    );
+    return operation;
+  };
+
+  return Object.freeze({ synchronize, enqueue });
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
+  const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
+    INITIAL_COMPATIBILITY_STATE_TRUTH,
+  );
   const [markets, setMarkets] = useState<MarketRow[]>([]);
+  const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
   const [marketsError, setMarketsError] = useState<string | null>(null);
   const [mutationError, setMutationError] = useState<ApiFailure | null>(null);
+  const [fxTruth, setFxTruth] = useState<FxTruth>(INITIAL_FX_TRUTH);
+  const [fxBusy, setFxBusy] = useState(false);
   const [connected, setConnected] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => {
     applyPrefs();
@@ -255,33 +587,60 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
   const [, bumpFx] = useState(0);
+  const fxPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
+  const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
 
-  // Display currency → live FX rate (USD base). USD is identity; others fetch.
+  // One FX owner feeds both global formatters and the operator sheet. Cached
+  // rates remain diagnostic evidence after failure, but never current truth.
+  useEffect(() => {
+    const poll = createSettledPoll<{ rates?: Record<string, number>; fetchedAt?: number }>({
+      intervalMs: Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1_000,
+      request: (signal) => {
+        setFxBusy(true);
+        return fetchJson('/api/fx', { signal });
+      },
+      onSuccess: (d) => {
+        setFxTruth((current) => reduceFxTruth(current, { kind: 'SUCCESS', observedAtMs: Date.now(), payload: d }));
+        setFxBusy(false);
+      },
+      onError: (cause) => {
+        setFxTruth((current) => reduceFxTruth(current, {
+          kind: 'FAILURE', observedAtMs: Date.now(), error: mutationFailure(cause).message,
+        }));
+        setFxBusy(false);
+      },
+    });
+    fxPollRef.current = poll;
+    poll.start();
+    return () => {
+      if (fxPollRef.current === poll) fxPollRef.current = null;
+      poll.stop();
+    };
+  }, [prefs.dataCadence?.fx]);
+
   useEffect(() => {
     const cur = prefs.currency || 'USD';
     const sym = CURRENCIES[cur]?.symbol ?? '$';
-    if (cur === 'USD') {
-      setFxRate(1, '$');
-      bumpFx((n) => n + 1);
-      return;
-    }
-    const poll = createSettledPoll<{ rates?: Record<string, number> }>({
-      intervalMs: Math.max(0.5, prefs.dataCadence?.fx ?? 300) * 1_000,
-      request: (signal) => fetchJson('/api/fx', { signal }),
-      onSuccess: (d) => {
-        if (!d?.rates) return;
-        const rate = d.rates[cur];
-        if (rate) {
-          setFxRate(rate, sym);
-          bumpFx((n) => n + 1);
-        }
-      },
-    });
-    poll.start();
-    return poll.stop;
-  }, [prefs.currency, prefs.dataCadence?.fx]);
+    const resolved = resolveFxRate(fxTruth, cur, Date.now());
+    setFxRate(resolved.rate, sym, resolved.status === 'CURRENT');
+    bumpFx((n) => n + 1);
+    if (fxTruth.status !== 'CURRENT' || fxTruth.sourceTimeMs === null) return;
+    const delayMs = Math.max(0, fxTruth.sourceTimeMs + FX_MAX_SOURCE_AGE_MS - Date.now() + 1);
+    const timer = window.setTimeout(() => {
+      setFxTruth((current) => current.status === 'CURRENT' && current.sourceTimeMs === fxTruth.sourceTimeMs
+        ? reduceFxTruth(current, { kind: 'FAILURE', observedAtMs: Date.now(), error: 'FX source expired.' })
+        : current);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [fxTruth, prefs.currency]);
+
+  const refreshFx = useCallback(() => {
+    if (!fxPollRef.current) return;
+    setFxBusy(true);
+    fxPollRef.current.refresh();
+  }, []);
 
   useEffect(() => onPrefs((p) => {
     setPrefs(p);
@@ -308,6 +667,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let closed = false;
     let retry: number | null = null;
+    let stableOpenTimer: number | null = null;
+    let reconnectBackoff = INITIAL_RECONNECT_BACKOFF_STATE;
     let generation = 0;
     let stateRefreshInFlight = false;
     let stateRefreshQueued = false;
@@ -323,9 +684,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       stateRefreshController = controller;
       void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
         .then((snapshot) => {
-          if (!closed && !controller.signal.aborted) setState(failClosedState(snapshot));
+          if (!closed && !controller.signal.aborted) {
+            setState(failClosedState(snapshot));
+            setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+              kind: 'SUCCESS',
+              observedAtMs: Date.now(),
+            }));
+          }
         })
-        .catch(() => undefined)
+        .catch((cause) => {
+          if (!closed && !controller.signal.aborted) {
+            setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+              kind: 'FAILURE',
+              observedAtMs: Date.now(),
+              error: mutationFailure(cause).message,
+            }));
+          }
+        })
         .finally(() => {
           if (stateRefreshController === controller) stateRefreshController = null;
           stateRefreshInFlight = false;
@@ -340,7 +715,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (retry !== null) window.clearTimeout(retry);
       retry = null;
     };
+    const clearStableOpenTimer = () => {
+      if (stableOpenTimer !== null) window.clearTimeout(stableOpenTimer);
+      stableOpenTimer = null;
+    };
     const closeCurrent = () => {
+      clearStableOpenTimer();
       const previous = wsRef.current;
       wsRef.current = null;
       if (liveWs === previous) liveWs = null;
@@ -370,28 +750,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
       const ws = new WebSocket(socketUrl.toString());
       let connectionEstablished = false;
+      let openedAtMonotonicMs: number | null = null;
+      let protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
+      const applyProtocolObservation = (observation: WebSocketProtocolObservation) => {
+        protocolHealth = reduceWebSocketProtocolHealth(protocolHealth, observation);
+        if (protocolHealth.status === 'DEGRADED') setConnected(false);
+        else if (connectionEstablished) setConnected(true);
+        return protocolHealth;
+      };
       wsRef.current = ws;
       liveWs = ws;
       ws.onopen = () => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
         connectionEstablished = true;
+        openedAtMonotonicMs = performance.now();
+        protocolHealth = INITIAL_WEB_SOCKET_PROTOCOL_HEALTH;
         setConnected(true);
         sendLiveSub(); // re-attach any live book subscription after reconnect
+        clearStableOpenTimer();
+        stableOpenTimer = window.setTimeout(() => {
+          stableOpenTimer = null;
+          if (closed || socketGeneration !== generation || wsRef.current !== ws
+              || ws.readyState !== WebSocket.OPEN) return;
+          reconnectBackoff = INITIAL_RECONNECT_BACKOFF_STATE;
+        }, RECONNECT_BACKOFF_STABLE_OPEN_MS);
       };
       ws.onmessage = (msg) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
-        try {
-          const data: unknown = JSON.parse(msg.data as string);
-          if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
-          else if (data && typeof data === 'object'
-              && ((data as { type?: unknown }).type === 'book' || (data as { type?: unknown }).type === 'btrades')) {
-            for (const fn of liveBookListeners) fn(data as unknown as LiveBookMsg);
+        const decoded = decodeWebSocketProtocolEnvelope(msg.data, isKnownWebSocketEnvelope);
+        if (!decoded.ok) {
+          const degraded = applyProtocolObservation('INVALID_ENVELOPE');
+          if (degraded.reconnectRequired && ws.readyState === WebSocket.OPEN) {
+            ws.close(WEB_SOCKET_PROTOCOL_CLOSE_CODE, WEB_SOCKET_PROTOCOL_CLOSE_REASON);
           }
-          // Material-event cursor consumption stays with the existing Product
-          // Control Room binding; this compatibility store never advances it.
-        } catch {
-          // ignore
+          return;
         }
+        applyProtocolObservation('VALID_ENVELOPE');
+        const data = decoded.value;
+        if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
+        else if (isLiveBookMessage(data)) {
+          for (const fn of liveBookListeners) fn(data);
+        }
+        // Material-event cursor consumption stays with the existing Product
+        // Control Room binding; this compatibility store never advances it.
       };
       ws.onclose = (event) => {
         if (closed || socketGeneration !== generation || wsRef.current !== ws) return;
@@ -401,10 +802,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           socketGeneration,
           connectionEstablished,
         ));
+        clearStableOpenTimer();
         wsRef.current = null;
         if (liveWs === ws) liveWs = null;
         setConnected(false);
-        scheduleConnect(3_000);
+        const plan = planReconnectBackoff(reconnectBackoff, {
+          entropySample: Math.random(),
+          openDurationMs: openedAtMonotonicMs === null
+            ? null
+            : Math.max(0, performance.now() - openedAtMonotonicMs),
+        });
+        reconnectBackoff = plan.next;
+        scheduleConnect(plan.delayMs);
       };
       ws.onerror = () => {
         if (socketGeneration === generation && wsRef.current === ws) ws.close();
@@ -442,10 +851,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSuccess: (payload) => {
           if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
           setMarkets(payload.rows);
-          setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
+          setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
           setMarketsError(null);
+          setMarketTruth((current) => reduceMarketStateTruth(current, {
+            kind: 'SUCCESS',
+            observedAtMs: Date.now(),
+          }));
       },
-      onError: () => setMarketsError('market refresh failed'),
+      onError: (cause) => {
+        const error = mutationFailure(cause).message || 'Market refresh failed.';
+        setMarketsError(error);
+        setMarketTruth((current) => reduceMarketStateTruth(current, {
+          kind: 'FAILURE',
+          observedAtMs: Date.now(),
+          error,
+        }));
+      },
     });
     poll.start();
     return poll.stop;
@@ -471,10 +892,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const result = await post<AppConfig>('/api/config', patch);
     const config = result.data && isConfigAcknowledgement(result.data) ? failClosedConfig(result.data) : null;
     const error = result.error ?? (config ? null : acknowledgementFailure('Configuration acknowledgement was malformed.'));
-    setMutationError(error);
+    setMutationError((current) => config
+      ? reduceMutationFailureTruth(current, { kind: 'ACKNOWLEDGED' })
+      : reduceMutationFailureTruth(current, {
+          kind: 'REJECTED',
+          failure: error ?? acknowledgementFailure('Configuration acknowledgement was malformed.'),
+        }));
     if (config) setState((s) => (s ? failClosedState({ ...s, config }) : s));
     return config;
   }, []);
+
+  if (!watchlistMutationQueueRef.current) {
+    watchlistMutationQueueRef.current = createSerializedWatchlistMutationQueue(
+      state?.config.watchlist ?? [],
+      (watchlist) => saveConfig({ watchlist: [...watchlist] }),
+    );
+  }
+  const watchlistMutationQueue = watchlistMutationQueueRef.current;
+
+  useEffect(() => {
+    watchlistMutationQueue.synchronize(state?.config.watchlist ?? []);
+  }, [state?.config.watchlist, watchlistMutationQueue]);
+
+  const toggleWatch = useCallback(
+    async (symbol: string) => {
+      const saved = await watchlistMutationQueue.enqueue(symbol);
+      return saved ? null : acknowledgementFailure('The watchlist change was not acknowledged.');
+    },
+    [watchlistMutationQueue],
+  );
 
   // Read-only browser snapshot refresh retained for compatibility consumers.
   // It never calls the managed-runtime /api/refresh targets: those require the
@@ -484,18 +930,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await fetchJson<ServerState>('/api/state');
       setState(failClosedState(s));
-    } catch {
+      setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+        kind: 'SUCCESS',
+        observedAtMs: Date.now(),
+      }));
+    } catch (cause) {
       issues.push('State snapshot failed');
+      setStateTruth((current) => reduceCompatibilityStateTruth(current, {
+        kind: 'FAILURE',
+        observedAtMs: Date.now(),
+        error: mutationFailure(cause).message,
+      }));
     }
     try {
       const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
-      if (Array.isArray(payload.rows)) {
-        setMarkets(payload.rows);
-        setMarketsUpdatedAt(payload.updatedAt ?? Date.now());
-        setMarketsError(null);
-      }
-    } catch {
+      if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
+      setMarkets(payload.rows);
+      setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
+      setMarketsError(null);
+      setMarketTruth((current) => reduceMarketStateTruth(current, {
+        kind: 'SUCCESS',
+        observedAtMs: Date.now(),
+      }));
+    } catch (cause) {
       issues.push('Market refresh failed');
+      const error = mutationFailure(cause).message || 'Market refresh failed.';
+      setMarketsError(error);
+      setMarketTruth((current) => reduceMarketStateTruth(current, {
+        kind: 'FAILURE',
+        observedAtMs: Date.now(),
+        error,
+      }));
     }
     // Rebuild only the browser's cockpit socket, then re-attach any active
     // token-book subscription. No server runtime is restarted here.
@@ -511,10 +976,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const store: Store = {
     state,
+    stateStatus: stateTruth.status,
+    stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
+    stateError: stateTruth.error,
     markets,
+    marketStatus: marketTruth.status,
+    marketsLastSuccessAtMs: marketTruth.lastSuccessAtMs,
     marketsUpdatedAt,
     marketsError,
     mutationError,
+    fxTruth,
+    fxBusy,
+    refreshFx,
     connected,
     dataNonce,
     refresh,
@@ -535,15 +1008,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }, []),
     paletteOpen,
     setPaletteOpen,
-    toggleWatch: useCallback(
-      async (symbol: string) => {
-        const cur = state?.config.watchlist ?? [];
-        const next = cur.includes(symbol) ? cur.filter((s) => s !== symbol) : [...cur, symbol];
-        const saved = await saveConfig({ watchlist: next });
-        return saved ? null : acknowledgementFailure('The watchlist change was not acknowledged.');
-      },
-      [state, saveConfig]
-    ),
+    toggleWatch,
     saveConfig,
   };
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from q14_fixtures import make_sample_set, predictions_from_scores
 
@@ -186,6 +188,53 @@ def test_pr_auc_exact_value_and_degeneracy() -> None:
         unknown, {f"s-{index:04d}": (1, 10) for index in range(3)}
     )
     assert pr_auc(unknown, unknown_predictions).reason == "NO_SCOREABLE_SAMPLES"
+
+    constant = make_sample_set(4, outcome_of=lambda index: index % 2 == 0)
+    renamed_cases = (
+        ("a-positive", "z-negative", "b-positive", "y-negative"),
+        ("z-positive", "a-negative", "y-positive", "b-negative"),
+    )
+    for sample_ids in renamed_cases:
+        renamed = SampleSetV1(
+            dataset_id="q14-tied-constant",
+            posture=constant.posture,
+            samples=tuple(
+                replace(sample, sample_id=sample_id)
+                for sample, sample_id in zip(constant.samples, sample_ids, strict=True)
+            ),
+        )
+        tied_predictions = _prediction_set(
+            renamed,
+            {sample.sample_id: (1, 2) for sample in renamed.samples},
+        )
+        assert pr_auc(renamed, tied_predictions).value == FixedPointV1(SCALE // 2)
+
+    mixed = make_sample_set(
+        6,
+        outcome_of=lambda index: (True, False, True, True, False, False)[index],
+    )
+    mixed_renamings = (
+        ("a", "z", "b", "c", "y", "x"),
+        ("z", "a", "y", "x", "b", "c"),
+    )
+    for mixed_sample_ids in mixed_renamings:
+        renamed = SampleSetV1(
+            dataset_id="q14-tied-mixed",
+            posture=mixed.posture,
+            samples=tuple(
+                replace(sample, sample_id=sample_id)
+                for sample, sample_id in zip(mixed.samples, mixed_sample_ids, strict=True)
+            ),
+        )
+        score_by_position = ((9, 10), (9, 10), (1, 2), (1, 2), (1, 2), (1, 10))
+        tied_predictions = _prediction_set(
+            renamed,
+            {
+                sample.sample_id: score
+                for sample, score in zip(renamed.samples, score_by_position, strict=True)
+            },
+        )
+        assert pr_auc(renamed, tied_predictions).value == FixedPointV1(566_666_666_667)
 
 
 def test_roc_auc_tie_law() -> None:

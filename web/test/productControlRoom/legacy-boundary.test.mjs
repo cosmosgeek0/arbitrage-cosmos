@@ -63,6 +63,16 @@ test('automatic token rendering uses only same-origin owners and deterministic l
   assert.match(detail, /same-origin public-source owner/);
 });
 
+test('TokenDetail retains one derivatives owner without dead alternate panels', async () => {
+  const detail = await read('pages/TokenDetail.tsx');
+
+  assert.doesNotMatch(detail, /\b(?:function\s+(?:CgxPanel|BasisCard|ProfilePanel)|type\s+CgxTab|interface\s+CgxPoint)\b/);
+  assert.doesNotMatch(detail, /\bfetch\(`\/api\/(?:candles|futures)\//);
+  assert.doesNotMatch(detail, /import\s*\{[^}]*\bCopy\b/);
+  assert.match(detail, /function\s+DerivativesIntelligence\b/);
+  assert.match(detail, /<DerivativesIntelligence\b/);
+});
+
 test('the shared store structurally omits legacy preview and execution capabilities', async () => {
   const store = await read('store.tsx');
   assert.doesNotMatch(store, /preview:\s*\(intent:/);
@@ -125,6 +135,16 @@ test('header keeps canonical Product truth and structurally omits legacy and AWS
   ]) {
     assert.equal(header.includes(token), false, `Header retains retired action ${token}`);
   }
+});
+
+test('Header retains one mounted topbar content implementation', async () => {
+  const header = await read('components/Header.tsx');
+
+  assert.doesNotMatch(header, /\bconst\s+content\s*=\s*\(k:\s*MK\)/);
+  assert.doesNotMatch(header, /\bconst\s+contentClean\s*=\s*\(k:\s*MK\)/);
+  assert.doesNotMatch(header, /\b(?:function\s+TopPanelHeader|const\s+(?:TbpCheck|IconDollar))\b/);
+  assert.match(header, /const\s+premiumContent\s*=\s*\(k:\s*MK\)/);
+  assert.equal(header.match(/premiumContent\((?:outgoingContent|contentActive)\)/g)?.length, 2);
 });
 
 test('account recovery and notification routing cannot reintroduce private or AWS green state', async () => {

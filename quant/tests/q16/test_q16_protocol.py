@@ -87,6 +87,7 @@ def test_python_protocol_bytes_match_generated_node_over_frozen_valid_fixtures()
         check=True,
         capture_output=True,
         text=True,
+        timeout=15,
     )
     assert json.loads(completed.stdout) == expected
 
@@ -112,6 +113,7 @@ def test_python_node_protocol_hashes_match_deterministic_numeric_vectors() -> No
         check=True,
         capture_output=True,
         text=True,
+        timeout=15,
     )
     assert json.loads(completed.stdout) == expected
 

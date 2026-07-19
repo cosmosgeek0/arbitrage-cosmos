@@ -81,6 +81,7 @@ def _killed_promotion(registry_root: Path, stage: CommitStage) -> subprocess.Com
         capture_output=True,
         text=True,
         env=environment,
+        timeout=15,
     )
 
 

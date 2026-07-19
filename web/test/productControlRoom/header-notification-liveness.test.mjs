@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const headerUrl = new URL('../../src/components/Header.tsx', import.meta.url);
+const notificationFeedUrl = new URL('../../src/lib/notificationFeed.tsx', import.meta.url);
 
 test('I00-050 premium Header and Notifications page share canonical incident truth without local regrouping', async () => {
   const [source, page, selector] = await Promise.all([

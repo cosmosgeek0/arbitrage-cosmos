@@ -149,7 +149,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "3a2a912ccecdd9fb893d798c38b4cc40d2f4821465fd2d3e82987b7449c654a8"
             ),
             "currentSourceSha256": (
-                "c39a0c893f885e637f3d6ac22cb25df753a0bcf0388b4966342e0a8a0aecfd53"
+                "6eee726b5cd40f20d83b1c7ef164f75a9f0bd2183fb8621ce140f9d4688adcf9"
             ),
             "fixCommits": [
                 "19f674a35944f1f3fdd4fdafd396fba9df6fd255",
@@ -236,7 +236,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             "correctionRefs": ["Q-073", "Q-074"],
             "currentFileCount": 9,
             "currentSourceSha256": (
-                "a548b1c53b6c56037a6d9e8ed7b9c7785e440c8b68ba57e0dacbd40b7d9e3d85"
+                "168e013f6fb5ae66b3113294bb4fc7c8edebb8ec2dbad37b94401ecb6a8cb1a4"
             ),
             "historicalSourceSha256": (
                 "cd50265ea4e986b32c07f5766b1de3b904a28a136450af8888f7712e36a65798"
@@ -291,7 +291,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             "correctionRefs": ["Q-070"],
             "currentFileCount": 13,
             "currentSourceSha256": (
-                "78e7c8450d53f5be8a33e7df102d5c263995ba24b22de9257507187d9d643faf"
+                "0f76a339360c25c993ca6c179c32536860dac3d6000772192569d173bc25e030"
             ),
             "historicalSourceSha256": (
                 "8c4482643582c9e9fbd7be3bd470c4d106717955bd10ad80854df9314e6b7356"
@@ -313,7 +313,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             "correctionRefs": ["RB13_QUANT_INFERENCE_WORKER_ISOLATION", "Q-070"],
             "currentFileCount": 8,
             "currentSourceSha256": (
-                "8df1b57a7a53b94d1c036751a32b4dc593792fcc4c43b6dd12a1ba6d2fbee322"
+                "5d9c0cbd4f86cd0b1a48a89bd19b4ba527cf5e99007cce0bdbdac13b243773b5"
             ),
             "historicalSourceSha256": (
                 "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"

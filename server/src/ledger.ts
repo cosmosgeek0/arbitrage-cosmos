@@ -1659,6 +1659,15 @@ export class Ledger extends EventEmitter {
 
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
+      // Make the concurrency contract explicit rather than inherited by
+      // accident (Part 4 #10): busy_timeout matches better-sqlite3's implicit
+      // 5000 ms and wal_autocheckpoint pins SQLite's 1000-page default, so a
+      // driver or SQLite upgrade cannot silently change either. The runtime
+      // `synchronous` level is deliberately NOT set here: the shutdown path
+      // escalates to FULL for the clean-boot marker, and moving the runtime
+      // level (e.g. to NORMAL) is a durability decision for the director.
+      this.db.pragma('busy_timeout = 5000');
+      this.db.pragma('wal_autocheckpoint = 1000');
       this.db.exec(`
       CREATE TABLE IF NOT EXISTS ledger_schema_compatibility (
         singleton INTEGER NOT NULL PRIMARY KEY CHECK(singleton = 1),
@@ -4855,6 +4864,24 @@ export class Ledger extends EventEmitter {
         // The original write failure is the health result.
       }
       this.healthProbeCache = { checkedAt: now, writable: false };
+      return false;
+    }
+  }
+
+  /**
+   * Periodic WAL reclamation (Part 4 #10): without it the WAL is fully
+   * reclaimed only on a clean stop, which a SIGKILL mid-drain is precisely
+   * the scenario that prevents. Best-effort by design — a busy reader simply
+   * defers reclamation to the next pass.
+   */
+  checkpointWalPeriodic(): boolean {
+    if (this.closed || !this.db.open) return false;
+    try {
+      const rows = this.db.pragma('wal_checkpoint(TRUNCATE)') as unknown;
+      if (!Array.isArray(rows) || rows.length !== 1) return false;
+      const row = rows[0] as Record<string, unknown>;
+      return row.busy === 0;
+    } catch {
       return false;
     }
   }

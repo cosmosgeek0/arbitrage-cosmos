@@ -3826,7 +3826,13 @@ function startServerTimers(): void {
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
   pruneEphemeralLedgerEvents(5);
-  eventRetentionTimer = setInterval(() => pruneEphemeralLedgerEvents(1), 10 * 60_000);
+  eventRetentionTimer = setInterval(() => {
+    pruneEphemeralLedgerEvents(1);
+    // Reclaim WAL frames on the same cadence as retention so the -wal file
+    // stays bounded even when the process never reaches a clean shutdown
+    // checkpoint (Part 4 #10).
+    ledger.checkpointWalPeriodic();
+  }, 10 * 60_000);
   websocketHeartbeatTimer = setInterval(() => {
     for (const client of wss.clients) {
       if (wsAlive.get(client) === false) {

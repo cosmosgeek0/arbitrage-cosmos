@@ -86,7 +86,14 @@ TARGET_SCHEMA="$(json_get "$TARGET_DIR/release.json" schemaVersion)" \
 # --- journal/schema compatibility: absolute ------------------------------------
 ROLLBACK_FLOOR=0
 if [ -f "$JOURNAL_FILE" ]; then
-  ROLLBACK_FLOOR="$(json_get "$JOURNAL_FILE" rollbackFloor || echo 0)"
+  # Part 4 #6: a corrupt journal must never default the non-rollback barrier
+  # to its most permissive value.
+  set +e; FLOOR_VALUE="$(json_get "$JOURNAL_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
+  case "$FLOOR_RC" in
+    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
+    3) ROLLBACK_FLOOR=0 ;;
+    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+  esac
 fi
 if [ "$TARGET_SCHEMA" -lt "$ROLLBACK_FLOOR" ]; then
   log_event REFUSED_SCHEMA "target schema $TARGET_SCHEMA behind non-rollback barrier $ROLLBACK_FLOOR"

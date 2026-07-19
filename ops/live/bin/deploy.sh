@@ -118,7 +118,15 @@ assert_link_sane "$PREVIOUS_LINK"
 
 ROLLBACK_FLOOR=0
 if [ -f "$JOURNAL_FILE" ]; then
-  ROLLBACK_FLOOR="$(json_get "$JOURNAL_FILE" rollbackFloor || echo 0)"
+  # Part 4 #6: a corrupt journal must never default a SAFETY BARRIER to its
+  # most permissive value. Key absent (rc 3) legitimately means floor 0; an
+  # unreadable journal (any other failure) refuses the deploy.
+  set +e; FLOOR_VALUE="$(json_get "$JOURNAL_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
+  case "$FLOOR_RC" in
+    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
+    3) ROLLBACK_FLOOR=0 ;;
+    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+  esac
 fi
 if [ "$SCHEMA_VERSION" -lt "$ROLLBACK_FLOOR" ]; then
   log_event REFUSED_SCHEMA "candidate schema $SCHEMA_VERSION is behind the non-rollback barrier $ROLLBACK_FLOOR"
@@ -233,7 +241,13 @@ fi
 # --- 8. success: record journal compatibility ---------------------------------
 DATA_SCHEMA=0
 if [ -f "$JOURNAL_FILE" ]; then
-  DATA_SCHEMA="$(json_get "$JOURNAL_FILE" dataSchema || echo 0)"
+  # Part 4 #6: an unreadable journal must not be rewritten from defaults.
+  set +e; SCHEMA_VALUE="$(json_get "$JOURNAL_FILE" dataSchema)"; SCHEMA_RC=$?; set -e
+  case "$SCHEMA_RC" in
+    0) DATA_SCHEMA="$SCHEMA_VALUE" ;;
+    3) DATA_SCHEMA=0 ;;
+    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to rewrite it from defaults after the switch" ;;
+  esac
 fi
 NEW_SCHEMA="$DATA_SCHEMA"
 [ "$SCHEMA_VERSION" -gt "$NEW_SCHEMA" ] && NEW_SCHEMA="$SCHEMA_VERSION"

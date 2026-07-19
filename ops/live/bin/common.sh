@@ -754,12 +754,20 @@ sha256_file() {
   fi
 }
 
-# json_get FILE DOTTED.KEY — prints the scalar value; exits 3 when missing.
+# json_get FILE DOTTED.KEY — prints the scalar value; exits 3 when the key is
+# missing, 4 when the file is unreadable or not valid JSON (Part 4 #6: the two
+# conditions must be distinguishable at the call site - "key absent" may have
+# a safe default, "journal unreadable" never does).
 json_get() {
   "$NODE" -e '
     const fs = require("fs");
     const [file, key] = process.argv.slice(1);
-    let v = JSON.parse(fs.readFileSync(file, "utf8"));
+    let v;
+    try {
+      v = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch {
+      process.exit(4);
+    }
     for (const part of key.split(".")) { v = v == null ? undefined : v[part]; }
     if (v === undefined || v === null) process.exit(3);
     process.stdout.write(typeof v === "object" ? JSON.stringify(v) : String(v));

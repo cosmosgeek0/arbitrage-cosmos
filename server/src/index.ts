@@ -2,6 +2,7 @@ import {
   DATA_DIR_AUTHORITY,
   DATA_DIR_LEASE,
 } from './bootstrap/environment.js';
+import { resolveBindHost, resolveBindPort } from './bootstrap/bind.js';
 import express from 'express';
 import http from 'node:http';
 import path from 'node:path';
@@ -134,8 +135,12 @@ import { compareExactDecimals, normalizeNonNegativeExactDecimal } from './capita
 // supplies the one exact positive admission.
 const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
 
-const PORT = Number(process.env.PORT ?? 8080);
-const HOST = process.env.HOST ?? '127.0.0.1';
+// The origin is loopback-only and the bind address fails closed: see
+// bootstrap/bind.ts. `??` does not catch the empty string systemd's
+// EnvironmentFile= produces from a bare `HOST=` line, which Node would bind
+// as `::` on every interface — proven reachable from the LAN by V3.
+const PORT = resolveBindPort(process.env.PORT);
+const HOST = resolveBindHost(process.env.HOST);
 const CANONICAL_DELIVERY_MS = 2_000;
 const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
 const SOURCE_LOGO_MAX_BYTES = 256 * 1024;

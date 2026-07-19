@@ -15,9 +15,12 @@ from quant_edge.micro import (
     MicroFeatureImplementationV1,
     TopOfBookPointV1,
     absorption_ratio_feature,
+    activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     disposition_table_digest,
@@ -46,9 +49,12 @@ from quant_edge.micro.activity import (
 
 ALL_FEATURE_FACTORIES = (
     absorption_ratio_feature,
+    activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     effective_spread_feature,
@@ -282,7 +288,7 @@ class TestSection131Table:
             for feature_id in record.implemented_features
         }
 
-        assert len(library_ids) == 16
+        assert len(library_ids) == 19
         assert table_ids == library_ids
 
     def test_unimplemented_families_name_their_reason(self) -> None:
@@ -293,7 +299,7 @@ class TestSection131Table:
             in (FamilyDisposition.BLOCKED_DATA, FamilyDisposition.REFERENCE_ONLY)
         ]
 
-        assert len(blocked) == 4
+        assert len(blocked) == 3
         for record in blocked:
             assert not record.implemented_features
             assert len(record.reason) > 20
@@ -345,6 +351,29 @@ class TestImplementationContract:
             assert card.equivalence_tolerance_ulp == 0
             assert card.test_binding.startswith("tests.unit.test_q07_")
             assert implementation.declared_max_update_ops >= 1
+
+    def test_activity_surprise_is_canonical_and_batch_streaming_equivalent(self) -> None:
+        observations = tuple(
+            ActivityObservationV1(
+                observation_id=f"feature-{index}",
+                event_time_ns=1_772_000_000_000_000_000 + index,
+                ordinal=index,
+                trades=1 if index < 4 else 8,
+                quote_updates=1 if index < 4 else 8,
+                spread_ticks=1,
+                bid_depth=100,
+                ask_depth=100,
+                peer_activity=2,
+            )
+            for index in range(6)
+        )
+
+        report = run_micro_equivalence(activity_surprise_feature(), observations)
+
+        assert report.feature_id == "activity_surprise:v1"
+        assert report.passed
+        assert report.compared_values == 2
+        assert report.max_update_ops == 1
 
 
 class TestEquivalenceReportContract:

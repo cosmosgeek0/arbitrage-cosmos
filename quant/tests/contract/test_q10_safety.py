@@ -17,6 +17,7 @@ MODEL_SOURCES = tuple(
         "contracts.py",
         "engine.py",
         "estimators.py",
+        "focus_budget.py",
         "metrics.py",
         "quantize.py",
         "split.py",
@@ -28,6 +29,13 @@ PURE_CONTRACT_SOURCES = tuple(
     MODELS_DIR / name for name in ("__init__.py", "contracts.py", "split.py")
 )
 CAMPAIGN_SCRIPT = QUANT_ROOT / "scripts" / "q10_model_campaign.py"
+
+
+def test_the_model_module_inventory_is_exact() -> None:
+    observed = sorted(path.name for path in MODELS_DIR.glob("*.py"))
+    expected = sorted(path.name for path in MODEL_SOURCES)
+    assert observed == expected
+
 
 FORBIDDEN_NEEDLES = (
     "os.environ",

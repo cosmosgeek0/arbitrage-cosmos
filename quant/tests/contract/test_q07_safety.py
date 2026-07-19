@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from quant_edge.micro import SECTION_13_1_DISPOSITIONS, FamilyDisposition
+from quant_edge.micro.activity import activity_surprise_feature
 from quant_edge.micro.bookfeat import (
     band_flow_feature,
     book_slope_imbalance_feature,
@@ -28,6 +29,7 @@ from quant_edge.micro.l1 import (
     microprice_displacement_feature,
     ofi_l1_feature,
 )
+from quant_edge.micro.point_process import add_intensity_feature, cancel_intensity_feature
 
 QUANT_ROOT = Path(__file__).resolve().parents[2]
 MICRO_SOURCES = tuple(
@@ -40,15 +42,20 @@ MICRO_SOURCES = tuple(
         "bookfeat.py",
         "flow.py",
         "families.py",
+        "activity.py",
+        "point_process.py",
     )
 )
 CAMPAIGN_SCRIPT = QUANT_ROOT / "scripts" / "q07_micro_campaign.py"
 
 ALL_FEATURE_FACTORIES = (
     absorption_ratio_feature,
+    activity_surprise_feature,
+    add_intensity_feature,
     amihud_illiquidity_feature,
     band_flow_feature,
     book_slope_imbalance_feature,
+    cancel_intensity_feature,
     cumulative_band_imbalance_feature,
     depth_resiliency_feature,
     effective_spread_feature,
@@ -62,6 +69,13 @@ ALL_FEATURE_FACTORIES = (
     trade_intensity_feature,
     vwap_spread_at_size_feature,
 )
+
+
+def test_the_micro_module_inventory_is_exact() -> None:
+    observed = sorted(path.name for path in MICRO_SOURCES[0].parent.glob("*.py"))
+    expected = sorted(path.name for path in MICRO_SOURCES)
+    assert observed == expected
+
 
 FORBIDDEN_NEEDLES = (
     "os.environ",

@@ -9,19 +9,26 @@ prevents a single burst from being promoted into persistent activity.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
 from quant_edge.errors import ContractValueError
+from quant_edge.features.domains import BarDomain
+from quant_edge.features.fixedpoint import FixedPointV1
+from quant_edge.features.registry import FeatureCardV1
 from quant_edge.labels.rational import ExactRatioV1, make_ratio
 from quant_edge.lake.contracts import require_contract_id, require_strict_int
+from quant_edge.micro.equivalence import MicroFeatureImplementationV1
+from quant_edge.micro.l1 import fp_from_fraction
 
 MAX_ACTIVITY_COUNT: Final = 10**12
 MAX_ACTIVITY_HORIZON: Final = 4_096
 MAX_ACTIVITY_OBSERVATIONS: Final = 4_096
 MAX_ACTIVITY_HORIZONS: Final = 32
 MAX_ACTIVITY_OUTPUT_ROWS: Final = MAX_ACTIVITY_OBSERVATIONS * MAX_ACTIVITY_HORIZONS
+ACTIVITY_SURPRISE_LOOKBACK: Final = 4
 
 
 class ActivityState(StrEnum):
@@ -307,3 +314,135 @@ def activity_transitions(
                 )
             )
     return tuple(output)
+
+
+def batch_activity_surprise(
+    observations: tuple[ActivityObservationV1, ...],
+) -> FixedPointV1 | None:
+    """Return current activity divided by its strictly-prior four-print mean."""
+
+    if not observations:
+        return None
+    horizon = ActivityHorizonV1(
+        horizon_id="q07-activity-surprise-v1",
+        lookback=ACTIVITY_SURPRISE_LOOKBACK,
+        surprise_numerator=2,
+        surprise_denominator=1,
+        persistence_prints=2,
+        controlled_spread_ticks=2,
+    )
+    transition = activity_transitions(observations, (horizon,))[-1]
+    surprise = transition.surprise
+    if surprise is None:
+        return None
+    return fp_from_fraction(surprise.numerator, surprise.denominator)
+
+
+class _StreamingActivitySurprise:
+    __slots__ = (
+        "__count",
+        "__ids",
+        "__last_ordinal",
+        "__last_time",
+        "__ops",
+        "__prior",
+    )
+
+    def __init__(self) -> None:
+        self.__count = 0
+        self.__ids: set[str] = set()
+        self.__last_ordinal: int | None = None
+        self.__last_time = -1
+        self.__ops = 0
+        self.__prior: deque[int | None] = deque()
+
+    @property
+    def last_update_ops(self) -> int:
+        return self.__ops
+
+    def update(self, observation: ActivityObservationV1) -> FixedPointV1 | None:
+        if not isinstance(observation, ActivityObservationV1):
+            raise ContractValueError("observations must contain ActivityObservationV1")
+        if self.__count >= MAX_ACTIVITY_OBSERVATIONS:
+            raise ContractValueError(f"observations must be bounded at {MAX_ACTIVITY_OBSERVATIONS}")
+        if self.__last_ordinal is not None and observation.ordinal <= self.__last_ordinal:
+            raise ContractValueError("observations must be strictly chronological")
+        if self.__last_ordinal is not None and observation.ordinal != self.__last_ordinal + 1:
+            raise ContractValueError("observations must form one gap-free ordinal segment")
+        if observation.observation_id in self.__ids:
+            raise ContractValueError("observation identifiers must be unique")
+        if observation.event_time_ns <= self.__last_time:
+            raise ContractValueError("observations must be strictly chronological")
+
+        self.__count += 1
+        self.__ids.add(observation.observation_id)
+        self.__last_ordinal = observation.ordinal
+        self.__last_time = observation.event_time_ns
+        current = observation.activity
+        value: FixedPointV1 | None = None
+        if (
+            len(self.__prior) == ACTIVITY_SURPRISE_LOOKBACK
+            and current is not None
+            and all(item is not None for item in self.__prior)
+        ):
+            prior_sum = sum(item for item in self.__prior if item is not None)
+            if prior_sum > 0:
+                value = fp_from_fraction(
+                    current * ACTIVITY_SURPRISE_LOOKBACK,
+                    prior_sum,
+                )
+        self.__prior.append(current)
+        if len(self.__prior) > ACTIVITY_SURPRISE_LOOKBACK:
+            self.__prior.popleft()
+        self.__ops = 1
+        return value
+
+
+def activity_surprise_feature() -> MicroFeatureImplementationV1[ActivityObservationV1]:
+    """Canonical Q07 feature adapter for the richer activity-transition report."""
+
+    return MicroFeatureImplementationV1(
+        card=FeatureCardV1(
+            name="activity_surprise",
+            version="v1",
+            economic_hypothesis=(
+                "activity relative to a strictly-prior local baseline measures an "
+                "auditable transition in public aggregate flow"
+            ),
+            inputs=("public_activity_observations",),
+            window_law=(
+                f"current print divided by the mean of exactly the prior "
+                f"{ACTIVITY_SURPRISE_LOOKBACK} gap-free prints"
+            ),
+            domain=BarDomain.EVENT_TIME,
+            normalization_cohort="symbol-self",
+            missing_behavior=(
+                "missing current or baseline activity and zero baseline activity yield "
+                "UNKNOWN, never zero"
+            ),
+            stale_behavior="gap or non-monotonic chronology is rejected",
+            unit_id="RATIO",
+            lower_bound=FixedPointV1(0),
+            upper_bound=None,
+            incremental_update_rule=(
+                "retain a bounded four-print prior window, evaluate before inserting the "
+                "current print, then evict the oldest print"
+            ),
+            batch_reference="quant_edge.micro.activity:batch_activity_surprise",
+            streaming_implementation=("quant_edge.micro.activity:_StreamingActivitySurprise"),
+            provenance=(
+                "Q07 public aggregate activity transition adapter; research machinery only"
+            ),
+            computational_cost="O_1_PER_UPDATE",
+            expected_failure_modes=(
+                "GAPPED_ORDINALS",
+                "MISSING_ACTIVITY",
+                "ZERO_PRIOR_BASELINE",
+            ),
+            test_binding="tests.unit.test_q07_families",
+            equivalence_tolerance_ulp=0,
+        ),
+        batch=batch_activity_surprise,
+        make_streaming=_StreamingActivitySurprise,
+        declared_max_update_ops=1,
+    )

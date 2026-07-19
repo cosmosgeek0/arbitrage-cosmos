@@ -35,7 +35,7 @@ def test_committed_fixture_is_canonical_and_equivalence_passed() -> None:
     assert registry["schema"] == "Q06FeatureRegistryV1"
     reports = fixture["goldenReports"]
     assert isinstance(reports, list)
-    assert len(reports) == 16
+    assert len(reports) == 19
     for report in reports:
         mapping = _object(report)
         assert mapping["passed"] is True
@@ -74,9 +74,12 @@ def test_campaign_json_binds_fixture_and_measured_costs() -> None:
     ops = _object(campaign["maxUpdateOpsByFeature"])
     expected_ids = {
         "absorption_ratio:v1",
+        "activity_surprise:v1",
+        "add_intensity:v1",
         "amihud_illiquidity:v1",
         "band_flow:v1",
         "book_slope_imbalance:v1",
+        "cancel_intensity:v1",
         "cumulative_band_imbalance:v1",
         "depth_resiliency:v1",
         "effective_spread:v1",

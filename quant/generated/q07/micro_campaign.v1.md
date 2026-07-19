@@ -2,7 +2,7 @@
 
 Registry version: `q07-micro-v1`
 
-Content SHA-256: `b805c14e4afb9e417359c6b9307dd1dd6dc5c07ab64e25e9bc38a62a44bc3f7e`
+Content SHA-256: `26d7b52cb095eb66f4fc51db66e078742ff5416ae1e71691fd31e4d3b8d79e8e`
 
 No feature listed here is claimed to be predictive, validated or economically
 valuable; cards are machinery contracts with streaming/batch equivalence law.
@@ -10,9 +10,12 @@ valuable; cards are machinery contracts with streaming/batch equivalence law.
 | Feature | Domain | Cohort | Unit | Tolerance (ulp) | Batch | Streaming |
 | --- | --- | --- | --- | ---: | --- | --- |
 | `absorption_ratio:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.flow:batch_absorption_ratio` | `quant_edge.micro.flow:streaming_absorption_ratio` |
+| `activity_surprise:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.activity:batch_activity_surprise` | `quant_edge.micro.activity:_StreamingActivitySurprise` |
+| `add_intensity:v1` | EVENT_TIME | symbol-self | EVENTS_PER_SECOND | 0 | `quant_edge.micro.point_process:batch_add_intensity` | `quant_edge.micro.point_process:_StreamingPointIntensity` |
 | `amihud_illiquidity:v1` | EVENT_TIME | symbol-self | RETURN_PER_VOLUME | 0 | `quant_edge.micro.flow:batch_amihud_illiquidity` | `quant_edge.micro.flow:streaming_amihud_illiquidity` |
 | `band_flow:v1` | EVENT_TIME | symbol-self | SIZE_UNITS | 0 | `quant_edge.micro.bookfeat:batch_band_flow` | `quant_edge.micro.bookfeat:streaming_band_flow` |
 | `book_slope_imbalance:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.bookfeat:batch_book_slope_imbalance` | `quant_edge.micro.bookfeat:streaming_book_slope_imbalance` |
+| `cancel_intensity:v1` | EVENT_TIME | symbol-self | EVENTS_PER_SECOND | 0 | `quant_edge.micro.point_process:batch_cancel_intensity` | `quant_edge.micro.point_process:_StreamingPointIntensity` |
 | `cumulative_band_imbalance:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.bookfeat:batch_cumulative_band_imbalance` | `quant_edge.micro.bookfeat:streaming_cumulative_band_imbalance` |
 | `depth_resiliency:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.bookfeat:batch_depth_resiliency` | `quant_edge.micro.bookfeat:streaming_depth_resiliency` |
 | `effective_spread:v1` | EVENT_TIME | symbol-self | RATIO | 0 | `quant_edge.micro.flow:batch_effective_spread` | `quant_edge.micro.flow:streaming_effective_spread` |
@@ -35,11 +38,11 @@ valuable; cards are machinery contracts with streaming/batch equivalence law.
 | 13.1-03-queue-imbalance | ADOPT | cumulative_band_imbalance:v1, l1_queue_imbalance:v1 |
 | 13.1-04-microprice | ADOPT | microprice_displacement:v1 |
 | 13.1-05-signed-trade-imbalance | ADOPT | signed_trade_imbalance:v1 |
-| 13.1-06-arrival | ADAPT | trade_dispersion:v1, trade_intensity:v1 |
+| 13.1-06-arrival | ADAPT | activity_surprise:v1, trade_dispersion:v1, trade_intensity:v1 |
 | 13.1-07-size-distribution | ADAPT | size_concentration_hhi:v1 |
 | 13.1-08-book-shape | ADAPT | book_slope_imbalance:v1 |
 | 13.1-09-depth-dynamics | ADAPT | depth_resiliency:v1 |
-| 13.1-10-cancel-add-intensity | BLOCKED_DATA | — |
+| 13.1-10-cancel-add-intensity | ADAPT | add_intensity:v1, cancel_intensity:v1 |
 | 13.1-11-wall-persistence | REFERENCE_ONLY | — |
 | 13.1-12-effective-spread-vwap | ADOPT | effective_spread:v1, vwap_spread_at_size:v1 |
 | 13.1-13-price-response | ADOPT | kyle_slope:v1 |
@@ -51,9 +54,9 @@ valuable; cards are machinery contracts with streaming/batch equivalence law.
 ## Campaign evidence (synthetic only)
 
 - Seed: `20260712`
-- Golden fixture SHA-256: `d8308437461b8d6aebd3814ef91044208255f34290ff9d260b167b21723f4ce3`
-- Disposition table SHA-256: `a47b5212f68cf0b07c2374b5b041fac23582b3013ba164fa7237d0be9d78a892`
+- Golden fixture SHA-256: `c38bcd656d5a0b31b9f38739674bcc12b391ff2fd800956b85a857eb0bb00bdd`
+- Disposition table SHA-256: `e665116af946a0c2a86279a65fac4864220f74b18b713dbbef955dbac1443415`
 - Seeded scenarios: 10, all equivalence reports passed
-- Max update ops by feature: `absorption_ratio:v1`=16, `amihud_illiquidity:v1`=16, `band_flow:v1`=5, `book_slope_imbalance:v1`=10, `cumulative_band_imbalance:v1`=5, `depth_resiliency:v1`=8, `effective_spread:v1`=1, `kyle_slope:v1`=16, `l1_queue_imbalance:v1`=1, `microprice_displacement:v1`=1, `ofi_l1:v1`=1, `signed_trade_imbalance:v1`=1, `size_concentration_hhi:v1`=1, `trade_dispersion:v1`=16, `trade_intensity:v1`=1, `vwap_spread_at_size:v1`=12
+- Max update ops by feature: `absorption_ratio:v1`=16, `activity_surprise:v1`=1, `add_intensity:v1`=35, `amihud_illiquidity:v1`=16, `band_flow:v1`=5, `book_slope_imbalance:v1`=10, `cancel_intensity:v1`=35, `cumulative_band_imbalance:v1`=5, `depth_resiliency:v1`=8, `effective_spread:v1`=1, `kyle_slope:v1`=16, `l1_queue_imbalance:v1`=1, `microprice_displacement:v1`=1, `ofi_l1:v1`=1, `signed_trade_imbalance:v1`=1, `size_concentration_hhi:v1`=1, `trade_dispersion:v1`=16, `trade_intensity:v1`=1, `vwap_spread_at_size:v1`=12
 
 > possible_spoof_like_pattern: public L2/L1 evidence can describe patterns consistent with spoofing but can never attribute individual intent; any such feature must carry this limitation verbatim

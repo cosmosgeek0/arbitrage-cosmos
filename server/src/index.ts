@@ -602,6 +602,13 @@ function pruneEphemeralLedgerEvents(maxBatches = 1): void {
       if (ledger.pruneEphemeralEvents(now, 10_000) < 10_000) break;
     }
   } catch (error) {
+    // A retention failure is a ledger failure: reporting it only through
+    // safeLogEvent writes the error into the thing that just failed, so a
+    // broken ledger silences its own alarm. Mirror it to stderr (F-104).
+    console.error(
+      'ledger retention failed:',
+      error instanceof Error ? error.message : String(error),
+    );
     safeLogEvent('error_event', null, {
       source: 'ledger.retention',
       message: error instanceof Error ? error.message : String(error),

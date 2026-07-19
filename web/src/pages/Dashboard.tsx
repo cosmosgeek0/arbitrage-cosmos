@@ -220,7 +220,9 @@ export function Dashboard() {
   const volumePosture = supervisorPosture(volumeComponent);
   const runtimePresentation = productSnapshot && productBinding.continuity === 'PROVEN'
     ? productSnapshot.canonicalCockpit.strategyRuntime
-    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: 0 };
+    // F-061: absence of supervisor truth must not be presented as a measured
+    // count of zero live engines. null renders as UNKNOWN.
+    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: null };
   const marketFeedReadiness = productSnapshot && productBinding.continuity === 'PROVEN'
     ? productSnapshot.canonicalCockpit.marketFeedReadiness
     : null;
@@ -451,7 +453,7 @@ export function Dashboard() {
         <section className="dcx-section dcx-runtime-section">
           <header className="dcx-section-head">
             <span><b>Strategy Runtime</b><small>Canonical Lifecycle · Capability · Truth</small></span>
-            <em>{runtimePresentation.livePublicCount}/{runtimeRows.length} Engines Live Public</em>
+            <em>{runtimePresentation.livePublicCount === null ? 'UNKNOWN' : runtimePresentation.livePublicCount}/{runtimeRows.length} Engines Live Public</em>
           </header>
           <div className="dcx-runtime-scroll">
             <div className="dcx-runtime-canvas" role="table" aria-label="Strategy Runtime">

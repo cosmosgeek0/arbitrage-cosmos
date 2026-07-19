@@ -221,7 +221,9 @@ export function NotificationsPage() {
   const volumeComponent = productSnapshot?.components.find((component) => component.componentId === 'volume-engine');
   const runtimePresentation = productSnapshot && productBinding.continuity === 'PROVEN'
     ? productSnapshot.canonicalCockpit.strategyRuntime
-    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: 0 };
+    // F-061: absence of supervisor truth must not be presented as a measured
+    // count of zero live engines. null renders as UNKNOWN.
+    : { tone: 'bad' as const, label: 'Canonical Runtime Unavailable', livePublicCount: null };
   const botState = runtimePresentation.label;
   const botTone = runtimePresentation.tone === 'ok' ? 'good' : runtimePresentation.tone;
   const botDetail = productSnapshot
@@ -263,7 +265,7 @@ export function NotificationsPage() {
       <section className="notifx-command" aria-label="Notification Control Summary">
         <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{botDetail}</em></div>
         <div><span>Execution</span><strong>{executionState}</strong><em>LIVE_EXECUTION_NOT_IMPLEMENTED</em></div>
-        <div><span>Engines</span><strong>{runtimePresentation.livePublicCount} / 2 Live Public</strong><em>Canonical lifecycle, capability, and truth · continuity {productBinding.continuity}</em></div>
+        <div><span>Engines</span><strong>{runtimePresentation.livePublicCount === null ? 'UNKNOWN' : runtimePresentation.livePublicCount} / 2 Live Public</strong><em>Canonical lifecycle, capability, and truth · continuity {productBinding.continuity}</em></div>
         <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'Incident State UNKNOWN'}</strong><em>{latestAction ? latestAction.subject : 'No current intervention was observed; this is not an all-clear'}</em></div>
       </section>
 
@@ -295,7 +297,7 @@ export function NotificationsPage() {
             <span className="calx-day-name">Active <b>∞</b></span>
             <span><em>Alerts</em><b>{activeItems.length}</b></span>
             <span><em>Attention</em><b className={activeItems.length ? 'notifx-count-bad' : ''}>{activeItems.length}</b></span>
-            <span><em>Recovered</em><b className="notifx-count-good">0</b></span>
+            <span><em>Recovered</em><b className="notifx-count-good">{activeItems.filter((item) => item.severity === 'resolved').length}</b></span>
           </button>
           {dayKeys.map((key) => {
             const items = itemsByDay.get(key) ?? [];

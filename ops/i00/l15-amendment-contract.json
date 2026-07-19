@@ -157,18 +157,63 @@
           "sha256": "99947891d2673a6d04ebad8cc5edea325fac6e8857ae18832d299485720ab9a2"
         }
       ]
+    },
+    {
+      "findingId": "FIX-031-CS-06",
+      "baseLiveTree": "25157a5e45e74b3f5cb785ae77b74ff0fd3daaf3",
+      "effectiveLiveTree": "49e073d81fd3649245e0cc80d9385f5df0174fc3",
+      "baseRootDigestSha256": "243eb2f4b1c3fa1ee991295f7dca1a60717cb6b25e5fc4d31d150263fe1a9a43",
+      "effectiveRootDigestSha256": "4cb626c4592969030e120e06099a233f1d011a25ce1f6a387a3f51213d2187ec",
+      "changedFiles": [
+        {
+          "path": "ops/live/README.md",
+          "mode": "100644",
+          "beforeGitBlob": "949ed28d9f339dc16d126614a07660fc25ef89c1",
+          "beforeSha256": "14906b9b91d93e94bd2cd55a1541ab615164fc80745d0908c524d2883cd519ec",
+          "afterGitBlob": "0b1491d408ed36f8a2931016e995a15d972feca6",
+          "afterSha256": "fe0ff0097159357292b09a084da4d8464c7bad202f2c79b0dd420724faa835cb"
+        },
+        {
+          "path": "ops/live/env/cosmos-app.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "c7e4ba58c759e25b519e0b1aa6d52654800ab7c7",
+          "beforeSha256": "295893ed396c1ae7801c58602c93d48dfd5ba7d1e86d70de3b00693388885244",
+          "afterGitBlob": "650c5ba0f630717d53435c66d56e29bf8eb3c49c",
+          "afterSha256": "7ec7676d2f3d356fe2363cbf0ae3fdbf481d19ffb8dc26b5a740f4aeba5d4e80"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-app.service",
+          "mode": "100644",
+          "beforeGitBlob": "bb2e0b859593b068601a27a435ee6c8aff899c7c",
+          "beforeSha256": "cf767d776b30d5b61ca6a8e335ebbbd9fca4df26e0dc9405e6d118d0c97f12d7",
+          "afterGitBlob": "12abb3e6b1f1e507f622da3951573a48109a8602",
+          "afterSha256": "811ed8b022eb9e173f269f3a18a859208d0b7cb5476aa88bab70d0e96de77b21"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/FIX-031-CS-06_CORRECTION_RECEIPT.md",
+        "gitBlob": "1f069139ae03adbe71196ca9758b62ac7c99bba5",
+        "sha256": "a9932d6119ae24635bf386ab771016b058307a346f0d853f88f2a9b6e8a7fd66"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh",
+          "gitBlob": "c82f88cfa891657d97b0acdb2859f5023827709a",
+          "sha256": "9b56a615829562493050d7f579fdf149d1498974867193373d199821d320cbce"
+        }
+      ]
     }
   ],
   "effectiveLive": {
-    "tree": "25157a5e45e74b3f5cb785ae77b74ff0fd3daaf3",
-    "rootDigestSha256": "243eb2f4b1c3fa1ee991295f7dca1a60717cb6b25e5fc4d31d150263fe1a9a43",
+    "tree": "49e073d81fd3649245e0cc80d9385f5df0174fc3",
+    "rootDigestSha256": "4cb626c4592969030e120e06099a233f1d011a25ce1f6a387a3f51213d2187ec",
     "fileCount": 31,
     "files": [
       {
         "path": "README.md",
         "mode": "100644",
-        "gitBlob": "949ed28d9f339dc16d126614a07660fc25ef89c1",
-        "sha256": "14906b9b91d93e94bd2cd55a1541ab615164fc80745d0908c524d2883cd519ec"
+        "gitBlob": "0b1491d408ed36f8a2931016e995a15d972feca6",
+        "sha256": "fe0ff0097159357292b09a084da4d8464c7bad202f2c79b0dd420724faa835cb"
       },
       {
         "path": "RECEIPT.md",
@@ -275,8 +320,8 @@
       {
         "path": "env/cosmos-app.env.template",
         "mode": "100644",
-        "gitBlob": "c7e4ba58c759e25b519e0b1aa6d52654800ab7c7",
-        "sha256": "295893ed396c1ae7801c58602c93d48dfd5ba7d1e86d70de3b00693388885244"
+        "gitBlob": "650c5ba0f630717d53435c66d56e29bf8eb3c49c",
+        "sha256": "7ec7676d2f3d356fe2363cbf0ae3fdbf481d19ffb8dc26b5a740f4aeba5d4e80"
       },
       {
         "path": "env/cosmos-backup.env.template",
@@ -305,8 +350,8 @@
       {
         "path": "systemd/cosmos-app.service",
         "mode": "100644",
-        "gitBlob": "bb2e0b859593b068601a27a435ee6c8aff899c7c",
-        "sha256": "cf767d776b30d5b61ca6a8e335ebbbd9fca4df26e0dc9405e6d118d0c97f12d7"
+        "gitBlob": "12abb3e6b1f1e507f622da3951573a48109a8602",
+        "sha256": "811ed8b022eb9e173f269f3a18a859208d0b7cb5476aa88bab70d0e96de77b21"
       },
       {
         "path": "systemd/cosmos-backup.service",

@@ -9,7 +9,7 @@ import {
 import { loadL15AmendmentContract } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '771432f1b2e794db6e126f782e4c0e27780d3adcd35c5779d43b8ce50f35fd2f';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '5b94d4e4cf8ab57df3651a28e757705c347a5603bfb123836c20ad42d06588a5';
 const args = parseArgs(process.argv.slice(2), new Set(['contract-only', 'integrated']));
 const here = dirname(fileURLToPath(import.meta.url));
 const contractPath = resolve(args.contract ?? resolve(here, '../donor-contract.json'));
@@ -159,6 +159,7 @@ if (args.integrated === true) {
 
   const changedPaths = loadedAmendment.contract.amendments
     .flatMap((amendment) => amendment.changedFiles.map((file) => file.path))
+    .filter((path, index, all) => all.indexOf(path) === index)
     .sort();
   const diffLines = git('diff', '--name-status', '--no-renames', contract.acceptedCommit, head, '--', 'ops/live')
     .split('\n').filter(Boolean);

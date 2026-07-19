@@ -26,7 +26,7 @@ const IMMUTABLE_DONOR = Object.freeze({
   acceptedAssertions: 347,
 });
 
-const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27']);
+const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06']);
 const FINDING_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': Object.freeze([
     'ops/live/bin/common.sh',
@@ -43,12 +43,18 @@ const FINDING_PATHS = Object.freeze({
   'RB-27': Object.freeze([
     'ops/live/bin/latency-bench.mjs',
   ]),
+  'FIX-031-CS-06': Object.freeze([
+    'ops/live/README.md',
+    'ops/live/env/cosmos-app.env.template',
+    'ops/live/systemd/cosmos-app.service',
+  ]),
 });
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
   'R3-D-BACKUP-008': 'ops/tests/i00/test-r3-d-backup-008.sh',
   'CS-03': 'ops/tests/i00/test-cs-03-public-source-admission.sh',
   'RB-27': 'ops/tests/i00/test-rb-27-latency-deadlines.sh',
+  'FIX-031-CS-06': 'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
 });
 
 function assertSafePath(value, label, prefix = '') {
@@ -77,7 +83,11 @@ function validateBoundFile(value, label, pathPrefix) {
   assertSha256(value.sha256, `${label}.sha256`);
 }
 
-function validateAmendment(contract, amendment, index, priorTree, priorDigest, seenPaths) {
+function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
+  // Paths must be unique within one amendment. Across amendments, re-correcting
+  // a file is legal: every changed file's before-blob is verified against the
+  // preceding exact effective tree in Git, so the chain still binds every byte.
+  const seenPaths = new Set();
   const label = `L15 amendment[${index}]`;
   requireExactKeys(amendment, [
     'findingId', 'baseLiveTree', 'effectiveLiveTree', 'baseRootDigestSha256',
@@ -159,11 +169,10 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
       || contract.amendments.length > FINDING_ORDER.length) {
     fail('L15 amendment contract must contain a nonempty closed correction prefix');
   }
-  const seenPaths = new Set();
   let priorTree = IMMUTABLE_DONOR.acceptedLiveTree;
   let priorDigest = IMMUTABLE_DONOR.acceptedLiveRootDigestSha256;
   contract.amendments.forEach((amendment, index) => {
-    validateAmendment(contract, amendment, index, priorTree, priorDigest, seenPaths);
+    validateAmendment(contract, amendment, index, priorTree, priorDigest);
     priorTree = amendment.effectiveLiveTree;
     priorDigest = amendment.effectiveRootDigestSha256;
   });
@@ -194,8 +203,17 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
     assertSha256(file.sha256, `${label}.sha256`);
     effectiveFiles.set(file.path, file);
   });
+  // The final root must retain each amended file's LATEST after-bytes. A later
+  // amendment may legally re-correct a file; the per-amendment chain above
+  // already binds every intermediate before/after pair to exact Git trees.
+  const latestAfter = new Map();
   for (const amendment of contract.amendments) {
     for (const changed of amendment.changedFiles) {
+      latestAfter.set(changed.path, changed);
+    }
+  }
+  for (const changed of latestAfter.values()) {
+    {
       const finalFile = effectiveFiles.get(changed.path.slice('ops/live/'.length));
       if (!finalFile || finalFile.mode !== changed.mode
           || finalFile.gitBlob !== changed.afterGitBlob

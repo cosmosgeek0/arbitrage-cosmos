@@ -8,6 +8,11 @@ import type {
   ComponentStepContext,
 } from '../../foundation/control/index.js';
 import {
+  compareExactDecimals,
+  normalizeNonNegativeExactDecimal,
+  type NonNegativeDecimal,
+} from '../../capitalFoundation/contracts/index.js';
+import {
   SYSTEM_COMPONENT_IDS,
   type SystemComponentId,
 } from '../contracts/constants.js';
@@ -16,6 +21,7 @@ import type {
   SystemControlMutationReceipt,
   SystemControlMutationRequest,
   SystemControlState,
+  SystemFocusPinReadback,
   SystemTraceEvent,
 } from '../contracts/types.js';
 import {
@@ -82,6 +88,10 @@ import type {
   SystemApplicationStartResult,
   SystemIntegrationApplicationFacade,
   SystemIntegrationApplicationOptions,
+  StrategyIntakeControlReadback,
+  StrategySymbolPolicyControlReadback,
+  SizeCeilingControlReadback,
+  StrategyThresholdControlReadback,
 } from './types.js';
 
 const MAX_TRACE_EVENTS = 10_000;
@@ -123,6 +133,10 @@ function maintenanceRecoveryMutation(mutation: Readonly<SystemControlMutation>):
   if (mutation.command === 'SET_INTAKE_PAUSED') return mutation.paused === true;
   if (mutation.command === 'SET_BASIS_INTAKE') return mutation.paused === true;
   if (mutation.command === 'SET_VOLUME_INTAKE') return mutation.paused === true;
+  if (mutation.command === 'SET_BASIS_SYMBOL_POLICY') return mutation.action === 'BLOCK';
+  if (mutation.command === 'SET_VOLUME_SYMBOL_POLICY') return mutation.action === 'BLOCK';
+  if (mutation.command === 'REDUCE_SIZE_CEILING') return true;
+  if (mutation.command === 'PIN_FOCUS') return mutation.pinned === false;
   return mutation.command === 'REVOKE_APPROVAL' || mutation.command === 'REVOKE_RESERVATION';
 }
 
@@ -290,6 +304,32 @@ function failedCommand(
   }));
 }
 
+function thresholdIdentity(strategy: 'BASIS' | 'VOLUME'): Readonly<{
+  threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+  field: 'basisMinNetPct' | 'volume1sMultiple';
+}> {
+  return strategy === 'BASIS'
+    ? Object.freeze({ threshold: 'MIN_NET_BASIS_PCT', field: 'basisMinNetPct' })
+    : Object.freeze({ threshold: 'VOLUME_1S_MULTIPLE', field: 'volume1sMultiple' });
+}
+
+function canonicalStrategyThreshold(strategy: 'BASIS' | 'VOLUME', value: unknown): NonNegativeDecimal {
+  if (typeof value !== 'string'
+    || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(value)
+    || value.replace('.', '').length > 12) {
+    throw new TypeError('strategy threshold must be a bounded canonical positive decimal');
+  }
+  const canonical = normalizeNonNegativeExactDecimal(value);
+  const numeric = Number(canonical);
+  const bounded = strategy === 'BASIS'
+    ? numeric >= 0.01 && numeric <= 100
+    : numeric >= 1 && numeric <= 100;
+  if (canonical !== value || !Number.isFinite(numeric) || String(numeric) !== canonical || !bounded) {
+    throw new TypeError('strategy threshold is outside the approved exact range');
+  }
+  return canonical;
+}
+
 /**
  * The sole outer application root for convergence. Construction is inert:
  * neither the existing Ledger nor any runtime is touched until start().
@@ -373,6 +413,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       },
       events: (query: Readonly<SystemIntegrationEventQuery>) => this.eventPage(query),
       controls: () => this.controlState(),
+      focusPin: (symbol: string) => this.focusPinState(symbol),
       trace: (traceCorrelationId: string) => traceByCorrelationId(this.supervisor().traceIndex, traceCorrelationId),
     });
   }
@@ -601,6 +642,86 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       });
     }
 
+    if (!this.restoreStrategyIntake(current.value.strategyIntake)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_INTAKE_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
+    if (!this.restoreStrategySymbolPolicy(current.value.strategySymbolPolicy)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_SYMBOL_POLICY_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
+    if (!this.restoreSizeCeilings(current.value.sizeCeilings)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'SIZE_CEILING_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
+    if (!this.restoreStrategyThresholds(current.value.strategyThresholds)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'STRATEGY_THRESHOLD_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
+    if (!this.restoreFocusPins(current.value.focusPins.symbols)) {
+      this.phaseValue = 'FAILED';
+      this.applicationFailureCode = 'FOCUS_PIN_RESTORE_FAILED';
+      return this.cacheStartResult({
+        ok: false,
+        phase: this.phaseValue,
+        correlationId: startCorrelationId,
+        persistenceLoad: loaded,
+        startupReceipt: startup.value,
+        persistenceFailureCode: null,
+        restartBarrier: this.restartBarrier(),
+        compositionCommand: null,
+        composition: this.composition.read(),
+      });
+    }
+
     this.pendingControlRuntimePublications();
 
     // The authenticated control shell exists before any data component is
@@ -814,6 +935,89 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         return 'UNKNOWN';
       }
     }
+    if (request.mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+      || request.mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+      const strategy = request.mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      if (!owner || typeof owner.readBlockedSymbols !== 'function') return 'UNKNOWN';
+      try {
+        const blocked = owner.readBlockedSymbols();
+        if (!Array.isArray(blocked)) return 'UNKNOWN';
+        const expected = request.mutation.action === 'BLOCK';
+        return blocked.includes(request.mutation.symbol) === expected ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'REDUCE_SIZE_CEILING') {
+      const owner = this.options.sizeCeilings?.[request.mutation.scope];
+      if (!owner || typeof owner.readCeiling !== 'function') return 'UNKNOWN';
+      try {
+        const effective = owner.readCeiling();
+        return effective === request.mutation.maximumNotionalUsd ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'SET_STRATEGY_THRESHOLD') {
+      const owner = this.options.strategyThresholds?.[request.mutation.strategy];
+      if (!owner || typeof owner.readThreshold !== 'function') return 'UNKNOWN';
+      try {
+        const effective = owner.readThreshold();
+        return effective === request.mutation.value ? 'APPLIED' : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
+    if (request.mutation.command === 'PIN_FOCUS') {
+      const owner = this.options.attentionFocus;
+      if (!owner || typeof owner.readPinnedSymbols !== 'function'
+        || typeof owner.readFocusState !== 'function') return 'UNKNOWN';
+      try {
+        const pins = owner.readPinnedSymbols();
+        const readback = owner.readFocusState(request.mutation.symbol);
+        if (!Array.isArray(pins) || pins.length > 25
+          || pins.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+          || new Set(pins).size !== pins.length
+          || readback.symbol !== request.mutation.symbol
+          || typeof readback.pinned !== 'boolean'
+          || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+          || typeof readback.canPin !== 'boolean'
+          || !(readback.effectivePinned === null || typeof readback.effectivePinned === 'boolean')
+          || !(readback.effectiveTier === null
+            || ['UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS', 'RELEASED'].includes(readback.effectiveTier))
+          || !(readback.attentionPlanId === null
+            || typeof readback.attentionPlanId === 'string'
+            && readback.attentionPlanId.trim().length > 0
+            && readback.attentionPlanId.length <= 256)
+          || !(readback.attentionPlanAtMs === null
+            || Number.isSafeInteger(readback.attentionPlanAtMs) && readback.attentionPlanAtMs >= 0)
+          || (readback.attentionPlanId === null) !== (readback.attentionPlanAtMs === null)
+          || !Number.isSafeInteger(readback.pinCount) || readback.pinCount < 0
+          || !Number.isSafeInteger(readback.pinCapacity) || readback.pinCapacity < 1
+          || readback.pinCount > readback.pinCapacity
+          || pins.length !== readback.pinCount
+          || pins.length > readback.pinCapacity
+          || readback.pinned !== pins.includes(request.mutation.symbol)) return 'UNKNOWN';
+        if (!request.mutation.pinned) {
+          return readback.pinned === false && readback.effectivePinned === false ? 'APPLIED' : 'NOT_APPLIED';
+        }
+        const effectivePlanCurrent = readback.attentionPlanId !== null
+          && readback.attentionPlanAtMs !== null
+          && readback.attentionPlanAtMs >= receipt.after.updatedAtMs
+          && readback.attentionPlanAtMs <= this.options.clock.nowMs();
+        return readback.pinned === true
+          && readback.eligible === true
+          && readback.canPin === true
+          && readback.effectivePinned === true
+          && (readback.effectiveTier === 'FOCUS' || readback.effectiveTier === 'DEEP_FOCUS')
+          && effectivePlanCurrent
+          ? 'APPLIED'
+          : 'NOT_APPLIED';
+      } catch {
+        return 'UNKNOWN';
+      }
+    }
     const effectId = this.runtimePublicationEffectId(request, receipt);
     const local = this.runtimePublicationEffects.get(effectId);
     if (local !== undefined) return local;
@@ -901,7 +1105,23 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       if (typeof paused !== 'boolean') {
         return this.decision(false, 'BASIS_INTAKE_READBACK_INVALID', 'Canonical Basis intake readback is invalid.', false);
       }
-      return this.decision(true, 'BASIS_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'BASIS_INTAKE_DESIRED_STATE_UNAVAILABLE', 'Durable Basis intake posture is unavailable.', false);
+      }
+      if (!mutation.paused && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'Basis intake cannot resume while a stricter global posture is active.', false);
+      }
+      if (!mutation.paused && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'Basis intake cannot resume until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'BASIS_INTAKE_ACCEPTED',
+        '',
+        persisted.strategyIntake.basisPaused !== mutation.paused || paused !== mutation.paused,
+        !mutation.paused,
+      );
     }
     if (mutation.command === 'SET_VOLUME_INTAKE') {
       const owner = this.options.strategyIntake?.volume;
@@ -917,7 +1137,191 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       if (typeof paused !== 'boolean') {
         return this.decision(false, 'VOLUME_INTAKE_READBACK_INVALID', 'Canonical Volume intake readback is invalid.', false);
       }
-      return this.decision(true, 'VOLUME_INTAKE_ACCEPTED', '', paused !== mutation.paused, !mutation.paused);
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'VOLUME_INTAKE_DESIRED_STATE_UNAVAILABLE', 'Durable Volume intake posture is unavailable.', false);
+      }
+      if (!mutation.paused && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'Volume intake cannot resume while a stricter global posture is active.', false);
+      }
+      if (!mutation.paused && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'Volume intake cannot resume until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'VOLUME_INTAKE_ACCEPTED',
+        '',
+        persisted.strategyIntake.volumePaused !== mutation.paused || paused !== mutation.paused,
+        !mutation.paused,
+      );
+    }
+    if (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+      || mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+      const strategy = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+      const strategyLabel = strategy === 'basis' ? 'BASIS' : 'VOLUME';
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      if (!owner || typeof owner.readBlockedSymbols !== 'function'
+        || typeof owner.setBlocked !== 'function' || typeof owner.isAllowed !== 'function') {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_OWNER_NOT_WIRED`, 'Canonical strategy symbol-policy owner is unavailable.', false);
+      }
+      let effective: readonly string[];
+      try {
+        effective = owner.readBlockedSymbols();
+      } catch {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_READBACK_UNAVAILABLE`, 'Canonical symbol-policy readback is unavailable.', false);
+      }
+      if (!Array.isArray(effective)
+        || effective.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_READBACK_INVALID`, 'Canonical symbol-policy readback is invalid.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_DESIRED_STATE_UNAVAILABLE`, 'Durable symbol-policy posture is unavailable.', false);
+      }
+      const desired = strategy === 'basis'
+        ? persisted.strategySymbolPolicy.basisBlocked
+        : persisted.strategySymbolPolicy.volumeBlocked;
+      const blocking = mutation.action === 'BLOCK';
+      if (blocking && !desired.includes(mutation.symbol) && desired.length >= 500) {
+        return this.decision(false, `${strategyLabel}_SYMBOL_POLICY_CAPACITY_REACHED`, 'Durable strategy symbol-policy capacity is exhausted.', false);
+      }
+      if (!blocking && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'A symbol cannot be allowed while a stricter global posture is active.', false);
+      }
+      if (!blocking && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'A symbol cannot be allowed until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        `${strategyLabel}_SYMBOL_POLICY_ACCEPTED`,
+        '',
+        desired.includes(mutation.symbol) !== blocking || effective.includes(mutation.symbol) !== blocking,
+        !blocking,
+      );
+    }
+    if (mutation.command === 'REDUCE_SIZE_CEILING') {
+      const owner = this.options.sizeCeilings?.[mutation.scope];
+      if (!owner || typeof owner.readCeiling !== 'function' || typeof owner.setCeiling !== 'function') {
+        return this.decision(false, 'SIZE_CEILING_OWNER_NOT_WIRED', 'Canonical Capital/config size-ceiling owner is unavailable.', false);
+      }
+      let target: NonNegativeDecimal;
+      let effective: NonNegativeDecimal;
+      try {
+        target = normalizeNonNegativeExactDecimal(mutation.maximumNotionalUsd);
+        const read = owner.readCeiling();
+        if (read === null) throw new TypeError('size ceiling unavailable');
+        effective = normalizeNonNegativeExactDecimal(read);
+        if (effective !== read) throw new TypeError('size ceiling non-canonical');
+      } catch {
+        return this.decision(false, 'SIZE_CEILING_EFFECT_UNAVAILABLE', 'Canonical exact size-ceiling readback is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'SIZE_CEILING_DESIRED_STATE_UNAVAILABLE', 'Durable size-ceiling posture is unavailable.', false);
+      }
+      const field = mutation.scope === 'SYSTEM' ? 'system' : mutation.scope === 'BASIS' ? 'basis' : 'volume';
+      const desiredRaw = persisted.sizeCeilings[field];
+      let desired: NonNegativeDecimal | null = null;
+      try {
+        desired = desiredRaw === null ? null : normalizeNonNegativeExactDecimal(desiredRaw);
+      } catch {
+        return this.decision(false, 'SIZE_CEILING_DESIRED_STATE_UNAVAILABLE', 'Durable exact size-ceiling posture is invalid.', false);
+      }
+      if (compareExactDecimals(target, effective) > 0
+        || (desired !== null && compareExactDecimals(target, desired) > 0)) {
+        return this.decision(false, 'SIZE_CEILING_INCREASE_FORBIDDEN', 'This control permits downward-only exact size-ceiling changes.', false);
+      }
+      return this.decision(
+        true,
+        'SIZE_CEILING_REDUCTION_ACCEPTED',
+        '',
+        desired !== target || effective !== target,
+      );
+    }
+    if (mutation.command === 'SET_STRATEGY_THRESHOLD') {
+      const identity = thresholdIdentity(mutation.strategy);
+      if (mutation.threshold !== identity.threshold) {
+        return this.decision(false, 'STRATEGY_THRESHOLD_PAIR_INVALID', 'The requested threshold is not owned by this strategy.', false);
+      }
+      const owner = this.options.strategyThresholds?.[mutation.strategy];
+      if (!owner || typeof owner.readThreshold !== 'function' || typeof owner.setThreshold !== 'function') {
+        return this.decision(false, 'STRATEGY_THRESHOLD_OWNER_NOT_WIRED', 'Canonical strategy threshold owner is unavailable.', false);
+      }
+      let target: NonNegativeDecimal;
+      let effective: NonNegativeDecimal;
+      try {
+        target = canonicalStrategyThreshold(mutation.strategy, mutation.value);
+        const read = owner.readThreshold();
+        if (read === null) throw new TypeError('strategy threshold unavailable');
+        effective = canonicalStrategyThreshold(mutation.strategy, read);
+      } catch {
+        return this.decision(false, 'STRATEGY_THRESHOLD_EFFECT_UNAVAILABLE', 'Canonical exact strategy threshold readback is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'STRATEGY_THRESHOLD_DESIRED_STATE_UNAVAILABLE', 'Durable strategy threshold posture is unavailable.', false);
+      }
+      let desired: NonNegativeDecimal | null = null;
+      try {
+        const desiredRaw = persisted.strategyThresholds[identity.field];
+        desired = desiredRaw === null ? null : canonicalStrategyThreshold(mutation.strategy, desiredRaw);
+      } catch {
+        return this.decision(false, 'STRATEGY_THRESHOLD_DESIRED_STATE_UNAVAILABLE', 'Durable exact strategy threshold posture is invalid.', false);
+      }
+      const riskIncreasing = compareExactDecimals(target, effective) < 0
+        || (desired !== null && compareExactDecimals(target, desired) < 0);
+      if (riskIncreasing && (control.intakePaused || control.killSwitchEngaged || externalKillEngaged)) {
+        return this.decision(false, 'EFFECTIVE_INTAKE_PAUSED', 'A strategy threshold cannot be lowered while a stricter global posture is active.', false);
+      }
+      if (riskIncreasing && !this.restartBarrier().canOpenOrIncrease) {
+        return this.decision(false, 'RESTART_BARRIER_BLOCKED', 'A strategy threshold cannot be lowered until restart truth is fresh and reconciled.', false);
+      }
+      return this.decision(
+        true,
+        'STRATEGY_THRESHOLD_ACCEPTED',
+        '',
+        desired !== target || effective !== target,
+        riskIncreasing,
+      );
+    }
+    if (mutation.command === 'PIN_FOCUS') {
+      const owner = this.options.attentionFocus;
+      if (!owner || typeof owner.readPinnedSymbols !== 'function'
+        || typeof owner.readFocusState !== 'function' || typeof owner.setPinned !== 'function') {
+        return this.decision(false, 'FOCUS_PIN_OWNER_NOT_WIRED', 'Canonical Intelligence Runtime focus owner is unavailable.', false);
+      }
+      const persisted = this.checkpoint();
+      if (persisted === null) {
+        return this.decision(false, 'FOCUS_PIN_DESIRED_STATE_UNAVAILABLE', 'Durable focus-pin posture is unavailable.', false);
+      }
+      try {
+        const pins = owner.readPinnedSymbols();
+        const readback = owner.readFocusState(mutation.symbol);
+        if (!Array.isArray(pins)
+          || pins.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+          || readback.symbol !== mutation.symbol
+          || typeof readback.pinned !== 'boolean'
+          || typeof readback.canPin !== 'boolean'
+          || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+          || (readback.canPin && readback.eligible !== true)) {
+          return this.decision(false, 'FOCUS_PIN_READBACK_INVALID', 'Canonical focus-pin readback is invalid.', false);
+        }
+        if (mutation.pinned && !readback.canPin) {
+          return this.decision(false, readback.eligible === false ? 'FOCUS_SYMBOL_INELIGIBLE' : 'FOCUS_CAPACITY_UNAVAILABLE', 'Focus pin requires an eligible symbol and available hard capacity.', false);
+        }
+        const desiredPinned = persisted.focusPins.symbols.includes(mutation.symbol);
+        const ownerPinned = pins.includes(mutation.symbol);
+        return this.decision(
+          true,
+          'FOCUS_PIN_ACCEPTED',
+          '',
+          desiredPinned !== mutation.pinned
+            || ownerPinned !== mutation.pinned
+            || (mutation.pinned && readback.effectivePinned !== true),
+        );
+      } catch {
+        return this.decision(false, 'FOCUS_PIN_READBACK_UNAVAILABLE', 'Canonical focus-pin readback is unavailable.', false);
+      }
     }
     if (mutation.command === 'APPLY_CONFIGURATION') {
       return this.decision(false, 'CONFIGURATION_OWNER_NOT_WIRED', 'No configuration owner port is wired to this convergence root.', false);
@@ -1010,6 +1414,24 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
         const owner = this.options.strategyIntake?.volume;
         if (!owner || typeof owner.setPaused !== 'function') throw new Error('VOLUME_INTAKE_OWNER_NOT_WIRED');
         owner.setPaused(mutation.paused);
+      } else if (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+        || mutation.command === 'SET_VOLUME_SYMBOL_POLICY') {
+        const strategy = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basis' : 'volume';
+        const owner = this.options.strategySymbolPolicy?.[strategy];
+        if (!owner || typeof owner.setBlocked !== 'function') throw new Error('STRATEGY_SYMBOL_POLICY_OWNER_NOT_WIRED');
+        owner.setBlocked(mutation.symbol, mutation.action === 'BLOCK');
+      } else if (mutation.command === 'REDUCE_SIZE_CEILING') {
+        const owner = this.options.sizeCeilings?.[mutation.scope];
+        if (!owner || typeof owner.setCeiling !== 'function') throw new Error('SIZE_CEILING_OWNER_NOT_WIRED');
+        owner.setCeiling(mutation.maximumNotionalUsd);
+      } else if (mutation.command === 'SET_STRATEGY_THRESHOLD') {
+        const owner = this.options.strategyThresholds?.[mutation.strategy];
+        if (!owner || typeof owner.setThreshold !== 'function') throw new Error('STRATEGY_THRESHOLD_OWNER_NOT_WIRED');
+        owner.setThreshold(mutation.value);
+      } else if (mutation.command === 'PIN_FOCUS') {
+        const owner = this.options.attentionFocus;
+        if (!owner || typeof owner.setPinned !== 'function') throw new Error('FOCUS_PIN_OWNER_NOT_WIRED');
+        owner.setPinned(mutation.symbol, mutation.pinned);
       } else if (mutation.command === 'SET_COMPONENT_STATE') {
         if (mutation.desiredState === 'STOPPED') command = this.composition.issue('STOP');
         else if (mutation.desiredState === 'PAUSED') command = this.composition.issue('PAUSE');
@@ -1018,7 +1440,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           : this.composition.start();
       } else if (mutation.command === 'CLEAR_DEPLOYMENT_FREEZE') {
         if (_actor.source === 'canonical-alarm') {
-          throw new Error('DEPLOYMENT_FREEZE_CLEAR_ACTOR_INVALID');
+          throw new Error('OPERATOR_REQUIRED');
         }
         const result = await this.options.deploymentFreezeClear?.clear(Object.freeze({
           idempotencyKey: request.idempotencyKey,
@@ -1101,6 +1523,330 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
 
   controlState(): Readonly<SystemControlState> {
     return this.effectiveControlState();
+  }
+
+  strategyIntakeState(strategy: 'basis' | 'volume'): Readonly<StrategyIntakeControlReadback> {
+    const checkpoint = this.checkpoint();
+    const desiredPaused = checkpoint === null
+      ? true
+      : strategy === 'basis'
+        ? checkpoint.strategyIntake.basisPaused
+        : checkpoint.strategyIntake.volumePaused;
+    const owner = this.options.strategyIntake?.[strategy];
+    if (!owner || typeof owner.readPaused !== 'function') {
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused: null,
+        controlRevision: this.controls.snapshot().revision,
+        state: 'OWNER_NOT_WIRED',
+      });
+    }
+    const pendingPublications = this.persistence.readPendingControlRuntimePublications();
+    const publicationKnown = pendingPublications.ok && pendingPublications.value.length === 0;
+    try {
+      const effectivePaused = owner.readPaused();
+      if (typeof effectivePaused !== 'boolean') throw new TypeError('strategy intake readback must be boolean');
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused,
+        controlRevision: this.controls.snapshot().revision,
+        state: publicationKnown && effectivePaused === desiredPaused ? 'APPLIED' : 'EFFECT_UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({
+        strategy,
+        desiredPaused,
+        effectivePaused: null,
+        controlRevision: this.controls.snapshot().revision,
+        state: 'EFFECT_UNAVAILABLE',
+      });
+    }
+  }
+
+  strategySymbolPolicyState(
+    strategy: 'basis' | 'volume',
+    symbol: string,
+  ): Readonly<StrategySymbolPolicyControlReadback> {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('symbol must be canonical');
+    const checkpoint = this.checkpoint();
+    const desired = checkpoint === null
+      ? []
+      : strategy === 'basis'
+        ? checkpoint.strategySymbolPolicy.basisBlocked
+        : checkpoint.strategySymbolPolicy.volumeBlocked;
+    const owner = this.options.strategySymbolPolicy?.[strategy];
+    const base = { strategy, symbol, desiredBlocked: desired.includes(symbol), controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readBlockedSymbols !== 'function' || typeof owner.isAllowed !== 'function') {
+      return Object.freeze({ ...base, effectiveBlocked: null, effectiveAllowed: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const effectiveBlocked = owner.readBlockedSymbols().includes(symbol);
+      const effectiveAllowed = owner.isAllowed(symbol);
+      return Object.freeze({
+        ...base,
+        effectiveBlocked,
+        effectiveAllowed,
+        state: pending.ok && pending.value.length === 0 && checkpoint !== null
+          && effectiveBlocked === base.desiredBlocked ? 'APPLIED' : 'EFFECT_UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveBlocked: null, effectiveAllowed: null, state: 'EFFECT_UNAVAILABLE' });
+    }
+  }
+
+  sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback> {
+    const checkpoint = this.checkpoint();
+    const field = scope === 'SYSTEM' ? 'system' : scope === 'BASIS' ? 'basis' : 'volume';
+    const desiredMaximumNotionalUsd = checkpoint?.sizeCeilings[field] ?? null;
+    const owner = this.options.sizeCeilings?.[scope];
+    const base = { scope, desiredMaximumNotionalUsd, controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readCeiling !== 'function') {
+      return Object.freeze({ ...base, effectiveMaximumNotionalUsd: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const effectiveMaximumNotionalUsd = owner.readCeiling();
+      if (effectiveMaximumNotionalUsd === null
+        || normalizeNonNegativeExactDecimal(effectiveMaximumNotionalUsd) !== effectiveMaximumNotionalUsd) {
+        throw new TypeError('size ceiling readback unavailable');
+      }
+      return Object.freeze({
+        ...base,
+        effectiveMaximumNotionalUsd,
+        state: desiredMaximumNotionalUsd !== null && desiredMaximumNotionalUsd === effectiveMaximumNotionalUsd
+          && pending.ok && pending.value.length === 0 ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveMaximumNotionalUsd: null, state: 'UNAVAILABLE' });
+    }
+  }
+
+  strategyThresholdState(strategy: 'BASIS' | 'VOLUME'): Readonly<StrategyThresholdControlReadback> {
+    const identity = thresholdIdentity(strategy);
+    const checkpoint = this.checkpoint();
+    const desiredValue = checkpoint?.strategyThresholds[identity.field] ?? null;
+    const owner = this.options.strategyThresholds?.[strategy];
+    const base = {
+      strategy,
+      threshold: identity.threshold,
+      desiredValue,
+      controlRevision: this.controls.snapshot().revision,
+    } as const;
+    if (!owner || typeof owner.readThreshold !== 'function') {
+      return Object.freeze({ ...base, effectiveValue: null, state: 'OWNER_NOT_WIRED' });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const read = owner.readThreshold();
+      if (read === null) throw new TypeError('strategy threshold readback unavailable');
+      const effectiveValue = canonicalStrategyThreshold(strategy, read);
+      return Object.freeze({
+        ...base,
+        effectiveValue,
+        state: desiredValue !== null && desiredValue === effectiveValue
+          && pending.ok && pending.value.length === 0 ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({ ...base, effectiveValue: null, state: 'UNAVAILABLE' });
+    }
+  }
+
+  focusPinState(symbol: string): Readonly<SystemFocusPinReadback> {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('symbol must be canonical');
+    const checkpoint = this.checkpoint();
+    const desiredPinned = checkpoint?.focusPins.symbols.includes(symbol) ?? false;
+    const owner = this.options.attentionFocus;
+    const base = { symbol, desiredPinned, controlRevision: this.controls.snapshot().revision } as const;
+    if (!owner || typeof owner.readPinnedSymbols !== 'function' || typeof owner.readFocusState !== 'function') {
+      return Object.freeze({
+        ...base,
+        ownerPinned: null,
+        eligible: null,
+        canPin: null,
+        effectivePinned: null,
+        effectiveTier: null,
+        attentionPlanId: null,
+        attentionPlanAtMs: null,
+        pinCount: null,
+        pinCapacity: null,
+        state: 'OWNER_NOT_WIRED',
+      });
+    }
+    const pending = this.persistence.readPendingControlRuntimePublications();
+    try {
+      const pins = owner.readPinnedSymbols();
+      const readback = owner.readFocusState(symbol);
+      if (!Array.isArray(pins) || pins.length > 25
+        || pins.some((pin) => typeof pin !== 'string' || !/^[A-Z0-9]{4,20}$/.test(pin))
+        || readback.symbol !== symbol
+        || typeof readback.pinned !== 'boolean'
+        || !(readback.eligible === null || typeof readback.eligible === 'boolean')
+        || typeof readback.canPin !== 'boolean'
+        || (readback.canPin && readback.eligible !== true)
+        || !(readback.effectivePinned === null || typeof readback.effectivePinned === 'boolean')
+        || !(readback.effectiveTier === null
+          || ['UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS', 'RELEASED'].includes(readback.effectiveTier))
+        || !(readback.attentionPlanId === null
+          || typeof readback.attentionPlanId === 'string'
+          && readback.attentionPlanId.trim().length > 0
+          && readback.attentionPlanId.length <= 256)
+        || !(readback.attentionPlanAtMs === null
+          || Number.isSafeInteger(readback.attentionPlanAtMs) && readback.attentionPlanAtMs >= 0)
+        || (readback.attentionPlanId === null) !== (readback.attentionPlanAtMs === null)
+        || !Number.isSafeInteger(readback.pinCount) || readback.pinCount < 0
+        || !Number.isSafeInteger(readback.pinCapacity) || readback.pinCapacity < 1
+        || readback.pinCount > readback.pinCapacity
+        || pins.length > readback.pinCapacity
+        || new Set(pins).size !== pins.length
+        || readback.pinCount !== pins.length
+        || readback.pinned !== pins.includes(symbol)
+        || (readback.effectivePinned === true
+          && (!readback.pinned || !['FOCUS', 'DEEP_FOCUS'].includes(readback.effectiveTier ?? '')))) {
+        throw new TypeError('focus pin owner readback is invalid');
+      }
+      const ownerPinned = pins.includes(symbol);
+      const applied = checkpoint !== null && pending.ok && pending.value.length === 0
+        && desiredPinned === ownerPinned
+        && readback.pinned === ownerPinned
+        && (!desiredPinned || readback.effectivePinned === true);
+      return Object.freeze({
+        ...base,
+        ownerPinned,
+        eligible: readback.eligible,
+        canPin: readback.canPin,
+        effectivePinned: readback.effectivePinned,
+        effectiveTier: readback.effectiveTier,
+        attentionPlanId: readback.attentionPlanId,
+        attentionPlanAtMs: readback.attentionPlanAtMs,
+        pinCount: readback.pinCount,
+        pinCapacity: readback.pinCapacity,
+        state: applied ? 'APPLIED' : 'UNAVAILABLE',
+      });
+    } catch {
+      return Object.freeze({
+        ...base,
+        ownerPinned: null,
+        eligible: null,
+        canPin: null,
+        effectivePinned: null,
+        effectiveTier: null,
+        attentionPlanId: null,
+        attentionPlanAtMs: null,
+        pinCount: null,
+        pinCapacity: null,
+        state: 'UNAVAILABLE',
+      });
+    }
+  }
+
+  private restoreStrategyIntake(
+    posture: Readonly<{ basisPaused: boolean; volumePaused: boolean }>,
+  ): boolean {
+    for (const strategy of ['basis', 'volume'] as const) {
+      const owner = this.options.strategyIntake?.[strategy];
+      const desiredPaused = strategy === 'basis' ? posture.basisPaused : posture.volumePaused;
+      if (!owner || typeof owner.readPaused !== 'function' || typeof owner.setPaused !== 'function') {
+        // A legacy/test composition with no strategy owner may start only when
+        // there is no durable effect to restore. A persisted pause still fails
+        // closed because pretending it applied would reopen proposal intake.
+        if (desiredPaused) return false;
+        continue;
+      }
+      try {
+        owner.setPaused(desiredPaused);
+        if (owner.readPaused() !== desiredPaused) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreStrategySymbolPolicy(
+    posture: Readonly<{ basisBlocked: readonly string[]; volumeBlocked: readonly string[] }>,
+  ): boolean {
+    for (const strategy of ['basis', 'volume'] as const) {
+      const owner = this.options.strategySymbolPolicy?.[strategy];
+      const desired = strategy === 'basis' ? posture.basisBlocked : posture.volumeBlocked;
+      if (!owner || typeof owner.readBlockedSymbols !== 'function' || typeof owner.setBlocked !== 'function') {
+        if (desired.length > 0) return false;
+        continue;
+      }
+      try {
+        const current = owner.readBlockedSymbols();
+        if (!Array.isArray(current)) return false;
+        for (const symbol of current) if (!desired.includes(symbol)) owner.setBlocked(symbol, false);
+        for (const symbol of desired) owner.setBlocked(symbol, true);
+        const restored = owner.readBlockedSymbols();
+        if (JSON.stringify([...restored].sort()) !== JSON.stringify([...desired].sort())) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreSizeCeilings(
+    ceilings: Readonly<{ system: string | null; basis: string | null; volume: string | null }>,
+  ): boolean {
+    for (const scope of ['SYSTEM', 'BASIS', 'VOLUME'] as const) {
+      const field = scope === 'SYSTEM' ? 'system' : scope === 'BASIS' ? 'basis' : 'volume';
+      const desired = ceilings[field];
+      const owner = this.options.sizeCeilings?.[scope];
+      if (desired === null) continue;
+      if (!owner || typeof owner.readCeiling !== 'function' || typeof owner.setCeiling !== 'function') return false;
+      try {
+        if (normalizeNonNegativeExactDecimal(desired) !== desired) return false;
+        const before = owner.readCeiling();
+        if (before === null || compareExactDecimals(
+          desired as NonNegativeDecimal,
+          normalizeNonNegativeExactDecimal(before),
+        ) > 0) return false;
+        owner.setCeiling(desired);
+        if (owner.readCeiling() !== desired) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreStrategyThresholds(
+    thresholds: Readonly<{ basisMinNetPct: string | null; volume1sMultiple: string | null }>,
+  ): boolean {
+    for (const strategy of ['BASIS', 'VOLUME'] as const) {
+      const identity = thresholdIdentity(strategy);
+      const desired = thresholds[identity.field];
+      if (desired === null) continue;
+      const owner = this.options.strategyThresholds?.[strategy];
+      if (!owner || typeof owner.readThreshold !== 'function' || typeof owner.setThreshold !== 'function') return false;
+      try {
+        if (canonicalStrategyThreshold(strategy, desired) !== desired) return false;
+        owner.setThreshold(desired);
+        if (owner.readThreshold() !== desired) return false;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private restoreFocusPins(symbols: readonly string[]): boolean {
+    const owner = this.options.attentionFocus;
+    if (!owner || typeof owner.readPinnedSymbols !== 'function' || typeof owner.restorePinnedSymbols !== 'function') {
+      return symbols.length === 0;
+    }
+    try {
+      owner.restorePinnedSymbols(symbols);
+      const restored = owner.readPinnedSymbols();
+      return Array.isArray(restored)
+        && JSON.stringify([...restored].sort()) === JSON.stringify([...symbols].sort());
+    } catch {
+      return false;
+    }
   }
 
   private externalKillSwitchEngaged(): boolean {

@@ -11,6 +11,7 @@ import type {
 import type {
   SystemComponentSnapshot,
   SystemControlState,
+  SystemFocusPinReadback,
   SystemTraceEvent,
 } from '../contracts/types.js';
 import type {
@@ -86,12 +87,94 @@ export interface SystemIntegrationApplicationOptions {
       setPaused(paused: boolean): boolean;
     }>;
   }>;
+  /** Narrow durable deny-overlay seam; strategy engines remain the effective policy owners. */
+  readonly strategySymbolPolicy?: Readonly<{
+    basis?: StrategySymbolPolicyOwnerPort;
+    volume?: StrategySymbolPolicyOwnerPort;
+  }>;
+  /** Existing Capital/config owners expose only downward size-ceiling application. */
+  readonly sizeCeilings?: Readonly<Partial<Record<'SYSTEM' | 'BASIS' | 'VOLUME', SizeCeilingOwnerPort>>>;
+  /** Closed, approved threshold catalog; strategy runtimes remain the config owners. */
+  readonly strategyThresholds?: Readonly<Partial<Record<'BASIS' | 'VOLUME', StrategyThresholdOwnerPort>>>;
+  /** Intelligence Runtime owns desired focus pins and effective attention readback. */
+  readonly attentionFocus?: AttentionFocusOwnerPort;
   readonly tickIntervalMs?: number;
   readonly defaultGateTimeoutMs?: number;
   readonly defaultComponentTimeoutMs?: number;
   readonly drainTimeoutMs?: number;
   /** Must remain below the durable restart-truth freshness lease. */
   readonly restartTruthRefreshIntervalMs?: number;
+}
+
+export interface StrategyIntakeControlReadback {
+  readonly strategy: 'basis' | 'volume';
+  readonly desiredPaused: boolean;
+  readonly effectivePaused: boolean | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface StrategySymbolPolicyOwnerPort {
+  readBlockedSymbols(): readonly string[];
+  setBlocked(symbol: string, blocked: boolean): boolean;
+  isAllowed(symbol: string): boolean;
+}
+
+export interface StrategySymbolPolicyControlReadback {
+  readonly strategy: 'basis' | 'volume';
+  readonly symbol: string;
+  readonly desiredBlocked: boolean;
+  readonly effectiveBlocked: boolean | null;
+  readonly effectiveAllowed: boolean | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'EFFECT_UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface SizeCeilingOwnerPort {
+  readCeiling(): string | null;
+  setCeiling(value: string): boolean;
+}
+
+export interface SizeCeilingControlReadback {
+  readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
+  readonly desiredMaximumNotionalUsd: string | null;
+  readonly effectiveMaximumNotionalUsd: string | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface StrategyThresholdOwnerPort {
+  readThreshold(): string | null;
+  setThreshold(value: string): boolean;
+}
+
+export interface StrategyThresholdControlReadback {
+  readonly strategy: 'BASIS' | 'VOLUME';
+  readonly threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+  readonly desiredValue: string | null;
+  readonly effectiveValue: string | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
+export interface AttentionFocusOwnerReadback {
+  readonly symbol: string;
+  readonly pinned: boolean;
+  readonly eligible: boolean | null;
+  readonly canPin: boolean;
+  readonly effectivePinned: boolean | null;
+  readonly effectiveTier: SystemFocusPinReadback['effectiveTier'];
+  readonly attentionPlanId: string | null;
+  readonly attentionPlanAtMs: number | null;
+  readonly pinCount: number;
+  readonly pinCapacity: number;
+}
+
+export interface AttentionFocusOwnerPort {
+  readPinnedSymbols(): readonly string[];
+  readFocusState(symbol: string): Readonly<AttentionFocusOwnerReadback>;
+  setPinned(symbol: string, pinned: boolean): boolean;
+  restorePinnedSymbols(symbols: readonly string[]): boolean;
 }
 
 export type SystemApplicationPhase =
@@ -159,6 +242,14 @@ export interface SystemIntegrationApplicationFacade {
   managedRuntime(): Readonly<ManagedCompositionReadSnapshot>;
   supervisor(): Readonly<SystemSupervisorReadModel>;
   controlState(): Readonly<SystemControlState>;
+  strategyIntakeState(strategy: 'basis' | 'volume'): Readonly<StrategyIntakeControlReadback>;
+  strategySymbolPolicyState(
+    strategy: 'basis' | 'volume',
+    symbol: string,
+  ): Readonly<StrategySymbolPolicyControlReadback>;
+  sizeCeilingState(scope: 'SYSTEM' | 'BASIS' | 'VOLUME'): Readonly<SizeCeilingControlReadback>;
+  strategyThresholdState(strategy: 'BASIS' | 'VOLUME'): Readonly<StrategyThresholdControlReadback>;
+  focusPinState(symbol: string): Readonly<SystemFocusPinReadback>;
   restartBarrier(): Readonly<RestartBarrierProjection>;
   drain(): Promise<Readonly<SystemApplicationDrainResult>>;
 }

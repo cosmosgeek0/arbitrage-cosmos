@@ -187,6 +187,26 @@ export interface BridgeEvaluationInput {
   sourceQuality?: readonly InstrumentQualityOverride[];
 }
 
+export interface OperatorFocusPinReadback {
+  symbol: string;
+  pinned: boolean;
+  eligible: boolean | null;
+  canPin: boolean;
+  effectivePinned: boolean | null;
+  effectiveTier: AttentionAllocation['tier'] | null;
+  attentionPlanId: string | null;
+  attentionPlanAtMs: number | null;
+  pinCount: number;
+  pinCapacity: number;
+}
+
+/** Canonical attention-owner counts for downstream read-only projection. */
+export interface AttentionFocusCountSummary {
+  focusRequestedCount: number;
+  focusActiveCount: number;
+  observedAtMs: number;
+}
+
 export interface BridgeIntelligenceArtifact {
   id: string;
   candidateId: string;
@@ -243,6 +263,21 @@ export interface IntelligenceBridgeSnapshot {
   createsProposal: false;
   createsRiskVerdict: false;
   executesAction: false;
+}
+
+/** Exact-symbol, evidence-only readback over the Bridge's existing stores. */
+export interface BridgeSymbolReadModel {
+  readonly symbol: string;
+  readonly evaluatedAtMs: number;
+  readonly featureSnapshot: Readonly<FeatureSnapshot> | null;
+  /** Exact retained-history summary; no full record payload crosses this poll. */
+  readonly evidenceHistoryCount: number;
+  readonly evidenceHistoryState: 'COMPLETE' | 'TRUNCATED';
+  readonly attention: Readonly<PublicAttentionAllocation> | null;
+  readonly artifact: Readonly<BridgeIntelligenceArtifact> | null;
+  readonly reasonCodes: readonly string[];
+  readonly authority: 'EVIDENCE_ONLY';
+  readonly liveMoneyAuthority: 'NONE';
 }
 
 export interface BridgeUniverseReceipt {

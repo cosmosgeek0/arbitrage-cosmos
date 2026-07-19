@@ -8,7 +8,6 @@ import type {
   Clock,
   Decision,
   EventSink,
-  RiskVerdictBridge,
   SymbolMeta,
   TradeTick,
 } from '../v0/types.js';
@@ -21,9 +20,32 @@ import { FocusManager } from './focus.js';
 import { ProposalStore, type IntentResult } from './proposals.js';
 import { MemoryEventSink, makeEvent } from './events.js';
 import { priorityOf } from './priority.js';
-import type { WakeupSnapshot } from './types.js';
+import type {
+  VolumeFoundationRiskAttachmentInput,
+  VolumeProposalRiskCut,
+  WakeupSnapshot,
+} from './types.js';
+import {
+  OBSERVED_ORDER_FOCUS_MAX_AGE_MS,
+  inspectObservedOrderFocusSnapshot,
+  observedOrderFocusFingerprint,
+  type ObservedOrderFocusApplyResult,
+  type ObservedOrderFocusSnapshot,
+} from './observedOrderFocus.js';
 import type { SeedMinute } from './rolling.js';
 import { MAX_ENGINE_SYMBOLS, isCanonicalSymbol, positive, validSymbolMeta } from './validation.js';
+
+function validObservedOrderClock(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && !Object.is(value, -0)
+    && value <= 4_102_444_800_000;
+}
+
+function fixedClock(now: number): Clock {
+  return Object.freeze({ now: () => now });
+}
 
 export class VolumeEngine {
   readonly cfg: VolumeConfig;
@@ -106,6 +128,7 @@ export class VolumeEngine {
     if (typeof paused !== 'boolean') throw new TypeError('volume intake posture must be boolean');
     if (paused === this.intakePausedValue) return false;
     this.intakePausedValue = paused;
+    if (paused) this.proposalStore.expireAll('intake_paused');
     this.sink.emit(makeEvent(
       'heartbeat',
       this.clock.now(),
@@ -120,13 +143,31 @@ export class VolumeEngine {
     return this.intakePausedValue;
   }
 
-  blockSymbol(symbol: string, blocked = true): void {
-    if (!isCanonicalSymbol(symbol)) return;
+  blockSymbol(symbol: string, blocked = true): boolean {
+    if (!isCanonicalSymbol(symbol)) return false;
     if (blocked) {
-      if (!this.universeMap.has(symbol) || this.blocked.size >= MAX_ENGINE_SYMBOLS) return;
+      if (this.blocked.has(symbol)) return false;
+      if (this.blocked.size >= MAX_ENGINE_SYMBOLS) {
+        throw new RangeError(`volume operator symbol-policy capacity ${MAX_ENGINE_SYMBOLS} reached`);
+      }
       this.blocked.add(symbol);
+      this.proposalStore.expireForSymbol(symbol, 'symbol_blocked');
+      return true;
     }
-    else this.blocked.delete(symbol);
+    return this.blocked.delete(symbol);
+  }
+
+  operatorBlockedSymbols(): readonly string[] {
+    return Object.freeze([...this.blocked].sort());
+  }
+
+  setOperatorSymbolBlocked(symbol: string, blocked: boolean): boolean {
+    if (typeof blocked !== 'boolean') throw new TypeError('volume symbol policy must be boolean');
+    return this.blockSymbol(symbol, blocked);
+  }
+
+  symbolAllowedByPolicy(symbol: string): boolean {
+    return this.symbolAllowed(symbol);
   }
 
   /** Apply the operator's current allow/block lists without rebuilding the engine. */
@@ -139,8 +180,33 @@ export class VolumeEngine {
     );
   }
 
-  setSuggestedNotionalUsd(value: number): void {
-    if (positive(value)) this.cfg.suggestedNotionalUsd = Math.min(value, 1_000_000);
+  setSuggestedNotionalUsd(value: number): boolean {
+    if (!positive(value) || value > 1_000_000) throw new RangeError('volume size ceiling is outside owner bounds');
+    if (this.cfg.suggestedNotionalUsd === value) return false;
+    this.cfg.suggestedNotionalUsd = value;
+    this.proposalStore.expireAll('size_ceiling_changed');
+    return true;
+  }
+
+  setVolume1sMultiple(value: number): boolean {
+    if (!Number.isFinite(value) || value < 1 || value > 100) {
+      throw new RangeError('volume 1s threshold must be within 1..100');
+    }
+    if (this.cfg.vol1sMultiple === value) return false;
+    this.cfg.vol1sMultiple = value;
+    this.proposalStore.expireAll('config_changed');
+    this.features.invalidateThresholdDerivedState();
+    this.focusMgr.invalidateThresholdDerivedState();
+    this.decisionsRing = [];
+    this.signalCorrelation.clear();
+    this.lastDecisionKey.clear();
+    this.lastDecisionPersistedAt.clear();
+    this.sink.emit(makeEvent(
+      'heartbeat', this.clock.now(), newCorrelationId(this.clock, 've'),
+      'volume threshold revised; signal-derived state reset',
+      { payload: { threshold: 'VOLUME_1S_MULTIPLE', value } },
+    ));
+    return true;
   }
 
   pin(symbol: string, pinned = true): void {
@@ -159,7 +225,148 @@ export class VolumeEngine {
     }
   }
 
+  /**
+   * Consume only a pure owner projection. No route, client, credential,
+   * refresh, or exchange capability crosses this boundary.
+   */
+  applyObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    const now = this.clock.now();
+    if (!validObservedOrderClock(now)) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_ENGINE_CLOCK_INVALID'],
+      );
+    }
+    const inspection = inspectObservedOrderFocusSnapshot(snapshot);
+    if (inspection.snapshot === null) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, inspection.reasonCodes);
+    }
+    const safe = inspection.snapshot;
+
+    if (safe.state === 'UNAVAILABLE') {
+      const expired = this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback(
+        expired ? 'UNAVAILABLE_EXPIRED' : 'UNAVAILABLE_RETAINED',
+        false,
+        safe.reasonCodes,
+      );
+    }
+    if (safe.validUntilMs === null || safe.openSymbols === null || now > safe.validUntilMs) {
+      this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback('REJECTED_EXPIRED', false, ['OBSERVED_ORDER_FOCUS_CUT_EXPIRED']);
+    }
+    if ((safe.observedAtMs as number) > now + 5_000
+      || safe.validUntilMs - (safe.observedAtMs as number) > OBSERVED_ORDER_FOCUS_MAX_AGE_MS) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_TIME_INVALID']);
+    }
+
+    const cut = this.focusMgr.applyObservedOpenOrderCut(
+      safe.openSymbols,
+      safe.observedAtMs as number,
+      safe.validUntilMs,
+      observedOrderFocusFingerprint(safe),
+    );
+    if (cut.status === 'REJECTED_NON_MONOTONIC' || cut.status === 'REJECTED_CONFLICT') {
+      return this.observedOrderFocusReadback(cut.status, false, [
+        cut.status === 'REJECTED_NON_MONOTONIC'
+          ? 'OBSERVED_ORDER_FOCUS_CUT_NON_MONOTONIC'
+          : 'OBSERVED_ORDER_FOCUS_CUT_CONFLICT',
+      ]);
+    }
+
+    this.promoteObservedOpenOrderSymbols(safe.openSymbols, now);
+    return this.observedOrderFocusReadback(cut.status, true, []);
+  }
+
+  /**
+   * Install the sole Ledger checkpoint during startup or CAS reconciliation.
+   * Expired checkpoints restore only the monotonic high-water mark and never
+   * resurrect protection.
+   */
+  restoreObservedOrderFocus(snapshot: unknown): Readonly<ObservedOrderFocusApplyResult> {
+    const now = this.clock.now();
+    if (!validObservedOrderClock(now)) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_ENGINE_CLOCK_INVALID'],
+      );
+    }
+    const inspection = inspectObservedOrderFocusSnapshot(snapshot);
+    if (inspection.snapshot === null) {
+      return this.observedOrderFocusReadback('REJECTED_INVALID', false, inspection.reasonCodes);
+    }
+    const safe = inspection.snapshot;
+    if (safe.state !== 'AVAILABLE' || safe.observedAtMs === null
+        || safe.validUntilMs === null || safe.openSymbols === null) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CUT_INVALID'],
+      );
+    }
+
+    if (safe.observedAtMs > now + 5_000) {
+      return this.observedOrderFocusReadback(
+        'REJECTED_INVALID', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CLOCK_CONFLICT'],
+      );
+    }
+    const cut = this.focusMgr.restoreObservedOpenOrderCut(
+      safe.openSymbols,
+      safe.observedAtMs,
+      safe.validUntilMs,
+      observedOrderFocusFingerprint(safe),
+    );
+    if (cut.status === 'REJECTED_NON_MONOTONIC') {
+      return this.observedOrderFocusReadback(
+        cut.status, false, ['OBSERVED_ORDER_FOCUS_MEMORY_NEWER_THAN_DURABLE'],
+      );
+    }
+    if (now > safe.validUntilMs) {
+      this.focusMgr.expireObservedOpenOrderProtection(now);
+      return this.observedOrderFocusReadback(
+        'REJECTED_EXPIRED', false, ['OBSERVED_ORDER_FOCUS_DURABLE_CUT_EXPIRED'],
+      );
+    }
+    this.promoteObservedOpenOrderSymbols(safe.openSymbols, now);
+    return this.observedOrderFocusReadback(cut.status, true, []);
+  }
+
+  private promoteObservedOpenOrderSymbols(symbols: readonly string[], now: number): void {
+    for (const symbol of symbols) {
+      if (!this.universeMap.get(symbol)?.eligible || !this.features.observeAt(symbol, now)) continue;
+      if (!this.focusMgr.isFocused(symbol)) {
+        this.focusMgr.promote(symbol, 'open_order', 0, this.correlationForAt(symbol, now), now);
+      }
+    }
+  }
+
+  /** Passive result projection used when durable admission fails pre-mutation. */
+  observedOrderFocusReadback(
+    status: ObservedOrderFocusApplyResult['status'],
+    applied: boolean,
+    reasonCodes: readonly string[],
+  ): Readonly<ObservedOrderFocusApplyResult> {
+    const open = this.focusMgr.observedOpenOrderSymbols();
+    const focused: string[] = [];
+    const unfocused: string[] = [];
+    const untracked: string[] = [];
+    for (const symbol of open) {
+      if (!this.universeMap.get(symbol)?.eligible) untracked.push(symbol);
+      else if (this.focusMgr.isFocused(symbol)) focused.push(symbol);
+      else unfocused.push(symbol);
+    }
+    return Object.freeze({
+      status,
+      applied,
+      focusedOpenSymbols: Object.freeze(focused),
+      unfocusedOpenSymbols: Object.freeze(unfocused),
+      untrackedOpenSymbols: Object.freeze(untracked),
+      reasonCodes: Object.freeze([...new Set(reasonCodes)].sort((left, right) =>
+        left < right ? -1 : left > right ? 1 : 0)),
+    });
+  }
+
   setUniverse(metas: SymbolMeta[]): void {
+    const now = this.clock.now();
+    if (!validObservedOrderClock(now)) {
+      throw new TypeError('Volume universe clock returned invalid UTC ms');
+    }
     const next = new Map<string, SymbolMeta>();
     for (const m of metas.slice(0, MAX_ENGINE_SYMBOLS * 2)) {
       if (next.size >= MAX_ENGINE_SYMBOLS) break;
@@ -170,11 +377,10 @@ export class VolumeEngine {
     const eligible = new Set([...next.values()].filter((meta) => meta.eligible).map((meta) => meta.symbol));
     const nextKey = JSON.stringify([...next.values()]);
 
-    this.proposalStore.reconcileSymbols(eligible);
-    this.focusMgr.reconcileSymbols(eligible);
+    this.proposalStore.reconcileSymbolsAt(eligible, now);
+    this.focusMgr.reconcileSymbolsAt(eligible, now);
     this.features.reconcileSymbols(eligible);
-    for (const symbol of eligible) this.features.observe(symbol);
-    for (const symbol of this.blocked) if (!next.has(symbol)) this.blocked.delete(symbol);
+    for (const symbol of eligible) this.features.observeAt(symbol, now);
     for (const symbol of this.signalCorrelation.keys()) if (!eligible.has(symbol)) this.signalCorrelation.delete(symbol);
     for (const symbol of this.lastDecisionKey.keys()) if (!eligible.has(symbol)) this.lastDecisionKey.delete(symbol);
     for (const symbol of this.lastDecisionPersistedAt.keys()) {
@@ -183,13 +389,19 @@ export class VolumeEngine {
     this.decisionsRing = this.decisionsRing.filter((decision) => eligible.has(decision.symbol));
     this.universeMap = next;
 
+    for (const symbol of this.focusMgr.observedOpenOrderSymbols()) {
+      if (eligible.has(symbol) && !this.focusMgr.isFocused(symbol)) {
+        this.focusMgr.promote(symbol, 'open_order', 0, this.correlationForAt(symbol, now), now);
+      }
+    }
+
     if (nextKey === this.universeKey) return;
     this.universeKey = nextKey;
     this.sink.emit(
       makeEvent(
         'universe_refreshed',
-        this.clock.now(),
-        newCorrelationId(this.clock, 've'),
+        now,
+        newCorrelationId(fixedClock(now), 've'),
         `universe: ${next.size} symbols, ${eligible.size} eligible`,
         { payload: { size: next.size, eligible: eligible.size } },
       ),
@@ -214,11 +426,20 @@ export class VolumeEngine {
 
   // ---- execution-path bridge (manual, risk-gated; never automatic) ----
   intentFor(proposalId: string): IntentResult {
-    return this.proposalStore.intentFor(proposalId, this.killSwitchOn);
+    const proposal = this.proposalStore.byId(proposalId);
+    if (proposal && !this.symbolAllowed(proposal.symbol)) {
+      this.proposalStore.expireForSymbol(proposal.symbol, 'symbol_blocked');
+      return { ok: false, reason: 'symbol_blocked' };
+    }
+    return this.proposalStore.intentFor(proposalId, this.killSwitchOn, this.intakePausedValue);
   }
 
-  recordRiskResult(proposalId: string, verdict: Readonly<RiskVerdictBridge>): boolean {
-    return this.proposalStore.recordRiskResult(proposalId, verdict);
+  readProposalRiskCut(proposalId: string): Readonly<VolumeProposalRiskCut> | null {
+    return this.proposalStore.readProposalRiskCut(proposalId);
+  }
+
+  recordFoundationRiskResult(input: Readonly<VolumeFoundationRiskAttachmentInput>): boolean {
+    return this.proposalStore.recordFoundationRiskResult(input);
   }
 
   // ---- core tick ----
@@ -237,7 +458,9 @@ export class VolumeEngine {
         killSwitch: this.killSwitchOn,
         symbolAllowed: this.symbolAllowed(symbol),
         borrowStatus: 'not_needed',
-        nowTs: now,
+        // The detector decision and proposal owner fields must bind to the
+        // exact feature cut, even when a production clock advances mid-tick.
+        nowTs: f.ts,
         correlationId: this.correlationFor(symbol),
       };
       const evaluated = this.detector.evaluate(f, ctx);
@@ -281,9 +504,13 @@ export class VolumeEngine {
   }
 
   private correlationFor(symbol: string): string {
+    return this.correlationForAt(symbol, this.clock.now());
+  }
+
+  private correlationForAt(symbol: string, now: number): string {
     let cid = this.signalCorrelation.get(symbol);
     if (!cid) {
-      cid = newCorrelationId(this.clock, 'vs');
+      cid = newCorrelationId(fixedClock(now), 'vs');
       this.signalCorrelation.set(symbol, cid);
     }
     return cid;

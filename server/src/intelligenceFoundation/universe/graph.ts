@@ -23,6 +23,7 @@ import {
   type CoverageSummary,
   type CoverageView,
   type FocusEligibility,
+  type FocusTruthReceipt,
   type ListingObservation,
   type ListingView,
   type MarginEligibilityObservation,
@@ -639,10 +640,18 @@ function productKey(instrument: InstrumentIdentity): string | null {
   return pair === null ? null : `${pair}|${instrument.productFamily}`;
 }
 
+function truthObservesField(truth: TruthMetadata, ...fieldNames: readonly string[]): boolean {
+  if (truth.freshness.state !== 'FRESH') return false;
+  if (truth.completeness.state === 'COMPLETE') return true;
+  return fieldNames.some((field) => truth.completeness.observedFields.includes(field))
+    && !fieldNames.some((field) => truth.completeness.missingFields.includes(field));
+}
+
 function marketAvailability(record: ListingObservation, activeStatuses: readonly string[]): MarketAvailability {
-  if (record.truth.freshness.state !== 'FRESH' || record.truth.completeness.state !== 'COMPLETE') return 'UNKNOWN';
-  if (!activeStatuses.includes(canonicalToken(record.tradingStatus)) || record.tradingAllowed === false) return 'INACTIVE';
-  if (record.tradingAllowed === true) return 'ACTIVE';
+  if (!truthObservesField(record.truth, 'tradingStatus', 'status')) return 'UNKNOWN';
+  const tradingAllowed = truthObservesField(record.truth, 'tradingAllowed') ? record.tradingAllowed : null;
+  if (!activeStatuses.includes(canonicalToken(record.tradingStatus)) || tradingAllowed === false) return 'INACTIVE';
+  if (tradingAllowed === true) return 'ACTIVE';
   if (record.instrument.productFamily === 'SPOT') return 'ACTIVE';
   return record.instrument.productFamily === 'USD_M_PERPETUAL' && record.instrument.contractType === 'PERPETUAL'
     ? 'ACTIVE'
@@ -686,7 +695,7 @@ function dedupeListings(
           minimumPrice: null, maximumPrice: null, tickSize: null, minimumQuantity: null,
           maximumQuantity: null, quantityStep: null, minimumNotional: null, maximumNotional: null,
         },
-      tradingAllowed: trusted ? selected.tradingAllowed : null,
+      tradingAllowed: truthObservesField(selected.truth, 'tradingAllowed') ? selected.tradingAllowed : null,
       quoteVolume: selected.quoteVolume === null ? null : cloneQuoteVolume(selected.quoteVolume),
       truth: cloneTruth(selected.truth),
       marketAvailability: marketAvailability(selected, activeStatuses),
@@ -775,8 +784,7 @@ function dedupeCoverage(records: CoverageObservation[], failures: StableFailure[
     const group = groups.get(key)!.sort(preferRecord);
     const selected = group[0];
     if (group.length > 1) failures.push(failure('DUPLICATE_EVENT', 'duplicate coverage observations collapsed into one instrument view', 'COVERAGE', group.map((record) => record.id)));
-    const trusted = selected.truth.freshness.state === 'FRESH' && selected.truth.completeness.state === 'COMPLETE';
-    const mode = (value: CoverageModeObservation) => trusted
+    const mode = (field: 'publicData' | 'focusedData', value: CoverageModeObservation) => truthObservesField(selected.truth, field)
       ? {
         state: value.state,
         evidenceKinds: sortEvidenceKinds(value.evidenceKinds),
@@ -790,8 +798,8 @@ function dedupeCoverage(records: CoverageObservation[], failures: StableFailure[
     out.push({
       ...selected,
       instrument: cloneInstrument(selected.instrument),
-      publicData: mode(selected.publicData),
-      focusedData: mode(selected.focusedData),
+      publicData: mode('publicData', selected.publicData),
+      focusedData: mode('focusedData', selected.focusedData),
       truth: cloneTruth(selected.truth),
     });
   }
@@ -803,7 +811,7 @@ function coverageSummary(records: readonly CoverageView[], mode: 'publicData' | 
     return { state: 'UNKNOWN', instrumentIds: [], evidenceKinds: [], reasonCodes: ['COVERAGE_NOT_OBSERVED'] };
   }
   const states: Array<CoverageSummary['state']> = records.map((record) => {
-    if (record.truth.freshness.state !== 'FRESH' || record.truth.completeness.state !== 'COMPLETE') return 'UNKNOWN';
+    if (!truthObservesField(record.truth, mode)) return 'UNKNOWN';
     return record[mode].state;
   });
   let state: CoverageSummary['state'];
@@ -1003,6 +1011,227 @@ function deriveTruth(
   };
 }
 
+function focusTruthContent(
+  policy: UniversePolicy,
+  focusEligibility: FocusEligibility,
+  facts: Readonly<{
+    spot: Readonly<{ instrumentId: string; marketAvailability: MarketAvailability }> | null;
+    perpetual: Readonly<{ instrumentId: string; marketAvailability: MarketAvailability }> | null;
+    margin: MarginEligibilityView['state'] | null;
+    borrowEligibility: BorrowEligibilityView['eligibility'] | null;
+    borrowAvailability: BorrowEligibilityView['availability'] | null;
+    publicData: CoverageSummary['state'];
+    focusedData: CoverageSummary['state'];
+    quoteAsset: string;
+    quoteVolume24hUsd: number | null;
+  }>,
+  sourceRecordIds: readonly string[],
+) {
+  return {
+    scope: 'ATTENTION_FOCUS' as const,
+    configurationVersion: policy.configurationVersion,
+    requirements: {
+      requireSpot: policy.requireSpotForFocus,
+      requirePerpetual: policy.requirePerpetualForFocus,
+      requireMargin: policy.requireMarginForFocus,
+      requireBorrowEligibility: policy.requireBorrowEligibilityForFocus,
+      requireBorrowAvailability: policy.requireBorrowAvailabilityForFocus,
+      requirePublicData: policy.requirePublicDataForFocus,
+      requireFocusedData: policy.requireFocusedDataForFocus,
+      allowedQuoteAssets: policy.allowedQuoteAssetsForFocus,
+      minimumQuoteVolume24hUsd: policy.minimumQuoteVolume24hUsdForFocus,
+    },
+    result: focusEligibility,
+    facts,
+    sourceRecordIds: sortedUnique(sourceRecordIds),
+  };
+}
+
+function buildFocusTruthReceipt(input: Readonly<{
+  observedAtMs: number;
+  policy: UniversePolicy;
+  focusEligibility: FocusEligibility;
+  spot: ListingView | null;
+  perpetual: ListingView | null;
+  margin: MarginEligibilityView | null;
+  borrow: BorrowEligibilityView | null;
+  coverage: readonly CoverageView[];
+  quoteAsset: string;
+  quoteVolume24hUsd: number | null;
+  quoteVolume: QuoteVolumeObservation | null;
+  sourceTruths: Readonly<Record<UniverseSourceKind, TruthMetadata | null>>;
+}>): FocusTruthReceipt {
+  const requiredInstrumentIds = sortedUnique([
+    ...(input.policy.requireSpotForFocus && input.spot ? [input.spot.instrument.instrumentId] : []),
+    ...(input.policy.requirePerpetualForFocus && input.perpetual ? [input.perpetual.instrument.instrumentId] : []),
+  ]);
+  const relevantCoverage = requiredInstrumentIds.length === 0
+    ? input.coverage.filter((record) => [
+      input.spot?.instrument.instrumentId,
+      input.perpetual?.instrument.instrumentId,
+    ].includes(record.instrument.instrumentId))
+    : input.coverage.filter((record) => requiredInstrumentIds.includes(record.instrument.instrumentId));
+  const requiredTruths: Array<TruthMetadata | null> = [];
+  if (input.policy.requireSpotForFocus) requiredTruths.push(input.spot?.truth ?? input.sourceTruths.SPOT);
+  if (input.policy.requirePerpetualForFocus) {
+    requiredTruths.push(input.perpetual?.truth ?? input.sourceTruths.USD_M_PERPETUAL);
+  }
+  if (!input.policy.requireSpotForFocus && !input.policy.requirePerpetualForFocus) {
+    requiredTruths.push(
+      input.spot?.truth ?? input.sourceTruths.SPOT,
+      input.perpetual?.truth ?? input.sourceTruths.USD_M_PERPETUAL,
+    );
+  }
+  if (input.policy.requireMarginForFocus) requiredTruths.push(input.margin?.truth ?? input.sourceTruths.MARGIN);
+  if (input.policy.requireBorrowEligibilityForFocus || input.policy.requireBorrowAvailabilityForFocus) {
+    requiredTruths.push(input.borrow?.truth ?? input.sourceTruths.BORROW);
+  }
+  if (input.policy.requirePublicDataForFocus || input.policy.requireFocusedDataForFocus) {
+    if (relevantCoverage.length > 0) requiredTruths.push(...relevantCoverage.map((record) => record.truth));
+    else requiredTruths.push(input.sourceTruths.COVERAGE);
+  }
+  if (input.policy.minimumQuoteVolume24hUsdForFocus !== null) {
+    requiredTruths.push(input.quoteVolume?.truth ?? null, input.quoteVolume?.conversionTruth ?? null);
+  }
+  const truths = requiredTruths.filter((truth): truth is TruthMetadata => truth !== null);
+  const content = focusTruthContent(
+    input.policy,
+    input.focusEligibility,
+    {
+      spot: input.spot === null ? null : {
+        instrumentId: input.spot.instrument.instrumentId,
+        marketAvailability: input.spot.marketAvailability,
+      },
+      perpetual: input.perpetual === null ? null : {
+        instrumentId: input.perpetual.instrument.instrumentId,
+        marketAvailability: input.perpetual.marketAvailability,
+      },
+      margin: input.margin?.state ?? null,
+      borrowEligibility: input.borrow?.eligibility ?? null,
+      borrowAvailability: input.borrow?.availability ?? null,
+      publicData: coverageSummary(relevantCoverage, 'publicData').state,
+      focusedData: coverageSummary(relevantCoverage, 'focusedData').state,
+      quoteAsset: input.quoteAsset,
+      quoteVolume24hUsd: input.quoteVolume24hUsd,
+    },
+    truths.flatMap((truth) => truth.provenance.sourceRecordIds),
+  );
+  const contentDigest = stableId('universe-focus-truth-content', content);
+  const id = stableId('universe-focus-truth-receipt', {
+    scope: content.scope,
+    configurationVersion: input.policy.configurationVersion,
+    contentDigest,
+  });
+  const known = input.focusEligibility.state !== 'UNKNOWN';
+  const base = deriveTruth(
+    truths,
+    input.policy,
+    input.observedAtMs,
+    ['scope', 'configurationVersion', 'contentDigest', 'focusEligibility', 'requiredFacts'],
+    known ? [] : ['current focus requirement truth'],
+    known ? [] : input.focusEligibility.reasonCodes,
+    [id],
+  );
+  const truth: TruthMetadata = {
+    ...base,
+    producerVersion: PRODUCER_VERSION,
+    configurationVersion: input.policy.configurationVersion,
+    authority: {
+      kind: 'ENGINE_DERIVED',
+      sourceId: 'intelligence-universe',
+      dataset: 'attention-focus-truth-receipt',
+      endpointClass: 'INJECTED',
+    },
+    provenance: {
+      sourceRecordIds: sortedUnique([id, ...base.provenance.sourceRecordIds]),
+      sourceSet: [...base.provenance.sourceSet],
+      transforms: sortedUnique([...base.provenance.transforms, 'attention-focus-truth-receipt-v1']),
+    },
+    completeness: {
+      state: known ? 'COMPLETE' : truths.length === 0 ? 'MISSING' : 'PARTIAL',
+      observedFields: ['configurationVersion', 'contentDigest', 'focusEligibility', 'requiredFacts', 'scope'],
+      missingFields: known ? [] : ['current focus requirement truth'],
+      reasonCodes: known ? [] : sortedUnique(input.focusEligibility.reasonCodes),
+    },
+  };
+  return {
+    id,
+    scope: 'ATTENTION_FOCUS',
+    configurationVersion: input.policy.configurationVersion,
+    contentDigest,
+    truth,
+  };
+}
+
+/** Recomputes the canonical digest so downstream owners cannot trust a mutated graph envelope. */
+export function validateFocusTruthReceipt(node: UniverseMarketNode, policy: UniversePolicy): boolean {
+  const receipt = node.focusTruth;
+  if (!receipt || receipt.scope !== 'ATTENTION_FOCUS'
+      || receipt.configurationVersion !== policy.configurationVersion) return false;
+  const requiredInstrumentIds = sortedUnique([
+    ...(policy.requireSpotForFocus && node.spot ? [node.spot.instrument.instrumentId] : []),
+    ...(policy.requirePerpetualForFocus && node.usdMPerpetual ? [node.usdMPerpetual.instrument.instrumentId] : []),
+  ]);
+  const relevantCoverage = requiredInstrumentIds.length === 0
+    ? node.coverage.filter((record) => [
+      node.spot?.instrument.instrumentId,
+      node.usdMPerpetual?.instrument.instrumentId,
+    ].includes(record.instrument.instrumentId))
+    : node.coverage.filter((record) => requiredInstrumentIds.includes(record.instrument.instrumentId));
+  const requiredTruths: TruthMetadata[] = [];
+  if (policy.requireSpotForFocus && node.spot) requiredTruths.push(node.spot.truth);
+  if (policy.requirePerpetualForFocus && node.usdMPerpetual) requiredTruths.push(node.usdMPerpetual.truth);
+  if (!policy.requireSpotForFocus && !policy.requirePerpetualForFocus) {
+    if (node.spot) requiredTruths.push(node.spot.truth);
+    if (node.usdMPerpetual) requiredTruths.push(node.usdMPerpetual.truth);
+  }
+  if (policy.requireMarginForFocus && node.margin) requiredTruths.push(node.margin.truth);
+  if ((policy.requireBorrowEligibilityForFocus || policy.requireBorrowAvailabilityForFocus) && node.borrow) {
+    requiredTruths.push(node.borrow.truth);
+  }
+  if (policy.requirePublicDataForFocus || policy.requireFocusedDataForFocus) {
+    requiredTruths.push(...relevantCoverage.map((record) => record.truth));
+  }
+  if (policy.minimumQuoteVolume24hUsdForFocus !== null && node.quoteVolume) {
+    requiredTruths.push(node.quoteVolume.truth);
+    if (node.quoteVolume.conversionTruth) requiredTruths.push(node.quoteVolume.conversionTruth);
+  }
+  const expectedRecordIds = sortedUnique(requiredTruths.flatMap((truth) => truth.provenance.sourceRecordIds));
+  const receiptRecordIds = sortedUnique(receipt.truth.provenance.sourceRecordIds.filter((id) => id !== receipt.id));
+  if (node.focusEligibility.state === 'ELIGIBLE'
+      ? canonicalJson(expectedRecordIds) !== canonicalJson(receiptRecordIds)
+      : expectedRecordIds.some((id) => !receiptRecordIds.includes(id))) return false;
+  const content = focusTruthContent(
+    policy,
+    node.focusEligibility,
+    {
+      spot: node.spot === null ? null : {
+        instrumentId: node.spot.instrument.instrumentId,
+        marketAvailability: node.spot.marketAvailability,
+      },
+      perpetual: node.usdMPerpetual === null ? null : {
+        instrumentId: node.usdMPerpetual.instrument.instrumentId,
+        marketAvailability: node.usdMPerpetual.marketAvailability,
+      },
+      margin: node.margin?.state ?? null,
+      borrowEligibility: node.borrow?.eligibility ?? null,
+      borrowAvailability: node.borrow?.availability ?? null,
+      publicData: coverageSummary(relevantCoverage, 'publicData').state,
+      focusedData: coverageSummary(relevantCoverage, 'focusedData').state,
+      quoteAsset: node.quoteAsset,
+      quoteVolume24hUsd: node.quoteVolume24hUsd,
+    },
+    receiptRecordIds,
+  );
+  const contentDigest = stableId('universe-focus-truth-content', content);
+  return receipt.contentDigest === contentDigest
+    && receipt.id === stableId('universe-focus-truth-receipt', {
+      scope: receipt.scope,
+      configurationVersion: receipt.configurationVersion,
+      contentDigest,
+    });
+}
+
 /** Semantic state fingerprint. Deliberately excludes observation/evaluation wall-clock fields. */
 function nodeStateFingerprint(node: UniverseMarketNode): string {
   const listing = (record: ListingView | null) => record === null ? null : {
@@ -1068,6 +1297,14 @@ function nodeStateFingerprint(node: UniverseMarketNode): string {
     quoteVolumeId: node.quoteVolume?.id ?? null,
     activity: node.activity,
     focusEligibility: node.focusEligibility,
+    focusTruth: {
+      id: node.focusTruth.id,
+      scope: node.focusTruth.scope,
+      configurationVersion: node.focusTruth.configurationVersion,
+      contentDigest: node.focusTruth.contentDigest,
+      freshness: node.focusTruth.truth.freshness.state,
+      completeness: node.focusTruth.truth.completeness.state,
+    },
     reasonCodes: node.reasonCodes,
   });
 }
@@ -1234,6 +1471,26 @@ export function buildUniverseGraph(input: UniverseSnapshotInput, policyInput: Pa
       sourceStates,
       policy,
     });
+    const focusTruth = buildFocusTruthReceipt({
+      observedAtMs,
+      policy,
+      focusEligibility,
+      spot: spotView,
+      perpetual: perpetualView,
+      margin: marginView,
+      borrow: borrowView,
+      coverage: nodeCoverage,
+      quoteAsset,
+      quoteVolume24hUsd,
+      quoteVolume,
+      sourceTruths: {
+        SPOT: spot.truth,
+        USD_M_PERPETUAL: perpetual.truth,
+        MARGIN: margin.truth,
+        BORROW: borrow.truth,
+        COVERAGE: coverage.truth,
+      },
+    });
     reasonCodes.push(...focusEligibility.reasonCodes);
     const componentTruths = [
       spotView?.truth,
@@ -1287,6 +1544,7 @@ export function buildUniverseGraph(input: UniverseSnapshotInput, policyInput: Pa
       activity,
       visibility: { state: 'VISIBLE', reasonCodes: visibilityReasons },
       focusEligibility,
+      focusTruth,
       reasonCodes: sortedUnique(reasonCodes),
       truth: deriveTruth(componentTruths, policy, observedAtMs, observedFields, missingFields, reasonCodes, [
         ...(spotView ? [spotView.id] : []),

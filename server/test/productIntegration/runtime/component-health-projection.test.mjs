@@ -56,6 +56,7 @@ test('MIS-063 Product health preserves every per-component operational dimension
     duplicate: spot.dataQualityDuplicateCount,
     outOfOrder: spot.dataQualityOutOfOrderCount,
     gaps: spot.dataQualitySequenceGapCount,
+    qualityObservedAt: spot.dataQualityObservedAtMs,
     retry: spot.retryState,
     retryAttempt: spot.retryAttempt,
     retryCeiling: spot.retryCeiling,
@@ -72,6 +73,7 @@ test('MIS-063 Product health preserves every per-component operational dimension
   }, {
     freshness: 'FRESH', lag: 17, backlog: 0, drops: 0,
     quality: 'DEGRADED', invalid: 2, duplicate: 1, outOfOrder: 0, gaps: 1,
+    qualityObservedAt: T0 - 50,
     retry: 'BACKING_OFF', retryAttempt: 2, retryCeiling: 9, backoff: 750,
     retryAt: T0 + 750, dependencies: [], checkpoint: 'CURRENT',
     cooldownUntil: null, checkpointRevision: 'spot-cp-7', checkpointPersistedAt: T0 - 200,
@@ -92,6 +94,7 @@ test('MIS-063 legacy or absent fields project UNKNOWN/UNAVAILABLE, never fabrica
   assert.equal(basis.dataQualityDuplicateCount, null);
   assert.equal(basis.dataQualityOutOfOrderCount, null);
   assert.equal(basis.dataQualitySequenceGapCount, null);
+  assert.equal(basis.dataQualityObservedAtMs, null);
   assert.equal(basis.checkpointState, 'UNAVAILABLE');
   assert.equal(basis.checkpointRevision, null);
   assert.equal(basis.checkpointPersistedAtMs, null);
@@ -115,13 +118,26 @@ test('MIS-063 blocked state never fabricates restart necessity without explicit 
         ...component,
         phase: 'BLOCKED',
         readiness: 'BLOCKED',
-        blockerCodes: Object.freeze(['SOURCE_RESTART_REQUIRED']),
+        blockerCodes: Object.freeze(['OWNER_AUTHORIZATION_REQUIRED', 'SOURCE_RESTART_REQUIRED']),
       })
       : component);
   const projection = envelope(makeSupervisor({ components: Object.freeze(components) }));
 
   assert.equal(projection.components.find((component) => component.componentId === 'basis-engine').restartState, 'NEVER_RESTARTED');
-  assert.equal(projection.components.find((component) => component.componentId === 'volume-engine').restartState, 'RESTART_REQUIRED');
+  const volume = projection.components.find((component) => component.componentId === 'volume-engine');
+  assert.equal(volume.restartState, 'RESTART_REQUIRED');
+  assert.equal(volume.blockerCode, 'SOURCE_RESTART_REQUIRED');
+});
+
+test('MIS-063 contradictory restart counters fail closed before Product publication', () => {
+  const source = makeSupervisor();
+  const components = source.components.map((component) => component.componentId === 'basis-engine'
+    ? Object.freeze({ ...component, generation: 0, restartCount: 1 })
+    : component);
+  assert.throws(
+    () => envelope(makeSupervisor({ components: Object.freeze(components) })),
+    /restart count requires a nonzero runtime generation/u,
+  );
 });
 
 function sourceDependencies(dashboard, componentId) {

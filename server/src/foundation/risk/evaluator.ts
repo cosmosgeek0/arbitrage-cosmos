@@ -185,6 +185,23 @@ function effectiveVerdictHorizon(
 }
 
 /**
+ * Verdict-scoped gross-USD authority: an approval can authorize no more than
+ * the exact plan size that was evaluated; a known rejection authorizes zero;
+ * missing decisive evidence remains null rather than inventing permission.
+ */
+function deriveMaximumAllowedSize(checks: readonly Readonly<RiskCheck>[]): number | null {
+  if (checks.some((check) => check.blocking && check.status === 'UNKNOWN')) return null;
+  if (checks.some((check) => check.blocking && check.status === 'FAIL')) return 0;
+  const gross = checks.find((check) => check.code === 'MAX_GROSS_NOTIONAL');
+  const amount = typeof gross?.observed === 'number'
+    ? gross.observed
+    : typeof gross?.observed === 'string'
+      ? Number(gross.observed)
+      : null;
+  return amount !== null && Number.isFinite(amount) && amount >= 0 ? amount : null;
+}
+
+/**
  * Evaluate a multi-leg action snapshot into a frozen RiskVerdict.
  * Throws TypeError only for malformed nowMs/intent/policy (programmer
  * error); missing or malformed EVIDENCE becomes UNKNOWN checks instead.
@@ -261,9 +278,11 @@ export function evaluateMultiLegRisk(input: RiskEvaluationInput): Readonly<RiskV
 
   const horizon = effectiveVerdictHorizon(input, intent, checks);
   const verdict = deriveRiskVerdict({
+    correlationId: input.correlationId,
     checks,
     evaluatedAt: nowMs,
     ttlMs: horizon.ttlMs,
+    maxAllowedSize: deriveMaximumAllowedSize(checks),
   });
   if (verdict.expiresAt === horizon.expiresAt) return verdict;
   // Frozen deriveRiskVerdict intentionally requires a positive TTL. At an

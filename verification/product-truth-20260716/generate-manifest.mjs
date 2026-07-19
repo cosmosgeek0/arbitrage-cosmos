@@ -2,39 +2,28 @@
 
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import {
+  EXACT_C9_CANDIDATE,
+  EXACT_C9_TREE,
+  EXACT_EVIDENCE_DESCENDANT_FILES,
+  EXACT_EVIDENCE_OUTPUTS,
+  EXACT_EVIDENCE_TOOLING_FILES,
+  HISTORICAL_PAYLOAD_COMMIT_SPECS,
+  REJECTED_CANDIDATE_SHAS,
+  REQUIRED_C2_PARENT,
+  SEALED_C9_SOURCE_PATHS,
+  SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+} from './campaign-input-registry.mjs';
 
-const REQUIRED_C2_PARENT = 'dea2d2a5c2b5e83d3aea75b0e368f0a478596561';
 const REJECTED_PREDECESSOR = '41752d6a87dc1cb1b933bb4460c9cabfc15ff694';
 const REJECTED_PREDECESSOR_TREE = 'a770f9f393e6229252731cd5247e9a1abfd2e509';
-const REJECTED_CANDIDATE_SHAS = Object.freeze([
-  REJECTED_PREDECESSOR,
-  '78f708d6cdb9d1618c53d3f08f71097b4320a63b',
-  '4c9143a0bcc331aa170e9e26b741240b39df8b9e',
-  '959a5f9900e25f53414710bbfb3464c3ccb67a5d',
-  '89cd7e066b97f2f33d730d1e0adf291ebe7c4f64',
-  'a283eb859ec1142aadecbd64e0b84959535f6216',
-  '6ab02a82931ae8234456c0710cca41b94fdc12c9',
-]);
 const CAMPAIGN_RELATIVE_ROOT = 'verification/product-truth-20260716';
-const EXACT_EVIDENCE_PATHS = Object.freeze([
-  'AI_OPS_C2_DISPOSITION.json',
-  'C2_PROOF_BINDING.json',
-  'CAPABILITY_TRUTH_MATRIX.csv',
-  'COCKPIT_BINDING_MATRIX.csv',
-  'DIRECTIVE_COVERAGE_MATRIX.csv',
-  'EVIDENCE_SELECTION.json',
-  'INDEPENDENT_FINDINGS.json',
-  'INPUTS.lock',
-  'LOCKED_INPUT_PAYLOADS.json',
-  'MANIFEST.json',
-  'MANIFEST.sha256',
-  'MERGE_PROVENANCE.json',
-  'PRODUCT_ASSURANCE_C2_DISPOSITION.json',
-  'STATE.md',
-  'WORKTREE_CENSUS.json',
-].map((name) => `${CAMPAIGN_RELATIVE_ROOT}/${name}`));
+const EXACT_EVIDENCE_PATHS = Object.freeze(EXACT_EVIDENCE_DESCENDANT_FILES.map(
+  (name) => `${CAMPAIGN_RELATIVE_ROOT}/${name}`,
+));
 const MANIFEST_JSON = 'MANIFEST.json';
 const MANIFEST_SHA256 = 'MANIFEST.sha256';
 const REQUIRED_MATRIX_COUNTS = Object.freeze({
@@ -92,6 +81,10 @@ function runGit(args, { allowFailure = false, cwd = process.cwd() } = {}) {
 
 const repo = runGit(['rev-parse', '--show-toplevel']).stdout.trim();
 const campaignRoot = resolve(repo, CAMPAIGN_RELATIVE_ROOT);
+const scriptRoot = dirname(fileURLToPath(import.meta.url));
+if (resolve(scriptRoot) !== campaignRoot) {
+  throw new Error('MANIFEST_GENERATOR_MUST_RUN_FROM_TARGET_REPOSITORY_TOOLING');
+}
 const manifestJsonPath = resolve(campaignRoot, MANIFEST_JSON);
 const manifestSha256Path = resolve(campaignRoot, MANIFEST_SHA256);
 
@@ -106,6 +99,26 @@ function sha256(bytes) {
 function gitBlob(bytes) {
   const header = Buffer.from(`blob ${bytes.length}\0`, 'utf8');
   return createHash('sha1').update(header).update(bytes).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function currentToolingBindings() {
+  return EXACT_EVIDENCE_TOOLING_FILES.map((name) => {
+    const bytes = readCampaignBytes(name);
+    return {
+      path: name,
+      sha256: sha256(bytes),
+      git_blob: gitBlob(bytes),
+      byte_length: bytes.length,
+    };
+  });
 }
 
 function assertEqual(label, actual, expected) {
@@ -198,10 +211,12 @@ function assertExactMatrix(name, expectedCount) {
 }
 
 assertEqual('CANDIDATE_COMMIT', git('rev-parse', `${candidate}^{commit}`), candidate);
+assertEqual('EXACT_C9_CANDIDATE', candidate, EXACT_C9_CANDIDATE);
 if (REJECTED_CANDIDATE_SHAS.includes(candidate)) {
   throw new Error(`REJECTED_CANDIDATE_RELABEL_ATTEMPT:${candidate}`);
 }
 const candidateTree = git('rev-parse', `${candidate}^{tree}`);
+assertEqual('EXACT_C9_TREE', candidateTree, EXACT_C9_TREE);
 const candidateCommitRow = git('rev-list', '--parents', '-n', '1', candidate).split(/\s+/u);
 assertEqual('CANDIDATE_PARENT_COUNT', candidateCommitRow.length - 1, 1);
 const candidateParent = candidateCommitRow[1];
@@ -217,6 +232,7 @@ if (runGit(['merge-base', '--is-ancestor', candidate, 'HEAD'], { allowFailure: t
 const inputLock = readCampaignJson('INPUTS.lock');
 const proof = readCampaignJson('C2_PROOF_BINDING.json');
 const selection = readCampaignJson('EVIDENCE_SELECTION.json');
+const lockedPayloads = readCampaignJson('LOCKED_INPUT_PAYLOADS.json');
 const provenance = readCampaignJson('MERGE_PROVENANCE.json');
 const census = readCampaignJson('WORKTREE_CENSUS.json');
 
@@ -229,10 +245,39 @@ assertEqual('PROOF_PARENT', proof.candidate_parent, candidateParent);
 assertEqual('SELECTION_CANDIDATE', selection.source_candidate, candidate);
 assertEqual('SELECTION_TREE', selection.source_candidate_tree, candidateTree);
 assertEqual('SELECTION_PARENT', selection.source_candidate_parent, candidateParent);
+assertEqual('SELECTION_SCHEMA', selection.schema, 'product-truth-c9-evidence-selection.v5');
 assertEqual(
   'SELECTION_POST_CANDIDATE_ALLOWLIST',
   JSON.stringify(sorted(selection.post_candidate_path_allowlist)),
   JSON.stringify(sorted(EXACT_EVIDENCE_PATHS)),
+);
+assertEqual('SELECTION_GENERATED_OUTPUT_COUNT', selection.exact_generated_output_count, EXACT_EVIDENCE_OUTPUTS.length);
+assertEqual('SELECTION_GENERATED_OUTPUTS', JSON.stringify(selection.exact_generated_outputs), JSON.stringify(EXACT_EVIDENCE_OUTPUTS));
+assertEqual('SELECTION_TOOLING_COUNT', selection.exact_tooling_file_count, EXACT_EVIDENCE_TOOLING_FILES.length);
+assertEqual('SELECTION_TOOLING_FILES', JSON.stringify(selection.exact_tooling_files), JSON.stringify(EXACT_EVIDENCE_TOOLING_FILES));
+assertEqual('SELECTION_DESCENDANT_PATH_COUNT', selection.exact_descendant_path_count, EXACT_EVIDENCE_DESCENDANT_FILES.length);
+const toolingBindings = currentToolingBindings();
+assertEqual('SELECTION_TOOLING_BINDINGS', JSON.stringify(selection.tooling_bindings), JSON.stringify(toolingBindings));
+assertEqual(
+  'SELECTION_TOOLING_BUNDLE_SHA256',
+  selection.tooling_bundle_sha256,
+  sha256(Buffer.from(canonicalJson(toolingBindings), 'utf8')),
+);
+assertEqual(
+  'LOCKED_PAYLOAD_BUNDLE_SHA256',
+  lockedPayloads.sealed_git_object_payload_bundle_sha256,
+  SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+);
+assertEqual(
+  'SELECTION_PAYLOAD_BUNDLE',
+  JSON.stringify(selection.sealed_git_object_payload_bundle),
+  JSON.stringify({
+    path: `${CAMPAIGN_RELATIVE_ROOT}/LOCKED_INPUT_PAYLOADS.json`,
+    sha256: SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
+    sealed_machine_evidence_files: SEALED_C9_SOURCE_PATHS.length,
+    raw_historical_commit_objects: HISTORICAL_PAYLOAD_COMMIT_SPECS.length + 1,
+    authority_granted: false,
+  }),
 );
 assertEqual('PROVENANCE_CANDIDATE', provenance.candidate_sha, candidate);
 assertEqual('PROVENANCE_TREE', provenance.candidate_tree_sha, candidateTree);
@@ -254,21 +299,19 @@ for (const name of EXACT_AUTHORITY_FILES) {
   }
 }
 
-const postCandidatePaths = git('diff', '--name-only', candidate, '--')
-  .split('\n')
-  .filter(Boolean)
-  .sort();
-const fullEvidencePaths = [...EXACT_EVIDENCE_PATHS].sort();
-const preManifestEvidencePaths = EXACT_EVIDENCE_PATHS
-  .filter((path) => !path.endsWith(`/${MANIFEST_JSON}`) && !path.endsWith(`/${MANIFEST_SHA256}`))
-  .sort();
-const permittedPostCandidatePathSets = verifyOnly
-  ? [fullEvidencePaths]
-  : [preManifestEvidencePaths, fullEvidencePaths];
-if (!permittedPostCandidatePathSets.some(
-  (expectedPaths) => JSON.stringify(expectedPaths) === JSON.stringify(postCandidatePaths),
-)) {
-  throw new Error(`POST_CANDIDATE_EXACT_EVIDENCE_PATHS:${JSON.stringify(postCandidatePaths)}`);
+if (verifyOnly) {
+  const evidenceHead = git('rev-parse', 'HEAD^{commit}');
+  const evidenceParentRow = git('rev-list', '--parents', '-n', '1', evidenceHead).split(/\s+/u);
+  assertEqual('EVIDENCE_PARENT_COUNT', evidenceParentRow.length - 1, 1);
+  assertEqual('EVIDENCE_SOLE_DIRECT_PARENT', evidenceParentRow[1], candidate);
+  const postCandidatePaths = git('diff', '--name-only', candidate, '--')
+    .split('\n')
+    .filter(Boolean)
+    .sort();
+  const fullEvidencePaths = [...EXACT_EVIDENCE_PATHS].sort();
+  if (JSON.stringify(fullEvidencePaths) !== JSON.stringify(postCandidatePaths)) {
+    throw new Error(`POST_CANDIDATE_EXACT_EVIDENCE_PATHS:${JSON.stringify(postCandidatePaths)}`);
+  }
 }
 
 function trackedCampaignPaths() {
@@ -280,7 +323,13 @@ function trackedCampaignPaths() {
     `${CAMPAIGN_RELATIVE_ROOT}/${MANIFEST_JSON}`,
     `${CAMPAIGN_RELATIVE_ROOT}/${MANIFEST_SHA256}`,
   ]);
-  return sorted(output.split('\0').filter((path) => path && !excluded.has(path)));
+  const requiredToolingPaths = EXACT_EVIDENCE_TOOLING_FILES.map(
+    (name) => `${CAMPAIGN_RELATIVE_ROOT}/${name}`,
+  );
+  return sorted(new Set([
+    ...output.split('\0').filter((path) => path && !excluded.has(path)),
+    ...requiredToolingPaths,
+  ]));
 }
 
 function manifestEntry(repositoryRelativePath) {
@@ -306,7 +355,7 @@ const inventoryLines = entries.map(
   (entry) => `${entry.path}\0${entry.sha256}\0${entry.byte_length}\0${entry.git_blob}`,
 );
 const manifestObject = {
-  schema: 'product-truth-manifest.v2',
+  schema: 'product-truth-manifest.v5',
   candidate_sha: candidate,
   candidate_tree_sha: candidateTree,
   candidate_parent_sha: candidateParent,
@@ -315,6 +364,14 @@ const manifestObject = {
   scope: `${CAMPAIGN_RELATIVE_ROOT}/** tracked files at generation time`,
   exclusions: [MANIFEST_JSON, MANIFEST_SHA256],
   compatibility_manifest: MANIFEST_SHA256,
+  exact_generated_output_count: EXACT_EVIDENCE_OUTPUTS.length,
+  exact_generated_outputs: [...EXACT_EVIDENCE_OUTPUTS],
+  exact_tooling_file_count: EXACT_EVIDENCE_TOOLING_FILES.length,
+  exact_tooling_files: [...EXACT_EVIDENCE_TOOLING_FILES],
+  exact_descendant_path_count: EXACT_EVIDENCE_DESCENDANT_FILES.length,
+  exact_descendant_paths: [...EXACT_EVIDENCE_DESCENDANT_FILES],
+  tooling_bundle_sha256: selection.tooling_bundle_sha256,
+  sealed_git_object_payload_bundle_sha256: SEALED_GIT_OBJECT_PAYLOAD_BUNDLE_SHA256,
   entry_count: entries.length,
   inventory_sha256: sha256(Buffer.from(`${inventoryLines.join('\n')}\n`, 'utf8')),
   entries,
@@ -352,6 +409,9 @@ process.stdout.write(`${JSON.stringify({
   candidate_tree: candidateTree,
   candidate_parent: candidateParent,
   candidate_parent_count: 1,
+  generated_output_count: EXACT_EVIDENCE_OUTPUTS.length,
+  tooling_file_count: EXACT_EVIDENCE_TOOLING_FILES.length,
+  descendant_path_count: EXACT_EVIDENCE_DESCENDANT_FILES.length,
   entry_count: entries.length,
   manifest_json_sha256: sha256(Buffer.from(renderedJson, 'utf8')),
   manifest_sha256_sha256: sha256(Buffer.from(renderedSha256, 'utf8')),

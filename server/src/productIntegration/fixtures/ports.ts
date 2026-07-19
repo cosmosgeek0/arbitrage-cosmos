@@ -69,6 +69,7 @@ import { projectOperatorEventPage, type ProductOperatorEvent } from '../supervis
 import type { ProductSupervisorProjection } from '../contracts/index.js';
 
 const ID = /^[A-Za-z0-9_.:\-]{1,128}$/;
+const CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const HASH = /^[a-f0-9]{16,128}$/;
 const SHA256 = /^(?:sha256:)?[a-f0-9]{64}$/;
 const MAX_FIXTURE_RECORDS = 1_024;
@@ -316,14 +317,60 @@ function validDashboardSummaries(value: unknown): boolean {
   const summaryKeys: Record<string, readonly string[]> = {
     sourceCoverage: ['truthLabel', 'universeSymbols', 'spotCoveredSymbols', 'usdMCoveredSymbols', 'quietSymbolsRetained', 'materialGapCount', 'rateLimitedSourceCount', 'lastMaterialGapAtMs'],
     intelligence: ['truthLabel', 'evidenceCount', 'attentionCount', 'focusRequestedCount', 'focusActiveCount', 'thesisCount', 'insufficientEvidenceCount', 'lastUpdateAtMs'],
-    capital: ['truthLabel', 'accountTruthState', 'allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'checkpointRevision', 'blockerCodes'],
-    risk: ['truthLabel', 'latestVerdict', 'latestVerdictAtMs', 'latestVerdictId', 'rejectionCount', 'reasonCodes'],
+    capital: ['truthLabel', 'accountTruthState', 'allocatableAmount', 'reservedAmount', 'activeExposureAmount', 'eligibleCount', 'reservationCount', 'stagedMandateCount', 'activeExposureCount', 'recoveryCount', 'checkpointRevision', 'blockerCodes'],
+    risk: ['truthLabel', 'latestVerdict', 'latestVerdictAtMs', 'latestVerdictId', 'correlationId', 'maxAllowedSize', 'requiredConfirmation', 'decisiveInputSnapshot', 'rejectionCount', 'reasonCodes'],
     execution: ['truthLabel', 'mode', 'barrier', 'planId', 'planLifecycle', 'coordinatorState', 'legCount', 'recoveryState', 'lastTransitionAtMs'],
     reconciliation: ['truthLabel', 'status', 'blocksNewExposure', 'recommendation', 'checkpointId', 'evaluatedAtMs', 'reasonCodes'],
     ledger: ['truthLabel', 'writable', 'lastEventId', 'lastPersistedAtMs', 'checkpointRevision', 'recentTraceCount', 'lastCleanShutdownAtMs'],
   };
-  const strategyKeys = ['truthLabel', 'heartbeatAtMs', 'candidateCount', 'proposalCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs', 'sourceRevision'];
-  return Object.entries(summaryKeys).every(([key, keys]) => exactRecord(value[key], keys) && DASHBOARD_DONOR_TRUTH.includes(String((value[key] as Record<string, unknown>).truthLabel)))
+  const strategyKeys = ['truthLabel', 'heartbeatAtMs', 'candidateCount', 'proposalCount', 'cooldownCount', 'rejectionCount', 'acceptedCount', 'lastDecisionAtMs', 'sourceRevision'];
+  const risk = value.risk;
+  const validRiskShape = exactRecord(risk, summaryKeys.risk)
+    && typeof risk.latestVerdict === 'string'
+    && ['APPROVE', 'REJECT', 'NEEDS_REVIEW', 'CAP', 'UNAVAILABLE'].includes(risk.latestVerdict)
+    && (risk.correlationId === null || (typeof risk.correlationId === 'string' && CORRELATION_ID.test(risk.correlationId)))
+    && (risk.maxAllowedSize === null || (typeof risk.maxAllowedSize === 'string' && risk.maxAllowedSize.length <= 80 && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(risk.maxAllowedSize)))
+    && (risk.requiredConfirmation === null || typeof risk.requiredConfirmation === 'boolean')
+    && Array.isArray(risk.decisiveInputSnapshot)
+    && risk.decisiveInputSnapshot.length <= 512
+    && risk.decisiveInputSnapshot.every((entry) => exactRecord(entry, ['code', 'status', 'detail', 'observed', 'limit', 'evidenceTimestamp'])
+      && typeof entry.code === 'string'
+      && /^[A-Z][A-Z0-9_]{0,99}$/.test(entry.code)
+      && typeof entry.status === 'string'
+      && ['PASS', 'FAIL', 'UNKNOWN'].includes(entry.status)
+      && typeof entry.detail === 'string'
+      && entry.detail.trim().length >= 1
+      && entry.detail.length <= 1_000
+      && (entry.observed === null || (typeof entry.observed === 'string' && entry.observed.length >= 1 && entry.observed.length <= 300))
+      && (entry.limit === null || (typeof entry.limit === 'string' && entry.limit.length >= 1 && entry.limit.length <= 300))
+      && (entry.evidenceTimestamp === null || isValidUtcMillis(entry.evidenceTimestamp)))
+    && Array.isArray(risk.reasonCodes)
+    && risk.reasonCodes.length <= 64
+    && risk.reasonCodes.every((code) => typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,99}$/.test(code));
+  const directDecision = validRiskShape
+    && typeof risk.latestVerdict === 'string'
+    && ['APPROVE', 'REJECT', 'NEEDS_REVIEW'].includes(risk.latestVerdict);
+  const decisive = validRiskShape ? risk.decisiveInputSnapshot as readonly Record<string, unknown>[] : [];
+  const reasonCodes = validRiskShape && Array.isArray(risk.reasonCodes) ? risk.reasonCodes : [];
+  const validRiskSemantics = !directDecision || (
+    risk.correlationId !== null
+    && decisive.length > 0
+    && (risk.latestVerdict === 'APPROVE'
+      ? risk.maxAllowedSize !== null
+        && risk.requiredConfirmation === false
+        && reasonCodes.length === 0
+        && decisive.every((entry) => entry.status === 'PASS')
+      : risk.requiredConfirmation === (risk.latestVerdict === 'NEEDS_REVIEW')
+        && decisive.every((entry) => entry.status !== 'PASS')
+        && decisive.map((entry) => entry.code).join('|') === reasonCodes.join('|')
+        && (risk.latestVerdict === 'REJECT'
+          ? risk.maxAllowedSize === '0' && decisive.some((entry) => entry.status === 'FAIL')
+          : risk.maxAllowedSize === null
+            && decisive.every((entry) => entry.status !== 'FAIL')
+            && decisive.some((entry) => entry.status === 'UNKNOWN')))
+  );
+  return validRiskShape && validRiskSemantics
+    && Object.entries(summaryKeys).every(([key, keys]) => exactRecord(value[key], keys) && DASHBOARD_DONOR_TRUTH.includes(String((value[key] as Record<string, unknown>).truthLabel)))
     && exactRecord(value.strategies.basis, strategyKeys) && exactRecord(value.strategies.volume, strategyKeys)
     && DASHBOARD_DONOR_TRUTH.includes(String(value.strategies.basis.truthLabel)) && DASHBOARD_DONOR_TRUTH.includes(String(value.strategies.volume.truthLabel));
 }

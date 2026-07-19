@@ -11,7 +11,10 @@ import {
   deriveI00MeaningfulAdvanceEvidence,
   projectI00Health,
 } from '../../systemIntegration/application/health.js';
-import { buildProductRuntimeControlRegistry } from './controls.js';
+import {
+  buildProductRuntimeControlRegistry,
+  productIncidentAcknowledgementControlId,
+} from './controls.js';
 import { productTruthLabel } from './events.js';
 import { buildProductRuntimeManagedInventory } from './managedInventory.js';
 import {
@@ -27,6 +30,8 @@ import {
   type ProductRuntimeCorrelationTrace,
   type ProductRuntimeDependencyEdge,
   type ProductRuntimeLifecycle,
+  type ProductRuntimeIncidentProjection,
+  type ProductRuntimeIncidentSnapshot,
   type ProductRuntimeMaterialEventPage,
   type ProductRuntimeOwnerView,
   type ProductRuntimeSurfaceDatum,
@@ -154,6 +159,14 @@ function controlIds(component: Readonly<SystemComponentSnapshot>): readonly stri
     if (component.supportedControls.includes('SET_INTAKE_PAUSED')) ids.push('global.intake.pause');
     if (component.supportedControls.includes('RESTART_COMPONENT')) ids.push('component.engine-supervisor.restart');
   }
+  if (component.componentId === 'basis-engine'
+      && component.supportedControls.includes('SET_BASIS_INTAKE')) {
+    ids.push('strategy.basis.intake');
+  }
+  if (component.componentId === 'volume-engine'
+      && component.supportedControls.includes('SET_VOLUME_INTAKE')) {
+    ids.push('strategy.volume.intake');
+  }
   return Object.freeze(ids);
 }
 
@@ -164,7 +177,10 @@ function restartState(
     code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
   ));
   if (explicitlyRequired) return 'RESTART_REQUIRED';
-  if (component.restartCount > 0) return 'RESTARTED';
+  if (component.restartCount > 0) {
+    if (component.generation === 0) throw new TypeError('restart count requires a nonzero runtime generation');
+    return 'RESTARTED';
+  }
   if (component.generation > 0) return 'NEVER_RESTARTED';
   return 'UNKNOWN';
 }
@@ -187,6 +203,10 @@ function components(
     const projectedObservedLifecycle = recovery ? 'RECOVERY_REQUIRED' : observedLifecycle(component);
     const projectedCapability = capability(component);
     const projectedTruthLabel = componentTruth(component);
+    const restart = restartState(component);
+    const restartBlocker = component.blockerCodes.find((code) => (
+      code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
+    ));
     return Object.freeze({
       componentId: component.componentId,
       owner: `${component.owner}:${component.ownerPath}`,
@@ -210,6 +230,7 @@ function components(
       dataQualityDuplicateCount: component.dataQuality?.duplicateCount ?? null,
       dataQualityOutOfOrderCount: component.dataQuality?.outOfOrderCount ?? null,
       dataQualitySequenceGapCount: component.dataQuality?.sequenceGapCount ?? null,
+      dataQualityObservedAtMs: component.dataQuality?.observedAtMs ?? null,
       retryState: component.retry?.state ?? 'UNAVAILABLE',
       retryAttempt: component.retry?.attempt ?? null,
       retryCeiling: component.retry?.ceiling ?? null,
@@ -220,10 +241,10 @@ function components(
       checkpointState: component.checkpoint?.state ?? 'UNAVAILABLE',
       checkpointRevision: component.checkpoint?.revision ?? null,
       checkpointPersistedAtMs: component.checkpoint?.persistedAtMs ?? null,
-      restartState: restartState(component),
+      restartState: restart,
       generation: component.generation,
       restartCount: component.restartCount,
-      blockerCode: component.blockerCodes[0] ?? component.lastFailure?.code ?? null,
+      blockerCode: restartBlocker ?? component.blockerCodes[0] ?? component.lastFailure?.code ?? null,
       rootCauseComponentId: root?.componentId ?? null,
       capitalRelevance: component.capitalExposed ? 'EXPOSED' : recovery ? 'RECOVERY'
         : ['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only'].includes(component.componentId) ? 'POTENTIAL' : 'NONE',
@@ -291,6 +312,169 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[]):
   const sortedExpected = [...expected].sort();
   return actual.length === sortedExpected.length
     && actual.every((key, index) => key === sortedExpected[index]);
+}
+
+const INCIDENT_SNAPSHOT_KEYS = Object.freeze(['availability', 'incidents']);
+const INCIDENT_AVAILABILITY_KEYS = Object.freeze(['state', 'truthLabel', 'blocker']);
+const INCIDENT_KEYS = Object.freeze([
+  'incidentId', 'fingerprint', 'ledgerEventId', 'severity', 'rootComponentId',
+  'sourceGroup', 'capitalRelevant', 'firstSeenAtMs', 'lastSeenAtMs', 'count', 'state',
+  'reasonCode', 'operatorAction', 'correlationId', 'acknowledgedAtMs',
+  'acknowledgedByOperatorId', 'resolvedAtMs', 'acknowledgementControlId',
+  'routing', 'recoveryProof',
+]);
+const INCIDENT_ROUTING_KEYS = Object.freeze(['inApp', 'externalPaging']);
+const INCIDENT_IN_APP_KEYS = Object.freeze(['state', 'receiptId']);
+const INCIDENT_EXTERNAL_KEYS = Object.freeze(['state', 'receiptId', 'blocker']);
+const INCIDENT_RECOVERY_KEYS = Object.freeze(['state', 'sourceEventId', 'resolvedAtMs']);
+const PRODUCT_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
+const LEDGER_RECEIPT = /^ledger-event:[1-9][0-9]{0,15}$/;
+
+function unavailableIncidentSnapshot(blocker: string): Readonly<ProductRuntimeIncidentSnapshot> {
+  return Object.freeze({
+    availability: Object.freeze({ state: 'UNAVAILABLE', truthLabel: 'UNAVAILABLE', blocker }),
+    incidents: Object.freeze([]),
+  });
+}
+
+function projectProductRuntimeIncidentSnapshot(value: unknown): Readonly<ProductRuntimeIncidentSnapshot> {
+  if (!isRecord(value) || !exactKeys(value, INCIDENT_SNAPSHOT_KEYS)
+    || !isRecord(value.availability) || !exactKeys(value.availability, INCIDENT_AVAILABILITY_KEYS)
+    || !Array.isArray(value.incidents) || value.incidents.length > 200) {
+    return unavailableIncidentSnapshot('INCIDENT_OWNER_READBACK_INVALID');
+  }
+  const availability = value.availability;
+  const exactAvailability = (
+    availability.state === 'AVAILABLE'
+      && availability.truthLabel === 'BUILT_AND_TESTED'
+      && availability.blocker === null
+  ) || (
+    availability.state === 'NOT_CONFIGURED'
+      && availability.truthLabel === 'NOT_CONFIGURED'
+      && typeof availability.blocker === 'string'
+      && /^[A-Z][A-Z0-9_]{0,127}$/.test(availability.blocker)
+  ) || (
+    availability.state === 'UNAVAILABLE'
+      && availability.truthLabel === 'UNAVAILABLE'
+      && typeof availability.blocker === 'string'
+      && /^[A-Z][A-Z0-9_]{0,127}$/.test(availability.blocker)
+  );
+  if (!exactAvailability || (availability.state !== 'AVAILABLE' && value.incidents.length !== 0)) {
+    return unavailableIncidentSnapshot('INCIDENT_OWNER_READBACK_INVALID');
+  }
+
+  const seenIncidentIds = new Set<string>();
+  const seenFingerprints = new Set<string>();
+  const projected: Readonly<ProductRuntimeIncidentProjection>[] = [];
+  for (const candidate of value.incidents) {
+    if (!isRecord(candidate) || !exactKeys(candidate, INCIDENT_KEYS)
+      || typeof candidate.incidentId !== 'string' || !PRODUCT_IDENTIFIER.test(candidate.incidentId)
+      || typeof candidate.fingerprint !== 'string' || !PRODUCT_IDENTIFIER.test(candidate.fingerprint)
+      || typeof candidate.rootComponentId !== 'string' || !PRODUCT_IDENTIFIER.test(candidate.rootComponentId)
+      || typeof candidate.sourceGroup !== 'string' || !PRODUCT_IDENTIFIER.test(candidate.sourceGroup)
+      || typeof candidate.correlationId !== 'string' || !PRODUCT_IDENTIFIER.test(candidate.correlationId)
+      || !Number.isSafeInteger(candidate.ledgerEventId) || Number(candidate.ledgerEventId) < 1
+      || !Number.isSafeInteger(candidate.count) || Number(candidate.count) < 1
+      || !validUtcMs(candidate.firstSeenAtMs) || !validUtcMs(candidate.lastSeenAtMs)
+      || Number(candidate.lastSeenAtMs) < Number(candidate.firstSeenAtMs)
+      || !['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(String(candidate.severity))
+      || typeof candidate.capitalRelevant !== 'boolean'
+      || !['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].includes(String(candidate.state))
+      || candidate.reasonCode !== 'CONNECTION_UNHEALTHY'
+      || typeof candidate.operatorAction !== 'string' || candidate.operatorAction.length < 1
+      || candidate.operatorAction.length > 2_000
+      || !(candidate.acknowledgedAtMs === null || validUtcMs(candidate.acknowledgedAtMs))
+      || !(candidate.acknowledgedByOperatorId === null
+        || (typeof candidate.acknowledgedByOperatorId === 'string'
+          && PRODUCT_IDENTIFIER.test(candidate.acknowledgedByOperatorId)))
+      || !(candidate.resolvedAtMs === null || validUtcMs(candidate.resolvedAtMs))
+      || typeof candidate.acknowledgementControlId !== 'string'
+      || productIncidentAcknowledgementControlId(candidate.incidentId) !== candidate.acknowledgementControlId
+      || !isRecord(candidate.routing) || !exactKeys(candidate.routing, INCIDENT_ROUTING_KEYS)
+      || !isRecord(candidate.routing.inApp) || !exactKeys(candidate.routing.inApp, INCIDENT_IN_APP_KEYS)
+      || candidate.routing.inApp.state !== 'WIRED_LOCAL'
+      || typeof candidate.routing.inApp.receiptId !== 'string'
+      || !LEDGER_RECEIPT.test(candidate.routing.inApp.receiptId)
+      || !Number.isSafeInteger(Number(candidate.routing.inApp.receiptId.slice('ledger-event:'.length)))
+      || Number(candidate.routing.inApp.receiptId.slice('ledger-event:'.length)) > Number(candidate.ledgerEventId)
+      || !isRecord(candidate.routing.externalPaging)
+      || !exactKeys(candidate.routing.externalPaging, INCIDENT_EXTERNAL_KEYS)
+      || candidate.routing.externalPaging.state !== 'NOT_CONFIGURED'
+      || candidate.routing.externalPaging.receiptId !== null
+      || candidate.routing.externalPaging.blocker !== 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED'
+      || !isRecord(candidate.recoveryProof) || !exactKeys(candidate.recoveryProof, INCIDENT_RECOVERY_KEYS)
+      || !['PENDING', 'PROVEN'].includes(String(candidate.recoveryProof.state))
+      || !(candidate.recoveryProof.sourceEventId === null
+        || (Number.isSafeInteger(candidate.recoveryProof.sourceEventId)
+          && Number(candidate.recoveryProof.sourceEventId) >= 1))
+      || !(candidate.recoveryProof.resolvedAtMs === null
+        || validUtcMs(candidate.recoveryProof.resolvedAtMs))) {
+      return unavailableIncidentSnapshot('INCIDENT_OWNER_READBACK_INVALID');
+    }
+    const hasAcknowledgement = candidate.acknowledgedAtMs !== null
+      && candidate.acknowledgedByOperatorId !== null;
+    const exactAcknowledgement = hasAcknowledgement === (
+      candidate.acknowledgedAtMs !== null || candidate.acknowledgedByOperatorId !== null
+    );
+    const resolved = candidate.state === 'RESOLVED';
+    if (!exactAcknowledgement
+      || (candidate.state === 'ACKNOWLEDGED' && !hasAcknowledgement)
+      || (candidate.state === 'OPEN' && hasAcknowledgement)
+      || (candidate.acknowledgedAtMs !== null
+        && candidate.acknowledgedAtMs < candidate.firstSeenAtMs)
+      || resolved !== (candidate.resolvedAtMs !== null)
+      || resolved !== (candidate.recoveryProof.state === 'PROVEN')
+      || resolved !== (candidate.recoveryProof.sourceEventId !== null)
+      || candidate.recoveryProof.resolvedAtMs !== candidate.resolvedAtMs
+      || (candidate.resolvedAtMs !== null && candidate.resolvedAtMs !== candidate.lastSeenAtMs)
+      || (candidate.acknowledgedAtMs !== null && candidate.resolvedAtMs !== null
+        && candidate.acknowledgedAtMs > candidate.resolvedAtMs)
+      || seenIncidentIds.has(candidate.incidentId)
+      || seenFingerprints.has(candidate.fingerprint)) {
+      return unavailableIncidentSnapshot('INCIDENT_OWNER_READBACK_INVALID');
+    }
+    seenIncidentIds.add(candidate.incidentId);
+    seenFingerprints.add(candidate.fingerprint);
+    projected.push(Object.freeze({
+      incidentId: candidate.incidentId,
+      fingerprint: candidate.fingerprint,
+      ledgerEventId: candidate.ledgerEventId as number,
+      severity: candidate.severity as ProductRuntimeIncidentProjection['severity'],
+      rootComponentId: candidate.rootComponentId,
+      sourceGroup: candidate.sourceGroup,
+      capitalRelevant: candidate.capitalRelevant,
+      firstSeenAtMs: candidate.firstSeenAtMs,
+      lastSeenAtMs: candidate.lastSeenAtMs,
+      count: candidate.count as number,
+      state: candidate.state as ProductRuntimeIncidentProjection['state'],
+      reasonCode: 'CONNECTION_UNHEALTHY',
+      operatorAction: candidate.operatorAction,
+      correlationId: candidate.correlationId,
+      acknowledgedAtMs: candidate.acknowledgedAtMs as number | null,
+      acknowledgedByOperatorId: candidate.acknowledgedByOperatorId as string | null,
+      resolvedAtMs: candidate.resolvedAtMs as number | null,
+      acknowledgementControlId: candidate.acknowledgementControlId,
+      routing: Object.freeze({
+        inApp: Object.freeze({ state: 'WIRED_LOCAL', receiptId: candidate.routing.inApp.receiptId }),
+        externalPaging: Object.freeze({
+          state: 'NOT_CONFIGURED', receiptId: null, blocker: 'EXTERNAL_PAGING_OWNER_NOT_CONFIGURED',
+        }),
+      }),
+      recoveryProof: Object.freeze({
+        state: candidate.recoveryProof.state as 'PENDING' | 'PROVEN',
+        sourceEventId: candidate.recoveryProof.sourceEventId as number | null,
+        resolvedAtMs: candidate.recoveryProof.resolvedAtMs as number | null,
+      }),
+    }));
+  }
+  return Object.freeze({
+    availability: Object.freeze({
+      state: availability.state as ProductRuntimeIncidentSnapshot['availability']['state'],
+      truthLabel: availability.truthLabel as ProductRuntimeTruthLabel,
+      blocker: availability.blocker as string | null,
+    }),
+    incidents: Object.freeze(projected),
+  });
 }
 
 function validUtcMs(value: unknown): value is number {
@@ -710,13 +894,17 @@ function weakestSurfaceTruth(labels: readonly ProductRuntimeTruthLabel[]): Produ
   return 'UNKNOWN';
 }
 
-function surfaceTruth(surfaceId: keyof typeof SURFACE_EVIDENCE, snapshot: Readonly<SystemSupervisorReadModel>): ProductRuntimeTruthLabel {
+function surfaceTruth(
+  surfaceId: keyof typeof SURFACE_EVIDENCE,
+  snapshot: Readonly<SystemSupervisorReadModel>,
+  incidentSnapshot: Readonly<ProductRuntimeIncidentSnapshot>,
+): ProductRuntimeTruthLabel {
   const map = (truth: SystemTruthLabel) => productTruthLabel(truth);
   if (surfaceId === 'basis') return map(snapshot.summaries.strategies.basis.truthLabel);
   if (surfaceId === 'volume') return map(snapshot.summaries.strategies.volume.truthLabel);
   if (surfaceId === 'risk') return map(snapshot.summaries.risk.truthLabel);
   if (surfaceId === 'account' || surfaceId === 'borrow') return accountTruth(snapshot);
-  if (surfaceId === 'notifications') return 'NOT_CONFIGURED';
+  if (surfaceId === 'notifications') return incidentSnapshot.availability.truthLabel;
   if (['execution', 'orders', 'positions', 'fills', 'pnl'].includes(surfaceId)) {
     return weakestSurfaceTruth([
       map(snapshot.summaries.capital.truthLabel),
@@ -809,7 +997,14 @@ function surfaces(
   controlCount: number,
   opsReadback: Readonly<CanonicalSupervisorOpsReadback>,
   opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>,
+  incidentSnapshot: Readonly<ProductRuntimeIncidentSnapshot>,
 ): Readonly<Record<string, Readonly<ProductRuntimeSurfaceProjection>>> {
+  const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.state !== 'RESOLVED');
+  const acknowledgedIncidents = incidentSnapshot.incidents.filter((incident) => incident.acknowledgedAtMs !== null);
+  const recoveredIncidents = incidentSnapshot.incidents.filter((incident) => incident.recoveryProof.state === 'PROVEN');
+  const capitalRelevantIncidents = incidentSnapshot.incidents.filter((incident) => incident.capitalRelevant);
+  const criticalIncidents = incidentSnapshot.incidents.filter((incident) => incident.severity === 'CRITICAL');
+  const latestIncident = incidentSnapshot.incidents[0] ?? null;
   const known: Readonly<Record<string, string | null>> = Object.freeze({
     'overall-posture': dashboard.overallPosture,
     startup: `${snapshot.phase} · runtime generation ${snapshot.runtimeGeneration}`,
@@ -839,10 +1034,22 @@ function surfaces(
     'root-blocker-action': view.topRootBlocker,
     'bounded-pagination': `cursor page · max 500 · continuity ${materialEvents.continuity}`,
     retention: materialEvents.truncated ? 'TRUNCATED_REQUIRES_BACKFILL' : materialEvents.continuity,
+    'fingerprint-dedup': `${incidentSnapshot.incidents.length} durable incident episodes`,
+    'causal-group': 'Canonical component + connection group + durable episode boundary',
+    'root-cause': latestIncident?.rootComponentId ?? 'NO_ACTIVE_INCIDENT',
+    'severity-capital': `${criticalIncidents.length} critical · ${capitalRelevantIncidents.length} capital relevant`,
+    'first-last-count': latestIncident === null
+      ? 'NO_INCIDENT_HISTORY'
+      : `${latestIncident.firstSeenAtMs} · ${latestIncident.lastSeenAtMs} · count ${latestIncident.count}`,
+    state: `${activeIncidents.length} active · ${acknowledgedIncidents.length} acknowledged · ${recoveredIncidents.length} recovered`,
+    'owner-action': latestIncident?.operatorAction ?? 'NO_INCIDENT_ACTION_REQUIRED',
+    routing: 'IN_APP WIRED_LOCAL · EXTERNAL PAGING NOT_CONFIGURED',
+    'silence-ack': `${acknowledgedIncidents.length} durable acknowledgements · no silence mutation`,
+    'recovery-proof': `${recoveredIncidents.length} proven · ${activeIncidents.length} pending`,
   });
   const result: Record<string, Readonly<ProductRuntimeSurfaceProjection>> = {};
   for (const surfaceId of Object.keys(SURFACE_EVIDENCE) as (keyof typeof SURFACE_EVIDENCE)[]) {
-    const baseTruthLabel = surfaceTruth(surfaceId, snapshot);
+    const baseTruthLabel = surfaceTruth(surfaceId, snapshot, incidentSnapshot);
     const ownerTruthLabel = (surfaceId === 'control-room' || surfaceId === 'health')
       ? weakestSurfaceTruth([baseTruthLabel, opsInterlockTruth(opsIntakeInterlock)])
       : baseTruthLabel;
@@ -855,14 +1062,20 @@ function surfaces(
           ...canonicalOpsDatum,
         } satisfies ProductRuntimeSurfaceDatum);
       }
-      const value = Object.prototype.hasOwnProperty.call(known, fieldId) ? known[fieldId]! : null;
+      const value = surfaceId === 'notifications' && incidentSnapshot.availability.state !== 'AVAILABLE'
+        ? null
+        : surfaceId === 'notifications' && fieldId === 'correlation'
+          ? latestIncident?.correlationId ?? 'NO_ACTIVE_INCIDENT'
+          : Object.prototype.hasOwnProperty.call(known, fieldId) ? known[fieldId]! : null;
       const meaningfulAdvanceUnknown = fieldId === 'heartbeat-advance' && value === null;
       return Object.freeze({
         fieldId,
         label: fieldId.replaceAll('-', ' '),
         value,
         truthLabel: meaningfulAdvanceUnknown ? 'UNKNOWN' : value === null ? 'MISSING' : ownerTruthLabel,
-        canonicalSource: `systemIntegration:${surfaceId}:${fieldId}`,
+        canonicalSource: surfaceId === 'notifications'
+          ? `productIntegration.incident-router:${fieldId}`
+          : `systemIntegration:${surfaceId}:${fieldId}`,
         unavailableReason: meaningfulAdvanceUnknown
           ? 'CANONICAL_MEANINGFUL_ADVANCE_NOT_PUBLISHED'
           : value === null ? 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED' : null,
@@ -904,7 +1117,9 @@ function surfaces(
       label: SURFACE_LABELS[surfaceId],
       bindingState: blocked ? 'BLOCKED_BACKEND' : 'BINDING_READY',
       truthLabel,
-      canonicalSource: `systemIntegration supervisor:${surfaceId}`,
+      canonicalSource: surfaceId === 'notifications'
+        ? 'productIntegration incident-router projection'
+        : `systemIntegration supervisor:${surfaceId}`,
       evaluatedAtMs: snapshot.evaluatedAtMs,
       summary: blocked ? blockedSummary : `${SURFACE_LABELS[surfaceId]} projects canonical owner evidence only.`,
       blocker: blocked ? blockedCode : view.topRootBlocker,
@@ -962,6 +1177,7 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     | null;
   materialEvents: Readonly<ProductRuntimeMaterialEventPage>;
   traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
+  incidentSnapshot?: Readonly<ProductRuntimeIncidentSnapshot>;
   nowMs: number;
   commandOwner?: Readonly<ProductRuntimeCommandOwnerPort>;
 }>): Readonly<ProductRuntimeSupervisorEnvelope> {
@@ -969,7 +1185,15 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
   if (typeof input.applicationStartOk !== 'boolean') throw new TypeError('applicationStartOk must be an injected boolean');
   const dashboard = cloneDashboard(input.snapshot);
   const projectedComponents = components(input.snapshot, input.nowMs);
-  const managedInventory = buildProductRuntimeManagedInventory(projectedComponents);
+  const incidentSnapshot = projectProductRuntimeIncidentSnapshot(input.incidentSnapshot ?? Object.freeze({
+    availability: Object.freeze({
+      state: 'NOT_CONFIGURED',
+      truthLabel: 'NOT_CONFIGURED',
+      blocker: 'INCIDENT_OWNER_NOT_CONFIGURED',
+    }),
+    incidents: Object.freeze([]),
+  }));
+  const managedInventory = buildProductRuntimeManagedInventory(projectedComponents, incidentSnapshot.availability);
   const projectedEdges = edges(input.snapshot);
   const controls = buildProductRuntimeControlRegistry(input.snapshot, input.commandOwner);
   const bootReleaseReadback = projectProductRuntimeBootReleaseReadback(
@@ -992,8 +1216,14 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     controls.length,
     input.opsReadback,
     input.opsIntakeInterlock,
+    incidentSnapshot,
   );
-  const revision = `system-${input.snapshot.revision}-runtime-${input.snapshot.runtimeGeneration}-control-${input.snapshot.controlGeneration}`;
+  const incidentHighWater = incidentSnapshot.incidents.reduce(
+    (maximum, incident) => Math.max(maximum, incident.ledgerEventId),
+    0,
+  );
+  const incidentRevision = `${incidentSnapshot.availability.state.toLowerCase()}-${incidentSnapshot.incidents.length}-${incidentHighWater}`;
+  const revision = `system-${input.snapshot.revision}-runtime-${input.snapshot.runtimeGeneration}-control-${input.snapshot.controlGeneration}-incident-${incidentRevision}`;
   const body = {
     schemaVersion: PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
     revision,
@@ -1014,12 +1244,8 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     dependencyEdges: projectedEdges,
     controls,
     traces: Object.freeze([...input.traces]),
-    incidentAvailability: Object.freeze({
-      state: 'NOT_CONFIGURED' as const,
-      truthLabel: 'NOT_CONFIGURED' as const,
-      blocker: 'INCIDENT_OWNER_NOT_CONFIGURED',
-    }),
-    incidents: Object.freeze([]),
+    incidentAvailability: incidentSnapshot.availability,
+    incidents: incidentSnapshot.incidents,
     materialEvents: input.materialEvents,
     surfaces: projectedSurfaces,
   } as const;

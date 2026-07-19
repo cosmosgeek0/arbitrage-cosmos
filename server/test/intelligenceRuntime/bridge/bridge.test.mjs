@@ -157,7 +157,7 @@ function universe(atMs = T0, options = {}) {
     coverage: { source: 'COVERAGE', state: 'UNAVAILABLE', records: [], truth: unavailableTruth(atMs, 'coverage') },
   }, {
     configurationVersion: 'bridge-test-universe-1',
-    requirePublicDataForFocus: false,
+    requirePublicDataForFocus: options.requirePublicDataForFocus ?? false,
   });
 }
 
@@ -308,7 +308,7 @@ function fullPublicEvidence(atMs = T0, options = {}) {
       filledQuantity: 1,
       averagePrice: 49_900,
       sampledPerWindow: true,
-      samplingSelection: 'LARGEST_PER_SYMBOL',
+      samplingSelection: 'LATEST_PER_SYMBOL',
       sampleWindowMs: 1_000,
       truth: truth(atMs, {
         sourceRecordIds: ['liquidation-1'], sourceId: 'binance-futures-market-stream', dataset: 'usd_m.liquidation', endpointClass: 'MARKET',
@@ -407,6 +407,30 @@ test('broad normalized public events feed the feature bank and stable snapshot w
   assert.equal(snapshot.executesAction, false);
 });
 
+test('exact-symbol Bridge readback is bounded, frozen, and honest before an artifact exists', () => {
+  const { bridge, clock, identity } = prepare();
+  const rows = [trade(identity, clock.nowMs(), 1), book(identity, clock.nowMs())];
+  assert.equal(bridge.ingest({ correlationId: 'symbol-read-root', scope: 'BROAD', evidence: rows }).accepted, 2);
+
+  const btc = bridge.readSymbol('BTCUSDT');
+  const eth = bridge.readSymbol('ETHUSDT');
+  assert.equal(btc.symbol, 'BTCUSDT');
+  assert.equal(btc.evidenceHistoryCount, 2);
+  assert.equal(btc.evidenceHistoryState, 'COMPLETE');
+  assert.equal(btc.featureSnapshot.symbol, 'BTCUSDT');
+  assert.equal(btc.artifact, null);
+  assert.equal(btc.attention, null);
+  assert.ok(btc.reasonCodes.includes('INTELLIGENCE_ARTIFACT_MISSING'));
+  assert.equal(btc.authority, 'EVIDENCE_ONLY');
+  assert.equal(btc.liveMoneyAuthority, 'NONE');
+  assert.equal(eth.featureSnapshot, null);
+  assert.equal(eth.evidenceHistoryCount, 0);
+  assert.ok(eth.reasonCodes.includes('EVIDENCE_HISTORY_MISSING'));
+  assert.equal(Object.isFrozen(btc), true);
+  assert.throws(() => btc.reasonCodes.push('MUTATION'), TypeError);
+  assert.throws(() => bridge.readSymbol('../BTCUSDT'), /canonical bounded market symbol/);
+});
+
 test('the production-sized 452-symbol public universe graph is accepted without truncation', () => {
   const clock = new ManualClock();
   const bridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });
@@ -422,6 +446,99 @@ test('the production-sized 452-symbol public universe graph is accepted without 
   const snapshot = bridge.snapshot();
   assert.equal(snapshot.universeGraphId, graph.id);
   assert.equal(snapshot.universeNodeCount, 452);
+});
+
+test('I00-037 applies operator focus pins immediately through canonical attention and retains the hard cap', () => {
+  const clock = new ManualClock();
+  const bridge = new IntelligenceRuntimeBridge({
+    clock,
+    config: bridgeConfig({ attention: { tierCaps: { FOCUS: 1, DEEP_FOCUS: 1 } } }),
+  });
+  const graph = universeWithSymbolCount(2, clock.nowMs());
+  assert.equal(bridge.updateUniverse(graph).accepted, true);
+  assert.ok(bridge.evaluate().attentionPlan);
+
+  assert.equal(bridge.focusPinState('ASSET0USDT').canPin, true);
+  assert.equal(bridge.setOperatorFocusPinned('ASSET0USDT', true), true);
+  assert.deepEqual(bridge.operatorFocusPins(), ['ASSET0USDT']);
+  const pinned = bridge.focusPinState('ASSET0USDT');
+  assert.equal(pinned.effectivePinned, true);
+  assert.equal(pinned.effectiveTier, 'FOCUS');
+  const allocation = bridge.snapshot().attentionPlan.allocations.find((row) => row.symbol === 'ASSET0USDT');
+  assert.ok(allocation.promotionReasons.includes('OPERATOR_FOCUS_PIN_APPLIED'));
+
+  assert.equal(bridge.focusPinState('ASSET1USDT').canPin, false);
+  assert.throws(
+    () => bridge.setOperatorFocusPinned('ASSET1USDT', true),
+    /eligible symbol and available FOCUS capacity/,
+  );
+  assert.deepEqual(bridge.operatorFocusPins(), ['ASSET0USDT']);
+
+  assert.equal(bridge.setOperatorFocusPinned('ASSET0USDT', false), true);
+  assert.deepEqual(bridge.operatorFocusPins(), []);
+  assert.equal(bridge.focusPinState('ASSET0USDT').effectivePinned, false);
+  assert.equal(bridge.setOperatorFocusPinned('ASSET1USDT', true), true);
+  assert.equal(bridge.focusPinState('ASSET1USDT').effectivePinned, true);
+  assert.throws(
+    () => bridge.setOperatorFocusPinned('asset1usdt', false),
+    /symbol must be canonical/,
+  );
+});
+
+test('I00-037 focus capacity accounts for protected canonical allocations before a durable pin can be admitted', () => {
+  const clock = new ManualClock();
+  const bridge = new IntelligenceRuntimeBridge({
+    clock,
+    protectedSymbols: { protectedSymbols: () => ['ASSET0USDT'] },
+    config: bridgeConfig({ attention: { tierCaps: { FOCUS: 1, DEEP_FOCUS: 1 } } }),
+  });
+  assert.equal(bridge.updateUniverse(universeWithSymbolCount(2, clock.nowMs())).accepted, true);
+  assert.ok(bridge.evaluate().attentionPlan);
+  assert.equal(bridge.focusPinState('ASSET0USDT').effectiveTier, 'FOCUS');
+  assert.equal(bridge.focusPinState('ASSET1USDT').canPin, false);
+  assert.throws(
+    () => bridge.setOperatorFocusPinned('ASSET1USDT', true),
+    /eligible symbol and available FOCUS capacity/,
+  );
+  assert.deepEqual(bridge.operatorFocusPins(), []);
+});
+
+test('I00-037 accepts only the canonical revision-bound focus receipt and keeps unknown cuts ineffective', () => {
+  const clock = new ManualClock();
+  const bridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });
+  const good = universe(clock.nowMs());
+  assert.equal(bridge.updateUniverse(good).accepted, true);
+
+  const tamperedDigest = structuredClone(good);
+  tamperedDigest.nodes[0].focusTruth.contentDigest = 'counterfeit-content-digest';
+  assert.equal(bridge.updateUniverse(tamperedDigest).accepted, false);
+
+  const tamperedRevision = structuredClone(good);
+  tamperedRevision.nodes[0].focusTruth.configurationVersion = 'counterfeit-revision';
+  assert.equal(bridge.updateUniverse(tamperedRevision).accepted, false);
+
+  const tamperedContent = structuredClone(good);
+  tamperedContent.nodes[0].focusEligibility.reasonCodes = ['COUNTERFEIT_ELIGIBILITY_CONTENT'];
+  assert.equal(bridge.updateUniverse(tamperedContent).accepted, false);
+
+  const futureReceipt = structuredClone(good);
+  futureReceipt.nodes[0].focusTruth.truth.temporal.receivedTimeMs = clock.nowMs() + 1;
+  futureReceipt.nodes[0].focusTruth.truth.freshness.evaluatedAtMs = clock.nowMs() + 1;
+  futureReceipt.nodes[0].focusTruth.truth.freshness.ageMs = 1;
+  assert.equal(bridge.updateUniverse(futureReceipt).accepted, false);
+  assert.equal(bridge.snapshot().universeGraphId, good.id);
+
+  const unavailable = universe(clock.nowMs(), { requirePublicDataForFocus: true });
+  const isolatedBridge = new IntelligenceRuntimeBridge({ clock, config: bridgeConfig() });
+  assert.equal(isolatedBridge.updateUniverse(unavailable).accepted, true);
+  assert.equal(unavailable.nodes[0].focusEligibility.state, 'UNKNOWN');
+  assert.notEqual(unavailable.nodes[0].focusTruth.truth.completeness.state, 'COMPLETE');
+  assert.ok(isolatedBridge.evaluate().attentionPlan);
+  assert.equal(isolatedBridge.focusPinState('BTCUSDT').canPin, false);
+  assert.throws(
+    () => isolatedBridge.setOperatorFocusPinned('BTCUSDT', true),
+    /eligible symbol and available FOCUS capacity/,
+  );
 });
 
 test('oversized universe aliases and failures are rejected transactionally without replacing prior good truth', () => {

@@ -649,6 +649,7 @@ function riskInput(
   const intentDigest = deriveRiskIntentDigest(intent);
   return {
     ...input.riskEvidence,
+    correlationId: input.correlationId,
     nowMs: input.nowMs,
     intent,
     proposal: {

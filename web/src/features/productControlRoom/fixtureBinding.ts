@@ -132,9 +132,13 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     : component.desiredState === 'PAUSED' ? 'PAUSED' : 'READY';
   const observedLifecycle = component.readiness;
   const projectedCapability = component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC';
-  const restartState: ProductComponentProjection['restartState'] = component.blockerCodes.some((code) => (
+  const restartBlocker = component.blockerCodes.find((code) => (
     code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
-  ))
+  ));
+  if (restartBlocker === undefined && component.restartCount > 0 && component.generation === 0) {
+    throw new TypeError('restart count requires a nonzero runtime generation');
+  }
+  const restartState: ProductComponentProjection['restartState'] = restartBlocker !== undefined
     ? 'RESTART_REQUIRED'
     : component.restartCount > 0
       ? 'RESTARTED'
@@ -170,6 +174,7 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     dataQualityDuplicateCount: component.dataQuality?.duplicateCount ?? null,
     dataQualityOutOfOrderCount: component.dataQuality?.outOfOrderCount ?? null,
     dataQualitySequenceGapCount: component.dataQuality?.sequenceGapCount ?? null,
+    dataQualityObservedAtMs: component.dataQuality?.observedAtMs ?? null,
     retryState: component.retry?.state ?? 'UNAVAILABLE',
     retryAttempt: component.retry?.attempt ?? null,
     retryCeiling: component.retry?.ceiling ?? null,
@@ -183,7 +188,7 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     restartState,
     generation: component.generation,
     restartCount: component.restartCount,
-    blockerCode: component.blockerCodes[0] ?? null,
+    blockerCode: restartBlocker ?? component.blockerCodes[0] ?? null,
     rootCauseComponentId: component.blockerCodes.length ? component.componentId : null,
     capitalRelevance: component.capitalExposed ? 'EXPOSED' : 'NONE',
     supportedControlIds: Object.freeze([...component.supportedControls]),

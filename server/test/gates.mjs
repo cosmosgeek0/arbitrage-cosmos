@@ -213,6 +213,22 @@ const dataDirLeaseSource = readFileSync(
   'utf8',
 );
 check(
+  'Token current OI comes only from the canonical owner read model',
+  /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
+    /\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
+    !/\/api\/futures\/oi-hist/.test(tokenDetailSource) &&
+    !/openInterestSnapshot|setOpenInterestSnapshot/.test(tokenDetailSource) &&
+    !/latest\.notional|previous\.notional/.test(tokenDetailSource)
+);
+check(
+  'production Token readback uses one existing router and no new transport owner',
+  /new\s+VolumeEvidenceRouter\(\{\s*clock,\s*sink:\s*this\.bridge\s*\}\)/s.test(productionFactorySource) &&
+    /this\.router\.route\(\{/.test(productionFactorySource) &&
+    /readSymbol\(symbol:\s*string\)/.test(productionFactorySource) &&
+    /liquidationEventTimestamp\(symbol:\s*string\)/.test(marketEngineSource) &&
+    !/new\s+(?:BinanceStream|WebSocket|BinanceClient)\b/.test(productionFactorySource)
+);
+check(
   'declared Binance keys never request withdrawal or universal-transfer permission',
   !/permissions\s*:\s*\{[^}]*withdrawals\s*:\s*true/si.test(serverIndex)
     && !/permissions\s*:\s*\{[^}]*universalTransfer\s*:\s*true/si.test(serverIndex)
@@ -894,11 +910,30 @@ check(
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
 check('symbol context responds', Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
 check(
-  'symbol context keeps unconfigured balances and private orders null instead of fabricating zero',
+  'symbol context keeps unconfigured balances, private orders, and borrow truth explicit instead of fabricating zero',
   sctx?.accountTruthState === 'NOT_CONFIGURED' &&
     sctx?.orderTruthState === 'NOT_CONFIGURED' &&
+    sctx?.borrowTruthState === 'NOT_CONFIGURED' &&
     sctx?.balances === null &&
     sctx?.openOrders === null
+);
+
+const tokenIntelligenceResponse = await get('/api/intelligence/token?symbol=BTCUSDT');
+const tokenIntelligence = tokenIntelligenceResponse.body;
+check('token intelligence owner readback responds', tokenIntelligenceResponse.status === 200);
+check(
+  'token intelligence remains evidence-only and honest when public owners are unavailable',
+  tokenIntelligence?.schemaVersion === 'token-intelligence-owner-read.v1' &&
+    tokenIntelligence?.symbol === 'BTCUSDT' &&
+    tokenIntelligence?.projection?.state === 'NOT_RUNNING' &&
+    tokenIntelligence?.authority === 'EVIDENCE_ONLY' &&
+    tokenIntelligence?.liveMoneyAuthority === 'NONE' &&
+    tokenIntelligence?.openInterest?.state === 'UNAVAILABLE' &&
+    tokenIntelligence?.openInterest?.value === null &&
+    tokenIntelligence?.liquidation?.state === 'UNAVAILABLE' &&
+    tokenIntelligence?.liquidation?.value === null &&
+    tokenIntelligence?.bridge?.currentState === 'HISTORICAL_ONLY' &&
+    tokenIntelligence?.bridge?.artifact === null
 );
 
 const sys = (await get('/api/system')).body;

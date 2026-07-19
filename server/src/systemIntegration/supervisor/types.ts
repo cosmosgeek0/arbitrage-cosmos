@@ -71,6 +71,7 @@ export interface SystemStrategyRuntimeSummary {
   readonly heartbeatAtMs: number | null;
   readonly candidateCount: number | null;
   readonly proposalCount: number | null;
+  readonly cooldownCount: number | null;
   readonly rejectionCount: number | null;
   readonly acceptedCount: number | null;
   readonly lastDecisionAtMs: number | null;
@@ -103,15 +104,28 @@ export interface SystemCapitalSummary {
   readonly reservationCount: number | null;
   readonly stagedMandateCount: number | null;
   readonly activeExposureCount: number | null;
+  readonly recoveryCount: number | null;
   readonly checkpointRevision: string | null;
   readonly blockerCodes: readonly string[];
 }
 
 export interface SystemRiskSummary {
   readonly truthLabel: SystemTruthLabel;
-  readonly latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE';
+  readonly latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
   readonly latestVerdictAtMs: number | null;
   readonly latestVerdictId: string | null;
+  readonly correlationId: string | null;
+  /** Exact gross-USD authority for this verdict, encoded without binary float drift. */
+  readonly maxAllowedSize: string | null;
+  readonly requiredConfirmation: boolean | null;
+  readonly decisiveInputSnapshot: readonly Readonly<{
+    readonly code: string;
+    readonly status: 'PASS' | 'FAIL' | 'UNKNOWN';
+    readonly detail: string;
+    readonly observed: string | null;
+    readonly limit: string | null;
+    readonly evidenceTimestamp: number | null;
+  }>[];
   readonly rejectionCount: number | null;
   readonly reasonCodes: readonly string[];
 }

@@ -278,6 +278,22 @@ export interface SystemControlState {
   readonly correlationId: string;
 }
 
+export interface SystemFocusPinReadback {
+  readonly symbol: string;
+  readonly desiredPinned: boolean;
+  readonly ownerPinned: boolean | null;
+  readonly eligible: boolean | null;
+  readonly canPin: boolean | null;
+  readonly effectivePinned: boolean | null;
+  readonly effectiveTier: 'UNIVERSE' | 'WATCH' | 'CANDIDATE' | 'FOCUS' | 'DEEP_FOCUS' | 'RELEASED' | null;
+  readonly attentionPlanId: string | null;
+  readonly attentionPlanAtMs: number | null;
+  readonly pinCount: number | null;
+  readonly pinCapacity: number | null;
+  readonly controlRevision: number;
+  readonly state: 'APPLIED' | 'UNAVAILABLE' | 'OWNER_NOT_WIRED';
+}
+
 export type SystemControlMutation =
   | { readonly command: 'SET_COMPONENT_STATE'; readonly componentId: SystemComponentId; readonly desiredState: DesiredRuntimeState }
   | { readonly command: 'SET_INTAKE_PAUSED'; readonly paused: boolean }
@@ -287,14 +303,28 @@ export type SystemControlMutation =
   | { readonly command: 'REVOKE_APPROVAL'; readonly approvalId: string }
   | { readonly command: 'REVOKE_RESERVATION'; readonly reservationId: string }
   | { readonly command: 'RESTART_COMPONENT'; readonly componentId: SystemComponentId }
+  | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean }
+  | { readonly command: 'SET_VOLUME_INTAKE'; readonly paused: boolean }
   | { readonly command: 'CLEAR_DEPLOYMENT_FREEZE'; readonly expectedObservedAtUtc: string }
   | {
       readonly command: 'SET_PUBLIC_SOURCE_LIFECYCLE';
       readonly sourceId: Extract<SystemComponentId, 'public-spot-source' | 'public-usdm-source'>;
       readonly action: 'ISOLATE' | 'RESTART';
     }
-  | { readonly command: 'SET_BASIS_INTAKE'; readonly paused: boolean }
-  | { readonly command: 'SET_VOLUME_INTAKE'; readonly paused: boolean };
+  | { readonly command: 'SET_BASIS_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string }
+  | { readonly command: 'SET_VOLUME_SYMBOL_POLICY'; readonly action: 'BLOCK' | 'ALLOW'; readonly symbol: string }
+  | {
+      readonly command: 'REDUCE_SIZE_CEILING';
+      readonly scope: 'SYSTEM' | 'BASIS' | 'VOLUME';
+      readonly maximumNotionalUsd: string;
+    }
+  | {
+      readonly command: 'SET_STRATEGY_THRESHOLD';
+      readonly strategy: 'BASIS' | 'VOLUME';
+      readonly threshold: 'MIN_NET_BASIS_PCT' | 'VOLUME_1S_MULTIPLE';
+      readonly value: string;
+    }
+  | { readonly command: 'PIN_FOCUS'; readonly symbol: string; readonly pinned: boolean };
 
 export interface SystemControlMutationRequest {
   readonly idempotencyKey: string;

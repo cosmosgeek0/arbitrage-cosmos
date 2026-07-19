@@ -37,12 +37,15 @@ function retryDetail(component: Readonly<ProductComponentProjection>): string {
 }
 
 function qualityDetail(component: Readonly<ProductComponentProjection>): string {
-  return [
+  const parts = [
     `Invalid ${count(component.dataQualityInvalidCount)}`,
     `Duplicate ${count(component.dataQualityDuplicateCount)}`,
     `Out Of Order ${count(component.dataQualityOutOfOrderCount)}`,
     `Gaps ${count(component.dataQualitySequenceGapCount)}`,
-  ].join(' · ');
+  ];
+  const observed = utcTime(component.dataQualityObservedAtMs, 'Observed');
+  if (observed) parts.push(observed);
+  return parts.join(' · ');
 }
 
 export function ComponentOperationalHealthTable({

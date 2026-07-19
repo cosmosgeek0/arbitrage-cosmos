@@ -81,7 +81,7 @@ test('premium topbar keeps all six measured roles in empty, action, and preferen
 
   const premiumStart = source.indexOf('const premiumContent');
   const notifications = source.slice(source.indexOf("case 'notif':", premiumStart), source.indexOf("case 'power':", premiumStart));
-  assert.match(notifications, /<OpsRow[\s\S]*title="Inbox Clear"[\s\S]*detail="Only owner-relevant alerts appear here\.[\s\S]*value="Clear"/);
+  assert.match(notifications, /<OpsRow[\s\S]*title="No Durable Incident Episodes"[\s\S]*not a derived system all-clear[\s\S]*value="Owner Available"[\s\S]*tone="idle"/);
   assert.doesNotMatch(notifications, /ops-empty-state/);
 
   const basis = source.slice(source.indexOf("case 'basisu':", premiumStart), source.indexOf("case 'account':", premiumStart));

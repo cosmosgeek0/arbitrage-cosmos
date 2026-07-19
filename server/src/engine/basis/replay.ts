@@ -10,13 +10,23 @@ import type { Decision } from '../v0/types.js';
 import { BasisEngine } from './engine.js';
 import { MemoryEventSink } from './events.js';
 import type { BasisConfig } from './config.js';
-import type { ReplayResult, ReplayStep } from './types.js';
+import type { BasisBookObservation, ReplayResult, ReplayStep } from './types.js';
 
 export interface ReplayHarness {
   engine: BasisEngine;
   clock: ManualClock;
   sink: MemoryEventSink;
   run(steps: ReplayStep[]): ReplayResult;
+}
+
+/** One explicit accepted-market step for causal tapes. */
+export function spotBookReplayStep(atMs: number, tick: BasisBookObservation, runTick = true): ReplayStep {
+  return { atMs, events: [{ type: 'spotBook', tick: { ...tick } }], tick: runTick };
+}
+
+/** One explicit accepted-market step for causal tapes. */
+export function perpetualBookReplayStep(atMs: number, tick: BasisBookObservation, runTick = true): ReplayStep {
+  return { atMs, events: [{ type: 'perpBook', tick: { ...tick } }], tick: runTick };
 }
 
 export function createReplayHarness(cfg?: Partial<BasisConfig>, startMs = 1_000_000): ReplayHarness {

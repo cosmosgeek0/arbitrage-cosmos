@@ -260,6 +260,22 @@ test('[L-085] canonical cloud alarm engages the existing durable kill-switch own
   assert.equal(releaseByAlarmActor.failure.code, 'OPERATOR_REQUIRED');
   assert.equal(world.service.snapshot().killSwitchEngaged, true);
 
+  const clearFreezeByAlarmActor = await world.service.mutate({
+    idempotencyKey: 'alarm.freeze.clear.forbidden.0001',
+    expectedRevision: 1,
+    reason: 'Canonical alarm identity must not clear the deployment freeze.',
+    requestedAtMs: NOW,
+    correlationId: 'alarm.freeze.clear.forbidden.0001',
+    mutation: {
+      command: 'CLEAR_DEPLOYMENT_FREEZE',
+      expectedObservedAtUtc: new Date(NOW).toISOString().replace('.000Z', 'Z'),
+    },
+  }, { id: 'system:canonical-alarm-router', email: null, source: 'canonical-alarm' });
+  assert.equal(clearFreezeByAlarmActor.ok, false);
+  assert.equal(clearFreezeByAlarmActor.failure.code, 'OPERATOR_REQUIRED');
+  assert.equal(world.commits.length, 1, 'alarm freeze-clear denial must not create a durable control receipt');
+  assert.equal(world.publications.length, 1, 'alarm freeze-clear denial must not publish any runtime effect');
+
   const prefixedDigestWorld = controlWorld();
   const prefixedDigest = await routeCanonicalAlarmToKillSwitch({
     service: prefixedDigestWorld.service,

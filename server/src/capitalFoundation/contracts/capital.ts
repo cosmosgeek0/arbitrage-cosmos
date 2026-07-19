@@ -1,4 +1,4 @@
-import type { RiskCheck, RiskVerdict } from '../../foundation/contracts/index.js';
+import { riskMaximumExactDecimal, type RiskCheck, type RiskVerdict } from '../../foundation/contracts/index.js';
 import type { CapitalStage } from './lifecycle.js';
 import { compareExactDecimals, type ExactDecimal, type NonNegativeDecimal } from './decimal.js';
 import type {
@@ -147,13 +147,28 @@ export interface StagedPlan {
 export interface FoundationRiskCheckProjection
   extends Pick<RiskCheck, 'code' | 'status' | 'blocking' | 'detail' | 'evidenceTimestamp'> {}
 
+export interface FoundationRiskDecisiveCheckProjection
+  extends FoundationRiskCheckProjection {
+  /** Foundation numbers are encoded as exact JSON decimal strings for Capital. */
+  readonly observed: string | null;
+  readonly limit: string | null;
+}
+
+export interface FoundationRiskDecisiveInputProjection {
+  readonly evaluatedAt: number;
+  readonly checks: readonly Readonly<FoundationRiskDecisiveCheckProjection>[];
+}
+
 /**
  * Float-free semantic projection of the canonical Foundation verdict. The
  * source digest binds back to the original verdict while observed/limit are
  * deliberately omitted because Foundation permits numeric values there.
  */
 export interface FoundationRiskVerdictProjection
-  extends Pick<RiskVerdict, 'allowed' | 'evaluatedAt' | 'expiresAt' | 'blockingCodes'> {
+  extends Pick<RiskVerdict, 'correlationId' | 'decision' | 'allowed' | 'requiredConfirmation' | 'evaluatedAt' | 'expiresAt' | 'blockingCodes'> {
+  /** Capital's float-free projection encodes Foundation's numeric cap exactly. */
+  readonly maxAllowedSize: string | null;
+  readonly decisiveInputSnapshot: Readonly<FoundationRiskDecisiveInputProjection>;
   readonly checks: readonly Readonly<FoundationRiskCheckProjection>[];
   readonly sourceVerdictDigest: string;
   readonly omittedFields: readonly ['checks.observed', 'checks.limit'];
@@ -179,8 +194,25 @@ export function projectFoundationRiskVerdict(
     detail: check.detail,
     evidenceTimestamp: check.evidenceTimestamp,
   })));
+  const decisiveChecks = Object.freeze(verdict.decisiveInputSnapshot.checks.map((check) => Object.freeze({
+    code: check.code,
+    status: check.status,
+    blocking: check.blocking,
+    detail: check.detail,
+    observed: check.observed === null ? null : String(check.observed),
+    limit: check.limit === null ? null : String(check.limit),
+    evidenceTimestamp: check.evidenceTimestamp,
+  })));
   const semantic = {
+    correlationId: verdict.correlationId,
+    decision: verdict.decision,
     allowed: verdict.allowed,
+    maxAllowedSize: riskMaximumExactDecimal(verdict.maxAllowedSize),
+    requiredConfirmation: verdict.requiredConfirmation,
+    decisiveInputSnapshot: Object.freeze({
+      evaluatedAt: verdict.decisiveInputSnapshot.evaluatedAt,
+      checks: decisiveChecks,
+    }),
     evaluatedAt: verdict.evaluatedAt,
     expiresAt: verdict.expiresAt,
     blockingCodes: [...verdict.blockingCodes],

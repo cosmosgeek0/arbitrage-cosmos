@@ -53,8 +53,8 @@ function truth(sourceId, dataset, recordId, overrides = {}) {
     },
     completeness: {
       state: completenessState,
-      observedFields: completenessState === 'MISSING' ? [] : ['identity', 'status'],
-      missingFields: completenessState === 'COMPLETE' ? [] : ['source fields'],
+      observedFields: overrides.observedFields ?? (completenessState === 'MISSING' ? [] : ['identity', 'status']),
+      missingFields: overrides.missingFields ?? (completenessState === 'COMPLETE' ? [] : ['source fields']),
       reasonCodes: completenessState === 'COMPLETE' ? [] : ['SOURCE_INCOMPLETE'],
     },
   };
@@ -368,6 +368,73 @@ test('coverage loss blocks promotion without deleting the market', () => {
   assert.equal(after.nodes[0].focusEligibility.state, 'UNKNOWN');
   assert.ok(after.nodes[0].focusEligibility.reasonCodes.includes('PUBLIC_DATA_REQUIRED_TRUTH_UNAVAILABLE'));
   assert.equal(diffUniverseGraphs(before, after).changes[0].kind, 'CHANGED');
+});
+
+test('fresh partial truth preserves explicitly observed focus fields without trusting missing siblings', () => {
+  const listingTruth = truth('existing-market-owner', 'spot-universe', 'spot:FIELDUSDT', {
+    completenessState: 'PARTIAL',
+    observedFields: ['identity', 'tradingStatus'],
+    missingFields: ['tradingAllowed', 'tradingRules', 'quoteVolume24hUsd'],
+  });
+  const coverageTruth = truth('existing-market-owner', 'public-coverage', 'coverage:FIELDUSDT', {
+    completenessState: 'PARTIAL',
+    observedFields: ['publicData'],
+    missingFields: ['focusedData'],
+  });
+  const graph = buildUniverseGraph(snapshot({
+    spot: slice('SPOT', [listing('SPOT', 'FIELDUSDT', 'FIELD', {
+      truth: listingTruth,
+      tradingAllowed: null,
+      quoteVolume24hUsd: null,
+    })], 'PARTIAL'),
+    coverage: slice('COVERAGE', [coverage('SPOT', 'FIELDUSDT', 'FIELD', {
+      truth: coverageTruth,
+      focusedState: 'UNKNOWN',
+    })], 'PARTIAL'),
+  }));
+
+  const node = graph.nodes[0];
+  assert.equal(node.spot.marketAvailability, 'ACTIVE');
+  assert.equal(node.spot.tradingAllowed, null);
+  assert.equal(node.spot.rules.minimumNotional, null);
+  assert.equal(node.publicData.state, 'AVAILABLE');
+  assert.equal(node.focusedData.state, 'UNKNOWN');
+  assert.equal(node.focusEligibility.state, 'ELIGIBLE');
+  assert.equal(node.truth.completeness.state, 'PARTIAL');
+  assert.equal(node.focusTruth.scope, 'ATTENTION_FOCUS');
+  assert.equal(node.focusTruth.configurationVersion, graph.configurationVersion);
+  assert.equal(node.focusTruth.truth.completeness.state, 'COMPLETE');
+  assert.equal(node.focusTruth.truth.freshness.state, 'FRESH');
+  assert.equal(node.focusTruth.truth.authority.sourceId, 'intelligence-universe');
+  assert.equal(node.focusTruth.truth.authority.dataset, 'attention-focus-truth-receipt');
+  assert.equal(node.focusTruth.truth.provenance.sourceRecordIds.includes(node.focusTruth.id), true);
+  assert.equal(validateTruthMetadata(node.focusTruth.truth).ok, true);
+  assert.equal(node.focusTruth.id, stableId('universe-focus-truth-receipt', {
+    scope: node.focusTruth.scope,
+    configurationVersion: node.focusTruth.configurationVersion,
+    contentDigest: node.focusTruth.contentDigest,
+  }));
+
+  const stale = buildUniverseGraph(snapshot({
+    spot: slice('SPOT', [listing('SPOT', 'FIELDUSDT', 'FIELD', {
+      truth: truth('existing-market-owner', 'spot-universe', 'spot:FIELDUSDT:stale', {
+        freshnessState: 'STALE',
+        completenessState: 'PARTIAL',
+        observedFields: ['identity', 'tradingStatus'],
+        missingFields: ['tradingAllowed', 'tradingRules', 'quoteVolume24hUsd'],
+      }),
+      tradingAllowed: null,
+      quoteVolume24hUsd: null,
+    })], 'PARTIAL'),
+    coverage: slice('COVERAGE', [coverage('SPOT', 'FIELDUSDT', 'FIELD', {
+      truth: coverageTruth,
+      focusedState: 'UNKNOWN',
+    })], 'PARTIAL'),
+  }));
+  assert.equal(stale.nodes[0].spot.marketAvailability, 'UNKNOWN');
+  assert.equal(stale.nodes[0].focusEligibility.state, 'UNKNOWN');
+  assert.equal(stale.nodes[0].focusTruth.truth.completeness.state, 'PARTIAL');
+  assert.equal(stale.nodes[0].focusTruth.truth.freshness.state, 'STALE');
 });
 
 test('explicit borrow ineligibility is preserved and fails a borrow-required focus policy', () => {

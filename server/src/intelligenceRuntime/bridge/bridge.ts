@@ -28,9 +28,10 @@ import {
 } from '../../intelligenceFoundation/features/index.js';
 import { analyzeFalsePositiveForensics } from '../../intelligenceFoundation/forensics/index.js';
 import { buildThesisPacket } from '../../intelligenceFoundation/thesis/index.js';
-import type {
-  UniverseGraph,
-  UniverseMarketNode,
+import {
+  validateFocusTruthReceipt,
+  type UniverseGraph,
+  type UniverseMarketNode,
 } from '../../intelligenceFoundation/universe/index.js';
 import { boundedJsonByteLength } from '../contracts/index.js';
 import {
@@ -55,12 +56,15 @@ import type {
   BridgeFreezeRequest,
   BridgeIntelligenceArtifact,
   BridgePendingCandidateTrigger,
+  BridgeSymbolReadModel,
   BridgeUniverseReceipt,
   CorrelatedEvidenceBatch,
   IntelligenceBridgeConfig,
   IntelligenceBridgeOptions,
   IntelligenceBridgeSnapshot,
   InstrumentQualityOverride,
+  AttentionFocusCountSummary,
+  OperatorFocusPinReadback,
   PublicAttentionProjection,
 } from './types.js';
 
@@ -265,7 +269,7 @@ function allocationOrder(left: AttentionAllocation, right: AttentionAllocation):
 }
 
 function selectedTruth(node: UniverseMarketNode): TruthMetadata {
-  return node.spot?.truth ?? node.usdMPerpetual?.truth ?? node.truth;
+  return node.focusTruth?.truth ?? node.spot?.truth ?? node.usdMPerpetual?.truth ?? node.truth;
 }
 
 function qualityOverrideMap(
@@ -324,6 +328,8 @@ export class IntelligenceRuntimeBridge {
   #artifacts = new Map<string, BridgeIntelligenceArtifact>();
   #pendingCandidateTriggers = new Map<string, BridgePendingCandidateTrigger>();
   #freezeEmittedCandidateIds = new Set<string>();
+  #operatorFocusPins = new Set<string>();
+  #lastEvaluationInput: BridgeEvaluationInput = Object.freeze({});
 
   constructor(options: IntelligenceBridgeOptions) {
     if (options === null || typeof options !== 'object' || !options.clock || typeof options.clock.nowMs !== 'function') {
@@ -366,6 +372,119 @@ export class IntelligenceRuntimeBridge {
       nodeCount: this.#universe.nodes.length,
       failure: null,
     });
+  }
+
+  operatorFocusPins(): readonly string[] {
+    return Object.freeze([...this.#operatorFocusPins].sort(codePointCompare));
+  }
+
+  /**
+   * Exact summary owned by the canonical attention plan. Consumers project
+   * these values verbatim and must not infer focus from hints or raw rows.
+   */
+  attentionFocusSummary(): Readonly<AttentionFocusCountSummary> | null {
+    const plan = this.#attentionPlan;
+    if (plan === null) return null;
+    const focusRequestedCount = plan.allocations.filter(
+      (allocation) => allocation.desiredTier === 'FOCUS' || allocation.desiredTier === 'DEEP_FOCUS',
+    ).length;
+    return deepFreeze({
+      focusRequestedCount,
+      focusActiveCount: plan.tierCounts.FOCUS + plan.tierCounts.DEEP_FOCUS,
+      observedAtMs: plan.atMs,
+    });
+  }
+
+  restoreOperatorFocusPins(symbols: readonly string[]): boolean {
+    if (!Array.isArray(symbols) || symbols.length > this.#config.attention.tierCaps.FOCUS) {
+      throw new RangeError('operator focus pin set exceeds the configured FOCUS capacity');
+    }
+    const restored = new Set<string>();
+    for (const symbol of symbols) {
+      if (!/^[A-Z0-9]{4,20}$/.test(symbol) || restored.has(symbol)) {
+        throw new TypeError('operator focus pins must be unique canonical symbols');
+      }
+      restored.add(symbol);
+    }
+    this.#operatorFocusPins = restored;
+    if (this.#universe !== null) this.evaluate(this.#lastEvaluationInput);
+    return true;
+  }
+
+  focusPinState(symbol: string): Readonly<OperatorFocusPinReadback> {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('focus pin symbol must be canonical');
+    const node = this.#universe?.nodes.find((candidate) => primaryInstrument(candidate)?.symbol === symbol) ?? null;
+    const identity = node === null ? null : primaryInstrument(node);
+    const allocation = identity === null
+      ? null
+      : this.#attentionPlan?.allocations.find((candidate) => candidate.instrumentId === identity.instrumentId) ?? null;
+    const eligible = node === null ? null : node.focusEligibility.state === 'ELIGIBLE';
+    // The allocation records the exact quality input accepted by the canonical
+    // planner, including a bounded owner-supplied override. Re-deriving from
+    // the broader universe node here can contradict the plan when optional
+    // listing metadata is partial even though the required public evidence is
+    // current.
+    const sourceQuality = allocation?.sourceQuality ?? (node === null ? null : derivedSourceQuality(node).state);
+    const sourceCeiling = sourceQuality === null ? null : this.#config.attention.sourceTierCeilings[sourceQuality];
+    const eligibilityCeiling = node === null
+      ? null
+      : this.#config.attention.focusEligibilityTierCeilings[node.focusEligibility.state];
+    const tierRank = (tier: AttentionAllocation['tier']): number => (
+      ['RELEASED', 'UNIVERSE', 'WATCH', 'CANDIDATE', 'FOCUS', 'DEEP_FOCUS'].indexOf(tier)
+    );
+    const focusCapacityUsed = this.#attentionPlan?.allocations.filter(
+      (candidate) => tierRank(candidate.tier) >= tierRank('FOCUS'),
+    ).length ?? 0;
+    const alreadyFocused = allocation !== null && tierRank(allocation.tier) >= tierRank('FOCUS');
+    const capacityAvailable = this.#operatorFocusPins.has(symbol)
+      || alreadyFocused
+      || focusCapacityUsed < this.#config.attention.tierCaps.FOCUS;
+    const canPin = eligible === true
+      && sourceCeiling !== null && eligibilityCeiling !== null
+      && tierRank(sourceCeiling) >= tierRank('FOCUS')
+      && tierRank(eligibilityCeiling) >= tierRank('FOCUS')
+      && capacityAvailable;
+    const pinned = this.#operatorFocusPins.has(symbol);
+    const effectivePinned = allocation === null
+      ? null
+      : pinned && tierRank(allocation.tier) >= tierRank('FOCUS');
+    return deepFreeze({
+      symbol,
+      pinned,
+      eligible,
+      canPin,
+      effectivePinned,
+      effectiveTier: allocation?.tier ?? null,
+      attentionPlanId: this.#attentionPlan?.id ?? null,
+      attentionPlanAtMs: this.#attentionPlan?.atMs ?? null,
+      pinCount: this.#operatorFocusPins.size,
+      pinCapacity: this.#config.attention.tierCaps.FOCUS,
+    });
+  }
+
+  setOperatorFocusPinned(symbol: string, pinned: boolean): boolean {
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) throw new TypeError('focus pin symbol must be canonical');
+    if (typeof pinned !== 'boolean') throw new TypeError('focus pin value must be boolean');
+    const before = this.#operatorFocusPins.has(symbol);
+    if (pinned && !this.focusPinState(symbol).canPin) {
+      throw new RangeError('focus pin requires an eligible symbol and available FOCUS capacity');
+    }
+    if (pinned) this.#operatorFocusPins.add(symbol);
+    else this.#operatorFocusPins.delete(symbol);
+    if (this.#universe !== null) {
+      const evaluated = this.evaluate(this.#lastEvaluationInput);
+      const applied = !pinned || this.focusPinState(symbol).effectivePinned === true;
+      if (evaluated.attentionPlan === null || !applied) {
+        if (before) this.#operatorFocusPins.add(symbol);
+        else this.#operatorFocusPins.delete(symbol);
+        this.evaluate(this.#lastEvaluationInput);
+        throw new Error('focus pin could not be applied by the canonical attention planner');
+      }
+    } else if (pinned) {
+      this.#operatorFocusPins.delete(symbol);
+      throw new Error('focus pin requires current universe truth');
+    }
+    return before !== pinned;
   }
 
   ingest(batch: CorrelatedEvidenceBatch): BridgeEvidenceIngestReceipt {
@@ -554,6 +673,10 @@ export class IntelligenceRuntimeBridge {
       failures.push(quality.failure);
       return this.#finishEvaluation(atMs, failures, []);
     }
+    this.#lastEvaluationInput = Object.freeze({
+      hintPorts: Object.freeze([...hintPorts]),
+      sourceQuality: deepFreeze(structuredClone(input.sourceQuality ?? [])),
+    });
     let protectedSymbols = new Set<string>();
     if (this.#protectedSymbols) {
       try {
@@ -577,6 +700,7 @@ export class IntelligenceRuntimeBridge {
       instruments.push({
         instrumentId: identity.instrumentId,
         symbol: identity.symbol,
+        operatorPinned: this.#operatorFocusPins.has(identity.symbol),
         protectedCapital: protectedSymbols.has(identity.symbol),
         releaseRequested: false,
         releaseReasonCodes: [],
@@ -821,6 +945,43 @@ export class IntelligenceRuntimeBridge {
     });
   }
 
+  readSymbol(symbol: string): Readonly<BridgeSymbolReadModel> {
+    if (typeof symbol !== 'string' || !/^[A-Z0-9]{2,32}$/.test(symbol)) {
+      throw new TypeError('symbol must be a canonical bounded market symbol');
+    }
+    const evaluatedAtMs = this.#now();
+    const featureSnapshot = this.#featureBank.snapshot(symbol);
+    const evidenceHistoryState = this.#evidence.isTruncated(
+      symbol,
+      evaluatedAtMs,
+      this.#config.featureBank.historyRetentionMs,
+    ) ? 'TRUNCATED' as const : 'COMPLETE' as const;
+    const evidenceHistoryCount = this.#evidence.countForSymbol(symbol, evaluatedAtMs);
+    const instrumentId = featureSnapshot?.instrumentId ?? null;
+    const attention = instrumentId === null
+      ? null
+      : this.#publicAttention?.allocations.find((allocation) => allocation.instrumentId === instrumentId) ?? null;
+    const artifact = instrumentId === null ? null : this.#artifacts.get(instrumentId) ?? null;
+    return deepFreeze({
+      symbol,
+      evaluatedAtMs,
+      featureSnapshot: featureSnapshot === null ? null : structuredClone(featureSnapshot),
+      evidenceHistoryCount,
+      evidenceHistoryState,
+      attention: attention === null ? null : structuredClone(attention),
+      artifact: artifact === null ? null : structuredClone(artifact),
+      reasonCodes: sortedUnique([
+        ...(featureSnapshot === null ? ['FEATURE_SNAPSHOT_MISSING'] : featureSnapshot.reasonCodes),
+        ...(evidenceHistoryCount === 0 ? ['EVIDENCE_HISTORY_MISSING'] : []),
+        ...(attention === null ? ['ATTENTION_ALLOCATION_MISSING'] : []),
+        ...(artifact === null ? ['INTELLIGENCE_ARTIFACT_MISSING'] : []),
+        ...(evidenceHistoryState === 'TRUNCATED' ? ['EVIDENCE_HISTORY_TRUNCATED'] : []),
+      ]),
+      authority: 'EVIDENCE_ONLY' as const,
+      liveMoneyAuthority: 'NONE' as const,
+    });
+  }
+
   #now(): number {
     return safeTime(this.#clock.nowMs(), 'clock.nowMs()');
   }
@@ -868,6 +1029,44 @@ export class IntelligenceRuntimeBridge {
     for (const node of graph.nodes) {
       if (!node || typeof node.id !== 'string' || node.id.trim().length === 0 || nodeIds.has(node.id)) {
         return makeStableFailure('DUPLICATE_EVENT', COMPONENT, 'universe node ids must be canonical and unique', 'universe.nodes');
+      }
+      const focusReceipt = node.focusTruth;
+      const focusTruth = focusReceipt && validateTruthMetadata(focusReceipt.truth);
+      const expectedFocusReceiptId = focusReceipt && typeof focusReceipt.contentDigest === 'string'
+        ? stableId('universe-focus-truth-receipt', {
+          scope: 'ATTENTION_FOCUS',
+          configurationVersion: graph.configurationVersion,
+          contentDigest: focusReceipt.contentDigest,
+        })
+        : null;
+      let focusDigestValid = false;
+      try {
+        focusDigestValid = validateFocusTruthReceipt(node, graph.policy);
+      } catch {
+        focusDigestValid = false;
+      }
+      if (
+        !focusReceipt
+        || focusReceipt.scope !== 'ATTENTION_FOCUS'
+        || focusReceipt.configurationVersion !== graph.configurationVersion
+        || typeof focusReceipt.contentDigest !== 'string'
+        || focusReceipt.contentDigest.trim().length === 0
+        || focusReceipt.contentDigest.length > 256
+        || focusReceipt.id !== expectedFocusReceiptId
+        || !focusDigestValid
+        || !focusTruth?.ok
+        || focusTruth.value.configurationVersion !== graph.configurationVersion
+        || focusTruth.value.authority.kind !== 'ENGINE_DERIVED'
+        || focusTruth.value.authority.sourceId !== 'intelligence-universe'
+        || focusTruth.value.authority.dataset !== 'attention-focus-truth-receipt'
+        || focusTruth.value.authority.endpointClass !== 'INJECTED'
+        || !focusTruth.value.provenance.sourceRecordIds.includes(focusReceipt.id)
+        || truthHasFutureTime(focusTruth.value, atMs)
+        || (node.focusEligibility.state === 'UNKNOWN'
+          ? focusTruth.value.completeness.state === 'COMPLETE'
+          : focusTruth.value.completeness.state !== 'COMPLETE')
+      ) {
+        return makeStableFailure('INVALID_VALUE', COMPONENT, 'invalid canonical focus-truth receipt', 'universe.nodes.focusTruth');
       }
       nodeIds.add(node.id);
       const identity = primaryInstrument(node);

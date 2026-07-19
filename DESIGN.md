@@ -394,15 +394,20 @@ Notifications is curated interruption plus routing. If a row does not answer
 "what is stuck, what changed, or what execution needs attention," it belongs in
 Logs. Never admit opportunities, news, scanner decisions, candidate telemetry,
 snapshots, heartbeats, ordinary sync chatter, or decorative failures. Collapse
-repeat runtime/infrastructure transitions into incidents and retain the exact
-underlying count; a later recovery replaces the old firing state in the inbox.
-The compact topbar tray shows only the same curated incidents and opens the
-full Utility page. The page keeps News/Calendar geometry and has two purposeful
-views only: Inbox and Routing. Routing separates sources, delivery destinations,
-noise policy, and persisted alert rules. In-App may show Active; Email, Telegram,
-WhatsApp, AWS SNS, and AWS intake must show Not Connected or Connector Required
-until their real server-side capability exists. No fake delivery toggles, no
-browser-held credentials, and no second Logs tape disguised as notifications.
+repeat runtime/infrastructure transitions only in the canonical Product incident
+router and retain the exact underlying count in the sole Ledger; a proven server
+recovery resolves the durable episode without erasing its source evidence. The
+compact topbar tray and full Utility page render the same supervisor incidents
+one-to-one. The browser never regroups source events or infers recovery. Active
+retains every unresolved episode without an age cutoff. The page keeps
+News/Calendar geometry and has two purposeful views only: Inbox and Routing.
+Routing separates sources, delivery destinations, noise policy, and persisted
+alert rules. In-App may show `WIRED_LOCAL` only when fresh canonical incident
+truth and a strictly decoded routing readback agree; Email, Telegram, WhatsApp,
+AWS SNS, AWS intake, and the Execution producer remain `NOT_CONFIGURED` or
+owner-gated until their real server-side capability exists. No fake delivery
+toggles, no browser-held credentials, and no second Logs tape disguised as
+notifications.
 
 **EXECUTION-CONTROL LAW (owner ruling 2026-07-10):** operational permissions
 are not vague binary switches. Every extensible guard row uses the same explicit
@@ -1044,25 +1049,30 @@ What makes it useful:
 
 - Notifications and Logs have deliberately different jobs. Logs is the complete
   evidence ledger. Notifications is the operator exception and routing layer:
-  it answers what is stuck, what changed state, what execution needs attention,
-  and where the selected alert is delivered.
-- The admitted set is intentionally narrow: execution/risk failures, order/fill/
-  loan outcomes, emergency/control transitions, bot/runtime dependency state,
-  and explicitly connected AWS EC2/CloudWatch/Health state changes.
+  it answers what is stuck, what changed state, and where the selected alert is
+  delivered. It never substitutes for the evidence ledger.
+- The admitted set is the bounded canonical Product incident projection. The
+  server Product incident router alone authenticates source events, groups
+  repeats into durable episodes, advances state, and proves recovery. The sole
+  Ledger owns source/disposition checkpoint history, episode rows, immutable ACK
+  evidence, routing receipts, and recovery proof. The browser owns none of those
+  decisions.
 - Scanner decisions, opportunities, news, announcements, snapshots, heartbeats,
   candidate telemetry, ordinary account sync, watch/config churn, and decoration
   failures stay in Logs. They never enter the notification inbox.
-- The topbar client maintains a five-second incremental ledger cursor so a real
-  alert cannot disappear merely because scanner telemetry pushed it outside the
-  server's latest 30-event state payload.
+- Header and page consume `ProductSupervisorReadModel.incidents` only when
+  supervisor continuity is `PROVEN` and incident availability is `AVAILABLE` /
+  `BUILT_AND_TESTED`. They apply one shared, one-to-one presentation selector;
+  neither surface reads `/api/events`, opens a second cursor, groups source rows,
+  recomputes severity, or infers a recovery.
 - Compact tray uses the Coinbase-clean account popover grammar already approved:
-  sourced bell identity, quiet heading, curated grouped rows, and real Mark Read
+  sourced bell identity, quiet heading, canonical incident rows, and real Mark Read
   / Open Center actions. Do not add filter strips or preferences to the tray.
-- Repeated runtime and infrastructure transitions collapse into one daily
-  incident carrying the exact underlying event count. Execution bursts use a
-  shorter grouping window. The newest state wins, so a recovery replaces an old
-  firing state instead of leaving both as open blockers. Investigation evidence
-  is never lost because the immutable source remains Logs.
+- Canonical order is `OPEN` then `ACKNOWLEDGED` then `RESOLVED`, severity highest
+  first inside each state, then newest evidence. Preserve that order in Header,
+  Active, and calendar buckets. Active includes every `OPEN` or `ACKNOWLEDGED`
+  episode without an age cutoff; an incident older than seven days remains there
+  until the server proves it resolved.
 - Compact tray must stay in the topbar popover family, close to the clock and
   account-detail footprint. Do not force page-like dimensions or giant empty
   regions.
@@ -1071,27 +1081,42 @@ What makes it useful:
   Center action navigates to `page='notifications'`.
 - Notifications uses the exact News / Calendar one-frame geometry: `x=189`,
   `y=75`, `1px` edge, `12px` radius at the current 1280×720 owner viewport, a `57px` toolbar,
-  rolling seven-day cards, segmented filters, and one curated inbox. Route changes
-  between Notifications, News, and Calendar must not move the frame.
+  one bounded Active card plus seven equal calendar cards, segmented filters,
+  and one curated inbox. The eight-card grid uses shrinkable tracks and must not
+  overflow the frame. Route changes between Notifications, News, and Calendar
+  must not move the frame.
 - Inbox and Routing are the only two page views. Inbox keeps Needs Attention
-  first and reports the real number of raw events excluded and repeats grouped.
-  Routing owns source readiness, destination readiness, noise policy, and the
-  four persisted rules: Needs Attention, Execution Outcomes, Bot Health, and
-  Infrastructure.
-- In-App is the only active destination. Email, Telegram, WhatsApp, and AWS SNS
-  show Not Connected until a real server-side provider exists. They are never
-  rendered as working toggles. AWS is an optional real input through
-  `/api/notifications/ingest/aws`; it fails closed until the server bearer token
-  is configured and accepts only EC2, CloudWatch, and AWS Health sources.
-- Seven-day history is fetched from `/api/events` with `beforeId` cursor
-  pagination, curated client-side, and grouped only for presentation. This is
-  required because a busy ledger can exceed the 20,000-row per-request ceiling;
-  never let that cap falsely render an older day as empty.
+  first and reports the exact durable episode count and server-grouped repeat
+  count. Routing owns source readiness, destination readiness, noise policy, and
+  persisted rules. Execution is visibly `NOT_CONFIGURED`: its rule and category
+  filter are disabled, it is excluded from enabled counts, and Header exposes no
+  Execution notification tab until a canonical producer exists.
+- The routing capability response is decoded from `unknown` with exact top-level,
+  connector, endpoint, policy, and cross-field relationships. Malformed or extra
+  fields fail closed without crashing. In-App is `WIRED_LOCAL` only when that
+  strict readback and fresh canonical Product incident availability agree.
+  Email, Telegram, WhatsApp, and AWS SNS stay `NOT_CONFIGURED`; no browser toggle
+  or optimistic API response may make them active. AWS intake remains owner-gated
+  at `/api/notifications/ingest/aws`.
+- The seven calendar buckets are presentation windows over the canonical bounded
+  incident projection, not a client-curated event history. Active is separate and
+  has no age cutoff. Never restore `/api/events` pagination or browser grouping as
+  notification authority.
+- Acknowledgement is an incident-specific canonical command. The browser verifies
+  the exact server-compatible SHA-256 control ID, previews the current incident
+  revision, and durably persists command identity before submit. On mount and
+  cross-tab storage changes it reconciles a pending result; stale reads are
+  abortable and ignored, and a manual Recheck remains available. Pending,
+  ambiguous, or invalid durable state blocks another command and is never cleared
+  optimistically. Only a proven terminal result clears identity and refreshes
+  supervisor truth. Confirm receives focus; Cancel, expiry, failure, and submit
+  completion restore focus to the remounted Acknowledge button.
 - Page typography stays restrained and matches News / Calendar: title 22px/540,
   rule and alert titles around 10.5-13px/480-540, metadata around
   9.5-11.5px/410-470, 1px hairlines, and no swollen display counters.
-- Category marks are real icons: Critical = Shield Alert, Account = Wallet,
-  Bot = operations/log mark, Opportunities = Radar, Announcements = Newspaper.
+- Category marks are real icons: Critical = Shield Alert, Bot = operations/log
+  mark, Infrastructure = network/source mark. Do not render categories without a
+  canonical producer.
 
 ### Kill Switch / Trading Mode
 
@@ -1157,8 +1182,10 @@ What makes it useful:
   legacy refresh mutation.
 - `GET /api/system.connections.watchman` owns the component inventory and
   summary. AWS Runner and Cloudflare remain visibly Planned/Not Configured
-  until prerequisites exist. The always-available in-app notification route is
-  explicit; external delivery remains honest in Notifications.
+  until prerequisites exist. The in-app notification route is explicit, but it
+  may claim `WIRED_LOCAL` only while fresh canonical incident truth and strict
+  routing-capability readback agree; otherwise it fails closed. External
+  delivery remains honest in Notifications.
 - The server logs only status transitions as `connection_alert` or
   `connection_recovered`; these are promoted into Notifications without copying
   raw health logs or spamming every five-second probe. Browser RTT/socket state

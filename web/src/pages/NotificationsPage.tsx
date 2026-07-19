@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   IconActivity,
   IconAlert,
@@ -15,41 +15,35 @@ import { PillSelect } from '../components/PillSelect';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
-import { curateNotifications, groupNotifications, notificationEnabled, type CuratedNotification } from '../lib/notifications';
+import { notificationEnabled, type CuratedNotification } from '../lib/notifications';
 import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
-import type { LedgerEvent } from '../types';
+import { IncidentAcknowledgementButton } from '../features/productControlRoom/components/IncidentAcknowledgementButton';
+import {
+  decodeNotificationRoutingSnapshot,
+  projectCanonicalIncidentNotifications,
+  type ConnectorState,
+  type RoutingSnapshot,
+} from '../lib/productIntegration';
 import './LiveIntelligence.css';
 import './NotificationsPage.css';
 
 type NotificationFilter = 'all' | 'action' | 'execution' | 'health' | 'infrastructure';
-interface ConnectorState {
-  available: boolean;
-  label: string;
-  detail: string;
-  endpoint?: string;
-}
 
-interface RoutingSnapshot {
-  sources: Record<'bot' | 'execution' | 'aws', ConnectorState>;
-  destinations: Record<'inApp' | 'email' | 'telegram' | 'whatsapp' | 'awsSns', ConnectorState>;
-  policy: { transitionsOnly: boolean; repeatWindowMinutes: number; rawLogsExcluded: boolean };
-}
-
-const RULES: { key: NotificationRuleKey; label: string; short: string }[] = [
+const RULES: { key: NotificationRuleKey; label: string; short: string; configured?: boolean }[] = [
   { key: 'critical', label: 'Needs Attention', short: 'Failed dependencies, owner-gated boundaries, and emergency controls' },
-  { key: 'execution', label: 'Legacy Execution Evidence', short: 'Historical order, fill, loan, and risk evidence; never route authority' },
+  { key: 'execution', label: 'Execution NOT_CONFIGURED', short: 'No canonical execution incident producer is mounted', configured: false },
   { key: 'health', label: 'Bot Health', short: 'Engine, stream, connection, and control transitions' },
   { key: 'infrastructure', label: 'Infrastructure Evidence', short: 'Unverified external events; AWS remains OWNER_GATED' },
 ];
 
-const FILTERS: { id: NotificationFilter; label: string }[] = [
+const FILTERS: { id: NotificationFilter; label: string; configured?: boolean }[] = [
   { id: 'all', label: 'All Alerts' },
   { id: 'action', label: 'Needs Attention' },
-  { id: 'execution', label: 'Execution' },
+  { id: 'execution', label: 'Execution NOT_CONFIGURED', configured: false },
   { id: 'health', label: 'Bot Health' },
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
@@ -61,16 +55,16 @@ const EMPTY_ROUTING: RoutingSnapshot = {
     aws: { available: false, label: 'AWS Infrastructure', detail: 'OWNER_GATED · external AWS state is not verified' },
   },
   destinations: {
-    inApp: { available: true, label: 'In-App', detail: 'Active in this control room' },
-    email: { available: false, label: 'Email', detail: 'Delivery provider is not connected' },
-    telegram: { available: false, label: 'Telegram', detail: 'Bot and chat routing are not connected' },
-    whatsapp: { available: false, label: 'WhatsApp', detail: 'Cloud API is not connected' },
-    awsSns: { available: false, label: 'AWS SNS', detail: 'OWNER_GATED · AWS delivery is not mounted' },
+    inApp: { available: false, state: 'UNAVAILABLE', label: 'In-App', detail: 'Canonical Product incident routing is unavailable' },
+    email: { available: false, state: 'NOT_CONFIGURED', label: 'Email', detail: 'Delivery provider is not connected' },
+    telegram: { available: false, state: 'NOT_CONFIGURED', label: 'Telegram', detail: 'Bot and chat routing are not connected' },
+    whatsapp: { available: false, state: 'NOT_CONFIGURED', label: 'WhatsApp', detail: 'Cloud API is not connected' },
+    awsSns: { available: false, state: 'NOT_CONFIGURED', label: 'AWS SNS', detail: 'AWS delivery owner is not configured' },
   },
   policy: { transitionsOnly: true, repeatWindowMinutes: 15, rawLogsExcluded: true },
 };
 
-function failClosedRouting(snapshot: RoutingSnapshot): RoutingSnapshot {
+function failClosedRouting(snapshot: RoutingSnapshot, canonicalInAppAvailable: boolean): RoutingSnapshot {
   return {
     ...snapshot,
     sources: {
@@ -80,6 +74,14 @@ function failClosedRouting(snapshot: RoutingSnapshot): RoutingSnapshot {
     },
     destinations: {
       ...snapshot.destinations,
+      inApp: canonicalInAppAvailable
+        && snapshot.destinations.inApp.available
+        && snapshot.destinations.inApp.state === 'WIRED_LOCAL'
+        ? snapshot.destinations.inApp
+        : EMPTY_ROUTING.destinations.inApp,
+      email: EMPTY_ROUTING.destinations.email,
+      telegram: EMPTY_ROUTING.destinations.telegram,
+      whatsapp: EMPTY_ROUTING.destinations.whatsapp,
       awsSns: EMPTY_ROUTING.destinations.awsSns,
     },
   };
@@ -123,84 +125,27 @@ export function NotificationsPage() {
   const { binding: productBinding } = useProductControlRoomContext();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
-  const [events, setEvents] = useState<LedgerEvent[]>([]);
-  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
-  const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
-  const [selectedDay, setSelectedDay] = useState(today);
+  const [selectedDay, setSelectedDay] = useState('active');
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [draftRules, setDraftRules] = useState<NotificationRules>(() => prefs.alerts);
   const [seen, setSeen] = useState(() => Number(localStorage.getItem('cosmos-notif-seen') || 0));
-  const [routing, setRouting] = useState<RoutingSnapshot>(EMPTY_ROUTING);
+  const [routingReadback, setRoutingReadback] = useState<RoutingSnapshot>(EMPTY_ROUTING);
   const [routingFailed, setRoutingFailed] = useState(false);
-  const cursorRef = useRef(0);
 
-  useEffect(() => setSelectedDay(dayKey(new Date(), zone)), [zone]);
   useEffect(() => setDraftRules(prefs.alerts), [prefs.alerts]);
 
   useEffect(() => {
-    const merge = (incoming: LedgerEvent[]) => {
-      if (incoming.length) cursorRef.current = Math.max(cursorRef.current, ...incoming.map((item) => item.id));
-      const cutoff = Date.now() - 7 * 24 * 60 * 60_000;
-      setEvents((current) => {
-        const merged = new Map<number, LedgerEvent>();
-        current.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-        incoming.filter((item) => item.ts >= cutoff).forEach((item) => merged.set(item.id, item));
-        return [...merged.values()].sort((a, b) => b.ts - a.ts || b.id - a.id).slice(0, 10_000);
-      });
-    };
-    let bootstrapped = false;
-    let bootstrapHighWater = 0;
-    const relevantKinds = ['risk_decision', 'error_event', 'user_stream', 'ws.closed', 'ws.open', 'connection_alert', 'connection_recovered', 'manual_action', 'order_intent', 'order_request', 'order_response', 'order_outcome_unknown', 'cancel_outcome_unknown', 'fill_event', 'loan_request', 'loan_response', 'binance.connected', 'engine.start', 'engine_started', 'basis.engine_started', 'config_change', 'aws_notification'];
-    const poll = createSettledPoll<LedgerEvent[]>({
-      intervalMs: 5_000,
-      timeoutMs: 15_000,
-      request: async (signal) => {
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60_000;
-        if (!bootstrapped) {
-          const head = await fetchJson<LedgerEvent[]>('/api/events?limit=1', { signal });
-          bootstrapHighWater = head[0]?.id ?? 0;
-          const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
-          return (await Promise.all(relevantKinds.map((kind) => fetchJson<LedgerEvent[]>(
-            `/api/events?since=${sevenDaysAgo}&limit=2000&kind=${encodeURIComponent(kind)}${before}`,
-            { signal },
-          )))).flat();
-        }
-        // Drain oldest-first pages after the last seen ledger id. This cannot
-        // skip alerts when more than one page arrives between polls.
-        const incoming: LedgerEvent[] = [];
-        let afterId = cursorRef.current;
-        for (let page = 0; page < 10; page += 1) {
-          const cursor = afterId > 0 ? `&afterId=${afterId}` : '';
-          const rows = await fetchJson<LedgerEvent[]>(`/api/events?since=${sevenDaysAgo}&limit=2000${cursor}`, { signal });
-          incoming.push(...rows);
-          if (rows.length < 2_000) break;
-          afterId = Math.max(afterId, ...rows.map((item) => item.id));
-        }
-        return incoming;
-      },
-      onSuccess: (incoming) => {
-        if (!bootstrapped) cursorRef.current = Math.max(cursorRef.current, bootstrapHighWater);
-        bootstrapped = true;
-        merge(incoming);
-        setFetchedAt(Date.now());
-        setFailed(false);
-      },
-      onError: () => setFailed(true),
-    });
-    poll.start();
-    return poll.stop;
-  }, []);
-
-  useEffect(() => {
-    const poll = createSettledPoll<RoutingSnapshot>({
+    const poll = createSettledPoll<unknown>({
       intervalMs: 10_000,
-      request: (signal) => fetchJson<RoutingSnapshot>('/api/notification-routing', { cache: 'no-store', signal }),
+      request: (signal) => fetchJson<unknown>('/api/notification-routing', { cache: 'no-store', signal }),
       onSuccess: (next) => {
-        setRouting(failClosedRouting(next));
-        setRoutingFailed(false);
+        const decoded = decodeNotificationRoutingSnapshot(next);
+        setRoutingReadback(decoded ?? EMPTY_ROUTING);
+        setRoutingFailed(decoded === null);
       },
       onError: () => {
+        setRoutingReadback(EMPTY_ROUTING);
         setRoutingFailed(true);
       },
     });
@@ -208,10 +153,26 @@ export function NotificationsPage() {
     return poll.stop;
   }, []);
 
-  const curatedRaw = useMemo(() => curateNotifications(events), [events]);
-  const notifications = useMemo(() => groupNotifications(curatedRaw, zone), [curatedRaw, zone]);
+  const productSnapshot = productBinding.snapshot;
+  const incidentAvailability = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.incidentAvailability
+    : { state: 'UNAVAILABLE' as const, truthLabel: 'UNAVAILABLE' as const, blocker: productBinding.error ?? `SUPERVISOR_CONTINUITY_${productBinding.continuity}` };
+  const canonicalIncidents = productSnapshot && productBinding.continuity === 'PROVEN'
+    ? productSnapshot.incidents
+    : [];
+  const canonicalInAppAvailable = productBinding.continuity === 'PROVEN'
+    && incidentAvailability.state === 'AVAILABLE';
+  const routing = useMemo(() => failClosedRouting(
+    routingReadback,
+    canonicalInAppAvailable && !routingFailed,
+  ), [canonicalInAppAvailable, routingFailed, routingReadback]);
+  const notifications = useMemo(() => projectCanonicalIncidentNotifications(
+    incidentAvailability,
+    canonicalIncidents,
+  ), [canonicalIncidents, incidentAvailability]);
   const enabled = useMemo(() => notifications.filter((item) => notificationEnabled(item, draftRules)), [draftRules, notifications]);
   const dayKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(today, index - 6)), [today]);
+  const activeItems = useMemo(() => enabled.filter((item) => item.needsAction), [enabled]);
   const itemsByDay = useMemo(() => {
     const grouped = new Map<string, CuratedNotification[]>();
     enabled.forEach((item) => {
@@ -220,14 +181,14 @@ export function NotificationsPage() {
     });
     return grouped;
   }, [enabled, zone]);
-  const selectedItems = itemsByDay.get(selectedDay) ?? [];
+  const selectedItems = selectedDay === 'active' ? activeItems : itemsByDay.get(selectedDay) ?? [];
   const deferredQuery = query.trim().toLowerCase();
   const filtered = useMemo(() => selectedItems.filter((item) => {
     if (filter === 'action' && !item.needsAction) return false;
     if (!['all', 'action'].includes(filter) && item.category !== filter) return false;
     if (!deferredQuery) return true;
     return `${item.title} ${item.detail} ${item.subject}`.toLowerCase().includes(deferredQuery);
-  }).sort((left, right) => Number(right.needsAction) - Number(left.needsAction) || right.ts - left.ts), [deferredQuery, filter, selectedItems]);
+  }), [deferredQuery, filter, selectedItems]);
   const categoryCounts = useMemo(() => notifications.reduce<Record<NotificationRuleKey, number>>((counts, item) => {
     counts[item.category] += 1;
     return counts;
@@ -237,12 +198,12 @@ export function NotificationsPage() {
   const selectedTotal = selectedItems.length;
   const unread = enabled.filter((item) => item.id > seen).length;
   const rulesDirty = JSON.stringify(draftRules) !== JSON.stringify(prefs.alerts);
-  const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-  const status = failed ? 'Archive Unavailable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Loading';
-  const groupedCount = Math.max(0, curatedRaw.length - notifications.length);
-  const excludedCount = Math.max(0, events.length - curatedRaw.length);
+  const rangeLabel = `Active Attention + ${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const status = incidentAvailability.state === 'AVAILABLE' && productSnapshot
+    ? `Canonical · ${liveAge(productSnapshot.evaluatedAtMs)}`
+    : `${incidentAvailability.state} · ${incidentAvailability.blocker ?? 'INCIDENT_OWNER_UNKNOWN'}`;
+  const groupedCount = notifications.reduce((count, item) => count + Math.max(0, item.count - 1), 0);
 
-  const productSnapshot = productBinding.snapshot;
   const basisComponent = productSnapshot?.components.find((component) => component.componentId === 'basis-engine');
   const volumeComponent = productSnapshot?.components.find((component) => component.componentId === 'volume-engine');
   const runtimePresentation = productSnapshot && productBinding.continuity === 'PROVEN'
@@ -277,7 +238,7 @@ export function NotificationsPage() {
         <div className="lix-title notifx-title">
           <img className="notifx-page-mark" src="/notification-bell.png" alt="" aria-hidden="true" />
           <h1>Notifications</h1>
-          <span className={`lix-live ${failed ? 'error' : 'streaming'}`}><i />{status}</span>
+          <span className={`lix-live ${incidentAvailability.state === 'AVAILABLE' ? 'streaming' : 'error'}`}><i />{status}</span>
         </div>
         <label className="lix-search">
           <IconSearch size={15} />
@@ -298,17 +259,28 @@ export function NotificationsPage() {
       <>
         <section className="calx-navigation notifx-navigation" aria-label="Notifications Navigation">
           <div className="calx-range-controls">
+            <button type="button" className="calx-today" onClick={() => setSelectedDay('active')}>Active</button>
             <button type="button" className="calx-today" onClick={() => setSelectedDay(today)}>Today</button>
             <strong>{rangeLabel}</strong><span className="newsx-range-note">Seven-Day Inbox</span>
           </div>
           <div className="notifx-navigation-actions">
-            <span className="notifx-curation"><b>{excludedCount.toLocaleString()}</b> Raw Events Excluded · <b>{groupedCount}</b> Repeats Grouped</span>
+            <span className="notifx-curation"><b>{notifications.length}</b> Durable Episodes · <b>{groupedCount}</b> Server-Grouped Repeats</span>
             <button type="button" className="notifx-mark-read" onClick={markRead} disabled={unread === 0}><IconBell size={13} />{unread ? `Mark ${unread} Read` : 'All Read'}</button>
             <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
           </div>
         </section>
 
         <section className="calx-week newsx-week notifx-week" aria-label="Notification Days">
+          <button
+            type="button"
+            className={selectedDay === 'active' ? 'selected' : ''}
+            onClick={() => setSelectedDay('active')}
+          >
+            <span className="calx-day-name">Active <b>∞</b></span>
+            <span><em>Alerts</em><b>{activeItems.length}</b></span>
+            <span><em>Attention</em><b className={activeItems.length ? 'notifx-count-bad' : ''}>{activeItems.length}</b></span>
+            <span><em>Recovered</em><b className="notifx-count-good">0</b></span>
+          </button>
           {dayKeys.map((key) => {
             const items = itemsByDay.get(key) ?? [];
             const total = items.length;
@@ -326,28 +298,40 @@ export function NotificationsPage() {
         <section className="lix-filters newsx-filters notifx-filters" aria-label="Notification Filters">
           <div className="newsx-filter-line notifx-filter-line">
             <div className="lix-segments newsx-category-tabs" role="group" aria-label="Alert Category">
-              {FILTERS.map((option) => <button type="button" key={option.id} className={filter === option.id ? 'selected' : ''} onClick={() => setFilter(option.id)}>{option.label}</button>)}
+              {FILTERS.map((option) => <button
+                type="button"
+                key={option.id}
+                className={filter === option.id ? 'selected' : ''}
+                disabled={option.configured === false}
+                aria-disabled={option.configured === false}
+                onClick={() => setFilter(option.id)}
+              >{option.label}</button>)}
             </div>
-            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>{routingFailed ? 'Routing Unavailable' : 'In-App Active'}</span><em>Manage Sources & Delivery</em></button>
+            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>{routingFailed ? 'Routing Unavailable' : routing.destinations.inApp.state === 'WIRED_LOCAL' ? 'In-App WIRED_LOCAL' : 'In-App Unavailable'}</span><em>Inspect Sources & Delivery</em></button>
           </div>
         </section>
 
         <section className="notifx-inbox" aria-label="Curated Notification Inbox">
           <div className="notifx-inbox-head">
-            <div><strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong><span>{resolvedZoneLabel(prefs.clockZone)}</span></div>
+            <div><strong>{selectedDay === 'active'
+              ? 'Active Attention — No Age Cutoff'
+              : formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong><span>{resolvedZoneLabel(prefs.clockZone)}</span></div>
             <p><b>{selectedAction}</b> Need Attention <i /> <b>{selectedTotal}</b> Curated Alerts <i /> <b>{selectedRecovered}</b> Recovered</p>
           </div>
           <div className="notifx-inbox-body" key={`${selectedDay}-${filter}`}>
-            {filtered.map((item) => <article key={`${item.id}-${item.category}`} className={`notifx-alert ${item.severity} ${item.needsAction ? 'action' : ''}`}>
-              <span className={`notifx-alert-icon ${item.category}`}>{categoryIcon(item.category, 16)}</span>
-              <span className="notifx-alert-copy"><b>{item.title}{item.count > 1 ? ` · ${item.count} Events` : ''}</b><em>{item.detail}</em></span>
-              <span className="notifx-alert-source"><b>{item.subject}</b><em>{item.origin === 'aws' ? 'AWS Evidence · OWNER_GATED' : item.origin === 'execution' ? 'Legacy Execution Evidence' : 'Bot Runtime'}</em></span>
-              <time><b>{notificationTime(item.ts, zone)}</b><em>{formatKey(dayKey(new Date(item.ts), zone), { month: 'short', day: 'numeric' })}</em></time>
-              <span className={`notifx-status ${item.severity}`}>{statusLabel(item)}</span>
-            </article>)}
-            {!fetchedAt && !failed && <div className="lix-empty">Loading Curated Alerts…</div>}
-            {failed && !events.length && <div className="lix-empty">The Notification Inbox Is Currently Unavailable.</div>}
-            {fetchedAt && filtered.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Curated Alerts Match This View.'}</div>}
+            {filtered.map((item) => {
+              const incident = canonicalIncidents.find((candidate) => candidate.ledgerEventId === item.id);
+              return <article key={`${item.id}-${item.category}`} className={`notifx-alert ${item.severity} ${item.needsAction ? 'action' : ''}`}>
+                <span className={`notifx-alert-icon ${item.category}`}>{categoryIcon(item.category, 16)}</span>
+                <span className="notifx-alert-copy"><b>{item.title}{item.count > 1 ? ` · ${item.count} Events` : ''}</b><em>{item.detail}</em></span>
+                <span className="notifx-alert-source"><b>{item.subject}</b><em>Product Incident Router · External Paging NOT_CONFIGURED</em></span>
+                <time><b>{notificationTime(item.ts, zone)}</b><em>{formatKey(dayKey(new Date(item.ts), zone), { month: 'short', day: 'numeric' })}</em></time>
+                <span className={`notifx-status ${item.severity}`}>{statusLabel(item)}</span>
+                {incident && <IncidentAcknowledgementButton incident={incident} />}
+              </article>;
+            })}
+            {incidentAvailability.state !== 'AVAILABLE' && <div className="lix-empty">Incident Truth {incidentAvailability.state} · {incidentAvailability.blocker}</div>}
+            {incidentAvailability.state === 'AVAILABLE' && filtered.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Canonical Incident Episodes Match This View.'}</div>}
           </div>
         </section>
       </>
@@ -380,7 +364,7 @@ export function NotificationsPage() {
             {(Object.entries(routing.destinations) as [keyof RoutingSnapshot['destinations'], ConnectorState][]).map(([key, connector]) => <article key={key}>
               <span className="notifx-connector-icon">{connectorIcon(key)}</span>
               <span><b>{connector.label}</b><em>{connector.detail}</em></span>
-              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? 'Active' : key === 'awsSns' ? 'OWNER_GATED' : 'Not Configured'}</strong>
+              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? connector.state ?? 'Active' : connector.state ?? 'NOT_CONFIGURED'}</strong>
             </article>)}
           </section>
         </div>
@@ -388,15 +372,15 @@ export function NotificationsPage() {
         <section className="notifx-rule-panel">
           <header><div><span>Preferences</span><h3>What Deserves An Interruption</h3><p>Disabled categories remain searchable in Logs and never disappear from the ledger.</p></div><div className="notifx-rule-actions"><button type="button" onClick={() => setDraftRules(prefs.alerts)} disabled={!rulesDirty}>Discard</button><button type="button" className="primary" onClick={saveRules} disabled={!rulesDirty}>Save Preferences</button></div></header>
           <div className="notifx-rule-list" role="group" aria-label="Notification Preferences">
-            {RULES.map((rule) => <button type="button" key={rule.key} className={draftRules[rule.key] ? 'on' : ''} aria-pressed={draftRules[rule.key]} onClick={() => setDraftRules((current) => ({ ...current, [rule.key]: !current[rule.key] }))}>
-              <i>{categoryIcon(rule.key, 15)}</i><span><b>{rule.label}</b><em>{rule.short}</em></span><strong>{categoryCounts[rule.key].toLocaleString()} Events</strong><small><i /></small>
+            {RULES.map((rule) => <button type="button" key={rule.key} className={draftRules[rule.key] && rule.configured !== false ? 'on' : ''} aria-pressed={rule.configured === false ? false : draftRules[rule.key]} disabled={rule.configured === false} aria-disabled={rule.configured === false} onClick={() => setDraftRules((current) => ({ ...current, [rule.key]: !current[rule.key] }))}>
+              <i>{categoryIcon(rule.key, 15)}</i><span><b>{rule.label}</b><em>{rule.short}</em></span><strong>{rule.configured === false ? 'NOT_CONFIGURED' : `${categoryCounts[rule.key].toLocaleString()} Events`}</strong><small><i /></small>
             </button>)}
           </div>
         </section>
 
         <section className="notifx-noise-policy">
           <div><IconShield size={16} /><span><b>Transitions Only</b><em>Repeated telemetry never enters this inbox.</em></span></div>
-          <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>State repeats and legacy evidence bursts collapse with a real count.</em></span></div>
+          <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>Canonical connection-state repeats collapse into durable episodes with a real count.</em></span></div>
           <div><IconActivity size={16} /><span><b>Logs Stay Complete</b><em>No raw evidence is deleted or hidden.</em></span></div>
         </section>
       </section>

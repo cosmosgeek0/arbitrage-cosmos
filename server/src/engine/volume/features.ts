@@ -28,6 +28,14 @@ const WINDOW_SECONDS: Record<WindowKey, number> = {
   '1h': 3600,
 };
 
+function validFeatureClock(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0
+    && !Object.is(value, -0)
+    && value <= 4_102_444_800_000;
+}
+
 interface SymbolState {
   tape: RollingTape;
   book: BookQualityTracker;
@@ -47,10 +55,20 @@ export class VolumeFeatureEngine {
   /** Register a symbol for observation (starts its baseline clock). */
   observe(symbol: string): boolean {
     if (!isCanonicalSymbol(symbol)) return false;
+    if (this.state.has(symbol)) return true;
+    return this.observeAt(symbol, this.clock.now());
+  }
+
+  /** Register from one already-validated Engine-owned clock cut. */
+  observeAt(symbol: string, now: number): boolean {
+    if (!validFeatureClock(now)) {
+      throw new TypeError('Volume feature observation received invalid UTC ms');
+    }
+    if (!isCanonicalSymbol(symbol)) return false;
     if (!this.state.has(symbol)) {
       if (this.state.size >= MAX_ENGINE_SYMBOLS) return false;
       this.state.set(symbol, {
-        tape: new RollingTape(this.cfg, this.clock.now()),
+        tape: new RollingTape(this.cfg, now),
         book: new BookQualityTracker(this.cfg),
         triggerFirstTs: null,
         baselineCache: null,
@@ -94,6 +112,14 @@ export class VolumeFeatureEngine {
 
   symbols(): string[] {
     return [...this.state.keys()];
+  }
+
+  /** Retain raw public observations while discarding threshold-derived signal age/cache. */
+  invalidateThresholdDerivedState(): void {
+    for (const state of this.state.values()) {
+      state.triggerFirstTs = null;
+      state.baselineCache = null;
+    }
   }
 
   /** FeatureSource contract. */

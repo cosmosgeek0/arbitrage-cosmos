@@ -9,9 +9,11 @@ import {
   normalizeExactDecimal,
   normalizeNonNegativeExactDecimal,
   truthAllowsNewExposure,
+  validateConservativeEconomicFactBinding,
   weakestCapitalTruth,
   type CapitalConsiderationMode,
   type CapitalTruthState,
+  type ConservativeEconomicAdmissionMode,
   type ConservativeEconomicInputs,
   type EligibilityReasonCode,
   type IntelligenceEvidenceReference,
@@ -166,7 +168,21 @@ function cloneTruth(truth: TruthMetadata, evaluatedAtMs: number, reasons: readon
   });
 }
 
-function normalizeEconomics(source: ConservativeEconomicInputs): {
+function normalizeEconomics(
+  source: ConservativeEconomicInputs,
+  evaluatedAtMs: number,
+  expectedScope: Readonly<{
+    proposalId: string;
+    proposalRevision: string | null;
+    proposalUpdatedAtMs: number;
+    proposalConfigRevision: string;
+    correlationId: string;
+    strategy: 'BASIS' | 'VOLUME';
+    symbol: string;
+    instrumentIds: readonly string[];
+  }>,
+  admissionMode: ConservativeEconomicAdmissionMode,
+): {
   readonly economics: Readonly<ConservativeEconomicInputs>;
   readonly incomplete: boolean;
 } {
@@ -192,10 +208,34 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
   if (valuationAsset === 'UNKNOWN') missing.add('valuationAsset');
   const exactSourceIds = sortedUnique((Array.isArray(source?.exactSourceIds) ? source.exactSourceIds : []).filter(nonEmpty));
   if (exactSourceIds.length === 0) missing.add('exactSourceIds');
-  const sourceIds = (name: 'fundingSourceIds' | 'borrowSourceIds' | 'capitalOpportunitySourceIds'): readonly string[] => {
-    const ids = sortedUnique((Array.isArray(source?.[name]) ? source[name] : []).filter(nonEmpty));
-    if (ids.length === 0) missing.add(name);
-    return ids;
+  const estimatedFunding = signed('estimatedFunding');
+  const estimatedBorrowCost = unsigned('estimatedBorrowCost');
+  const estimatedCapitalOpportunityCost = unsigned('estimatedCapitalOpportunityCost');
+  const boundFact = (
+    name: 'fundingFact' | 'borrowFact' | 'capitalOpportunityFact',
+    kind: 'FUNDING' | 'BORROW' | 'CAPITAL_OPPORTUNITY',
+    value: ReturnType<typeof normalizeExactDecimal> | null,
+  ) => {
+    const binding = source?.[name] ?? null;
+    if (value === null || binding === null) {
+      missing.add(name);
+      return null;
+    }
+    const issues = validateConservativeEconomicFactBinding(binding, {
+      kind,
+      value,
+      unit: valuationAsset,
+      evaluatedAtMs,
+      admissionMode,
+      ...expectedScope,
+      borrowScope: source?.expectedBorrowScope ?? null,
+    });
+    if (issues.length > 0) {
+      missing.add(name);
+      for (const issue of issues) missing.add(`${name}.${issue}`);
+      return null;
+    }
+    return binding;
   };
   const economics = Object.freeze({
     valuationAsset,
@@ -203,18 +243,23 @@ function normalizeEconomics(source: ConservativeEconomicInputs): {
     expectedGrossEdge: signed('expectedGrossEdge'),
     expectedNetEdge: signed('expectedNetEdge'),
     estimatedFees: unsigned('estimatedFees'),
-    estimatedFunding: signed('estimatedFunding'),
-    estimatedBorrowCost: unsigned('estimatedBorrowCost'),
+    estimatedFunding,
+    estimatedBorrowCost,
     estimatedSpreadCost: unsigned('estimatedSpreadCost'),
     estimatedSlippage: unsigned('estimatedSlippage'),
     estimatedLatencyCost: unsigned('estimatedLatencyCost'),
     estimatedAdverseSelectionCost: unsigned('estimatedAdverseSelectionCost'),
     estimatedRecoveryCost: unsigned('estimatedRecoveryCost'),
-    estimatedCapitalOpportunityCost: unsigned('estimatedCapitalOpportunityCost'),
+    estimatedCapitalOpportunityCost,
     liquidityCapacity: unsigned('liquidityCapacity'),
-    fundingSourceIds: sourceIds('fundingSourceIds'),
-    borrowSourceIds: sourceIds('borrowSourceIds'),
-    capitalOpportunitySourceIds: sourceIds('capitalOpportunitySourceIds'),
+    expectedBorrowScope: source?.expectedBorrowScope ?? null,
+    fundingFact: boundFact('fundingFact', 'FUNDING', estimatedFunding),
+    borrowFact: boundFact('borrowFact', 'BORROW', estimatedBorrowCost),
+    capitalOpportunityFact: boundFact(
+      'capitalOpportunityFact',
+      'CAPITAL_OPPORTUNITY',
+      estimatedCapitalOpportunityCost,
+    ),
     exactSourceIds,
     missingFields: sortedUnique([...missing]),
   });
@@ -513,11 +558,88 @@ function discoverConflicts(drafts: readonly Draft[]): readonly OpportunityConfli
   return Object.freeze(conflicts.sort((left, right) => compareText(left.considerationIds.join('|'), right.considerationIds.join('|'))));
 }
 
-/** Pure batch gate. It never reads clocks, engines, evidence stores, or account state. */
+export interface ProductionConservativeEconomicsAdmission {
+  readonly state: 'AVAILABLE' | 'BLOCKED';
+  readonly admissionMode: 'PRODUCTION';
+  readonly proposalId: string;
+  readonly economics: Readonly<ConservativeEconomicInputs>;
+  readonly reasonCodes: readonly string[];
+}
+
+/**
+ * Public pure proof/replay gate. Production never trusts facts carried by the
+ * intake object; its separate composition entrypoint below injects exact
+ * owner projections after ordinary ingress.
+ */
 export function evaluateOpportunityEligibility(
   candidates: readonly Readonly<OpportunityEligibilityCandidate>[],
   policy: Readonly<OpportunityEligibilityPolicy>,
   evaluatedAtMs: number,
+): Readonly<OpportunityEligibilityBatch> {
+  return evaluateOpportunityEligibilityCore(
+    candidates,
+    policy,
+    evaluatedAtMs,
+    'SYNTHETIC_TEST',
+    null,
+  );
+}
+
+/** Production-only composition seam; deliberately not re-exported by the public opportunities index. */
+export function evaluateOpportunityEligibilityWithProductionEconomics(
+  candidates: readonly Readonly<OpportunityEligibilityCandidate>[],
+  policy: Readonly<OpportunityEligibilityPolicy>,
+  evaluatedAtMs: number,
+  admissions: readonly Readonly<ProductionConservativeEconomicsAdmission>[],
+): Readonly<OpportunityEligibilityBatch> {
+  if (!Array.isArray(admissions) || admissions.length !== candidates.length) {
+    throw new TypeError('production eligibility requires one canonical economics admission per candidate');
+  }
+  const byProposalId = new Map<string, Readonly<ProductionConservativeEconomicsAdmission>>();
+  for (const admission of admissions) {
+    if (!admission || (admission.state !== 'AVAILABLE' && admission.state !== 'BLOCKED')
+      || admission.admissionMode !== 'PRODUCTION'
+      || !nonEmpty(admission.proposalId)
+      || byProposalId.has(admission.proposalId)) {
+      throw new TypeError('production economics admission identity is invalid');
+    }
+    const facts = admission.economics;
+    if (admission.state === 'BLOCKED' && (
+      facts.fundingFact !== null
+      || facts.borrowFact !== null
+      || facts.capitalOpportunityFact !== null
+    )) {
+      throw new TypeError('blocked production economics admission cannot carry usable facts');
+    }
+    if (admission.state === 'AVAILABLE' && (
+      facts.fundingFact === null
+      || facts.borrowFact === null
+      || facts.capitalOpportunityFact === null
+    )) {
+      throw new TypeError('available production economics admission requires all canonical facts');
+    }
+    byProposalId.set(admission.proposalId, admission);
+  }
+  for (const candidate of candidates) {
+    if (!byProposalId.has(candidate?.intake?.proposal?.sourceProposalId)) {
+      throw new TypeError('production economics admission does not cover candidate');
+    }
+  }
+  return evaluateOpportunityEligibilityCore(
+    candidates,
+    policy,
+    evaluatedAtMs,
+    'PRODUCTION',
+    byProposalId,
+  );
+}
+
+function evaluateOpportunityEligibilityCore(
+  candidates: readonly Readonly<OpportunityEligibilityCandidate>[],
+  policy: Readonly<OpportunityEligibilityPolicy>,
+  evaluatedAtMs: number,
+  admissionMode: Extract<ConservativeEconomicAdmissionMode, 'PRODUCTION' | 'SYNTHETIC_TEST'>,
+  admittedEconomics: ReadonlyMap<string, Readonly<ProductionConservativeEconomicsAdmission>> | null,
 ): Readonly<OpportunityEligibilityBatch> {
   validatePolicy(policy, evaluatedAtMs);
   if (!Array.isArray(candidates)) throw new TypeError('opportunity candidates must be an array');
@@ -542,7 +664,25 @@ export function evaluateOpportunityEligibility(
     }
     const structure = structureFor(candidate);
     const evidence = assessEvidence(candidate, policy, evaluatedAtMs, structure.instrumentIds);
-    const normalizedEconomics = normalizeEconomics(candidate.intake.economics);
+    const economicSource = admissionMode === 'PRODUCTION'
+      ? admittedEconomics?.get(candidate.intake.proposal.sourceProposalId)?.economics
+      : candidate.intake.economics;
+    if (!economicSource) throw new TypeError('canonical economics admission missing');
+    const normalizedEconomics = normalizeEconomics(
+      economicSource,
+      evaluatedAtMs,
+      Object.freeze({
+        proposalId: candidate.intake.proposal.sourceProposalId,
+        proposalRevision: candidate.intake.proposal.sourceRevision,
+        proposalUpdatedAtMs: candidate.intake.proposal.updatedAtMs ?? 0,
+        proposalConfigRevision: candidate.intake.proposal.sourceConfigRevision ?? 'UNKNOWN',
+        correlationId: candidate.intake.proposal.sourceCorrelationId,
+        strategy: candidate.intake.proposal.strategy,
+        symbol: candidate.intake.proposal.symbol,
+        instrumentIds: structure.instrumentIds,
+      }),
+      admissionMode,
+    );
     const reasons = proposalReasons(candidate.intake, policy, evaluatedAtMs);
     reasons.push(...evidence.reasons);
     if (structure.unknown && candidate.intake.proposal.strategy === 'BASIS') reasons.push('EXECUTABLE_STRUCTURE_UNKNOWN');

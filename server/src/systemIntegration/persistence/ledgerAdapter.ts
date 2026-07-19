@@ -12,12 +12,13 @@ import type {
 } from '../contracts/types.js';
 import { SYSTEM_CONTROL_CANONICAL_ALARM_ACTOR } from '../controls/types.js';
 import type { OperatorApprovalState } from '../../capitalFoundation/approvals/index.js';
+import { projectFoundationRiskVerdict } from '../../capitalFoundation/contracts/index.js';
 import {
   RECOVERY_ACTIONS,
   recommendExecutionRecovery,
   type ExecutionPlanState,
 } from '../../foundation/execution/index.js';
-import { isStructuredFailure } from '../../foundation/contracts/index.js';
+import { MAX_RISK_VERDICT_CHECKS, isStructuredFailure, type RiskVerdict } from '../../foundation/contracts/index.js';
 import {
   canonicalPersistenceJson,
   cloneCheckpointState,
@@ -67,6 +68,7 @@ import {
   type ProductIdentityReferencePersistenceInput,
   type ProductIdentityReferenceRecord,
   type ProductIncidentPersistenceInput,
+  type ProductIncidentRecord,
   type ProductPersistenceMutationResult,
   type RestartBarrierProjection,
 } from './types.js';
@@ -79,6 +81,7 @@ const DIGEST = /^(?:sha256:)?[a-f0-9]{32,64}$/i;
 const REASON_CODE = /^[A-Z][A-Z0-9_.:-]{0,99}$/;
 const AUDIT_SCHEMA = 'cosmos.system-integration.audit' as const;
 const AUDIT_VERSION = 1 as const;
+const RISK_DECISION_AUDIT_SCHEMA = 'cosmos.foundation.risk-verdict.audit.v1' as const;
 const IDEMPOTENCY_AUDIT_SCHEMA = 'cosmos.system-integration.idempotency' as const;
 const IDEMPOTENCY_AUDIT_VERSION = 1 as const;
 const MAX_IDEMPOTENCY_EVENT_READBACK = 8;
@@ -148,9 +151,14 @@ function sameJson(left: unknown, right: unknown): boolean {
 function requiresRuntimePublication(command: unknown): boolean {
   return command === 'RESTART_COMPONENT'
     || command === 'SET_COMPONENT_STATE'
-    || command === 'CLEAR_DEPLOYMENT_FREEZE'
     || command === 'SET_BASIS_INTAKE'
-    || command === 'SET_VOLUME_INTAKE';
+    || command === 'SET_VOLUME_INTAKE'
+    || command === 'CLEAR_DEPLOYMENT_FREEZE'
+    || command === 'SET_BASIS_SYMBOL_POLICY'
+    || command === 'SET_VOLUME_SYMBOL_POLICY'
+    || command === 'REDUCE_SIZE_CEILING'
+    || command === 'SET_STRATEGY_THRESHOLD'
+    || command === 'PIN_FOCUS';
 }
 
 function idempotencyEventKind(idempotencyKey: string): string {
@@ -231,6 +239,12 @@ function validAuditInput(audit: Readonly<PersistenceAuditInput>): PersistenceRes
   if (new Set(traceIds).size !== traceIds.length) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'persistence audit trace IDs must be unique');
   }
+  if (audit.riskDecision !== undefined) {
+    if (traces.filter((trace) => trace.kind === 'RISK').length !== 1
+      || !validDurableRiskDecision(audit.riskDecision, audit.correlationId)) {
+      return failed('INVALID_PERSISTENCE_REQUEST', 'durable risk decision does not match one canonical risk trace');
+    }
+  }
   return { ok: true, value: true };
 }
 
@@ -280,6 +294,7 @@ function validateOnlyTraceEvents(
   const disposition = String(value.disposition);
   const calls = isRecord(value.ownerInvocations) ? value.ownerInvocations : {};
   const riskPlanBinding = isRecord(value.riskPlanBinding) ? value.riskPlanBinding : null;
+  const boundRiskDecision = isRecord(value.boundRiskDecision) ? value.boundRiskDecision : null;
   const executionPlan = isRecord(value.executionPlan) ? value.executionPlan : null;
   const executionState = isRecord(value.executionState) ? value.executionState : null;
   const reconciliation = isRecord(value.reconciliation) ? value.reconciliation : null;
@@ -326,7 +341,12 @@ function validateOnlyTraceEvents(
       kind: 'RISK',
       componentId: 'multileg-risk',
       truthLabel: dryRunTruth,
-      references: Object.freeze([riskPlanBinding?.riskDecisionId, value.mandateId]),
+      references: Object.freeze([
+        recordId,
+        boundRiskDecision?.decisionId,
+        riskPlanBinding?.riskDecisionId,
+        value.mandateId,
+      ]),
       domainLifecycle: disposition,
       failure: null,
       releaseStatuses,
@@ -476,6 +496,7 @@ interface DurableAuditEvent {
   readonly checkpointRevision: number;
   readonly checkpointChecksum: string;
   readonly trace: Readonly<SystemTraceEvent> | null;
+  readonly riskDecision?: SystemJsonValue;
 }
 
 export interface PersistenceStartupInput {
@@ -779,6 +800,128 @@ function assertApprovalStateCompareAndSet(
   }
 }
 
+function validRiskCheckProjection(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'code', 'status', 'blocking', 'detail', 'observed', 'limit', 'evidenceTimestamp',
+  ])) return false;
+  const scalar = (candidate: unknown): boolean => candidate === null
+    || (typeof candidate === 'number' && Number.isFinite(candidate))
+    || (typeof candidate === 'string' && candidate.length >= 1 && candidate.length <= 300);
+  return /^[A-Z][A-Z0-9_]{0,99}$/.test(String(value.code))
+    && ['PASS', 'FAIL', 'UNKNOWN'].includes(String(value.status))
+    && typeof value.blocking === 'boolean'
+    && typeof value.detail === 'string'
+    && value.detail.trim().length >= 1
+    && value.detail.length <= 1_000
+    && scalar(value.observed)
+    && scalar(value.limit)
+    && (value.evidenceTimestamp === null || validUtcMillis(value.evidenceTimestamp));
+}
+
+/** Exact durable projection guard for the canonical Foundation risk owner. */
+function validRiskVerdictProjection(value: unknown, correlationId: string): value is Record<string, unknown> {
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'correlationId', 'decision', 'allowed', 'maxAllowedSize', 'requiredConfirmation',
+    'decisiveInputSnapshot', 'evaluatedAt', 'expiresAt', 'checks', 'blockingCodes',
+  ])) return false;
+  const decision = String(value.decision);
+  if (value.correlationId !== correlationId
+    || !['APPROVED', 'REJECTED', 'NEEDS_REVIEW'].includes(decision)
+    || value.allowed !== (decision === 'APPROVED')
+    || value.requiredConfirmation !== (decision === 'NEEDS_REVIEW')
+    || (value.maxAllowedSize !== null
+      && (typeof value.maxAllowedSize !== 'number'
+        || !Number.isFinite(value.maxAllowedSize)
+        || value.maxAllowedSize < 0))
+    || !validUtcMillis(value.evaluatedAt)
+    || !validUtcMillis(value.expiresAt)
+    || (value.expiresAt as number) < (value.evaluatedAt as number)
+    || !Array.isArray(value.checks)
+    || value.checks.length > MAX_RISK_VERDICT_CHECKS
+    || !value.checks.every(validRiskCheckProjection)
+    || !Array.isArray(value.blockingCodes)
+    || value.blockingCodes.length > SYSTEM_PERSISTENCE_LIMITS.maximumArrayLength
+    || value.blockingCodes.some((code) => !/^[A-Z][A-Z0-9_]{0,99}$/.test(String(code)))) return false;
+  const checks = value.checks as readonly Record<string, unknown>[];
+  const expectedDecision = checks.some((check) => check.blocking === true && check.status === 'FAIL')
+    ? 'REJECTED'
+    : checks.some((check) => check.blocking === true && check.status === 'UNKNOWN')
+      ? 'NEEDS_REVIEW'
+      : 'APPROVED';
+  if (decision !== expectedDecision) return false;
+  const expectedBlockingCodes = checks
+    .filter((check) => check.blocking === true && check.status !== 'PASS')
+    .map((check) => check.code);
+  if (!sameJson(value.blockingCodes, expectedBlockingCodes)) return false;
+  if (!isRecord(value.decisiveInputSnapshot)
+    || !hasExactKeys(value.decisiveInputSnapshot, ['evaluatedAt', 'checks'])
+    || value.decisiveInputSnapshot.evaluatedAt !== value.evaluatedAt
+    || !Array.isArray(value.decisiveInputSnapshot.checks)
+    || value.decisiveInputSnapshot.checks.length > MAX_RISK_VERDICT_CHECKS
+    || !value.decisiveInputSnapshot.checks.every(validRiskCheckProjection)) return false;
+  const expectedDecisive = checks.filter((check) => (
+    check.blocking === true && (decision === 'APPROVED' || check.status !== 'PASS')
+  ));
+  const grossCheck = checks.find((check) => check.code === 'MAX_GROSS_NOTIONAL');
+  const approvedMaximum = typeof grossCheck?.observed === 'string'
+    && /^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(grossCheck.observed)
+    && Number.isFinite(Number(grossCheck.observed))
+    ? Number(grossCheck.observed)
+    : null;
+  const expectedMaximum = decision === 'APPROVED'
+    ? approvedMaximum
+    : decision === 'REJECTED'
+      ? 0
+      : null;
+  return sameJson(value.decisiveInputSnapshot.checks, expectedDecisive)
+    && value.maxAllowedSize === expectedMaximum;
+}
+
+function validDurableRiskDecision(value: unknown, correlationId: string): value is Record<string, unknown> {
+  return isRecord(value)
+    && hasExactKeys(value, ['schema', 'recordId', 'verdict'])
+    && value.schema === RISK_DECISION_AUDIT_SCHEMA
+    && BOUNDED_ID.test(String(value.recordId))
+    && validRiskVerdictProjection(value.verdict, correlationId);
+}
+
+function durableRiskDecision(record: Readonly<Record<string, SystemJsonValue>>): SystemJsonValue | undefined {
+  if (!isRecord(record.riskVerdict)) return undefined;
+  return Object.freeze({
+    schema: RISK_DECISION_AUDIT_SCHEMA,
+    recordId: record.recordId,
+    verdict: record.riskVerdict,
+  });
+}
+
+function validBoundRiskDecision(
+  value: unknown,
+  record: Readonly<Record<string, unknown>>,
+): value is Record<string, unknown> {
+  if (!isRecord(value)
+    || !hasExactKeys(value, [
+      'decisionId', 'mandateId', 'mandateRevision', 'mandateDigest',
+      'externalPlanId', 'correlationId', 'verdict',
+    ])
+    || !isRecord(record.riskVerdict)
+    || !isRecord(record.approvalState)
+    || !isRecord(record.approvalState.approval)
+    || !Number.isSafeInteger(value.mandateRevision)
+    || (value.mandateRevision as number) < 1
+    || value.mandateId !== record.mandateId
+    || value.mandateId !== record.approvalState.approval.mandateId
+    || value.mandateRevision !== record.approvalState.approval.mandateRevision
+    || value.mandateDigest !== record.approvalState.approval.mandateDigest) return false;
+  try {
+    return sameJson(
+      value.verdict,
+      projectFoundationRiskVerdict(record.riskVerdict as unknown as Readonly<RiskVerdict>),
+    );
+  } catch {
+    return false;
+  }
+}
+
 function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<string, SystemJsonValue>>> {
   if (!isRecord(record)) return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only persistence record must be an object');
   const keys = Object.keys(record).sort();
@@ -802,6 +945,10 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
   }
   if (record.failure !== null && !isStructuredFailure(record.failure)) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only structured failure is invalid');
+  }
+  if (record.riskVerdict !== null
+    && !validRiskVerdictProjection(record.riskVerdict, String(record.rootCorrelationId))) {
+    return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only risk verdict projection is invalid');
   }
   const riskVerdictHasUnknown = isRecord(record.riskVerdict)
     && Array.isArray(record.riskVerdict.checks)
@@ -910,9 +1057,8 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
       || !DIGEST.test(String(record.riskPlanBinding.mandateDigest))
       || !/^riskint_[0-9a-f]{32}$/.test(String(record.riskPlanBinding.riskIntentDigest))
       || !/^[0-9a-f]{32}$/.test(String(record.riskPlanBinding.executionTermsDigest))
-      || !isRecord(record.boundRiskDecision)
+      || !validBoundRiskDecision(record.boundRiskDecision, record)
       || record.boundRiskDecision.decisionId !== record.riskPlanBinding.riskDecisionId
-      || record.boundRiskDecision.mandateId !== record.mandateId
       || record.boundRiskDecision.mandateDigest !== record.riskPlanBinding.mandateDigest
       || record.boundRiskDecision.externalPlanId !== record.executionPlan.planId
       || record.boundRiskDecision.correlationId !== record.executionPlan.correlationId
@@ -927,7 +1073,10 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
       || record.executionState.plan.correlationId !== record.executionPlan.correlationId
       || record.executionState.plan.termsFingerprint !== record.executionPlan.termsFingerprint
     )) return failed('INVALID_PERSISTENCE_REQUEST', 'validate-only execution state is not bound to its plan');
-  } else if (record.riskPlanBinding !== null || record.executionCorrelationId !== null || record.executionState !== null) {
+  } else if (record.boundRiskDecision !== null
+    || record.riskPlanBinding !== null
+    || record.executionCorrelationId !== null
+    || record.executionState !== null) {
     return failed('INVALID_PERSISTENCE_REQUEST', 'pre-plan validate-only record contains plan-only binding state');
   }
   if (record.reconciliation !== null) {
@@ -1296,6 +1445,43 @@ export class SystemLedgerPersistenceAdapter {
     );
   }
 
+  readProductIncident(
+    incidentId: string,
+  ): PersistenceResult<Readonly<ProductIncidentRecord> | null> {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    if (typeof this.ledger.readProductIncident !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product incident read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductIncident(incidentId) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product incident query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product incident query failed'));
+    }
+  }
+
+  readProductIncidentAcknowledgement(
+    incidentId: string,
+    idempotencyKey: string,
+  ): PersistenceResult<Readonly<LedgerEventRecord> | null> {
+    const current = this.currentState();
+    if (!current.ok) return current;
+    if (typeof this.ledger.readProductIncidentAcknowledgement !== 'function') {
+      return failed('PERSISTENCE_READ_FAILED', 'existing Ledger lacks product incident acknowledgement read capability');
+    }
+    try {
+      return { ok: true, value: this.ledger.readProductIncidentAcknowledgement(incidentId, idempotencyKey) };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return failed('INVALID_PERSISTENCE_REQUEST', 'product incident acknowledgement query is invalid');
+      }
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'product incident acknowledgement query failed'));
+    }
+  }
+
   compareAndSetProductBootReleaseRevision(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): PersistenceResult<Readonly<ProductPersistenceMutationResult>> {
@@ -1380,7 +1566,7 @@ export class SystemLedgerPersistenceAdapter {
       return failed('CHECKPOINT_INVALID', errorMessage(error, 'checkpoint encoding failed'));
     }
     const traces = auditTraceEvents(audit);
-    const data: readonly DurableAuditEvent[] = (traces.length === 0 ? [null] : traces).map((trace) => ({
+    const data: readonly DurableAuditEvent[] = (traces.length === 0 ? [null] : traces).map((trace) => Object.freeze({
       schema: AUDIT_SCHEMA,
       version: AUDIT_VERSION,
       auditKind: audit.auditKind,
@@ -1389,6 +1575,9 @@ export class SystemLedgerPersistenceAdapter {
       checkpointRevision: nextState.revision,
       checkpointChecksum: checksum,
       trace,
+      ...(trace?.kind === 'RISK' && audit.riskDecision !== undefined
+        ? { riskDecision: audit.riskDecision }
+        : {}),
     }));
     const durableIdempotencyEvents: readonly DurableIdempotencyAuditEvent[] = idempotencyWrites.map((entry) => ({
       schema: IDEMPOTENCY_AUDIT_SCHEMA,
@@ -1543,6 +1732,7 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs: input.occurredAtMs,
       traceEvent: input.traceEvent,
       traceEvents: input.traceEvents,
+      riskDecision: input.riskDecision,
     });
     if (!auditValidation.ok) return auditValidation;
     if (!IDEMPOTENCY_KEY.test(input.idempotencyKey)
@@ -1675,6 +1865,7 @@ export class SystemLedgerPersistenceAdapter {
       occurredAtMs: input.occurredAtMs,
       traceEvent: input.traceEvent,
       traceEvents: input.traceEvents,
+      riskDecision: input.riskDecision,
     }, durableWrites);
     if (!committed.ok) return committed;
     const durableCommitted = isControlReceipt
@@ -1839,12 +2030,14 @@ export class SystemLedgerPersistenceAdapter {
     const current = this.currentState();
     if (!current.ok) throw new Error(`${current.code}: ${current.message}`);
     const traces = validateOnlyTraceEvents(value);
+    const riskDecision = durableRiskDecision(value);
     const persisted = this.applyIdempotentTransition({
       idempotencyKey,
       requestDigest,
       correlationId,
       occurredAtMs,
       traceEvents: traces,
+      ...(riskDecision === undefined ? {} : { riskDecision }),
       transition: (state) => {
         assertApprovalStateCompareAndSet(state, value);
         let dryRunExecutions = state.dryRunExecutions;
@@ -2294,6 +2487,11 @@ export class SystemLedgerPersistenceAdapter {
       traceEvent: trace,
       transition: (state) => {
         let desiredComponents = state.desiredComponents;
+        let strategyIntake = state.strategyIntake;
+        let strategySymbolPolicy = state.strategySymbolPolicy;
+        let sizeCeilings = state.sizeCeilings;
+        let strategyThresholds = state.strategyThresholds;
+        let focusPins = state.focusPins;
         let reservations = state.reservations;
         let approvals = state.approvals;
         const mutation: Readonly<SystemControlMutation> = commit.request.mutation;
@@ -2307,6 +2505,44 @@ export class SystemLedgerPersistenceAdapter {
               updatedAtMs: commit.request.requestedAtMs,
             },
           ].sort((left, right) => left.componentId.localeCompare(right.componentId, 'en'));
+        } else if (commit.applied && mutation.command === 'SET_BASIS_INTAKE') {
+          strategyIntake = Object.freeze({
+            ...state.strategyIntake,
+            basisPaused: mutation.paused,
+          });
+        } else if (commit.applied && mutation.command === 'SET_VOLUME_INTAKE') {
+          strategyIntake = Object.freeze({
+            ...state.strategyIntake,
+            volumePaused: mutation.paused,
+          });
+        } else if (commit.applied && (mutation.command === 'SET_BASIS_SYMBOL_POLICY'
+          || mutation.command === 'SET_VOLUME_SYMBOL_POLICY')) {
+          const field = mutation.command === 'SET_BASIS_SYMBOL_POLICY' ? 'basisBlocked' : 'volumeBlocked';
+          const current = state.strategySymbolPolicy[field];
+          const next = mutation.action === 'BLOCK'
+            ? [...new Set([...current, mutation.symbol])].sort((left, right) => left.localeCompare(right, 'en'))
+            : current.filter((symbol) => symbol !== mutation.symbol);
+          strategySymbolPolicy = Object.freeze({
+            ...state.strategySymbolPolicy,
+            [field]: Object.freeze(next),
+          });
+        } else if (commit.applied && mutation.command === 'REDUCE_SIZE_CEILING') {
+          const field = mutation.scope === 'SYSTEM' ? 'system' : mutation.scope === 'BASIS' ? 'basis' : 'volume';
+          sizeCeilings = Object.freeze({
+            ...state.sizeCeilings,
+            [field]: mutation.maximumNotionalUsd,
+          });
+        } else if (commit.applied && mutation.command === 'SET_STRATEGY_THRESHOLD') {
+          const field = mutation.strategy === 'BASIS' ? 'basisMinNetPct' : 'volume1sMultiple';
+          strategyThresholds = Object.freeze({
+            ...state.strategyThresholds,
+            [field]: mutation.value,
+          });
+        } else if (commit.applied && mutation.command === 'PIN_FOCUS') {
+          const symbols = mutation.pinned
+            ? [...new Set([...state.focusPins.symbols, mutation.symbol])].sort((left, right) => left.localeCompare(right, 'en'))
+            : state.focusPins.symbols.filter((symbol) => symbol !== mutation.symbol);
+          focusPins = Object.freeze({ symbols: Object.freeze(symbols) });
         } else if (commit.applied && mutation.command === 'REVOKE_RESERVATION') {
           reservations = state.reservations.map((entry) => entry.reservationId === mutation.reservationId
             ? { ...entry, blocksAllocation: false, correlationId: commit.request.correlationId, updatedAtMs: commit.request.requestedAtMs }
@@ -2322,6 +2558,11 @@ export class SystemLedgerPersistenceAdapter {
             revision: state.revision + 1,
             generation: commit.after.generation,
             control: commit.after,
+            strategyIntake,
+            strategySymbolPolicy,
+            sizeCeilings,
+            strategyThresholds,
+            focusPins,
             desiredComponents,
             reservations,
             approvals,

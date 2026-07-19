@@ -54,6 +54,11 @@ function throws(fn) {
   }
 }
 
+async function flushRejectedTurn() {
+  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 const T0 = 1_800_000_000_000;
 
 function stamp(sequence, overrides = {}) {
@@ -282,6 +287,29 @@ section('4. deterministic event order and virtual-clock replay');
   check('throwing handler stops with named failure', failureCode(throwing) === REPLAY_FAILURE_CODES.HANDLER_FAILED && !throwing.failure.message.includes('super-sensitive-adapter-detail'));
   const returning = replayEnvelope(envelope, new DeterministicVirtualClock(T0 + 20_000), () => 1, { allowGaps: true });
   check('non-void handler rejected', failureCode(returning) === REPLAY_FAILURE_CODES.HANDLER_FAILED);
+  const unhandled = [];
+  const onUnhandled = (reason) => { unhandled.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const rejectedHandler = replayEnvelope(
+      envelope,
+      new DeterministicVirtualClock(T0 + 20_000),
+      () => Promise.reject(new Error('hidden immediate replay rejection')),
+      { allowGaps: true },
+    );
+    const delayedHandler = replayEnvelope(
+      envelope,
+      new DeterministicVirtualClock(T0 + 20_000),
+      () => new Promise((_resolve, reject) => queueMicrotask(() => reject(new Error('hidden delayed replay rejection')))),
+      { allowGaps: true },
+    );
+    check('rejected replay Promise remains a typed synchronous-handler failure', failureCode(rejectedHandler) === REPLAY_FAILURE_CODES.HANDLER_FAILED);
+    check('delayed replay thenable remains a typed synchronous-handler failure', failureCode(delayedHandler) === REPLAY_FAILURE_CODES.HANDLER_FAILED);
+    await flushRejectedTurn();
+    check('same-turn replay observers prevent hostile handler rejections from becoming unhandled', unhandled.length === 0, `${unhandled.length} unhandled`);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
   const badClock = { value: T0 + 20_000, nowMs() { return this.value; }, advanceTo() {} };
   const badClockResult = replayEnvelope(envelope, badClock, () => {}, { allowGaps: true });
   check('non-advancing clock rejected', failureCode(badClockResult) === REPLAY_FAILURE_CODES.CLOCK_INVALID);

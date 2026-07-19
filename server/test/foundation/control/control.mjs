@@ -118,6 +118,11 @@ function issue(supervisor, command, revision, nowMs = T0) {
   return supervisor.issue({ command, revision, nowMs });
 }
 
+async function flushRejectedTurn() {
+  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 // =====================================================================
 section('1. dependency-ordered validation/start and reverse stop');
 {
@@ -671,6 +676,170 @@ section('22. unique failures and phase flapping retain bounded honest history');
     && transitionRetention.evictedTransitionRecords === transitionsBefore + flapCount - TRANSITION_HISTORY_CAPACITY);
   check('bounded correlation index retains the newest transition destination', lastTransition !== undefined
     && indexedTargets.includes(lastTransition.to));
+}
+
+// =====================================================================
+section('23. synchronous ports reject thenables without ambient rejection escape');
+{
+  const unhandled = [];
+  const onUnhandled = (reason) => { unhandled.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const environmentWorker = managed('environmentThenable');
+    const environmentSupervisor = makeSupervisor({
+      components: [environmentWorker.component],
+      environment: () => Object.assign(
+        Promise.reject(new Error('hidden environment rejection')),
+        { privateKeysAvailable: true, killSwitchEngaged: false, borrowTruthPresent: true },
+      ),
+    });
+    issue(environmentSupervisor, 'START', 1);
+    check('decorated rejected environment Promise cannot pass valid-looking fields', environmentSupervisor.snapshot().phase === 'FAILED'
+      && environmentSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.ENVIRONMENT_INVALID);
+
+    const gateWorker = managed('gateThenable');
+    const gateSupervisor = makeSupervisor({
+      components: [gateWorker.component],
+      gates: [{
+        gate: 'thenableGate',
+        blocking: true,
+        run: () => Object.assign(Promise.reject(new Error('hidden gate rejection')), { status: 'PASS', detail: 'decorated pass' }),
+      }],
+    });
+    issue(gateSupervisor, 'START', 1);
+    check('decorated rejected gate Promise cannot pass valid-looking fields', gateSupervisor.snapshot().phase === 'BLOCKED'
+      && gateSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    const lifecycleWorker = managed('lifecycleThenable', {
+      validate: () => Object.assign(
+        new Promise((_resolve, reject) => queueMicrotask(() => reject(new Error('delayed lifecycle rejection')))),
+        { kind: 'COMPLETE', detail: 'decorated complete' },
+      ),
+    });
+    const lifecycleSupervisor = makeSupervisor({ components: [lifecycleWorker.component] });
+    issue(lifecycleSupervisor, 'START', 1);
+    check('decorated delayed lifecycle Promise cannot pass valid-looking fields', lifecycleSupervisor.snapshot().phase === 'FAILED'
+      && lifecycleSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    const probeWorker = managed('probeThenable', {
+      probe: () => Object.assign(
+        new Promise((_resolve, reject) => queueMicrotask(() => reject(new Error('delayed probe rejection')))),
+        { heartbeatAt: T0, timestamp: timestamp(T0), fatal: null },
+      ),
+    });
+    const probeSupervisor = makeSupervisor({ components: [probeWorker.component] });
+    issue(probeSupervisor, 'START', 1);
+    check('decorated delayed probe Promise cannot pass valid-looking fields', probeSupervisor.snapshot().phase === 'FAILED'
+      && probeSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    let thenGetterReads = 0;
+    let thenCalls = 0;
+    const multiCallbackThenable = { status: 'PASS', detail: 'decorated hostile pass' };
+    Object.defineProperty(multiCallbackThenable, 'then', {
+      get() {
+        thenGetterReads += 1;
+        return (resolve, reject) => {
+          thenCalls += 1;
+          reject(new Error('first hostile callback'));
+          resolve('later hostile resolution');
+          reject(new Error('second hostile callback'));
+          throw new Error('hostile then invocation');
+        };
+      },
+    });
+    const multiWorker = managed('multiCallbackThenable');
+    const multiSupervisor = makeSupervisor({
+      components: [multiWorker.component],
+      gates: [{ gate: 'multiCallbackThenable', blocking: true, run: () => multiCallbackThenable }],
+    });
+    issue(multiSupervisor, 'START', 1);
+    check('callable then is read and invoked exactly once despite multiple callbacks and throw', thenGetterReads === 1 && thenCalls === 1);
+    check('decorated custom thenable is malformed before gate shape validation', multiSupervisor.snapshot().phase === 'BLOCKED'
+      && multiSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    let throwingGetterReads = 0;
+    const throwingGetterEnvironment = { privateKeysAvailable: true, killSwitchEngaged: false, borrowTruthPresent: true };
+    Object.defineProperty(throwingGetterEnvironment, 'then', {
+      get() {
+        throwingGetterReads += 1;
+        throw new Error('hostile then getter');
+      },
+    });
+    const throwingGetterWorker = managed('throwingGetterThenable');
+    const throwingGetterSupervisor = makeSupervisor({
+      components: [throwingGetterWorker.component],
+      environment: () => throwingGetterEnvironment,
+    });
+    issue(throwingGetterSupervisor, 'START', 1);
+    check('throwing then getter is read once and classified as malformed environment', throwingGetterReads === 1
+      && throwingGetterSupervisor.snapshot().phase === 'FAILED'
+      && throwingGetterSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.ENVIRONMENT_INVALID);
+
+    let proxyThenReads = 0;
+    const hostileProxy = new Proxy({ status: 'PASS', detail: 'decorated proxy pass' }, {
+      get(target, property, receiver) {
+        if (property === 'then') {
+          proxyThenReads += 1;
+          throw new Error('hostile proxy then trap');
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const proxyWorker = managed('proxyThenable');
+    const proxySupervisor = makeSupervisor({
+      components: [proxyWorker.component],
+      gates: [{ gate: 'proxyThenable', blocking: true, run: () => hostileProxy }],
+    });
+    issue(proxySupervisor, 'START', 1);
+    check('throwing Proxy then trap is read once and cannot reach shape validation', proxyThenReads === 1
+      && proxySupervisor.snapshot().phase === 'BLOCKED'
+      && proxySupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    let asyncThenCalls = 0;
+    const asyncThenable = {
+      status: 'PASS',
+      detail: 'decorated async pass',
+      async then() {
+        asyncThenCalls += 1;
+        throw new Error('async then return rejection');
+      },
+    };
+    const asyncWorker = managed('asyncThenable');
+    const asyncSupervisor = makeSupervisor({
+      components: [asyncWorker.component],
+      gates: [{ gate: 'asyncThenable', blocking: true, run: () => asyncThenable }],
+    });
+    issue(asyncSupervisor, 'START', 1);
+    check('rejected async then return is observed and remains a typed malformed gate', asyncThenCalls === 1
+      && asyncSupervisor.snapshot().phase === 'BLOCKED'
+      && asyncSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    let cyclicThenCalls = 0;
+    const cyclicA = { status: 'PASS', detail: 'decorated cyclic pass' };
+    const cyclicB = {};
+    cyclicA.then = () => {
+      cyclicThenCalls += 1;
+      return cyclicB;
+    };
+    cyclicB.then = () => {
+      cyclicThenCalls += 1;
+      return cyclicA;
+    };
+    const cyclicWorker = managed('cyclicThenable');
+    const cyclicSupervisor = makeSupervisor({
+      components: [cyclicWorker.component],
+      gates: [{ gate: 'cyclicThenable', blocking: true, run: () => cyclicA }],
+    });
+    issue(cyclicSupervisor, 'START', 1);
+    check('cyclic returned thenables are bounded and each invoked once', cyclicThenCalls === 2
+      && cyclicSupervisor.snapshot().phase === 'BLOCKED'
+      && cyclicSupervisor.snapshot().lastError?.code === CONTROL_FAILURE_CODES.COMPONENT_CONTRACT_VIOLATION);
+
+    await flushRejectedTurn();
+    check('same-turn observers prevent every hostile port rejection from becoming unhandled', unhandled.length === 0, `${unhandled.length} unhandled`);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
 }
 
 const passed = results.filter((result) => result.pass).length;

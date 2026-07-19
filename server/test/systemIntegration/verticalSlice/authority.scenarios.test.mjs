@@ -96,6 +96,16 @@ test('unknown account truth remains visibly unavailable after deterministic risk
   const { result } = await run(input);
   assert.equal(result.snapshot.disposition, 'RISK_REJECTED');
   assert.ok(result.snapshot.riskVerdict.checks.some((check) => check.status === 'UNKNOWN'));
+  assert.equal(result.snapshot.riskVerdict.decision, 'NEEDS_REVIEW');
+  assert.equal(result.snapshot.riskVerdict.allowed, false);
+  assert.equal(result.snapshot.riskVerdict.requiredConfirmation, true);
+  assert.equal(result.snapshot.riskVerdict.maxAllowedSize, null);
+  assert.equal(result.snapshot.riskVerdict.correlationId, input.correlationId);
+  assert.deepEqual(
+    result.snapshot.riskVerdict.decisiveInputSnapshot.checks.map((check) => check.code),
+    result.snapshot.riskVerdict.blockingCodes,
+  );
+  assert.equal(result.snapshot.ownerInvocations.coordinatorsCreated, 0, 'review can never override execution authority');
   assert.deepEqual(result.snapshot.truthLabels, ['UNAVAILABLE', 'SYNTHETIC_ONLY']);
 });
 
@@ -137,8 +147,9 @@ test('[SC-13] exact scoped VALIDATE_ONLY approval reaches risk exactly once', as
   assert.equal([...persistence.records.values()][0].ownerInvocations.persistenceWrites, 1);
 });
 
-test('[SC-13] evidence payload cannot override integration-owned time, intent, proposal, or approval', async () => {
+test('[SC-13] evidence payload cannot override integration-owned correlation, time, intent, proposal, or approval', async () => {
   const input = buildValidateOnlyInput();
+  input.riskEvidence.correlationId = 'forged.risk.correlation';
   input.riskEvidence.nowMs = NOW + 999_999;
   input.riskEvidence.intent = null;
   input.riskEvidence.proposal = null;
@@ -146,6 +157,7 @@ test('[SC-13] evidence payload cannot override integration-owned time, intent, p
   const { result } = await run(input);
   assert.equal(result.ok, true, result.snapshot.failure?.code);
   assert.equal(result.snapshot.riskVerdict.evaluatedAt, NOW);
+  assert.equal(result.snapshot.riskVerdict.correlationId, input.correlationId);
   assert.equal(result.snapshot.ownerInvocations.riskEvaluations, 1);
   assert.equal(
     result.snapshot.riskVerdict.checks.find((check) => check.code === 'APPROVAL_PRESENT')?.status,

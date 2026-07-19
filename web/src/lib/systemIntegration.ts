@@ -123,6 +123,7 @@ export interface SystemSupervisorSummaries {
     heartbeatAtMs: number | null;
     candidateCount: number | null;
     proposalCount: number | null;
+    cooldownCount: number | null;
     rejectionCount: number | null;
     acceptedCount: number | null;
     lastDecisionAtMs: number | null;
@@ -148,14 +149,26 @@ export interface SystemSupervisorSummaries {
     reservationCount: number | null;
     stagedMandateCount: number | null;
     activeExposureCount: number | null;
+    recoveryCount: number | null;
     checkpointRevision: string | null;
     blockerCodes: string[];
   };
   risk: {
     truthLabel: SystemTruthLabel;
-    latestVerdict: 'APPROVE' | 'REJECT' | 'CAP' | 'UNAVAILABLE';
+    latestVerdict: 'APPROVE' | 'REJECT' | 'NEEDS_REVIEW' | 'CAP' | 'UNAVAILABLE';
     latestVerdictAtMs: number | null;
     latestVerdictId: string | null;
+    correlationId: string | null;
+    maxAllowedSize: string | null;
+    requiredConfirmation: boolean | null;
+    decisiveInputSnapshot: Array<{
+      code: string;
+      status: 'PASS' | 'FAIL' | 'UNKNOWN';
+      detail: string;
+      observed: string | null;
+      limit: string | null;
+      evidenceTimestamp: number | null;
+    }>;
     rejectionCount: number | null;
     reasonCodes: string[];
   };

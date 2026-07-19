@@ -263,7 +263,7 @@ export function validateCheckpointState(value: unknown): string[] {
   const issues = inspectJson(value);
   if (!plainObject(value)) return [...issues, '$:STATE_OBJECT_REQUIRED'];
   exactKeys(value, [
-    'revision', 'generation', 'control', 'desiredComponents', 'authorityReferences', 'reservations',
+    'revision', 'generation', 'control', 'strategyIntake', 'strategySymbolPolicy', 'sizeCeilings', 'strategyThresholds', 'focusPins', 'desiredComponents', 'authorityReferences', 'reservations',
     'approvals', 'dryRunExecutions', 'reconciliations', 'idempotencyReceipts', 'liveEdgeControlEvents', 'traceIndex',
     'controlRejections', 'restartTruth', 'lastStartup', 'lastShutdown',
   ], '$', issues);
@@ -283,6 +283,74 @@ export function validateCheckpointState(value: unknown): string[] {
     if (typeof control.intakePaused !== 'boolean') issues.push('$.control.intakePaused:BOOLEAN_REQUIRED');
     if (!utcMillis(control.updatedAtMs)) issues.push('$.control.updatedAtMs:UTC_MILLIS_INVALID');
     if (!boundedIdentifier(control.correlationId)) issues.push('$.control.correlationId:CORRELATION_ID_INVALID');
+  }
+
+  const strategyIntake = value.strategyIntake;
+  if (!plainObject(strategyIntake)) issues.push('$.strategyIntake:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategyIntake, ['basisPaused', 'volumePaused'], '$.strategyIntake', issues);
+    if (typeof strategyIntake.basisPaused !== 'boolean') issues.push('$.strategyIntake.basisPaused:BOOLEAN_REQUIRED');
+    if (typeof strategyIntake.volumePaused !== 'boolean') issues.push('$.strategyIntake.volumePaused:BOOLEAN_REQUIRED');
+  }
+
+  const strategySymbolPolicy = value.strategySymbolPolicy;
+  if (!plainObject(strategySymbolPolicy)) issues.push('$.strategySymbolPolicy:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategySymbolPolicy, ['basisBlocked', 'volumeBlocked'], '$.strategySymbolPolicy', issues);
+    for (const field of ['basisBlocked', 'volumeBlocked'] as const) {
+      const symbols = strategySymbolPolicy[field];
+      if (!Array.isArray(symbols) || symbols.length > 500
+        || symbols.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+        || new Set(symbols).size !== symbols.length
+        || symbols.some((symbol, index) => index > 0 && String(symbols[index - 1]).localeCompare(String(symbol), 'en') >= 0)) {
+        issues.push(`$.strategySymbolPolicy.${field}:SYMBOL_POLICY_INVALID`);
+      }
+    }
+  }
+
+  const sizeCeilings = value.sizeCeilings;
+  if (!plainObject(sizeCeilings)) issues.push('$.sizeCeilings:OBJECT_REQUIRED');
+  else {
+    exactKeys(sizeCeilings, ['system', 'basis', 'volume'], '$.sizeCeilings', issues);
+    for (const field of ['system', 'basis', 'volume'] as const) {
+      const decimal = sizeCeilings[field];
+      if (decimal !== null && (typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 96)) {
+        issues.push(`$.sizeCeilings.${field}:EXACT_DECIMAL_INVALID`);
+      }
+    }
+  }
+
+  const strategyThresholds = value.strategyThresholds;
+  if (!plainObject(strategyThresholds)) issues.push('$.strategyThresholds:OBJECT_REQUIRED');
+  else {
+    exactKeys(strategyThresholds, ['basisMinNetPct', 'volume1sMultiple'], '$.strategyThresholds', issues);
+    for (const field of ['basisMinNetPct', 'volume1sMultiple'] as const) {
+      const decimal = strategyThresholds[field];
+      const numeric = typeof decimal === 'string' ? Number(decimal) : Number.NaN;
+      const bounded = field === 'basisMinNetPct'
+        ? numeric >= 0.01 && numeric <= 100
+        : numeric >= 1 && numeric <= 100;
+      if (decimal !== null && (typeof decimal !== 'string'
+        || !/^(?:[1-9][0-9]*|0\.[0-9]*[1-9]|[1-9][0-9]*\.[0-9]*[1-9])$/.test(decimal)
+        || decimal.replace('.', '').length > 12 || !Number.isFinite(numeric) || !bounded)) {
+        issues.push(`$.strategyThresholds.${field}:THRESHOLD_INVALID`);
+      }
+    }
+  }
+
+  const focusPins = value.focusPins;
+  if (!plainObject(focusPins)) issues.push('$.focusPins:OBJECT_REQUIRED');
+  else {
+    exactKeys(focusPins, ['symbols'], '$.focusPins', issues);
+    const symbols = focusPins.symbols;
+    if (!Array.isArray(symbols) || symbols.length > 25
+      || symbols.some((symbol) => typeof symbol !== 'string' || !/^[A-Z0-9]{4,20}$/.test(symbol))
+      || new Set(symbols).size !== symbols.length
+      || symbols.some((symbol, index) => index > 0 && String(symbols[index - 1]).localeCompare(String(symbol), 'en') >= 0)) {
+      issues.push('$.focusPins.symbols:FOCUS_PINS_INVALID');
+    }
   }
 
   const desired = validateArray(
@@ -550,9 +618,29 @@ export function decodeSystemCheckpoint(serialized: string): PersistenceResult<Re
     if (parsed.checksum !== expected) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint checksum does not match its state' };
     if (canonicalPersistenceJson(parsed) !== serialized) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint is not canonically serialized' };
     if (!plainObject(parsed.state)) return { ok: false, code: 'CHECKPOINT_INVALID', message: 'checkpoint state must be an object' };
-    const migratedState = Object.hasOwn(parsed.state, 'liveEdgeControlEvents')
-      ? parsed.state
-      : { ...parsed.state, liveEdgeControlEvents: [] };
+    const migratedState = {
+      ...parsed.state,
+      ...(Object.hasOwn(parsed.state, 'liveEdgeControlEvents') ? {} : { liveEdgeControlEvents: [] }),
+      // Historical checkpoints did not carry strategy-local desired posture.
+      // Restore them fail-closed instead of guessing that proposal intake was open.
+      ...(Object.hasOwn(parsed.state, 'strategyIntake')
+        ? {}
+        : { strategyIntake: { basisPaused: true, volumePaused: true } }),
+      // This overlay did not exist historically, so an empty deny set is the
+      // only truthful migration; global allow/block owners remain stricter.
+      ...(Object.hasOwn(parsed.state, 'strategySymbolPolicy')
+        ? {}
+        : { strategySymbolPolicy: { basisBlocked: [], volumeBlocked: [] } }),
+      ...(Object.hasOwn(parsed.state, 'sizeCeilings')
+        ? {}
+        : { sizeCeilings: { system: null, basis: null, volume: null } }),
+      ...(Object.hasOwn(parsed.state, 'strategyThresholds')
+        ? {}
+        : { strategyThresholds: { basisMinNetPct: null, volume1sMultiple: null } }),
+      ...(Object.hasOwn(parsed.state, 'focusPins')
+        ? {}
+        : { focusPins: { symbols: [] } }),
+    };
     const issues = validateCheckpointState(migratedState);
     if (issues.length > 0) return { ok: false, code: 'CHECKPOINT_INVALID', message: `checkpoint state failed validation: ${issues.slice(0, 8).join(', ')}` };
     return { ok: true, value: frozenClone(migratedState as unknown as SystemIntegrationCheckpointState) };

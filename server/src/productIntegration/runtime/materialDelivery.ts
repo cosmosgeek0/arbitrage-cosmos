@@ -1,6 +1,7 @@
 import type {
   ProductRuntimeMaterialEvent,
   ProductRuntimeMaterialEventPage,
+  ProductRuntimeIncidentAvailability,
   ProductRuntimeSupervisorEnvelope,
   ProductRuntimeTruthLabel,
 } from './types.js';
@@ -31,6 +32,9 @@ export interface ProductRuntimeSupervisorDelta {
   readonly safeMode: string;
   readonly killSwitchEngaged: boolean;
   readonly intakePaused: boolean;
+  readonly incidentAvailability: Readonly<ProductRuntimeIncidentAvailability>;
+  readonly incidentCount: number;
+  readonly incidentLedgerHighWater: number;
 }
 
 /** Exact bounded public delivery page requested by IP-RUNTIME. */
@@ -116,6 +120,31 @@ export function projectProductRuntimeSupervisorDelta(
   if (typeof control.killSwitchEngaged !== 'boolean' || typeof control.intakePaused !== 'boolean') {
     throw new TypeError('canonical supervisor control booleans are invalid');
   }
+  const incidentAvailability = envelope.incidentAvailability;
+  const availabilityState = incidentAvailability?.state;
+  const availabilityTruthLabel = incidentAvailability?.truthLabel;
+  const availabilityBlocker = incidentAvailability?.blocker;
+  const exactIncidentAvailability = (
+    availabilityState === 'AVAILABLE'
+      && availabilityTruthLabel === 'BUILT_AND_TESTED'
+      && availabilityBlocker === null
+  ) || (
+    (availabilityState === 'NOT_CONFIGURED' || availabilityState === 'UNAVAILABLE')
+      && availabilityTruthLabel === availabilityState
+      && typeof availabilityBlocker === 'string'
+      && /^[A-Z][A-Z0-9_]{0,127}$/.test(availabilityBlocker)
+  );
+  if (!exactIncidentAvailability || !Array.isArray(envelope.incidents) || envelope.incidents.length > 200
+      || (availabilityState !== 'AVAILABLE' && envelope.incidents.length !== 0)) {
+    throw new TypeError('canonical supervisor incident availability is invalid');
+  }
+  let incidentLedgerHighWater = 0;
+  for (const incident of envelope.incidents) {
+    if (!Number.isSafeInteger(incident?.ledgerEventId) || incident.ledgerEventId < 1) {
+      throw new TypeError('canonical supervisor incident ledger revision is invalid');
+    }
+    incidentLedgerHighWater = Math.max(incidentLedgerHighWater, incident.ledgerEventId);
+  }
   return Object.freeze({
     schemaVersion: PRODUCT_RUNTIME_SUPERVISOR_DELTA_SCHEMA,
     revision: boundedString(envelope.revision, 'revision', 256),
@@ -128,6 +157,13 @@ export function projectProductRuntimeSupervisorDelta(
     safeMode,
     killSwitchEngaged: control.killSwitchEngaged,
     intakePaused: control.intakePaused,
+    incidentAvailability: Object.freeze({
+      state: availabilityState,
+      truthLabel: availabilityTruthLabel,
+      blocker: availabilityBlocker,
+    }) as Readonly<ProductRuntimeIncidentAvailability>,
+    incidentCount: envelope.incidents.length,
+    incidentLedgerHighWater,
   });
 }
 

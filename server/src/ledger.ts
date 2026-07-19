@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +18,7 @@ import {
 import {
   PRODUCT_IDENTITY_REFERENCE_TYPES,
   PRODUCT_IDENTITY_RESOLUTION_STATES,
+  PRODUCT_INCIDENT_ACK_EVENT_KIND,
   type ProductBootReleasePersistenceInput,
   type ProductBootReleaseRecord,
   type ProductCommandPersistenceInput,
@@ -25,6 +27,8 @@ import {
   type ProductIdentityReferencePersistenceInput,
   type ProductIdentityReferenceRecord,
   type ProductIncidentPersistenceInput,
+  type ProductIncidentRecord,
+  type ProductIncidentRotationInput,
   type ProductPersistenceAuditRecord,
   type ProductPersistenceMutationResult,
   type LedgerSchemaCompatibilityReadback,
@@ -46,6 +50,7 @@ const CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS = 96;
 const LEDGER_EVENT_KIND = /^[a-z0-9_.-]{1,64}$/;
 const SYSTEM_INTEGRATION_EVENT_KIND = 'system.integration.trace';
 const SYSTEM_INTEGRATION_AUDIT_SCHEMA = 'cosmos.system-integration.audit';
+const SYSTEM_RISK_DECISION_AUDIT_SCHEMA = 'cosmos.foundation.risk-verdict.audit.v1';
 const SYSTEM_INTEGRATION_AUDIT_KINDS = new Set([
   'STARTUP',
   'TRANSITION',
@@ -73,6 +78,72 @@ const PRODUCT_PERSISTENCE_QUERY_MAX = 2_000;
 const PRODUCT_IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const PRODUCT_IDEMPOTENCY_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
 const PRODUCT_DOMAIN_STATE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
+const PRODUCT_INCIDENT_SEVERITIES = Object.freeze(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const);
+const PRODUCT_INCIDENT_STATES = Object.freeze(['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] as const);
+const PRODUCT_INCIDENT_ROUTE_SCHEMA = 'cosmos.product-incident-route.v1';
+const PRODUCT_INCIDENT_ROTATION_SCHEMA = 'cosmos.product-incident-rotation.v1';
+const PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA = 'cosmos.product-incident-source-disposition.v1';
+const PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY = 'product.incident.router.checkpoint.v1';
+const PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA = 'cosmos.product-incident-router-checkpoint.v2';
+const PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST = '0'.repeat(64);
+
+function productIncidentRouterCheckpointDigest(input: Readonly<{
+  priorChainDigest: string;
+  priorSourceEventId: number;
+  priorDispositionEventId: number;
+  sourceEventId: number;
+  dispositionEventId: number;
+  sourceData: unknown;
+  dispositionData: unknown;
+}>): string {
+  return createHash('sha256')
+    .update('product-incident-router-checkpoint.v2\0', 'utf8')
+    .update(input.priorChainDigest, 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.priorSourceEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.priorDispositionEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.sourceEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(String(input.dispositionEventId), 'utf8')
+    .update('\0', 'utf8')
+    .update(canonicalProductPersistenceJson(input.sourceData, 'product incident checkpoint source'), 'utf8')
+    .update('\0', 'utf8')
+    .update(canonicalProductPersistenceJson(
+      input.dispositionData,
+      'product incident checkpoint disposition',
+    ), 'utf8')
+    .digest('hex');
+}
+const PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS = Object.freeze([
+  'schema', 'operation', 'sourceEventId', 'sourceEventKind', 'sourceGroup',
+  'sourceStatus', 'sourceDetail', 'sourceObservedAtMs', 'incidentId', 'fingerprint', 'rootComponentId',
+  'severity', 'capitalRelevant', 'state', 'firstSeenAtMs', 'lastSeenAtMs',
+  'eventCount', 'acknowledgedAtMs', 'acknowledgedByOperatorId', 'resolvedAtMs',
+  'reasonCode', 'correlationId', 'routing', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS = Object.freeze([
+  'schema', 'operation', 'sourceEventId', 'sourceEventKind', 'sourceGroup',
+  'sourceStatus', 'sourceDetail', 'sourceObservedAtMs', 'rootComponentId',
+  'groupingDigest', 'incidentId', 'priorDispositionEventId', 'priorSourceEventId',
+  'priorObservedAtMs', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_ROTATION_KEYS = Object.freeze([
+  'schema', 'operation', 'incidentId', 'expectedLedgerEventId', 'reasonCode',
+  'retentionLimit', 'snapshot', 'externalActionAuthorization',
+]);
+const PRODUCT_INCIDENT_SNAPSHOT_KEYS = Object.freeze([
+  'incidentId', 'fingerprint', 'rootComponentId', 'severity', 'capitalRelevant',
+  'state', 'firstSeenAtMs', 'lastSeenAtMs', 'eventCount', 'acknowledgedAtMs',
+  'acknowledgedByOperatorId', 'resolvedAtMs', 'correlationId', 'ledgerEventId',
+  'sourceGroup', 'openingRoutingReceiptEventId', 'openingSourceEventId',
+  'recoveryRoutingReceiptEventId', 'recoverySourceEventId',
+]);
+const PRODUCT_INCIDENT_ACK_SCHEMAS = new Set([
+  'cosmos.product-incident-ack.v1',
+  'cosmos.product-incident-ack.v2',
+]);
 const PRODUCT_DIGEST = /^(?:sha256:)?[a-f0-9]{16,128}$/i;
 const PRODUCT_COMMIT = /^[a-f0-9]{40,64}$/i;
 const PRODUCT_SENSITIVE_TEXT = /(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_ -]?secret|password|authorization|bearer|access[_ -]?token|signature)\s*[:=]?\s*[A-Za-z0-9+/_=-]{12,})/i;
@@ -83,11 +154,13 @@ const PRODUCT_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'LIABILITY',
   'RECOVERY_CAMPAIGN',
 ] as const);
-export const LEDGER_SCHEMA_VERSION = 2;
-// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. An old
-// writer can silently coerce that truth back through binary64, so rollback is
-// no longer safe after this runtime opens the ledger.
-export const LEDGER_ROLLBACK_FLOOR = 2;
+const LEDGER_EXACT_FILL_SCHEMA_VERSION = 2;
+export const LEDGER_SCHEMA_VERSION = 3;
+// Schema 2 replaces lossy REAL fill money with canonical decimal TEXT. Schema
+// 3 makes the complete generic event envelope first-class in the sole Ledger.
+// An older writer can silently drop either class of truth, so rollback is no
+// longer safe after this runtime opens the ledger.
+export const LEDGER_ROLLBACK_FLOOR = 3;
 const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
 const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
 const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
@@ -120,6 +193,25 @@ export interface LedgerEvent {
   kind: string;
   symbol: string | null;
   data: unknown;
+  severity: string | null;
+  source: string | null;
+  strategy: string | null;
+  status: string | null;
+  reason: string | null;
+  message: string | null;
+  correlation: string | null;
+  createdAt: number;
+}
+
+export interface LedgerEventMetadataInput {
+  readonly severity?: string | null;
+  readonly source?: string | null;
+  readonly strategy?: string | null;
+  readonly status?: string | null;
+  readonly reason?: string | null;
+  readonly message?: string | null;
+  readonly correlation?: string | null;
+  readonly createdAt?: number;
 }
 
 export type OrderRecoveryState =
@@ -150,7 +242,7 @@ export interface DurableMutationAuthorityRead {
   readonly readErrorCount: number;
 }
 
-export interface LedgerEventInput {
+export interface LedgerEventInput extends LedgerEventMetadataInput {
   kind: string;
   symbol?: string | null;
   data?: unknown;
@@ -324,6 +416,443 @@ const LEGACY_FILL_COLUMNS = Object.freeze({
   source: 'TEXT',
 } as const);
 
+interface EventColumnInfo {
+  readonly cid: number;
+  readonly name: string;
+  readonly type: string;
+  readonly notnull: number;
+  readonly dflt_value: unknown;
+  readonly pk: number;
+  readonly hidden: number;
+}
+
+const LEGACY_EVENT_COLUMNS = Object.freeze({
+  id: 'INTEGER',
+  ts: 'INTEGER',
+  kind: 'TEXT',
+  symbol: 'TEXT',
+  data: 'TEXT',
+} as const);
+
+const EVENT_V3_COLUMNS = Object.freeze({
+  ...LEGACY_EVENT_COLUMNS,
+  severity: 'TEXT',
+  source: 'TEXT',
+  strategy: 'TEXT',
+  status: 'TEXT',
+  reason: 'TEXT',
+  message: 'TEXT',
+  correlation: 'TEXT',
+  created_at: 'INTEGER',
+} as const);
+
+const LEGACY_EVENT_TABLE_SQL = `
+  CREATE TABLE events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    symbol TEXT,
+    data TEXT
+  )
+`;
+
+const EVENT_V3_TABLE_SQL = `
+  CREATE TABLE events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    symbol TEXT,
+    data TEXT,
+    severity TEXT,
+    source TEXT,
+    strategy TEXT,
+    status TEXT,
+    reason TEXT,
+    message TEXT,
+    correlation TEXT,
+    created_at INTEGER
+  )
+`;
+
+const CREATE_EVENT_V3_TABLE_SQL = EVENT_V3_TABLE_SQL.replace(
+  /^\s*CREATE TABLE events/i,
+  'CREATE TABLE IF NOT EXISTS events',
+);
+
+const EVENT_INDEX_SPECS = Object.freeze([
+  Object.freeze({
+    name: 'idx_events_ts',
+    sql: 'CREATE INDEX idx_events_ts ON events (ts DESC)',
+    unique: 0,
+    partial: 0,
+    keys: Object.freeze([
+      Object.freeze({ cid: 1, name: 'ts', desc: 1 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_kind',
+    sql: 'CREATE INDEX idx_events_kind ON events (kind, ts DESC)',
+    unique: 0,
+    partial: 0,
+    keys: Object.freeze([
+      Object.freeze({ cid: 2, name: 'kind', desc: 0 }),
+      Object.freeze({ cid: 1, name: 'ts', desc: 1 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_correlation',
+    sql: 'CREATE INDEX idx_events_correlation ON events (correlation, id DESC)',
+    unique: 0,
+    partial: 0,
+    keys: Object.freeze([
+      Object.freeze({ cid: 11, name: 'correlation', desc: 0 }),
+      Object.freeze({ cid: 0, name: 'id', desc: 1 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_product_incident_source',
+    sql: 'CREATE INDEX idx_events_product_incident_source ON events(kind, id)',
+    unique: 0,
+    partial: 0,
+    keys: Object.freeze([
+      Object.freeze({ cid: 2, name: 'kind', desc: 0 }),
+      Object.freeze({ cid: 0, name: 'id', desc: 0 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_product_incident_disposition_source_event',
+    sql: `
+      CREATE UNIQUE INDEX idx_events_product_incident_disposition_source_event
+        ON events(
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+          'product.incident.source_ignored'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') IN (
+            'cosmos.product-incident-route.v1',
+            'cosmos.product-incident-source-disposition.v1'
+          )
+    `,
+    unique: 1,
+    partial: 1,
+    keys: Object.freeze([
+      Object.freeze({ cid: -2, name: null, desc: 0 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_product_incident_disposition_stream',
+    sql: `
+      CREATE INDEX idx_events_product_incident_disposition_stream
+        ON events(
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END,
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END,
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC,
+          id DESC
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+          'product.incident.source_ignored'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') IN (
+            'cosmos.product-incident-route.v1',
+            'cosmos.product-incident-source-disposition.v1'
+          )
+    `,
+    unique: 0,
+    partial: 1,
+    keys: Object.freeze([
+      Object.freeze({ cid: -2, name: null, desc: 0 }),
+      Object.freeze({ cid: -2, name: null, desc: 0 }),
+      Object.freeze({ cid: -2, name: null, desc: 1 }),
+      Object.freeze({ cid: 0, name: 'id', desc: 1 }),
+    ]),
+  }),
+  Object.freeze({
+    name: 'idx_events_product_incident_route_stream',
+    sql: `
+      CREATE INDEX idx_events_product_incident_route_stream
+        ON events(
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END,
+          CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END,
+          CASE WHEN json_valid(data)
+            THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC,
+          id DESC
+        )
+        WHERE kind IN (
+          'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved'
+        )
+          AND json_valid(data)
+          AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+    `,
+    unique: 0,
+    partial: 1,
+    keys: Object.freeze([
+      Object.freeze({ cid: -2, name: null, desc: 0 }),
+      Object.freeze({ cid: -2, name: null, desc: 0 }),
+      Object.freeze({ cid: -2, name: null, desc: 1 }),
+      Object.freeze({ cid: 0, name: 'id', desc: 1 }),
+    ]),
+  }),
+] as const);
+
+const CREATE_EVENT_INDEXES_SQL = EVENT_INDEX_SPECS
+  .map((index) => index.sql
+    .trim()
+    .replace(/^CREATE UNIQUE INDEX /, 'CREATE UNIQUE INDEX IF NOT EXISTS ')
+    .replace(/^CREATE INDEX /, 'CREATE INDEX IF NOT EXISTS '))
+  .join(';\n');
+
+const EVENT_TRIGGER_SPECS = Object.freeze([
+  Object.freeze({
+    name: 'product_incident_checkpoint_events_no_update',
+    sql: `
+      CREATE TRIGGER product_incident_checkpoint_events_no_update
+        BEFORE UPDATE ON events
+        WHEN EXISTS (
+          SELECT 1 FROM product_incident_source_dispositions
+          WHERE source_event_id = OLD.id OR disposition_event_id = OLD.id
+        )
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint evidence is immutable'); END
+    `,
+  }),
+  Object.freeze({
+    name: 'product_incident_checkpoint_events_no_delete',
+    sql: `
+      CREATE TRIGGER product_incident_checkpoint_events_no_delete
+        BEFORE DELETE ON events
+        WHEN EXISTS (
+          SELECT 1 FROM product_incident_source_dispositions
+          WHERE source_event_id = OLD.id OR disposition_event_id = OLD.id
+        )
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint evidence is immutable'); END
+    `,
+  }),
+] as const);
+
+const CREATE_EVENT_TRIGGERS_SQL = EVENT_TRIGGER_SPECS
+  .map((trigger) => trigger.sql
+    .trim()
+    .replace(/^CREATE TRIGGER /, 'CREATE TRIGGER IF NOT EXISTS '))
+  .join(';\n');
+
+const DROP_EVENT_TRIGGERS_SQL = EVENT_TRIGGER_SPECS
+  .map((trigger) => `DROP TRIGGER IF EXISTS ${trigger.name}`)
+  .join(';\n');
+
+const LEDGER_EVENT_INSERT_SQL = `
+  INSERT INTO events (
+    ts, kind, symbol, data, severity, source, strategy, status,
+    reason, message, correlation, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`;
+
+interface PreparedLedgerEventMetadata {
+  readonly severity: string | null;
+  readonly source: string | null;
+  readonly strategy: string | null;
+  readonly status: string | null;
+  readonly reason: string | null;
+  readonly message: string | null;
+  readonly correlation: string | null;
+  /** Null means the append transaction must bind its own receipt time. */
+  readonly createdAt: number | null;
+}
+
+const LEDGER_EVENT_TEXT_LIMITS = Object.freeze({
+  severity: 64,
+  source: 256,
+  strategy: 256,
+  status: 128,
+  reason: 2_048,
+  message: 8_192,
+  correlation: 256,
+} as const);
+
+const LEDGER_EVENT_TEXT_FIELDS = Object.freeze(
+  Object.keys(LEDGER_EVENT_TEXT_LIMITS) as (keyof typeof LEDGER_EVENT_TEXT_LIMITS)[],
+);
+
+function prepareLedgerEventText(
+  field: keyof typeof LEDGER_EVENT_TEXT_LIMITS,
+  value: unknown,
+): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
+    throw new TypeError(`invalid ledger event ${field}`);
+  }
+  let scalarCount = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const low = value.charCodeAt(index + 1);
+      if (!(low >= 0xdc00 && low <= 0xdfff)) {
+        throw new TypeError(`invalid ledger event ${field}`);
+      }
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      throw new TypeError(`invalid ledger event ${field}`);
+    }
+    scalarCount += 1;
+  }
+  if (scalarCount < 1
+      || scalarCount > LEDGER_EVENT_TEXT_LIMITS[field]
+      || /[\p{Cc}\p{Bidi_Control}]/u.test(value)) {
+    throw new TypeError(`invalid ledger event ${field}`);
+  }
+  return value;
+}
+
+function prepareLedgerEventCreatedAt(value: unknown, nullable: boolean): number | null {
+  if (value === undefined || value === null) {
+    if (nullable) return null;
+    throw new TypeError('invalid ledger event createdAt');
+  }
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new TypeError('invalid ledger event createdAt');
+  }
+  return value as number;
+}
+
+function prepareLedgerEventMetadata(
+  input: Readonly<LedgerEventMetadataInput>,
+): Readonly<PreparedLedgerEventMetadata> {
+  return Object.freeze({
+    severity: prepareLedgerEventText('severity', input.severity),
+    source: prepareLedgerEventText('source', input.source),
+    strategy: prepareLedgerEventText('strategy', input.strategy),
+    status: prepareLedgerEventText('status', input.status),
+    reason: prepareLedgerEventText('reason', input.reason),
+    message: prepareLedgerEventText('message', input.message),
+    correlation: prepareLedgerEventText('correlation', input.correlation),
+    createdAt: prepareLedgerEventCreatedAt(input.createdAt, true),
+  });
+}
+
+function snapshotLedgerEventMetadata(
+  input: Readonly<LedgerEventMetadataInput>,
+): Readonly<PreparedLedgerEventMetadata> {
+  return prepareLedgerEventMetadata({
+    severity: input.severity,
+    source: input.source,
+    strategy: input.strategy,
+    status: input.status,
+    reason: input.reason,
+    message: input.message,
+    correlation: input.correlation,
+    createdAt: input.createdAt,
+  });
+}
+
+interface PreparedLedgerEventData {
+  readonly serialized: string | null;
+  readonly value: unknown;
+}
+
+function prepareLedgerEventData(value: unknown, present: boolean): Readonly<PreparedLedgerEventData> {
+  if (!present) return Object.freeze({ serialized: null, value: null });
+  if (value === undefined) throw new TypeError('invalid ledger event data');
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) throw new TypeError('invalid ledger event data');
+  return Object.freeze({
+    serialized,
+    value: JSON.parse(serialized) as unknown,
+  });
+}
+
+interface StoredLedgerEventMetadata {
+  readonly severity: unknown;
+  readonly source: unknown;
+  readonly strategy: unknown;
+  readonly status: unknown;
+  readonly reason: unknown;
+  readonly message: unknown;
+  readonly correlation: unknown;
+  readonly createdAt: unknown;
+}
+
+function prepareStoredLedgerEventMetadata(
+  input: Readonly<StoredLedgerEventMetadata>,
+): Readonly<PreparedLedgerEventMetadata> {
+  const prepared: Partial<Record<keyof typeof LEDGER_EVENT_TEXT_LIMITS, string | null>> = {};
+  for (const field of LEDGER_EVENT_TEXT_FIELDS) {
+    try {
+      prepared[field] = prepareLedgerEventText(field, input[field]);
+    } catch {
+      throw new Error(`LEDGER_EVENT_${field.toUpperCase()}_MALFORMED`);
+    }
+  }
+  let createdAt: number | null;
+  try {
+    createdAt = prepareLedgerEventCreatedAt(input.createdAt, false);
+  } catch {
+    throw new Error('LEDGER_EVENT_CREATED_AT_MALFORMED');
+  }
+  return Object.freeze({
+    severity: prepared.severity ?? null,
+    source: prepared.source ?? null,
+    strategy: prepared.strategy ?? null,
+    status: prepared.status ?? null,
+    reason: prepared.reason ?? null,
+    message: prepared.message ?? null,
+    correlation: prepared.correlation ?? null,
+    createdAt,
+  });
+}
+
+function eventInsertValues(
+  ts: number,
+  kind: string,
+  symbol: string | null,
+  serialized: string | null,
+  metadata: Readonly<PreparedLedgerEventMetadata>,
+): readonly unknown[] {
+  return [
+    ts,
+    kind,
+    symbol,
+    serialized,
+    metadata.severity,
+    metadata.source,
+    metadata.strategy,
+    metadata.status,
+    metadata.reason,
+    metadata.message,
+    metadata.correlation,
+    metadata.createdAt ?? ts,
+  ];
+}
+
+function ledgerEventFromAppend(
+  id: number,
+  ts: number,
+  kind: string,
+  symbol: string | null,
+  data: unknown,
+  metadata: Readonly<PreparedLedgerEventMetadata>,
+): LedgerEvent {
+  return {
+    id,
+    ts,
+    kind,
+    symbol,
+    data,
+    severity: metadata.severity,
+    source: metadata.source,
+    strategy: metadata.strategy,
+    status: metadata.status,
+    reason: metadata.reason,
+    message: metadata.message,
+    correlation: metadata.correlation,
+    createdAt: metadata.createdAt ?? ts,
+  };
+}
+
 function exactColumnShape(
   columns: readonly FillColumnInfo[],
   expected: Readonly<Record<string, string>>,
@@ -412,7 +941,7 @@ function canonicalLegacyFill(row: Readonly<LegacyFillDbRow>): FillRow {
   });
 }
 
-function upgradeLedgerVersion(db: Database.Database): void {
+function upgradeFillSchemaVersion(db: Database.Database): void {
   const updated = db.prepare(`
     UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
     SET current_schema_version = ?, rollback_floor = ?
@@ -420,9 +949,9 @@ function upgradeLedgerVersion(db: Database.Database): void {
       AND current_schema_version = 1
       AND typeof(rollback_floor) = 'integer'
       AND rollback_floor BETWEEN 0 AND 1
-  `).run(LEDGER_SCHEMA_VERSION, LEDGER_ROLLBACK_FLOOR);
+  `).run(LEDGER_EXACT_FILL_SCHEMA_VERSION, LEDGER_EXACT_FILL_SCHEMA_VERSION);
   if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
-  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+  db.pragma(`user_version = ${LEDGER_EXACT_FILL_SCHEMA_VERSION}`);
 }
 
 function migrateFillStorage(db: Database.Database): void {
@@ -435,7 +964,7 @@ function migrateFillStorage(db: Database.Database): void {
     }
     const columns = db.prepare('PRAGMA table_info(fills)').all() as FillColumnInfo[];
     if (exactColumnShape(columns, EXACT_FILL_COLUMNS)) {
-      if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+      if (liveSchemaVersion === 1) upgradeFillSchemaVersion(db);
       return;
     }
     if (!exactColumnShape(columns, LEGACY_FILL_COLUMNS) || (liveSchemaVersion as number) >= 2) {
@@ -480,7 +1009,314 @@ function migrateFillStorage(db: Database.Database): void {
       CREATE INDEX idx_fills_total_order
         ON fills (ts ASC, symbol COLLATE BINARY ASC, trade_id ASC);
     `);
-    if (liveSchemaVersion === 1) upgradeLedgerVersion(db);
+    if (liveSchemaVersion === 1) upgradeFillSchemaVersion(db);
+  }).immediate();
+}
+
+function exactEventColumnShape(
+  columns: readonly EventColumnInfo[],
+  expected: Readonly<Record<string, string>>,
+): boolean {
+  const entries = Object.entries(expected);
+  if (columns.length !== entries.length) return false;
+  return entries.every(([name, type], index) => {
+    const column = columns[index];
+    return column?.cid === index
+      && column.name === name
+      && column.type.toUpperCase() === type
+      && column.notnull === (['ts', 'kind'].includes(name) ? 1 : 0)
+      && column.dflt_value === null
+      && column.pk === (name === 'id' ? 1 : 0)
+      && column.hidden === 0;
+  });
+}
+
+type EventTableShape = 'MISSING' | 'LEGACY' | 'V3' | 'MALFORMED';
+
+interface SqliteMasterSqlRow {
+  readonly name: unknown;
+  readonly tbl_name: unknown;
+  readonly sql: unknown;
+}
+
+interface EventIndexListRow {
+  readonly name: unknown;
+  readonly unique: unknown;
+  readonly origin: unknown;
+  readonly partial: unknown;
+}
+
+interface EventIndexXInfoRow {
+  readonly seqno: unknown;
+  readonly cid: unknown;
+  readonly name: unknown;
+  readonly desc: unknown;
+  readonly coll: unknown;
+  readonly key: unknown;
+}
+
+function normalizeSql(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return value
+    .trim()
+    .replace(/;+\s*$/, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([(),])\s*/g, '$1')
+    .toUpperCase();
+}
+
+function eventTableShape(db: Database.Database): EventTableShape {
+  const masterRows = db.prepare(`
+    SELECT name, tbl_name, sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'events' COLLATE NOCASE
+  `).all() as SqliteMasterSqlRow[];
+  if (masterRows.length === 0) return 'MISSING';
+  if (masterRows.length !== 1
+      || masterRows[0]?.name !== 'events'
+      || masterRows[0]?.tbl_name !== 'events') return 'MALFORMED';
+
+  const foreignKeys = db.prepare('PRAGMA foreign_key_list(events)').all();
+  if (foreignKeys.length !== 0) return 'MALFORMED';
+
+  const columns = db.prepare('PRAGMA table_xinfo(events)').all() as EventColumnInfo[];
+  const sql = normalizeSql(masterRows[0]?.sql);
+  if (exactEventColumnShape(columns, LEGACY_EVENT_COLUMNS)
+      && sql === normalizeSql(LEGACY_EVENT_TABLE_SQL)) return 'LEGACY';
+  if (exactEventColumnShape(columns, EVENT_V3_COLUMNS)
+      && sql === normalizeSql(EVENT_V3_TABLE_SQL)) return 'V3';
+  return 'MALFORMED';
+}
+
+function exactEventIndex(
+  db: Database.Database,
+  listRow: Readonly<EventIndexListRow>,
+  masterRow: Readonly<SqliteMasterSqlRow>,
+  spec: (typeof EVENT_INDEX_SPECS)[number],
+): boolean {
+  if (listRow.name !== spec.name
+      || listRow.unique !== spec.unique
+      || listRow.origin !== 'c'
+      || listRow.partial !== spec.partial
+      || masterRow.name !== spec.name
+      || masterRow.tbl_name !== 'events'
+      || normalizeSql(masterRow.sql) !== normalizeSql(spec.sql)) return false;
+
+  const rows = db.prepare(`PRAGMA index_xinfo(${spec.name})`).all() as EventIndexXInfoRow[];
+  if (rows.length !== spec.keys.length + 1) return false;
+  const exactKeys = spec.keys.every((key, index) => {
+    const row = rows[index];
+    return row?.seqno === index
+      && row.cid === key.cid
+      && row.name === key.name
+      && row.desc === key.desc
+      && row.coll === 'BINARY'
+      && row.key === 1;
+  });
+  const rowid = rows[spec.keys.length];
+  return exactKeys
+    && rowid?.seqno === spec.keys.length
+    && rowid.cid === -1
+    && rowid.name === null
+    && rowid.desc === 0
+    && rowid.coll === 'BINARY'
+    && rowid.key === 0;
+}
+
+function eventIndexRows(db: Database.Database): {
+  readonly list: readonly EventIndexListRow[];
+  readonly master: readonly SqliteMasterSqlRow[];
+} {
+  return {
+    list: db.prepare('PRAGMA index_list(events)').all() as EventIndexListRow[],
+    master: db.prepare(`
+      SELECT name, tbl_name, sql
+      FROM sqlite_master
+      WHERE type = 'index' AND tbl_name = 'events' COLLATE NOCASE
+    `).all() as SqliteMasterSqlRow[],
+  };
+}
+
+function eventTriggerRows(db: Database.Database): readonly SqliteMasterSqlRow[] {
+  return db.prepare(`
+    SELECT name, tbl_name, sql
+    FROM sqlite_master
+    WHERE type = 'trigger' AND tbl_name = 'events' COLLATE NOCASE
+  `).all() as SqliteMasterSqlRow[];
+}
+
+function exactCanonicalEventTriggers(rows: readonly SqliteMasterSqlRow[]): boolean {
+  return rows.length === EVENT_TRIGGER_SPECS.length
+    && EVENT_TRIGGER_SPECS.every((spec) => {
+      const row = rows.find((candidate) => candidate.name === spec.name);
+      return row?.tbl_name === 'events'
+        && normalizeSql(row.sql) === normalizeSql(spec.sql);
+    });
+}
+
+function assertMigratableEventTriggers(db: Database.Database): void {
+  const rows = eventTriggerRows(db);
+  if (rows.length !== 0 && !exactCanonicalEventTriggers(rows)) {
+    throw new Error('LEDGER_EVENT_TRIGGER_SCHEMA_MALFORMED');
+  }
+}
+
+function assertCanonicalEventTriggers(db: Database.Database): void {
+  if (!exactCanonicalEventTriggers(eventTriggerRows(db))) {
+    throw new Error('LEDGER_EVENT_TRIGGER_SCHEMA_MALFORMED');
+  }
+}
+
+function assertMigratableEventIndexes(db: Database.Database): void {
+  const rows = eventIndexRows(db);
+  if (rows.list.length !== rows.master.length) {
+    throw new Error('LEDGER_EVENT_INDEX_SCHEMA_MALFORMED');
+  }
+  for (const listRow of rows.list) {
+    const spec = EVENT_INDEX_SPECS.find((candidate) => candidate.name === listRow.name);
+    const masterRow = rows.master.find((candidate) => candidate.name === listRow.name);
+    if (spec === undefined || spec.name === 'idx_events_correlation'
+        || masterRow === undefined || !exactEventIndex(db, listRow, masterRow, spec)) {
+      throw new Error('LEDGER_EVENT_INDEX_SCHEMA_MALFORMED');
+    }
+  }
+}
+
+function assertCanonicalEventIndexes(db: Database.Database): void {
+  const rows = eventIndexRows(db);
+  if (rows.list.length !== EVENT_INDEX_SPECS.length
+      || rows.master.length !== EVENT_INDEX_SPECS.length) {
+    throw new Error('LEDGER_EVENT_INDEX_SCHEMA_MALFORMED');
+  }
+  for (const spec of EVENT_INDEX_SPECS) {
+    const listRow = rows.list.find((candidate) => candidate.name === spec.name);
+    const masterRow = rows.master.find((candidate) => candidate.name === spec.name);
+    if (listRow === undefined || masterRow === undefined
+        || !exactEventIndex(db, listRow, masterRow, spec)) {
+      throw new Error('LEDGER_EVENT_INDEX_SCHEMA_MALFORMED');
+    }
+  }
+}
+
+function upgradeEventSchemaVersion(db: Database.Database): void {
+  const updated = db.prepare(`
+    UPDATE ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+    SET current_schema_version = ?, rollback_floor = ?
+    WHERE singleton = 1
+      AND current_schema_version = ?
+      AND typeof(rollback_floor) = 'integer'
+      AND rollback_floor BETWEEN 0 AND ?
+  `).run(
+    LEDGER_SCHEMA_VERSION,
+    LEDGER_ROLLBACK_FLOOR,
+    LEDGER_EXACT_FILL_SCHEMA_VERSION,
+    LEDGER_EXACT_FILL_SCHEMA_VERSION,
+  );
+  if (updated.changes !== 1) throw new Error('LEDGER_SCHEMA_COMPATIBILITY_MIGRATION_BLOCKED');
+  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+}
+
+function initializeEventSchemaVersion(db: Database.Database, legacyRollbackFloor: number): void {
+  const existingRows = db.prepare(`
+    SELECT singleton, current_schema_version, rollback_floor
+    FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+    LIMIT 2
+  `).all();
+  if (existingRows.length !== 0) {
+    throw new Error('LEDGER_SCHEMA_COMPATIBILITY_LEGACY_COLLISION');
+  }
+  const rollbackFloor = Math.max(legacyRollbackFloor, LEDGER_ROLLBACK_FLOOR);
+  db.prepare(`
+    INSERT INTO ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+      (singleton, current_schema_version, rollback_floor)
+    VALUES (1, ?, ?)
+  `).run(LEDGER_SCHEMA_VERSION, rollbackFloor);
+  db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
+}
+
+function assertCompleteEventMetadataStorage(db: Database.Database): void {
+  const rows = db.prepare(`
+    SELECT severity, source, strategy, status, reason, message, correlation,
+           created_at AS createdAt
+    FROM events
+    ORDER BY id ASC
+  `).iterate() as IterableIterator<StoredLedgerEventMetadata>;
+  for (const row of rows) {
+    prepareStoredLedgerEventMetadata(row);
+  }
+}
+
+function assertCanonicalEventStorage(db: Database.Database): void {
+  if (eventTableShape(db) !== 'V3') throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+  assertCanonicalEventIndexes(db);
+  assertCanonicalEventTriggers(db);
+  assertCompleteEventMetadataStorage(db);
+}
+
+/**
+ * Adds the v3 generic event envelope in place. SQLite ADD COLUMN preserves the
+ * historical rows; created_at alone is deterministically backfilled from the
+ * old receipt timestamp, while every historically absent descriptive field
+ * remains NULL.
+ */
+function migrateEventStorage(
+  db: Database.Database,
+  allowFreshV3: boolean,
+  legacyRollbackFloor: number,
+): void {
+  db.transaction(() => {
+    const liveSchemaVersion = db.pragma('user_version', { simple: true }) as unknown;
+    if (!Number.isSafeInteger(liveSchemaVersion)
+        || (liveSchemaVersion as number) < 0
+        || (liveSchemaVersion as number) > LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
+    }
+    const version = liveSchemaVersion as number;
+    const shape = eventTableShape(db);
+    if (shape === 'V3') {
+      // A completed envelope beside an older durable marker cannot be an
+      // interrupted migration: SQLite transactions commit schema, backfill,
+      // compatibility row and user_version together. Treat that split-brain
+      // shape as corruption instead of guessing which side is authoritative.
+      if (version > 0 && version < LEDGER_SCHEMA_VERSION) {
+        throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+      }
+      if (version === 0) {
+        if (!allowFreshV3) throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+        db.exec(CREATE_EVENT_INDEXES_SQL);
+      }
+      assertCanonicalEventStorage(db);
+      if (version === 0) initializeEventSchemaVersion(db, legacyRollbackFloor);
+      return;
+    }
+    if (shape !== 'LEGACY' || version >= LEDGER_SCHEMA_VERSION) {
+      throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+    }
+    // Rank-42 owns immutable incident checkpoint events through exact triggers.
+    // Temporarily remove only those already-proven triggers inside this same
+    // migration transaction so the deterministic created_at backfill can
+    // cover protected historical rows; rollback restores the prior schema.
+    assertCanonicalEventTriggers(db);
+    db.exec(DROP_EVENT_TRIGGERS_SQL);
+    db.exec(`
+      ALTER TABLE events ADD COLUMN severity TEXT;
+      ALTER TABLE events ADD COLUMN source TEXT;
+      ALTER TABLE events ADD COLUMN strategy TEXT;
+      ALTER TABLE events ADD COLUMN status TEXT;
+      ALTER TABLE events ADD COLUMN reason TEXT;
+      ALTER TABLE events ADD COLUMN message TEXT;
+      ALTER TABLE events ADD COLUMN correlation TEXT;
+      ALTER TABLE events ADD COLUMN created_at INTEGER;
+    `);
+    if (eventTableShape(db) !== 'V3') {
+      throw new Error('LEDGER_EVENT_SCHEMA_MIGRATION_INCOMPLETE');
+    }
+    db.prepare('UPDATE events SET created_at = ts WHERE created_at IS NULL').run();
+    db.exec(CREATE_EVENT_TRIGGERS_SQL);
+    db.exec(CREATE_EVENT_INDEXES_SQL);
+    assertCanonicalEventStorage(db);
+    if (version === 0) initializeEventSchemaVersion(db, legacyRollbackFloor);
+    else if (version === LEDGER_EXACT_FILL_SCHEMA_VERSION) upgradeEventSchemaVersion(db);
   }).immediate();
 }
 
@@ -551,6 +1387,14 @@ interface EventDbRow {
   kind: string;
   symbol: string | null;
   data: string | null;
+  severity: string | null;
+  source: string | null;
+  strategy: string | null;
+  status: string | null;
+  reason: string | null;
+  message: string | null;
+  correlation: string | null;
+  created_at: number | null;
 }
 
 interface ProductOperatorEventDbRow {
@@ -754,6 +1598,64 @@ export class Ledger extends EventEmitter {
       if ((startupSchemaVersion as number) > 0 && startupFillTable.count !== 1) {
         throw new Error('LEDGER_FILL_SCHEMA_MISSING');
       }
+      const startupEventShape = eventTableShape(this.db);
+      const allowFreshEventV3 = (() => {
+        const version = startupSchemaVersion as number;
+        if (version === LEDGER_SCHEMA_VERSION) {
+          if (startupEventShape === 'MISSING') throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+          if (startupEventShape !== 'V3') throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+          assertCanonicalEventStorage(this.db);
+          return false;
+        }
+        if (version > 0) {
+          if (startupEventShape === 'MISSING') throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+          if (startupEventShape === 'V3') throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+          if (startupEventShape !== 'LEGACY') throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+          assertMigratableEventIndexes(this.db);
+          assertMigratableEventTriggers(this.db);
+          return false;
+        }
+        if (legacyCompatibility !== null) {
+          if (startupEventShape === 'MISSING') throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+          if (legacyCompatibility.dataSchema !== 1 || startupEventShape === 'V3') {
+            throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+          }
+          if (startupEventShape !== 'LEGACY') throw new Error('LEDGER_EVENT_SCHEMA_MALFORMED');
+          const compatibilityObjects = this.db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM sqlite_master
+            WHERE name = ? COLLATE NOCASE
+          `).get(LEDGER_SCHEMA_COMPATIBILITY_TABLE) as { count: unknown };
+          if (compatibilityObjects.count !== 0) {
+            try {
+              const rows = this.db.prepare(`
+                SELECT singleton, current_schema_version, rollback_floor
+                FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
+                LIMIT 1
+              `).all();
+              if (rows.length !== 0) {
+                throw new Error('LEDGER_SCHEMA_COMPATIBILITY_LEGACY_COLLISION');
+              }
+            } catch {
+              throw new Error('LEDGER_SCHEMA_COMPATIBILITY_LEGACY_COLLISION');
+            }
+          }
+          assertMigratableEventIndexes(this.db);
+          assertMigratableEventTriggers(this.db);
+          return false;
+        }
+        if (startupEventShape !== 'MISSING') {
+          throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+        }
+        const existingSchemaObjects = this.db.prepare(`
+          SELECT COUNT(*) AS count
+          FROM sqlite_master
+          WHERE type IN ('table', 'index', 'trigger', 'view')
+            AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
+        `).get() as { count: unknown };
+        if (existingSchemaObjects.count !== 0) throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+        return true;
+      })();
 
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('foreign_keys = ON');
@@ -769,13 +1671,7 @@ export class Ledger extends EventEmitter {
           AND rollback_floor <= current_schema_version
         )
       );
-      CREATE TABLE IF NOT EXISTS events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts INTEGER NOT NULL,
-        kind TEXT NOT NULL,
-        symbol TEXT,
-        data TEXT
-      );
+      ${CREATE_EVENT_V3_TABLE_SQL};
       CREATE TABLE IF NOT EXISTS fills (
         symbol TEXT NOT NULL,
         trade_id INTEGER NOT NULL,
@@ -806,6 +1702,21 @@ export class Ledger extends EventEmitter {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS product_incident_source_dispositions (
+        source_event_id INTEGER PRIMARY KEY REFERENCES events(id),
+        disposition_event_id INTEGER NOT NULL UNIQUE REFERENCES events(id),
+        previous_source_event_id INTEGER NOT NULL,
+        previous_disposition_event_id INTEGER NOT NULL,
+        processed_count INTEGER NOT NULL UNIQUE CHECK(processed_count >= 1),
+        chain_digest TEXT NOT NULL UNIQUE CHECK(length(chain_digest) = 64)
+      );
+      CREATE TRIGGER IF NOT EXISTS product_incident_source_dispositions_no_update
+        BEFORE UPDATE ON product_incident_source_dispositions
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint history is immutable'); END;
+      CREATE TRIGGER IF NOT EXISTS product_incident_source_dispositions_no_delete
+        BEFORE DELETE ON product_incident_source_dispositions
+        BEGIN SELECT RAISE(ABORT, 'product incident checkpoint history is immutable'); END;
+      ${CREATE_EVENT_TRIGGERS_SQL};
       CREATE TABLE IF NOT EXISTS product_component_desired_state (
         component_id TEXT PRIMARY KEY,
         desired_state TEXT NOT NULL,
@@ -951,8 +1862,6 @@ export class Ledger extends EventEmitter {
         last_seen INTEGER NOT NULL,
         requests INTEGER NOT NULL DEFAULT 0
       );
-      CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts DESC);
-      CREATE INDEX IF NOT EXISTS idx_events_kind ON events (kind, ts DESC);
       CREATE INDEX IF NOT EXISTS idx_product_operator_events_correlation_cursor
         ON product_operator_events (correlation_id, cursor);
       CREATE INDEX IF NOT EXISTS idx_product_operator_events_component_cursor
@@ -977,32 +1886,11 @@ export class Ledger extends EventEmitter {
       CREATE INDEX IF NOT EXISTS idx_browser_sessions_last_seen ON browser_sessions (last_seen DESC);
     `);
       migrateFillStorage(this.db);
-      if (startupSchemaVersion === 0) {
-        const initializeCompatibility = this.db.transaction(() => {
-          const liveSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
-          if (liveSchemaVersion === LEDGER_SCHEMA_VERSION) return;
-          if (liveSchemaVersion !== 0) throw new Error('LEDGER_SCHEMA_VERSION_MISMATCH');
-          const existingRows = this.db.prepare(`
-            SELECT singleton, current_schema_version, rollback_floor
-            FROM ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
-            LIMIT 2
-          `).all();
-          if (existingRows.length !== 0) {
-            throw new Error('LEDGER_SCHEMA_COMPATIBILITY_LEGACY_COLLISION');
-          }
-          const rollbackFloor = Math.max(
-            legacyCompatibility?.rollbackFloor ?? 0,
-            LEDGER_ROLLBACK_FLOOR,
-          );
-          this.db.prepare(`
-            INSERT INTO ${LEDGER_SCHEMA_COMPATIBILITY_TABLE}
-              (singleton, current_schema_version, rollback_floor)
-            VALUES (1, ?, ?)
-          `).run(LEDGER_SCHEMA_VERSION, rollbackFloor);
-          this.db.pragma(`user_version = ${LEDGER_SCHEMA_VERSION}`);
-        });
-        initializeCompatibility.immediate();
-      }
+      migrateEventStorage(
+        this.db,
+        allowFreshEventV3,
+        legacyCompatibility?.rollbackFloor ?? 0,
+      );
 
       const compatibility = this.readSchemaCompatibility();
       if (compatibility.state !== 'AVAILABLE') {
@@ -1033,19 +1921,27 @@ export class Ledger extends EventEmitter {
     }
   }
 
-  logEvent(kind: string, symbol?: string | null, data?: unknown): LedgerEvent {
+  logEvent(
+    kind: string,
+    symbol?: string | null,
+    data?: unknown,
+    metadata: Readonly<LedgerEventMetadataInput> = {},
+  ): LedgerEvent {
     const ts = Date.now();
-    validateFinancialMutationEvent(kind, symbol ?? null, data);
+    const preparedData = prepareLedgerEventData(data, data !== undefined);
+    validateFinancialMutationEvent(kind, symbol ?? null, preparedData.value);
+    const preparedMetadata = snapshotLedgerEventMetadata(metadata);
     const info = this.db
-      .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-      .run(ts, kind, symbol ?? null, data === undefined ? null : JSON.stringify(data));
-    const ev: LedgerEvent = {
-      id: Number(info.lastInsertRowid),
+      .prepare(LEDGER_EVENT_INSERT_SQL)
+      .run(...eventInsertValues(ts, kind, symbol ?? null, preparedData.serialized, preparedMetadata));
+    const ev = ledgerEventFromAppend(
+      Number(info.lastInsertRowid),
       ts,
       kind,
-      symbol: symbol ?? null,
-      data: data ?? null,
-    };
+      symbol ?? null,
+      preparedData.value,
+      preparedMetadata,
+    );
     this.emit('event', ev);
     return ev;
   }
@@ -1060,33 +1956,71 @@ export class Ledger extends EventEmitter {
     if (!Array.isArray(records) || records.length < 1 || records.length > 8) {
       throw new Error('atomic ledger event batch must contain between 1 and 8 records');
     }
-    const ts = Date.now();
-    const insert = this.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
-    const commit = this.db.transaction(() => records.map((record) => {
-      if (typeof record.kind !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(record.kind)) {
+    const preparedRecords = records.map((record) => {
+      if (record === null || typeof record !== 'object') {
+        throw new Error('invalid atomic ledger event record');
+      }
+      const kind = record.kind;
+      const rawSymbol = record.symbol;
+      const rawData = record.data;
+      const hasData = Object.hasOwn(record, 'data');
+      if (typeof kind !== 'string' || !/^[a-z0-9_.-]{1,64}$/.test(kind)) {
         throw new Error('invalid atomic ledger event kind');
       }
-      validateFinancialMutationEvent(record.kind, record.symbol ?? null, record.data);
-      const serialized = record.data === undefined ? null : JSON.stringify(record.data);
-      const info = insert.run(ts, record.kind, record.symbol ?? null, serialized);
-      return {
-        id: Number(info.lastInsertRowid),
+      if (rawSymbol !== undefined && rawSymbol !== null && typeof rawSymbol !== 'string') {
+        throw new Error('invalid atomic ledger event symbol');
+      }
+      if (!hasData && rawData !== undefined) {
+        throw new Error('invalid atomic ledger event data');
+      }
+      const symbol = rawSymbol ?? null;
+      const data = prepareLedgerEventData(rawData, hasData);
+      validateFinancialMutationEvent(kind, symbol, data.value);
+      return Object.freeze({
+        kind,
+        symbol,
+        data,
+        metadata: snapshotLedgerEventMetadata(record),
+      });
+    });
+    const ts = Date.now();
+    const insert = this.db.prepare(LEDGER_EVENT_INSERT_SQL);
+    const commit = this.db.transaction(() => preparedRecords.map((record) => {
+      const info = insert.run(...eventInsertValues(
         ts,
-        kind: record.kind,
-        symbol: record.symbol ?? null,
-        data: record.data ?? null,
-      } satisfies LedgerEvent;
+        record.kind,
+        record.symbol,
+        record.data.serialized,
+        record.metadata,
+      ));
+      return ledgerEventFromAppend(
+        Number(info.lastInsertRowid),
+        ts,
+        record.kind,
+        record.symbol,
+        record.data.value,
+        record.metadata,
+      );
     }));
     const events = commit();
-    for (const event of events) {
-      try {
-        this.emit('event', event);
-      } catch {
-        // SQLite is the source of truth. A listener failure after commit must
-        // not make the caller retry or reinterpret a financial outcome.
+    const cloneCommittedEvent = (event: Readonly<LedgerEvent>, index: number): LedgerEvent => ({
+      ...event,
+      data: preparedRecords[index].data.serialized === null
+        ? null
+        : JSON.parse(preparedRecords[index].data.serialized) as unknown,
+    });
+    const exactEvents = events.map((event, index) => cloneCommittedEvent(event, index));
+    for (const [index, event] of events.entries()) {
+      for (const listener of this.rawListeners('event')) {
+        try {
+          listener.call(this, cloneCommittedEvent(event, index));
+        } catch {
+          // SQLite is the source of truth. A listener failure after commit must
+          // not make the caller retry or reinterpret a financial outcome.
+        }
       }
     }
-    return events;
+    return exactEvents;
   }
 
   recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number, beforeId?: number, until?: number, offset = 0, afterId?: number): LedgerEvent[] {
@@ -1105,8 +2039,14 @@ export class Ledger extends EventEmitter {
       if (!like) return [];
       clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
       params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push("(data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\')");
-      params.push(like, like, like);
+      clauses.push(`(
+        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
+        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
+        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
+        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
+        OR correlation LIKE ? ESCAPE '\\'
+      )`);
+      params.push(like, like, like, like, like, like, like, like, like, like);
     }
     if (since !== undefined && Number.isFinite(since)) {
       clauses.push('ts >= ?');
@@ -1144,14 +2084,30 @@ export class Ledger extends EventEmitter {
       if (!like) return 0;
       clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
       params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push("(data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\')");
-      params.push(like, like, like);
+      clauses.push(`(
+        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
+        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
+        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
+        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
+        OR correlation LIKE ? ESCAPE '\\'
+      )`);
+      params.push(like, like, like, like, like, like, like, like, like, like);
     }
     if (since !== undefined && Number.isFinite(since)) { clauses.push('ts >= ?'); params.push(since); }
     if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const row = this.db.prepare(`SELECT COUNT(*) AS count FROM events ${where}`).get(...params) as { count?: number } | undefined;
-    return Number(row?.count) || 0;
+    const rows = this.db.prepare(`
+      SELECT severity, source, strategy, status, reason, message, correlation,
+             created_at AS createdAt
+      FROM events ${where}
+    `).iterate(...params) as IterableIterator<StoredLedgerEventMetadata>;
+    let count = 0;
+    for (const row of rows) {
+      prepareStoredLedgerEventMetadata(row);
+      if (count === Number.MAX_SAFE_INTEGER) throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
+      count += 1;
+    }
+    return count;
   }
 
   eventsSince(ts: number, kind: string): LedgerEvent[] {
@@ -1827,20 +2783,22 @@ export class Ledger extends EventEmitter {
     prepared: Readonly<PreparedProductPersistenceAudit>,
   ): LedgerEvent {
     const ts = Date.now();
+    const metadata = prepareLedgerEventMetadata({});
     const info = this.db
-      .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-      .run(ts, prepared.kind, prepared.symbol, prepared.serialized);
+      .prepare(LEDGER_EVENT_INSERT_SQL)
+      .run(...eventInsertValues(ts, prepared.kind, prepared.symbol, prepared.serialized, metadata));
     const id = Number(info.lastInsertRowid);
     if (!Number.isSafeInteger(id) || id < 1) {
       throw new RangeError('product persistence ledger event identity is invalid');
     }
-    return {
+    return ledgerEventFromAppend(
       id,
       ts,
-      kind: prepared.kind,
-      symbol: prepared.symbol,
-      data: JSON.parse(prepared.serialized) as SystemJsonValue,
-    };
+      prepared.kind,
+      prepared.symbol,
+      JSON.parse(prepared.serialized) as SystemJsonValue,
+      metadata,
+    );
   }
 
   private readProductPersistenceAudit(
@@ -1865,7 +2823,7 @@ export class Ledger extends EventEmitter {
   ): ProductPersistenceMutationResult {
     if (result.disposition !== 'COMMITTED_NEW') return result;
     try {
-      const event = result.ledgerEvent;
+      const event = this.readProductPersistenceAudit(result.ledgerEvent.id);
       this.emit('event', {
         ...event,
         data: JSON.parse(JSON.stringify(event.data)) as unknown,
@@ -1905,8 +2863,10 @@ export class Ledger extends EventEmitter {
     kind: string,
     symbol: string | null = null,
     data: unknown = null,
+    metadataInput: Readonly<LedgerEventMetadataInput> = {},
   ): LedgerEvent {
     const ts = Date.now();
+    const metadata = prepareLedgerEventMetadata(metadataInput);
     let serialized: string | null = null;
     if (data !== undefined) {
       const encoded = JSON.stringify(data);
@@ -1920,8 +2880,8 @@ export class Ledger extends EventEmitter {
         .prepare('INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
         .run(key, value);
       const info = this.db
-        .prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)')
-        .run(ts, kind, symbol, serialized);
+        .prepare(LEDGER_EVENT_INSERT_SQL)
+        .run(...eventInsertValues(ts, kind, symbol, serialized, metadata));
       const ledgerEventId = Number(info.lastInsertRowid);
       if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
         throw new RangeError('ledger event identity exceeds the supported integer range');
@@ -1951,13 +2911,14 @@ export class Ledger extends EventEmitter {
       return ledgerEventId;
     });
     const ledgerEventId = commit.immediate();
-    const event: LedgerEvent = {
-      id: ledgerEventId,
+    const event = ledgerEventFromAppend(
+      ledgerEventId,
       ts,
       kind,
       symbol,
-      data: durableData,
-    };
+      durableData,
+      metadata,
+    );
     try {
       this.emit('event', event);
       return event;
@@ -1981,6 +2942,14 @@ export class Ledger extends EventEmitter {
           && row.kind === kind
           && row.symbol === symbol
           && row.data === serialized
+          && row.severity === metadata.severity
+          && row.source === metadata.source
+          && row.strategy === metadata.strategy
+          && row.status === metadata.status
+          && row.reason === metadata.reason
+          && row.message === metadata.message
+          && row.correlation === metadata.correlation
+          && row.created_at === (metadata.createdAt ?? ts)
           && exactOperator) {
           return parseEvent(row);
         }
@@ -1988,13 +2957,14 @@ export class Ledger extends EventEmitter {
         // A listener may close its surrounding application. The pristine
         // transaction result below remains authoritative in that case.
       }
-      return {
-        id: ledgerEventId,
+      return ledgerEventFromAppend(
+        ledgerEventId,
         ts,
         kind,
         symbol,
-        data: serialized === null ? null : JSON.parse(serialized) as unknown,
-      };
+        serialized === null ? null : JSON.parse(serialized) as unknown,
+        metadata,
+      );
     }
   }
 
@@ -2432,7 +3402,8 @@ export class Ledger extends EventEmitter {
   }
 
   /**
-   * Persists an incident projection with an exact event-count CAS. Grouping,
+   * Persists an incident projection with an exact sole-Ledger event revision
+   * CAS. `eventCount` is incident evidence, never a version token. Grouping,
    * severity, acknowledgement, and resolution remain supplied owner truth.
    */
   compareAndTransitionProductIncident(
@@ -2442,20 +3413,16 @@ export class Ledger extends EventEmitter {
     assertProductIdentifier(input.incidentId, 'product incidentId');
     assertProductIdentifier(input.fingerprint, 'product incident fingerprint');
     assertProductIdentifier(input.rootComponentId, 'product incident rootComponentId');
-    assertProductDomainState(input.severity, 'product incident severity');
+    assertProductIncidentSeverity(input.severity, 'product incident severity');
     if (typeof input.capitalRelevant !== 'boolean') throw new TypeError('product incident capitalRelevant is invalid');
-    if (input.expectedEventCount !== null) {
-      assertProductPositiveInteger(input.expectedEventCount, 'product incident expectedEventCount');
+    if (input.expectedLedgerEventId !== null) {
+      assertProductPositiveInteger(input.expectedLedgerEventId, 'product incident expectedLedgerEventId');
     }
-    assertProductDomainState(input.state, 'product incident state');
+    assertProductIncidentState(input.state, 'product incident state');
     assertProductUtcMillis(input.firstSeenAtMs, 'product incident firstSeenAtMs');
     assertProductUtcMillis(input.lastSeenAtMs, 'product incident lastSeenAtMs');
     if (input.lastSeenAtMs < input.firstSeenAtMs) throw new TypeError('product incident lastSeenAtMs precedes firstSeenAtMs');
     assertProductPositiveInteger(input.eventCount, 'product incident eventCount');
-    const expectedNextCount = input.expectedEventCount === null ? 1 : input.expectedEventCount + 1;
-    if (!Number.isSafeInteger(expectedNextCount) || input.eventCount !== expectedNextCount) {
-      throw new TypeError('product incident eventCount must advance exactly once');
-    }
     if ((input.acknowledgedAtMs === null) !== (input.acknowledgedByOperatorId === null)) {
       throw new TypeError('product incident acknowledgement fields must be paired');
     }
@@ -2468,6 +3435,15 @@ export class Ledger extends EventEmitter {
       assertProductUtcMillis(input.resolvedAtMs, 'product incident resolvedAtMs');
       if (input.resolvedAtMs < input.firstSeenAtMs) throw new TypeError('product incident resolution precedes first sighting');
     }
+    if (!validProductIncidentLifecycle(
+      input.state,
+      input.lastSeenAtMs,
+      input.acknowledgedAtMs,
+      input.acknowledgedByOperatorId,
+      input.resolvedAtMs,
+    )) {
+      throw new TypeError('product incident state fields are inconsistent');
+    }
     assertProductIdentifier(input.correlationId, 'product incident correlationId');
     const audit = prepareProductPersistenceAudit(input.audit);
 
@@ -2478,6 +3454,9 @@ export class Ledger extends EventEmitter {
         ORDER BY CASE WHEN incident_id = ? THEN 0 ELSE 1 END
         LIMIT 1
       `).get(input.incidentId, input.fingerprint, input.incidentId) as ProductIncidentDbRow | undefined;
+      if (existing) {
+        productIncidentRecord(existing, this.readProductPersistenceAudit(existing.ledger_event_id));
+      }
       if (existing && exactProductIncidentRow(existing, input)) {
         return frozenProductPersistenceResult(
           'IDEMPOTENT_REPLAY',
@@ -2488,17 +3467,34 @@ export class Ledger extends EventEmitter {
       if (existing && (existing.incident_id !== input.incidentId || existing.fingerprint !== input.fingerprint)) {
         return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, String(existing.event_count));
       }
-      const currentCount = existing?.event_count ?? null;
-      if (currentCount !== input.expectedEventCount) {
+      const currentRevision = existing?.ledger_event_id ?? null;
+      if (currentRevision !== input.expectedLedgerEventId) {
         return frozenProductPersistenceResult(
           'VERSION_CONFLICT',
           null,
-          currentCount === null ? null : String(currentCount),
+          currentRevision === null ? null : String(currentRevision),
         );
+      }
+      if (!existing && input.eventCount !== 1) {
+        throw new TypeError('new product incident eventCount must equal one');
+      }
+      if (!existing && input.state !== 'OPEN') {
+        throw new TypeError('new product incident must begin OPEN');
+      }
+      if (existing && input.eventCount !== existing.event_count
+        && input.eventCount !== existing.event_count + 1) {
+        throw new TypeError('product incident eventCount may stay fixed or advance exactly once');
       }
       if (existing && (existing.first_seen_at_ms !== input.firstSeenAtMs
         || input.lastSeenAtMs < existing.last_seen_at_ms)) {
         throw new TypeError('product incident transition cannot rewrite first sighting or move last sighting backwards');
+      }
+      if (existing && (existing.root_component_id !== input.rootComponentId
+        || existing.correlation_id !== input.correlationId)) {
+        throw new TypeError('product incident transition cannot rewrite owner identity');
+      }
+      if (existing && !validProductIncidentTransition(existing, input)) {
+        throw new TypeError('product incident lifecycle transition is invalid');
       }
       const event = this.appendProductPersistenceAudit(audit);
       this.db.prepare(`
@@ -2538,9 +3534,681 @@ export class Ledger extends EventEmitter {
         input.correlationId,
         event.id,
       );
-      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(input.eventCount));
+      if (plainLedgerRecord(audit.data)
+        && audit.data.schema === PRODUCT_INCIDENT_ROUTE_SCHEMA
+        && Number.isSafeInteger(audit.data.sourceEventId)) {
+        this.advanceProductIncidentRouterCheckpointInTransaction(
+          Number(audit.data.sourceEventId),
+          event.id,
+        );
+      }
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
     });
     return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Appends one immutable disposition for an admitted source that creates no incident mutation. */
+  recordProductIncidentSourceDisposition(
+    input: Readonly<ProductPersistenceAuditRecord>,
+  ): ProductPersistenceMutationResult {
+    const audit = prepareProductPersistenceAudit(input);
+    const data = audit.data;
+    if (audit.kind !== 'product.incident.source_ignored'
+      || audit.symbol !== null
+      || !plainLedgerRecord(data)
+      || Object.keys(data).length !== PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS.length
+      || !PRODUCT_INCIDENT_SOURCE_DISPOSITION_KEYS.every((key) => Object.hasOwn(data, key))
+      || data.schema !== PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA
+      || (data.operation !== 'IGNORE_NO_ACTIVE' && data.operation !== 'IGNORE_LATE')
+      || !Number.isSafeInteger(data.sourceEventId) || Number(data.sourceEventId) < 1
+      || (data.sourceEventKind !== 'connection_alert' && data.sourceEventKind !== 'connection_recovered')
+      || typeof data.sourceGroup !== 'string' || !PRODUCT_IDENTIFIER.test(data.sourceGroup)
+      || (data.sourceStatus !== 'degraded' && data.sourceStatus !== 'outage' && data.sourceStatus !== 'operational')
+      || typeof data.sourceDetail !== 'string' || data.sourceDetail.length > 2_000
+      || !validProductUtcMillis(data.sourceObservedAtMs)
+      || typeof data.rootComponentId !== 'string' || !PRODUCT_IDENTIFIER.test(data.rootComponentId)
+      || typeof data.groupingDigest !== 'string' || !/^[a-f0-9]{64}$/.test(data.groupingDigest)
+      || data.incidentId !== null
+      || !((data.priorDispositionEventId === null
+        && data.priorSourceEventId === null
+        && data.priorObservedAtMs === null)
+        || (Number.isSafeInteger(data.priorDispositionEventId)
+          && Number(data.priorDispositionEventId) >= 1
+          && Number.isSafeInteger(data.priorSourceEventId)
+          && Number(data.priorSourceEventId) >= 1
+          && validProductUtcMillis(data.priorObservedAtMs)))
+      || (data.operation === 'IGNORE_NO_ACTIVE' && data.sourceEventKind !== 'connection_recovered')
+      || (data.operation === 'IGNORE_NO_ACTIVE'
+        && data.priorObservedAtMs !== null
+        && Number(data.priorObservedAtMs) > Number(data.sourceObservedAtMs))
+      || (data.operation === 'IGNORE_LATE'
+        && (data.priorSourceEventId === null
+          || Number(data.priorSourceEventId) >= Number(data.sourceEventId)
+          || Number(data.priorObservedAtMs) <= Number(data.sourceObservedAtMs)))
+      || data.externalActionAuthorization !== 'NONE') {
+      throw new TypeError('product incident source disposition is invalid');
+    }
+    const source = this.readProductIncidentSourceEvent(Number(data.sourceEventId));
+    if (!source || source.kind !== data.sourceEventKind || !plainLedgerRecord(source.data)
+      || source.data.componentId !== data.rootComponentId
+      || source.data.group !== data.sourceGroup
+      || source.data.status !== data.sourceStatus
+      || source.data.detail !== data.sourceDetail
+      || source.data.observedAt !== data.sourceObservedAtMs) {
+      throw new Error('product incident source disposition does not match durable source truth');
+    }
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const existing = this.readProductIncidentRoutingBySourceEventId(Number(data.sourceEventId));
+      if (existing !== null) {
+        if (existing.kind === audit.kind
+          && existing.symbol === audit.symbol
+          && canonicalProductPersistenceJson(existing.data, 'existing product incident source disposition')
+            === audit.serialized) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.id, audit),
+            String(existing.id),
+          );
+        }
+        return frozenProductPersistenceResult('IDEMPOTENCY_CONFLICT', null, String(existing.id));
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      this.advanceProductIncidentRouterCheckpointInTransaction(Number(data.sourceEventId), event.id);
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Atomically rotates one resolved top-N projection while preserving immutable Ledger history. */
+  compareAndRotateResolvedProductIncident(
+    input: Readonly<ProductIncidentRotationInput>,
+  ): ProductPersistenceMutationResult {
+    if (!plainLedgerRecord(input)
+      || Object.keys(input).length !== 3
+      || !Object.hasOwn(input, 'incidentId')
+      || !Object.hasOwn(input, 'expectedLedgerEventId')
+      || !Object.hasOwn(input, 'audit')) {
+      throw new TypeError('product incident rotation input is invalid');
+    }
+    assertProductIdentifier(input.incidentId, 'product incident rotation incidentId');
+    assertProductPositiveInteger(input.expectedLedgerEventId, 'product incident rotation expectedLedgerEventId');
+    const audit = prepareProductPersistenceAudit(input.audit);
+    const commit = this.db.transaction((): ProductPersistenceMutationResult => {
+      const row = this.db.prepare(`
+        SELECT * FROM product_incidents WHERE incident_id = ? LIMIT 1
+      `).get(input.incidentId) as ProductIncidentDbRow | undefined;
+      if (!row) {
+        const existing = this.readProductIncidentRotationByIncidentId(input.incidentId);
+        if (existing && existing.kind === audit.kind && existing.symbol === audit.symbol
+          && canonicalProductPersistenceJson(existing.data, 'existing product incident rotation') === audit.serialized) {
+          return frozenProductPersistenceResult(
+            'IDEMPOTENT_REPLAY',
+            this.readProductPersistenceAudit(existing.id, audit),
+            String(existing.id),
+          );
+        }
+        return frozenProductPersistenceResult('VERSION_CONFLICT', null, null);
+      }
+      productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id));
+      if (row.ledger_event_id !== input.expectedLedgerEventId) {
+        return frozenProductPersistenceResult('VERSION_CONFLICT', null, String(row.ledger_event_id));
+      }
+      if (row.state !== 'RESOLVED' || !productIncidentRotationAuditMatchesRow(audit.data, row)
+        || audit.kind !== 'product.incident.rotated' || audit.symbol !== null) {
+        throw new TypeError('product incident rotation audit does not match resolved projection truth');
+      }
+      const event = this.appendProductPersistenceAudit(audit);
+      const removed = this.db.prepare(`
+        DELETE FROM product_incidents
+        WHERE incident_id = ? AND ledger_event_id = ? AND state = 'RESOLVED'
+      `).run(row.incident_id, row.ledger_event_id);
+      if (removed.changes !== 1) throw new Error('product incident rotation compare-and-delete failed');
+      return frozenProductPersistenceResult('COMMITTED_NEW', event, String(event.id));
+    });
+    return this.publishProductPersistenceResult(commit.immediate());
+  }
+
+  /** Reads one exact incident projection and verifies its immutable audit row. */
+  readProductIncident(incidentId: string): Readonly<ProductIncidentRecord> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const row = this.db.prepare(`
+      SELECT * FROM product_incidents WHERE incident_id = ? LIMIT 1
+    `).get(incidentId) as ProductIncidentDbRow | undefined;
+    if (!row) return null;
+    return productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id));
+  }
+
+  /** Bounded deterministic incident list for one exact owner fingerprint namespace. */
+  readProductIncidentsByFingerprintPrefix(
+    fingerprintPrefix: string,
+    limit = 200,
+  ): readonly Readonly<ProductIncidentRecord>[] {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const safeLimit = boundedInteger(limit, 1, 200, 200);
+    const rows = this.db.prepare(`
+      SELECT * FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ?
+      ORDER BY
+        CASE state WHEN 'OPEN' THEN 0 WHEN 'ACKNOWLEDGED' THEN 1 WHEN 'RESOLVED' THEN 2 ELSE 3 END,
+        CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END,
+        last_seen_at_ms DESC,
+        incident_id ASC
+      LIMIT ?
+    `).all(fingerprintPrefix, fingerprintPrefix, safeLimit) as ProductIncidentDbRow[];
+    return Object.freeze(rows.map((row) => (
+      productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id))
+    )));
+  }
+
+  /** Exact owner-namespace cardinality prevents a bounded read from hiding overflow. */
+  countProductIncidentsByFingerprintPrefix(fingerprintPrefix: string): number {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ?
+    `).get(fingerprintPrefix, fingerprintPrefix) as { count: number };
+    assertProductNonNegativeInteger(row.count, 'product incident namespace count');
+    return row.count;
+  }
+
+  /** Reads admitted source events oldest-first for explicit startup catch-up. */
+  readProductIncidentSourceEvents(
+    afterId: number,
+    limit = 500,
+  ): readonly Readonly<LedgerEvent>[] {
+    if (!Number.isSafeInteger(afterId) || afterId < 0) {
+      throw new TypeError('product incident source cursor is invalid');
+    }
+    const safeLimit = boundedInteger(limit, 1, 500, 500);
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id > ? AND kind IN ('connection_alert', 'connection_recovered')
+      ORDER BY id ASC
+      LIMIT ?
+    `).all(afterId, safeLimit) as EventDbRow[];
+    return Object.freeze(rows.map((row) => Object.freeze(parseEvent(row))));
+  }
+
+  private advanceProductIncidentRouterCheckpointInTransaction(
+    sourceEventId: number,
+    dispositionEventId: number,
+  ): void {
+    assertProductPositiveInteger(sourceEventId, 'product incident checkpoint sourceEventId');
+    assertProductPositiveInteger(dispositionEventId, 'product incident checkpoint dispositionEventId');
+    const current = this.readProductIncidentRouterCheckpoint();
+    const currentSourceEventId = current.sourceEventId;
+    const currentDispositionEventId = current.dispositionEventId;
+    const currentProcessedCount = current.processedCount;
+    const currentChainDigest = current.chainDigest;
+    if (sourceEventId === currentSourceEventId) {
+      if (dispositionEventId !== currentDispositionEventId) {
+        throw new Error('product incident router checkpoint disposition conflicts');
+      }
+      return;
+    }
+    if (sourceEventId < currentSourceEventId) {
+      const mapping = this.db.prepare(`
+        SELECT disposition_event_id FROM product_incident_source_dispositions
+        WHERE source_event_id = ?
+      `).get(sourceEventId) as { disposition_event_id: number } | undefined;
+      if (!mapping || mapping.disposition_event_id !== dispositionEventId) {
+        throw new Error('product incident router historical checkpoint mapping conflicts');
+      }
+      return;
+    }
+    const nextSource = this.db.prepare(`
+      SELECT id FROM events
+      WHERE kind IN ('connection_alert', 'connection_recovered') AND id > ?
+      ORDER BY id ASC LIMIT 1
+    `).get(currentSourceEventId) as { id: number } | undefined;
+    if (!nextSource || nextSource.id !== sourceEventId) {
+      throw new Error('product incident router checkpoint advance has a source gap');
+    }
+    const source = this.readProductIncidentSourceEvent(sourceEventId);
+    const disposition = this.readProductIncidentRoutingBySourceEventId(sourceEventId);
+    if (source === null || disposition === null || disposition.id !== dispositionEventId
+      || disposition.id <= source.id || !plainLedgerRecord(disposition.data)
+      || disposition.data.sourceEventId !== source.id
+      || ![
+        PRODUCT_INCIDENT_ROUTE_SCHEMA,
+        PRODUCT_INCIDENT_SOURCE_DISPOSITION_SCHEMA,
+      ].includes(String(disposition.data.schema))) {
+      throw new Error('product incident router checkpoint advance proof is invalid');
+    }
+    const processedCount = currentProcessedCount + 1;
+    if (!Number.isSafeInteger(processedCount)) {
+      throw new Error('product incident router checkpoint count is exhausted');
+    }
+    const chainDigest = productIncidentRouterCheckpointDigest({
+      priorChainDigest: currentChainDigest,
+      priorSourceEventId: currentSourceEventId,
+      priorDispositionEventId: currentDispositionEventId,
+      sourceEventId,
+      dispositionEventId,
+      sourceData: source.data,
+      dispositionData: disposition.data,
+    });
+    const inserted = this.db.prepare(`
+      INSERT INTO product_incident_source_dispositions (
+        source_event_id, disposition_event_id, previous_source_event_id,
+        previous_disposition_event_id, processed_count, chain_digest
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(source_event_id) DO NOTHING
+    `).run(
+      sourceEventId,
+      dispositionEventId,
+      currentSourceEventId,
+      currentDispositionEventId,
+      processedCount,
+      chainDigest,
+    );
+    if (inserted.changes !== 1) throw new Error('product incident router checkpoint mapping conflicts');
+    this.db.prepare(`
+      INSERT INTO config (key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY, JSON.stringify({
+      schema: PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA,
+      sourceEventId,
+      dispositionEventId,
+      processedCount,
+      chainDigest,
+    }));
+  }
+
+  /**
+   * Reads only the bounded suffix after the atomically advanced incident-router
+   * checkpoint. The latest immutable chained receipt authenticates the prefix,
+   * so restart work is independent of lifetime source-event history.
+   */
+  readProductIncidentRouterBootstrapPage(limit = 500): readonly Readonly<LedgerEvent>[] {
+    const safeLimit = boundedInteger(limit, 1, 500, 500);
+    const checkpoint = this.readProductIncidentRouterCheckpoint();
+    return this.readProductIncidentSourceEvents(checkpoint.sourceEventId, safeLimit);
+  }
+
+  /** Exact durable high-water used to avoid lifetime-history replay on restart. */
+  readProductIncidentRouterCheckpoint(): Readonly<{
+    sourceEventId: number;
+    dispositionEventId: number;
+    processedCount: number;
+    chainDigest: string;
+  }> {
+    const raw = this.getConfigValue(PRODUCT_INCIDENT_ROUTER_CHECKPOINT_KEY);
+    if (raw === null) {
+      const mapping = this.db.prepare(`
+        SELECT source_event_id FROM product_incident_source_dispositions LIMIT 1
+      `).get() as { source_event_id: number } | undefined;
+      if (mapping) throw new Error('product incident router checkpoint is missing');
+      return Object.freeze({
+        sourceEventId: 0,
+        dispositionEventId: 0,
+        processedCount: 0,
+        chainDigest: PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST,
+      });
+    }
+    let value: unknown;
+    try { value = JSON.parse(raw) as unknown; } catch {
+      throw new Error('product incident router checkpoint is invalid');
+    }
+    if (!plainLedgerRecord(value)
+      || Object.keys(value).length !== 5
+      || value.schema !== PRODUCT_INCIDENT_ROUTER_CHECKPOINT_SCHEMA
+      || !Number.isSafeInteger(value.sourceEventId) || Number(value.sourceEventId) < 1
+      || !Number.isSafeInteger(value.dispositionEventId) || Number(value.dispositionEventId) < 1
+      || !Number.isSafeInteger(value.processedCount) || Number(value.processedCount) < 1
+      || typeof value.chainDigest !== 'string' || !/^[a-f0-9]{64}$/.test(value.chainDigest)) {
+      throw new Error('product incident router checkpoint is invalid');
+    }
+    const mapping = this.db.prepare(`
+      SELECT disposition_event_id, previous_source_event_id, previous_disposition_event_id,
+        processed_count, chain_digest
+      FROM product_incident_source_dispositions
+      WHERE source_event_id = ?
+    `).get(Number(value.sourceEventId)) as {
+      disposition_event_id: number;
+      previous_source_event_id: number;
+      previous_disposition_event_id: number;
+      processed_count: number;
+      chain_digest: string;
+    } | undefined;
+    if (!mapping || mapping.disposition_event_id !== value.dispositionEventId
+      || mapping.processed_count !== value.processedCount
+      || mapping.chain_digest !== value.chainDigest
+      || !Number.isSafeInteger(mapping.previous_source_event_id)
+      || mapping.previous_source_event_id < 0
+      || mapping.previous_source_event_id >= Number(value.sourceEventId)
+      || !Number.isSafeInteger(mapping.previous_disposition_event_id)
+      || mapping.previous_disposition_event_id < 0
+      || mapping.previous_disposition_event_id >= Number(value.dispositionEventId)
+      || ((mapping.previous_source_event_id === 0)
+        !== (mapping.previous_disposition_event_id === 0))) {
+      throw new Error('product incident router checkpoint mapping is invalid');
+    }
+    const latest = this.db.prepare(`
+      SELECT source_event_id, disposition_event_id, processed_count, chain_digest
+      FROM product_incident_source_dispositions
+      ORDER BY processed_count DESC LIMIT 1
+    `).get() as {
+      source_event_id: number;
+      disposition_event_id: number;
+      processed_count: number;
+      chain_digest: string;
+    } | undefined;
+    if (!latest
+      || latest.source_event_id !== value.sourceEventId
+      || latest.disposition_event_id !== value.dispositionEventId
+      || latest.processed_count !== value.processedCount
+      || latest.chain_digest !== value.chainDigest) {
+      throw new Error('product incident router checkpoint is not the immutable high-water');
+    }
+    const source = this.readProductIncidentSourceEvent(Number(value.sourceEventId));
+    const disposition = this.readProductIncidentRoutingBySourceEventId(Number(value.sourceEventId));
+    if (source === null || disposition === null || disposition.id !== value.dispositionEventId
+      || disposition.id <= source.id || !plainLedgerRecord(disposition.data)
+      || disposition.data.sourceEventId !== source.id) {
+      throw new Error('product incident router checkpoint proof is invalid');
+    }
+    let priorChainDigest = PRODUCT_INCIDENT_ROUTER_GENESIS_DIGEST;
+    if (mapping.previous_source_event_id === 0) {
+      if (mapping.processed_count !== 1) {
+        throw new Error('product incident router checkpoint genesis count is invalid');
+      }
+    } else {
+      const prior = this.db.prepare(`
+        SELECT disposition_event_id, processed_count, chain_digest
+        FROM product_incident_source_dispositions
+        WHERE source_event_id = ?
+      `).get(mapping.previous_source_event_id) as {
+        disposition_event_id: number;
+        processed_count: number;
+        chain_digest: string;
+      } | undefined;
+      if (!prior
+        || prior.disposition_event_id !== mapping.previous_disposition_event_id
+        || prior.processed_count !== mapping.processed_count - 1
+        || !/^[a-f0-9]{64}$/.test(prior.chain_digest)) {
+        throw new Error('product incident router checkpoint predecessor is invalid');
+      }
+      priorChainDigest = prior.chain_digest;
+    }
+    const expectedChainDigest = productIncidentRouterCheckpointDigest({
+      priorChainDigest,
+      priorSourceEventId: mapping.previous_source_event_id,
+      priorDispositionEventId: mapping.previous_disposition_event_id,
+      sourceEventId: Number(value.sourceEventId),
+      dispositionEventId: Number(value.dispositionEventId),
+      sourceData: source.data,
+      dispositionData: disposition.data,
+    });
+    if (expectedChainDigest !== value.chainDigest) {
+      throw new Error('product incident router checkpoint chain digest is invalid');
+    }
+    return Object.freeze({
+      sourceEventId: Number(value.sourceEventId),
+      dispositionEventId: Number(value.dispositionEventId),
+      processedCount: Number(value.processedCount),
+      chainDigest: value.chainDigest,
+    });
+  }
+
+  /** Advances an existing exact source disposition during idempotent catch-up. */
+  advanceProductIncidentRouterCheckpoint(sourceEventId: number): void {
+    assertProductPositiveInteger(sourceEventId, 'product incident checkpoint sourceEventId');
+    const disposition = this.readProductIncidentRoutingBySourceEventId(sourceEventId);
+    if (disposition === null) throw new Error('product incident checkpoint disposition is missing');
+    const commit = this.db.transaction(() => {
+      this.advanceProductIncidentRouterCheckpointInTransaction(sourceEventId, disposition.id);
+    });
+    commit.immediate();
+  }
+
+  /** Exact durable admitted source event for router input authentication. */
+  readProductIncidentSourceEvent(sourceEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(sourceEventId, 'product incident sourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id = ? AND kind IN ('connection_alert', 'connection_recovered')
+    `).get(sourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact durable source-event dedupe for Product incident routing audits. */
+  readProductIncidentRoutingBySourceEventId(sourceEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(sourceEventId, 'product incident sourceEventId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(sourceEventId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident source routing events');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Exact immutable Product incident route by its Ledger receipt revision. */
+  readProductIncidentRoutingByReceiptEventId(receiptEventId: number): Readonly<LedgerEvent> | null {
+    assertProductPositiveInteger(receiptEventId, 'product incident routing receiptEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE id = ?
+        AND kind IN ('product.incident.opened', 'product.incident.grouped', 'product.incident.resolved')
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+      LIMIT 1
+    `).get(receiptEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Latest exact processed-source high-water for one component/group stream. */
+  readLatestProductIncidentSourceDisposition(
+    componentId: string,
+    sourceGroup: string,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact predecessor disposition for ignored-source causal proof. */
+  readPreviousProductIncidentSourceDisposition(
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    assertProductPositiveInteger(beforeSourceEventId, 'product incident beforeSourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN (
+        'product.incident.opened', 'product.incident.grouped', 'product.incident.resolved',
+        'product.incident.source_ignored'
+      )
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-route.v1',
+          'cosmos.product-incident-source-disposition.v1'
+        )
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END < ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup, beforeSourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Exact predecessor route, excluding ignored late/unmatched source dispositions. */
+  readPreviousProductIncidentRoutedDisposition(
+    componentId: string,
+    sourceGroup: string,
+    beforeSourceEventId: number,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(componentId, 'product incident componentId');
+    assertProductIdentifier(sourceGroup, 'product incident sourceGroup');
+    assertProductPositiveInteger(beforeSourceEventId, 'product incident beforeSourceEventId');
+    const row = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind IN ('product.incident.opened', 'product.incident.grouped', 'product.incident.resolved')
+        AND json_valid(data)
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.rootComponentId') END = ?
+        AND CASE WHEN json_valid(data) THEN json_extract(data, '$.sourceGroup') END = ?
+        AND CASE WHEN json_valid(data)
+          THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END < ?
+      ORDER BY CASE WHEN json_valid(data)
+        THEN CAST(json_extract(data, '$.sourceEventId') AS INTEGER) END DESC, id DESC
+      LIMIT 1
+    `).get(componentId, sourceGroup, beforeSourceEventId) as EventDbRow | undefined;
+    return row ? Object.freeze(parseEvent(row)) : null;
+  }
+
+  /** Stable immutable in-app opening receipt for one routed incident episode. */
+  readProductIncidentOpeningRoutingByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = 'product.incident.opened'
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-route.v1'
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident opening routes');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** One immutable ACK transition for an incident episode, independent of idempotency-key lookup. */
+  readProductIncidentAcknowledgementByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-ack.v1',
+          'cosmos.product-incident-ack.v2'
+        )
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(PRODUCT_INCIDENT_ACK_EVENT_KIND, incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident ACK transitions');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Immutable proof that a resolved projection episode was top-N rotated. */
+  readProductIncidentRotationByIncidentId(incidentId: string): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = 'product.incident.rotated'
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-rotation.v1'
+        AND json_extract(data, '$.incidentId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(incidentId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident rotation events');
+    return rows.length === 0 ? null : Object.freeze(parseEvent(rows[0]!));
+  }
+
+  /** Oldest resolved projection eligible for deterministic top-N rotation. */
+  readOldestResolvedProductIncidentByFingerprintPrefix(
+    fingerprintPrefix: string,
+  ): Readonly<ProductIncidentRecord> | null {
+    assertProductIdentifier(fingerprintPrefix, 'product incident fingerprintPrefix');
+    const row = this.db.prepare(`
+      SELECT * FROM product_incidents
+      WHERE substr(fingerprint, 1, length(?)) = ? AND state = 'RESOLVED'
+      ORDER BY resolved_at_ms ASC, incident_id ASC
+      LIMIT 1
+    `).get(fingerprintPrefix, fingerprintPrefix) as ProductIncidentDbRow | undefined;
+    return row ? productIncidentRecord(row, this.readProductPersistenceAudit(row.ledger_event_id)) : null;
+  }
+
+  /**
+   * Reads the one immutable acknowledgement event by Product incident and
+   * idempotency identity. The canonical Ledger event-history route exposes this same
+   * Ledger row; no operator-event projection or second store is involved.
+   */
+  readProductIncidentAcknowledgement(
+    incidentId: string,
+    idempotencyKey: string,
+  ): Readonly<LedgerEvent> | null {
+    assertProductIdentifier(incidentId, 'product incidentId');
+    if (typeof idempotencyKey !== 'string' || !PRODUCT_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      throw new TypeError('product incident acknowledgement idempotencyKey is invalid');
+    }
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') IN (
+          'cosmos.product-incident-ack.v1',
+          'cosmos.product-incident-ack.v2'
+        )
+        AND json_extract(data, '$.incidentId') = ?
+        AND json_extract(data, '$.idempotencyKey') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(
+      PRODUCT_INCIDENT_ACK_EVENT_KIND,
+      incidentId,
+      idempotencyKey,
+    ) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident acknowledgement events');
+    return rows.length === 0 ? null : this.readProductPersistenceAudit(rows[0]!.id);
+  }
+
+  /** Reads one Product ACK receipt by its exact command identity pair. */
+  readProductIncidentCommandAcknowledgement(
+    idempotencyKey: string,
+    controlId: string,
+  ): Readonly<LedgerEvent> | null {
+    if (typeof idempotencyKey !== 'string' || !PRODUCT_IDEMPOTENCY_KEY.test(idempotencyKey)) {
+      throw new TypeError('product incident acknowledgement idempotencyKey is invalid');
+    }
+    if (typeof controlId !== 'string' || !/^incident\.ack\.[a-f0-9]{64}$/.test(controlId)) {
+      throw new TypeError('product incident acknowledgement controlId is invalid');
+    }
+    const rows = this.db.prepare(`
+      SELECT * FROM events
+      WHERE kind = ?
+        AND json_extract(data, '$.schema') = 'cosmos.product-incident-ack.v2'
+        AND json_extract(data, '$.idempotencyKey') = ?
+        AND json_extract(data, '$.command.controlId') = ?
+      ORDER BY id ASC
+      LIMIT 2
+    `).all(PRODUCT_INCIDENT_ACK_EVENT_KIND, idempotencyKey, controlId) as EventDbRow[];
+    if (rows.length > 1) throw new Error('duplicate durable product incident command receipts');
+    return rows.length === 0 ? null : this.readProductPersistenceAudit(rows[0]!.id);
   }
 
   /**
@@ -2895,36 +4563,41 @@ export class Ledger extends EventEmitter {
     }
 
     const prepared = records.map((record) => {
-      if (record === null || typeof record !== 'object'
-        || typeof record.kind !== 'string' || !LEDGER_EVENT_KIND.test(record.kind)) {
+      if (record === null || typeof record !== 'object') {
         throw new TypeError('invalid compare-and-set ledger event kind');
       }
-      const symbol = record.symbol ?? null;
+      const kind = record.kind;
+      const rawSymbol = record.symbol;
+      const rawData = record.data;
+      const hasData = Object.hasOwn(record, 'data');
+      if (typeof kind !== 'string' || !LEDGER_EVENT_KIND.test(kind)) {
+        throw new TypeError('invalid compare-and-set ledger event kind');
+      }
+      const symbol = rawSymbol ?? null;
       if (symbol !== null && (typeof symbol !== 'string'
         || symbol.length > CONFIG_CAS_EVENT_SYMBOL_MAX_CHARS
         || /[\u0000-\u001f\u007f]/.test(symbol))) {
         throw new TypeError('invalid compare-and-set ledger event symbol');
       }
-      let serialized: string | null = null;
-      if (record.data !== undefined) {
-        const encoded = JSON.stringify(record.data);
-        if (typeof encoded !== 'string') {
-          throw new TypeError('compare-and-set ledger event data must be JSON serializable');
-        }
-        if (Buffer.byteLength(encoded, 'utf8') > CONFIG_CAS_EVENT_DATA_MAX_BYTES) {
-          throw new RangeError('compare-and-set ledger event data exceeds its byte bound');
-        }
-        serialized = encoded;
+      if (!hasData && rawData !== undefined) {
+        throw new TypeError('compare-and-set ledger event data must be an own value');
       }
+      const data = prepareLedgerEventData(rawData, hasData);
+      if (data.serialized !== null
+          && Buffer.byteLength(data.serialized, 'utf8') > CONFIG_CAS_EVENT_DATA_MAX_BYTES) {
+        throw new RangeError('compare-and-set ledger event data exceeds its byte bound');
+      }
+      validateFinancialMutationEvent(kind, symbol, data.value);
       return Object.freeze({
-        kind: record.kind,
+        kind,
         symbol,
-        serialized,
-        data: serialized === null ? null : JSON.parse(serialized) as unknown,
+        serialized: data.serialized,
+        data: data.value,
+        metadata: snapshotLedgerEventMetadata(record),
       });
     });
 
-    const insert = this.db.prepare('INSERT INTO events (ts, kind, symbol, data) VALUES (?, ?, ?, ?)');
+    const insert = this.db.prepare(LEDGER_EVENT_INSERT_SQL);
     const insertProductOperatorEvent = this.db.prepare(`
       INSERT INTO product_operator_events (
         ledger_event_id,
@@ -2954,7 +4627,13 @@ export class Ledger extends EventEmitter {
         .run(key, nextValue);
       let appendedProductOperatorEvent = false;
       const events = prepared.map((record) => {
-        const info = insert.run(ts, record.kind, record.symbol, record.serialized);
+        const info = insert.run(...eventInsertValues(
+          ts,
+          record.kind,
+          record.symbol,
+          record.serialized,
+          record.metadata,
+        ));
         const ledgerEventId = Number(info.lastInsertRowid);
         if (!Number.isSafeInteger(ledgerEventId) || ledgerEventId < 1) {
           throw new RangeError('ledger event identity exceeds the supported integer range');
@@ -2972,13 +4651,14 @@ export class Ledger extends EventEmitter {
           );
           appendedProductOperatorEvent = true;
         }
-        return Object.freeze({
-          id: ledgerEventId,
+        return Object.freeze(ledgerEventFromAppend(
+          ledgerEventId,
           ts,
-          kind: record.kind,
-          symbol: record.symbol,
-          data: record.data,
-        } satisfies LedgerEvent);
+          record.kind,
+          record.symbol,
+          record.data,
+          record.metadata,
+        ));
       });
       if (appendedProductOperatorEvent) this.trimProductOperatorEvents();
       return Object.freeze({ committed: true as const, events: Object.freeze(events) });
@@ -2995,6 +4675,14 @@ export class Ledger extends EventEmitter {
       data: prepared[index].serialized === null
         ? null
         : JSON.parse(prepared[index].serialized) as unknown,
+      severity: event.severity,
+      source: event.source,
+      strategy: event.strategy,
+      status: event.status,
+      reason: event.reason,
+      message: event.message,
+      correlation: event.correlation,
+      createdAt: event.createdAt,
     });
     const exactResult: LedgerConfigCompareAndSetResult = Object.freeze({
       committed: true as const,
@@ -3045,6 +4733,14 @@ export class Ledger extends EventEmitter {
           && row.kind === prepared[index].kind
           && row.symbol === prepared[index].symbol
           && row.data === prepared[index].serialized
+          && row.severity === prepared[index].metadata.severity
+          && row.source === prepared[index].metadata.source
+          && row.strategy === prepared[index].metadata.strategy
+          && row.status === prepared[index].metadata.status
+          && row.reason === prepared[index].metadata.reason
+          && row.message === prepared[index].metadata.message
+          && row.correlation === prepared[index].metadata.correlation
+          && row.created_at === (prepared[index].metadata.createdAt ?? row.ts)
           && (() => {
             const productOperatorEvent = prepareProductOperatorEvent(
               prepared[index].kind,
@@ -3117,6 +4813,9 @@ export class Ledger extends EventEmitter {
     if ((userVersion as number) !== currentSchemaVersion
         || currentSchemaVersion !== LEDGER_SCHEMA_VERSION) {
       return failedSchemaCompatibility('MISMATCH', 'LEDGER_SCHEMA_VERSION_MISMATCH');
+    }
+    if (rollbackFloor < LEDGER_ROLLBACK_FLOOR) {
+      return failedSchemaCompatibility('MISMATCH', 'LEDGER_ROLLBACK_FLOOR_BELOW_RUNTIME_FLOOR');
     }
     return availableSchemaCompatibility(currentSchemaVersion, rollbackFloor);
   }
@@ -3220,6 +4919,59 @@ function assertProductDomainState(value: unknown, label: string): asserts value 
   if (typeof value !== 'string' || !PRODUCT_DOMAIN_STATE.test(value)) {
     throw new TypeError(`${label} must be a bounded canonical state`);
   }
+}
+
+function assertProductIncidentSeverity(
+  value: unknown,
+  label: string,
+): asserts value is (typeof PRODUCT_INCIDENT_SEVERITIES)[number] {
+  if (typeof value !== 'string'
+    || !PRODUCT_INCIDENT_SEVERITIES.includes(value as (typeof PRODUCT_INCIDENT_SEVERITIES)[number])) {
+    throw new TypeError(`${label} must be CRITICAL, HIGH, MEDIUM, or LOW`);
+  }
+}
+
+function assertProductIncidentState(
+  value: unknown,
+  label: string,
+): asserts value is (typeof PRODUCT_INCIDENT_STATES)[number] {
+  if (typeof value !== 'string'
+    || !PRODUCT_INCIDENT_STATES.includes(value as (typeof PRODUCT_INCIDENT_STATES)[number])) {
+    throw new TypeError(`${label} must be OPEN, ACKNOWLEDGED, or RESOLVED`);
+  }
+}
+
+function validProductIncidentLifecycle(
+  state: string,
+  lastSeenAtMs: number,
+  acknowledgedAtMs: number | null,
+  acknowledgedByOperatorId: string | null,
+  resolvedAtMs: number | null,
+): boolean {
+  const acknowledgementAbsent = acknowledgedAtMs === null && acknowledgedByOperatorId === null;
+  const acknowledgementPresent = acknowledgedAtMs !== null && acknowledgedByOperatorId !== null;
+  if (state === 'OPEN') return acknowledgementAbsent && resolvedAtMs === null;
+  if (state === 'ACKNOWLEDGED') return acknowledgementPresent && resolvedAtMs === null;
+  return state === 'RESOLVED'
+    && (acknowledgementAbsent || acknowledgementPresent)
+    && resolvedAtMs !== null
+    && resolvedAtMs === lastSeenAtMs
+    && (acknowledgedAtMs === null || acknowledgedAtMs <= resolvedAtMs);
+}
+
+function validProductIncidentTransition(
+  existing: Readonly<ProductIncidentDbRow>,
+  input: Readonly<ProductIncidentPersistenceInput>,
+): boolean {
+  if (existing.state === 'RESOLVED') return false;
+  if (existing.state === 'ACKNOWLEDGED' && input.state === 'OPEN') return false;
+  if (existing.acknowledged_at_ms !== null) {
+    if (input.acknowledgedAtMs !== existing.acknowledged_at_ms
+      || input.acknowledgedByOperatorId !== existing.acknowledged_by_operator_id) return false;
+  } else if (input.acknowledgedAtMs !== null && input.state !== 'ACKNOWLEDGED') {
+    return false;
+  }
+  return true;
 }
 
 function assertProductUtcMillis(value: unknown, label: string): asserts value is number {
@@ -3392,6 +5144,206 @@ function exactProductIncidentRow(
     && row.ledger_event_id > 0;
 }
 
+function productIncidentAuditSnapshotMatchesRow(
+  value: unknown,
+  row: Readonly<ProductIncidentDbRow>,
+): boolean {
+  if (!plainLedgerRecord(value)) return false;
+  return value.incidentId === row.incident_id
+    && value.fingerprint === row.fingerprint
+    && value.rootComponentId === row.root_component_id
+    && value.severity === row.severity
+    && value.capitalRelevant === (row.capital_relevant === 1)
+    && value.state === row.state
+    && value.firstSeenAtMs === row.first_seen_at_ms
+    && value.lastSeenAtMs === row.last_seen_at_ms
+    && value.eventCount === row.event_count
+    && value.acknowledgedAtMs === row.acknowledged_at_ms
+    && value.acknowledgedByOperatorId === row.acknowledged_by_operator_id
+    && value.resolvedAtMs === row.resolved_at_ms
+    && value.correlationId === row.correlation_id;
+}
+
+function productIncidentRotationAuditMatchesRow(
+  value: unknown,
+  row: Readonly<ProductIncidentDbRow>,
+): boolean {
+  if (!plainLedgerRecord(value)
+    || Object.keys(value).length !== PRODUCT_INCIDENT_ROTATION_KEYS.length
+    || !PRODUCT_INCIDENT_ROTATION_KEYS.every((key) => Object.hasOwn(value, key))
+    || value.schema !== PRODUCT_INCIDENT_ROTATION_SCHEMA
+    || value.operation !== 'ROTATE_RESOLVED'
+    || value.incidentId !== row.incident_id
+    || value.expectedLedgerEventId !== row.ledger_event_id
+    || value.reasonCode !== 'BOUNDED_TOP_N_RETENTION'
+    || value.retentionLimit !== 200
+    || value.externalActionAuthorization !== 'NONE'
+    || !plainLedgerRecord(value.snapshot)) {
+    return false;
+  }
+  const snapshot = value.snapshot;
+  return Object.keys(snapshot).length === PRODUCT_INCIDENT_SNAPSHOT_KEYS.length
+    && PRODUCT_INCIDENT_SNAPSHOT_KEYS.every((key) => Object.hasOwn(snapshot, key))
+    && productIncidentAuditSnapshotMatchesRow(snapshot, row)
+    && snapshot.ledgerEventId === row.ledger_event_id
+    && typeof snapshot.sourceGroup === 'string'
+    && PRODUCT_IDENTIFIER.test(snapshot.sourceGroup)
+    && Number.isSafeInteger(snapshot.openingRoutingReceiptEventId)
+    && Number(snapshot.openingRoutingReceiptEventId) >= 1
+    && Number.isSafeInteger(snapshot.openingSourceEventId)
+    && Number(snapshot.openingSourceEventId) >= 1
+    && Number(snapshot.openingSourceEventId) < Number(snapshot.openingRoutingReceiptEventId)
+    && Number.isSafeInteger(snapshot.recoveryRoutingReceiptEventId)
+    && snapshot.recoveryRoutingReceiptEventId === row.ledger_event_id
+    && Number.isSafeInteger(snapshot.recoverySourceEventId)
+    && Number(snapshot.recoverySourceEventId) >= 1
+    && Number(snapshot.recoverySourceEventId) < Number(snapshot.recoveryRoutingReceiptEventId)
+    && Number(snapshot.openingRoutingReceiptEventId) < Number(snapshot.recoveryRoutingReceiptEventId);
+}
+
+function productIncidentAuditMatchesRow(
+  row: Readonly<ProductIncidentDbRow>,
+  audit: Readonly<LedgerEvent>,
+): boolean {
+  if (!plainLedgerRecord(audit.data)) return false;
+  const data = audit.data;
+  if (Object.hasOwn(data, 'incidentId') && data.incidentId !== row.incident_id) return false;
+
+  if (data.schema === PRODUCT_INCIDENT_ROUTE_SCHEMA) {
+    const expected = audit.kind === 'product.incident.opened'
+      ? Object.freeze({ operation: 'OPEN', sourceKind: 'connection_alert', state: 'OPEN' })
+      : audit.kind === 'product.incident.grouped'
+        ? Object.freeze({ operation: 'GROUP', sourceKind: 'connection_alert', state: null })
+        : audit.kind === 'product.incident.resolved'
+          ? Object.freeze({ operation: 'RESOLVE', sourceKind: 'connection_recovered', state: 'RESOLVED' })
+          : null;
+    return expected !== null
+      && audit.symbol === null
+      && Object.keys(data).length === PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS.length
+      && PRODUCT_INCIDENT_ROUTE_AUDIT_KEYS.every((key) => Object.hasOwn(data, key))
+      && data.operation === expected.operation
+      && data.sourceEventKind === expected.sourceKind
+      && typeof data.sourceGroup === 'string'
+      && PRODUCT_IDENTIFIER.test(data.sourceGroup)
+      && typeof data.sourceDetail === 'string'
+      && data.sourceDetail.length <= 2_000
+      && validProductUtcMillis(data.sourceObservedAtMs)
+      && Number.isSafeInteger(data.sourceEventId)
+      && Number(data.sourceEventId) >= 1
+      && (expected.state === null || row.state === expected.state)
+      && data.fingerprint === row.fingerprint
+      && data.rootComponentId === row.root_component_id
+      && data.severity === row.severity
+      && data.capitalRelevant === (row.capital_relevant === 1)
+      && data.state === row.state
+      && data.firstSeenAtMs === row.first_seen_at_ms
+      && data.lastSeenAtMs === row.last_seen_at_ms
+      && data.eventCount === row.event_count
+      && data.acknowledgedAtMs === row.acknowledged_at_ms
+      && data.acknowledgedByOperatorId === row.acknowledged_by_operator_id
+      && data.resolvedAtMs === row.resolved_at_ms
+      && data.correlationId === row.correlation_id
+      && data.reasonCode === 'CONNECTION_UNHEALTHY'
+      && plainLedgerRecord(data.routing)
+      && Object.keys(data.routing).length === 2
+      && data.routing.inApp === 'WIRED_LOCAL'
+      && data.routing.externalPaging === 'NOT_CONFIGURED'
+      && data.externalActionAuthorization === 'NONE'
+      && (expected.sourceKind === 'connection_recovered'
+        ? data.sourceStatus === 'operational'
+        : data.sourceStatus === 'degraded' || data.sourceStatus === 'outage');
+  }
+
+  if (PRODUCT_INCIDENT_ACK_SCHEMAS.has(String(data.schema))) {
+    return audit.kind === PRODUCT_INCIDENT_ACK_EVENT_KIND
+      && audit.symbol === null
+      && row.state === 'ACKNOWLEDGED'
+      && data.operation === 'ACKNOWLEDGE'
+      && data.acknowledgedAtMs === row.acknowledged_at_ms
+      && data.incidentCorrelationId === row.correlation_id
+      && Number.isSafeInteger(data.expectedLedgerEventId)
+      && Number(data.expectedLedgerEventId) >= 1
+      && Number(data.expectedLedgerEventId) < audit.id
+      && plainLedgerRecord(data.actor)
+      && data.actor.id === row.acknowledged_by_operator_id
+      && productIncidentAuditSnapshotMatchesRow(data.after, row);
+  }
+
+  return true;
+}
+
+function productIncidentRecord(
+  row: Readonly<ProductIncidentDbRow>,
+  audit: Readonly<LedgerEvent>,
+): Readonly<ProductIncidentRecord> {
+  if (!Number.isSafeInteger(row.ledger_event_id) || row.ledger_event_id < 1
+    || audit.id !== row.ledger_event_id) {
+    throw new Error('durable product incident audit reference is invalid');
+  }
+  assertProductIdentifier(row.incident_id, 'durable product incidentId');
+  assertProductIdentifier(row.fingerprint, 'durable product incident fingerprint');
+  assertProductIdentifier(row.root_component_id, 'durable product incident rootComponentId');
+  assertProductIncidentSeverity(row.severity, 'durable product incident severity');
+  assertProductIncidentState(row.state, 'durable product incident state');
+  if (row.capital_relevant !== 0 && row.capital_relevant !== 1) {
+    throw new Error('durable product incident capital relevance is invalid');
+  }
+  assertProductUtcMillis(row.first_seen_at_ms, 'durable product incident firstSeenAtMs');
+  assertProductUtcMillis(row.last_seen_at_ms, 'durable product incident lastSeenAtMs');
+  assertProductPositiveInteger(row.event_count, 'durable product incident eventCount');
+  if (row.last_seen_at_ms < row.first_seen_at_ms) throw new Error('durable product incident chronology is invalid');
+  if ((row.acknowledged_at_ms === null) !== (row.acknowledged_by_operator_id === null)) {
+    throw new Error('durable product incident acknowledgement is invalid');
+  }
+  if (row.acknowledged_at_ms !== null) {
+    assertProductUtcMillis(row.acknowledged_at_ms, 'durable product incident acknowledgedAtMs');
+    if (row.acknowledged_at_ms < row.first_seen_at_ms) throw new Error('durable product incident acknowledgement chronology is invalid');
+  }
+  assertProductOptionalIdentifier(row.acknowledged_by_operator_id, 'durable product incident acknowledgedByOperatorId');
+  if (row.resolved_at_ms !== null) {
+    assertProductUtcMillis(row.resolved_at_ms, 'durable product incident resolvedAtMs');
+    if (row.resolved_at_ms < row.first_seen_at_ms) throw new Error('durable product incident resolution chronology is invalid');
+  }
+  if (!validProductIncidentLifecycle(
+    row.state,
+    row.last_seen_at_ms,
+    row.acknowledged_at_ms,
+    row.acknowledged_by_operator_id,
+    row.resolved_at_ms,
+  )) {
+    throw new Error('durable product incident state fields are inconsistent');
+  }
+  assertProductIdentifier(row.correlation_id, 'durable product incident correlationId');
+  if (!productIncidentAuditMatchesRow(row, audit)) {
+    throw new Error('durable product incident audit relationship is invalid');
+  }
+  return Object.freeze({
+    incidentId: row.incident_id,
+    fingerprint: row.fingerprint,
+    rootComponentId: row.root_component_id,
+    severity: row.severity,
+    capitalRelevant: row.capital_relevant === 1,
+    state: row.state,
+    firstSeenAtMs: row.first_seen_at_ms,
+    lastSeenAtMs: row.last_seen_at_ms,
+    eventCount: row.event_count,
+    acknowledgedAtMs: row.acknowledged_at_ms,
+    acknowledgedByOperatorId: row.acknowledged_by_operator_id,
+    resolvedAtMs: row.resolved_at_ms,
+    correlationId: row.correlation_id,
+    ledgerEventId: row.ledger_event_id,
+    lastAudit: Object.freeze({
+      id: audit.id,
+      ts: audit.ts,
+      kind: audit.kind,
+      symbol: audit.symbol,
+      data: audit.data === null
+        ? null
+        : JSON.parse(canonicalProductPersistenceJson(audit.data, 'durable product incident audit data')) as SystemJsonValue,
+    }),
+  });
+}
+
 function exactProductBootReleaseRow(
   row: Readonly<ProductBootReleaseDbRow>,
   input: Readonly<ProductBootReleasePersistenceInput>,
@@ -3434,6 +5386,7 @@ function prepareProductOperatorEvent(
   persistedAtMs: number,
 ): Readonly<PreparedProductOperatorEvent> | null {
   if (kind !== SYSTEM_INTEGRATION_EVENT_KIND || !plainLedgerRecord(data)) return null;
+  const hasRiskDecision = Object.hasOwn(data, 'riskDecision');
   if (!exactLedgerFields(data, [
     'schema',
     'version',
@@ -3443,6 +5396,7 @@ function prepareProductOperatorEvent(
     'checkpointRevision',
     'checkpointChecksum',
     'trace',
+    ...(hasRiskDecision ? ['riskDecision'] : []),
   ])) return null;
   if (data.schema !== SYSTEM_INTEGRATION_AUDIT_SCHEMA
     || data.version !== 1
@@ -3462,6 +5416,20 @@ function prepareProductOperatorEvent(
     || source.persistedAtMs !== null
     || data.correlationId !== source.correlationId
     || data.occurredAtMs !== source.occurredAtMs) return null;
+  if (hasRiskDecision) {
+    const riskDecision = data.riskDecision;
+    if (source.kind !== 'RISK'
+      || !plainLedgerRecord(riskDecision)
+      || !exactLedgerFields(riskDecision, ['schema', 'recordId', 'verdict'])
+      || riskDecision.schema !== SYSTEM_RISK_DECISION_AUDIT_SCHEMA
+      || typeof riskDecision.recordId !== 'string'
+      || !PRODUCT_IDENTIFIER.test(riskDecision.recordId)
+      || !plainLedgerRecord(riskDecision.verdict)
+      || riskDecision.verdict.correlationId !== source.correlationId) return null;
+    const serializedRiskDecision = JSON.stringify(riskDecision);
+    if (Buffer.byteLength(serializedRiskDecision, 'utf8') > PRODUCT_OPERATOR_EVENT_MAX_BYTES
+      || PRODUCT_SENSITIVE_TEXT.test(serializedRiskDecision)) return null;
+  }
 
   const event = frozenSystemTraceEvent({ ...source, persistedAtMs });
   if (validateSystemTraceEvent(event).length > 0
@@ -3555,12 +5523,30 @@ function parseEvent(r: EventDbRow): LedgerEvent {
       data = { unavailable: true, reason: 'invalid_json' };
     }
   }
+  const metadata = prepareStoredLedgerEventMetadata({
+    severity: r.severity,
+    source: r.source,
+    strategy: r.strategy,
+    status: r.status,
+    reason: r.reason,
+    message: r.message,
+    correlation: r.correlation,
+    createdAt: r.created_at,
+  });
   return {
     id: r.id,
     ts: r.ts,
     kind: r.kind,
     symbol: r.symbol,
     data,
+    severity: metadata.severity,
+    source: metadata.source,
+    strategy: metadata.strategy,
+    status: metadata.status,
+    reason: metadata.reason,
+    message: metadata.message,
+    correlation: metadata.correlation,
+    createdAt: metadata.createdAt as number,
   };
 }
 

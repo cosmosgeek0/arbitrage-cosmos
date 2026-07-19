@@ -9,6 +9,7 @@ export const SYSTEM_PERSISTENCE_SCHEMA = 'cosmos.system-integration.checkpoint' 
 export const SYSTEM_PERSISTENCE_VERSION = 1 as const;
 export const SYSTEM_PERSISTENCE_CONFIG_KEY = 'system.integration.checkpoint.v1' as const;
 export const SYSTEM_PERSISTENCE_EVENT_KIND = 'system.integration.trace' as const;
+export const PRODUCT_INCIDENT_ACK_EVENT_KIND = 'incident_acknowledged' as const;
 
 export const SYSTEM_PERSISTENCE_LIMITS = Object.freeze({
   maximumCheckpointBytes: 512 * 1024,
@@ -192,7 +193,11 @@ export interface ProductIncidentPersistenceInput {
   readonly rootComponentId: string;
   readonly severity: string;
   readonly capitalRelevant: boolean;
-  readonly expectedEventCount: number | null;
+  /**
+   * Exact sole-Ledger revision. `eventCount` is incident evidence and must
+   * never be reused as a compare-and-set token.
+   */
+  readonly expectedLedgerEventId: number | null;
   readonly state: string;
   readonly firstSeenAtMs: number;
   readonly lastSeenAtMs: number;
@@ -201,6 +206,36 @@ export interface ProductIncidentPersistenceInput {
   readonly acknowledgedByOperatorId: string | null;
   readonly resolvedAtMs: number | null;
   readonly correlationId: string;
+  readonly audit: Readonly<ProductPersistenceAuditRecord>;
+}
+
+export interface ProductIncidentRecord {
+  readonly incidentId: string;
+  readonly fingerprint: string;
+  readonly rootComponentId: string;
+  readonly severity: string;
+  readonly capitalRelevant: boolean;
+  readonly state: string;
+  readonly firstSeenAtMs: number;
+  readonly lastSeenAtMs: number;
+  readonly eventCount: number;
+  readonly acknowledgedAtMs: number | null;
+  readonly acknowledgedByOperatorId: string | null;
+  readonly resolvedAtMs: number | null;
+  readonly correlationId: string;
+  readonly ledgerEventId: number;
+  readonly lastAudit: Readonly<{
+    readonly id: number;
+    readonly ts: number;
+    readonly kind: string;
+    readonly symbol: string | null;
+    readonly data: SystemJsonValue | null;
+  }>;
+}
+
+export interface ProductIncidentRotationInput {
+  readonly incidentId: string;
+  readonly expectedLedgerEventId: number;
   readonly audit: Readonly<ProductPersistenceAuditRecord>;
 }
 
@@ -321,6 +356,13 @@ export interface LedgerPersistencePort {
   compareAndTransitionProductIncident?(
     input: Readonly<ProductIncidentPersistenceInput>,
   ): ProductPersistenceMutationResult;
+  readProductIncident?(
+    incidentId: string,
+  ): Readonly<ProductIncidentRecord> | null;
+  readProductIncidentAcknowledgement?(
+    incidentId: string,
+    idempotencyKey: string,
+  ): Readonly<LedgerEventRecord> | null;
   compareAndSetProductBootReleaseRevision?(
     input: Readonly<ProductBootReleasePersistenceInput>,
   ): ProductPersistenceMutationResult;
@@ -336,6 +378,39 @@ export interface PersistedDesiredComponentState {
   readonly desiredState: 'STOPPED' | 'RUNNING' | 'PAUSED';
   readonly generation: number;
   readonly updatedAtMs: number;
+}
+
+/**
+ * Durable desired posture for the two strategy-owned proposal intake gates.
+ * This is deliberately separate from component lifecycle: a paused intake
+ * must not stop observation, supervision, reconciliation, or risk reduction.
+ */
+export interface PersistedStrategyIntakePosture {
+  readonly basisPaused: boolean;
+  readonly volumePaused: boolean;
+}
+
+/** Durable strategy-local deny overlays. Global AppConfig policy remains independent. */
+export interface PersistedStrategySymbolPolicy {
+  readonly basisBlocked: readonly string[];
+  readonly volumeBlocked: readonly string[];
+}
+
+/** Exact desired ceilings; null means no durable control value has been established. */
+export interface PersistedSizeCeilings {
+  readonly system: string | null;
+  readonly basis: string | null;
+  readonly volume: string | null;
+}
+
+export interface PersistedStrategyThresholds {
+  readonly basisMinNetPct: string | null;
+  readonly volume1sMultiple: string | null;
+}
+
+/** Desired operator attention pins; the Intelligence Runtime planner owns delivery. */
+export interface PersistedFocusPins {
+  readonly symbols: readonly string[];
 }
 
 /**
@@ -556,6 +631,11 @@ export interface SystemIntegrationCheckpointState {
   readonly revision: number;
   readonly generation: number;
   readonly control: Readonly<SystemControlState>;
+  readonly strategyIntake: Readonly<PersistedStrategyIntakePosture>;
+  readonly strategySymbolPolicy: Readonly<PersistedStrategySymbolPolicy>;
+  readonly sizeCeilings: Readonly<PersistedSizeCeilings>;
+  readonly strategyThresholds: Readonly<PersistedStrategyThresholds>;
+  readonly focusPins: Readonly<PersistedFocusPins>;
   readonly desiredComponents: readonly Readonly<PersistedDesiredComponentState>[];
   readonly authorityReferences: readonly Readonly<PersistedAuthorityReference>[];
   readonly reservations: readonly Readonly<PersistedReservationReference>[];
@@ -624,6 +704,8 @@ export interface PersistenceAuditInput {
   readonly occurredAtMs: number;
   readonly traceEvent?: Readonly<SystemTraceEvent>;
   readonly traceEvents?: readonly Readonly<SystemTraceEvent>[];
+  /** Present only on a durable canonical RiskVerdict Ledger event. */
+  readonly riskDecision?: SystemJsonValue;
 }
 
 export interface PersistedCommitReceipt {
@@ -637,6 +719,7 @@ interface IdempotentTransitionBase<T extends SystemJsonValue> {
   readonly requestDigest: string;
   readonly correlationId: string;
   readonly occurredAtMs: number;
+  readonly riskDecision?: SystemJsonValue;
   readonly transition: (
     current: Readonly<SystemIntegrationCheckpointState>,
   ) => {

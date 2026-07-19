@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,6 +10,14 @@ import {
 import {
   SourceObservationTracker,
 } from '../../../dist/systemIntegration/production/temporal.js';
+import {
+  defaultApplicationSummaries,
+  mergeApplicationSummaries,
+} from '../../../dist/systemIntegration/application/projection.js';
+import {
+  createEmptyCapitalCheckpointState,
+  projectRestartSafety,
+} from '../../../dist/capitalFoundation/checkpoint/index.js';
 
 const START = Date.UTC(2026, 6, 12, 12, 0, 0);
 
@@ -58,7 +67,25 @@ function proposal(strategy, ts, suffix) {
   };
 }
 
-function createWorld() {
+function capitalSummaryCut(projection) {
+  return Object.freeze({
+    availability: 'AVAILABLE',
+    checkpoint: Object.freeze({
+      id: projection.checkpointId,
+      revision: projection.checkpointState.revision,
+    }),
+    safety: Object.freeze({
+      canOpenOrIncrease: projection.safety.canOpenOrIncrease,
+      supervisionContinues: projection.safety.supervisionContinues,
+      visiblePositionIds: Object.freeze([...projection.safety.visiblePositionIds]),
+      recoveryRequiredPositionIds: Object.freeze([...projection.safety.recoveryRequiredPositionIds]),
+      effectiveActiveReservationIds: Object.freeze([...projection.safety.effectiveActiveReservationIds]),
+      reasonCodes: Object.freeze([...projection.safety.reasonCodes]),
+    }),
+  });
+}
+
+function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) {
   const clock = new ManualClock();
   const calls = {
     marketInit: 0,
@@ -71,6 +98,8 @@ function createWorld() {
   };
   const spot = new Map();
   const usdm = new Map();
+  const liquidation = new Map();
+  let liquidationEvidenceObserver = null;
   const market = {
     feeds: {},
     pairCount: 0,
@@ -81,6 +110,8 @@ function createWorld() {
     allRows() { return this.rows; },
     priceUpdatedAt(symbol) { return spot.get(symbol) ?? null; },
     markEventTimestamp(symbol) { return usdm.get(symbol) ?? null; },
+    liquidationEventTimestamp(symbol) { return liquidation.get(symbol) ?? null; },
+    setLiquidationEvidenceObserver(observer) { liquidationEvidenceObserver = observer; },
   };
   const basisStatus = {
     running: false,
@@ -93,6 +124,7 @@ function createWorld() {
     lastTickTs: null,
     decisions: [],
     proposals: [],
+    ownerSummary: { candidateCount: 0, opportunityCount: 0, cooldownCount: 0 },
   };
   const basis = {
     async start() { calls.basisStart += 1; basisStatus.running = true; },
@@ -113,19 +145,26 @@ function createWorld() {
     lastTickTs: null,
     decisions: [],
     proposals: [],
+    ownerSummary: { candidateCount: 0, opportunityCount: 0, cooldownCount: 0 },
   };
+  let volumeEvidenceObserver = null;
   const volume = {
     async start() { calls.volumeStart += 1; volumeStatus.running = true; },
     stop() { calls.volumeStop += 1; volumeStatus.running = false; },
     connectionStatus() { return { ...volumeStatus }; },
     integrationSnapshot() { return structuredClone(volumeSnapshot); },
+    setEvidenceObserver(observer) { volumeEvidenceObserver = observer; },
   };
   const ports = createProductionSystemIntegrationPorts({
     clock,
     market,
     basis,
     volume,
+    capitalSummary,
     sourceMaxAgeMs: 10_000,
+    ...(intelligenceEvidenceMaximumBytes === undefined
+      ? {}
+      : { intelligenceEvidenceMaximumBytes }),
   });
   const ctx = () => ({
     nowMs: clock.nowMs(),
@@ -139,6 +178,7 @@ function createWorld() {
     calls,
     spot,
     usdm,
+    liquidation,
     market,
     basis,
     basisStatus,
@@ -146,6 +186,14 @@ function createWorld() {
     volume,
     volumeStatus,
     volumeSnapshot,
+    emitVolumeEvidence(cut) {
+      assert.equal(typeof volumeEvidenceObserver, 'function');
+      volumeEvidenceObserver(structuredClone(cut));
+    },
+    emitLiquidationEvidence(cut) {
+      assert.equal(typeof liquidationEvidenceObserver, 'function');
+      liquidationEvidenceObserver(structuredClone(cut));
+    },
     ports,
     ctx,
   };
@@ -196,6 +244,13 @@ test('rejected Basis and Volume starts stop partial runtimes and preserve the st
 async function startMarket(world) {
   await world.ports.runtimes.market.init();
   world.ports.runtimes.market.start();
+}
+
+function routingCapability(world, name) {
+  const value = world.ports.intelligenceEvidence.readRoutingSnapshot().capabilities
+    .find((entry) => entry.capability === name);
+  assert.ok(value, `missing routing capability ${name}`);
+  return value;
 }
 
 test('factory construction is inert and exposes only passive public source projections', () => {
@@ -368,6 +423,12 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const intelligence = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(intelligence.running, true);
   assert.equal(intelligence.timestamp.sourceTimeMs, START - 200);
+  const focusReadback = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(focusReadback.canPin, true, JSON.stringify(focusReadback));
+  assert.equal(focusReadback.effectivePinned, false);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), ['BTCUSDT']);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, true);
   await world.ports.runtimes.q.start();
   assert.equal(world.ports.runtimes.q.health(world.ctx()).fatal.code, 'CHAMPION_UNAVAILABLE');
 
@@ -390,6 +451,353 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   const stale = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(stale.timestamp, null);
   assert.equal(allRowsReads, 6);
+  const staleFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(staleFocus.pinned, true);
+  assert.equal(staleFocus.canPin, false);
+  assert.equal(staleFocus.effectivePinned, null);
+  assert.equal(staleFocus.effectiveTier, null);
+  assert.throws(
+    () => world.ports.attentionFocus.setPinned('BTCUSDT', true),
+    /eligible symbol and available FOCUS capacity/,
+  );
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), []);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
+});
+
+test('one production router projects current mark/funding and OI with fresh, missing, restart, and stale truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+    openInterest: 2_000, openInterestUsd: 120_000_000,
+    openInterestChangePct: 1.2, openInterestUpdatedAt: START - 150,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'FRESH');
+  const firstSources = world.ports.intelligenceEvidence.readRoutingSnapshot().sources;
+  assert.ok(firstSources.some((entry) => entry.generation === 1 && entry.bootstrapped));
+
+  world.market.feeds['futures-markprice'] = 'closed';
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'MISSING');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'MISSING');
+
+  world.clock.now = START + 5_000;
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START + 4_900);
+  world.usdm.set('BTCUSDT', START + 4_950);
+  world.market.rows[0].openInterestUpdatedAt = START + 4_940;
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'FRESH');
+
+  world.clock.now = START + 10_000;
+  world.spot.set('BTCUSDT', START + 9_900);
+  world.usdm.set('BTCUSDT', START + 9_950);
+  world.market.rows[0].openInterest = null;
+  world.market.rows[0].openInterestUsd = null;
+  world.market.rows[0].openInterestChangePct = null;
+  world.market.rows[0].openInterestUpdatedAt = null;
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'MISSING');
+
+  world.clock.now = START + 15_000;
+  world.spot.set('BTCUSDT', START + 14_900);
+  world.usdm.set('BTCUSDT', START + 14_950);
+  world.market.rows[0].openInterest = 2_100;
+  world.market.rows[0].openInterestUsd = 126_000_000;
+  world.market.rows[0].openInterestChangePct = null;
+  world.market.rows[0].openInterestUpdatedAt = START + 14_940;
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'FRESH');
+
+  world.clock.now = START + 25_001;
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'STALE');
+  assert.equal(routingCapability(world, 'OPEN_INTEREST').freshness, 'STALE');
+});
+
+test('token intelligence readback is exact-symbol, owner-fresh, historical-aware, and hostile-input fail-closed', async () => {
+  const world = createWorld();
+  const row = {
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+    openInterest: 1_000, openInterestUsd: 60_000_000,
+    openInterestChangePct: 1.25, openInterestUpdatedAt: START - 150,
+    liquidations15mUsd: 120_000_000,
+    longLiquidations15mUsd: 120_000_000,
+    shortLiquidations15mUsd: 0,
+  };
+  world.market.rows = [row];
+
+  const stopped = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(stopped.projection.state, 'NOT_RUNNING');
+  assert.equal(stopped.markFunding.state, 'UNAVAILABLE');
+  assert.equal(stopped.openInterest.state, 'UNAVAILABLE');
+  assert.equal(stopped.liquidation.state, 'UNAVAILABLE');
+  assert.equal(stopped.bridge.currentState, 'HISTORICAL_ONLY');
+
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.market.feeds['futures-liquidations'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  world.liquidation.set('BTCUSDT', START - 100);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  world.emitLiquidationEvidence({
+    kind: 'FORCE_ORDER', generation: 1, revision: 1,
+    receivedAtMs: START, bootstrap: 'CURRENT_SNAPSHOT', baseAsset: 'BTC',
+    raw: {
+      e: 'forceOrder', E: START - 100, st: 1, ps: 'BTCUSDT',
+      o: {
+        s: 'BTCUSDT', S: 'SELL', o: 'LIMIT', f: 'IOC', q: '2', ap: '60000', z: '2',
+        X: 'FILLED', T: START - 100,
+      },
+    },
+  });
+
+  const read = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(read.projection.state, 'ACTIVE');
+  assert.equal(read.markFunding.state, 'FRESH');
+  assert.equal(read.markFunding.value.fundingRate, 0.0001);
+  assert.equal(read.openInterest.state, 'FRESH');
+  assert.deepEqual(read.openInterest.value, { base: 1_000, quoteUsd: 60_000_000, changePct: 1.25 });
+  assert.equal(read.liquidation.state, 'FRESH');
+  assert.equal(read.liquidation.value.total15mUsd, 120_000_000);
+  assert.equal(read.liquidation.value.sampling, 'LATEST_PER_SYMBOL_LOWER_BOUND');
+  const capability = (name) => read.routing.capabilities.find((entry) => entry.capability === name);
+  assert.equal(capability('OPEN_INTEREST').freshness, 'FRESH');
+  assert.equal(capability('FUNDING').freshness, 'FRESH');
+  assert.equal(capability('LIQUIDATION').completeness, 'SAMPLED');
+  assert.equal(read.bridge.evidenceHistoryCount, 4);
+  assert.equal(read.bridge.currentState, 'CURRENT');
+  assert.equal(read.bridge.artifact, null);
+  assert.ok(read.bridge.reasonCodes.includes('INTELLIGENCE_ARTIFACT_MISSING'));
+  assert.equal(read.authority, 'EVIDENCE_ONLY');
+  assert.equal(read.liveMoneyAuthority, 'NONE');
+  assert.equal(Object.isFrozen(read), true);
+  assert.equal(Object.isFrozen(read.openInterest.reasonCodes), true);
+
+  const savedMark = [row.perpMark, row.perpIndexPrice, row.fundingRate];
+  row.perpMark = null;
+  row.perpIndexPrice = null;
+  row.fundingRate = null;
+  const scheduleOnly = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(scheduleOnly.markFunding.state, 'MISSING');
+  assert.equal(scheduleOnly.markFunding.value, null, 'a funding schedule alone is not current mark/funding evidence');
+  [row.perpMark, row.perpIndexPrice, row.fundingRate] = savedMark;
+
+  const other = world.ports.intelligenceEvidence.readSymbol('ETHUSDT');
+  assert.equal(other.openInterest.state, 'MISSING');
+  assert.equal(other.liquidation.state, 'MISSING');
+  assert.equal(other.routing.capabilities.find((entry) => entry.capability === 'OPEN_INTEREST').freshness, 'MISSING');
+  assert.equal(other.bridge.evidenceHistoryCount, 0);
+
+  row.openInterestUpdatedAt = START + 1;
+  world.liquidation.set('BTCUSDT', START + 1);
+  const future = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(future.openInterest.state, 'MISSING');
+  assert.equal(future.openInterest.value, null);
+  assert.equal(future.liquidation.state, 'MISSING');
+  assert.equal(future.liquidation.value, null);
+  row.openInterestUpdatedAt = START - 150;
+  world.liquidation.set('BTCUSDT', START - 100);
+
+  let accessorReads = 0;
+  const accessorRow = { ...row };
+  Object.defineProperty(accessorRow, 'openInterestUsd', {
+    enumerable: true,
+    get() { accessorReads += 1; return 60_000_000; },
+  });
+  world.market.rows = [accessorRow];
+  const accessorRead = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(accessorReads, 0);
+  assert.equal(accessorRead.openInterest.state, 'MISSING');
+  assert.equal(accessorRead.openInterest.value, null);
+
+  world.market.rows = [new Proxy({ ...row }, { get() { throw new Error('hostile row read'); } })];
+  assert.equal(world.ports.intelligenceEvidence.readSymbol('BTCUSDT').openInterest.value, null);
+  const originalAllRows = world.market.allRows;
+  world.market.allRows = () => { throw new Error('owner unavailable'); };
+  assert.equal(world.ports.intelligenceEvidence.readSymbol('BTCUSDT').openInterest.value, null);
+  world.market.allRows = originalAllRows;
+  world.market.rows = [row];
+
+  world.clock.now = START + 10_001;
+  world.spot.set('BTCUSDT', START + 9_900);
+  world.usdm.set('BTCUSDT', START + 9_950);
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  const stale = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(stale.openInterest.state, 'STALE');
+  assert.equal(stale.openInterest.value, null);
+  assert.equal(stale.liquidation.state, 'STALE');
+  assert.equal(stale.liquidation.value, null);
+
+  world.ports.runtimes.marketIntelligence.stop();
+  const historical = world.ports.intelligenceEvidence.readSymbol('BTCUSDT');
+  assert.equal(historical.projection.state, 'NOT_RUNNING');
+  assert.equal(historical.bridge.currentState, 'HISTORICAL_ONLY');
+  assert.equal(historical.bridge.featureSnapshot, null);
+  assert.equal(historical.bridge.attention, null);
+  assert.equal(historical.bridge.artifact, null);
+  assert.ok(historical.bridge.evidenceHistoryCount > 0);
+  assert.equal(historical.openInterest.value, null);
+  assert.throws(() => world.ports.intelligenceEvidence.readSymbol('../BTCUSDT'), /canonical bounded market symbol/);
+});
+
+test('partial canonical bootstrap cannot publish cached focus and recovers only after full duplicate reconciliation', async () => {
+  // This bound is deliberately between the canonical current funding record
+  // and the larger mark record below, forcing the real Bridge to accept one
+  // immutable row and reject the other without a fabricated sink receipt.
+  const world = createWorld({ intelligenceEvidenceMaximumBytes: 1_270 });
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+    fundingRate: 0.0001, nextFundingTime: START + 8 * 60 * 60_000,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+
+  const runtimeHealth = world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  assert.notEqual(runtimeHealth.timestamp, null);
+  const partialHealth = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(partialHealth.timestamp, null);
+  let routing = world.ports.intelligenceEvidence.readRoutingSnapshot();
+  assert.deepEqual([routing.routed, routing.duplicate, routing.rejected], [1, 0, 1]);
+  const partialSource = routing.sources.find((entry) => entry.dataset === 'usd_m.mark_price');
+  assert.deepEqual(
+    [partialSource.generation, partialSource.revision, partialSource.closed, partialSource.bootstrapped],
+    [1, 1, false, false],
+  );
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'MISSING');
+  const cachedPlanFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(cachedPlanFocus.canPin, false);
+  assert.equal(cachedPlanFocus.attentionPlanId, null);
+  assert.equal(cachedPlanFocus.effectiveTier, null);
+
+  // Reconstruct at the same injected clock so the accepted funding row is an
+  // exact Bridge duplicate. A smaller, new mark row supplies the missing cut;
+  // only that complete duplicate+accepted reconciliation may republish health.
+  world.ports.runtimes.marketIntelligence.stop();
+  world.ports.runtimes.intelligenceRuntime.stop();
+  world.market.rows[0].perpMark = 1;
+  world.market.rows[0].perpIndexPrice = null;
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  const recoveredHealth = world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(recoveredHealth.timestamp.sourceTimeMs, START - 200);
+
+  routing = world.ports.intelligenceEvidence.readRoutingSnapshot();
+  assert.deepEqual([routing.routed, routing.duplicate, routing.rejected], [2, 1, 1]);
+  const recoveredSource = routing.sources.find((entry) => entry.dataset === 'usd_m.mark_price');
+  assert.deepEqual(
+    [recoveredSource.generation, recoveredSource.revision, recoveredSource.closed, recoveredSource.bootstrapped],
+    [2, 1, false, true],
+  );
+  assert.equal(routingCapability(world, 'FUNDING').freshness, 'FRESH');
+  const recoveredFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(recoveredFocus.canPin, true);
+  assert.notEqual(recoveredFocus.attentionPlanId, null);
+});
+
+test('production Volume owner publishes one lifecycle-bound trade source and delayed pre-close LIVE stays fenced', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+
+  const tradeCut = (generation, revision, id, continuity) => ({
+    kind: 'SPOT_AGG_TRADE', generation, revision, receivedAtMs: START,
+    continuity, baseAsset: 'BTC',
+    raw: {
+      e: 'aggTrade', E: START - 100 + id, T: START - 99 + id, s: 'BTCUSDT',
+      a: id, f: id, l: id, p: '60000', q: '0.01', m: false,
+    },
+  });
+  world.emitVolumeEvidence(tradeCut(1, 1, 1, 'UNKNOWN'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(1, 2, 2, 'CONTIGUOUS'));
+  assert.equal(
+    routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness,
+    'FRESH',
+    JSON.stringify(world.ports.intelligenceEvidence.readRoutingSnapshot()),
+  );
+
+  world.emitVolumeEvidence({ kind: 'SOURCE_CLOSED', generation: 1, revision: 3, observedAtMs: START });
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(1, 4, 3, 'CONTIGUOUS'));
+  const closed = world.ports.intelligenceEvidence.readRoutingSnapshot().sources
+    .find((entry) => entry.dataset === 'spot.aggregate_trade');
+  assert.deepEqual([closed.generation, closed.revision, closed.closed], [1, 3, true]);
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+
+  world.emitVolumeEvidence(tradeCut(3, 1, 4, 'UNKNOWN'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'MISSING');
+  world.emitVolumeEvidence(tradeCut(3, 2, 5, 'CONTIGUOUS'));
+  assert.equal(routingCapability(world, 'ROLLING_ACTIVITY_FLOW').freshness, 'FRESH');
+  const restarted = world.ports.intelligenceEvidence.readRoutingSnapshot().sources
+    .find((entry) => entry.dataset === 'spot.aggregate_trade');
+  assert.deepEqual([restarted.generation, restarted.revision, restarted.closed, restarted.bootstrapped], [3, 2, false, true]);
+});
+
+test('focus counts come from the canonical attention summary and disappear with owner truth', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  world.ports.runtimes.intelligenceRuntime.health(world.ctx());
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+
+  const broad = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual([broad.truthLabel, broad.focusRequestedCount, broad.focusActiveCount], ['LIVE_PUBLIC', 0, 0]);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  const focused = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual([focused.focusRequestedCount, focused.focusActiveCount], [1, 1]);
+
+  world.market.feeds['futures-markprice'] = 'closed';
+  const unavailable = world.ports.summaries.readSupervisorSummaries().intelligence;
+  assert.deepEqual(
+    [unavailable.truthLabel, unavailable.focusRequestedCount, unavailable.focusActiveCount],
+    ['UNAVAILABLE', null, null],
+  );
 });
 
 test('market intelligence fails closed when USD-M disconnects with fresh cached evidence', async () => {
@@ -414,12 +822,46 @@ test('market intelligence fails closed when USD-M disconnects with fresh cached 
     world.ports.runtimes.marketIntelligence.health(world.ctx()).timestamp.sourceTimeMs,
     START - 200,
   );
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, true);
   world.market.feeds['futures-markprice'] = 'closed';
 
   const disconnected = world.ports.runtimes.marketIntelligence.health(world.ctx());
   assert.equal(disconnected.running, true);
   assert.equal(disconnected.timestamp, null);
+  const disconnectedFocus = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(disconnectedFocus.pinned, true);
+  assert.equal(disconnectedFocus.canPin, false);
+  assert.equal(disconnectedFocus.effectivePinned, null);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
   assert.equal(world.ports.runtimes.intelligenceRuntime.health(world.ctx()).timestamp.sourceTimeMs, START - 250);
+});
+
+test('focus readback becomes unavailable immediately when the intelligence owner stops', async () => {
+  const world = createWorld();
+  world.market.rows = [{
+    symbol: 'BTCUSDT', base: 'BTC', hasSpot: true, hasPerp: true,
+    perpMark: 60_000, perpIndexPrice: 59_990,
+  }];
+  await startMarket(world);
+  world.market.feeds['spot-miniticker'] = 'open';
+  world.market.feeds['futures-markprice'] = 'open';
+  world.spot.set('BTCUSDT', START - 250);
+  world.usdm.set('BTCUSDT', START - 200);
+  await world.ports.runtimes.intelligenceRuntime.start();
+  await world.ports.runtimes.marketIntelligence.start();
+  world.ports.runtimes.marketIntelligence.health(world.ctx());
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
+
+  world.ports.runtimes.marketIntelligence.stop();
+  const stopped = world.ports.attentionFocus.readFocusState('BTCUSDT');
+  assert.equal(stopped.pinned, true);
+  assert.equal(stopped.canPin, false);
+  assert.equal(stopped.effectivePinned, null);
+  assert.equal(stopped.attentionPlanId, null);
+  assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', false), true);
+  assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, false);
 });
 
 test('sibling intelligence probes share exactly one same-step refresh and never a later call', async () => {
@@ -668,6 +1110,7 @@ test('strategy summaries count exact owner records without recomputing scores or
     decision('proposal', START - 200, 'basis-proposal'),
   );
   world.basisSnapshot.proposals.push(proposal('basis', START - 200, 'basis-one'));
+  world.basisSnapshot.ownerSummary = { candidateCount: 7, opportunityCount: 3, cooldownCount: 2 };
 
   world.volumeStatus.lastBookTs = START - 120;
   world.volumeStatus.lastTradeTs = START - 140;
@@ -680,13 +1123,15 @@ test('strategy summaries count exact owner records without recomputing scores or
     decision('proposal', START - 250, 'volume-proposal'),
   );
   world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 250, 'volume-one'));
+  world.volumeSnapshot.ownerSummary = { candidateCount: 5, opportunityCount: 4, cooldownCount: 1 };
 
   const summaries = world.ports.summaries.readSupervisorSummaries().strategies;
   assert.deepEqual(summaries.basis, {
     truthLabel: 'LIVE_PUBLIC',
     heartbeatAtMs: START - 50,
-    candidateCount: 2,
-    proposalCount: 1,
+    candidateCount: 7,
+    proposalCount: 3,
+    cooldownCount: 2,
     rejectionCount: 1,
     acceptedCount: 1,
     lastDecisionAtMs: START - 200,
@@ -695,12 +1140,312 @@ test('strategy summaries count exact owner records without recomputing scores or
   assert.deepEqual(summaries.volume, {
     truthLabel: 'LIVE_PUBLIC',
     heartbeatAtMs: START - 60,
-    candidateCount: 0,
-    proposalCount: 1,
+    candidateCount: 5,
+    proposalCount: 4,
+    cooldownCount: 1,
     rejectionCount: 1,
     acceptedCount: 1,
     lastDecisionAtMs: START - 250,
     sourceRevision: null,
   });
   assert.equal(JSON.stringify(summaries).includes(String(START + 9_999_999)), false);
+});
+
+test('missing or malformed strategy owner counts remain null instead of becoming synthetic zero', async () => {
+  const world = createWorld();
+  await world.ports.runtimes.basis.start();
+  await world.ports.runtimes.volume.start();
+  world.basisStatus.lastBookTs = START - 100;
+  world.basisStatus.lastMarkTs = START - 150;
+  world.volumeStatus.lastBookTs = START - 120;
+  world.volumeStatus.lastTradeTs = START - 140;
+  world.volumeStatus.streamState = 'open';
+  world.volumeStatus.streamConnections = 1;
+  world.volumeStatus.openConnections = 1;
+  world.basisSnapshot.decisions.push(decision('watch', START - 100, 'basis-raw'));
+  world.basisSnapshot.proposals.push(proposal('basis', START - 100, 'basis-raw'));
+  world.volumeSnapshot.decisions.push(decision('focus', START - 100, 'volume-raw'));
+  world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 100, 'volume-raw'));
+  world.basisSnapshot.ownerSummary = null;
+  world.volumeSnapshot.ownerSummary = { candidateCount: 0, opportunityCount: 0, cooldownCount: -1 };
+
+  const summaries = world.ports.summaries.readSupervisorSummaries().strategies;
+  assert.deepEqual(
+    [summaries.basis.candidateCount, summaries.basis.proposalCount, summaries.basis.cooldownCount],
+    [null, null, null],
+  );
+  assert.deepEqual(
+    [summaries.volume.candidateCount, summaries.volume.proposalCount, summaries.volume.cooldownCount],
+    [null, null, null],
+  );
+});
+
+test('production summaries bind active-exposure and recovery counts to exact Capital owner cuts', () => {
+  const state = createEmptyCapitalCheckpointState('capital:production-summary:test');
+  const restart = projectRestartSafety(state, {
+    nowMs: START,
+    correlationId: 'capital-production-summary',
+    accountTruth: null,
+    reconciliationTruth: null,
+    reconciliationReferences: [],
+  });
+  const world = createWorld({
+    capitalSummary: Object.freeze({ readCapitalSummary: () => capitalSummaryCut(restart) }),
+  });
+
+  assert.deepEqual(world.ports.summaries.readSupervisorSummaries().capital, {
+    truthLabel: 'RECORDED_REPLAY',
+    accountTruthState: 'RESTART_TRUTH_BLOCKED',
+    allocatableAmount: null,
+    reservedAmount: null,
+    activeExposureAmount: null,
+    eligibleCount: null,
+    reservationCount: 0,
+    stagedMandateCount: null,
+    activeExposureCount: 0,
+    recoveryCount: 0,
+    checkpointRevision: '0',
+    blockerCodes: [
+      'RESTART_ACCOUNT_TRUTH_NOT_FRESH',
+      'RESTART_RECONCILIATION_TRUTH_NOT_FRESH',
+    ],
+  });
+});
+
+test('unavailable or malformed Capital restart truth keeps production counts null', () => {
+  const unavailable = createWorld();
+  assert.deepEqual(
+    [
+      unavailable.ports.summaries.readSupervisorSummaries().capital.activeExposureCount,
+      unavailable.ports.summaries.readSupervisorSummaries().capital.recoveryCount,
+    ],
+    [null, null],
+  );
+
+  const ownerGated = createWorld({
+    capitalSummary: Object.freeze({
+      readCapitalSummary: () => Object.freeze({
+        availability: 'UNAVAILABLE',
+        accountTruthState: 'OWNER_GATED',
+        reasonCodes: Object.freeze(['NO_CANONICAL_ACTIVE_L12_SUBJECT']),
+      }),
+    }),
+  }).ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [ownerGated.activeExposureCount, ownerGated.recoveryCount, ownerGated.accountTruthState],
+    [null, null, 'OWNER_GATED'],
+  );
+  assert.deepEqual(ownerGated.blockerCodes, ['NO_CANONICAL_ACTIVE_L12_SUBJECT']);
+
+  const malformed = createWorld({
+    capitalSummary: Object.freeze({
+      readCapitalSummary: () => ({
+        availability: 'AVAILABLE',
+        checkpoint: { id: 'cchk-malformed', revision: 4 },
+        safety: {
+          canOpenOrIncrease: false,
+          supervisionContinues: true,
+          visiblePositionIds: [],
+          recoveryRequiredPositionIds: ['position-not-visible'],
+          effectiveActiveReservationIds: [],
+          reasonCodes: [],
+        },
+      }),
+    }),
+  });
+  const summary = malformed.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual([summary.activeExposureCount, summary.recoveryCount, summary.checkpointRevision], [null, null, null]);
+  assert.deepEqual(summary.blockerCodes, ['CAPITAL_SUMMARY_OWNER_MALFORMED']);
+});
+
+test('the real server entrypoint binds canonical L12 evidence through the lazy Capital summary port', () => {
+  const source = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
+  const declaration = source.indexOf('let canonicalOwnerEvidence: CanonicalOwnerEvidenceReadPort | null = null;');
+  const construction = source.indexOf('const systemIntegrationProduction = createProductionSystemIntegrationPorts({');
+  const assignment = source.indexOf('canonicalOwnerEvidence = createCanonicalOwnerEvidenceReadPort({');
+  assert.ok(declaration >= 0 && declaration < construction && construction < assignment);
+  assert.match(source, /readCapitalSummary: \(\) => \{[\s\S]*readCanonicalOwnerEvidence\(\)\.l12/u);
+  assert.match(source, /capitalSummary: capitalSummaryReadPort/u);
+  assert.doesNotMatch(source, /createEmptyCapitalCheckpointState/u);
+});
+
+test('Capital summary reads are lazy, exact, deeply snapshotted, and fail closed on hostile input', () => {
+  let cut = null;
+  let reads = 0;
+  const port = Object.freeze({
+    readCapitalSummary() {
+      reads += 1;
+      return cut;
+    },
+  });
+  const world = createWorld({ capitalSummary: port });
+  assert.equal(reads, 0);
+  assert.equal(world.ports.summaries.readSupervisorSummaries().capital.activeExposureCount, null);
+  assert.equal(reads, 1);
+
+  cut = {
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:restored:7', revision: 7 },
+    safety: {
+      canOpenOrIncrease: false,
+      supervisionContinues: true,
+      visiblePositionIds: ['position-1', 'position-2'],
+      recoveryRequiredPositionIds: ['position-2'],
+      effectiveActiveReservationIds: ['reservation-1'],
+      reasonCodes: ['RESTART_RECOVERY_REQUIRED'],
+    },
+  };
+  const summary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.reservationCount, summary.checkpointRevision],
+    [2, 1, 1, '7'],
+  );
+  cut.safety.visiblePositionIds.push('position-after-read');
+  cut.safety.reasonCodes.push('AFTER_READ');
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.reservationCount, summary.blockerCodes],
+    [2, 1, 1, ['RESTART_RECOVERY_REQUIRED']],
+  );
+
+  let getterReads = 0;
+  const getterSafety = {};
+  Object.defineProperties(getterSafety, {
+    canOpenOrIncrease: { enumerable: true, get() { getterReads += 1; return true; } },
+    supervisionContinues: { enumerable: true, value: false },
+    visiblePositionIds: { enumerable: true, value: [] },
+    recoveryRequiredPositionIds: { enumerable: true, value: [] },
+    effectiveActiveReservationIds: { enumerable: true, value: [] },
+    reasonCodes: { enumerable: true, value: [] },
+  });
+  cut = {
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:getter', revision: 8 },
+    safety: getterSafety,
+  };
+  const getterSummary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.equal(getterReads, 0);
+  assert.deepEqual(
+    [getterSummary.activeExposureCount, getterSummary.recoveryCount, getterSummary.checkpointRevision],
+    [null, null, null],
+  );
+
+  cut = new Proxy({
+    availability: 'AVAILABLE',
+    checkpoint: { id: 'capital:proxy', revision: 9 },
+    safety: {
+      canOpenOrIncrease: true,
+      supervisionContinues: false,
+      visiblePositionIds: [], recoveryRequiredPositionIds: [],
+      effectiveActiveReservationIds: [], reasonCodes: [],
+    },
+  }, {});
+  assert.equal(world.ports.summaries.readSupervisorSummaries().capital.activeExposureCount, null);
+});
+
+test('Capital summary reentrancy and READY/blocker contradictions invalidate the whole cut', () => {
+  let world;
+  let reenter = true;
+  const port = Object.freeze({
+    readCapitalSummary() {
+      if (reenter) {
+        reenter = false;
+        world.ports.summaries.readSupervisorSummaries();
+      }
+      return {
+        availability: 'AVAILABLE',
+        checkpoint: { id: 'capital:reentrant', revision: 1 },
+        safety: {
+          canOpenOrIncrease: true,
+          supervisionContinues: false,
+          visiblePositionIds: [], recoveryRequiredPositionIds: [],
+          effectiveActiveReservationIds: [], reasonCodes: ['CONTRADICTORY_BLOCKER'],
+        },
+      };
+    },
+  });
+  world = createWorld({ capitalSummary: port });
+  const summary = world.ports.summaries.readSupervisorSummaries().capital;
+  assert.deepEqual(
+    [summary.activeExposureCount, summary.recoveryCount, summary.checkpointRevision],
+    [null, null, null],
+  );
+  assert.deepEqual(summary.blockerCodes, ['CAPITAL_SUMMARY_OWNER_MALFORMED']);
+});
+
+test('strategy owner summaries reject Proxy/accessor records and snapshot exact own data once', async () => {
+  const world = createWorld();
+  await world.ports.runtimes.basis.start();
+  world.basisStatus.lastBookTs = START - 100;
+  world.basisStatus.lastMarkTs = START - 100;
+  world.basis.integrationSnapshot = () => ({
+    capturedAtMs: world.basisSnapshot.capturedAtMs,
+    lastTickTs: world.basisSnapshot.lastTickTs,
+    decisions: world.basisSnapshot.decisions,
+    proposals: world.basisSnapshot.proposals,
+    ownerSummary: world.basisSnapshot.ownerSummary,
+  });
+
+  world.basisSnapshot.ownerSummary = new Proxy({
+    candidateCount: 3, opportunityCount: 2, cooldownCount: 1,
+  }, {});
+  let summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [null, null, null]);
+
+  let getterReads = 0;
+  const getterSummary = {};
+  Object.defineProperties(getterSummary, {
+    candidateCount: { enumerable: true, get() { getterReads += 1; return 3; } },
+    opportunityCount: { enumerable: true, value: 2 },
+    cooldownCount: { enumerable: true, value: 1 },
+  });
+  world.basisSnapshot.ownerSummary = getterSummary;
+  summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  assert.equal(getterReads, 0);
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [null, null, null]);
+
+  const owned = { candidateCount: 4, opportunityCount: 3, cooldownCount: 2 };
+  world.basisSnapshot.ownerSummary = owned;
+  summary = world.ports.summaries.readSupervisorSummaries().strategies.basis;
+  owned.candidateCount = 999;
+  assert.deepEqual([summary.candidateCount, summary.proposalCount, summary.cooldownCount], [4, 3, 2]);
+  assert.equal(Object.isFrozen(summary), true);
+});
+
+test('active exposure and recovery counts are owner facts, never validate-only synthetic zeros', () => {
+  const defaults = defaultApplicationSummaries(null, true, null);
+  const ownerCapital = Object.freeze({
+    ...defaults.capital,
+    truthLabel: 'RECORDED_REPLAY',
+    accountTruthState: 'OWNER_READBACK',
+    activeExposureCount: 3,
+    recoveryCount: 2,
+    blockerCodes: Object.freeze([]),
+  });
+  const projected = mergeApplicationSummaries(defaults, { capital: ownerCapital }, null);
+  assert.equal(projected.capital, ownerCapital);
+  assert.deepEqual([projected.capital.activeExposureCount, projected.capital.recoveryCount], [3, 2]);
+
+  const projectedDuringValidateOnly = mergeApplicationSummaries(defaults, { capital: ownerCapital }, {
+    disposition: 'RISK_REJECTED',
+    riskVerdict: null,
+    executionState: null,
+    reconciliation: null,
+  });
+  assert.equal(projectedDuringValidateOnly.capital, ownerCapital);
+  assert.deepEqual(
+    [projectedDuringValidateOnly.capital.activeExposureCount, projectedDuringValidateOnly.capital.recoveryCount],
+    [3, 2],
+  );
+
+  const validateOnlyWithoutCapitalOwner = mergeApplicationSummaries(defaults, null, {
+    disposition: 'RISK_REJECTED',
+    riskVerdict: null,
+    executionState: null,
+    reconciliation: null,
+  });
+  assert.deepEqual(
+    [validateOnlyWithoutCapitalOwner.capital.activeExposureCount, validateOnlyWithoutCapitalOwner.capital.recoveryCount],
+    [null, null],
+  );
+  assert.ok(validateOnlyWithoutCapitalOwner.capital.blockerCodes.includes('CAPITAL_EXPOSURE_OWNER_UNAVAILABLE'));
 });

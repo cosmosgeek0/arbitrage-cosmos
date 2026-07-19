@@ -88,6 +88,7 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     || typeof options.read?.graph !== 'function'
     || typeof options.read?.events !== 'function'
     || typeof options.read?.controls !== 'function'
+    || typeof options.read?.focusPin !== 'function'
     || typeof options.read?.trace !== 'function'
     || typeof options.controls?.mutate !== 'function'
     || typeof options.controls?.auditRejectedRequest !== 'function'
@@ -149,6 +150,16 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
   router.get('/controls', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
     try { res.json(await options.read.controls()); } catch { readError(res); }
+  }));
+
+  router.get('/attention/focus/:symbol', asyncRoute(async (req, res) => {
+    if (rejectReadQuery(req, res)) return;
+    const symbol = req.params.symbol;
+    if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
+      res.status(400).json({ ok: false, code: 'INVALID_FOCUS_SYMBOL', error: 'symbol must be canonical.' });
+      return;
+    }
+    try { res.json(await options.read.focusPin(symbol)); } catch { readError(res); }
   }));
 
   router.get('/traces/:correlationId', asyncRoute(async (req, res) => {

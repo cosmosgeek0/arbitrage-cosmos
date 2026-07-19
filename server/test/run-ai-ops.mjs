@@ -161,8 +161,8 @@ const lanes = [
   {
     id: 'A5',
     files: a5,
-    expectedFiles: 12,
-    expectedTests: 94,
+    expectedFiles: 13,
+    expectedTests: 95,
     osNetworkDeny: true,
     env: { AI_OPS_OS_NETWORK_DENY: '1' },
     nodeArgs: [
@@ -192,7 +192,7 @@ const inventoryTotal = lanes.reduce((sum, lane) => sum + lane.files.length, 0);
 const failures = [];
 const totals = { tests: 0, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 0 };
 
-if (inventoryTotal !== 44) failures.push(`AI_OPS_TEST_FILE_TOTAL_DRIFT:${inventoryTotal}:EXPECTED_44`);
+if (inventoryTotal !== 45) failures.push(`AI_OPS_TEST_FILE_TOTAL_DRIFT:${inventoryTotal}:EXPECTED_45`);
 
 for (const lane of lanes) {
   process.stdout.write(`\nAI Ops ${lane.id}: ${lane.files.length} test files\n`);

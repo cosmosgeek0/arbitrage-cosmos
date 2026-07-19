@@ -8,7 +8,7 @@ import { Band, FactRow, NotPublished, TruthTag, Val } from './bits';
 
 export function CapitalPanel({ snapshot }: { snapshot: SystemSupervisorSnapshot }) {
   const capital = snapshot.summaries.capital;
-  const exposed = (capital.activeExposureCount ?? 0) > 0;
+  const exposed = capital.activeExposureCount !== null && capital.activeExposureCount > 0;
 
   return (
     <section className="sdx-section" aria-label="Capital and exposure">
@@ -38,8 +38,15 @@ export function CapitalPanel({ snapshot }: { snapshot: SystemSupervisorSnapshot 
         />
         <FactRow
           label="Active Exposure Positions"
-          sub={exposed ? 'Open exposure — highest attention priority on this screen' : 'No open exposure'}
+          sub={capital.activeExposureCount === null
+            ? 'Canonical active-exposure owner count is unavailable'
+            : exposed ? 'Open exposure — highest attention priority on this screen' : 'No open exposure'}
           end={<Val text={countText(capital.activeExposureCount)} tone={exposed ? 'bad' : undefined} />}
+        />
+        <FactRow
+          label="Recoveries"
+          sub={capital.recoveryCount === null ? 'Canonical recovery owner count is unavailable' : 'Owner-reported recovery subjects requiring supervision'}
+          end={<Val text={countText(capital.recoveryCount)} tone={capital.recoveryCount !== null && capital.recoveryCount > 0 ? 'warn' : undefined} />}
         />
         <FactRow
           label="Checkpoint Revision"

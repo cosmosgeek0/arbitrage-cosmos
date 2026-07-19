@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -115,9 +115,9 @@ function incident(overrides = {}) {
     incidentId: 'incident.product.one',
     fingerprint: 'fingerprint.product.one',
     rootComponentId: 'basis-engine',
-    severity: 'WARNING',
+    severity: 'MEDIUM',
     capitalRelevant: true,
-    expectedEventCount: null,
+    expectedLedgerEventId: null,
     state: 'OPEN',
     firstSeenAtMs: T0 + 4,
     lastSeenAtMs: T0 + 4,
@@ -184,6 +184,10 @@ const EXPECTED_COLUMNS = Object.freeze({
     'event_count', 'acknowledged_at_ms', 'acknowledged_by_operator_id',
     'resolved_at_ms', 'correlation_id', 'ledger_event_id',
   ],
+  product_incident_source_dispositions: [
+    'source_event_id', 'disposition_event_id', 'previous_source_event_id',
+    'previous_disposition_event_id', 'processed_count', 'chain_digest',
+  ],
   product_boot_release_revisions: [
     'operation_id', 'operation_type', 'generation', 'tested_commit',
     'deployed_commit', 'config_revision', 'schema_revision', 'model_revision',
@@ -192,7 +196,84 @@ const EXPECTED_COLUMNS = Object.freeze({
   ],
 });
 
-test('migration creates the exact six canonical tables, foreign keys, constraints, and requested indexes', () => {
+const INCIDENT_CHECKPOINT_TRIGGER_NAMES = Object.freeze([
+  'product_incident_checkpoint_events_no_delete',
+  'product_incident_checkpoint_events_no_update',
+  'product_incident_source_dispositions_no_delete',
+  'product_incident_source_dispositions_no_update',
+]);
+
+const INCIDENT_EXPRESSION_INDEX_NAMES = Object.freeze([
+  'idx_events_product_incident_disposition_source_event',
+  'idx_events_product_incident_disposition_stream',
+  'idx_events_product_incident_route_stream',
+]);
+
+function assertProductIncidentCheckpointSchema(database) {
+  const tableInfo = database.prepare('PRAGMA table_info(product_incident_source_dispositions)').all();
+  assert.deepEqual(tableInfo.map((column) => column.name), EXPECTED_COLUMNS.product_incident_source_dispositions);
+  assert.equal(tableInfo.find((column) => column.name === 'source_event_id').pk, 1);
+  assert.ok(tableInfo.filter((column) => column.name !== 'source_event_id').every((column) => column.pk === 0));
+  assert.ok(tableInfo.filter((column) => column.name !== 'source_event_id').every((column) => column.notnull === 1));
+
+  assert.deepEqual(
+    database.prepare('PRAGMA foreign_key_list(product_incident_source_dispositions)').all()
+      .map((row) => `${row.from}->${row.table}.${row.to}`)
+      .sort(),
+    ['disposition_event_id->events.id', 'source_event_id->events.id'],
+  );
+
+  const checkpointIndexes = database.prepare('PRAGMA index_list(product_incident_source_dispositions)').all();
+  const uniqueColumns = checkpointIndexes
+    .filter((index) => index.unique === 1)
+    .map((index) => database.prepare(`PRAGMA index_info(${index.name})`).all().map((row) => row.name).join(','))
+    .sort();
+  assert.deepEqual(uniqueColumns, ['chain_digest', 'disposition_event_id', 'processed_count']);
+
+  const tableSql = database.prepare(
+    "SELECT sql FROM sqlite_master WHERE type='table' AND name='product_incident_source_dispositions'",
+  ).get().sql;
+  assert.match(tableSql, /processed_count\s+INTEGER\s+NOT\s+NULL\s+UNIQUE\s+CHECK\s*\(\s*processed_count\s*>=\s*1\s*\)/i);
+  assert.match(tableSql, /chain_digest\s+TEXT\s+NOT\s+NULL\s+UNIQUE\s+CHECK\s*\(\s*length\s*\(\s*chain_digest\s*\)\s*=\s*64\s*\)/i);
+
+  const triggers = database.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'trigger' AND name LIKE 'product_incident_%'
+    ORDER BY name ASC
+  `).all();
+  assert.deepEqual(triggers.map((trigger) => trigger.name), INCIDENT_CHECKPOINT_TRIGGER_NAMES);
+  for (const trigger of triggers) {
+    assert.match(trigger.sql, /BEFORE\s+(?:UPDATE|DELETE)\s+ON/i);
+    assert.match(trigger.sql, /RAISE\s*\(\s*ABORT\s*,\s*'product incident checkpoint (?:history|evidence) is immutable'\s*\)/i);
+    if (trigger.name.startsWith('product_incident_checkpoint_events_')) {
+      assert.match(trigger.sql, /ON\s+events/i);
+      assert.match(trigger.sql, /source_event_id\s*=\s*OLD\.id\s+OR\s+disposition_event_id\s*=\s*OLD\.id/i);
+    } else {
+      assert.match(trigger.sql, /ON\s+product_incident_source_dispositions/i);
+    }
+  }
+
+  const expressionIndexes = database.prepare(`
+    SELECT name, sql FROM sqlite_master
+    WHERE type = 'index' AND name IN (?, ?, ?)
+    ORDER BY name ASC
+  `).all(...INCIDENT_EXPRESSION_INDEX_NAMES);
+  assert.deepEqual(expressionIndexes.map((index) => index.name), INCIDENT_EXPRESSION_INDEX_NAMES);
+  for (const index of expressionIndexes) {
+    assert.match(index.sql, /CASE\s+WHEN\s+json_valid\s*\(\s*data\s*\)/i);
+    assert.match(index.sql, /json_extract\s*\(\s*data\s*,\s*'\$\.sourceEventId'\s*\)/i);
+    assert.match(index.sql, /WHERE\s+kind\s+IN/i);
+  }
+  assert.match(expressionIndexes[0].sql, /CREATE\s+UNIQUE\s+INDEX/i);
+  for (const index of expressionIndexes.slice(1)) {
+    assert.match(index.sql, /json_extract\s*\(\s*data\s*,\s*'\$\.rootComponentId'\s*\)/i);
+    assert.match(index.sql, /json_extract\s*\(\s*data\s*,\s*'\$\.sourceGroup'\s*\)/i);
+  }
+  assert.ok(new Set(database.prepare('PRAGMA index_list(events)').all().map((index) => index.name))
+    .has('idx_events_product_incident_source'));
+}
+
+test('migration creates the exact seven canonical tables, foreign keys, constraints, and requested indexes', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
   try {
@@ -200,8 +281,16 @@ test('migration creates the exact six canonical tables, foreign keys, constraint
     for (const [table, names] of Object.entries(EXPECTED_COLUMNS)) {
       assert.deepEqual(ledger.db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name), names);
       const foreignKeys = ledger.db.prepare(`PRAGMA foreign_key_list(${table})`).all();
-      assert.ok(foreignKeys.some((row) => row.table === 'events' && row.from === 'ledger_event_id' && row.to === 'id'));
+      if (table === 'product_incident_source_dispositions') {
+        assert.deepEqual(
+          foreignKeys.map((row) => `${row.from}->${row.table}.${row.to}`).sort(),
+          ['disposition_event_id->events.id', 'source_event_id->events.id'],
+        );
+      } else {
+        assert.ok(foreignKeys.some((row) => row.table === 'events' && row.from === 'ledger_event_id' && row.to === 'id'));
+      }
     }
+    assertProductIncidentCheckpointSchema(ledger.db);
 
     const commandIndexes = new Set(ledger.db.prepare('PRAGMA index_list(product_commands)').all().map((row) => row.name));
     assert.ok(commandIndexes.has('idx_product_commands_target_created'));
@@ -245,6 +334,12 @@ test('legacy database files migrate in place and preserve prior durable rows', (
     INSERT INTO config (key, value) VALUES ('legacy.config', 'preserved');
   `);
   legacy.close();
+  writeFileSync(path.join(dataDir, 'journal-compat.json'), `${JSON.stringify({
+    dataSchema: 1,
+    rollbackFloor: 0,
+    updatedAtUtc: '2026-07-13T00:00:00Z',
+    updatedBy: 'product-persistence-test',
+  })}\n`);
 
   const migrated = new Ledger(dataDir);
   try {
@@ -253,6 +348,8 @@ test('legacy database files migrate in place and preserve prior durable rows', (
     for (const table of Object.keys(EXPECTED_COLUMNS)) {
       assert.equal(migrated.db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name=?").get(table).count, 1);
     }
+    assertProductIncidentCheckpointSchema(migrated.db);
+    assert.equal(migrated.db.prepare('SELECT COUNT(*) AS count FROM product_incident_source_dispositions').get().count, 0);
   } finally {
     migrated.close();
   }
@@ -262,6 +359,8 @@ test('legacy database files migrate in place and preserve prior durable rows', (
     assert.equal(restarted.getConfigValue('legacy.config'), 'preserved');
     assert.equal(restarted.countEvents('legacy.audit'), 1);
     assert.equal(restarted.readProductBlockingIdentityReferences().length, 0);
+    assertProductIncidentCheckpointSchema(restarted.db);
+    assert.equal(restarted.db.prepare('SELECT COUNT(*) AS count FROM product_incident_source_dispositions').get().count, 0);
   } finally {
     restarted.close();
     rmSync(dataDir, { recursive: true, force: true });
@@ -435,9 +534,9 @@ test('incident and boot/release transitions are CAS evidence only and survive re
     const firstIncident = ledger.compareAndTransitionProductIncident(incident());
     assert.equal(firstIncident.disposition, 'COMMITTED_NEW');
     const secondIncidentInput = incident({
-      expectedEventCount: 1,
+      expectedLedgerEventId: firstIncident.ledgerEvent.id,
       lastSeenAtMs: T0 + 10,
-      eventCount: 2,
+      eventCount: 1,
       state: 'ACKNOWLEDGED',
       acknowledgedAtMs: T0 + 9,
       acknowledgedByOperatorId: 'operator.digest.one',
@@ -461,7 +560,7 @@ test('incident and boot/release transitions are CAS evidence only and survive re
 
     ledger = new Ledger(dataDir);
     assert.deepEqual(ledger.db.prepare('SELECT event_count, state FROM product_incidents').get(), {
-      event_count: 2,
+      event_count: 1,
       state: 'ACKNOWLEDGED',
     });
     assert.deepEqual(ledger.db.prepare('SELECT completed_at_ms, clean FROM product_boot_release_revisions').get(), {

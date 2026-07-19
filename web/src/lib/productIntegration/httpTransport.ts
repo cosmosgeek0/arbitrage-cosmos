@@ -49,13 +49,17 @@ export function createHttpProductIntegrationTransport(
         [503],
       ).then(({ status, body }) => Object.freeze({ httpStatus: status, body }));
     },
-    previewCommand(controlId, expectedRevision, signal) {
+    previewCommand(controlId, expectedRevision, targetId, signal) {
       return fetchJson<unknown>(commandPreview, {
         method: 'POST',
         cache: 'no-store',
         signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ controlId, expectedRevision }),
+        body: JSON.stringify({
+          controlId,
+          expectedRevision,
+          ...(targetId === undefined ? {} : { targetId }),
+        }),
       });
     },
     submitCommand(request: Readonly<ProductCommandRequest>, signal) {

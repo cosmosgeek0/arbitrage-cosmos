@@ -513,4 +513,9 @@ assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.50.7 
 assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.44.6 fixture'
 assert_failure node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.51.0 fixture'
 assert_failure node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.50.6 fixture'
+# F-109: the allowlist is non-monotonic by design - these are NEWER than
+# 3.44.6 and still rejected; the locked behaviour prevents a false floor.
+assert_failure node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.45.1 fixture'
+assert_failure node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.46.1 fixture'
+assert_failure_contains 'NOT accepted even though they are newer' node "$I00_ROOT/bin/verify-sqlite-version.mjs" --version '3.45.1'
 finish

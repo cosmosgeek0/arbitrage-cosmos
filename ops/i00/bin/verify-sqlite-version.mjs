@@ -16,5 +16,8 @@ const atLeast = (minimum) => {
 const safe = atLeast([3, 51, 3])
   || (version[0] === 3 && version[1] === 50 && version[2] >= 7)
   || (version[0] === 3 && version[1] === 44 && version[2] >= 6);
-if (!safe) fail(`SQLite ${version.join('.')} lacks the WAL-reset fix; require 3.51.3+, 3.50.7, or 3.44.6`);
+// F-109: this is a BRANCH allowlist, not a floor - state the rule and the
+// trap, or an operator on Ubuntu 24.04's 3.45.1 will reasonably conclude a
+// "newer" version is fine.
+if (!safe) fail(`SQLite ${version.join('.')} is on a branch without the WAL-reset fix; accepted: >=3.51.3, or the 3.50.x branch from 3.50.7, or the 3.44.x branch from 3.44.6. NOTE: 3.45.x through 3.49.x are NOT accepted even though they are newer than 3.44.6`);
 process.stdout.write(`${JSON.stringify({ status: 'SQLITE_WAL_VERSION_SAFE', version: version.join('.') })}\n`);

@@ -190,4 +190,16 @@ for caller in release-switch.sh rollback-switch.sh install-ops-bundle.sh backup-
   done
   assert_eq "$(grep -c 'validate-authorization\.mjs' "$I00_ROOT/bin/$caller")" 1
 done
+
+note "F-016: entrypoint proceeds keyless; malformed present values still fail closed"
+KEYLESS_ROOT="$TEST_TMP/keyless"
+mkdir -p "$KEYLESS_ROOT/server/dist" "$KEYLESS_ROOT/creds"
+printf 'console.log("stub-app-booted");\n' > "$KEYLESS_ROOT/server/dist/index.js"
+printf '{}' > "$KEYLESS_ROOT/creds/app-secrets"
+KEYLESS_OUT="$(cd "$KEYLESS_ROOT" && CREDENTIALS_DIRECTORY="$KEYLESS_ROOT/creds" node "$I00_ROOT/bin/app-entrypoint.mjs" 2>&1)"
+assert_contains "$KEYLESS_OUT" 'stub-app-booted'
+assert_contains "$KEYLESS_OUT" 'keyless posture'
+printf '{"BINANCE_API_KEY":"x","BINANCE_API_SECRET":"y"}' > "$KEYLESS_ROOT/creds/app-secrets"
+assert_failure_contains 'required credential field' bash -c "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/creds' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+
 finish

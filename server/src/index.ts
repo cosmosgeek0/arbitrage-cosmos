@@ -835,6 +835,7 @@ function sendI00Health(
       overallPosture: 'FAILED',
       rootBlockerComponentId: null,
       reasonCodes: [processResponsive ? 'SUPERVISOR_READ_UNAVAILABLE_LIVENESS_ONLY' : 'SUPERVISOR_READ_UNAVAILABLE'],
+      ...(processResponsive ? { okSemantics: 'PROCESS_LIVENESS_ONLY' } : {}),
       componentCount: 0,
       dependencyEdgeCount: 0,
       meaningfulAdvanceOwnerComponentId: null,

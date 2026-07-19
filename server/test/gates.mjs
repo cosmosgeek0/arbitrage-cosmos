@@ -558,6 +558,7 @@ const processLive = await get('/health/live');
 check(
   'canonical liveness remains process-only while readiness evidence is unavailable',
   processLive.status === 200 && processLive.body?.ok === true
+    && processLive.body?.okSemantics === 'PROCESS_LIVENESS_ONLY'
 );
 // Conventional probe paths must never be answered by the SPA shell: a
 // misconfigured ALB/systemd/uptime probe must get a loud JSON 404, not a

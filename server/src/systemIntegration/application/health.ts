@@ -31,6 +31,12 @@ export interface I00HealthProjection {
   readonly lastMeaningfulAdvanceAtMs: number | null;
   readonly meaningfulAdvanceAgeMs: number | null;
   readonly executionBarrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED';
+  // LIVE only: `ok` here is pure process-liveness truth and disagrees with
+  // overallPosture by design. The label prevents the first field a consumer
+  // reaches for from being read as product health, mirroring the existing
+  // okSemantics: 'TRANSPORT_ONLY' (/api/system) and readinessSemantics
+  // (/api/health) conventions.
+  readonly okSemantics?: 'PROCESS_LIVENESS_ONLY';
 }
 
 const MEANINGFUL_ADVANCE_OWNER_ORDER = Object.freeze([
@@ -200,5 +206,6 @@ export function projectI00Health(
     lastMeaningfulAdvanceAtMs: meaningfulAdvance?.observedAtMs ?? null,
     meaningfulAdvanceAgeMs,
     executionBarrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+    ...(kind === 'LIVE' ? { okSemantics: 'PROCESS_LIVENESS_ONLY' as const } : {}),
   });
 }

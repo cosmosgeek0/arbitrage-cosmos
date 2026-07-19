@@ -117,9 +117,16 @@ export interface StrategyDecayDecision {
   readonly revision: number;
   readonly strategy: StrategyDecaySource;
   readonly configVersion: string;
+  readonly direction: string;
+  readonly policyId: string;
   readonly policyRevision: string;
+  readonly reduceAfterConsecutiveDegradedWindows: number;
+  readonly disableAfterConsecutiveDeadWindows: number;
+  readonly retireAfterConsecutiveDeadWindows: number;
+  readonly maximumRecentDecisions: number;
   readonly measurementId: string;
   readonly evaluatedAtMs: number;
+  readonly measurementState: StrategyDecayState;
   readonly kind: StrategyDecayDecisionKind;
   readonly priorPosture: StrategyDecayPosture;
   readonly nextPosture: StrategyDecayPosture;
@@ -134,11 +141,26 @@ export interface StrategyDecayDecision {
 export interface StrategyDecayDecisionSummary {
   readonly decisionId: string;
   readonly revision: number;
+  readonly strategy: StrategyDecaySource;
+  readonly configVersion: string;
+  readonly direction: string;
+  readonly policyId: string;
+  readonly policyRevision: string;
+  readonly reduceAfterConsecutiveDegradedWindows: number;
+  readonly disableAfterConsecutiveDeadWindows: number;
+  readonly retireAfterConsecutiveDeadWindows: number;
   readonly measurementId: string;
   readonly evaluatedAtMs: number;
+  readonly measurementState: StrategyDecayState;
   readonly kind: StrategyDecayDecisionKind;
   readonly nextPosture: StrategyDecayPosture;
   readonly researchState: StrategyDecayResearchState;
+  readonly researchCandidateId: string | null;
+  readonly consecutiveDegradedWindows: number;
+  readonly consecutiveDeadWindows: number;
+  readonly maximumRecentDecisions: number;
+  /** Verifiable hash-chain head after this exact summary. */
+  readonly historyDigest: string;
 }
 
 export interface StrategyDecayHistoryState {
@@ -146,8 +168,14 @@ export interface StrategyDecayHistoryState {
   readonly schemaVersion: typeof STRATEGY_DECAY_HISTORY_SCHEMA_VERSION;
   readonly strategy: StrategyDecaySource;
   readonly configVersion: string;
+  readonly direction: string;
+  readonly policyId: string;
   readonly policyRevision: string;
+  readonly reduceAfterConsecutiveDegradedWindows: number;
+  readonly disableAfterConsecutiveDeadWindows: number;
+  readonly retireAfterConsecutiveDeadWindows: number;
   readonly revision: number;
+  readonly updatedAtMs: number;
   readonly effectivePosture: StrategyDecayPosture;
   readonly researchState: StrategyDecayResearchState;
   readonly researchCandidateId: string | null;
@@ -155,6 +183,9 @@ export interface StrategyDecayHistoryState {
   readonly consecutiveDeadWindows: number;
   readonly totalDecisionCount: number;
   readonly compactedDecisionCount: number;
+  readonly maximumRecentDecisions: number;
+  /** Hash-chain head immediately before the first retained summary. */
+  readonly compactedHistoryDigest: string | null;
   readonly recentDecisions: readonly Readonly<StrategyDecayDecisionSummary>[];
   /** Hash-chain head covers every decision, including compacted summaries. */
   readonly historyDigest: string;

@@ -16,8 +16,13 @@ import { projectActivePosition } from '../../../dist/capitalFoundation/positions
 import {
   EMPTY_RESERVATION_BOOK,
   allocateCapital,
+  createStrategyDecayAllocationPosture,
+  deriveStrategyDecayAllocationPostureRevision,
   deriveAllocationSizingAuthorityRevision,
   reduceReservationBook,
+  strategyDecayPostureSetDigest,
+  validateStrategyDecayAllocationPosture,
+  validateStrategyDecayPostureSet,
   validateAllocationCandidate,
 } from '../../../dist/capitalFoundation/allocation/index.js';
 import { MAX_UTC_MS } from '../../../dist/foundation/contracts/index.js';
@@ -256,6 +261,31 @@ function reissueSizing(draft) {
 
 function run(candidates, snapshotOverrides = {}, policyOverrides = {}) {
   return allocateCapital({ policy: policy(policyOverrides), snapshot: snapshot(snapshotOverrides), candidates, nowMs: NOW });
+}
+
+function decayPosture(allocationCandidate, overrides = {}) {
+  const material = {
+    strategy: allocationCandidate.consideration.proposal.strategy,
+    configVersion: allocationCandidate.consideration.proposal.sourceConfigRevision,
+    direction: allocationCandidate.consideration.proposal.direction,
+    effectivePosture: 'ENABLED',
+    latestMeasurementState: 'STABLE',
+    decisionId: `decaydec_${'a'.repeat(32)}`,
+    measurementId: `decaymeas_${'b'.repeat(32)}`,
+    policyRevision: `decaypolicy_${'c'.repeat(32)}`,
+    historyRevision: 1,
+    evaluatedAtMs: NOW - 100,
+    validUntilMs: NOW + 10_000,
+    historyDigest: `decayhist_${'d'.repeat(32)}`,
+    ...overrides,
+  };
+  return createStrategyDecayAllocationPosture(material);
+}
+
+function runWithDecay(candidates, strategyDecayPostures, nowMs = NOW) {
+  return allocateCapital({
+    policy: policy(), snapshot: snapshot(), candidates, nowMs, strategyDecayPostures,
+  });
 }
 
 test('scarce collateral grants canonical consideration identity first with a complete capped audit', () => {
@@ -1055,6 +1085,165 @@ test('case and padding aliases in allocation identifiers fail closed', () => {
   assert.ok(lowerDecision.blockingReasons.includes('PRIMARY_SYMBOL_NOT_CANONICAL'));
   assert.equal(paddedDecision.status, 'BLOCKED');
   assert.ok(paddedDecision.blockingReasons.includes('CORRELATED_GROUP_REQUIREMENT_KEY_NOT_CANONICAL'));
+});
+
+test('configured strategy-decay gate is Capital-owned, direction-safe, and replay-bound', () => {
+  const selected = candidate('decay-gate', '80');
+  const legacy = run([selected]);
+  assert.equal(legacy.decisions[0].status, 'GRANTED');
+  assert.equal('strategyDecay' in legacy.authorities[0], false);
+
+  const absent = runWithDecay([selected], []);
+  assert.equal(absent.decisions[0].status, 'BLOCKED');
+  assert.ok(absent.decisions[0].blockingReasons.includes('STRATEGY_DECAY_POSTURE_MISSING'));
+
+  const enabled = runWithDecay([selected], [decayPosture(selected)]);
+  assert.equal(enabled.decisions[0].status, 'GRANTED');
+  assert.equal(enabled.decisions[0].grantedAmount, '80');
+  assert.ok(enabled.decisions[0].audit.some((step) => step.code === 'STRATEGY_DECAY_ENABLED'));
+  assert.equal(enabled.authorities[0].strategyDecay.matchedProjectionRevision, decayPosture(selected).projectionRevision);
+  assert.equal(enabled.authorities[0].strategyDecay.postureSetDigest, strategyDecayPostureSetDigest([decayPosture(selected)]));
+  assert.equal(enabled.authorities[0].validUntilMs, NOW + 991);
+
+  const originalInput = {
+    policy: policy(), snapshot: snapshot(), candidates: [selected], nowMs: NOW,
+    strategyDecayPostures: [decayPosture(selected)],
+  };
+  const original = allocateCapital(originalInput);
+  const replayDrift = reduceReservationBook(EMPTY_RESERVATION_BOOK, {
+    kind: 'RESERVE', commandId: 'decay-posture-replay-drift', nowMs: NOW,
+    allocation: original.decisions[0], authority: original.authorities[0],
+    allocationInput: {
+      ...originalInput,
+      strategyDecayPostures: [decayPosture(selected, {
+        effectivePosture: 'REDUCED', latestMeasurementState: 'DEGRADED',
+      })],
+    },
+    capitalClaimKey: 'decay-posture-replay-drift-claim',
+  });
+  assert.equal(replayDrift.mutation.status, 'REJECTED');
+  assert.ok(replayDrift.mutation.reasonCodes.includes('ALLOCATOR_AUTHORITY_RECEIPT_MISMATCH'));
+
+  const expiringInput = {
+    ...originalInput,
+    strategyDecayPostures: [decayPosture(selected, { validUntilMs: NOW + 100 })],
+  };
+  const expiring = allocateCapital(expiringInput);
+  assert.equal(expiring.authorities[0].validUntilMs, NOW + 100);
+  const expired = reduceReservationBook(EMPTY_RESERVATION_BOOK, {
+    kind: 'RESERVE', commandId: 'decay-posture-expired', nowMs: NOW + 100,
+    allocation: expiring.decisions[0], authority: expiring.authorities[0],
+    allocationInput: expiringInput,
+    capitalClaimKey: 'decay-posture-expired-claim',
+  });
+  assert.equal(expired.mutation.status, 'REJECTED');
+  assert.ok(expired.mutation.reasonCodes.includes('ALLOCATION_AUTHORITY_EXPIRED'));
+
+  const reducedPosture = decayPosture(selected, { effectivePosture: 'REDUCED', latestMeasurementState: 'DEGRADED' });
+  const reduced = runWithDecay([selected], [reducedPosture]);
+  assert.equal(reduced.decisions[0].status, 'CAPPED');
+  assert.equal(reduced.decisions[0].grantedAmount, '40');
+  assert.ok(reduced.decisions[0].audit.some((step) => (
+    step.code === 'STRATEGY_DECAY_REDUCED' && step.before === '80' && step.after === '40'
+  )));
+
+  for (const effectivePosture of ['DISABLED', 'RETIRED']) {
+    const blocked = runWithDecay([selected], [decayPosture(selected, {
+      effectivePosture,
+      latestMeasurementState: 'DEAD',
+    })]).decisions[0];
+    assert.equal(blocked.status, 'BLOCKED');
+    assert.ok(blocked.blockingReasons.includes(`STRATEGY_DECAY_${effectivePosture}`));
+  }
+
+  const unknown = runWithDecay([selected], [decayPosture(selected, { latestMeasurementState: 'UNKNOWN' })]);
+  assert.equal(unknown.decisions[0].status, 'BLOCKED');
+  assert.ok(unknown.decisions[0].blockingReasons.includes('STRATEGY_DECAY_EVIDENCE_UNKNOWN'));
+
+  const stale = runWithDecay([selected], [decayPosture(selected, { validUntilMs: NOW })]);
+  assert.equal(stale.decisions[0].status, 'BLOCKED');
+  assert.ok(stale.decisions[0].blockingReasons.includes('STRATEGY_DECAY_POSTURE_STALE'));
+
+  const reverseConsideration = {
+    ...selected.consideration,
+    proposal: { ...selected.consideration.proposal, direction: 'short_spot_long_perp' },
+    legs: selected.consideration.legs.map((leg) => ({
+      ...leg,
+      side: leg.role === 'SPOT' ? 'SHORT' : 'LONG',
+    })),
+  };
+  const reverse = reissueSizing({
+    ...selected,
+    consideration: reverseConsideration,
+    considerationDigest: capitalDigest(reverseConsideration),
+  });
+  const crossDirection = runWithDecay([reverse], [decayPosture(selected)]).decisions[0];
+  assert.equal(crossDirection.status, 'BLOCKED');
+  assert.ok(crossDirection.blockingReasons.includes('STRATEGY_DECAY_DIRECTION_MISMATCH'));
+});
+
+test('strategy-decay posture boundary snapshots hostile data with zero Proxy traps and rejects -0', () => {
+  const selected = candidate('decay-hostile', '80');
+  const valid = decayPosture(selected);
+  const trapped = (target) => {
+    const counter = { count: 0 };
+    const handler = {};
+    for (const name of [
+      'defineProperty', 'deleteProperty', 'get', 'getOwnPropertyDescriptor', 'getPrototypeOf',
+      'has', 'isExtensible', 'ownKeys', 'preventExtensions', 'set', 'setPrototypeOf',
+    ]) {
+      handler[name] = (...args) => {
+        counter.count += 1;
+        return Reflect[name](...args);
+      };
+    }
+    return { proxy: new Proxy(target, handler), counter };
+  };
+
+  for (const hostile of [trapped([valid]), trapped(valid)]) {
+    const input = Array.isArray(hostile.proxy) ? hostile.proxy : [hostile.proxy];
+    assert.ok(validateStrategyDecayPostureSet(input).length > 0);
+    assert.equal(hostile.counter.count, 0);
+    const decision = runWithDecay([selected], input).decisions[0];
+    assert.equal(decision.status, 'BLOCKED');
+    assert.equal(hostile.counter.count, 0);
+  }
+
+  const revokedRoot = Proxy.revocable([valid], {});
+  revokedRoot.revoke();
+  assert.doesNotThrow(() => assert.ok(validateStrategyDecayPostureSet(revokedRoot.proxy).length > 0));
+  assert.doesNotThrow(() => assert.equal(runWithDecay([selected], revokedRoot.proxy).decisions[0].status, 'BLOCKED'));
+
+  let accessorReads = 0;
+  const accessor = { ...valid };
+  Object.defineProperty(accessor, 'direction', {
+    enumerable: true,
+    get() { accessorReads += 1; throw new Error('must not read'); },
+  });
+  assert.ok(validateStrategyDecayAllocationPosture(accessor).length > 0);
+  assert.equal(accessorReads, 0);
+
+  const sparse = new Array(1);
+  assert.ok(validateStrategyDecayPostureSet(sparse).length > 0);
+  const symbol = { ...valid, [Symbol('hidden')]: true };
+  assert.ok(validateStrategyDecayAllocationPosture(symbol).length > 0);
+  const custom = Object.assign(Object.create({ inherited: true }), valid);
+  assert.ok(validateStrategyDecayAllocationPosture(custom).length > 0);
+
+  const { projectionRevision: _projectionRevision, ...validMaterial } = valid;
+  assert.throws(() => deriveStrategyDecayAllocationPostureRevision({
+    ...validMaterial,
+    evaluatedAtMs: -0,
+  }), /invalid/);
+  assert.ok(validateStrategyDecayAllocationPosture({ ...valid, validUntilMs: -0 }).length > 0);
+  const plusZeroMaterial = { ...validMaterial, evaluatedAtMs: 0 };
+  assert.deepEqual(validateStrategyDecayAllocationPosture({
+    ...plusZeroMaterial,
+    projectionRevision: deriveStrategyDecayAllocationPostureRevision(plusZeroMaterial),
+  }), []);
+  const invalidNow = runWithDecay([selected], [valid], -0).decisions[0];
+  assert.equal(invalidNow.status, 'BLOCKED');
+  assert.ok(invalidNow.blockingReasons.includes('STRATEGY_DECAY_NOW_INVALID'));
 });
 
 test('malformed consideration truth returns a typed fail-closed decision', () => {

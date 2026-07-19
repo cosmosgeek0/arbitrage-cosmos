@@ -1,3 +1,5 @@
+import { types as utilTypes } from 'node:util';
+
 import {
   canonicalJson,
   isValidUtcMillis,
@@ -27,9 +29,16 @@ import {
   type StrategyDecayMeasurement,
   type StrategyDecayPosture,
   type StrategyDecayResearchState,
+  type StrategyDecayState,
 } from './types.js';
 
 const MAX_RECENT_DECISIONS = 64;
+const MAX_SNAPSHOT_ARRAY_LENGTH = 20_000;
+const MAX_SNAPSHOT_DEPTH = 16;
+const MAX_SNAPSHOT_NODES = 150_000;
+const MAX_SNAPSHOT_OBJECT_KEYS = 4_096;
+const MAX_SNAPSHOT_STRING_LENGTH = 1_048_576;
+const MAX_SNAPSHOT_STRING_UNITS = 16 * 1_048_576;
 const LABEL = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const REASON_CODE = /^[A-Z][A-Z0-9_.:-]{0,127}$/;
 const DECISION_ID = /^decaydec_[a-f0-9]{32}$/;
@@ -46,6 +55,7 @@ const POLICY_KEYS = Object.freeze([
   'retireAfterConsecutiveDeadWindows',
   'maximumRecentDecisions',
 ] as const);
+const POLICY_SEMANTIC_KEYS = Object.freeze(POLICY_KEYS.filter((key) => key !== 'policyRevision'));
 const MEASUREMENT_KEYS = Object.freeze([
   'schema', 'schemaVersion', 'measurementId', 'strategy', 'configVersion',
   'measurementPolicyRevision', 'direction',
@@ -58,55 +68,136 @@ const AXIS_KEYS = Object.freeze([
   'currentValue', 'unit', 'reasonCodes', 'evidenceIds',
 ] as const);
 const STATE_KEYS = Object.freeze([
-  'schema', 'schemaVersion', 'strategy', 'configVersion', 'policyRevision', 'revision',
-  'effectivePosture', 'researchState', 'researchCandidateId',
+  'schema', 'schemaVersion', 'strategy', 'configVersion', 'direction', 'policyId', 'policyRevision',
+  'reduceAfterConsecutiveDegradedWindows', 'disableAfterConsecutiveDeadWindows',
+  'retireAfterConsecutiveDeadWindows', 'revision',
+  'updatedAtMs', 'effectivePosture', 'researchState', 'researchCandidateId',
   'consecutiveDegradedWindows', 'consecutiveDeadWindows', 'totalDecisionCount',
-  'compactedDecisionCount', 'recentDecisions', 'historyDigest',
+  'compactedDecisionCount', 'maximumRecentDecisions', 'compactedHistoryDigest',
+  'recentDecisions', 'historyDigest',
 ] as const);
 const SUMMARY_KEYS = Object.freeze([
-  'decisionId', 'revision', 'measurementId', 'evaluatedAtMs', 'kind', 'nextPosture',
-  'researchState',
+  'decisionId', 'revision', 'strategy', 'configVersion', 'direction', 'policyId', 'policyRevision',
+  'reduceAfterConsecutiveDegradedWindows', 'disableAfterConsecutiveDeadWindows',
+  'retireAfterConsecutiveDeadWindows',
+  'measurementId', 'evaluatedAtMs', 'measurementState', 'kind', 'nextPosture', 'researchState',
+  'researchCandidateId', 'consecutiveDegradedWindows', 'consecutiveDeadWindows',
+  'maximumRecentDecisions', 'historyDigest',
 ] as const);
 const DECISION_KEYS = Object.freeze([
   'schema', 'schemaVersion', 'decisionId', 'revision', 'strategy', 'configVersion',
-  'policyRevision', 'measurementId', 'evaluatedAtMs', 'kind', 'priorPosture',
+  'direction', 'policyId', 'policyRevision', 'reduceAfterConsecutiveDegradedWindows',
+  'disableAfterConsecutiveDeadWindows', 'retireAfterConsecutiveDeadWindows',
+  'maximumRecentDecisions', 'measurementId', 'evaluatedAtMs', 'measurementState', 'kind', 'priorPosture',
   'nextPosture', 'researchState', 'researchCandidateId', 'reasonCodes',
   'automaticResearchPromotion', 'executionAuthority',
 ] as const);
 
-function recordWithExactKeys(value: unknown, keys: readonly string[]): Record<string, unknown> | null {
+/**
+ * Takes one bounded, trap-zero snapshot of an ordinary JSON-like data graph.
+ * Proxy identity is rejected before any reflective operation, including for
+ * revoked and forwarding Proxies. Arrays are length-bounded from their own
+ * data descriptor before key enumeration or element materialization.
+ */
+export function snapshotStrategyDecayData(value: unknown): unknown | null {
   try {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return null;
-    const ownKeys = Reflect.ownKeys(value);
-    if (ownKeys.length !== keys.length || ownKeys.some((key) => typeof key !== 'string' || !keys.includes(key))) {
-      return null;
-    }
-    for (const key of keys) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (!descriptor || descriptor.get || descriptor.set || !descriptor.enumerable) return null;
-    }
-    return value as Record<string, unknown>;
+    const active = new Set<object>();
+    const budget = { nodes: 0, stringUnits: 0 };
+    const visit = (candidate: unknown, depth: number): unknown => {
+      budget.nodes += 1;
+      if (budget.nodes > MAX_SNAPSHOT_NODES || depth > MAX_SNAPSHOT_DEPTH) {
+        throw new RangeError('strategy decay input graph exceeds its bound');
+      }
+      if (candidate === null || typeof candidate === 'boolean') return candidate;
+      if (typeof candidate === 'number') {
+        if (!Number.isFinite(candidate) || Object.is(candidate, -0)) {
+          throw new TypeError('strategy decay numbers must be finite canonical values');
+        }
+        return candidate;
+      }
+      if (typeof candidate === 'string') {
+        if (candidate.length > MAX_SNAPSHOT_STRING_LENGTH) {
+          throw new RangeError('strategy decay input string exceeds its bound');
+        }
+        budget.stringUnits += candidate.length;
+        if (budget.stringUnits > MAX_SNAPSHOT_STRING_UNITS) {
+          throw new RangeError('strategy decay input strings exceed their aggregate bound');
+        }
+        return candidate;
+      }
+      if ((typeof candidate !== 'object' && typeof candidate !== 'function')
+        || utilTypes.isProxy(candidate)) {
+        throw new TypeError('strategy decay input must be ordinary data');
+      }
+      if (typeof candidate === 'function' || active.has(candidate)) {
+        throw new TypeError('strategy decay input cannot contain functions or cycles');
+      }
+      active.add(candidate);
+      const prototype = Object.getPrototypeOf(candidate);
+      if (Array.isArray(candidate)) {
+        if (prototype !== Array.prototype) throw new TypeError('strategy decay array prototype invalid');
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(candidate, 'length');
+        if (lengthDescriptor === undefined || !Object.hasOwn(lengthDescriptor, 'value')
+          || !Number.isSafeInteger(lengthDescriptor.value) || lengthDescriptor.value < 0
+          || lengthDescriptor.value > MAX_SNAPSHOT_ARRAY_LENGTH) {
+          throw new RangeError('strategy decay array length invalid or overbound');
+        }
+        const length = lengthDescriptor.value as number;
+        const ownKeys = Reflect.ownKeys(candidate);
+        if (ownKeys.length !== length + 1 || ownKeys.some((key) => typeof key !== 'string'
+          || (key !== 'length' && (!/^(?:0|[1-9][0-9]*)$/.test(key) || Number(key) >= length)))) {
+          throw new TypeError('strategy decay arrays must be dense own data without named fields');
+        }
+        const output: unknown[] = [];
+        for (let index = 0; index < length; index += 1) {
+          const descriptor = Object.getOwnPropertyDescriptor(candidate, String(index));
+          if (descriptor === undefined || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+            throw new TypeError('strategy decay array element must be enumerable own data');
+          }
+          output.push(visit(descriptor.value, depth + 1));
+        }
+        active.delete(candidate);
+        return Object.freeze(output);
+      }
+      if (prototype !== Object.prototype && prototype !== null) {
+        throw new TypeError('strategy decay record prototype invalid');
+      }
+      const ownKeys = Reflect.ownKeys(candidate);
+      if (ownKeys.length > MAX_SNAPSHOT_OBJECT_KEYS
+        || ownKeys.some((key) => typeof key !== 'string' || key.length > 256)) {
+        throw new RangeError('strategy decay record keys invalid or overbound');
+      }
+      const output: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+      for (const key of ownKeys as string[]) {
+        budget.stringUnits += key.length;
+        if (budget.stringUnits > MAX_SNAPSHOT_STRING_UNITS) {
+          throw new RangeError('strategy decay input strings exceed their aggregate bound');
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(candidate, key);
+        if (descriptor === undefined || !descriptor.enumerable || !Object.hasOwn(descriptor, 'value')) {
+          throw new TypeError('strategy decay record fields must be enumerable own data');
+        }
+        output[key] = visit(descriptor.value, depth + 1);
+      }
+      active.delete(candidate);
+      return Object.freeze(output);
+    };
+    return visit(value, 0);
   } catch {
     return null;
   }
 }
 
+function recordWithExactKeys(value: unknown, keys: readonly string[]): Record<string, unknown> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.length !== keys.length || ownKeys.some((key) => typeof key !== 'string' || !keys.includes(key))) return null;
+  return value as Record<string, unknown>;
+}
+
 function denseArray(value: unknown, maximum: number): readonly unknown[] | null {
-  try {
-    if (!Array.isArray(value) || value.length > maximum) return null;
-    const keys = Reflect.ownKeys(value);
-    if (keys.some((key) => typeof key !== 'string'
-      || (key !== 'length' && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)))) return null;
-    for (let index = 0; index < value.length; index += 1) {
-      const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-      if (!descriptor || descriptor.get || descriptor.set || !descriptor.enumerable) return null;
-    }
-    return value;
-  } catch {
-    return null;
-  }
+  if (!Array.isArray(value) || value.length > maximum) return null;
+  return value;
 }
 
 function sortedUniqueStrings(
@@ -125,20 +216,66 @@ function positiveSafeInteger(value: unknown): value is number {
 }
 
 function nonNegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 }
 
 function label(value: unknown): value is string {
   return typeof value === 'string' && LABEL.test(value);
 }
 
-function deepFreeze<T>(value: T, seen: Set<object> = new Set()): T {
-  if (value === null || typeof value !== 'object') return value;
-  const object = value as object;
-  if (seen.has(object)) return value;
-  seen.add(object);
-  for (const key of Object.keys(object)) deepFreeze((object as Record<string, unknown>)[key], seen);
-  return Object.freeze(value);
+function validateEmbeddedGovernancePolicy(
+  value: Record<string, unknown>,
+  prefix: string,
+  issues: string[],
+): void {
+  if (!label(value.policyId)) issues.push(`${prefix}_POLICY_ID_INVALID`);
+  if (typeof value.policyRevision !== 'string' || !POLICY_REVISION.test(value.policyRevision)) {
+    issues.push(`${prefix}_POLICY_REVISION_INVALID`);
+  }
+  if (value.reduceAfterConsecutiveDegradedWindows !== 1) {
+    issues.push(`${prefix}_REDUCE_THRESHOLD_INVALID`);
+  }
+  if (!positiveSafeInteger(value.disableAfterConsecutiveDeadWindows)) {
+    issues.push(`${prefix}_DISABLE_THRESHOLD_INVALID`);
+  }
+  if (!positiveSafeInteger(value.retireAfterConsecutiveDeadWindows)) {
+    issues.push(`${prefix}_RETIRE_THRESHOLD_INVALID`);
+  }
+  if (!positiveSafeInteger(value.maximumRecentDecisions)
+    || value.maximumRecentDecisions > MAX_RECENT_DECISIONS) {
+    issues.push(`${prefix}_RETENTION_BOUND_INVALID`);
+  }
+  if (positiveSafeInteger(value.disableAfterConsecutiveDeadWindows)
+    && positiveSafeInteger(value.retireAfterConsecutiveDeadWindows)
+    && value.disableAfterConsecutiveDeadWindows >= value.retireAfterConsecutiveDeadWindows) {
+    issues.push(`${prefix}_RETIRE_THRESHOLD_ORDER_INVALID`);
+  }
+  if (label(value.policyId)
+    && value.reduceAfterConsecutiveDegradedWindows === 1
+    && positiveSafeInteger(value.disableAfterConsecutiveDeadWindows)
+    && positiveSafeInteger(value.retireAfterConsecutiveDeadWindows)
+    && positiveSafeInteger(value.maximumRecentDecisions)) {
+    try {
+      const expected = deriveStrategyDecayPolicyRevision({
+        policyId: value.policyId,
+        reduceAfterConsecutiveDegradedWindows: value.reduceAfterConsecutiveDegradedWindows,
+        disableAfterConsecutiveDeadWindows: value.disableAfterConsecutiveDeadWindows,
+        retireAfterConsecutiveDeadWindows: value.retireAfterConsecutiveDeadWindows,
+        maximumRecentDecisions: value.maximumRecentDecisions,
+      });
+      if (value.policyRevision !== expected) issues.push(`${prefix}_POLICY_REVISION_CONTENT_MISMATCH`);
+    } catch {
+      issues.push(`${prefix}_POLICY_REVISION_CONTENT_MISMATCH`);
+    }
+  }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object') {
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function policySemantics(policy: Omit<StrategyDecayGovernancePolicy, 'policyRevision'>): unknown {
@@ -154,12 +291,24 @@ function policySemantics(policy: Omit<StrategyDecayGovernancePolicy, 'policyRevi
 export function deriveStrategyDecayPolicyRevision(
   policy: Omit<StrategyDecayGovernancePolicy, 'policyRevision'>,
 ): string {
-  return `decaypolicy_${stableHash128Hex(canonicalJson(policySemantics(policy)))}`;
+  const snapshot = snapshotStrategyDecayData(policy);
+  const exact = recordWithExactKeys(snapshot, POLICY_SEMANTIC_KEYS);
+  if (exact === null
+    || !label(exact.policyId)
+    || exact.reduceAfterConsecutiveDegradedWindows !== 1
+    || !positiveSafeInteger(exact.disableAfterConsecutiveDeadWindows)
+    || !positiveSafeInteger(exact.retireAfterConsecutiveDeadWindows)
+    || !positiveSafeInteger(exact.maximumRecentDecisions)) {
+    throw new TypeError('strategy decay policy semantics invalid');
+  }
+  return `decaypolicy_${stableHash128Hex(canonicalJson(policySemantics(
+    exact as unknown as Omit<StrategyDecayGovernancePolicy, 'policyRevision'>,
+  )))}`;
 }
 
 export function validateStrategyDecayGovernancePolicy(value: unknown): readonly string[] {
   const issues: string[] = [];
-  const policy = recordWithExactKeys(value, POLICY_KEYS);
+  const policy = recordWithExactKeys(snapshotStrategyDecayData(value), POLICY_KEYS);
   if (policy === null) return Object.freeze(['POLICY_SHAPE_INVALID']);
   if (!label(policy.policyId)) issues.push('POLICY_ID_INVALID');
   if (typeof policy.policyRevision !== 'string' || !POLICY_REVISION.test(policy.policyRevision)) {
@@ -177,7 +326,9 @@ export function validateStrategyDecayGovernancePolicy(value: unknown): readonly 
   }
   if (issues.length === 0) {
     try {
-      const expected = deriveStrategyDecayPolicyRevision(policy as unknown as StrategyDecayGovernancePolicy);
+      const expected = deriveStrategyDecayPolicyRevision(
+        policySemantics(policy as unknown as StrategyDecayGovernancePolicy) as Omit<StrategyDecayGovernancePolicy, 'policyRevision'>,
+      );
       if (policy.policyRevision !== expected) issues.push('POLICY_REVISION_CONTENT_MISMATCH');
     } catch {
       issues.push('POLICY_REVISION_CONTENT_MISMATCH');
@@ -231,15 +382,40 @@ function derivedMeasurementState(axes: readonly StrategyDecayAxisAssessment[]): 
   return 'STABLE';
 }
 
+function measurementIdentityMaterial(
+  measurement: Omit<StrategyDecayMeasurement, 'measurementId'>,
+): unknown {
+  return {
+    schema: measurement.schema,
+    schemaVersion: measurement.schemaVersion,
+    strategy: measurement.strategy,
+    configVersion: measurement.configVersion,
+    measurementPolicyRevision: measurement.measurementPolicyRevision,
+    direction: measurement.direction,
+    evaluatedAtMs: measurement.evaluatedAtMs,
+    evidenceAuthority: measurement.evidenceAuthority,
+    baselineWindow: measurement.baselineWindow,
+    currentWindow: measurement.currentWindow,
+    axes: measurement.axes,
+    state: measurement.state,
+    reasonCodes: measurement.reasonCodes,
+  };
+}
+
 export function deriveStrategyDecayMeasurementId(
   measurement: Omit<StrategyDecayMeasurement, 'measurementId'>,
 ): string {
-  return `decaymeas_${stableHash128Hex(canonicalJson(measurement))}`;
+  const snapshot = snapshotStrategyDecayData(measurement);
+  const exact = recordWithExactKeys(snapshot, MEASUREMENT_KEYS.filter((key) => key !== 'measurementId'));
+  if (exact === null) throw new TypeError('strategy decay measurement material invalid');
+  return `decaymeas_${stableHash128Hex(canonicalJson(measurementIdentityMaterial(
+    exact as unknown as Omit<StrategyDecayMeasurement, 'measurementId'>,
+  )))}`;
 }
 
 export function validateStrategyDecayMeasurement(value: unknown): readonly string[] {
   const issues: string[] = [];
-  const measurement = recordWithExactKeys(value, MEASUREMENT_KEYS);
+  const measurement = recordWithExactKeys(snapshotStrategyDecayData(value), MEASUREMENT_KEYS);
   if (measurement === null) return Object.freeze(['MEASUREMENT_SHAPE_INVALID']);
   if (measurement.schema !== STRATEGY_DECAY_MEASUREMENT_SCHEMA) issues.push('MEASUREMENT_SCHEMA_INVALID');
   if (measurement.schemaVersion !== STRATEGY_DECAY_MEASUREMENT_SCHEMA_VERSION) issues.push('MEASUREMENT_SCHEMA_VERSION_INVALID');
@@ -257,6 +433,13 @@ export function validateStrategyDecayMeasurement(value: unknown): readonly strin
   }
   if (!(STRATEGY_DECAY_STATES as readonly unknown[]).includes(measurement.state)) issues.push('MEASUREMENT_STATE_INVALID');
   if (!sortedUniqueStrings(measurement.reasonCodes, 64, REASON_CODE)) issues.push('MEASUREMENT_REASONS_INVALID');
+  const measurementReasons = denseArray(measurement.reasonCodes, 64);
+  if (measurementReasons !== null && measurementReasons.some((reason) => typeof reason === 'string'
+    && (/^(?:DECAY_STATE_|GOVERNANCE_)/.test(reason)
+      || reason === 'MORE_RESTRICTIVE_POSTURE_PRESERVED'
+      || reason === 'COHORT_CHANGED_COUNTERS_RESET'))) {
+    issues.push('MEASUREMENT_GOVERNANCE_REASON_NAMESPACE_FORBIDDEN');
+  }
   validateWindow(measurement.baselineWindow, 'BASELINE_WINDOW', measurement.evaluatedAtMs as number, issues);
   validateWindow(measurement.currentWindow, 'CURRENT_WINDOW', measurement.evaluatedAtMs as number, issues);
   const baseline = recordWithExactKeys(measurement.baselineWindow, WINDOW_KEYS);
@@ -280,10 +463,11 @@ export function validateStrategyDecayMeasurement(value: unknown): readonly strin
   }
   if (issues.length === 0) {
     try {
-      const { measurementId: _measurementId, ...material } = measurement as unknown as StrategyDecayMeasurement;
-      if (measurement.measurementId !== deriveStrategyDecayMeasurementId(material)) {
-        issues.push('MEASUREMENT_ID_CONTENT_MISMATCH');
-      }
+      const material = { ...measurement } as Record<string, unknown>;
+      delete material.measurementId;
+      if (measurement.measurementId !== deriveStrategyDecayMeasurementId(
+        material as unknown as Omit<StrategyDecayMeasurement, 'measurementId'>,
+      )) issues.push('MEASUREMENT_ID_CONTENT_MISMATCH');
     } catch {
       issues.push('MEASUREMENT_ID_CONTENT_MISMATCH');
     }
@@ -291,31 +475,104 @@ export function validateStrategyDecayMeasurement(value: unknown): readonly strin
   return Object.freeze([...new Set(issues)].sort());
 }
 
-function validateSummary(value: unknown, expectedRevision: number, issues: string[]): void {
+function historySummaryMaterial(
+  summary: Omit<StrategyDecayDecisionSummary, 'historyDigest'>,
+): unknown {
+  return {
+    decisionId: summary.decisionId,
+    revision: summary.revision,
+    strategy: summary.strategy,
+    configVersion: summary.configVersion,
+    direction: summary.direction,
+    policyId: summary.policyId,
+    policyRevision: summary.policyRevision,
+    reduceAfterConsecutiveDegradedWindows: summary.reduceAfterConsecutiveDegradedWindows,
+    disableAfterConsecutiveDeadWindows: summary.disableAfterConsecutiveDeadWindows,
+    retireAfterConsecutiveDeadWindows: summary.retireAfterConsecutiveDeadWindows,
+    measurementId: summary.measurementId,
+    evaluatedAtMs: summary.evaluatedAtMs,
+    measurementState: summary.measurementState,
+    kind: summary.kind,
+    nextPosture: summary.nextPosture,
+    researchState: summary.researchState,
+    researchCandidateId: summary.researchCandidateId,
+    consecutiveDegradedWindows: summary.consecutiveDegradedWindows,
+    consecutiveDeadWindows: summary.consecutiveDeadWindows,
+    maximumRecentDecisions: summary.maximumRecentDecisions,
+  };
+}
+
+export function deriveStrategyDecayHistoryDigest(
+  previousHistoryDigest: string | null,
+  summary: Omit<StrategyDecayDecisionSummary, 'historyDigest'>,
+): string {
+  if (previousHistoryDigest !== null && !HISTORY_DIGEST.test(previousHistoryDigest)) {
+    throw new TypeError('previous strategy decay history digest invalid');
+  }
+  const snapshot = snapshotStrategyDecayData(summary);
+  const exact = recordWithExactKeys(snapshot, SUMMARY_KEYS.filter((key) => key !== 'historyDigest'));
+  if (exact === null) throw new TypeError('strategy decay summary material invalid');
+  return `decayhist_${stableHash128Hex(canonicalJson({
+    previousHistoryDigest,
+    summary: historySummaryMaterial(exact as unknown as Omit<StrategyDecayDecisionSummary, 'historyDigest'>),
+  }))}`;
+}
+
+function validateSummary(
+  value: unknown,
+  expectedRevision: number,
+  issues: string[],
+): Record<string, unknown> | null {
   const summary = recordWithExactKeys(value, SUMMARY_KEYS);
   if (summary === null) {
     issues.push('HISTORY_SUMMARY_SHAPE_INVALID');
-    return;
+    return null;
   }
   if (typeof summary.decisionId !== 'string' || !DECISION_ID.test(summary.decisionId)) issues.push('HISTORY_DECISION_ID_INVALID');
   if (summary.revision !== expectedRevision) issues.push('HISTORY_REVISION_SEQUENCE_INVALID');
+  if (!(STRATEGY_DECAY_SOURCES as readonly unknown[]).includes(summary.strategy)) issues.push('HISTORY_SUMMARY_STRATEGY_INVALID');
+  if (!label(summary.configVersion)) issues.push('HISTORY_SUMMARY_CONFIG_VERSION_INVALID');
+  if (!label(summary.direction)) issues.push('HISTORY_SUMMARY_DIRECTION_INVALID');
+  validateEmbeddedGovernancePolicy(summary, 'HISTORY_SUMMARY', issues);
   if (typeof summary.measurementId !== 'string' || !MEASUREMENT_ID.test(summary.measurementId)) issues.push('HISTORY_MEASUREMENT_ID_INVALID');
   if (!isValidUtcMillis(summary.evaluatedAtMs)) issues.push('HISTORY_EVALUATED_AT_INVALID');
+  if (!(STRATEGY_DECAY_STATES as readonly unknown[]).includes(summary.measurementState)) issues.push('HISTORY_MEASUREMENT_STATE_INVALID');
   if (!(STRATEGY_DECAY_DECISION_KINDS as readonly unknown[]).includes(summary.kind)) issues.push('HISTORY_DECISION_KIND_INVALID');
   if (!(STRATEGY_DECAY_POSTURES as readonly unknown[]).includes(summary.nextPosture)) issues.push('HISTORY_POSTURE_INVALID');
   if (!(STRATEGY_DECAY_RESEARCH_STATES as readonly unknown[]).includes(summary.researchState)) issues.push('HISTORY_RESEARCH_STATE_INVALID');
+  if (summary.researchState === 'NONE' ? summary.researchCandidateId !== null
+    : typeof summary.researchCandidateId !== 'string' || !RESEARCH_ID.test(summary.researchCandidateId)) {
+    issues.push('HISTORY_SUMMARY_RESEARCH_CANDIDATE_INVALID');
+  }
+  if (!nonNegativeSafeInteger(summary.consecutiveDegradedWindows)) issues.push('HISTORY_SUMMARY_DEGRADED_COUNT_INVALID');
+  if (!nonNegativeSafeInteger(summary.consecutiveDeadWindows)) issues.push('HISTORY_SUMMARY_DEAD_COUNT_INVALID');
+  if (nonNegativeSafeInteger(summary.consecutiveDegradedWindows)
+    && nonNegativeSafeInteger(summary.consecutiveDeadWindows)
+    && summary.consecutiveDeadWindows > summary.consecutiveDegradedWindows) {
+    issues.push('HISTORY_SUMMARY_DEAD_COUNT_EXCEEDS_DEGRADED');
+  }
+  if (!positiveSafeInteger(summary.maximumRecentDecisions)
+    || summary.maximumRecentDecisions > MAX_RECENT_DECISIONS) {
+    issues.push('HISTORY_SUMMARY_RETENTION_BOUND_INVALID');
+  }
+  if (typeof summary.historyDigest !== 'string' || !HISTORY_DIGEST.test(summary.historyDigest)) {
+    issues.push('HISTORY_SUMMARY_DIGEST_INVALID');
+  }
+  return summary;
 }
 
 export function validateStrategyDecayHistoryState(value: unknown): readonly string[] {
   const issues: string[] = [];
-  const state = recordWithExactKeys(value, STATE_KEYS);
+  const state = recordWithExactKeys(snapshotStrategyDecayData(value), STATE_KEYS);
   if (state === null) return Object.freeze(['HISTORY_STATE_SHAPE_INVALID']);
   if (state.schema !== STRATEGY_DECAY_HISTORY_SCHEMA) issues.push('HISTORY_SCHEMA_INVALID');
   if (state.schemaVersion !== STRATEGY_DECAY_HISTORY_SCHEMA_VERSION) issues.push('HISTORY_SCHEMA_VERSION_INVALID');
   if (!(STRATEGY_DECAY_SOURCES as readonly unknown[]).includes(state.strategy)) issues.push('HISTORY_STRATEGY_INVALID');
   if (!label(state.configVersion)) issues.push('HISTORY_CONFIG_VERSION_INVALID');
-  if (typeof state.policyRevision !== 'string' || !POLICY_REVISION.test(state.policyRevision)) issues.push('HISTORY_POLICY_REVISION_INVALID');
+  if (!label(state.direction)) issues.push('HISTORY_DIRECTION_INVALID');
+  validateEmbeddedGovernancePolicy(state, 'HISTORY', issues);
   if (!positiveSafeInteger(state.revision)) issues.push('HISTORY_REVISION_INVALID');
+  if (!isValidUtcMillis(state.updatedAtMs)) issues.push('HISTORY_UPDATED_AT_INVALID');
   if (!(STRATEGY_DECAY_POSTURES as readonly unknown[]).includes(state.effectivePosture)) issues.push('HISTORY_POSTURE_INVALID');
   if (!(STRATEGY_DECAY_RESEARCH_STATES as readonly unknown[]).includes(state.researchState)) issues.push('HISTORY_RESEARCH_STATE_INVALID');
   if (state.researchState === 'NONE' ? state.researchCandidateId !== null
@@ -331,14 +588,95 @@ export function validateStrategyDecayHistoryState(value: unknown): readonly stri
   if (positiveSafeInteger(state.revision) && nonNegativeSafeInteger(state.totalDecisionCount)
     && state.revision !== state.totalDecisionCount) issues.push('HISTORY_TOTAL_REVISION_MISMATCH');
   if (typeof state.historyDigest !== 'string' || !HISTORY_DIGEST.test(state.historyDigest)) issues.push('HISTORY_DIGEST_INVALID');
+  if (!positiveSafeInteger(state.maximumRecentDecisions)
+    || state.maximumRecentDecisions > MAX_RECENT_DECISIONS) issues.push('HISTORY_RETENTION_BOUND_INVALID');
+  if (nonNegativeSafeInteger(state.compactedDecisionCount)) {
+    if (state.compactedDecisionCount === 0 ? state.compactedHistoryDigest !== null
+      : typeof state.compactedHistoryDigest !== 'string' || !HISTORY_DIGEST.test(state.compactedHistoryDigest)) {
+      issues.push('HISTORY_COMPACTION_ANCHOR_INVALID');
+    }
+  }
   const summaries = denseArray(state.recentDecisions, MAX_RECENT_DECISIONS);
   if (summaries === null) {
     issues.push('HISTORY_RECENT_DECISIONS_INVALID');
   } else if (nonNegativeSafeInteger(state.totalDecisionCount) && nonNegativeSafeInteger(state.compactedDecisionCount)) {
     if (state.compactedDecisionCount + summaries.length !== state.totalDecisionCount) issues.push('HISTORY_COMPACTION_COUNT_MISMATCH');
-    summaries.forEach((summary, index) => validateSummary(summary, state.compactedDecisionCount as number + index + 1, issues));
-    const ids = summaries.map((summary) => recordWithExactKeys(summary, SUMMARY_KEYS)?.decisionId);
-    if (new Set(ids).size !== ids.length) issues.push('HISTORY_DUPLICATE_DECISION_ID');
+    if (positiveSafeInteger(state.maximumRecentDecisions)
+      && summaries.length > state.maximumRecentDecisions) issues.push('HISTORY_RETENTION_BOUND_EXCEEDED');
+    const validated = summaries.map((summary, index) => validateSummary(
+      summary,
+      state.compactedDecisionCount as number + index + 1,
+      issues,
+    ));
+    const decisionIds = validated.flatMap((summary) => typeof summary?.decisionId === 'string' ? [summary.decisionId] : []);
+    const measurementIds = validated.flatMap((summary) => typeof summary?.measurementId === 'string' ? [summary.measurementId] : []);
+    if (new Set(decisionIds).size !== decisionIds.length) issues.push('HISTORY_DUPLICATE_DECISION_ID');
+    if (new Set(measurementIds).size !== measurementIds.length) issues.push('HISTORY_DUPLICATE_MEASUREMENT_ID');
+    let previousDigest = state.compactedHistoryDigest as string | null;
+    let previousSummary: Record<string, unknown> | null = null;
+    for (const summary of validated) {
+      if (summary === null) continue;
+      if (summary.strategy !== state.strategy) issues.push('HISTORY_SUMMARY_STRATEGY_MISMATCH');
+      if (summary.direction !== state.direction) issues.push('HISTORY_SUMMARY_DIRECTION_MISMATCH');
+      if (previousSummary !== null) {
+        if (isValidUtcMillis(previousSummary.evaluatedAtMs)
+          && isValidUtcMillis(summary.evaluatedAtMs)
+          && summary.evaluatedAtMs <= previousSummary.evaluatedAtMs) {
+          issues.push('HISTORY_EVALUATED_AT_ORDER_INVALID');
+        }
+        if ((STRATEGY_DECAY_POSTURES as readonly unknown[]).includes(previousSummary.nextPosture)
+          && (STRATEGY_DECAY_POSTURES as readonly unknown[]).includes(summary.nextPosture)
+          && STRATEGY_DECAY_POSTURES.indexOf(summary.nextPosture as StrategyDecayPosture)
+            < STRATEGY_DECAY_POSTURES.indexOf(previousSummary.nextPosture as StrategyDecayPosture)) {
+          issues.push('HISTORY_POSTURE_RELAXATION_FORBIDDEN');
+        }
+        if (previousSummary.researchState === 'PENDING_REVIEW'
+          && (summary.researchState !== 'PENDING_REVIEW'
+            || summary.researchCandidateId !== previousSummary.researchCandidateId)) {
+          issues.push('HISTORY_RESEARCH_RELAXATION_FORBIDDEN');
+        }
+      }
+      if ((previousDigest === null || HISTORY_DIGEST.test(previousDigest))
+        && typeof summary.historyDigest === 'string') {
+        try {
+          const material = { ...summary } as Record<string, unknown>;
+          delete material.historyDigest;
+          const expectedDigest = deriveStrategyDecayHistoryDigest(
+            previousDigest,
+            material as unknown as Omit<StrategyDecayDecisionSummary, 'historyDigest'>,
+          );
+          if (summary.historyDigest !== expectedDigest) issues.push('HISTORY_DIGEST_CONTENT_MISMATCH');
+        } catch {
+          issues.push('HISTORY_DIGEST_CONTENT_MISMATCH');
+        }
+      }
+      previousDigest = typeof summary.historyDigest === 'string' ? summary.historyDigest : previousDigest;
+      previousSummary = summary;
+    }
+    const latest = validated.at(-1);
+    if (latest === null || latest === undefined) {
+      issues.push('HISTORY_LATEST_SUMMARY_MISSING');
+    } else {
+      if (latest.strategy !== state.strategy
+        || latest.configVersion !== state.configVersion
+        || latest.direction !== state.direction
+        || latest.policyId !== state.policyId
+        || latest.policyRevision !== state.policyRevision
+        || latest.reduceAfterConsecutiveDegradedWindows !== state.reduceAfterConsecutiveDegradedWindows
+        || latest.disableAfterConsecutiveDeadWindows !== state.disableAfterConsecutiveDeadWindows
+        || latest.retireAfterConsecutiveDeadWindows !== state.retireAfterConsecutiveDeadWindows
+        || latest.revision !== state.revision
+        || latest.evaluatedAtMs !== state.updatedAtMs
+        || latest.nextPosture !== state.effectivePosture
+        || latest.researchState !== state.researchState
+        || latest.researchCandidateId !== state.researchCandidateId
+        || latest.consecutiveDegradedWindows !== state.consecutiveDegradedWindows
+        || latest.consecutiveDeadWindows !== state.consecutiveDeadWindows
+        || latest.maximumRecentDecisions !== state.maximumRecentDecisions) {
+        issues.push('HISTORY_LATEST_SUMMARY_STATE_MISMATCH');
+      }
+      if (latest.historyDigest !== state.historyDigest) issues.push('HISTORY_HEAD_DIGEST_MISMATCH');
+    }
   }
   return Object.freeze([...new Set(issues)].sort());
 }
@@ -355,9 +693,16 @@ function decisionIdentityMaterial(decision: Omit<StrategyDecayDecision, 'schema'
     revision: decision.revision,
     strategy: decision.strategy,
     configVersion: decision.configVersion,
+    direction: decision.direction,
+    policyId: decision.policyId,
     policyRevision: decision.policyRevision,
+    reduceAfterConsecutiveDegradedWindows: decision.reduceAfterConsecutiveDegradedWindows,
+    disableAfterConsecutiveDeadWindows: decision.disableAfterConsecutiveDeadWindows,
+    retireAfterConsecutiveDeadWindows: decision.retireAfterConsecutiveDeadWindows,
+    maximumRecentDecisions: decision.maximumRecentDecisions,
     measurementId: decision.measurementId,
     evaluatedAtMs: decision.evaluatedAtMs,
+    measurementState: decision.measurementState,
     kind: decision.kind,
     priorPosture: decision.priorPosture,
     nextPosture: decision.nextPosture,
@@ -367,9 +712,20 @@ function decisionIdentityMaterial(decision: Omit<StrategyDecayDecision, 'schema'
   };
 }
 
+function decayStateFromDecisionRecord(decision: Record<string, unknown>): StrategyDecayState | null {
+  return (STRATEGY_DECAY_STATES as readonly unknown[]).includes(decision.measurementState)
+    ? decision.measurementState as StrategyDecayState
+    : null;
+}
+
+export function strategyDecayStateFromDecision(value: unknown): StrategyDecayState | null {
+  const decision = recordWithExactKeys(snapshotStrategyDecayData(value), DECISION_KEYS);
+  return decision === null ? null : decayStateFromDecisionRecord(decision);
+}
+
 export function validateStrategyDecayDecision(value: unknown): readonly string[] {
   const issues: string[] = [];
-  const decision = recordWithExactKeys(value, DECISION_KEYS);
+  const decision = recordWithExactKeys(snapshotStrategyDecayData(value), DECISION_KEYS);
   if (decision === null) return Object.freeze(['DECISION_SHAPE_INVALID']);
   if (decision.schema !== STRATEGY_DECAY_DECISION_SCHEMA) issues.push('DECISION_SCHEMA_INVALID');
   if (decision.schemaVersion !== STRATEGY_DECAY_DECISION_SCHEMA_VERSION) issues.push('DECISION_SCHEMA_VERSION_INVALID');
@@ -377,7 +733,8 @@ export function validateStrategyDecayDecision(value: unknown): readonly string[]
   if (!positiveSafeInteger(decision.revision)) issues.push('DECISION_REVISION_INVALID');
   if (!(STRATEGY_DECAY_SOURCES as readonly unknown[]).includes(decision.strategy)) issues.push('DECISION_STRATEGY_INVALID');
   if (!label(decision.configVersion)) issues.push('DECISION_CONFIG_VERSION_INVALID');
-  if (typeof decision.policyRevision !== 'string' || !POLICY_REVISION.test(decision.policyRevision)) issues.push('DECISION_POLICY_REVISION_INVALID');
+  if (!label(decision.direction)) issues.push('DECISION_DIRECTION_INVALID');
+  validateEmbeddedGovernancePolicy(decision, 'DECISION', issues);
   if (typeof decision.measurementId !== 'string' || !MEASUREMENT_ID.test(decision.measurementId)) issues.push('DECISION_MEASUREMENT_ID_INVALID');
   if (!isValidUtcMillis(decision.evaluatedAtMs)) issues.push('DECISION_EVALUATED_AT_INVALID');
   if (!(STRATEGY_DECAY_DECISION_KINDS as readonly unknown[]).includes(decision.kind)) issues.push('DECISION_KIND_INVALID');
@@ -401,6 +758,35 @@ export function validateStrategyDecayDecision(value: unknown): readonly string[]
   if ((decision.kind === 'REDUCE' || decision.kind === 'DISABLE' || decision.kind === 'RETIRE')
     && decision.researchState !== 'PENDING_REVIEW') issues.push('DECISION_ACTION_RESEARCH_REDIRECTION_MISSING');
   if (!sortedUniqueStrings(decision.reasonCodes, 64, REASON_CODE)) issues.push('DECISION_REASONS_INVALID');
+  const measurementState = decayStateFromDecisionRecord(decision);
+  if (measurementState === null) {
+    issues.push('DECISION_MEASUREMENT_STATE_INVALID');
+  } else if ((measurementState === 'UNKNOWN' && decision.kind !== 'HOLD_UNKNOWN')
+    || (measurementState === 'STABLE' && decision.kind !== 'HOLD_STABLE')
+    || (measurementState === 'DEGRADED' && decision.kind !== 'REDUCE')
+    || (measurementState === 'DEAD' && !['REDUCE', 'DISABLE', 'RETIRE'].includes(decision.kind as string))) {
+    issues.push('DECISION_MEASUREMENT_STATE_KIND_CONTRADICTION');
+  }
+  const decisionReasons = denseArray(decision.reasonCodes, 64);
+  if (decisionReasons !== null && measurementState !== null
+    && (decisionReasons.filter((reason) => reason === `DECAY_STATE_${measurementState}`).length !== 1
+      || decisionReasons.some((reason) => typeof reason === 'string'
+        && reason.startsWith('DECAY_STATE_') && reason !== `DECAY_STATE_${measurementState}`))) {
+    issues.push('DECISION_MEASUREMENT_STATE_REASON_CONTRADICTION');
+  }
+  if (decisionReasons !== null && (STRATEGY_DECAY_DECISION_KINDS as readonly unknown[]).includes(decision.kind)
+    && (decisionReasons.filter((reason) => reason === `GOVERNANCE_${decision.kind as string}`).length !== 1
+      || decisionReasons.some((reason) => typeof reason === 'string'
+        && reason.startsWith('GOVERNANCE_') && reason !== `GOVERNANCE_${decision.kind as string}`))) {
+    issues.push('DECISION_KIND_REASON_CONTRADICTION');
+  }
+  if (decisionReasons !== null
+    && (STRATEGY_DECAY_DECISION_KINDS as readonly unknown[]).includes(decision.kind)
+    && (STRATEGY_DECAY_POSTURES as readonly unknown[]).includes(decision.nextPosture)
+    && decisionReasons.includes('MORE_RESTRICTIVE_POSTURE_PRESERVED')
+      !== (decision.nextPosture !== targetPosture(decision.kind as StrategyDecayDecisionKind))) {
+    issues.push('DECISION_POSTURE_REASON_CONTRADICTION');
+  }
   if (decision.automaticResearchPromotion !== false) issues.push('DECISION_AUTOMATIC_RESEARCH_PROMOTION_FORBIDDEN');
   if (decision.executionAuthority !== 'NONE') issues.push('DECISION_EXECUTION_AUTHORITY_FORBIDDEN');
   if (issues.length === 0) {
@@ -436,15 +822,49 @@ function decisionKind(
   return degradedWindows >= policy.reduceAfterConsecutiveDegradedWindows ? 'REDUCE' : 'HOLD_UNKNOWN';
 }
 
-function decisionSummary(decision: StrategyDecayDecision): StrategyDecayDecisionSummary {
-  return Object.freeze({
-    decisionId: decision.decisionId,
-    revision: decision.revision,
-    measurementId: decision.measurementId,
-    evaluatedAtMs: decision.evaluatedAtMs,
-    kind: decision.kind,
-    nextPosture: decision.nextPosture,
-    researchState: decision.researchState,
+export function summarizeStrategyDecayDecision(
+  decision: StrategyDecayDecision,
+  consecutiveDegradedWindows: number,
+  consecutiveDeadWindows: number,
+  maximumRecentDecisions: number,
+  previousHistoryDigest: string | null,
+): StrategyDecayDecisionSummary {
+  const snapshot = snapshotStrategyDecayData(decision);
+  const exact = recordWithExactKeys(snapshot, DECISION_KEYS);
+  if (exact === null || validateStrategyDecayDecision(exact).length > 0
+    || !nonNegativeSafeInteger(consecutiveDegradedWindows)
+    || !nonNegativeSafeInteger(consecutiveDeadWindows)
+    || consecutiveDeadWindows > consecutiveDegradedWindows
+    || !positiveSafeInteger(maximumRecentDecisions)
+    || maximumRecentDecisions > MAX_RECENT_DECISIONS) {
+    throw new TypeError('strategy decay decision summary input invalid');
+  }
+  const safeDecision = exact as unknown as StrategyDecayDecision;
+  const material: Omit<StrategyDecayDecisionSummary, 'historyDigest'> = {
+    decisionId: safeDecision.decisionId,
+    revision: safeDecision.revision,
+    strategy: safeDecision.strategy,
+    configVersion: safeDecision.configVersion,
+    direction: safeDecision.direction,
+    policyId: safeDecision.policyId,
+    policyRevision: safeDecision.policyRevision,
+    reduceAfterConsecutiveDegradedWindows: safeDecision.reduceAfterConsecutiveDegradedWindows,
+    disableAfterConsecutiveDeadWindows: safeDecision.disableAfterConsecutiveDeadWindows,
+    retireAfterConsecutiveDeadWindows: safeDecision.retireAfterConsecutiveDeadWindows,
+    measurementId: safeDecision.measurementId,
+    evaluatedAtMs: safeDecision.evaluatedAtMs,
+    measurementState: safeDecision.measurementState,
+    kind: safeDecision.kind,
+    nextPosture: safeDecision.nextPosture,
+    researchState: safeDecision.researchState,
+    researchCandidateId: safeDecision.researchCandidateId,
+    consecutiveDegradedWindows,
+    consecutiveDeadWindows,
+    maximumRecentDecisions,
+  };
+  return deepFreeze({
+    ...material,
+    historyDigest: deriveStrategyDecayHistoryDigest(previousHistoryDigest, material),
   });
 }
 
@@ -458,7 +878,7 @@ export function evaluateStrategyDecayGovernance(input: {
   readonly measurement: Readonly<StrategyDecayMeasurement>;
   readonly previousState: Readonly<StrategyDecayHistoryState> | null;
 }): StrategyDecayEvaluationResult {
-  const exact = recordWithExactKeys(input, ['policy', 'measurement', 'previousState']);
+  const exact = recordWithExactKeys(snapshotStrategyDecayData(input), ['policy', 'measurement', 'previousState']);
   if (exact === null) return Object.freeze({ ok: false, reasonCodes: Object.freeze(['GOVERNANCE_INPUT_SHAPE_INVALID']) });
   const policyIssues = validateStrategyDecayGovernancePolicy(exact.policy);
   const measurementIssues = validateStrategyDecayMeasurement(exact.measurement);
@@ -472,8 +892,22 @@ export function evaluateStrategyDecayGovernance(input: {
   if (previous !== null && previous.strategy !== measurement.strategy) {
     return Object.freeze({ ok: false, reasonCodes: Object.freeze(['HISTORY_STRATEGY_MISMATCH']) });
   }
+  if (previous !== null && previous.direction !== measurement.direction) {
+    return Object.freeze({ ok: false, reasonCodes: Object.freeze(['HISTORY_DIRECTION_MISMATCH']) });
+  }
+  if (previous !== null) {
+    const sequenceIssues: string[] = [];
+    if (measurement.evaluatedAtMs <= previous.updatedAtMs) sequenceIssues.push('MEASUREMENT_TIME_NOT_STRICTLY_INCREASING');
+    if (previous.recentDecisions.some((summary) => summary.measurementId === measurement.measurementId)) {
+      sequenceIssues.push('MEASUREMENT_ID_REPLAYED');
+    }
+    if (sequenceIssues.length > 0) {
+      return Object.freeze({ ok: false, reasonCodes: Object.freeze(sequenceIssues.sort()) });
+    }
+  }
   const sameCohort = previous !== null
     && previous.configVersion === measurement.configVersion
+    && previous.direction === measurement.direction
     && previous.policyRevision === policy.policyRevision;
   const priorDegraded = sameCohort ? previous.consecutiveDegradedWindows : 0;
   const priorDead = sameCohort ? previous.consecutiveDeadWindows : 0;
@@ -502,6 +936,7 @@ export function evaluateStrategyDecayGovernance(input: {
     ? previous?.researchCandidateId ?? `decayresearch_${stableHash128Hex(canonicalJson({
         strategy: measurement.strategy,
         configVersion: measurement.configVersion,
+        direction: measurement.direction,
         firstMeasurementId: measurement.measurementId,
         revision,
       }))}`
@@ -517,9 +952,16 @@ export function evaluateStrategyDecayGovernance(input: {
     revision,
     strategy: measurement.strategy,
     configVersion: measurement.configVersion,
+    direction: measurement.direction,
+    policyId: policy.policyId,
     policyRevision: policy.policyRevision,
+    reduceAfterConsecutiveDegradedWindows: policy.reduceAfterConsecutiveDegradedWindows,
+    disableAfterConsecutiveDeadWindows: policy.disableAfterConsecutiveDeadWindows,
+    retireAfterConsecutiveDeadWindows: policy.retireAfterConsecutiveDeadWindows,
+    maximumRecentDecisions: policy.maximumRecentDecisions,
     measurementId: measurement.measurementId,
     evaluatedAtMs: measurement.evaluatedAtMs,
+    measurementState: measurement.state,
     kind,
     priorPosture,
     nextPosture,
@@ -538,30 +980,47 @@ export function evaluateStrategyDecayGovernance(input: {
     executionAuthority: 'NONE',
   });
   const maximumRecent = policy.maximumRecentDecisions;
-  const recentDecisions = Object.freeze([
+  const appendedSummary = summarizeStrategyDecayDecision(
+    decision,
+    degradedWindows,
+    deadWindows,
+    maximumRecent,
+    previous?.historyDigest ?? null,
+  );
+  const allRecentDecisions = [
     ...(previous?.recentDecisions ?? []),
-    decisionSummary(decision),
-  ].slice(-maximumRecent));
+    appendedSummary,
+  ];
+  const removedSummaries = allRecentDecisions.slice(0, Math.max(0, allRecentDecisions.length - maximumRecent));
+  const recentDecisions = Object.freeze(allRecentDecisions.slice(-maximumRecent));
   const totalDecisionCount = (previous?.totalDecisionCount ?? 0) + 1;
-  const historyDigest = `decayhist_${stableHash128Hex(canonicalJson({
-    previousHistoryDigest: previous?.historyDigest ?? null,
-    decisionId: decision.decisionId,
-    revision,
-  }))}`;
+  const compactedDecisionCount = totalDecisionCount - recentDecisions.length;
+  const compactedHistoryDigest = removedSummaries.at(-1)?.historyDigest
+    ?? previous?.compactedHistoryDigest
+    ?? null;
+  const historyDigest = appendedSummary.historyDigest;
   const nextState: StrategyDecayHistoryState = deepFreeze({
     schema: STRATEGY_DECAY_HISTORY_SCHEMA,
     schemaVersion: STRATEGY_DECAY_HISTORY_SCHEMA_VERSION,
     strategy: measurement.strategy,
     configVersion: measurement.configVersion,
+    direction: measurement.direction,
+    policyId: policy.policyId,
     policyRevision: policy.policyRevision,
+    reduceAfterConsecutiveDegradedWindows: policy.reduceAfterConsecutiveDegradedWindows,
+    disableAfterConsecutiveDeadWindows: policy.disableAfterConsecutiveDeadWindows,
+    retireAfterConsecutiveDeadWindows: policy.retireAfterConsecutiveDeadWindows,
     revision,
+    updatedAtMs: measurement.evaluatedAtMs,
     effectivePosture: nextPosture,
     researchState,
     researchCandidateId,
     consecutiveDegradedWindows: degradedWindows,
     consecutiveDeadWindows: deadWindows,
     totalDecisionCount,
-    compactedDecisionCount: totalDecisionCount - recentDecisions.length,
+    compactedDecisionCount,
+    maximumRecentDecisions: maximumRecent,
+    compactedHistoryDigest,
     recentDecisions,
     historyDigest,
   });

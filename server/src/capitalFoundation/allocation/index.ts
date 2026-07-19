@@ -11,8 +11,19 @@ export type {
   AllocationCandidate,
   AllocationSizingAuthority,
   EconomicDirection,
+  StrategyDecayAllocationPosture,
 } from './types.js';
 export { ECONOMIC_DIRECTIONS } from './types.js';
+export {
+  STRATEGY_DECAY_ALLOCATION_GATE_POLICY_REVISION,
+  assessStrategyDecayAllocationGate,
+  createStrategyDecayAllocationPosture,
+  deriveStrategyDecayAllocationPostureRevision,
+  snapshotStrategyDecayPostureData,
+  strategyDecayPostureSetDigest,
+  validateStrategyDecayAllocationPosture,
+  validateStrategyDecayPostureSet,
+} from './strategyDecay.js';
 export {
   EMPTY_RESERVATION_BOOK,
   RESERVATION_COMMAND_KINDS,

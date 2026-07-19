@@ -5,6 +5,7 @@
  * touching logic.
  */
 import { ENGINE_DEFAULTS, type EngineConfig } from '../v0/config.js';
+import { deriveConfigVersionId } from '../../foundation/contracts/index.js';
 
 export interface BasisConfig extends EngineConfig {
   // --- gap thresholds (gross executable gap, pct) ---
@@ -220,4 +221,21 @@ export function basisConfig(partial?: Partial<BasisConfig>): BasisConfig {
     previous = fraction;
   }
   return cfg;
+}
+
+/** Content identity owned by the Basis engine configuration boundary. */
+export function deriveBasisConfigVersion(config: Readonly<BasisConfig>): string {
+  if (Object.values(config).some((value) => typeof value === 'number' && Object.is(value, -0))
+    || config.stagedSizeFractions.some((value) => Object.is(value, -0))) {
+    throw new TypeError('basis config revision rejects negative zero');
+  }
+  const validated = basisConfig({
+    ...config,
+    stagedSizeFractions: [...config.stagedSizeFractions],
+  });
+  if (Object.values(validated).some((value) => typeof value === 'number' && Object.is(value, -0))
+    || validated.stagedSizeFractions.some((value) => Object.is(value, -0))) {
+    throw new TypeError('basis config revision rejects negative zero');
+  }
+  return deriveConfigVersionId({ scope: 'engine.basis', payload: validated });
 }

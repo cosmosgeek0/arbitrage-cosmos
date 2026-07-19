@@ -4,6 +4,7 @@
  * never edit.
  */
 import { ENGINE_DEFAULTS, type EngineConfig } from '../v0/config.js';
+import { deriveConfigVersionId } from '../../foundation/contracts/index.js';
 
 export interface VolumeConfig extends EngineConfig {
   // ---- tape / raw trade window ----
@@ -155,4 +156,16 @@ export function volumeConfig(partial?: Partial<VolumeConfig>): VolumeConfig {
   for (const key of positiveKeys) cfg[key] = clamp(cfg[key], 1e-9, 1_000_000_000);
 
   return cfg;
+}
+
+/** Content identity owned by the Volume engine configuration boundary. */
+export function deriveVolumeConfigVersion(config: Readonly<VolumeConfig>): string {
+  if (Object.values(config).some((value) => typeof value === 'number' && Object.is(value, -0))) {
+    throw new TypeError('volume config revision rejects negative zero');
+  }
+  const validated = volumeConfig(config);
+  if (Object.values(validated).some((value) => typeof value === 'number' && Object.is(value, -0))) {
+    throw new TypeError('volume config revision rejects negative zero');
+  }
+  return deriveConfigVersionId({ scope: 'engine.volume', payload: validated });
 }

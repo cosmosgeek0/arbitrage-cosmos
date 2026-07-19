@@ -806,6 +806,64 @@ section('25. SAFETY: runtime retries an empty startup and trusts source timestam
   staleRuntime.stop();
 }
 
+// =====================================================================
+section('26. RUNTIME: decay governance reuses the successful owner tick cadence');
+{
+  const runtimeConfig = {
+    feesPct: 0.3,
+    minNetBasisPct: 0.25,
+    persistTicks: 3,
+    minQuoteVolume24h: 0,
+    killSwitch: false,
+    blockedSymbols: [],
+  };
+  const universe = [{
+    symbol: SYM,
+    base: 'TEST',
+    quoteVolume24h: 50_000_000,
+    hasSpot: true,
+    hasPerp: true,
+    perpMark: 100.01,
+    fundingRate: 0.0001,
+    nextFundingTime: Date.now() + 3_600_000,
+    markUpdatedAt: Date.now(),
+  }];
+  const fakeFetch = async () => new Map([[
+    SYM,
+    { bidPrice: 100, askPrice: 100.02, bidQty: 10, askQty: 10 },
+  ]]);
+  const calls = [];
+  const decay = {
+    tick(request) {
+      calls.push(request);
+      return { disposition: 'NOT_DUE', reasonCodes: [] };
+    },
+  };
+  const runtime = new BasisRuntime(
+    { logEvent() {} },
+    () => runtimeConfig,
+    () => universe,
+    fakeFetch,
+    decay,
+  );
+  await runtime.start();
+  check('one successful Basis tick evaluates both exact owner directions',
+    calls.length === 2
+      && calls[0].direction === 'long_spot_short_perp'
+      && calls[1].direction === 'short_spot_long_perp');
+  check('both direction lanes share owner tick time and config version',
+    calls[0].evaluatedAtMs === calls[1].evaluatedAtMs
+      && calls[0].configVersion === calls[1].configVersion
+      && calls.every((call) => call.strategy === 'BASIS' && /^cfg_/.test(call.configVersion)));
+  const originalRevision = calls[0].configVersion;
+  runtimeConfig.minNetBasisPct = 0.31;
+  runtime.refreshUniverse();
+  await runtime.refreshBooks();
+  check('effective Basis config mutation changes the owner revision before decay evaluation',
+    calls.length === 4 && calls[2].configVersion !== originalRevision && calls[2].configVersion === calls[3].configVersion);
+  runtime.stop();
+}
+
 // ---------- summary ----------
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed${failed.length ? ` — ${failed.length} FAILED` : ''}`);

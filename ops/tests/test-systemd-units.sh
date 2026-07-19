@@ -56,6 +56,14 @@ for private_pids in yes true on 1; do
 done
 assert_grep '^StartLimitIntervalSec=' "$APP" "restart storm bounded"
 assert_grep '^StartLimitBurst=' "$APP" "restart storm bounded (burst)"
+# F-017: TimeoutStopSec must cover the app's 45 s drain + 8 s HTTP deadline
+# with margin, so the two budgets can never silently diverge again.
+APP_TIMEOUT_STOP="$(unit_get "$APP" TimeoutStopSec)"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$APP_TIMEOUT_STOP" in
+  (*[!0-9]*|"") fail "cosmos-app.service TimeoutStopSec is not a plain integer" ;;
+  (*) [ "$APP_TIMEOUT_STOP" -ge 75 ] || fail "cosmos-app.service TimeoutStopSec=$APP_TIMEOUT_STOP is below the 45s drain + 8s close + margin budget (>=75)" ;;
+esac
 assert_grep '^LogRateLimitIntervalSec=' "$APP" "journal rate bounded"
 assert_grep '^ReadWritePaths=.*/var/lib/cosmos' "$APP" "state dir writable"
 assert_grep '^ReadWritePaths=.*/run/cosmos-app' "$APP" "logical lease runtime writable"

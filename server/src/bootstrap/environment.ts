@@ -649,8 +649,12 @@ export function loadDotEnv(
         environment[match[1]] = match[2].replace(/^["']|["']$/gu, '');
       }
     }
-  } catch {
-    // An absent local file is a valid keyless/default configuration.
+  } catch (error) {
+    // An absent local file is a valid keyless/default configuration, but an
+    // unreadable one (EACCES, EISDIR, …) must not be silently identical to an
+    // absent one — that hides a real misconfiguration (F-050).
+    const code = (error as NodeJS.ErrnoException | null)?.code;
+    if (code !== 'ENOENT') throw error;
   }
 }
 

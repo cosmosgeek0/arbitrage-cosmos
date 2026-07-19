@@ -26,7 +26,7 @@ const IMMUTABLE_DONOR = Object.freeze({
   acceptedAssertions: 347,
 });
 
-const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06']);
+const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06', 'DEPLOY-READINESS-001']);
 const FINDING_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': Object.freeze([
     'ops/live/bin/common.sh',
@@ -48,6 +48,22 @@ const FINDING_PATHS = Object.freeze({
     'ops/live/env/cosmos-app.env.template',
     'ops/live/systemd/cosmos-app.service',
   ]),
+  'DEPLOY-READINESS-001': Object.freeze([
+    'ops/live/README.md',
+    'ops/live/bin/backup.sh',
+    'ops/live/bin/common.sh',
+    'ops/live/bin/deploy.sh',
+    'ops/live/bin/rollback.sh',
+    'ops/live/bin/watchdog.sh',
+    'ops/live/env/cosmos-app.env.template',
+    'ops/live/env/cosmos-backup.env.template',
+    'ops/live/env/cosmos-deploy.env.template',
+    'ops/live/env/cosmos-watchdog.env.template',
+    'ops/live/systemd/cosmos-app.service',
+    'ops/live/systemd/cosmos-backup.service',
+    'ops/live/systemd/cosmos-restore-drill.service',
+    'ops/live/systemd/cosmos-watchdog.service',
+  ]),
 });
 // Donor-owned test files a finding is authorized to evolve, with exact
 // before/after byte binding in the amendment. Empty for historical findings.
@@ -59,6 +75,9 @@ const FINDING_TEST_CHANGES = Object.freeze({
   'FIX-031-CS-06': Object.freeze([
     'ops/tests/test-systemd-units.sh',
   ]),
+  'DEPLOY-READINESS-001': Object.freeze([
+    'ops/tests/test-systemd-units.sh',
+  ]),
 });
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
@@ -66,6 +85,7 @@ const FINDING_TESTS = Object.freeze({
   'CS-03': 'ops/tests/i00/test-cs-03-public-source-admission.sh',
   'RB-27': 'ops/tests/i00/test-rb-27-latency-deadlines.sh',
   'FIX-031-CS-06': 'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
+  'DEPLOY-READINESS-001': 'ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh',
 });
 
 function assertSafePath(value, label, prefix = '') {

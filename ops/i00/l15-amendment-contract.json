@@ -216,18 +216,161 @@
           "sha256": "9b56a615829562493050d7f579fdf149d1498974867193373d199821d320cbce"
         }
       ]
+    },
+    {
+      "findingId": "DEPLOY-READINESS-001",
+      "baseLiveTree": "49e073d81fd3649245e0cc80d9385f5df0174fc3",
+      "effectiveLiveTree": "fd2e76085fdf98c892e3e9cca2f0f085adfd2b9f",
+      "baseRootDigestSha256": "4cb626c4592969030e120e06099a233f1d011a25ce1f6a387a3f51213d2187ec",
+      "effectiveRootDigestSha256": "f4dafa650326c67e254c2c798721324709bee182a7b9f4d4a249f54324bdd3d5",
+      "changedFiles": [
+        {
+          "path": "ops/live/README.md",
+          "mode": "100644",
+          "beforeGitBlob": "0b1491d408ed36f8a2931016e995a15d972feca6",
+          "beforeSha256": "fe0ff0097159357292b09a084da4d8464c7bad202f2c79b0dd420724faa835cb",
+          "afterGitBlob": "f57872f11e285bfec6280b89c03f6f5eadea8db0",
+          "afterSha256": "e74826fbf31778f3fc37692e62498cd1553734e8d85dd303f4f00caa61ba2502"
+        },
+        {
+          "path": "ops/live/bin/backup.sh",
+          "mode": "100755",
+          "beforeGitBlob": "9d500dfb3fa660934ce53af89d791c7ca3cdd856",
+          "beforeSha256": "26bd74cd78baecfe7697e356329460b3c8f2226c36573aef089a6641573ecd5c",
+          "afterGitBlob": "9de219e48e0df15f4a3e0ee812ec907863389111",
+          "afterSha256": "6d2c693251be5782ba8c3abb38714bee6580450dafa8e13b79606c17e48b5890"
+        },
+        {
+          "path": "ops/live/bin/common.sh",
+          "mode": "100755",
+          "beforeGitBlob": "32f841f00ac981cfcf09948443025063fa5d0b61",
+          "beforeSha256": "0d635d8e4d8d87e65532c98405bcb7ba6054520c8140f3b07258396cea561f87",
+          "afterGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
+          "afterSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6"
+        },
+        {
+          "path": "ops/live/bin/deploy.sh",
+          "mode": "100755",
+          "beforeGitBlob": "a9285b2e411b4280f83a9333d8a5744d36adeab7",
+          "beforeSha256": "12165ef6aad45e3eacf2524f68111fee4611426bcb95c6f517f2e08cd725b965",
+          "afterGitBlob": "2385c1652f5c36f81bf741509b6a6fc752f39f4b",
+          "afterSha256": "43fe7f3834387edd2f6268730911bfd092a9362aa322ae97d8e31894130c9599"
+        },
+        {
+          "path": "ops/live/bin/rollback.sh",
+          "mode": "100755",
+          "beforeGitBlob": "3b52cf2488a248502689a52b0e8b7b5bce08e04a",
+          "beforeSha256": "ca9441bff367b987589444d02c77cbf639c6a2301ada76d42873e57a31e4d725",
+          "afterGitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
+          "afterSha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728"
+        },
+        {
+          "path": "ops/live/bin/watchdog.sh",
+          "mode": "100755",
+          "beforeGitBlob": "66fe95e0ab1d7165b8ccb2c13a20bb564edaf771",
+          "beforeSha256": "3e554005c869958e660798f9c9ee045fcfc1913ff7ac7e4bc4d4205b7130ccab",
+          "afterGitBlob": "249d54b8e55850f3e6bd7feab6cf61375d8ad029",
+          "afterSha256": "bffacaf70b8aa2fb1df894f78db5d8e610ca16810b14e4fba9db3f000a994b0a"
+        },
+        {
+          "path": "ops/live/env/cosmos-app.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "650c5ba0f630717d53435c66d56e29bf8eb3c49c",
+          "beforeSha256": "7ec7676d2f3d356fe2363cbf0ae3fdbf481d19ffb8dc26b5a740f4aeba5d4e80",
+          "afterGitBlob": "249276befb02bfc75e953a2a5995124181735763",
+          "afterSha256": "0e8e5b199e6f814226b8d830779e33ea262bd5d1c60399c89ac84794867e2ebc"
+        },
+        {
+          "path": "ops/live/env/cosmos-backup.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "f34bcfebe7a8a6d76d2b9a8abce900f449b1921a",
+          "beforeSha256": "1ac6e7d6df84b73b4cd4ff48b7453954de05c90cff6c136dd34f3596fbd84f8c",
+          "afterGitBlob": "f656fa524608697e01383da22c1b6d3f2dd1a44b",
+          "afterSha256": "b483ed1cfc8ce53ee2a28ee82c938d74c6a31e8745fee7bee9b9dfc188f2e02c"
+        },
+        {
+          "path": "ops/live/env/cosmos-deploy.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "858942e314ff9b314f358702b0773eab012a5cbe",
+          "beforeSha256": "1028a1cafadc56df410a168390e92e9708373b375b6f79a367678d9b673af9e1",
+          "afterGitBlob": "043ec964a2fdb9ab24656b587484d98e4798ceb1",
+          "afterSha256": "e195a3d200b9f69aa0ea76c83d57190bedda253a4b07a5cf049bcece95fc21eb"
+        },
+        {
+          "path": "ops/live/env/cosmos-watchdog.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "f5100efac71aee443db26f4a81d7f68159ed1526",
+          "beforeSha256": "b4c7f618e4fadafdc87425fd2d3401d57232ad82fcd498cbdfefa77d22c1a0a0",
+          "afterGitBlob": "009497f50028c24f409eb86c8cb31cfdfea6d40d",
+          "afterSha256": "0bacd405c98d87a1ec6d0dd0fb33c77cade0dc233944b4761e3987b16d326ec1"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-app.service",
+          "mode": "100644",
+          "beforeGitBlob": "12abb3e6b1f1e507f622da3951573a48109a8602",
+          "beforeSha256": "811ed8b022eb9e173f269f3a18a859208d0b7cb5476aa88bab70d0e96de77b21",
+          "afterGitBlob": "cc2d689d2a76dab601fcf01fba915a721127916f",
+          "afterSha256": "58fa4ba9c10c51c07e45891cc109e0ac0d743105db164702665a5e7e6319ab10"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-backup.service",
+          "mode": "100644",
+          "beforeGitBlob": "d37f7462c8142bbda12f924b405c34e3c9a3ade0",
+          "beforeSha256": "bd5a5b93a831f9c5dba67257199e68800383da94fed40deed746a309407bbb5d",
+          "afterGitBlob": "21803732315160d967a300a4db3de8c8dc7fa70d",
+          "afterSha256": "dafb2934f8d31a1634e4110346d502b0727a5bae5f4ee8ab13ac6941276a1d22"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-restore-drill.service",
+          "mode": "100644",
+          "beforeGitBlob": "be5f1421145b08dadca83fe203f557be4cd2b2be",
+          "beforeSha256": "1287b86f776b72ada5e8bd0f4c375293bf852b89d216143444324b6979108def",
+          "afterGitBlob": "4eca14745d6f3979a476f8de7be451b94c465ac7",
+          "afterSha256": "d59160aebe5fc7efb9035661eb8e9098c0efc3d868cc0543765cba9c30ef62e6"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-watchdog.service",
+          "mode": "100644",
+          "beforeGitBlob": "b7f879146cd2b9389e79f039c6b040a46d03925e",
+          "beforeSha256": "06b0272dd66d2b60962d0dffb4ad2f2ddd0a6759bd9a6830d5d88cfd63ab83e7",
+          "afterGitBlob": "bb07d9d76080f8a0c4037acb9918a1ce7de24ebe",
+          "afterSha256": "8bfab233229b61ce4aa50c886e0cbc2387a83568b049ab6272d16f69dc26b826"
+        }
+      ],
+      "changedTestFiles": [
+        {
+          "path": "ops/tests/test-systemd-units.sh",
+          "mode": "100755",
+          "beforeGitBlob": "bd7ab661e802482a7143e90861bd2d35e783eb84",
+          "beforeSha256": "b17443e04d8bb5c0a652a82de81146d9dc4964430e69402474a974bce8f55dcd",
+          "afterGitBlob": "d472b7fc8a9ace53ba5b302df0cfc2f82c9cab17",
+          "afterSha256": "3244d94c97af2711e7b806b961976c1c037ec1b03ec68d88276a26851417431d"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/DEPLOY-READINESS-001_CORRECTION_RECEIPT.md",
+        "gitBlob": "d31e5f86223fdf44b627346ae1ef66b36fa22cb8",
+        "sha256": "d8be87b6f84183490b6632892952fd70d009af3c92664f4c5aa546ec532afe37"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh",
+          "gitBlob": "6d8e79a6ac73af90d2831229f6af4f1c7abb6cd8",
+          "sha256": "e8c01b83697d7e6a4b64f798d115adedf0104a5b9c8ca9df8240642d566b1af8"
+        }
+      ]
     }
   ],
   "effectiveLive": {
-    "tree": "49e073d81fd3649245e0cc80d9385f5df0174fc3",
-    "rootDigestSha256": "4cb626c4592969030e120e06099a233f1d011a25ce1f6a387a3f51213d2187ec",
+    "tree": "fd2e76085fdf98c892e3e9cca2f0f085adfd2b9f",
+    "rootDigestSha256": "f4dafa650326c67e254c2c798721324709bee182a7b9f4d4a249f54324bdd3d5",
     "fileCount": 31,
     "files": [
       {
         "path": "README.md",
         "mode": "100644",
-        "gitBlob": "0b1491d408ed36f8a2931016e995a15d972feca6",
-        "sha256": "fe0ff0097159357292b09a084da4d8464c7bad202f2c79b0dd420724faa835cb"
+        "gitBlob": "f57872f11e285bfec6280b89c03f6f5eadea8db0",
+        "sha256": "e74826fbf31778f3fc37692e62498cd1553734e8d85dd303f4f00caa61ba2502"
       },
       {
         "path": "RECEIPT.md",
@@ -268,20 +411,20 @@
       {
         "path": "bin/backup.sh",
         "mode": "100755",
-        "gitBlob": "9d500dfb3fa660934ce53af89d791c7ca3cdd856",
-        "sha256": "26bd74cd78baecfe7697e356329460b3c8f2226c36573aef089a6641573ecd5c"
+        "gitBlob": "9de219e48e0df15f4a3e0ee812ec907863389111",
+        "sha256": "6d2c693251be5782ba8c3abb38714bee6580450dafa8e13b79606c17e48b5890"
       },
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "32f841f00ac981cfcf09948443025063fa5d0b61",
-        "sha256": "0d635d8e4d8d87e65532c98405bcb7ba6054520c8140f3b07258396cea561f87"
+        "gitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
+        "sha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6"
       },
       {
         "path": "bin/deploy.sh",
         "mode": "100755",
-        "gitBlob": "a9285b2e411b4280f83a9333d8a5744d36adeab7",
-        "sha256": "12165ef6aad45e3eacf2524f68111fee4611426bcb95c6f517f2e08cd725b965"
+        "gitBlob": "2385c1652f5c36f81bf741509b6a6fc752f39f4b",
+        "sha256": "43fe7f3834387edd2f6268730911bfd092a9362aa322ae97d8e31894130c9599"
       },
       {
         "path": "bin/latency-bench.mjs",
@@ -304,14 +447,14 @@
       {
         "path": "bin/rollback.sh",
         "mode": "100755",
-        "gitBlob": "3b52cf2488a248502689a52b0e8b7b5bce08e04a",
-        "sha256": "ca9441bff367b987589444d02c77cbf639c6a2301ada76d42873e57a31e4d725"
+        "gitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
+        "sha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728"
       },
       {
         "path": "bin/watchdog.sh",
         "mode": "100755",
-        "gitBlob": "66fe95e0ab1d7165b8ccb2c13a20bb564edaf771",
-        "sha256": "3e554005c869958e660798f9c9ee045fcfc1913ff7ac7e4bc4d4205b7130ccab"
+        "gitBlob": "249d54b8e55850f3e6bd7feab6cf61375d8ad029",
+        "sha256": "bffacaf70b8aa2fb1df894f78db5d8e610ca16810b14e4fba9db3f000a994b0a"
       },
       {
         "path": "cloudflare/README.md",
@@ -334,26 +477,26 @@
       {
         "path": "env/cosmos-app.env.template",
         "mode": "100644",
-        "gitBlob": "650c5ba0f630717d53435c66d56e29bf8eb3c49c",
-        "sha256": "7ec7676d2f3d356fe2363cbf0ae3fdbf481d19ffb8dc26b5a740f4aeba5d4e80"
+        "gitBlob": "249276befb02bfc75e953a2a5995124181735763",
+        "sha256": "0e8e5b199e6f814226b8d830779e33ea262bd5d1c60399c89ac84794867e2ebc"
       },
       {
         "path": "env/cosmos-backup.env.template",
         "mode": "100644",
-        "gitBlob": "f34bcfebe7a8a6d76d2b9a8abce900f449b1921a",
-        "sha256": "1ac6e7d6df84b73b4cd4ff48b7453954de05c90cff6c136dd34f3596fbd84f8c"
+        "gitBlob": "f656fa524608697e01383da22c1b6d3f2dd1a44b",
+        "sha256": "b483ed1cfc8ce53ee2a28ee82c938d74c6a31e8745fee7bee9b9dfc188f2e02c"
       },
       {
         "path": "env/cosmos-deploy.env.template",
         "mode": "100644",
-        "gitBlob": "858942e314ff9b314f358702b0773eab012a5cbe",
-        "sha256": "1028a1cafadc56df410a168390e92e9708373b375b6f79a367678d9b673af9e1"
+        "gitBlob": "043ec964a2fdb9ab24656b587484d98e4798ceb1",
+        "sha256": "e195a3d200b9f69aa0ea76c83d57190bedda253a4b07a5cf049bcece95fc21eb"
       },
       {
         "path": "env/cosmos-watchdog.env.template",
         "mode": "100644",
-        "gitBlob": "f5100efac71aee443db26f4a81d7f68159ed1526",
-        "sha256": "b4c7f618e4fadafdc87425fd2d3401d57232ad82fcd498cbdfefa77d22c1a0a0"
+        "gitBlob": "009497f50028c24f409eb86c8cb31cfdfea6d40d",
+        "sha256": "0bacd405c98d87a1ec6d0dd0fb33c77cade0dc233944b4761e3987b16d326ec1"
       },
       {
         "path": "systemd/cloudflared.service",
@@ -364,14 +507,14 @@
       {
         "path": "systemd/cosmos-app.service",
         "mode": "100644",
-        "gitBlob": "12abb3e6b1f1e507f622da3951573a48109a8602",
-        "sha256": "811ed8b022eb9e173f269f3a18a859208d0b7cb5476aa88bab70d0e96de77b21"
+        "gitBlob": "cc2d689d2a76dab601fcf01fba915a721127916f",
+        "sha256": "58fa4ba9c10c51c07e45891cc109e0ac0d743105db164702665a5e7e6319ab10"
       },
       {
         "path": "systemd/cosmos-backup.service",
         "mode": "100644",
-        "gitBlob": "d37f7462c8142bbda12f924b405c34e3c9a3ade0",
-        "sha256": "bd5a5b93a831f9c5dba67257199e68800383da94fed40deed746a309407bbb5d"
+        "gitBlob": "21803732315160d967a300a4db3de8c8dc7fa70d",
+        "sha256": "dafb2934f8d31a1634e4110346d502b0727a5bae5f4ee8ab13ac6941276a1d22"
       },
       {
         "path": "systemd/cosmos-backup.timer",
@@ -382,8 +525,8 @@
       {
         "path": "systemd/cosmos-restore-drill.service",
         "mode": "100644",
-        "gitBlob": "be5f1421145b08dadca83fe203f557be4cd2b2be",
-        "sha256": "1287b86f776b72ada5e8bd0f4c375293bf852b89d216143444324b6979108def"
+        "gitBlob": "4eca14745d6f3979a476f8de7be451b94c465ac7",
+        "sha256": "d59160aebe5fc7efb9035661eb8e9098c0efc3d868cc0543765cba9c30ef62e6"
       },
       {
         "path": "systemd/cosmos-restore-drill.timer",
@@ -394,8 +537,8 @@
       {
         "path": "systemd/cosmos-watchdog.service",
         "mode": "100644",
-        "gitBlob": "b7f879146cd2b9389e79f039c6b040a46d03925e",
-        "sha256": "06b0272dd66d2b60962d0dffb4ad2f2ddd0a6759bd9a6830d5d88cfd63ab83e7"
+        "gitBlob": "bb07d9d76080f8a0c4037acb9918a1ce7de24ebe",
+        "sha256": "8bfab233229b61ce4aa50c886e0cbc2387a83568b049ab6272d16f69dc26b826"
       },
       {
         "path": "systemd/cosmos-watchdog.timer",

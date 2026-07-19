@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import math
+from decimal import getcontext, localcontext
 
 import pytest
 
 from quant_edge.errors import ContractValueError
 from quant_edge.features.fixedpoint import FIXED_POINT_SCALE, FixedPointV1
+from quant_edge.labels.rational import make_ratio
 from quant_edge.models.contracts import MetricDerivation, MetricDirection
+from quant_edge.models.focus_budget import (
+    PRODUCTION_FOCUS_EVIDENCE_NOT_CONFIGURED,
+    FocusBudgetReportV1,
+    FocusBudgetSpecV1,
+    FocusBudgetStatus,
+    FocusCandidateV1,
+    MeasurementPosture,
+    focus_budget_report,
+)
 from quant_edge.models.metrics import (
     binary64_log_loss,
     brier_score,
@@ -24,6 +35,236 @@ from quant_edge.models.metrics import (
 )
 
 S = FIXED_POINT_SCALE
+
+
+def _focus_candidate(
+    candidate_id: str,
+    score: int,
+    *,
+    relevant: bool | None = True,
+    lead_time_ns: int | None = 20,
+    gross: int | None = 10,
+    cost: int | None = 2,
+    compute_ns: int | None = 100,
+    stream_bytes: int | None = 10,
+) -> FocusCandidateV1:
+    return FocusCandidateV1(
+        candidate_id=candidate_id,
+        rank_score=make_ratio(score, 10),
+        relevant=relevant,
+        detection_time_ns=None if lead_time_ns is None else 1_000,
+        event_time_ns=None if lead_time_ns is None else 1_000 + lead_time_ns,
+        prior_probability=None if lead_time_ns is None else make_ratio(1, 5),
+        posterior_probability=None if lead_time_ns is None else make_ratio(4, 5),
+        gross_value=None if gross is None else make_ratio(gross, 1),
+        cost_value=None if cost is None else make_ratio(cost, 1),
+        compute_ns=compute_ns,
+        stream_bytes=stream_bytes,
+    )
+
+
+def _focus_spec(*, compute: int = 1_000, stream: int = 1_000) -> FocusBudgetSpecV1:
+    return FocusBudgetSpecV1(
+        top_k=2,
+        conservative_haircut=make_ratio(1, 2),
+        max_compute_ns=compute,
+        max_stream_bytes=stream,
+    )
+
+
+class TestFocusBudgetMetrics:
+    def test_top_k_precision_recall_and_lead_time_are_exact(self) -> None:
+        report = focus_budget_report(
+            (
+                _focus_candidate("asset-a", 9, relevant=True, lead_time_ns=20),
+                _focus_candidate("asset-b", 8, relevant=False, lead_time_ns=40),
+                _focus_candidate("asset-c", 7, relevant=True, lead_time_ns=60),
+            ),
+            spec=_focus_spec(),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+
+        assert report.status is FocusBudgetStatus.AVAILABLE_RESEARCH_ONLY
+        assert report.selected_ids == ("asset-a", "asset-b")
+        assert report.precision_at_k == make_ratio(1, 2)
+        assert report.recall_at_k == make_ratio(1, 2)
+        assert report.mean_lead_time_ns == make_ratio(30, 1)
+
+    def test_expected_information_gain_is_positive_and_deterministic(self) -> None:
+        candidates = (_focus_candidate("asset-a", 9), _focus_candidate("asset-b", 8))
+
+        first = focus_budget_report(
+            candidates,
+            spec=_focus_spec(),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+
+        assert first == focus_budget_report(
+            candidates,
+            spec=_focus_spec(),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+        assert first.mean_information_gain is not None
+        assert first.mean_information_gain.mantissa > 0
+
+    def test_information_gain_ignores_and_restores_hostile_ambient_precision(self) -> None:
+        candidates = (_focus_candidate("asset-a", 9), _focus_candidate("asset-b", 8))
+        original = getcontext().copy()
+
+        with localcontext() as ambient:
+            ambient.prec = 6
+            low_precision = focus_budget_report(
+                candidates,
+                spec=_focus_spec(),
+                posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+            )
+            assert getcontext().prec == 6
+
+            ambient.prec = 28
+            ordinary_precision = focus_budget_report(
+                candidates,
+                spec=_focus_spec(),
+                posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+            )
+            assert getcontext().prec == 28
+
+        assert low_precision == ordinary_precision
+        assert getcontext().prec == original.prec
+        assert getcontext().rounding == original.rounding
+        assert getcontext().flags == original.flags
+        assert getcontext().traps == original.traps
+
+    def test_research_costs_are_measured_but_caller_cannot_mint_production_truth(self) -> None:
+        candidates = (
+            _focus_candidate("asset-a", 9, gross=10, cost=2, compute_ns=100, stream_bytes=10),
+            _focus_candidate("asset-b", 8, gross=8, cost=1, compute_ns=200, stream_bytes=20),
+        )
+        research = focus_budget_report(
+            candidates,
+            spec=_focus_spec(),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+        production = focus_budget_report(
+            candidates,
+            spec=_focus_spec(),
+            posture=MeasurementPosture.PRODUCTION_OBSERVED,
+        )
+
+        assert research.status is FocusBudgetStatus.AVAILABLE_RESEARCH_ONLY
+        assert research.conservative_net_value == make_ratio(6, 1)
+        assert research.compute_ns == 300
+        assert research.stream_bytes == 30
+        assert research.within_budget is True
+        assert production.status is FocusBudgetStatus.DATA_INSUFFICIENT
+        assert production.selected_ids == ()
+        assert production.precision_at_k is None
+        assert production.recall_at_k is None
+        assert production.mean_lead_time_ns is None
+        assert production.mean_information_gain is None
+        assert production.conservative_net_value is None
+        assert production.compute_ns is None
+        assert production.stream_bytes is None
+        assert production.within_budget is None
+        assert production.reasons == (PRODUCTION_FOCUS_EVIDENCE_NOT_CONFIGURED,)
+        with pytest.raises(ContractValueError, match=PRODUCTION_FOCUS_EVIDENCE_NOT_CONFIGURED):
+            FocusBudgetReportV1(
+                MeasurementPosture.PRODUCTION_OBSERVED,
+                FocusBudgetStatus.AVAILABLE_PRODUCTION_MEASURED,
+                (),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                (),
+            )
+
+    def test_absent_research_measurements_stay_data_insufficient(self) -> None:
+        missing = FocusCandidateV1(
+            candidate_id="asset-a",
+            rank_score=make_ratio(9, 10),
+            relevant=None,
+            detection_time_ns=None,
+            event_time_ns=None,
+            prior_probability=None,
+            posterior_probability=None,
+            gross_value=None,
+            cost_value=None,
+            compute_ns=None,
+            stream_bytes=None,
+        )
+
+        report = focus_budget_report(
+            (missing,),
+            spec=FocusBudgetSpecV1(1, make_ratio(1, 2), 1_000, 1_000),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+
+        assert report.status is FocusBudgetStatus.DATA_INSUFFICIENT
+        assert report.mean_lead_time_ns is None
+        assert report.mean_information_gain is None
+        assert report.conservative_net_value is None
+        assert report.within_budget is None
+        assert set(report.reasons) == {
+            "COMPUTE_COST_MISSING",
+            "INFORMATION_GAIN_MISSING",
+            "LABELS_MISSING",
+            "LEAD_TIME_MISSING",
+            "NET_VALUE_MISSING",
+            "STREAM_COST_MISSING",
+        }
+
+    def test_tie_break_and_budget_breach_are_deterministic(self) -> None:
+        report = focus_budget_report(
+            (
+                _focus_candidate("asset-b", 9, compute_ns=80, stream_bytes=80),
+                _focus_candidate("asset-a", 9, compute_ns=80, stream_bytes=80),
+                _focus_candidate("asset-c", 8),
+            ),
+            spec=_focus_spec(compute=100, stream=100),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+
+        assert report.selected_ids == ("asset-a", "asset-b")
+        assert report.within_budget is False
+        with pytest.raises(ContractValueError, match="top_k cannot exceed"):
+            focus_budget_report(
+                (_focus_candidate("asset-a", 9),),
+                spec=_focus_spec(),
+                posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+            )
+
+    def test_no_relevant_outcomes_and_invalid_probability_fail_honestly(self) -> None:
+        report = focus_budget_report(
+            (
+                _focus_candidate("asset-a", 9, relevant=False),
+                _focus_candidate("asset-b", 8, relevant=False),
+            ),
+            spec=_focus_spec(),
+            posture=MeasurementPosture.SYNTHETIC_RESEARCH,
+        )
+
+        assert report.status is FocusBudgetStatus.DATA_INSUFFICIENT
+        assert report.precision_at_k == make_ratio(0, 1)
+        assert report.recall_at_k is None
+        assert report.reasons == ("NO_RELEVANT_OUTCOMES",)
+        with pytest.raises(ContractValueError, match=r"\(0, 1\)"):
+            FocusCandidateV1(
+                "asset-z",
+                make_ratio(1, 2),
+                True,
+                1,
+                2,
+                make_ratio(0, 1),
+                make_ratio(1, 2),
+                make_ratio(1, 1),
+                make_ratio(0, 1),
+                1,
+                1,
+            )
 
 
 def fp(numerator: int, denominator: int = 1) -> FixedPointV1:

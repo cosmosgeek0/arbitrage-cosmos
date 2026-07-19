@@ -3836,6 +3836,11 @@ if (canonicalApplicationStartOk) {
     'control-room listener not admitted because durable boot failed:',
     canonicalApplicationStartFailureCodes.join(',') || 'APPLICATION_START_FAILED',
   );
+  // A failed durable boot must be supervisor-visible: every runtime timer is
+  // unref()'d, so without an explicit exit the event loop drains and Node
+  // exits 0, which Restart=on-failure treats as success (F-053).
+  process.exitCode = 1;
+  process.exit(1);
 }
 server.on('error', (error) => {
   console.error('control-room listener failed:', error instanceof Error ? error.message : String(error));

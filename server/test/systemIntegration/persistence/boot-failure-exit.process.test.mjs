@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -36,6 +37,21 @@ function runtimeEnvironment(dataDir, port) {
       ? {}
       : { I00_TEST_EGRESS_REPORT_FILE: process.env.I00_TEST_EGRESS_REPORT_FILE }),
   };
+}
+
+// The bind resolver refuses PORT values below 1024, so the ephemeral `0`
+// convention cannot ride through the environment. The boot under test refuses
+// the listener before any bind, so the port is never used — but it must still
+// be a value the resolver admits.
+function freeResolvablePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, HOST, () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
 }
 
 function waitForExit(child, timeoutMs = 60_000) {
@@ -77,7 +93,7 @@ test('a boot that refuses the listener exits non-zero so the supervisor observes
       ['--import', './server/test/private-egress-tripwire.mjs', 'server/dist/index.js'],
       {
         cwd: path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../..'),
-        env: runtimeEnvironment(dataDir, 0),
+        env: runtimeEnvironment(dataDir, await freeResolvablePort()),
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );

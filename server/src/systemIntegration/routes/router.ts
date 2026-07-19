@@ -29,7 +29,30 @@ function correlationId(idempotencyKey: string): string {
   return `cor_control_${digest}`;
 }
 
-function readError(res: Response): void {
+// A read-model failure must stay opaque on the wire (the body below is part of
+// the HTTP contract) but must never be silent on the box: the bare `catch {}`
+// form of these handlers swallowed 189 precise contract violations in 45 s with
+// zero stderr during a total control-plane outage. Identical consecutive
+// failures per route are rate-bounded so a permanent fault logs once a minute,
+// not once per poll.
+const READ_ERROR_LOG_REPEAT_MS = 60_000;
+const lastReadErrorLog = new Map<string, { message: string; loggedAtMs: number }>();
+
+function readError(res: Response, error: unknown, route: string): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const prior = lastReadErrorLog.get(route);
+  const nowMs = Date.now();
+  if (prior === undefined || prior.message !== message || nowMs - prior.loggedAtMs >= READ_ERROR_LOG_REPEAT_MS) {
+    lastReadErrorLog.set(route, { message, loggedAtMs: nowMs });
+    const code = (error as { code?: unknown } | null)?.code;
+    console.error(JSON.stringify({
+      event: 'system_integration_read_failed',
+      route,
+      code: typeof code === 'string' ? code : null,
+      message,
+      stack: error instanceof Error ? (error.stack ?? null) : null,
+    }));
+  }
   res.status(503).json({ ok: false, code: 'READ_MODEL_UNAVAILABLE', error: 'System integration read model is unavailable.' });
 }
 
@@ -111,12 +134,12 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
 
   router.get('/supervisor', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
-    try { res.json(await options.read.supervisor()); } catch { readError(res); }
+    try { res.json(await options.read.supervisor()); } catch (error) { readError(res, error, '/supervisor'); }
   }));
 
   router.get('/ops/readback', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
-    try { res.json(await options.opsReadback.read()); } catch { readError(res); }
+    try { res.json(await options.opsReadback.read()); } catch (error) { readError(res, error, '/ops/readback'); }
   }));
 
   router.get('/ops/intake-gate', asyncRoute(async (req, res) => {
@@ -124,12 +147,12 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     try {
       const readback = await options.opsReadback.read();
       res.json(evaluateCanonicalOpsIntakeGate(readback, options.clock.nowMs()));
-    } catch { readError(res); }
+    } catch (error) { readError(res, error, '/ops/intake-gate'); }
   }));
 
   router.get('/graph', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
-    try { res.json(await options.read.graph()); } catch { readError(res); }
+    try { res.json(await options.read.graph()); } catch (error) { readError(res, error, '/graph'); }
   }));
 
   router.get('/events', asyncRoute(async (req, res) => {
@@ -144,12 +167,12 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
         ...(parsed.beforeId ? { beforeId: parsed.beforeId } : {}),
         ...(parsed.afterId ? { afterId: parsed.afterId } : {}),
       }));
-    } catch { readError(res); }
+    } catch (error) { readError(res, error, '/events'); }
   }));
 
   router.get('/controls', asyncRoute(async (req, res) => {
     if (rejectReadQuery(req, res)) return;
-    try { res.json(await options.read.controls()); } catch { readError(res); }
+    try { res.json(await options.read.controls()); } catch (error) { readError(res, error, '/controls'); }
   }));
 
   router.get('/attention/focus/:symbol', asyncRoute(async (req, res) => {
@@ -159,7 +182,7 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
       res.status(400).json({ ok: false, code: 'INVALID_FOCUS_SYMBOL', error: 'symbol must be canonical.' });
       return;
     }
-    try { res.json(await options.read.focusPin(symbol)); } catch { readError(res); }
+    try { res.json(await options.read.focusPin(symbol)); } catch (error) { readError(res, error, '/attention/focus'); }
   }));
 
   router.get('/traces/:correlationId', asyncRoute(async (req, res) => {
@@ -176,7 +199,7 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
         return;
       }
       res.json(trace);
-    } catch { readError(res); }
+    } catch (error) { readError(res, error, '/traces'); }
   }));
 
   router.post('/validate-only', asyncRoute(async (req, res) => {

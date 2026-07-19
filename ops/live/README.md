@@ -52,7 +52,7 @@ bench/               benchmark targets template + harness docs
 /var/lib/cosmos/ops/                deploy log, locks, markers, watchdog state
 /var/backups/cosmos/                published backups + drills
 /etc/cosmos/*.env                   installed env files (root-owned, 0640)
-/usr/local/lib/cosmos-ops/bin/      these scripts, OUTSIDE the release path
+/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/  these scripts, OUTSIDE the release path
 ```
 
 ## DATA_DIR authority deployment precondition

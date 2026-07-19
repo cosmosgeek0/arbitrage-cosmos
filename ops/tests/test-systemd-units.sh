@@ -81,7 +81,9 @@ for pair in "cosmos-watchdog.service:watchdog.sh" "cosmos-backup.service:backup.
   assert_eq "$(unit_get "$u" Type)" oneshot "$(basename "$u") oneshot"
   # Part 4 #11: every oneshot must declare an explicit start budget.
   assert_grep '^TimeoutStartSec=' "$u" "$(basename "$u") declares TimeoutStartSec"
-  assert_grep "^ExecStart=/usr/local/lib/cosmos-ops/bin/$script" "$u" "$(basename "$u") external to releases"
+  # F-040: the units must point at the path install-ops-bundle.sh actually
+  # creates (<dest>/accepted-ops-live/bin), still outside the release path.
+  assert_grep "^ExecStart=/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/$script" "$u" "$(basename "$u") external to releases"
   # directives (non-comment lines) must not reference the release path
   ASSERTIONS=$((ASSERTIONS + 1))
   ! grep -v '^#' "$u" | grep -q '/opt/cosmos/current' \

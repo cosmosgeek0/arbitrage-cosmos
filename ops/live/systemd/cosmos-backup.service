@@ -16,7 +16,7 @@ TimeoutStartSec=1800
 User=cosmos
 Group=cosmos
 EnvironmentFile=/etc/cosmos/cosmos-backup.env
-ExecStart=/usr/local/lib/cosmos-ops/bin/backup.sh --env-file /etc/cosmos/cosmos-backup.env
+ExecStart=/usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/backup.sh --env-file /etc/cosmos/cosmos-backup.env
 
 # --- hardening ---
 NoNewPrivileges=yes

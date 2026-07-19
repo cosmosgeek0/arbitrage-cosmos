@@ -1049,6 +1049,7 @@ def _capture_q17_benchmark(
         report,
         repo_root=repo_root,
         require_actual=capture_mode == ACTUAL_CAPTURE_MODE,
+        require_current_runtime=True,
     )
     return report
 
@@ -1150,11 +1151,14 @@ def validate_q17_benchmark(
     *,
     repo_root: Path | None = None,
     require_actual: bool = True,
+    require_current_runtime: bool = True,
 ) -> None:
     """Validate integer-only evidence against current Q16 fixture, lock and golden truth."""
 
     if not isinstance(require_actual, bool):
         raise BenchmarkError("require_actual must be boolean")
+    if not isinstance(require_current_runtime, bool):
+        raise BenchmarkError("require_current_runtime must be boolean")
     resolved_root = Path(__file__).resolve().parents[4] if repo_root is None else repo_root
     if not resolved_root.is_dir() or resolved_root.is_symlink():
         raise BenchmarkError("validator repo_root must be a real directory")
@@ -1540,11 +1544,15 @@ def validate_q17_benchmark(
         "implementation": platform.python_implementation(),
         "version": platform.python_version(),
     }
-    if (
+    if cpu_count is not None and type(cpu_count) is not int:
+        raise BenchmarkError("provenance cpuCount must be an integer when present")
+    # Committed artifacts legitimately record the runtime that measured them; the
+    # digest bindings below keep those records tamper-evident. Equality with the
+    # CURRENT runtime is only a valid demand at measurement time.
+    if require_current_runtime and (
         host_profile != current_host_profile
         or python_profile != current_python_profile
         or cpu_count != os.cpu_count()
-        or (cpu_count is not None and type(cpu_count) is not int)
     ):
         raise BenchmarkError("provenance profiles do not describe the current safe runtime")
     for field in (

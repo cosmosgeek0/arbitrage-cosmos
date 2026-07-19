@@ -102,9 +102,15 @@ def test_committed_q17_directory_is_exact_and_semantically_current(
         *,
         repo_root: Path | None = None,
         require_actual: bool = True,
+        require_current_runtime: bool = True,
     ) -> None:
         observed_roots.append(repo_root)
-        original_validate(value, repo_root=repo_root, require_actual=require_actual)
+        original_validate(
+            value,
+            repo_root=repo_root,
+            require_actual=require_actual,
+            require_current_runtime=require_current_runtime,
+        )
 
     monkeypatch.setattr(generation, "validate_q17_benchmark", validate_benchmark)
     manifest = validate_q17_artifact_directory(REPO_ROOT)
@@ -126,9 +132,15 @@ def test_builder_reconstructs_committed_bytes_without_remeasuring_benchmark(
         *,
         repo_root: Path | None = None,
         require_actual: bool = True,
+        require_current_runtime: bool = True,
     ) -> None:
         observed_roots.append(repo_root)
-        original_validate(value, repo_root=repo_root, require_actual=require_actual)
+        original_validate(
+            value,
+            repo_root=repo_root,
+            require_actual=require_actual,
+            require_current_runtime=require_current_runtime,
+        )
 
     monkeypatch.setattr(generation, "validate_q17_benchmark", validate_benchmark)
     built = build_q17_artifacts(

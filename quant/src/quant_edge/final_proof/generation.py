@@ -108,7 +108,7 @@ FROZEN_FILE_SHA256: Final = FROZEN_Q_LANE_FILES_SHA256
 TRUSTED_SOURCE_SHA256: Final = {
     "cli.py": "56e110936b16370ca1e7cf1e0b9fd6668dce203f910f42d4370e12e0a716812f",
     "final_proof/benchmark.py": (
-        "5979dc6003301ba65df262e0de85f6a85ac9c8233a08fd072fc38b3e561153f4"
+        "8769321e2079b9a8501510c3df5ac53cfb062bdf101ed127ee8aee10ca20aede"
     ),
     "inference/service.py": "763e08352e201ce7173c16a6a72cd413c7feac58ca7e624a3d94dab4eb70fb68",
     "inference/transport.py": ("f3ab8e8a9a6cd29776c153ddd52cc673f627c9dcdd9fa9c01078c55cf8e44769"),
@@ -434,7 +434,10 @@ def build_q17_artifacts(
     current_evidence = project_research_evidence(repo_root)
     if canonical_json_bytes(evidence) != canonical_json_bytes(current_evidence):
         raise Q17ArtifactError("research evidence does not match current repo truth")
-    validate_q17_benchmark(benchmark, repo_root=repo_root)
+    # The committed benchmark records the exact runtime that measured it; its
+    # provenance digests stay bound, so validation must not demand that THIS
+    # machine be that runtime.
+    validate_q17_benchmark(benchmark, repo_root=repo_root, require_current_runtime=False)
     security = validate_security_scope(repo_root, security_scope)
     components = validate_component_manifest(repo_root, component_manifest)
     proof, faults = _split_replay(replay_proof)

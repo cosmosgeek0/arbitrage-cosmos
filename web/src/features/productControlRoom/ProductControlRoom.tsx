@@ -27,10 +27,17 @@ import { SurfaceBindingPanel } from './components/SurfaceBindingPanel';
 import { buildProductControlRoomFixture } from './fixtureBinding';
 import './styles/productControlRoom.css';
 
+const SYSTEM_WALL_CLOCK = () => Date.now();
+// Ages rendered from the donor dashboard are minutes-scale; tick at the
+// provider's 5s poll cadence rather than 1s so the correctness fix does not
+// buy a per-second re-render of every panel.
+const AGE_TICK_INTERVAL_MS = 5_000;
+
 export interface ProductControlRoomProps {
   readonly snapshot: ProductSupervisorEnvelope<SystemSupervisorSnapshot> | null;
   readonly staleSnapshot?: ProductSupervisorEnvelope<SystemSupervisorSnapshot> | null;
   readonly materialEvents?: Readonly<MaterialEventPage> | null;
+  readonly clock?: () => number;
   readonly busy: boolean;
   readonly unavailableReason?: string | null;
   readonly bindingBlocker?: string | null;
@@ -51,6 +58,7 @@ export function ProductControlRoom({
   snapshot,
   staleSnapshot = null,
   materialEvents = null,
+  clock = SYSTEM_WALL_CLOCK,
   busy,
   unavailableReason = null,
   bindingBlocker = null,
@@ -63,9 +71,19 @@ export function ProductControlRoom({
   const [liveTrace, setLiveTrace] = useState<ProductCorrelationTrace | null>(null);
   const [traceBusy, setTraceBusy] = useState(false);
   const [traceError, setTraceError] = useState<string | null>(null);
+  // The dashboard contract takes nowMs as a prop and expects the integrator
+  // to supply a ticking clock. Reading the snapshot's own evaluatedAtMs froze
+  // every rendered age at "0s ago", so a wedged supervisor serving its last
+  // snapshot was indistinguishable from a live one.
+  const [nowMs, setNowMs] = useState(() => clock());
   const traceRequestRef = useRef(0);
 
   useEffect(() => () => { traceRequestRef.current += 1; }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(clock()), AGE_TICK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [clock]);
 
   const readTrace = (correlationId: string) => {
     const exactId = correlationId.trim();
@@ -126,7 +144,7 @@ export function ProductControlRoom({
             <div className="pcr-donor">
               <SystemDashboard
                 snapshot={snapshot.dashboard}
-                nowMs={snapshot.evaluatedAtMs}
+                nowMs={nowMs}
                 readOnlyProjection
                 busy
                 unavailableReason={null}
@@ -195,5 +213,5 @@ export function FixtureProductControlRoom({
     if (!next.lastResult) throw new Error('FIXTURE_RESULT_MISSING');
     return next.lastResult;
   };
-  return <ProductControlRoom snapshot={snapshot} busy={false} allowFixtureControls onPreview={onPreview} onSubmit={onSubmit} />;
+  return <ProductControlRoom snapshot={snapshot} clock={clock} busy={false} allowFixtureControls onPreview={onPreview} onSubmit={onSubmit} />;
 }

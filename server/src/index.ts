@@ -594,13 +594,29 @@ console.log(
 
 let eventRetentionTimer: NodeJS.Timeout | null = null;
 
-function pruneEphemeralLedgerEvents(maxBatches = 1): void {
+function pruneEphemeralLedgerEvents(maxBatches = 1): number {
   try {
     const now = Date.now();
     const batches = Math.max(1, Math.min(5, Math.trunc(maxBatches)));
+    let totalDeleted = 0;
+    let saturated = true;
     for (let batch = 0; batch < batches; batch += 1) {
-      if (ledger.pruneEphemeralEvents(now, 10_000) < 10_000) break;
+      const deleted = ledger.pruneEphemeralEvents(now, 10_000);
+      totalDeleted += deleted;
+      if (deleted < 10_000) {
+        saturated = false;
+        break;
+      }
     }
+    // Deletion pinned at the per-tick ceiling means the producers are
+    // outrunning retention — that is a saturation signal, not a normal tick,
+    // and it must be visible before the disk fills (F-102).
+    if (saturated) {
+      console.error(
+        `ledger retention saturated: deleted ${totalDeleted} rows and hit the per-tick ceiling; producers may be outrunning retention`,
+      );
+    }
+    return totalDeleted;
   } catch (error) {
     // A retention failure is a ledger failure: reporting it only through
     // safeLogEvent writes the error into the thing that just failed, so a
@@ -613,6 +629,7 @@ function pruneEphemeralLedgerEvents(maxBatches = 1): void {
       source: 'ledger.retention',
       message: error instanceof Error ? error.message : String(error),
     });
+    return 0;
   }
 }
 function mode(): string {
@@ -3827,7 +3844,7 @@ function startServerTimers(): void {
   // metrics are never exposed on the application WebSocket.
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
-    pruneEphemeralLedgerEvents(1);
+    pruneEphemeralLedgerEvents(5);
     // Reclaim WAL frames on the same cadence as retention so the -wal file
     // stays bounded even when the process never reaches a clean shutdown
     // checkpoint (Part 4 #10).

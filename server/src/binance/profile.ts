@@ -10,7 +10,6 @@ import {
   assertDataDirCachePathHeld,
   resolveDataDirAuthority,
 } from '../bootstrap/environment.js';
-import { noteCachePersistFailure } from './cachePersistence.js';
 import { deterministicOfflinePublicSourcesEnabled } from './publicSourceMode.js';
 
 const CG = 'https://api.coingecko.com/api/v3';
@@ -533,10 +532,7 @@ function enqueueProfilePersist(): Promise<void> {
         await fs.promises.unlink(temp).catch(() => undefined);
       }
     })
-    .catch((error) => {
-      noteCachePersistFailure('profile', error);
-      return undefined;
-    });
+    .catch(() => undefined);
   return persistTail;
 }
 

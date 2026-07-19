@@ -111,6 +111,11 @@ if (args.profile === 'deploy') {
   );
 }
 
+// F-107: only the I00 wrapper path is authorized against the production
+// root; the marker lets the donor deploy.sh distinguish the two paths
+// mechanically instead of by documentation.
+values.COSMOS_DEPLOY_VIA_I00_WRAPPER = '1';
+
 const output = resolve(args.output);
 if (existsSync(output)) fail('sanitized donor env output already exists');
 mkdirSync(dirname(output), { recursive: true, mode: 0o700 });

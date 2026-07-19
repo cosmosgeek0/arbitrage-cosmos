@@ -50,6 +50,15 @@ done
 load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 
+# F-107: two deployment paths exist with materially different safety
+# properties. Only the I00 wrapper (ops/i00/bin/release-switch.sh), which
+# sanitizes and force-locks the donor env, is authorized against the
+# production root; it sets the marker below. Direct deploy.sh use stays
+# available for staging roots.
+if [ "$COSMOS_ROOT" = /opt/cosmos ] && [ "${COSMOS_DEPLOY_VIA_I00_WRAPPER:-}" != 1 ]; then
+  die_code 1 "direct deploy.sh against the production root /opt/cosmos is refused: use ops/i00/bin/release-switch.sh (the authorized production path)"
+fi
+
 if [ "${I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES+x}" = x ]; then
   die_code 1 "I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES is forbidden for deployment"
 fi

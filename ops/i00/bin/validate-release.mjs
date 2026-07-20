@@ -18,7 +18,7 @@ import {
   assertTrustedBuildPublicKey, expectedBuildAttestation, verifyBuildAttestation,
 } from './verify-build-attestation.mjs';
 
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'f7fa09b546c4726c46f215b06c4f4cde2a1fde49306579a46ecdfb737ac9274f';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'd60fdff586c1af91bfd92727ba49403bc0fd57210c4e76f1f5ee99391ee52581';
 const args = parseArgs(process.argv.slice(2), new Set(['allow-simulation']));
 if (!args.release) fail('--release is required');
 const root = resolve(args.release);

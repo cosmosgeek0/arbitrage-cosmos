@@ -388,8 +388,8 @@
       ],
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/FIRST-HOST-001_CORRECTION_RECEIPT.md",
-        "gitBlob": "beda2a5b38d72874b35e0f239e34c7ad67d3f9f5",
-        "sha256": "b25c79bc0d86aeaa97fc81b565286966e9c037d5918c60d02144c553a063790e"
+        "gitBlob": "c1251f6526f19118f16bba995a377d11473e6f6c",
+        "sha256": "e0d9238b15dbe2aad2e0c4d1bd11c2c0e71c818cc4f5b8d150b4e7f2f56a7b9a"
       },
       "regressionTests": [
         {

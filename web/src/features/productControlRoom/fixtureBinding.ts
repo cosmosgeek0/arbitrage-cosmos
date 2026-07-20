@@ -1,11 +1,14 @@
-import type { SystemComponentSnapshot, SystemSupervisorSnapshot, SystemSupervisorSummaries, SystemTruthLabel } from '../../lib/systemIntegration';
+import type { SystemComponentId, SystemComponentSnapshot, SystemSupervisorSnapshot, SystemSupervisorSummaries, SystemTruthLabel } from '../../lib/systemIntegration';
 import {
   buildFixtureBinding,
   buildFixtureManagedInventory,
+  buildFixtureServiceReadinessDisposition,
   buildSyntheticComponentPresentation,
   type ProductComponentProjection,
   type ProductFixtureScenarioId,
   type ProductFixtureSession,
+  type ProductReadinessPolicyProjection,
+  type ProductServiceReadinessDisposition,
   type ProductSupervisorEnvelope,
 } from '../../lib/productIntegration';
 import { fixtureById } from '../systemDashboard/fixtures';
@@ -25,17 +28,34 @@ const DONOR_FIXTURE: Readonly<Record<ProductFixtureScenarioId, string>> = Object
  */
 export function buildProductControlRoomFixture(
   session: Readonly<ProductFixtureSession>,
-): ProductSupervisorEnvelope<SystemSupervisorSnapshot> {
+): ProductSupervisorEnvelope<ProductFixtureDashboard> {
   const recoveryResolved = session.scenarioId === 'RECOVERY_REQUIRED_ONE_LEG'
     && session.lastResult?.controlId === 'recovery.execute-plan'
     && session.lastResult.status === 'APPLIED';
   const donorId = recoveryResolved ? 'healthy' : DONOR_FIXTURE[session.scenarioId];
   const donor = fixtureById(donorId).build(session.nowMs);
-  const dashboard = alignDonorScenario(forceSyntheticDonorSnapshot(donor, session), session, recoveryResolved);
+  const dashboard = enforceMissingFixtureReadinessPolicy(
+    alignDonorScenario(forceSyntheticDonorSnapshot(donor, session), session, recoveryResolved),
+  );
   const binding = buildFixtureBinding(session, dashboard);
   const components = Object.freeze(dashboard.components.map(projectDonorComponent));
+  const dashboardComponents: Array<SystemComponentSnapshot & {
+    readonly serviceReadiness: Readonly<ProductServiceReadinessDisposition>;
+  }> = dashboard.components.map((component) => Object.freeze({
+    ...component,
+    serviceReadiness: components.find((projected) => projected.componentId === component.componentId)!
+      .serviceReadiness,
+  }));
+  Object.freeze(dashboardComponents);
+  const canonicalDashboard: ProductFixtureDashboard = Object.freeze({
+    ...dashboard,
+    components: dashboardComponents,
+    serviceReadinessPolicy: binding.serviceReadinessPolicy,
+    firstRequiredReadinessBlockerComponentId: binding.firstRequiredReadinessBlockerComponentId,
+  });
   return Object.freeze({
     ...binding,
+    dashboard: canonicalDashboard,
     components,
     managedInventory: buildFixtureManagedInventory(components),
     dependencyEdges: Object.freeze(dashboard.edges.map((edge) => Object.freeze({
@@ -47,6 +67,56 @@ export function buildProductControlRoomFixture(
       reasonCodes: Object.freeze([...edge.reasonCodes]),
     }))),
   });
+}
+
+type ProductFixtureDashboard = SystemSupervisorSnapshot & {
+  readonly serviceReadinessPolicy: Readonly<ProductReadinessPolicyProjection>;
+  readonly firstRequiredReadinessBlockerComponentId: string | null;
+  readonly components: Array<SystemComponentSnapshot & {
+    readonly serviceReadiness: Readonly<ProductServiceReadinessDisposition>;
+  }>;
+};
+
+function enforceMissingFixtureReadinessPolicy(
+  snapshot: SystemSupervisorSnapshot,
+): SystemSupervisorSnapshot {
+  const qComponentId: SystemComponentId = 'q-inference';
+  const rootCauses = snapshot.rootCauses?.some((root) => root.affectedComponentIds.includes(qComponentId))
+    ? snapshot.rootCauses
+    : [...(snapshot.rootCauses ?? []), {
+        componentId: qComponentId,
+        severity: 'HIGH' as const,
+        reasonCodes: ['READINESS_POLICY_MISSING'],
+        failure: null,
+        dependencyPath: [qComponentId],
+        affectedComponentIds: [qComponentId],
+        capitalExposed: false,
+      }];
+  const rootBlockerComponentIds = snapshot.rootBlockerComponentIds.includes('q-inference')
+    ? snapshot.rootBlockerComponentIds
+    : [...snapshot.rootBlockerComponentIds, qComponentId];
+  const operatorAttentionComponentIds = snapshot.operatorAttentionComponentIds.includes('q-inference')
+    ? snapshot.operatorAttentionComponentIds
+    : [...snapshot.operatorAttentionComponentIds, qComponentId];
+  const attentionQueue = snapshot.attentionQueue.some((entry) => entry.componentId === 'q-inference')
+    ? snapshot.attentionQueue
+    : [...snapshot.attentionQueue, {
+        componentId: qComponentId,
+        rootComponentId: qComponentId,
+        severity: 'HIGH' as const,
+        reasonCodes: ['READINESS_POLICY_MISSING'],
+        capitalExposed: false,
+        recommendedOperatorAction: null,
+      }];
+  return {
+    ...snapshot,
+    overallPosture: snapshot.overallPosture === 'READY' ? 'DEGRADED' : snapshot.overallPosture,
+    firstRootBlockerComponentId: snapshot.firstRootBlockerComponentId ?? 'q-inference',
+    rootBlockerComponentIds,
+    operatorAttentionComponentIds,
+    rootCauses,
+    attentionQueue,
+  };
 }
 
 function alignDonorScenario(
@@ -127,11 +197,14 @@ function alignDonorScenario(
 }
 
 function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): ProductComponentProjection {
+  const isQ = component.componentId === 'q-inference';
   const desiredLifecycle = component.desiredState === 'STOPPED'
     ? 'STOPPED'
     : component.desiredState === 'PAUSED' ? 'PAUSED' : 'READY';
   const observedLifecycle = component.readiness;
-  const projectedCapability = component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC';
+  const projectedCapability = isQ
+    ? 'NOT_CONFIGURED'
+    : component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC';
   const restartBlocker = component.blockerCodes.find((code) => (
     code === 'RESTART_REQUIRED' || code.endsWith('_RESTART_REQUIRED')
   ));
@@ -149,8 +222,8 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     desiredLifecycle,
     observedLifecycle,
     capability: projectedCapability,
-    heartbeatAtMs: component.lastReceiveAtMs ?? component.lastSuccessAtMs,
-    lastAdvanceAtMs: component.lastProcessAtMs ?? component.lastSuccessAtMs,
+    heartbeatAtMs: isQ ? null : component.lastReceiveAtMs ?? component.lastSuccessAtMs,
+    lastAdvanceAtMs: isQ ? null : component.lastProcessAtMs ?? component.lastSuccessAtMs,
     sourceAgeMs: component.sourceTimestamp?.sourceTimeMs === null
       ? null
       : component.sourceTimestamp
@@ -188,12 +261,15 @@ function projectDonorComponent(component: Readonly<SystemComponentSnapshot>): Pr
     restartState,
     generation: component.generation,
     restartCount: component.restartCount,
-    blockerCode: restartBlocker ?? component.blockerCodes[0] ?? null,
-    rootCauseComponentId: component.blockerCodes.length ? component.componentId : null,
+    blockerCode: isQ
+      ? 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED'
+      : restartBlocker ?? component.blockerCodes[0] ?? null,
+    rootCauseComponentId: isQ || component.blockerCodes.length ? component.componentId : null,
     capitalRelevance: component.capitalExposed ? 'EXPOSED' : 'NONE',
-    supportedControlIds: Object.freeze([...component.supportedControls]),
+    supportedControlIds: Object.freeze(isQ ? [] : [...component.supportedControls]),
     correlationId: null,
-    truthLabel: 'SYNTHETIC_ONLY',
+    truthLabel: isQ ? 'UNAVAILABLE' : 'SYNTHETIC_ONLY',
+    serviceReadiness: buildFixtureServiceReadinessDisposition(component.componentId),
     canonicalPresentation: buildSyntheticComponentPresentation({
       observedLifecycle,
       capability: projectedCapability,
@@ -221,7 +297,31 @@ function forceSyntheticDonorSnapshot(
     },
     components: snapshot.components.map((component) => ({
       ...component,
-      truthLabel: component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' : 'SYNTHETIC_ONLY',
+      ...(component.componentId === 'q-inference'
+        ? {
+            releaseStatuses: ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'],
+            truthLabel: 'UNAVAILABLE' as const,
+            phase: 'BLOCKED' as const,
+            domainObservedState: 'ABSTAIN_UNKNOWN',
+            sourceLifecycle: null,
+            readiness: 'BLOCKED' as const,
+            authority: 'UNAVAILABLE' as const,
+            completeness: 'UNAVAILABLE' as const,
+            sourceTimestamp: null,
+            freshness: null,
+            lastReceiveAtMs: null,
+            lastProcessAtMs: null,
+            lastSuccessAtMs: null,
+            queue: null,
+            lastFailure: null,
+            blockerCodes: ['Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED'],
+            supportedControls: [],
+            capitalExposed: false,
+            operatorAttentionRequired: true,
+          }
+        : {
+            truthLabel: component.truthLabel === 'DRY_RUN' ? 'DRY_RUN' as const : 'SYNTHETIC_ONLY' as const,
+          }),
     })),
     summaries: forceSyntheticSummaries(snapshot.summaries),
     recentCorrelatedDecisions: snapshot.recentCorrelatedDecisions.map((trace) => ({

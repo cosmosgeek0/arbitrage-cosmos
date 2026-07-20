@@ -71,8 +71,20 @@ test('browser fixture carries the exact server-owned 33-role inventory over all 
     for (const evidence of entry.evidence ?? []) {
       assert.equal(evidence.source, 'PRODUCT_RUNTIME_COMPONENT_PROJECTION');
       assert.equal(snapshot.components[evidence.componentProjectionIndex].componentId, evidence.componentId);
+      assert.deepEqual(
+        evidence.serviceReadiness,
+        snapshot.components[evidence.componentProjectionIndex].serviceReadiness,
+      );
     }
   }
+  assert.deepEqual(snapshot.serviceReadinessPolicy, {
+    status: 'MISSING',
+    accepted: false,
+    reasonCode: 'READINESS_POLICY_MISSING',
+    waiver: null,
+  });
+  assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, 'q-inference');
+  assert.equal(snapshot.ownerView.machineReady, 'NO');
   assert.deepEqual(validateProductSupervisorEnvelope(snapshot), []);
 });
 
@@ -143,6 +155,59 @@ test('browser decoder rejects forged evidence references and contradictory dispo
     componentProjectionIndex: 0,
   }];
   assertHasCode(unavailableDisposition, 'MANAGED_INVENTORY_DISPOSITION_INVALID');
+
+  const readiness = cloneFixture();
+  readiness.managedInventory.entries[2].evidence[0].serviceReadiness = {
+    ...readiness.managedInventory.entries[2].evidence[0].serviceReadiness,
+    basis: 'PUBLIC_DATA',
+  };
+  assertHasCode(readiness, 'MANAGED_INVENTORY_READINESS_MISMATCH');
+});
+
+test('browser decoder fails closed on missing or forged canonical readiness disposition', () => {
+  const missingPolicy = cloneFixture();
+  delete missingPolicy.serviceReadinessPolicy;
+  assertHasCode(missingPolicy, 'SERVICE_READINESS_POLICY_MISSING');
+
+  const missingComponentDisposition = cloneFixture();
+  delete missingComponentDisposition.components[5].serviceReadiness;
+  assertHasCode(missingComponentDisposition, 'COMPONENT_SERVICE_READINESS_MISSING');
+  assertHasCode(missingComponentDisposition, 'MANAGED_INVENTORY_READINESS_MISMATCH');
+
+  const forgedBasis = cloneFixture();
+  forgedBasis.components[5].serviceReadiness.basis = 'PERSISTENCE';
+  assertHasCode(forgedBasis, 'COMPONENT_SERVICE_READINESS_BASIS_INVALID');
+
+  const nonQExclusion = cloneFixture();
+  nonQExclusion.components[0].serviceReadiness.requiredForServiceReadiness = false;
+  nonQExclusion.components[0].serviceReadiness.excludedFromServiceReadiness = true;
+  assertHasCode(nonQExclusion, 'COMPONENT_SERVICE_READINESS_POLICY_MISMATCH');
+
+  const forgedBlocker = cloneFixture();
+  forgedBlocker.firstRequiredReadinessBlockerComponentId = 'public-spot-source';
+  assertHasCode(forgedBlocker, 'FIRST_REQUIRED_READINESS_BLOCKER_MISMATCH');
+
+  const dashboardPolicy = cloneFixture();
+  dashboardPolicy.dashboard.serviceReadinessPolicy = {
+    status: 'WRONG_SCOPE',
+    accepted: false,
+    reasonCode: 'READINESS_POLICY_WRONG_SCOPE',
+    waiver: null,
+  };
+  assertHasCode(dashboardPolicy, 'DASHBOARD_SERVICE_READINESS_POLICY_MISMATCH');
+
+  const dashboardDisposition = cloneFixture();
+  const dashboardQ = dashboardDisposition.dashboard.components
+    .find((component) => component.componentId === 'q-inference');
+  dashboardQ.serviceReadiness = {
+    ...dashboardQ.serviceReadiness,
+    basis: 'PERSISTENCE',
+  };
+  assertHasCode(dashboardDisposition, 'DASHBOARD_COMPONENT_SERVICE_READINESS_MISMATCH:q-inference');
+
+  const dashboardBlocker = cloneFixture();
+  dashboardBlocker.dashboard.firstRequiredReadinessBlockerComponentId = 'public-spot-source';
+  assertHasCode(dashboardBlocker, 'DASHBOARD_REQUIRED_READINESS_BLOCKER_MISMATCH');
 });
 
 test('fixture inventory evidence indexes bind to the final projected component array', () => {
@@ -160,8 +225,9 @@ test('fixture inventory evidence indexes bind to the final projected component a
 
 test('managed inventory prevents a ready envelope from hiding a missing or unknown canonical component', () => {
   const missing = cloneFixture();
-  missing.components = missing.components.filter((component) => component.componentId !== 'q-inference');
-  missing.dashboard.components = missing.dashboard.components.filter((component) => component.componentId !== 'q-inference');
+  missing.ownerView.machineReady = 'YES';
+  missing.components = missing.components.filter((component) => component.componentId !== 'public-spot-source');
+  missing.dashboard.components = missing.dashboard.components.filter((component) => component.componentId !== 'public-spot-source');
   missing.managedInventory = structuredClone(buildFixtureManagedInventory(missing.components));
   assertHasCode(missing, 'MANAGED_INVENTORY_GREEN_WITH_MISSING_COMPONENT');
 

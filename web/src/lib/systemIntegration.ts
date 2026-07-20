@@ -222,6 +222,15 @@ export interface SystemSupervisorSnapshot {
   firstRootBlockerComponentId: SystemComponentId | null;
   rootBlockerComponentIds: SystemComponentId[];
   operatorAttentionComponentIds: SystemComponentId[];
+  rootCauses: Array<{
+    componentId: SystemComponentId;
+    severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+    reasonCodes: string[];
+    failure: { code: string; message: string; recommendedOperatorAction: string } | null;
+    dependencyPath: SystemComponentId[];
+    affectedComponentIds: SystemComponentId[];
+    capitalExposed: boolean;
+  }>;
   attentionQueue: Array<{
     componentId: SystemComponentId;
     rootComponentId: SystemComponentId;

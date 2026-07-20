@@ -75,6 +75,97 @@ export interface ProductComponentPresentation {
   readonly stateLabel: string;
 }
 
+export type ProductServiceReadinessBasis =
+  | 'PUBLIC_DATA'
+  | 'VALIDATE_ONLY_EXECUTOR'
+  | 'PERSISTENCE'
+  | 'MANAGED_LIFECYCLE';
+
+export type ProductReadinessPolicyStatus =
+  | 'VALID'
+  | 'MISSING'
+  | 'MALFORMED'
+  | 'WRONG_MODE'
+  | 'WRONG_SCOPE'
+  | 'EXPIRED';
+
+export interface ProductReadinessWaiverProjection {
+  readonly id: 'READINESS-CLUSTER-001-Q-INFERENCE';
+  readonly scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY';
+  readonly mode: 'VALIDATE_ONLY';
+  readonly reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED';
+  readonly owner: 'cosmosgeek';
+  readonly expiresAt: '2026-10-18T00:00:00Z';
+  readonly status: 'VALID' | 'EXPIRED';
+}
+
+export interface ProductServiceReadinessDisposition {
+  readonly basis: ProductServiceReadinessBasis;
+  readonly expected: boolean;
+  readonly observed: boolean;
+  readonly requiredForServiceReadiness: boolean;
+  readonly excludedFromServiceReadiness: boolean;
+  readonly waiver: Readonly<ProductReadinessWaiverProjection> | null;
+}
+
+export interface ProductReadinessPolicyProjection {
+  readonly status: ProductReadinessPolicyStatus;
+  readonly accepted: boolean;
+  readonly reasonCode:
+    | 'READINESS_POLICY_VALID'
+    | 'READINESS_POLICY_MISSING'
+    | 'READINESS_POLICY_MALFORMED'
+    | 'READINESS_POLICY_WRONG_MODE'
+    | 'READINESS_POLICY_WRONG_SCOPE'
+    | 'READINESS_POLICY_EXPIRED';
+  readonly waiver: Readonly<ProductReadinessWaiverProjection> | null;
+}
+
+export const PRODUCT_SIGNED_Q_READINESS_WAIVER = Object.freeze({
+  id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+  scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+  mode: 'VALIDATE_ONLY',
+  reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+  owner: 'cosmosgeek',
+  expiresAt: '2026-10-18T00:00:00Z',
+  status: 'VALID',
+} as const satisfies ProductReadinessWaiverProjection);
+
+const PRODUCT_COMPONENT_SERVICE_READINESS_BASIS = Object.freeze({
+  'public-spot-source': 'PUBLIC_DATA',
+  'public-usdm-source': 'PUBLIC_DATA',
+  'market-universe': 'PUBLIC_DATA',
+  'intelligence-runtime': 'PUBLIC_DATA',
+  'market-intelligence': 'PUBLIC_DATA',
+  'q-inference': 'PUBLIC_DATA',
+  'basis-engine': 'PUBLIC_DATA',
+  'volume-engine': 'PUBLIC_DATA',
+  'capital-supervision': 'VALIDATE_ONLY_EXECUTOR',
+  'multileg-risk': 'VALIDATE_ONLY_EXECUTOR',
+  'execution-coordinator-validate-only': 'VALIDATE_ONLY_EXECUTOR',
+  reconciliation: 'VALIDATE_ONLY_EXECUTOR',
+  'ledger-persistence': 'PERSISTENCE',
+  'engine-supervisor': 'MANAGED_LIFECYCLE',
+} as const satisfies Readonly<Record<string, ProductServiceReadinessBasis>>);
+
+/** Synthetic-fixture only: a missing waiver never creates an exclusion. */
+export function buildFixtureServiceReadinessDisposition(
+  componentId: string,
+): Readonly<ProductServiceReadinessDisposition> {
+  const basis = PRODUCT_COMPONENT_SERVICE_READINESS_BASIS[
+    componentId as keyof typeof PRODUCT_COMPONENT_SERVICE_READINESS_BASIS
+  ];
+  if (basis === undefined) throw new TypeError(`fixture component ${componentId} has no canonical readiness basis`);
+  return Object.freeze({
+    basis,
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: null,
+  });
+}
+
 export type ProductSafeMode = 'READ_ONLY' | 'ADVISORY' | 'VALIDATE_ONLY';
 export type ControlWiringState =
   | 'WIRED_LIVE'
@@ -255,6 +346,7 @@ export interface ProductComponentProjection {
   readonly supportedControlIds: readonly string[];
   readonly correlationId: string | null;
   readonly truthLabel: ProductTruthLabel;
+  readonly serviceReadiness: Readonly<ProductServiceReadinessDisposition>;
   readonly canonicalPresentation: Readonly<ProductComponentPresentation>;
 }
 
@@ -288,6 +380,7 @@ export interface ProductManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
+  readonly serviceReadiness: Readonly<ProductServiceReadinessDisposition>;
 }
 
 export interface ProductManagedInventoryOwnerEvidenceRef {
@@ -669,6 +762,8 @@ export interface ProductSupervisorEnvelope<TDashboard = unknown> {
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly bootReleaseReadback: Readonly<ProductBootReleaseReadback>;
   readonly ownerView: Readonly<FiveSecondOwnerView>;
+  readonly serviceReadinessPolicy: Readonly<ProductReadinessPolicyProjection>;
+  readonly firstRequiredReadinessBlockerComponentId: string | null;
   readonly canonicalCockpit: Readonly<ProductCanonicalCockpitTruth>;
   readonly dashboard: TDashboard;
   readonly components: readonly Readonly<ProductComponentProjection>[];
@@ -1070,6 +1165,7 @@ export function buildFixtureManagedInventory(
         source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION' as const,
         componentId: matches[0]!.component.componentId,
         componentProjectionIndex: matches[0]!.index,
+        serviceReadiness: matches[0]!.component.serviceReadiness,
       }))),
       reasonCode: null,
     });
@@ -1216,6 +1312,13 @@ export function buildFixtureBinding<TDashboard>(
       reasonCodes: Object.freeze(['SYNTHETIC_ONLY']),
     }),
     ownerView,
+    serviceReadinessPolicy: Object.freeze({
+      status: 'MISSING',
+      accepted: false,
+      reasonCode: 'READINESS_POLICY_MISSING',
+      waiver: null,
+    }),
+    firstRequiredReadinessBlockerComponentId: 'q-inference',
     canonicalCockpit: Object.freeze({
       source: 'SYNTHETIC_FIXTURE',
       marketFeedReadiness: Object.freeze({
@@ -1289,8 +1392,8 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
   if (session.scenarioId === 'VALIDATE_ONLY_SLICE_RUNNING') {
     return {
       summary: 'Validate-only chain advances without exchange mutation',
-      processAlive: 'YES', machineReady: 'YES', exposedCapital: '0.00 USDT', recovery: 'NONE',
-      freshness: `${2 + tickPhase}s`, blocker: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+      processAlive: 'YES', machineReady: 'NO', exposedCapital: '0.00 USDT', recovery: 'NONE',
+      freshness: `${2 + tickPhase}s`, blocker: 'READINESS_POLICY_MISSING:q-inference',
       opportunity: 'fixture-opportunity-basis-01', ticket: `fixture-ticket-${tickPhase + 1}`, position: null,
       materialChange: ['Evidence sealed', 'Capital capped fixture', 'Risk validated fixture', 'Reconciliation converged fixture'][tickPhase],
       modelRevision: 'fixture-model-validate', eventComponent: 'execution-coordinator-validate-only', eventKind: `validate-stage-${tickPhase + 1}`,
@@ -1303,8 +1406,8 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
     if (recoveryResolved) {
       return {
         summary: 'Synthetic one-leg recovery completed and exposure is clear',
-        processAlive: 'YES', machineReady: 'YES', exposedCapital: '0.00 USDT SYNTHETIC', recovery: 'NONE',
-        freshness: `${1 + tickPhase}s`, blocker: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+        processAlive: 'YES', machineReady: 'NO', exposedCapital: '0.00 USDT SYNTHETIC', recovery: 'NONE',
+        freshness: `${1 + tickPhase}s`, blocker: 'READINESS_POLICY_MISSING:q-inference',
         opportunity: null, ticket: 'fixture-ticket-recovery-01', position: null,
         materialChange: 'Synthetic recovery fixture resolved',
         modelRevision: 'fixture-model-recovery', eventComponent: 'reconciliation', eventKind: 'recovery-resolved',
@@ -1337,8 +1440,8 @@ function fixtureScenarioFacts(session: Readonly<ProductFixtureSession>): Fixture
   }
   return {
     summary: 'Healthy observation fixture with no capital authority',
-    processAlive: 'YES', machineReady: 'YES', exposedCapital: '0.00 USDT', recovery: 'NONE',
-    freshness: `${1 + tickPhase}s`, blocker: null,
+    processAlive: 'YES', machineReady: 'NO', exposedCapital: '0.00 USDT', recovery: 'NONE',
+    freshness: `${1 + tickPhase}s`, blocker: 'READINESS_POLICY_MISSING:q-inference',
     opportunity: null, ticket: null, position: null,
     materialChange: ['Supervisor fixture advanced', 'Sources fixture advanced', 'Engines fixture advanced', 'Ledger fixture advanced'][tickPhase],
     modelRevision: 'fixture-model-observe', eventComponent: 'machine-supervisor', eventKind: 'fixture-heartbeat',
@@ -1393,6 +1496,7 @@ function baseFixtureComponents(nowMs: number, scenarioId: ProductFixtureScenario
       supportedControlIds: ['component.restart'],
       correlationId: null,
       truthLabel: 'SYNTHETIC_ONLY',
+      serviceReadiness: buildFixtureServiceReadinessDisposition(componentId),
       canonicalPresentation: buildSyntheticComponentPresentation({
         observedLifecycle: 'READY',
         capability: projectedCapability,
@@ -1824,6 +1928,299 @@ export function validateProductCorrelationTrace(value: unknown, expectedCorrelat
   return Object.freeze(Array.from(new Set(errors)));
 }
 
+function exactProductReadinessWaiver(
+  value: unknown,
+  status: 'VALID' | 'EXPIRED',
+): value is Readonly<ProductReadinessWaiverProjection> {
+  return isRecord(value)
+    && exactRecordKeys(value, ['id', 'scope', 'mode', 'reason', 'owner', 'expiresAt', 'status'])
+    && value.id === PRODUCT_SIGNED_Q_READINESS_WAIVER.id
+    && value.scope === PRODUCT_SIGNED_Q_READINESS_WAIVER.scope
+    && value.mode === PRODUCT_SIGNED_Q_READINESS_WAIVER.mode
+    && value.reason === PRODUCT_SIGNED_Q_READINESS_WAIVER.reason
+    && value.owner === PRODUCT_SIGNED_Q_READINESS_WAIVER.owner
+    && value.expiresAt === PRODUCT_SIGNED_Q_READINESS_WAIVER.expiresAt
+    && value.status === status;
+}
+
+function validateProductReadinessPolicy(policyValue: unknown): readonly string[] {
+  if (!isRecord(policyValue)) return Object.freeze(['SERVICE_READINESS_POLICY_MISSING']);
+  const errors: string[] = [];
+  if (!exactRecordKeys(policyValue, ['status', 'accepted', 'reasonCode', 'waiver'])) {
+    errors.push('SERVICE_READINESS_POLICY_INVALID');
+  }
+  const statuses: readonly ProductReadinessPolicyStatus[] = [
+    'VALID', 'MISSING', 'MALFORMED', 'WRONG_MODE', 'WRONG_SCOPE', 'EXPIRED',
+  ];
+  if (!statuses.includes(policyValue.status as ProductReadinessPolicyStatus)) {
+    errors.push('SERVICE_READINESS_POLICY_STATUS_INVALID');
+    return Object.freeze(Array.from(new Set(errors)));
+  }
+  const status = policyValue.status as ProductReadinessPolicyStatus;
+  if (policyValue.accepted !== (status === 'VALID')) {
+    errors.push('SERVICE_READINESS_POLICY_ACCEPTANCE_INVALID');
+  }
+  if (policyValue.reasonCode !== `READINESS_POLICY_${status}`) {
+    errors.push('SERVICE_READINESS_POLICY_REASON_INVALID');
+  }
+  if (status === 'VALID') {
+    if (!exactProductReadinessWaiver(policyValue.waiver, 'VALID')) {
+      errors.push('SERVICE_READINESS_POLICY_WAIVER_INVALID');
+    }
+  } else if (status === 'EXPIRED') {
+    if (!exactProductReadinessWaiver(policyValue.waiver, 'EXPIRED')) {
+      errors.push('SERVICE_READINESS_POLICY_WAIVER_INVALID');
+    }
+  } else if (policyValue.waiver !== null) {
+    errors.push('SERVICE_READINESS_POLICY_WAIVER_INVALID');
+  }
+  return Object.freeze(Array.from(new Set(errors)));
+}
+
+function sameProductReadinessWaiver(left: unknown, right: unknown): boolean {
+  if (left === null || right === null) return left === right;
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const fields = ['id', 'scope', 'mode', 'reason', 'owner', 'expiresAt', 'status'];
+  return exactRecordKeys(left, fields)
+    && exactRecordKeys(right, fields)
+    && fields.every((field) => left[field] === right[field]);
+}
+
+function sameProductReadinessPolicy(left: unknown, right: unknown): boolean {
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const fields = ['status', 'accepted', 'reasonCode'] as const;
+  const exactFields = [...fields, 'waiver'];
+  return exactRecordKeys(left, exactFields)
+    && exactRecordKeys(right, exactFields)
+    && fields.every((field) => left[field] === right[field])
+    && sameProductReadinessWaiver(left.waiver, right.waiver);
+}
+
+function sameServiceReadinessProjection(left: unknown, right: unknown): boolean {
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const fields = [
+    'basis',
+    'expected',
+    'observed',
+    'requiredForServiceReadiness',
+    'excludedFromServiceReadiness',
+  ] as const;
+  const exactFields = [...fields, 'waiver'];
+  return exactRecordKeys(left, exactFields)
+    && exactRecordKeys(right, exactFields)
+    && fields.every((field) => left[field] === right[field])
+    && sameProductReadinessWaiver(left.waiver, right.waiver);
+}
+
+const EXACT_Q_RELEASE_STATUSES = Object.freeze([
+  'BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED',
+] as const);
+const EXACT_Q_BLOCKER_CODES = Object.freeze([
+  'FRESHNESS_NOT_REPORTED',
+  'Q_CLIENT_NOT_CONFIGURED',
+  'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+  'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+  'Q_TRANSPORT_NOT_CONFIGURED',
+  'RELEASE_NOT_AVAILABLE',
+  'TRUTH_UNAVAILABLE',
+] as const);
+
+function exactStringSet(value: unknown, expected: readonly string[]): boolean {
+  return Array.isArray(value)
+    && value.length === expected.length
+    && value.every((entry) => typeof entry === 'string' && expected.includes(entry))
+    && expected.every((entry) => value.includes(entry));
+}
+
+function productQIsCanonicalBlocked(value: unknown): boolean {
+  return isRecord(value)
+    && value.owner === 'Q_INFERENCE:quant/src/quant_edge/inference'
+    && value.desiredLifecycle === 'READY'
+    && value.observedLifecycle === 'BLOCKED'
+    && value.capability === 'NOT_CONFIGURED'
+    && value.truthLabel === 'UNAVAILABLE'
+    && value.heartbeatAtMs === null
+    && value.lastAdvanceAtMs === null
+    && value.sourceAgeMs === null
+    && value.eventAgeMs === null
+    && value.processingAgeMs === null
+    && value.processingLagMs === null
+    && value.queueDepth === null
+    && value.queueCapacity === null
+    && value.droppedCount === null
+    && value.freshnessState === 'UNAVAILABLE'
+    && value.dataQualityState === 'UNAVAILABLE'
+    && value.dataQualityInvalidCount === null
+    && value.dataQualityDuplicateCount === null
+    && value.dataQualityOutOfOrderCount === null
+    && value.dataQualitySequenceGapCount === null
+    && value.dataQualityObservedAtMs === null
+    && value.retryState === 'UNAVAILABLE'
+    && value.retryAttempt === null
+    && value.retryCeiling === null
+    && value.backoffMs === null
+    && value.retryAtMs === null
+    && value.cooldownUntilMs === null
+    && exactStringSet(value.dependencyIds, ['market-intelligence'])
+    && value.checkpointState === 'UNAVAILABLE'
+    && value.checkpointRevision === null
+    && value.checkpointPersistedAtMs === null
+    && value.restartState === 'UNKNOWN'
+    && value.generation === 0
+    && value.restartCount === 0
+    && value.blockerCode === 'FRESHNESS_NOT_REPORTED'
+    && typeof value.rootCauseComponentId === 'string'
+    && value.rootCauseComponentId.length > 0
+    && value.capitalRelevance === 'NONE'
+    && Array.isArray(value.supportedControlIds)
+    && value.supportedControlIds.length === 0;
+}
+
+function validateProductComponentServiceReadiness(
+  componentId: string,
+  componentValue: unknown,
+  readinessValue: unknown,
+  policyValue: unknown,
+): readonly string[] {
+  if (!isRecord(readinessValue)) return Object.freeze(['COMPONENT_SERVICE_READINESS_MISSING']);
+  const errors: string[] = [];
+  if (!exactRecordKeys(readinessValue, [
+    'basis',
+    'expected',
+    'observed',
+    'requiredForServiceReadiness',
+    'excludedFromServiceReadiness',
+    'waiver',
+  ])) errors.push('COMPONENT_SERVICE_READINESS_INVALID');
+  const expectedBasis = PRODUCT_COMPONENT_SERVICE_READINESS_BASIS[
+    componentId as keyof typeof PRODUCT_COMPONENT_SERVICE_READINESS_BASIS
+  ];
+  if (expectedBasis === undefined || readinessValue.basis !== expectedBasis) {
+    errors.push('COMPONENT_SERVICE_READINESS_BASIS_INVALID');
+  }
+  if (readinessValue.expected !== true || readinessValue.observed !== true) {
+    errors.push('COMPONENT_SERVICE_READINESS_EVIDENCE_INVALID');
+  }
+  if (typeof readinessValue.requiredForServiceReadiness !== 'boolean'
+    || typeof readinessValue.excludedFromServiceReadiness !== 'boolean'
+    || readinessValue.requiredForServiceReadiness === readinessValue.excludedFromServiceReadiness) {
+    errors.push('COMPONENT_SERVICE_READINESS_DISPOSITION_INVALID');
+  }
+
+  if (componentId !== 'q-inference') {
+    if (readinessValue.requiredForServiceReadiness !== true
+      || readinessValue.excludedFromServiceReadiness !== false
+      || readinessValue.waiver !== null) {
+      errors.push('COMPONENT_SERVICE_READINESS_POLICY_MISMATCH');
+    }
+    return Object.freeze(Array.from(new Set(errors)));
+  }
+
+  const policy = isRecord(policyValue) ? policyValue : null;
+  const status = policy?.status ?? null;
+  if (status === 'VALID') {
+    const excluded = readinessValue.requiredForServiceReadiness === false
+      && readinessValue.excludedFromServiceReadiness === true;
+    const requiredFailClosed = readinessValue.requiredForServiceReadiness === true
+      && readinessValue.excludedFromServiceReadiness === false;
+    if ((!excluded && !requiredFailClosed)
+      || !exactProductReadinessWaiver(readinessValue.waiver, 'VALID')
+      || !sameProductReadinessWaiver(readinessValue.waiver, policy?.waiver)) {
+      errors.push('COMPONENT_SERVICE_READINESS_POLICY_MISMATCH');
+    }
+  } else if (status === 'EXPIRED') {
+    if (readinessValue.requiredForServiceReadiness !== true
+      || readinessValue.excludedFromServiceReadiness !== false
+      || !exactProductReadinessWaiver(readinessValue.waiver, 'EXPIRED')
+      || !sameProductReadinessWaiver(readinessValue.waiver, policy?.waiver)) {
+      errors.push('COMPONENT_SERVICE_READINESS_POLICY_MISMATCH');
+    }
+  } else if (readinessValue.requiredForServiceReadiness !== true
+    || readinessValue.excludedFromServiceReadiness !== false
+    || readinessValue.waiver !== null) {
+    errors.push('COMPONENT_SERVICE_READINESS_POLICY_MISMATCH');
+  }
+  const qExcluded = readinessValue.excludedFromServiceReadiness === true;
+  const qLifecycleValid = isRecord(componentValue) && (qExcluded
+    ? productQIsCanonicalBlocked(componentValue)
+    : ['FAILED', 'BLOCKED', 'DEGRADED'].includes(String(componentValue.observedLifecycle))
+      && ['NOT_CONFIGURED', 'UNAVAILABLE', 'UNKNOWN'].includes(String(componentValue.capability))
+      && ['NOT_CONFIGURED', 'UNAVAILABLE', 'BLOCKED', 'UNKNOWN'].includes(String(componentValue.truthLabel)));
+  if (!qLifecycleValid
+    || !isRecord(componentValue)
+    || componentValue.capitalRelevance !== 'NONE'
+    || !Array.isArray(componentValue.supportedControlIds)
+    || componentValue.supportedControlIds.length !== 0
+    || !isRecord(componentValue.canonicalPresentation)
+    || componentValue.canonicalPresentation.status === 'operational'
+    || componentValue.canonicalPresentation.tone === 'ok') {
+    errors.push('Q_COMPONENT_NON_GREEN_TRUTH_INVALID');
+  }
+  return Object.freeze(Array.from(new Set(errors)));
+}
+
+function dashboardQIsCanonicalBlocked(value: unknown): boolean {
+  return isRecord(value)
+    && value.componentId === 'q-inference'
+    && value.owner === 'Q_INFERENCE'
+    && value.desiredState === 'RUNNING'
+    && value.phase === 'BLOCKED'
+    && value.domainObservedState === 'ABSTAIN_UNKNOWN'
+    && value.readiness === 'BLOCKED'
+    && value.truthLabel === 'UNAVAILABLE'
+    && value.authority === 'UNAVAILABLE'
+    && value.completeness === 'UNAVAILABLE'
+    && value.sourceLifecycle === null
+    && value.sourceTimestamp === null
+    && value.freshness === null
+    && value.lastReceiveAtMs === null
+    && value.lastProcessAtMs === null
+    && value.lastSuccessAtMs === null
+    && value.processingLagMs === null
+    && isRecord(value.retry)
+    && value.retry.state === 'UNAVAILABLE'
+    && value.retry.attempt === null
+    && value.retry.ceiling === null
+    && value.retry.delayMs === null
+    && value.retry.retryAtMs === null
+    && value.retry.cooldownUntilMs === null
+    && isRecord(value.dataQuality)
+    && value.dataQuality.state === 'UNAVAILABLE'
+    && value.dataQuality.invalidCount === null
+    && value.dataQuality.duplicateCount === null
+    && value.dataQuality.outOfOrderCount === null
+    && value.dataQuality.sequenceGapCount === null
+    && value.dataQuality.observedAtMs === null
+    && isRecord(value.checkpoint)
+    && value.checkpoint.state === 'UNAVAILABLE'
+    && value.checkpoint.revision === null
+    && value.checkpoint.persistedAtMs === null
+    && value.queue === null
+    && value.lastFailure === null
+    && exactStringSet(value.releaseStatuses, EXACT_Q_RELEASE_STATUSES)
+    && exactStringSet(value.blockerCodes, EXACT_Q_BLOCKER_CODES)
+    && exactStringSet(value.dependencies, ['market-intelligence'])
+    && value.generation === 0
+    && value.restartCount === 0
+    && value.capitalExposed === false
+    && Array.isArray(value.supportedControls)
+    && value.supportedControls.length === 0
+    && value.operatorAttentionRequired === true;
+}
+
+function dashboardQIsFailClosed(value: unknown): boolean {
+  return isRecord(value)
+    && value.componentId === 'q-inference'
+    && ['FAILED', 'BLOCKED', 'DEGRADED'].includes(String(value.phase))
+    && ['FAILED', 'BLOCKED', 'DEGRADED'].includes(String(value.readiness))
+    && ['UNAVAILABLE', 'UNKNOWN'].includes(String(value.truthLabel))
+    && value.authority === 'UNAVAILABLE'
+    && ['UNAVAILABLE', 'PARTIAL'].includes(String(value.completeness))
+    && value.capitalExposed === false
+    && Array.isArray(value.supportedControls)
+    && value.supportedControls.length === 0;
+}
+
 export function validateProductSupervisorEnvelope(value: unknown): readonly string[] {
   const errors: string[] = [];
   if (!isRecord(value)) return Object.freeze(['PRODUCT_SUPERVISOR_NOT_OBJECT']);
@@ -1831,6 +2228,7 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
   if (typeof value.revision !== 'string' || value.revision.length === 0) errors.push('PRODUCT_REVISION_MISSING');
   if (typeof value.digest !== 'string' || value.digest.length === 0 || value.digest.length > 500) errors.push('PRODUCT_DIGEST_INVALID');
   if (typeof value.evaluatedAtMs !== 'number' || !Number.isFinite(value.evaluatedAtMs)) errors.push('PRODUCT_EVALUATED_AT_INVALID');
+  errors.push(...validateProductReadinessPolicy(value.serviceReadinessPolicy));
   if (!isProductTruthLabel(value.truthLabel)) errors.push('PRODUCT_TRUTH_LABEL_INVALID');
   if (typeof value.persistentSyntheticLabel !== 'boolean') errors.push('SYNTHETIC_LABEL_INVALID');
   errors.push(...validateCanonicalOpsEnvelope(value.opsReadback, value.opsIntakeInterlock, value.evaluatedAtMs));
@@ -1858,6 +2256,12 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       if (!PRODUCT_CAPABILITIES.has(String(component.capability))) errors.push('COMPONENT_FIELD_INVALID:capability');
       if (!['NONE', 'POTENTIAL', 'EXPOSED', 'RECOVERY'].includes(String(component.capitalRelevance))) errors.push('COMPONENT_FIELD_INVALID:capitalRelevance');
       if (!isProductTruthLabel(component.truthLabel)) errors.push('COMPONENT_FIELD_INVALID:truthLabel');
+      errors.push(...validateProductComponentServiceReadiness(
+        component.componentId,
+        component,
+        component.serviceReadiness,
+        value.serviceReadinessPolicy,
+      ));
       const presentation = component.canonicalPresentation;
       if (!isRecord(presentation)
         || !['operational', 'degraded', 'outage', 'planned'].includes(String(presentation.status))
@@ -1962,6 +2366,20 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       }
     }
     if (isRecord(value.dashboard) && Array.isArray(value.dashboard.components)) {
+      if (validateProductReadinessPolicy(value.dashboard.serviceReadinessPolicy).length > 0) {
+        errors.push('DASHBOARD_SERVICE_READINESS_POLICY_INVALID');
+      }
+      if (!sameProductReadinessPolicy(
+        value.dashboard.serviceReadinessPolicy,
+        value.serviceReadinessPolicy,
+      )) {
+        errors.push('DASHBOARD_SERVICE_READINESS_POLICY_MISMATCH');
+      }
+      if (!isStringOrNull(value.dashboard.firstRequiredReadinessBlockerComponentId)
+        || value.dashboard.firstRequiredReadinessBlockerComponentId
+          !== value.firstRequiredReadinessBlockerComponentId) {
+        errors.push('DASHBOARD_REQUIRED_READINESS_BLOCKER_MISMATCH');
+      }
       const dashboardIds = value.dashboard.components
         .filter(isRecord)
         .map((component) => component.componentId)
@@ -1971,9 +2389,100 @@ export function validateProductSupervisorEnvelope(value: unknown): readonly stri
       if (dashboardIds.length !== canonicalIds.length || dashboardIds.some((id, index) => id !== canonicalIds[index])) {
         errors.push('DASHBOARD_COMPONENT_GRAPH_MISMATCH');
       }
+      for (const dashboardComponent of value.dashboard.components) {
+        if (!isRecord(dashboardComponent) || typeof dashboardComponent.componentId !== 'string') continue;
+        const productComponent = value.components.find((component) => isRecord(component)
+          && component.componentId === dashboardComponent.componentId);
+        if (!isRecord(productComponent)
+          || !sameServiceReadinessProjection(
+            dashboardComponent.serviceReadiness,
+            productComponent.serviceReadiness,
+          )) {
+          errors.push(`DASHBOARD_COMPONENT_SERVICE_READINESS_MISMATCH:${dashboardComponent.componentId}`);
+        }
+        if (dashboardComponent.componentId === 'q-inference') {
+          const qExcluded = isRecord(dashboardComponent.serviceReadiness)
+            && dashboardComponent.serviceReadiness.excludedFromServiceReadiness === true;
+          if (!(qExcluded
+            ? dashboardQIsCanonicalBlocked(dashboardComponent)
+            : dashboardQIsFailClosed(dashboardComponent))) {
+            errors.push('DASHBOARD_Q_NON_GREEN_TRUTH_INVALID');
+          }
+          const qInAttentionIds = Array.isArray(value.dashboard.operatorAttentionComponentIds)
+            && value.dashboard.operatorAttentionComponentIds.includes('q-inference');
+          const qRetainedRoot = Array.isArray(value.dashboard.rootCauses)
+            ? value.dashboard.rootCauses.find((root) => isRecord(root)
+              && typeof root.componentId === 'string'
+              && Array.isArray(root.affectedComponentIds)
+              && root.affectedComponentIds.includes('q-inference'))
+            : undefined;
+          const retainedRootId = isRecord(qRetainedRoot)
+            && typeof qRetainedRoot.componentId === 'string'
+            ? qRetainedRoot.componentId
+            : null;
+          const qRootIdRetained = retainedRootId !== null
+            && Array.isArray(value.dashboard.rootBlockerComponentIds)
+            && value.dashboard.rootBlockerComponentIds.includes(retainedRootId);
+          const qAttentionRetained = Array.isArray(value.dashboard.attentionQueue)
+            && value.dashboard.attentionQueue.some((entry) => isRecord(entry)
+              && entry.componentId === 'q-inference'
+              && entry.rootComponentId === retainedRootId);
+          const productRootMatches = isRecord(productComponent)
+            && productComponent.rootCauseComponentId === retainedRootId;
+          if (!qInAttentionIds || !qRootIdRetained || !qAttentionRetained || !productRootMatches) {
+            errors.push('DASHBOARD_Q_FULL_EVIDENCE_MISSING');
+          }
+        }
+      }
       if (value.truthLabel === 'SYNTHETIC_ONLY' && value.dashboard.components.some((component) => isRecord(component) && component.truthLabel === 'LIVE_PUBLIC')) {
         errors.push('SYNTHETIC_DASHBOARD_CONTAINS_LIVE_TRUTH');
       }
+    }
+  }
+  if (!isStringOrNull(value.firstRequiredReadinessBlockerComponentId)) {
+    errors.push('FIRST_REQUIRED_READINESS_BLOCKER_INVALID');
+  } else if (typeof value.firstRequiredReadinessBlockerComponentId === 'string') {
+    const requiredBlocker = Array.isArray(value.components)
+      ? value.components.find((component) => isRecord(component)
+        && component.componentId === value.firstRequiredReadinessBlockerComponentId)
+      : undefined;
+    if (!isRecord(requiredBlocker)
+      || !isRecord(requiredBlocker.serviceReadiness)
+      || requiredBlocker.serviceReadiness.requiredForServiceReadiness !== true
+      || requiredBlocker.serviceReadiness.excludedFromServiceReadiness !== false
+      || requiredBlocker.observedLifecycle === 'READY') {
+      errors.push('FIRST_REQUIRED_READINESS_BLOCKER_MISMATCH');
+    }
+  }
+  if (isRecord(value.ownerView)
+    && value.ownerView.machineReady === 'YES'
+    && value.firstRequiredReadinessBlockerComponentId !== null) {
+    errors.push('FIRST_REQUIRED_READINESS_BLOCKER_MISMATCH');
+  }
+  const qComponent = Array.isArray(value.components)
+    ? value.components.find((component) => isRecord(component) && component.componentId === 'q-inference')
+    : undefined;
+  const syntheticFixture = value.persistentSyntheticLabel === true
+    && value.truthLabel === 'SYNTHETIC_ONLY'
+    && isRecord(value.canonicalCockpit)
+    && value.canonicalCockpit.source === 'SYNTHETIC_FIXTURE';
+  const machineReady = isRecord(value.ownerView) && value.ownerView.machineReady === 'YES';
+  const policyAccepted = isRecord(value.serviceReadinessPolicy)
+    && value.serviceReadinessPolicy.status === 'VALID'
+    && value.serviceReadinessPolicy.accepted === true;
+  if (machineReady && !syntheticFixture && !policyAccepted) {
+    errors.push('OWNER_MACHINE_READY_WITHOUT_VALID_READINESS_POLICY');
+  }
+  if (isRecord(qComponent) && isRecord(qComponent.serviceReadiness)) {
+    const qRequired = qComponent.serviceReadiness.requiredForServiceReadiness === true
+      && qComponent.serviceReadiness.excludedFromServiceReadiness === false;
+    if (!syntheticFixture && qRequired && (
+      machineReady || value.firstRequiredReadinessBlockerComponentId === null
+    )) errors.push('Q_REQUIRED_READINESS_RELATION_INVALID');
+    if (!syntheticFixture
+      && machineReady
+      && qComponent.serviceReadiness.excludedFromServiceReadiness !== true) {
+      errors.push('Q_REQUIRED_READINESS_RELATION_INVALID');
     }
   }
   errors.push(...validateCanonicalCockpitTruth(value.canonicalCockpit, value.components, value.ownerView));
@@ -2477,6 +2986,11 @@ function validateProductManagedInventory(
         const projected = components[Number(evidence.componentProjectionIndex)];
         if (!isRecord(projected) || projected.componentId !== expectedComponentId) {
           errors.push('MANAGED_INVENTORY_EVIDENCE_INDEX_INVALID');
+        } else if (!sameServiceReadinessProjection(
+          evidence.serviceReadiness,
+          projected.serviceReadiness,
+        )) {
+          errors.push('MANAGED_INVENTORY_READINESS_MISMATCH');
         }
       }
     }

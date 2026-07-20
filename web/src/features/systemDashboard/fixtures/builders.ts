@@ -309,6 +309,7 @@ export interface SnapshotOptions {
   summaries?: DeepPartialSummaries;
   firstRootBlockerComponentId?: SystemComponentId | null;
   rootBlockerComponentIds?: SystemComponentId[];
+  rootCauses?: SystemSupervisorSnapshot['rootCauses'];
   attentionQueue?: SystemSupervisorSnapshot['attentionQueue'];
   recentCorrelatedDecisions?: SystemTraceDecision[];
 }
@@ -339,6 +340,7 @@ export function makeSnapshot(options: SnapshotOptions): SystemSupervisorSnapshot
     firstRootBlockerComponentId: options.firstRootBlockerComponentId ?? null,
     rootBlockerComponentIds: options.rootBlockerComponentIds ?? [],
     operatorAttentionComponentIds: attention.map((entry) => entry.componentId),
+    rootCauses: options.rootCauses ?? [],
     attentionQueue: attention,
     summaries: makeSummaries(options.now, options.summaries),
     recentCorrelatedDecisions: options.recentCorrelatedDecisions ?? [],

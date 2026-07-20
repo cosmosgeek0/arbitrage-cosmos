@@ -21,6 +21,7 @@ import { SystemDashboard } from '../systemDashboard/SystemDashboard';
 import { ControlRegistryPanel } from './components/ControlRegistryPanel';
 import { ComponentAuthorityPanel } from './components/ComponentAuthorityPanel';
 import { IncidentCursorPanel } from './components/IncidentCursorPanel';
+import { ManagedInventoryPanel } from './components/ManagedInventoryPanel';
 import { OwnerViewPanel } from './components/OwnerViewPanel';
 import { ProductTracePanel } from './components/ProductTracePanel';
 import { SurfaceBindingPanel } from './components/SurfaceBindingPanel';
@@ -150,7 +151,13 @@ export function ProductControlRoom({
                 unavailableReason={null}
               />
             </div>
-            <ComponentAuthorityPanel components={snapshot.components} edges={snapshot.dependencyEdges} onTrace={readTrace} />
+            <ComponentAuthorityPanel
+              components={snapshot.components}
+              edges={snapshot.dependencyEdges}
+              serviceReadinessPolicy={snapshot.serviceReadinessPolicy}
+              onTrace={readTrace}
+            />
+            <ManagedInventoryPanel inventory={snapshot.managedInventory} />
             <IncidentCursorPanel
               availability={snapshot.incidentAvailability}
               incidents={snapshot.incidents}

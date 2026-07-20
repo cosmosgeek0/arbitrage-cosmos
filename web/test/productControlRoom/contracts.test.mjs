@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
   MATERIAL_CURSOR_SCHEMA,
+  PRODUCT_SIGNED_Q_READINESS_WAIVER,
   REQUIRED_FIXTURE_SCENARIOS,
   REQUIRED_SURFACE_IDS,
   advanceFixtureSession,
@@ -29,6 +30,7 @@ import { controlResultTruthLabel } from '../../src/features/productControlRoom/c
 import { browserIncidentAcknowledgementControlId } from '../../src/lib/productIntegration/sha256.ts';
 
 const NOW = 1_800_000_000_000;
+const VALID_WAIVER_NOW = Date.parse('2026-08-01T00:00:00Z');
 
 const materialEvent = (cursor) => ({
   cursor,
@@ -68,6 +70,162 @@ function materialPage({
   };
 }
 
+function setQReadiness(snapshot, serviceReadiness) {
+  const exactQBlockers = [
+    'Q_CLIENT_NOT_CONFIGURED',
+    'Q_TRANSPORT_NOT_CONFIGURED',
+    'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+    'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+    'RELEASE_NOT_AVAILABLE',
+    'TRUTH_UNAVAILABLE',
+    'FRESHNESS_NOT_REPORTED',
+  ];
+  const q = snapshot.components.find((component) => component.componentId === 'q-inference');
+  assert.ok(q);
+  Object.assign(q, {
+    owner: 'Q_INFERENCE:quant/src/quant_edge/inference',
+    desiredLifecycle: 'READY',
+    observedLifecycle: 'BLOCKED',
+    capability: 'NOT_CONFIGURED',
+    heartbeatAtMs: null,
+    lastAdvanceAtMs: null,
+    sourceAgeMs: null,
+    eventAgeMs: null,
+    processingAgeMs: null,
+    processingLagMs: null,
+    queueDepth: null,
+    queueCapacity: null,
+    droppedCount: null,
+    freshnessState: 'UNAVAILABLE',
+    dataQualityState: 'UNAVAILABLE',
+    dataQualityInvalidCount: null,
+    dataQualityDuplicateCount: null,
+    dataQualityOutOfOrderCount: null,
+    dataQualitySequenceGapCount: null,
+    dataQualityObservedAtMs: null,
+    retryState: 'UNAVAILABLE',
+    retryAttempt: null,
+    retryCeiling: null,
+    backoffMs: null,
+    retryAtMs: null,
+    cooldownUntilMs: null,
+    dependencyIds: ['market-intelligence'],
+    checkpointState: 'UNAVAILABLE',
+    checkpointRevision: null,
+    checkpointPersistedAtMs: null,
+    restartState: 'UNKNOWN',
+    generation: 0,
+    restartCount: 0,
+    blockerCode: 'FRESHNESS_NOT_REPORTED',
+    rootCauseComponentId: 'q-inference',
+    capitalRelevance: 'NONE',
+    supportedControlIds: [],
+    correlationId: null,
+    truthLabel: 'UNAVAILABLE',
+    serviceReadiness,
+    canonicalPresentation: {
+      status: 'outage',
+      tone: 'bad',
+      statusLabel: 'Unavailable',
+      stateLabel: 'BLOCKED · NOT CONFIGURED · UNAVAILABLE',
+    },
+  });
+  const dashboardQ = snapshot.dashboard.components.find((component) => component.componentId === 'q-inference');
+  assert.ok(dashboardQ);
+  Object.assign(dashboardQ, {
+    owner: 'Q_INFERENCE',
+    releaseStatuses: ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'],
+    truthLabel: 'UNAVAILABLE',
+    desiredState: 'RUNNING',
+    phase: 'BLOCKED',
+    domainObservedState: 'ABSTAIN_UNKNOWN',
+    readiness: 'BLOCKED',
+    authority: 'UNAVAILABLE',
+    completeness: 'UNAVAILABLE',
+    sourceLifecycle: null,
+    sourceTimestamp: null,
+    freshness: null,
+    lastReceiveAtMs: null,
+    lastProcessAtMs: null,
+    lastSuccessAtMs: null,
+    processingLagMs: null,
+    retry: {
+      state: 'UNAVAILABLE', attempt: null, ceiling: null, delayMs: null,
+      retryAtMs: null, cooldownUntilMs: null,
+    },
+    dataQuality: {
+      state: 'UNAVAILABLE', invalidCount: null, duplicateCount: null,
+      outOfOrderCount: null, sequenceGapCount: null, observedAtMs: null,
+    },
+    checkpoint: { state: 'UNAVAILABLE', revision: null, persistedAtMs: null },
+    dependencies: ['market-intelligence'],
+    queue: null,
+    lastFailure: null,
+    blockerCodes: exactQBlockers,
+    generation: 0,
+    restartCount: 0,
+    supportedControls: [],
+    capitalExposed: false,
+    operatorAttentionRequired: true,
+    serviceReadiness: structuredClone(serviceReadiness),
+  });
+  snapshot.dashboard.firstRootBlockerComponentId = 'q-inference';
+  snapshot.dashboard.rootBlockerComponentIds = ['q-inference'];
+  snapshot.dashboard.operatorAttentionComponentIds = ['q-inference'];
+  snapshot.dashboard.rootCauses = [{
+    componentId: 'q-inference', severity: 'HIGH', reasonCodes: exactQBlockers,
+    failure: null, dependencyPath: ['q-inference'],
+    affectedComponentIds: ['q-inference'], capitalExposed: false,
+  }];
+  snapshot.dashboard.attentionQueue = [{
+    componentId: 'q-inference', rootComponentId: 'q-inference', severity: 'HIGH',
+    reasonCodes: exactQBlockers, capitalExposed: false,
+    recommendedOperatorAction: null,
+  }];
+  snapshot.ownerView.topRootBlocker = 'q-inference';
+  for (const entry of snapshot.managedInventory.entries) {
+    for (const evidence of entry.evidence ?? []) {
+      if (evidence.componentId === 'q-inference') {
+        evidence.serviceReadiness = structuredClone(serviceReadiness);
+      }
+    }
+  }
+}
+
+function setMachineNotReadyForQ(snapshot) {
+  snapshot.dashboard.overallPosture = 'DEGRADED';
+  snapshot.ownerView.machineReady = 'NO';
+  snapshot.ownerView.topRootBlocker = 'q-inference';
+  snapshot.firstRequiredReadinessBlockerComponentId = 'q-inference';
+  snapshot.dashboard.firstRequiredReadinessBlockerComponentId = 'q-inference';
+}
+
+function setMachineReadyWithExcludedQ(snapshot) {
+  snapshot.dashboard.overallPosture = 'READY';
+  snapshot.ownerView.machineReady = 'YES';
+  snapshot.ownerView.topRootBlocker = 'q-inference';
+  snapshot.firstRequiredReadinessBlockerComponentId = null;
+  snapshot.dashboard.firstRequiredReadinessBlockerComponentId = null;
+  snapshot.canonicalCockpit.watchmanOverall = {
+    status: 'degraded',
+    label: 'Synthetic Fixture',
+  };
+}
+
+function setValidReadyPolicy(snapshot) {
+  const waiver = structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER);
+  snapshot.serviceReadinessPolicy = {
+    status: 'VALID', accepted: true, reasonCode: 'READINESS_POLICY_VALID', waiver,
+  };
+  snapshot.dashboard.serviceReadinessPolicy = structuredClone(snapshot.serviceReadinessPolicy);
+  setQReadiness(snapshot, {
+    basis: 'PUBLIC_DATA', expected: true, observed: true,
+    requiredForServiceReadiness: false, excludedFromServiceReadiness: true,
+    waiver: structuredClone(waiver),
+  });
+  setMachineReadyWithExcludedQ(snapshot);
+}
+
 test('required fixture registry is exact and stable', () => {
   assert.deepEqual(REQUIRED_FIXTURE_SCENARIOS, [
     'HEALTHY_OBSERVE',
@@ -76,6 +234,255 @@ test('required fixture registry is exact and stable', () => {
     'RECOVERY_REQUIRED_ONE_LEG',
     'TINY_LIVE_CANARY_OWNER_GATED',
   ]);
+});
+
+test('browser accepts only the exact canonical Q readiness waiver projection and keeps trade readiness blocked', () => {
+  const valid = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'readiness-valid', VALID_WAIVER_NOW),
+  ));
+  const validWaiver = structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER);
+  valid.serviceReadinessPolicy = {
+    status: 'VALID',
+    accepted: true,
+    reasonCode: 'READINESS_POLICY_VALID',
+    waiver: validWaiver,
+  };
+  valid.dashboard.serviceReadinessPolicy = structuredClone(valid.serviceReadinessPolicy);
+  setQReadiness(valid, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: false,
+    excludedFromServiceReadiness: true,
+    waiver: structuredClone(validWaiver),
+  });
+  setMachineReadyWithExcludedQ(valid);
+  assert.deepEqual(validateProductSupervisorEnvelope(valid), []);
+  assert.equal(valid.ownerView.machineReady, 'YES');
+  assert.equal(valid.ownerView.tradeReady, 'NO');
+  assert.equal(valid.firstRequiredReadinessBlockerComponentId, null);
+
+  const missing = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'readiness-missing', VALID_WAIVER_NOW),
+  ));
+  setQReadiness(missing, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: null,
+  });
+  setMachineNotReadyForQ(missing);
+  assert.deepEqual(validateProductSupervisorEnvelope(missing), []);
+  assert.equal(missing.serviceReadinessPolicy.status, 'MISSING');
+  assert.equal(missing.ownerView.machineReady, 'NO');
+  assert.equal(missing.ownerView.tradeReady, 'NO');
+
+  const expired = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'readiness-expired', NOW),
+  ));
+  const expiredWaiver = { ...structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER), status: 'EXPIRED' };
+  expired.serviceReadinessPolicy = {
+    status: 'EXPIRED',
+    accepted: false,
+    reasonCode: 'READINESS_POLICY_EXPIRED',
+    waiver: structuredClone(expiredWaiver),
+  };
+  expired.dashboard.serviceReadinessPolicy = structuredClone(expired.serviceReadinessPolicy);
+  setQReadiness(expired, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: structuredClone(expiredWaiver),
+  });
+  setMachineNotReadyForQ(expired);
+  assert.deepEqual(validateProductSupervisorEnvelope(expired), []);
+  assert.equal(expired.ownerView.machineReady, 'NO');
+  assert.equal(expired.ownerView.tradeReady, 'NO');
+});
+
+test('browser rejects forged waiver literals, mode/scope projections, and exclusion relationships without re-evaluating time', () => {
+  const base = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'readiness-hostile', VALID_WAIVER_NOW),
+  ));
+  const validWaiver = structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER);
+  base.serviceReadinessPolicy = {
+    status: 'VALID',
+    accepted: true,
+    reasonCode: 'READINESS_POLICY_VALID',
+    waiver: structuredClone(validWaiver),
+  };
+  base.dashboard.serviceReadinessPolicy = structuredClone(base.serviceReadinessPolicy);
+  setQReadiness(base, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: false,
+    excludedFromServiceReadiness: true,
+    waiver: structuredClone(validWaiver),
+  });
+  setMachineReadyWithExcludedQ(base);
+
+  const wrongScope = structuredClone(base);
+  wrongScope.serviceReadinessPolicy.waiver.scope = 'FORGED_SCOPE';
+  assert.ok(validateProductSupervisorEnvelope(wrongScope).includes('SERVICE_READINESS_POLICY_WAIVER_INVALID'));
+
+  const wrongMode = structuredClone(base);
+  wrongMode.serviceReadinessPolicy.waiver.mode = 'READ_ONLY';
+  assert.ok(validateProductSupervisorEnvelope(wrongMode).includes('SERVICE_READINESS_POLICY_WAIVER_INVALID'));
+
+  const wrongExpiry = structuredClone(base);
+  wrongExpiry.serviceReadinessPolicy.waiver.expiresAt = '2026-10-19T00:00:00Z';
+  assert.ok(validateProductSupervisorEnvelope(wrongExpiry).includes('SERVICE_READINESS_POLICY_WAIVER_INVALID'));
+
+  const transportedAtLaterCut = structuredClone(base);
+  transportedAtLaterCut.evaluatedAtMs = NOW;
+  assert.equal(validateProductSupervisorEnvelope(transportedAtLaterCut)
+    .includes('SERVICE_READINESS_POLICY_EXPIRY_CONTRADICTION'), false);
+
+  const missingExclusion = structuredClone(base);
+  missingExclusion.components.find((component) => component.componentId === 'q-inference')
+    .serviceReadiness.requiredForServiceReadiness = true;
+  missingExclusion.components.find((component) => component.componentId === 'q-inference')
+    .serviceReadiness.excludedFromServiceReadiness = false;
+  missingExclusion.canonicalCockpit.source = 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION';
+  assert.ok(validateProductSupervisorEnvelope(missingExclusion)
+    .includes('Q_REQUIRED_READINESS_RELATION_INVALID'));
+
+  const validButInapplicable = structuredClone(base);
+  setQReadiness(validButInapplicable, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: structuredClone(validWaiver),
+  });
+  validButInapplicable.components.find((component) => component.componentId === 'q-inference')
+    .blockerCode = 'Q_RUNTIME_CORRUPTED';
+  Object.assign(validButInapplicable.components.find((component) => component.componentId === 'q-inference'), {
+    observedLifecycle: 'FAILED',
+    capability: 'UNAVAILABLE',
+    truthLabel: 'UNAVAILABLE',
+    canonicalPresentation: {
+      status: 'outage', tone: 'bad', statusLabel: 'Unavailable', stateLabel: 'FAILED · UNAVAILABLE',
+    },
+  });
+  Object.assign(validButInapplicable.dashboard.components.find((component) => component.componentId === 'q-inference'), {
+    releaseStatuses: ['BUILT_AND_TESTED', 'IMPORTED', 'BLOCKED'],
+    phase: 'FAILED',
+    domainObservedState: 'Q_RUNTIME_CORRUPTED',
+    readiness: 'FAILED',
+    blockerCodes: ['Q_RUNTIME_CORRUPTED'],
+  });
+  setMachineNotReadyForQ(validButInapplicable);
+  assert.deepEqual(validateProductSupervisorEnvelope(validButInapplicable), []);
+
+  const validButInapplicableWithEarlierBlocker = structuredClone(validButInapplicable);
+  validButInapplicableWithEarlierBlocker.firstRequiredReadinessBlockerComponentId = 'public-spot-source';
+  validButInapplicableWithEarlierBlocker.dashboard.firstRequiredReadinessBlockerComponentId = 'public-spot-source';
+  validButInapplicableWithEarlierBlocker.ownerView.topRootBlocker = 'public-spot-source';
+  validButInapplicableWithEarlierBlocker.components.find((component) => component.componentId === 'public-spot-source')
+    .observedLifecycle = 'DEGRADED';
+  assert.deepEqual(validateProductSupervisorEnvelope(validButInapplicableWithEarlierBlocker), []);
+
+  const qFalseGreen = structuredClone(base);
+  const qFalseGreenComponent = qFalseGreen.components.find((component) => component.componentId === 'q-inference');
+  Object.assign(qFalseGreenComponent, {
+    observedLifecycle: 'READY',
+    capability: 'LIVE_PUBLIC',
+    truthLabel: 'LIVE_PUBLIC',
+    canonicalPresentation: {
+      status: 'operational', tone: 'ok', statusLabel: 'Operational', stateLabel: 'READY',
+    },
+  });
+  assert.ok(validateProductSupervisorEnvelope(qFalseGreen).includes('Q_COMPONENT_NON_GREEN_TRUTH_INVALID'));
+
+  const dashboardQFalseGreen = structuredClone(validButInapplicable);
+  Object.assign(dashboardQFalseGreen.dashboard.components.find((component) => component.componentId === 'q-inference'), {
+    releaseStatuses: ['BUILT_AND_TESTED', 'WIRED', 'LIVE_PUBLIC'],
+    phase: 'RUNNING',
+    readiness: 'READY',
+    truthLabel: 'LIVE_PUBLIC',
+    authority: 'LIVE_PUBLIC',
+    completeness: 'COMPLETE',
+  });
+  assert.ok(validateProductSupervisorEnvelope(dashboardQFalseGreen)
+    .includes('DASHBOARD_Q_NON_GREEN_TRUTH_INVALID'));
+
+  const productionShapedMissing = structuredClone(base);
+  productionShapedMissing.serviceReadinessPolicy = {
+    status: 'MISSING', accepted: false, reasonCode: 'READINESS_POLICY_MISSING', waiver: null,
+  };
+  productionShapedMissing.dashboard.serviceReadinessPolicy = structuredClone(productionShapedMissing.serviceReadinessPolicy);
+  setQReadiness(productionShapedMissing, {
+    basis: 'PUBLIC_DATA', expected: true, observed: true,
+    requiredForServiceReadiness: true, excludedFromServiceReadiness: false, waiver: null,
+  });
+  productionShapedMissing.canonicalCockpit.source = 'CANONICAL_SUPERVISOR_PRODUCT_PROJECTION';
+  assert.ok(validateProductSupervisorEnvelope(productionShapedMissing)
+    .includes('OWNER_MACHINE_READY_WITHOUT_VALID_READINESS_POLICY'));
+
+  const requiredQWithoutFullEvidence = structuredClone(productionShapedMissing);
+  setMachineNotReadyForQ(requiredQWithoutFullEvidence);
+  requiredQWithoutFullEvidence.dashboard.rootCauses = [];
+  requiredQWithoutFullEvidence.dashboard.rootBlockerComponentIds = [];
+  requiredQWithoutFullEvidence.dashboard.operatorAttentionComponentIds = [];
+  requiredQWithoutFullEvidence.dashboard.attentionQueue = [];
+  requiredQWithoutFullEvidence.components.find((component) => component.componentId === 'q-inference')
+    .rootCauseComponentId = null;
+  assert.ok(validateProductSupervisorEnvelope(requiredQWithoutFullEvidence)
+    .includes('DASHBOARD_Q_FULL_EVIDENCE_MISSING'));
+
+  const forgedReason = structuredClone(base);
+  forgedReason.serviceReadinessPolicy.reasonCode = 'READINESS_POLICY_MISSING';
+  assert.ok(validateProductSupervisorEnvelope(forgedReason).includes('SERVICE_READINESS_POLICY_REASON_INVALID'));
+
+  const activeQRetry = structuredClone(base);
+  Object.assign(activeQRetry.dashboard.components.find((component) => component.componentId === 'q-inference').retry, {
+    state: 'RETRYING', attempt: 1, ceiling: 3, delayMs: 100,
+    retryAtMs: VALID_WAIVER_NOW + 100, cooldownUntilMs: null,
+  });
+  assert.ok(validateProductSupervisorEnvelope(activeQRetry)
+    .includes('DASHBOARD_Q_NON_GREEN_TRUTH_INVALID'));
+
+  for (const mutateProductQ of [
+    (component) => { component.owner = 'Q_INFERENCE:forged-owner'; },
+    (component) => { component.dependencyIds = []; },
+    (component) => { component.generation = 1; component.restartState = 'NEVER_RESTARTED'; },
+  ]) {
+    const driftedProductQ = structuredClone(base);
+    mutateProductQ(driftedProductQ.components.find((component) => component.componentId === 'q-inference'));
+    assert.ok(validateProductSupervisorEnvelope(driftedProductQ)
+      .includes('Q_COMPONENT_NON_GREEN_TRUTH_INVALID'));
+  }
+
+  const qAttentionRemoved = structuredClone(base);
+  qAttentionRemoved.dashboard.operatorAttentionComponentIds = [];
+  qAttentionRemoved.dashboard.attentionQueue = [];
+  assert.ok(validateProductSupervisorEnvelope(qAttentionRemoved)
+    .includes('DASHBOARD_Q_FULL_EVIDENCE_MISSING'));
+
+  const upstreamQRoot = structuredClone(base);
+  upstreamQRoot.dashboard.firstRootBlockerComponentId = 'market-intelligence';
+  upstreamQRoot.dashboard.rootBlockerComponentIds = ['market-intelligence'];
+  upstreamQRoot.dashboard.rootCauses = [{
+    componentId: 'market-intelligence', severity: 'HIGH', reasonCodes: ['MARKET_INTELLIGENCE_UNAVAILABLE'],
+    failure: null, dependencyPath: ['market-intelligence'],
+    affectedComponentIds: ['market-intelligence', 'q-inference'], capitalExposed: false,
+  }];
+  upstreamQRoot.dashboard.attentionQueue = [{
+    componentId: 'q-inference', rootComponentId: 'market-intelligence', severity: 'HIGH',
+    reasonCodes: ['MARKET_INTELLIGENCE_UNAVAILABLE'], capitalExposed: false,
+    recommendedOperatorAction: null,
+  }];
+  upstreamQRoot.components.find((component) => component.componentId === 'q-inference')
+    .rootCauseComponentId = 'market-intelligence';
+  assert.equal(validateProductSupervisorEnvelope(upstreamQRoot)
+    .includes('DASHBOARD_Q_FULL_EVIDENCE_MISSING'), false);
 });
 
 for (const scenarioId of REQUIRED_FIXTURE_SCENARIOS) {
@@ -509,7 +916,10 @@ test('I00-050 browser contract accepts exact durable routing and rejects forged 
 });
 
 test('owner machine readiness requires dashboard READY plus published advance evidence', () => {
-  const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'ready-map', NOW));
+  const ready = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'ready-map', NOW),
+  ));
+  setValidReadyPolicy(ready);
   assert.ok(validateProductSupervisorEnvelope({ ...ready, ownerView: { ...ready.ownerView, machineReady: 'NO' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
   const degraded = buildProductControlRoomFixture(createFixtureSession('DEGRADED_STALE_SOURCES', 'degraded-map', NOW));
   assert.ok(validateProductSupervisorEnvelope({ ...degraded, ownerView: { ...degraded.ownerView, machineReady: 'YES' } }).includes('OWNER_DASHBOARD_READINESS_MISMATCH'));
@@ -606,7 +1016,10 @@ test('browser risk contract rejects missing correlation and forged review semant
 });
 
 test('READY posture with null meaningful advance cannot validate YES or render header green', () => {
-  const ready = buildProductControlRoomFixture(createFixtureSession('HEALTHY_OBSERVE', 'null-advance', NOW));
+  const ready = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'null-advance', NOW),
+  ));
+  setValidReadyPolicy(ready);
   const health = ready.surfaces.health;
   const withoutAdvance = {
     ...ready,

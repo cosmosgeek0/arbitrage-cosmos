@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { SURFACE_MOUNT_CONTRACTS } from '../../src/features/productControlRoom/surfaceMounts.ts';
+import { ComponentAuthorityPanel } from '../../src/features/productControlRoom/components/ComponentAuthorityPanel.tsx';
+import { ManagedInventoryPanel } from '../../src/features/productControlRoom/components/ManagedInventoryPanel.tsx';
+import { buildProductControlRoomFixture } from '../../src/features/productControlRoom/fixtureBinding.ts';
+import {
+  PRODUCT_SIGNED_Q_READINESS_WAIVER,
+  createFixtureSession,
+} from '../../src/lib/productIntegration/model.ts';
 
 const read = (path) => readFile(new URL(`../../src/${path}`, import.meta.url), 'utf8');
 const sourceExists = async (path) => {
@@ -245,4 +254,140 @@ test('control and incident truth labels cannot render false green or false all-c
   assert.match(incidents, /availability\.state !== 'AVAILABLE'/);
   assert.match(incidents, /Incident owner is available; no grouped incident requires attention/);
   assert.doesNotMatch(css, /truth-live-public\s*,\s*\.pcr-surface-end em\.truth-wired/);
+});
+
+test('component authority renders canonical service disposition and exact Q waiver evidence without turning Q green', () => {
+  const snapshot = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'component-readiness-panel', Date.parse('2026-08-01T00:00:00Z')),
+  ));
+  const q = snapshot.components.find((component) => component.componentId === 'q-inference');
+  assert.ok(q);
+  Object.assign(q, {
+    observedLifecycle: 'BLOCKED',
+    capability: 'NOT_CONFIGURED',
+    blockerCode: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+    rootCauseComponentId: 'q-inference',
+    truthLabel: 'UNAVAILABLE',
+    serviceReadiness: {
+      basis: 'PUBLIC_DATA',
+      expected: true,
+      observed: true,
+      requiredForServiceReadiness: false,
+      excludedFromServiceReadiness: true,
+      waiver: structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER),
+    },
+  });
+  const html = renderToStaticMarkup(React.createElement(ComponentAuthorityPanel, {
+    components: snapshot.components,
+    edges: snapshot.dependencyEdges,
+    serviceReadinessPolicy: {
+      status: 'VALID',
+      accepted: true,
+      reasonCode: 'READINESS_POLICY_VALID',
+      waiver: structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER),
+    },
+  }));
+  assert.equal((html.match(/<article>/g) ?? []).length, 14);
+  for (const exact of [
+    'EXCLUDED · VALID',
+    'READINESS-CLUSTER-001-Q-INFERENCE',
+    'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+    'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+    'cosmosgeek',
+    '2026-10-18T00:00:00Z',
+    'NOT_CONFIGURED',
+    'UNAVAILABLE',
+  ]) assert.match(html, new RegExp(exact));
+  assert.doesNotMatch(html, /q-inference<\/strong><small>[^<]*<\/small><\/span><em>LIVE_PUBLIC<\/em>/);
+
+  const missing = structuredClone(q);
+  missing.serviceReadiness = {
+    ...missing.serviceReadiness,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: null,
+  };
+  const missingHtml = renderToStaticMarkup(React.createElement(ComponentAuthorityPanel, {
+    components: [missing],
+    edges: [],
+    serviceReadinessPolicy: {
+      status: 'MISSING', accepted: false, reasonCode: 'READINESS_POLICY_MISSING', waiver: null,
+    },
+  }));
+  assert.match(missingHtml, /REQUIRED · POLICY MISSING/);
+
+  const expired = structuredClone(q);
+  expired.serviceReadiness = {
+    ...expired.serviceReadiness,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: { ...structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER), status: 'EXPIRED' },
+  };
+  const expiredHtml = renderToStaticMarkup(React.createElement(ComponentAuthorityPanel, {
+    components: [expired],
+    edges: [],
+    serviceReadinessPolicy: {
+      status: 'EXPIRED',
+      accepted: false,
+      reasonCode: 'READINESS_POLICY_EXPIRED',
+      waiver: { ...structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER), status: 'EXPIRED' },
+    },
+  }));
+  assert.match(expiredHtml, /REQUIRED · WAIVER EXPIRED/);
+  assert.match(expiredHtml, /READINESS-CLUSTER-001-Q-INFERENCE · EXPIRED/);
+
+  const wrongModeHtml = renderToStaticMarkup(React.createElement(ComponentAuthorityPanel, {
+    components: [missing],
+    edges: [],
+    serviceReadinessPolicy: {
+      status: 'WRONG_MODE', accepted: false, reasonCode: 'READINESS_POLICY_WRONG_MODE', waiver: null,
+    },
+  }));
+  assert.match(wrongModeHtml, /REQUIRED · POLICY WRONG_MODE/);
+});
+
+test('managed inventory mounts every authenticated role with canonical evidence and reason truth', () => {
+  const snapshot = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'managed-inventory-panel', Date.parse('2026-08-01T00:00:00Z')),
+  ));
+  const qInventory = snapshot.managedInventory.entries.find((entry) => entry.identity === 'q-inference');
+  const qEvidence = qInventory?.evidence?.find((evidence) => (
+    evidence.source === 'PRODUCT_RUNTIME_COMPONENT_PROJECTION' && evidence.componentId === 'q-inference'
+  ));
+  assert.ok(qEvidence && qEvidence.source === 'PRODUCT_RUNTIME_COMPONENT_PROJECTION');
+  qEvidence.serviceReadiness = {
+    ...qEvidence.serviceReadiness,
+    requiredForServiceReadiness: false,
+    excludedFromServiceReadiness: true,
+    waiver: structuredClone(PRODUCT_SIGNED_Q_READINESS_WAIVER),
+  };
+  const html = renderToStaticMarkup(React.createElement(ManagedInventoryPanel, {
+    inventory: snapshot.managedInventory,
+  }));
+
+  assert.equal((html.match(/data-managed-role=/g) ?? []).length, 33);
+  for (const entry of snapshot.managedInventory.entries) {
+    assert.match(html, new RegExp(`data-managed-role="${entry.identity}"`));
+    assert.match(html, new RegExp(entry.owner));
+    for (const componentId of entry.canonicalComponentIds) {
+      assert.match(html, new RegExp(componentId));
+    }
+    if (entry.reasonCode) assert.match(html, new RegExp(entry.reasonCode));
+  }
+  assert.match(html, /33\/33 Managed Roles/);
+  assert.match(html, /14\/14 Canonical Components/);
+  for (const exactWaiverDatum of [
+    'READINESS-CLUSTER-001-Q-INFERENCE',
+    'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+    'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+    'cosmosgeek',
+    '2026-10-18T00:00:00Z',
+  ]) assert.match(html, new RegExp(exactWaiverDatum));
+  assert.match(html, /Managed Inventory Evidence Table/);
+});
+
+test('product control room mounts the authenticated managed inventory projection without recomputing it', async () => {
+  const source = await read('features/productControlRoom/ProductControlRoom.tsx');
+  assert.match(source, /ManagedInventoryPanel/);
+  assert.match(source, /<ManagedInventoryPanel inventory=\{snapshot\.managedInventory\} \/>/);
 });

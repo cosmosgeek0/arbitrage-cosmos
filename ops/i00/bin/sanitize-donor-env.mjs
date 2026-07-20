@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fail, parseArgs } from '../lib.mjs';
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseArgs(process.argv.slice(2), new Set(['require-first-host-no-current']));
 if (!args.env || !args.output || !args.profile) fail('--env, --output, and --profile are required');
+if (args['require-first-host-no-current'] && args.profile !== 'deploy') {
+  fail('--require-first-host-no-current is valid only with --profile deploy');
+}
 
 const profiles = {
   deploy: new Set([
@@ -50,6 +53,38 @@ for (const key of required) if (!values[key]) fail(`donor env is missing require
 
 if (args.profile === 'deploy') {
   const canonicalGatePaths = '/health/live /health/ready';
+  const canonicalPathKeys = [
+    'COSMOS_ROOT', 'RELEASES_DIR', 'CURRENT_LINK', 'PREVIOUS_LINK', 'DATA_DIR', 'OPS_STATE_DIR',
+  ];
+  for (const key of canonicalPathKeys) {
+    if (values[key] === '/' || !isAbsolute(values[key]) || resolve(values[key]) !== values[key]) {
+      const requirement = key === 'OPS_STATE_DIR'
+        ? 'one canonical absolute directory'
+        : 'one non-root canonical absolute path';
+      fail(`donor env ${key} must be ${requirement}`);
+    }
+  }
+  const requireRelationship = (key, expected) => {
+    if (values[key] !== expected) {
+      fail(`donor env ${key} must match the canonical COSMOS_ROOT release layout; expected ${expected}`);
+    }
+  };
+  requireRelationship('RELEASES_DIR', `${values.COSMOS_ROOT}/releases`);
+  requireRelationship('CURRENT_LINK', `${values.COSMOS_ROOT}/current`);
+  requireRelationship('PREVIOUS_LINK', `${values.COSMOS_ROOT}/previous`);
+
+  const pathsOverlap = (left, right) => (
+    left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+  );
+  if (pathsOverlap(values.DATA_DIR, values.OPS_STATE_DIR)) {
+    fail('donor env DATA_DIR and OPS_STATE_DIR must be distinct and disjoint');
+  }
+  for (const key of ['DATA_DIR', 'OPS_STATE_DIR']) {
+    if (pathsOverlap(values[key], values.COSMOS_ROOT)) {
+      fail(`donor env ${key} must be disjoint from the canonical COSMOS_ROOT release layout`);
+    }
+  }
+
   const lockEffectiveValue = (key, expected, reason) => {
     if (Object.hasOwn(values, key) && values[key] !== expected) {
       fail(`donor env ${key} ${reason}; expected ${expected}`);
@@ -75,11 +110,6 @@ if (args.profile === 'deploy') {
     return { canonical, hostname: parsed.hostname, port: Number(parsed.port) };
   };
 
-  if (values.OPS_STATE_DIR === '/'
-      || !values.OPS_STATE_DIR.startsWith('/')
-      || resolve(values.OPS_STATE_DIR) !== values.OPS_STATE_DIR) {
-    fail('donor env OPS_STATE_DIR must be one canonical absolute directory');
-  }
   const health = loopbackBase(values.HEALTH_BASE, 'HEALTH_BASE');
   const probePortRaw = values.PROBE_PORT ?? '8091';
   if (!/^[1-9][0-9]{0,4}$/.test(probePortRaw)
@@ -109,6 +139,7 @@ if (args.profile === 'deploy') {
     `${health.canonical}/api/system-integration/ops/readback`,
     'must match the authenticated numeric-loopback app origin',
   );
+  if (args['require-first-host-no-current']) values.I00_REQUIRE_FIRST_HOST_NO_CURRENT = '1';
 }
 
 // F-107: only the I00 wrapper path is authorized against the production

@@ -535,6 +535,227 @@ done
 node -e 'const fs=require("fs");const p=process.argv[1];const v=require(p);v.validUntilUtc="2026-07-13T00:01:30Z";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/supervisor.json"
 assert_failure "${PREFLIGHT[@]}"
 
+note "first-host preflight accepts only the exact producer-bound clean baseline"
+FIRST_HOST_ROOT="$SIMULATION_ROOT/preflight-first-host"
+FIRST_HOST_COSMOS="$FIRST_HOST_ROOT/cosmos"
+FIRST_HOST_DATA="$FIRST_HOST_ROOT/data"
+FIRST_HOST_OPS="$FIRST_HOST_ROOT/ops"
+FIRST_HOST_EVIDENCE_PARENT="$SIMULATION_ROOT/preflight-first-host-evidence"
+FIRST_HOST_BUNDLE="$FIRST_HOST_EVIDENCE_PARENT/bundle"
+FIRST_HOST_RELEASE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$RELEASE")"
+FIRST_HOST_ENV="$FIRST_HOST_ROOT/deploy.env"
+FIRST_HOST_SQLITE="$FIRST_HOST_ROOT/sqlite3"
+FIRST_HOST_SYSTEMCTL="$FIRST_HOST_ROOT/systemctl"
+mkdir -p "$FIRST_HOST_ROOT" "$FIRST_HOST_EVIDENCE_PARENT"
+cat > "$FIRST_HOST_SQLITE" <<'SH'
+#!/usr/bin/env bash
+printf '3.53.3 fixture\n'
+SH
+cat > "$FIRST_HOST_SYSTEMCTL" <<'SH'
+#!/usr/bin/env bash
+printf 'inactive\n'
+exit 3
+SH
+chmod 755 "$FIRST_HOST_SQLITE" "$FIRST_HOST_SYSTEMCTL"
+cat > "$FIRST_HOST_ROOT/raw.env" <<EOF
+COSMOS_ROOT=$FIRST_HOST_COSMOS
+RELEASES_DIR=$FIRST_HOST_COSMOS/releases
+CURRENT_LINK=$FIRST_HOST_COSMOS/current
+PREVIOUS_LINK=$FIRST_HOST_COSMOS/previous
+DATA_DIR=$FIRST_HOST_DATA
+OPS_STATE_DIR=$FIRST_HOST_OPS
+APP_UNIT=cosmos-app.service
+HEALTH_BASE=http://127.0.0.1:18080
+EOF
+node "$I00_ROOT/bin/sanitize-donor-env.mjs" --env "$FIRST_HOST_ROOT/raw.env" \
+  --output "$FIRST_HOST_ENV" --profile deploy --require-first-host-no-current >/dev/null
+
+produce_first_host_bundle() {
+  local reserve="${1:-1000}"
+  chmod -R u+rwx "$FIRST_HOST_COSMOS" "$FIRST_HOST_DATA" "$FIRST_HOST_OPS" 2>/dev/null || true
+  rm -rf "$FIRST_HOST_COSMOS" "$FIRST_HOST_DATA" "$FIRST_HOST_OPS" "$FIRST_HOST_BUNDLE"
+  mkdir "$FIRST_HOST_BUNDLE"
+  chmod 700 "$FIRST_HOST_BUNDLE"
+  node "$I00_ROOT/bin/first-host-readback.mjs" --env "$FIRST_HOST_ENV" --release "$FIRST_HOST_RELEASE" \
+    --output-dir "$FIRST_HOST_BUNDLE" --account simulation-account \
+    --target-host fixture-host.internal --environment simulation \
+    --backup-reserve-bytes "$reserve" --sqlite "$FIRST_HOST_SQLITE" \
+    --systemctl "$FIRST_HOST_SYSTEMCTL" --now 2026-07-13T00:00:00Z >/dev/null
+}
+
+first_host_preflight() {
+  local mode="${1:-deploy}" target="${2:-NO_PRIOR_RELEASE_FIRST_HOST}" now="${3:-2026-07-13T00:01:00Z}"
+  node "$I00_ROOT/bin/preflight.mjs" --release "$FIRST_HOST_RELEASE" \
+    --host "$FIRST_HOST_BUNDLE/host.json" --supervisor "$FIRST_HOST_BUNDLE/supervisor.json" \
+    --mode "$mode" --now "$now" --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+    --required-supervisor-window-sec 130 --recovery-target "$target" \
+    --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV" \
+    "${@:4}"
+}
+
+first_host_preflight_without_token() {
+  node "$I00_ROOT/bin/preflight.mjs" --release "$FIRST_HOST_RELEASE" \
+    --host "$FIRST_HOST_BUNDLE/host.json" --supervisor "$FIRST_HOST_BUNDLE/supervisor.json" \
+    --mode deploy --now 2026-07-13T00:01:00Z --max-host-age-sec 300 \
+    --max-supervisor-age-sec 120 --required-supervisor-window-sec 130 \
+    --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV"
+}
+
+mutate_first_host_bundle() {
+  node --input-type=module - "$FIRST_HOST_BUNDLE" "$1" <<'NODE'
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+const [root, kind] = process.argv.slice(2);
+const read = (name) => JSON.parse(readFileSync(path.join(root, name), 'utf8'));
+const write = (name, value) => writeFileSync(path.join(root, name), `${JSON.stringify(value, null, 2)}\n`);
+const evidence = read('collected-evidence.json');
+const supervisor = read('supervisor.json');
+if (kind === 'short-lease') {
+  evidence.validUntilUtc = '2026-07-13T00:01:30Z';
+  supervisor.validUntilUtc = evidence.validUntilUtc;
+} else if (kind === 'cross-owner') evidence.owner.account = 'different-account';
+else if (kind === 'unit-unknown') {
+  evidence.baseline.unit.state = 'UNKNOWN';
+  evidence.baseline.unit.exitCode = 4;
+} else if (kind === 'nonzero-floor') {
+  evidence.derived.currentSchemaVersion = 1;
+  evidence.derived.rollbackFloor = 1;
+  supervisor.currentSchemaVersion = 1;
+  supervisor.rollbackFloor = 1;
+} else if (kind === 'frozen') {
+  evidence.derived.deploymentFrozen = true;
+  supervisor.deploymentFrozen = true;
+} else if (kind === 'exposure') {
+  evidence.derived.exposureState = 'ACTIVE';
+  supervisor.exposureState = 'ACTIVE';
+} else if (kind === 'ambiguity') {
+  evidence.derived.ambiguityState = 'AMBIGUOUS';
+  supervisor.ambiguityState = 'AMBIGUOUS';
+} else if (kind === 'recovery') {
+  evidence.derived.recoveryState = 'RECOVERY_REQUIRED';
+  supervisor.recoveryState = 'RECOVERY_REQUIRED';
+} else if (kind === 'wrong-source') supervisor.source = 'UNAUTHORIZED_BOOTSTRAP_READBACK';
+else if (kind === 'env-digest') evidence.sanitizedDonorEnv.sha256 = '0'.repeat(64);
+else if (kind === 'release-cross') evidence.release.releaseId = 'i00-different';
+else if (kind === 'forged-huge-disk') {
+  const blockSize = BigInt(evidence.disk.blockSize);
+  const forgedFree = (BigInt(Number.MAX_SAFE_INTEGER) / blockSize) * blockSize;
+  evidence.disk.availableBlocks = (forgedFree / blockSize).toString();
+  evidence.disk.freeBytes = Number(forgedFree);
+  evidence.owner.backupReserveBytes = 9000000000000000;
+}
+else throw new Error(`unknown mutation ${kind}`);
+const evidenceBytes = Buffer.from(`${JSON.stringify(evidence, null, 2)}\n`);
+const host = read('host.json');
+if (kind === 'forged-huge-disk') {
+  host.freeBytes = evidence.disk.freeBytes;
+  host.backupReserveBytes = evidence.owner.backupReserveBytes;
+}
+host.evidenceSha256 = createHash('sha256').update(evidenceBytes).digest('hex');
+writeFileSync(path.join(root, 'collected-evidence.json'), evidenceBytes);
+write('host.json', host);
+write('supervisor.json', supervisor);
+NODE
+}
+
+produce_first_host_bundle
+assert_success first_host_preflight
+assert_failure_contains 'recovery target must be NO_PRIOR_RELEASE_FIRST_HOST' \
+  first_host_preflight deploy WRONG_FIRST_HOST
+assert_failure_contains 'recovery target must be NO_PRIOR_RELEASE_FIRST_HOST' \
+  first_host_preflight_without_token
+assert_failure_contains 'deploy-only' first_host_preflight rollback
+assert_failure_contains 'canonical supervisor readback rejects first-host arguments' \
+  "${PREFLIGHT[@]}" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST
+assert_failure_contains 'duplicate first-host argument' first_host_preflight deploy \
+  NO_PRIOR_RELEASE_FIRST_HOST 2026-07-13T00:01:00Z --recovery-target NO_PRIOR_RELEASE_FIRST_HOST
+assert_failure first_host_preflight deploy NO_PRIOR_RELEASE_FIRST_HOST 2026-07-12T23:59:00Z
+produce_first_host_bundle
+mutate_first_host_bundle wrong-source
+assert_failure_contains 'supervisor source is not canonical readback' first_host_preflight
+produce_first_host_bundle
+cp "$FIRST_HOST_BUNDLE/host.json" "$FIRST_HOST_ROOT/caller-host.json"
+cp "$FIRST_HOST_BUNDLE/supervisor.json" "$FIRST_HOST_ROOT/caller-supervisor.json"
+assert_failure_contains 'must be the producer bundle files' node "$I00_ROOT/bin/preflight.mjs" \
+  --release "$FIRST_HOST_RELEASE" --host "$FIRST_HOST_ROOT/caller-host.json" \
+  --supervisor "$FIRST_HOST_ROOT/caller-supervisor.json" --mode deploy \
+  --now 2026-07-13T00:01:00Z --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --required-supervisor-window-sec 130 --recovery-target NO_PRIOR_RELEASE_FIRST_HOST \
+  --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV"
+
+note "first-host preflight rejects every current and previous node type"
+for link in current previous; do
+  for kind in valid-symlink dangling-symlink file directory; do
+    produce_first_host_bundle
+    mkdir -p "$FIRST_HOST_COSMOS"
+    case "$kind" in
+      valid-symlink) ln -s "$FIRST_HOST_RELEASE" "$FIRST_HOST_COSMOS/$link" ;;
+      dangling-symlink) ln -s "$FIRST_HOST_ROOT/absent-target" "$FIRST_HOST_COSMOS/$link" ;;
+      file) printf 'residue\n' > "$FIRST_HOST_COSMOS/$link" ;;
+      directory) mkdir "$FIRST_HOST_COSMOS/$link" ;;
+    esac
+    assert_failure first_host_preflight
+  done
+done
+
+note "first-host preflight rejects ancestor ambiguity and every residual baseline family"
+produce_first_host_bundle
+mkdir "$FIRST_HOST_ROOT/cosmos-target"
+ln -s "$FIRST_HOST_ROOT/cosmos-target" "$FIRST_HOST_COSMOS"
+assert_failure first_host_preflight
+rm -rf "$FIRST_HOST_COSMOS" "$FIRST_HOST_ROOT/cosmos-target"
+
+for residual in cosmos releases release-destination data ops journal frozen money; do
+  produce_first_host_bundle
+  case "$residual" in
+    cosmos) mkdir -p "$FIRST_HOST_COSMOS"; printf 'residue\n' > "$FIRST_HOST_COSMOS/residue" ;;
+    releases) mkdir -p "$FIRST_HOST_COSMOS/releases"; printf 'residue\n' > "$FIRST_HOST_COSMOS/releases/residue" ;;
+    release-destination)
+      release_id="$(node -e 'process.stdout.write(require(process.argv[1]).releaseId)' "$FIRST_HOST_RELEASE/release.json")"
+      mkdir -p "$FIRST_HOST_COSMOS/releases/$release_id"
+      ;;
+    data) mkdir -p "$FIRST_HOST_DATA"; printf 'residue\n' > "$FIRST_HOST_DATA/residue" ;;
+    ops) mkdir -p "$FIRST_HOST_OPS"; printf 'residue\n' > "$FIRST_HOST_OPS/residue" ;;
+    journal) mkdir -p "$FIRST_HOST_DATA"; printf '{corrupt\n' > "$FIRST_HOST_DATA/journal-compat.json" ;;
+    frozen) mkdir -p "$FIRST_HOST_OPS"; printf '{}\n' > "$FIRST_HOST_OPS/deploy-frozen.json" ;;
+    money) mkdir -p "$FIRST_HOST_OPS"; : > "$FIRST_HOST_OPS/money-ready" ;;
+  esac
+  assert_failure first_host_preflight
+done
+
+produce_first_host_bundle
+mkdir -p "$FIRST_HOST_DATA"
+chmod 000 "$FIRST_HOST_DATA"
+assert_failure first_host_preflight
+chmod 700 "$FIRST_HOST_DATA"
+
+note "first-host evidence chronology, cross-bindings, clean derivation, and bytes fail closed"
+for mutation in short-lease cross-owner unit-unknown nonzero-floor frozen exposure ambiguity recovery env-digest release-cross; do
+  produce_first_host_bundle
+  mutate_first_host_bundle "$mutation"
+  assert_failure first_host_preflight
+done
+produce_first_host_bundle
+printf ' ' >> "$FIRST_HOST_BUNDLE/collected-evidence.json"
+assert_failure_contains 'not canonical JSON' first_host_preflight
+produce_first_host_bundle
+node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.evidenceSha256="0".repeat(64);fs.writeFileSync(p,`${JSON.stringify(v,null,2)}\n`);' "$FIRST_HOST_BUNDLE/host.json"
+assert_failure first_host_preflight
+for malformed_digest in abc zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz; do
+  produce_first_host_bundle
+  node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.evidenceSha256=process.argv[2];fs.writeFileSync(p,`${JSON.stringify(v,null,2)}\n`);' \
+    "$FIRST_HOST_BUNDLE/host.json" "$malformed_digest"
+  assert_failure_contains 'host preflight is not exact owner readback evidence' first_host_preflight
+done
+produce_first_host_bundle
+assert_failure first_host_preflight deploy NO_PRIOR_RELEASE_FIRST_HOST 2026-07-13T00:20:00Z
+produce_first_host_bundle 9000000000000000
+assert_failure_contains 'insufficient disk' first_host_preflight
+produce_first_host_bundle
+mutate_first_host_bundle forged-huge-disk
+assert_failure_contains 'insufficient disk' first_host_preflight
+
 note "unbound non-Git release source is refused without simulation marking"
 make_release_inputs "$TEST_TMP/unbound/source" "$TEST_TMP/unbound/deps" "$SHA" "$TEST_TMP/unbound/tested.json"
 assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$TEST_TMP/unbound/source" --runtime-deps "$TEST_TMP/unbound/deps" --output-root "$TEST_TMP/unbound/out" --tested-sha "$SHA" --tested-receipt "$TEST_TMP/unbound/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m

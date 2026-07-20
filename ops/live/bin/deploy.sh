@@ -123,6 +123,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# FIRST-HOST-001: the I00 wrapper may request an additional under-lock proof
+# that this is still a clean first host. The marker is refusal-only: it cannot
+# bypass any existing donor check, and every set value other than exact `1`
+# fails closed. Test both existence and link identity so dangling symlinks are
+# treated as occupied paths too.
+if [ "${I00_REQUIRE_FIRST_HOST_NO_CURRENT+x}" = x ]; then
+  [ "$I00_REQUIRE_FIRST_HOST_NO_CURRENT" = 1 ] \
+    || die_code 1 "I00_REQUIRE_FIRST_HOST_NO_CURRENT must be absent or exactly 1"
+  if [ -e "$CURRENT_LINK" ] || [ -L "$CURRENT_LINK" ]; then
+    die_code 1 "first-host deploy refused under lock: current path is not absent: $CURRENT_LINK"
+  fi
+  if [ -e "$PREVIOUS_LINK" ] || [ -L "$PREVIOUS_LINK" ]; then
+    die_code 1 "first-host deploy refused under lock: previous path is not absent: $PREVIOUS_LINK"
+  fi
+fi
+
 # --- 3. host sanity + journal/schema floor, before any mutation --------------
 assert_link_sane "$CURRENT_LINK"
 assert_link_sane "$PREVIOUS_LINK"

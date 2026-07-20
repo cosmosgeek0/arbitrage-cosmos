@@ -359,11 +359,50 @@
           "sha256": "e8c01b83697d7e6a4b64f798d115adedf0104a5b9c8ca9df8240642d566b1af8"
         }
       ]
+    },
+    {
+      "findingId": "FIRST-HOST-001",
+      "baseLiveTree": "fd2e76085fdf98c892e3e9cca2f0f085adfd2b9f",
+      "effectiveLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
+      "baseRootDigestSha256": "f4dafa650326c67e254c2c798721324709bee182a7b9f4d4a249f54324bdd3d5",
+      "effectiveRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
+      "changedFiles": [
+        {
+          "path": "ops/live/bin/deploy.sh",
+          "mode": "100755",
+          "beforeGitBlob": "2385c1652f5c36f81bf741509b6a6fc752f39f4b",
+          "beforeSha256": "43fe7f3834387edd2f6268730911bfd092a9362aa322ae97d8e31894130c9599",
+          "afterGitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
+          "afterSha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a"
+        }
+      ],
+      "changedTestFiles": [
+        {
+          "path": "ops/tests/test-deploy.sh",
+          "mode": "100755",
+          "beforeGitBlob": "700ad6fb184315895672de58ed151ff3c07273fe",
+          "beforeSha256": "e2dc8e1c8e714c75ae49052a2f168687ab2d06ff38bf13a8c2d7aadc85c121dd",
+          "afterGitBlob": "90aa4f17e7f8f1854f9c7ec9ef541d6f66548bb2",
+          "afterSha256": "4bdd6c5a75c57b35c4e8f71391d9e331a84fcc8413ae0c1be5840058cabd3db8"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/FIRST-HOST-001_CORRECTION_RECEIPT.md",
+        "gitBlob": "beda2a5b38d72874b35e0f239e34c7ad67d3f9f5",
+        "sha256": "b25c79bc0d86aeaa97fc81b565286966e9c037d5918c60d02144c553a063790e"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-first-host-001-l15-bytes.sh",
+          "gitBlob": "71470775c3c16fe3b3b3c22d7c87c165d0be46bd",
+          "sha256": "f830dbb80f559d70e8247e848e1a047fb2b55de0bc6cd2cc534e269604f3f76f"
+        }
+      ]
     }
   ],
   "effectiveLive": {
-    "tree": "fd2e76085fdf98c892e3e9cca2f0f085adfd2b9f",
-    "rootDigestSha256": "f4dafa650326c67e254c2c798721324709bee182a7b9f4d4a249f54324bdd3d5",
+    "tree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
+    "rootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
     "fileCount": 31,
     "files": [
       {
@@ -423,8 +462,8 @@
       {
         "path": "bin/deploy.sh",
         "mode": "100755",
-        "gitBlob": "2385c1652f5c36f81bf741509b6a6fc752f39f4b",
-        "sha256": "43fe7f3834387edd2f6268730911bfd092a9362aa322ae97d8e31894130c9599"
+        "gitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
+        "sha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a"
       },
       {
         "path": "bin/latency-bench.mjs",

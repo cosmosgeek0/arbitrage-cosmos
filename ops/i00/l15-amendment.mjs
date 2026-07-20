@@ -26,7 +26,7 @@ const IMMUTABLE_DONOR = Object.freeze({
   acceptedAssertions: 347,
 });
 
-const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06', 'DEPLOY-READINESS-001']);
+const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06', 'DEPLOY-READINESS-001', 'FIRST-HOST-001']);
 const FINDING_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': Object.freeze([
     'ops/live/bin/common.sh',
@@ -64,6 +64,9 @@ const FINDING_PATHS = Object.freeze({
     'ops/live/systemd/cosmos-restore-drill.service',
     'ops/live/systemd/cosmos-watchdog.service',
   ]),
+  'FIRST-HOST-001': Object.freeze([
+    'ops/live/bin/deploy.sh',
+  ]),
 });
 // Donor-owned test files a finding is authorized to evolve, with exact
 // before/after byte binding in the amendment. Empty for historical findings.
@@ -78,6 +81,9 @@ const FINDING_TEST_CHANGES = Object.freeze({
   'DEPLOY-READINESS-001': Object.freeze([
     'ops/tests/test-systemd-units.sh',
   ]),
+  'FIRST-HOST-001': Object.freeze([
+    'ops/tests/test-deploy.sh',
+  ]),
 });
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
@@ -86,6 +92,7 @@ const FINDING_TESTS = Object.freeze({
   'RB-27': 'ops/tests/i00/test-rb-27-latency-deadlines.sh',
   'FIX-031-CS-06': 'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
   'DEPLOY-READINESS-001': 'ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh',
+  'FIRST-HOST-001': 'ops/tests/i00/test-first-host-001-l15-bytes.sh',
 });
 
 function assertSafePath(value, label, prefix = '') {
